@@ -8,8 +8,151 @@
         'application/vnd.ms-excel',
         'application/csv'
     ]);
+    const MAX_VOCAB_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+    const MAX_VOCAB_IMPORT_ENTRIES = 5000;
+    const MAX_WORD_TEXT_LENGTH = 160;
+    const MAX_MEANING_TEXT_LENGTH = 4000;
+    const MAX_EXAMPLE_TEXT_LENGTH = 4000;
+    const MAX_SOURCE_TEXT_LENGTH = 200;
+    const MAX_EXTRA_TEXT_LENGTH = 1000;
+    const MAX_PROGRESS_EXTRA_DEPTH = 8;
+    const MAX_PROGRESS_EXTRA_ARRAY_ITEMS = 100;
+    const MAX_PROGRESS_EXTRA_OBJECT_KEYS = 100;
+    const VOCAB_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const PROGRESS_EXTRA_FIELDS = Object.freeze([
+        'userInput',
+        'questionId',
+        'suiteId',
+        'examId',
+        'errorCount',
+        'timestamp',
+        'acceptedAnswers',
+        'canonicalAnswer',
+        'reasonCode',
+        'confidence',
+        'tokenIndex',
+        'metadata',
+        'spellingNote'
+    ]);
 
     const DEFAULT_EXPORT_VERSION = '1.0.0';
+
+    function normalizeTextField(value, maxLength) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().slice(0, maxLength);
+    }
+
+    function limitImportItems(items) {
+        return Array.isArray(items) ? items.slice(0, MAX_VOCAB_IMPORT_ENTRIES) : [];
+    }
+
+    function isUnsafeImportKey(key) {
+        return VOCAB_IMPORT_POLLUTION_KEYS.has(String(key));
+    }
+
+    function normalizeInteger(value, min, max) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return null;
+        }
+        const clamped = Math.min(max, Math.max(min, Math.floor(numeric)));
+        return clamped;
+    }
+
+    function normalizeNumber(value, min, max) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return null;
+        }
+        return Math.min(max, Math.max(min, numeric));
+    }
+
+    function normalizeDateString(value) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return null;
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return date.toISOString();
+    }
+
+    function sanitizeProgressExtraValue(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return normalizeTextField(value, MAX_EXTRA_TEXT_LENGTH);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth >= MAX_PROGRESS_EXTRA_DEPTH || seen.has(value)) {
+            return undefined;
+        }
+        seen.add(value);
+        if (Array.isArray(value)) {
+            return value
+                .slice(0, MAX_PROGRESS_EXTRA_ARRAY_ITEMS)
+                .map((item) => sanitizeProgressExtraValue(item, depth + 1, seen))
+                .filter((item) => item !== undefined);
+        }
+        const clone = {};
+        Object.keys(value)
+            .slice(0, MAX_PROGRESS_EXTRA_OBJECT_KEYS)
+            .forEach((key) => {
+                if (isUnsafeImportKey(key)) {
+                    return;
+                }
+                const safeKey = normalizeTextField(key, MAX_WORD_TEXT_LENGTH);
+                if (!safeKey || isUnsafeImportKey(safeKey)) {
+                    return;
+                }
+                const safeValue = sanitizeProgressExtraValue(value[key], depth + 1, seen);
+                if (safeValue !== undefined) {
+                    clone[safeKey] = safeValue;
+                }
+            });
+        return clone;
+    }
+
+    function normalizeProgressConfig(config) {
+        if (!config || typeof config !== 'object') {
+            return undefined;
+        }
+        const normalized = {};
+        const dailyNew = normalizeInteger(config.dailyNew, 0, 200);
+        const reviewLimit = normalizeInteger(config.reviewLimit, 1, 300);
+        const masteryCount = normalizeInteger(config.masteryCount, 1, 10);
+        if (dailyNew !== null) {
+            normalized.dailyNew = dailyNew;
+        }
+        if (reviewLimit !== null) {
+            normalized.reviewLimit = reviewLimit;
+        }
+        if (masteryCount !== null) {
+            normalized.masteryCount = masteryCount;
+        }
+        if (typeof config.notify === 'boolean') {
+            normalized.notify = config.notify;
+        }
+        if (typeof config.theme === 'string') {
+            const theme = config.theme.trim().toLowerCase();
+            if (theme === 'auto' || theme === 'light' || theme === 'dark') {
+                normalized.theme = theme;
+            }
+        }
+        return Object.keys(normalized).length ? normalized : undefined;
+    }
 
     function normalizeFrequency(value) {
         if (value == null || value === '') {
@@ -89,19 +232,120 @@
         if (!raw.word || !raw.meaning) {
             return null;
         }
-        const clone = {};
-        Object.keys(raw).forEach((key) => {
-            clone[key] = raw[key];
+        const clone = {
+            word: normalizeTextField(raw.word, MAX_WORD_TEXT_LENGTH),
+            meaning: normalizeTextField(raw.meaning, MAX_MEANING_TEXT_LENGTH),
+            example: normalizeTextField(raw.example, MAX_EXAMPLE_TEXT_LENGTH),
+            note: normalizeTextField(raw.note, MAX_EXAMPLE_TEXT_LENGTH)
+        };
+        const id = normalizeTextField(raw.id, MAX_SOURCE_TEXT_LENGTH);
+        const source = normalizeTextField(raw.source, MAX_SOURCE_TEXT_LENGTH);
+        if (id) {
+            clone.id = id;
+        }
+        if (source) {
+            clone.source = source;
+        }
+        const freq = normalizeFrequency(raw.freq);
+        if (freq !== null) {
+            clone.freq = freq;
+        }
+        const easeFactor = normalizeNumber(raw.easeFactor, 1.3, 3.0);
+        if (easeFactor !== null) {
+            clone.easeFactor = easeFactor;
+        }
+        [
+            ['interval', 0, 36500],
+            ['repetitions', 0, 100000],
+            ['intraCycles', 0, 100000],
+            ['correctCount', 0, 100000]
+        ].forEach(([key, min, max]) => {
+            const value = normalizeInteger(raw[key], min, max);
+            if (value !== null) {
+                clone[key] = value;
+            }
         });
+        ['lastReviewed', 'nextReview', 'createdAt', 'updatedAt'].forEach((key) => {
+            const value = normalizeDateString(raw[key]);
+            if (value) {
+                clone[key] = value;
+            }
+        });
+        PROGRESS_EXTRA_FIELDS.forEach((key) => {
+            if (raw[key] === undefined || isUnsafeImportKey(key)) {
+                return;
+            }
+            const value = sanitizeProgressExtraValue(raw[key]);
+            if (value !== undefined) {
+                clone[key] = value;
+            }
+        });
+        if (!clone.word || !clone.meaning) {
+            return null;
+        }
         return clone;
     }
 
+    function validateVocabImportFile(file) {
+        if (!file || typeof file.size !== 'number') {
+            throw new Error('Invalid import file.');
+        }
+        if (file.size > MAX_VOCAB_IMPORT_FILE_BYTES) {
+            throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+        }
+        const name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+        const extension = name.split('.').pop();
+        const mimeType = typeof file.type === 'string' ? file.type.split(';')[0].trim().toLowerCase() : '';
+        const supportedExtension = extension === 'json' || extension === 'csv';
+        const supportedType = SUPPORTED_JSON_TYPES.has(mimeType) || SUPPORTED_CSV_TYPES.has(mimeType) || mimeType === '';
+        if (!supportedExtension || !supportedType) {
+            throw new Error('Only JSON and CSV import files are supported.');
+        }
+    }
+
     function buildImportResult(type, entries, meta = {}) {
-        const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
-        const normalizedMeta = { ...meta };
+        const safeEntries = limitImportItems(entries).filter(Boolean);
+        const normalizedMeta = {};
+        if (typeof meta.format === 'string') {
+            normalizedMeta.format = normalizeTextField(meta.format, 40);
+        }
+        if (Number.isFinite(Number(meta.originalLength))) {
+            normalizedMeta.originalLength = Math.max(0, Math.floor(Number(meta.originalLength)));
+        }
+        if (typeof meta.version === 'string') {
+            normalizedMeta.version = normalizeTextField(meta.version, 40);
+        }
+        if (typeof meta.name === 'string') {
+            normalizedMeta.name = normalizeTextField(meta.name, MAX_SOURCE_TEXT_LENGTH);
+        }
+        if (typeof meta.source === 'string') {
+            normalizedMeta.source = normalizeTextField(meta.source, MAX_SOURCE_TEXT_LENGTH);
+        }
+        if (typeof meta.exportedAt === 'string') {
+            const exportedAt = normalizeDateString(meta.exportedAt);
+            if (exportedAt) {
+                normalizedMeta.exportedAt = exportedAt;
+            }
+        }
+        const config = normalizeProgressConfig(meta.config);
+        if (config) {
+            normalizedMeta.config = config;
+        }
         normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
+        normalizedMeta.category = normalizeCategory(meta.category, normalizedMeta.category);
         if (Array.isArray(normalizedMeta.reviewQueue)) {
-            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
+            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue
+                .slice(0, MAX_VOCAB_IMPORT_ENTRIES)
+                .map((item) => normalizeTextField(String(item), MAX_WORD_TEXT_LENGTH))
+                .filter((item) => item && !isUnsafeImportKey(item))
+                .filter(Boolean);
+        }
+        if (Array.isArray(meta.reviewQueue)) {
+            normalizedMeta.reviewQueue = meta.reviewQueue
+                .slice(0, MAX_VOCAB_IMPORT_ENTRIES)
+                .map((item) => normalizeTextField(String(item), MAX_WORD_TEXT_LENGTH))
+                .filter((item) => item && !isUnsafeImportKey(item))
+                .filter(Boolean);
         }
         return {
             type,
@@ -114,12 +358,12 @@
         if (!raw || typeof raw !== 'object') {
             return null;
         }
-        const word = typeof raw.word === 'string' ? raw.word.trim() : '';
-        const meaning = typeof raw.meaning === 'string' ? raw.meaning.trim() : '';
+        const word = normalizeTextField(raw.word, MAX_WORD_TEXT_LENGTH);
+        const meaning = normalizeTextField(raw.meaning, MAX_MEANING_TEXT_LENGTH);
         if (!word || !meaning) {
             return null;
         }
-        const example = typeof raw.example === 'string' ? raw.example.trim() : '';
+        const example = normalizeTextField(raw.example, MAX_EXAMPLE_TEXT_LENGTH);
         const freq = normalizeFrequency(raw.freq);
         const normalized = {
             word,
@@ -138,6 +382,9 @@
         }
         const payload = Array.isArray(data) ? data : Array.isArray(data.words) ? data.words : null;
         if (!Array.isArray(payload) || !payload.length) {
+            return false;
+        }
+        if (payload.length > MAX_VOCAB_IMPORT_ENTRIES) {
             return false;
         }
         return payload.every((item) => !!normalizeEntry(item));
@@ -197,7 +444,8 @@
             freq: headerCells.indexOf('freq')
         };
         const entries = [];
-        for (let i = 1; i < lines.length; i += 1) {
+        const rowLimit = Math.min(lines.length, MAX_VOCAB_IMPORT_ENTRIES + 1);
+        for (let i = 1; i < rowLimit; i += 1) {
             const cells = splitCsvLine(lines[i], delimiter);
             const candidate = {
                 word: columnIndex.word >= 0 ? cells[columnIndex.word] : cells[0],
@@ -219,41 +467,44 @@
     function parseJson(text) {
         const payload = JSON.parse(text);
         if (Array.isArray(payload)) {
-            return buildImportResult('wordlist', payload.map(normalizeEntry).filter(Boolean), {
+            const items = limitImportItems(payload);
+            return buildImportResult('wordlist', items.map(normalizeEntry).filter(Boolean), {
                 format: 'json',
                 originalLength: payload.length
             });
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
+            const words = limitImportItems(payload.words);
             const metaCategory = extractCategory(payload.meta, null);
             const category = extractCategory(payload, metaCategory || 'external');
             const looksProgress = typeof payload.version === 'string'
                 || Array.isArray(payload.reviewQueue)
-                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+                || words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
             if (looksProgress) {
-                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                const entries = words.map(cloneProgressEntry).filter(Boolean);
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
-                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
+                    config: payload.config,
                     reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
                 });
             }
-            return buildImportResult('wordlist', payload.words.map(normalizeEntry).filter(Boolean), {
+            return buildImportResult('wordlist', words.map(normalizeEntry).filter(Boolean), {
                 format: 'json',
                 originalLength: payload.words.length,
                 category
             });
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.entries)) {
+            const entries = limitImportItems(payload.entries);
             const metaCategory = extractCategory(payload.meta, null);
             const category = extractCategory(payload, metaCategory || 'external');
-            return buildImportResult('wordlist', payload.entries.map(normalizeEntry).filter(Boolean), {
+            return buildImportResult('wordlist', entries.map(normalizeEntry).filter(Boolean), {
                 format: 'json',
                 originalLength: payload.entries.length,
                 category
@@ -281,6 +532,7 @@
         if (!(file instanceof Blob)) {
             throw new Error('仅支持通过文件导入词表');
         }
+        validateVocabImportFile(file);
         const name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
         const extension = name.split('.').pop();
         const mimeType = typeof file.type === 'string' ? file.type.toLowerCase() : '';

@@ -2,6 +2,11 @@
  * 本地存储工具类
  * 提供统一的数据存储和检索接口
  */
+const STORAGE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const STORAGE_BACKUP_MAX_PRACTICE_RECORDS = 5000;
+const STORAGE_BACKUP_MAX_NODES = 50000;
+const STORAGE_BACKUP_MAX_DEPTH = 40;
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
@@ -23,7 +28,17 @@ class StorageManager {
             'exam_index_configurations',
             'active_exam_index_key',
             'settings',
-            'learning_goals'
+            'learning_goals',
+            'vocab_words',
+            'vocab_user_config',
+            'vocab_review_queue',
+            'vocab_active_list_id',
+            'vocab_active_list',
+            'vocab_list_p1_errors',
+            'vocab_list_p4_errors',
+            'vocab_list_master_errors',
+            'vocab_list_custom',
+            'vocab_list_reading_highlights'
         ]);
         this.ready = this.initializeStorage().catch(error => {
             console.error('[Storage] 初始化失败:', error);
@@ -1226,7 +1241,18 @@ class StorageManager {
         }
 
         try {
-            const response = await fetch(backupPath);
+            const baseHref = typeof window !== 'undefined' && window.location && window.location.href
+                ? window.location.href
+                : 'http://localhost/';
+            const backupUrl = new URL(backupPath, baseHref);
+            const currentOrigin = typeof window !== 'undefined' && window.location && window.location.origin
+                ? window.location.origin
+                : new URL(baseHref).origin;
+            if ((backupUrl.protocol !== 'http:' && backupUrl.protocol !== 'https:') || backupUrl.origin !== currentOrigin) {
+                console.warn('[Storage] 内置备份路径无效，已跳过');
+                return false;
+            }
+            const response = await fetch(backupUrl.href, { credentials: 'same-origin', cache: 'no-store' });
             if (!response.ok) {
                 return false;
             }
@@ -1236,7 +1262,8 @@ class StorageManager {
                 return false;
             }
             // 恢复 practice_records
-            await this.set('practice_records', backupData.practice_records, { skipReady });
+            const practiceRecords = this.validateBackupPracticeRecords(backupData.practice_records);
+            await this.set('practice_records', practiceRecords, { skipReady });
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
@@ -1248,6 +1275,50 @@ class StorageManager {
     /**
      * 处理存储配额超限
      */
+    validateBackupPracticeRecords(records) {
+        if (!Array.isArray(records)) {
+            throw new Error('Backup practice records must be an array');
+        }
+        if (records.length > STORAGE_BACKUP_MAX_PRACTICE_RECORDS) {
+            throw new Error(`Backup contains too many practice records. Maximum supported count is ${STORAGE_BACKUP_MAX_PRACTICE_RECORDS}.`);
+        }
+        this.assertSafeBackupValue(records, 'backup.practice_records');
+        return records;
+    }
+
+    assertSafeBackupValue(value, path = 'backup', depth = 0, state = null) {
+        if (value === null || typeof value !== 'object') {
+            return;
+        }
+        const scanState = state || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (depth > STORAGE_BACKUP_MAX_DEPTH) {
+            throw new Error(`Backup structure is too deep at ${path}`);
+        }
+        if (scanState.seen.has(value)) {
+            return;
+        }
+        scanState.seen.add(value);
+        scanState.nodes += 1;
+        if (scanState.nodes > STORAGE_BACKUP_MAX_NODES) {
+            throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${STORAGE_BACKUP_MAX_NODES}.`);
+        }
+        if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+                this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
+            });
+            return;
+        }
+        Object.keys(value).forEach((key) => {
+            if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
+                throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+            }
+            this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
+        });
+    }
+
     handleStorageQuotaExceeded(key, value) {
         console.error('[Storage] 存储配额超限，无法保存数据:', key);
 
@@ -1297,7 +1368,10 @@ class StorageManager {
             if (this.fallbackStorage) {
                 this.fallbackStorage.forEach((value, key) => {
                     if (key.startsWith(this.prefix)) {
-                        const cleanKey = key.replace(this.prefix, '');
+                        const cleanKey = this.normalizeImportKey(key);
+                        if (!cleanKey) {
+                            return;
+                        }
                         data[cleanKey] = JSON.parse(value);
                     }
                 });
@@ -1311,7 +1385,10 @@ class StorageManager {
                     const indexedDBData = {};
                     items.forEach(item => {
                         if (item.key.startsWith(this.prefix)) {
-                            const cleanKey = item.key.replace(this.prefix, '');
+                            const cleanKey = this.normalizeImportKey(item.key);
+                            if (!cleanKey) {
+                                return;
+                            }
                             indexedDBData[cleanKey] = JSON.parse(item.value);
                         }
                     });
@@ -1327,7 +1404,10 @@ class StorageManager {
             const localStorageKeys = Object.keys(localStorage);
             const appKeys = localStorageKeys.filter(key => key.startsWith(this.prefix));
             appKeys.forEach(key => {
-                const cleanKey = key.replace(this.prefix, '');
+                const cleanKey = this.normalizeImportKey(key);
+                if (!cleanKey) {
+                    return;
+                }
                 try {
                     const value = localStorage.getItem(key);
                     if (value) {
@@ -1386,8 +1466,15 @@ class StorageManager {
         const { skipReady = false } = options;
         await this.waitForInitialization(skipReady);
         try {
-            if (!importedData || !importedData.data) {
+            if (!importedData || !importedData.data || typeof importedData.data !== 'object' || Array.isArray(importedData.data)) {
                 throw new Error('Invalid import data format');
+            }
+            const rawEntries = Object.entries(importedData.data);
+            const importEntries = rawEntries
+                .map(([key, value]) => this.normalizeImportDataEntry(key, value))
+                .filter(Boolean);
+            if (rawEntries.length > 0 && importEntries.length === 0) {
+                throw new Error('Import data contains no allowed storage keys');
             }
 
             // 备份当前数据
@@ -1398,21 +1485,29 @@ class StorageManager {
                 await this.clear({ skipReady });
 
                 // 导入新数据
-                const importPromises = Object.entries(importedData.data).map(([key, value]) => {
-                    return this.set(key, value.data, { skipReady });
+                const importPromises = importEntries.map(({ key, value }) => {
+                    return this.set(key, value, { skipReady });
                 });
 
                 await Promise.all(importPromises);
 
-                return { success: true, message: 'Data imported successfully' };
+                return {
+                    success: true,
+                    message: 'Data imported successfully',
+                    importedKeys: importEntries.length,
+                    skippedKeys: rawEntries.length - importEntries.length
+                };
             } catch (importError) {
                 // 恢复备份
                 console.error('Import failed, restoring backup:', importError);
                 await this.clear({ skipReady });
 
                 if (backup && backup.data) {
-                    const restorePromises = Object.entries(backup.data).map(([key, value]) => {
-                        return this.set(key, value.data, { skipReady });
+                    const restoreEntries = Object.entries(backup.data)
+                        .map(([key, value]) => this.normalizeImportDataEntry(key, value))
+                        .filter(Boolean);
+                    const restorePromises = restoreEntries.map(({ key, value }) => {
+                        return this.set(key, value, { skipReady });
                     });
                     await Promise.all(restorePromises);
                 }
@@ -1428,6 +1523,60 @@ class StorageManager {
     /**
      * 数据验证
      */
+    normalizeImportDataEntry(key, envelope) {
+        const cleanKey = this.normalizeImportKey(key);
+        if (!cleanKey || !this.isImportableStorageKey(cleanKey)) {
+            return null;
+        }
+        if (!envelope || typeof envelope !== 'object' || !Object.prototype.hasOwnProperty.call(envelope, 'data')) {
+            return null;
+        }
+        this.assertSafeBackupValue(envelope.data, `import.data.${cleanKey}`);
+        if (cleanKey === 'practice_records') {
+            this.validateBackupPracticeRecords(envelope.data);
+        }
+        return { key: cleanKey, value: envelope.data };
+    }
+
+    normalizeImportKey(key) {
+        if (typeof key !== 'string') {
+            return '';
+        }
+        let cleanKey = key.trim();
+        if (!cleanKey) {
+            return '';
+        }
+        if (cleanKey.startsWith(this.prefix)) {
+            cleanKey = cleanKey.slice(this.prefix.length);
+        }
+        if (!/^[A-Za-z0-9:_-]{1,160}$/.test(cleanKey)) {
+            return '';
+        }
+        if (this.isUnsafeImportKey(cleanKey)) {
+            return '';
+        }
+        return cleanKey;
+    }
+
+    isUnsafeImportKey(key) {
+        const normalized = String(key || '').trim().toLowerCase();
+        return normalized === '__proto__'
+            || normalized === 'prototype'
+            || normalized === 'constructor'
+            || normalized === 'storage_backend'
+            || normalized === this.backendPreferenceKey.toLowerCase();
+    }
+
+    isImportableStorageKey(key) {
+        if (key === 'system_version') {
+            return true;
+        }
+        if (this.persistentKeys && this.persistentKeys.has(key)) {
+            return true;
+        }
+        return /^vocab(?:_list)?_[A-Za-z0-9_-]{1,100}$/.test(key);
+    }
+
     validateData(key, data) {
         const validators = {
             practice_records: (records) => {
@@ -2498,7 +2647,7 @@ class StorageManager {
 
             // 生成文件名
             const defaultFilename = `ielts-practice-export-${new Date().toISOString().split('T')[0]}.json`;
-            const finalFilename = filename || defaultFilename;
+            const finalFilename = this.sanitizeDownloadFilename(filename || defaultFilename, defaultFilename);
 
             // 创建下载链接
             const url = URL.createObjectURL(blob);
@@ -2512,7 +2661,7 @@ class StorageManager {
 
             // 清理
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
 
             console.log(`[Storage] 数据已下载: ${finalFilename}`);
             return true;
@@ -2520,6 +2669,20 @@ class StorageManager {
             console.error('[Storage] 下载导出数据失败:', error);
             return false;
         }
+    }
+
+    sanitizeDownloadFilename(filename, fallback) {
+        const safeFallback = fallback || `ielts-practice-export-${new Date().toISOString().split('T')[0]}.json`;
+        const normalized = String(filename || safeFallback)
+            .replace(/[\u0000-\u001F\u007F<>:"/\\|?*]+/g, '_')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/^\.+/, '')
+            .slice(0, 180);
+        if (!normalized) {
+            return safeFallback;
+        }
+        return /\.json$/i.test(normalized) ? normalized : `${normalized}.json`;
     }
 
     /**

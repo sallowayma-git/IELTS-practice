@@ -10,6 +10,13 @@
 (function(window) {
     'use strict';
 
+    const SAFE_TOAST_TYPES = new Set(['info', 'success', 'warning', 'error']);
+
+    function normalizeToastType(type) {
+        const value = String(type || '').toLowerCase();
+        return SAFE_TOAST_TYPES.has(value) ? value : 'info';
+    }
+
     class VocabListSwitcher {
         constructor(vocabStore) {
             if (!vocabStore) {
@@ -538,22 +545,23 @@
          * @param {string} type - 消息类型 ('info' | 'error' | 'success')
          */
         showToast(message, type = 'info') {
+            const safeType = normalizeToastType(type);
             // 检查是否存在全局 Toast 组件
             if (window.Toast && typeof window.Toast.show === 'function') {
-                window.Toast.show(message, type);
+                window.Toast.show(message, safeType);
                 return;
             }
 
             // 降级方案：使用简单的 DOM 提示
             const toast = document.createElement('div');
-            toast.className = `vocab-switcher-toast toast-${type}`;
+            toast.className = `vocab-switcher-toast toast-${safeType}`;
             toast.textContent = message;
             toast.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
                 padding: 12px 20px;
-                background: ${type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : '#2196f3'};
+                background: ${safeType === 'error' ? '#f44336' : safeType === 'success' ? '#4caf50' : safeType === 'warning' ? '#f59e0b' : '#2196f3'};
                 color: white;
                 border-radius: 4px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.2);

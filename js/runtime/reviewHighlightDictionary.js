@@ -6,23 +6,104 @@
     const INTERACTIVE_CLASS = 'review-dictionary-highlight';
     const VOCAB_MESSAGE_TYPE = 'VOCAB_HIGHLIGHT_SAVE';
     const FALLBACK_STORAGE_KEY = 'exam_system_vocab_list_reading_highlights';
+    const MAX_STORED_HIGHLIGHT_WORDS = 5000;
+    const MAX_WORD_TEXT_LENGTH = 160;
+    const MAX_MEANING_TEXT_LENGTH = 4000;
+    const MAX_SOURCE_TEXT_LENGTH = 200;
+    const MAX_EXTRA_TEXT_LENGTH = 1000;
+    const MAX_TAGS = 20;
+    const MAX_CONTEXT_JSON_CHARS = 8000;
+    const MAX_CONTEXT_DEPTH = 6;
+    const MAX_CONTEXT_OBJECT_KEYS = 50;
+    const MAX_CONTEXT_ARRAY_ITEMS = 50;
+    const CONTEXT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     let currentOptions = {};
     let activeHighlight = null;
     let activeLookup = null;
     let outsideHandlerAttached = false;
 
-    function cleanText(value) {
-        return String(value || '').replace(/\s+/g, ' ').trim();
+    function cleanText(value, maxLength = MAX_EXTRA_TEXT_LENGTH) {
+        return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
     }
 
-    function escapeHtml(value) {
-        return String(value || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+    function hashText(value) {
+        const text = String(value || '');
+        let hash = 0;
+        for (let index = 0; index < text.length; index += 1) {
+            hash = ((hash << 5) - hash) + text.charCodeAt(index);
+            hash |= 0;
+        }
+        return Math.abs(hash).toString(36);
+    }
+
+    function buildHighlightId(word) {
+        const slug = cleanText(word, MAX_WORD_TEXT_LENGTH)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 80);
+        return `reading-highlight-${slug || 'term'}-${hashText(word)}`;
+    }
+
+    function normalizeTags(tags) {
+        return Array.isArray(tags)
+            ? tags.slice(0, MAX_TAGS).map((tag) => cleanText(tag, MAX_SOURCE_TEXT_LENGTH)).filter(Boolean)
+            : [];
+    }
+
+    function normalizeContextValue(value, depth = 0, seen = new WeakSet()) {
+        if (typeof value === 'string') {
+            return cleanText(value, MAX_EXTRA_TEXT_LENGTH);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (value == null || typeof value === 'boolean') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            if (depth >= MAX_CONTEXT_DEPTH || seen.has(value)) {
+                return null;
+            }
+            seen.add(value);
+            return value
+                .slice(0, MAX_CONTEXT_ARRAY_ITEMS)
+                .map((item) => normalizeContextValue(item, depth + 1, seen))
+                .filter((item) => item !== null && item !== undefined);
+        }
+        if (value && typeof value === 'object') {
+            if (depth >= MAX_CONTEXT_DEPTH || seen.has(value)) {
+                return null;
+            }
+            seen.add(value);
+            try {
+                if (JSON.stringify(value).length > MAX_CONTEXT_JSON_CHARS) {
+                    return null;
+                }
+            } catch (_) {
+                return null;
+            }
+            const clone = {};
+            Object.keys(value)
+                .slice(0, MAX_CONTEXT_OBJECT_KEYS)
+                .forEach((key) => {
+                    const safeKey = cleanText(key, MAX_SOURCE_TEXT_LENGTH);
+                    if (!safeKey || CONTEXT_POLLUTION_KEYS.has(safeKey)) {
+                        return;
+                    }
+                    const normalized = normalizeContextValue(value[key], depth + 1, seen);
+                    if (normalized !== null && normalized !== undefined) {
+                        clone[safeKey] = normalized;
+                    }
+                });
+            try {
+                return JSON.stringify(clone).length <= MAX_CONTEXT_JSON_CHARS ? clone : null;
+            } catch (_) {
+                return null;
+            }
+        }
+        return null;
     }
 
     function getMessageTargetOrigin() {
@@ -235,21 +316,44 @@
         return bubble;
     }
 
-    function renderPart(part) {
+    function appendTextElement(parent, tagName, className, text) {
+        const element = document.createElement(tagName);
+        if (className) {
+            element.className = className;
+        }
+        element.textContent = String(text || '');
+        parent.appendChild(element);
+        return element;
+    }
+
+    function appendSection(parent, label, text) {
+        if (!text) {
+            return null;
+        }
+        const section = document.createElement('div');
+        section.className = 'vocab-section';
+        appendTextElement(section, 'div', 'vocab-label', label);
+        appendTextElement(section, 'div', 'vocab-text', text);
+        parent.appendChild(section);
+        return section;
+    }
+
+    function appendPart(parent, part) {
         if (!part) {
-            return '';
+            return;
         }
         const meta = [part.phonetic ? `/${part.phonetic}/` : '', part.pos || '', part.sourceLabel || '']
             .filter(Boolean)
             .join(' · ');
-        return `
-            <div class="vocab-part">
-                <div class="vocab-term">${escapeHtml(part.term || part.lemma || part.requested)}</div>
-                ${meta ? `<div class="vocab-meta">${escapeHtml(meta)}</div>` : ''}
-                ${part.zh ? `<div class="vocab-section"><div class="vocab-label">中文释义</div><div class="vocab-text">${escapeHtml(part.zh)}</div></div>` : ''}
-                ${part.en ? `<div class="vocab-section"><div class="vocab-label">英文释义</div><div class="vocab-text">${escapeHtml(part.en)}</div></div>` : ''}
-            </div>
-        `;
+        const node = document.createElement('div');
+        node.className = 'vocab-part';
+        appendTextElement(node, 'div', 'vocab-term', part.term || part.lemma || part.requested);
+        if (meta) {
+            appendTextElement(node, 'div', 'vocab-meta', meta);
+        }
+        appendSection(node, '中文释义', part.zh);
+        appendSection(node, '英文释义', part.en);
+        parent.appendChild(node);
     }
 
     function renderLookup(lookup) {
@@ -263,35 +367,47 @@
         const sourceLine = found && lookup.sourceLabel
             ? `${lookup.sourceLabel}${lookup.license ? ` · ${lookup.license}` : ''}`
             : '';
-        const body = !found
-            ? `
-                <div class="vocab-section">
-                    <div class="vocab-label">本地词典</div>
-                    <div class="vocab-text">未收录该高亮内容。可先加入阅读高亮生词，后续手动补充释义。</div>
-                </div>
-            `
-            : (Array.isArray(lookup.parts) && lookup.parts.length
-                ? lookup.parts.map(renderPart).join('')
-                : `
-                    ${lookup.zh ? `<div class="vocab-section"><div class="vocab-label">中文释义</div><div class="vocab-text">${escapeHtml(lookup.zh)}</div></div>` : ''}
-                    ${lookup.en ? `<div class="vocab-section"><div class="vocab-label">英文释义</div><div class="vocab-text">${escapeHtml(lookup.en)}</div></div>` : ''}
-                    ${lookup.example ? `<div class="vocab-section"><div class="vocab-label">例句</div><div class="vocab-text">${escapeHtml(lookup.example)}</div></div>` : ''}
-                    ${sourceLine ? `<div class="vocab-section"><div class="vocab-label">来源</div><div class="vocab-text">${escapeHtml(sourceLine)}</div></div>` : ''}
-                `);
 
-        return `
-            <div class="vocab-bubble-head">
-                <div>
-                    <h4 class="vocab-term">${escapeHtml(term || lookup.requested || '高亮词')}</h4>
-                    ${meta ? `<div class="vocab-meta">${escapeHtml(meta)}</div>` : ''}
-                </div>
-                <button class="vocab-close" type="button" data-vocab-close aria-label="关闭">×</button>
-            </div>
-            ${body}
-            <div class="vocab-actions">
-                <button class="vocab-add" type="button" data-vocab-add>加入生词本</button>
-            </div>
-        `;
+        const fragment = document.createDocumentFragment();
+        const head = document.createElement('div');
+        head.className = 'vocab-bubble-head';
+        const headingWrap = document.createElement('div');
+        appendTextElement(headingWrap, 'h4', 'vocab-term', term || (lookup && lookup.requested) || '高亮词');
+        if (meta) {
+            appendTextElement(headingWrap, 'div', 'vocab-meta', meta);
+        }
+        head.appendChild(headingWrap);
+
+        const closeButton = document.createElement('button');
+        closeButton.className = 'vocab-close';
+        closeButton.type = 'button';
+        closeButton.dataset.vocabClose = '';
+        closeButton.setAttribute('aria-label', '关闭');
+        closeButton.textContent = '×';
+        head.appendChild(closeButton);
+        fragment.appendChild(head);
+
+        if (!found) {
+            appendSection(fragment, '本地词典', '未收录该高亮内容。可先加入阅读高亮生词，后续手动补充释义。');
+        } else if (Array.isArray(lookup.parts) && lookup.parts.length) {
+            lookup.parts.forEach((part) => appendPart(fragment, part));
+        } else {
+            appendSection(fragment, '中文释义', lookup.zh);
+            appendSection(fragment, '英文释义', lookup.en);
+            appendSection(fragment, '例句', lookup.example);
+            appendSection(fragment, '来源', sourceLine);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'vocab-actions';
+        const addButton = document.createElement('button');
+        addButton.className = 'vocab-add';
+        addButton.type = 'button';
+        addButton.dataset.vocabAdd = '';
+        addButton.textContent = '加入生词本';
+        actions.appendChild(addButton);
+        fragment.appendChild(actions);
+        return fragment;
     }
 
     function positionBubble(bubble, highlight) {
@@ -323,7 +439,7 @@
         activeHighlight = highlight;
         activeLookup = lookupTerm(term);
         const bubble = ensureBubble();
-        bubble.innerHTML = renderLookup(activeLookup);
+        bubble.replaceChildren(renderLookup(activeLookup));
         positionBubble(bubble, highlight);
         if (!outsideHandlerAttached) {
             outsideHandlerAttached = true;
@@ -338,7 +454,7 @@
         const bubble = document.getElementById(BUBBLE_ID);
         if (bubble) {
             bubble.style.display = 'none';
-            bubble.innerHTML = '';
+            bubble.replaceChildren();
         }
         activeHighlight = null;
         activeLookup = null;
@@ -376,20 +492,20 @@
         const context = currentOptions && typeof currentOptions.getContext === 'function'
             ? currentOptions.getContext()
             : {};
-        const selectedText = cleanText(activeHighlight && activeHighlight.textContent);
+        const selectedText = cleanText(activeHighlight && activeHighlight.textContent, MAX_WORD_TEXT_LENGTH);
         return {
-            word: cleanText(lookup.term || lookup.lemma || selectedText),
+            word: cleanText(lookup.term || lookup.lemma || selectedText, MAX_WORD_TEXT_LENGTH),
             selectedText,
-            meaning: cleanText(lookup.zh || ''),
-            definition: cleanText(lookup.en || ''),
-            phonetic: cleanText(lookup.phonetic || ''),
-            partOfSpeech: cleanText(lookup.pos || ''),
-            source: lookup.source || 'local',
-            sourceLabel: lookup.sourceLabel || '本地词典',
-            license: lookup.license || '',
-            example: cleanText(lookup.example || ''),
-            tags: Array.isArray(lookup.tags) ? lookup.tags.slice() : [],
-            context: context && typeof context === 'object' ? context : {}
+            meaning: cleanText(lookup.zh || '', MAX_MEANING_TEXT_LENGTH),
+            definition: cleanText(lookup.en || '', MAX_MEANING_TEXT_LENGTH),
+            phonetic: cleanText(lookup.phonetic || '', MAX_SOURCE_TEXT_LENGTH),
+            partOfSpeech: cleanText(lookup.pos || '', MAX_SOURCE_TEXT_LENGTH),
+            source: cleanText(lookup.source || 'local', MAX_SOURCE_TEXT_LENGTH),
+            sourceLabel: cleanText(lookup.sourceLabel || '本地词典', MAX_SOURCE_TEXT_LENGTH),
+            license: cleanText(lookup.license || '', MAX_SOURCE_TEXT_LENGTH),
+            example: cleanText(lookup.example || '', MAX_MEANING_TEXT_LENGTH),
+            tags: normalizeTags(lookup.tags),
+            context: normalizeContextValue(context) || {}
         };
     }
 
@@ -432,19 +548,26 @@
             createdAt: now,
             updatedAt: now
         };
-        const key = payload.word.toLowerCase();
+        list.words = Array.isArray(list.words)
+            ? list.words.filter((item) => item && typeof item === 'object').slice(-MAX_STORED_HIGHLIGHT_WORDS)
+            : [];
+        const safeWord = cleanText(payload.word, MAX_WORD_TEXT_LENGTH);
+        if (!safeWord) {
+            return false;
+        }
+        const key = safeWord.toLowerCase();
         const existingIndex = list.words.findIndex((item) => String(item.word || '').trim().toLowerCase() === key);
         const wordRecord = {
-            id: `reading-highlight-${key.replace(/[^a-z0-9]+/g, '-')}`,
-            word: payload.word,
-            meaning: payload.meaning || payload.definition || '待补充释义',
-            example: payload.example || '',
+            id: buildHighlightId(safeWord),
+            word: safeWord,
+            meaning: cleanText(payload.meaning || payload.definition || '待补充释义', MAX_MEANING_TEXT_LENGTH),
+            example: cleanText(payload.example || '', MAX_MEANING_TEXT_LENGTH),
             note: [
-                payload.phonetic ? `音标: ${payload.phonetic}` : '',
-                payload.partOfSpeech ? `词性: ${payload.partOfSpeech}` : '',
-                payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${payload.selectedText}` : '',
-                payload.sourceLabel ? `来源: ${payload.sourceLabel}` : ''
-            ].filter(Boolean).join('；'),
+                payload.phonetic ? `音标: ${cleanText(payload.phonetic, MAX_SOURCE_TEXT_LENGTH)}` : '',
+                payload.partOfSpeech ? `词性: ${cleanText(payload.partOfSpeech, MAX_SOURCE_TEXT_LENGTH)}` : '',
+                payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${cleanText(payload.selectedText, MAX_WORD_TEXT_LENGTH)}` : '',
+                payload.sourceLabel ? `来源: ${cleanText(payload.sourceLabel, MAX_SOURCE_TEXT_LENGTH)}` : ''
+            ].filter(Boolean).join('；').slice(0, MAX_MEANING_TEXT_LENGTH),
             timestamp: Date.now(),
             source: 'reading-highlight',
             easeFactor: null,
@@ -462,6 +585,7 @@
         } else {
             list.words.push(wordRecord);
         }
+        list.words = list.words.slice(-MAX_STORED_HIGHLIGHT_WORDS);
         list.updatedAt = now;
         list.stats = {
             totalWords: list.words.length,

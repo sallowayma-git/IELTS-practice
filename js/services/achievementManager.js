@@ -678,6 +678,56 @@
         window.AchievementManager.init();
     }
 
+    function normalizeTierClass(value) {
+        return String(value || '').replace(/[^a-z0-9_-]/gi, '');
+    }
+
+    function clearElement(element) {
+        while (element && element.firstChild) {
+            element.removeChild(element.firstChild);
+        }
+    }
+
+    function createAchievementTextNode(tagName, className, text) {
+        const node = document.createElement(tagName);
+        if (className) {
+            node.className = className;
+        }
+        node.textContent = text == null ? '' : String(text);
+        return node;
+    }
+
+    function renderAchievementCard(achievement) {
+        const card = document.createElement('div');
+        const tierClass = achievement.tier ? `tier-${normalizeTierClass(achievement.tier)}` : '';
+        card.className = [
+            'achievement-card',
+            achievement.isUnlocked ? 'unlocked' : '',
+            tierClass
+        ].filter(Boolean).join(' ');
+
+        card.appendChild(createAchievementTextNode('span', 'achievement-icon', achievement.icon));
+        card.appendChild(createAchievementTextNode('div', 'achievement-title', achievement.title));
+        card.appendChild(createAchievementTextNode('div', 'achievement-desc', achievement.description));
+
+        if (achievement.isUnlocked) {
+            const status = createAchievementTextNode('div', '', '已解锁');
+            status.style.cssText = 'font-size:0.7em; margin-top:5px; color:#10b981; font-weight:bold;';
+            card.appendChild(status);
+        }
+
+        if (achievement.isUnlocked && achievement.unlockedAt) {
+            const unlockedAt = new Date(achievement.unlockedAt).toLocaleDateString();
+            if (unlockedAt) {
+                const date = createAchievementTextNode('div', '', unlockedAt);
+                date.style.cssText = 'font-size:0.65em; color:#9ca3af; margin-top:2px;';
+                card.appendChild(date);
+            }
+        }
+
+        return card;
+    }
+
     // UI Helpers
     window.showAchievements = async function () {
         const modal = document.getElementById('achievements-modal');
@@ -694,15 +744,12 @@
 
         await window.AchievementManager.syncFromScoreStorage({ includeRecords: true, notify: false });
         const all = window.AchievementManager.getAll();
-        list.innerHTML = all.map(a => `
-            <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''} ${a.tier ? 'tier-' + a.tier : ''}">
-                <span class="achievement-icon">${a.icon}</span>
-                <div class="achievement-title">${a.title}</div>
-                <div class="achievement-desc">${a.description}</div>
-                ${a.isUnlocked ? `<div style="font-size:0.7em; margin-top:5px; color:#10b981; font-weight:bold;">已解锁</div>` : ''}
-                ${a.isUnlocked && a.unlockedAt ? `<div style="font-size:0.65em; color:#9ca3af; margin-top:2px;">${new Date(a.unlockedAt).toLocaleDateString()}</div>` : ''}
-            </div>
-        `).join('');
+        const fragment = document.createDocumentFragment();
+        all.forEach((achievement) => {
+            fragment.appendChild(renderAchievementCard(achievement));
+        });
+        clearElement(list);
+        list.appendChild(fragment);
 
         modal.classList.add('show');
     };

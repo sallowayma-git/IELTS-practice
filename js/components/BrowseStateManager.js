@@ -2,6 +2,180 @@
  * 浏览状态管理器
  * 负责管理题库浏览的状态和过滤器，支持完整的状态持久化和回滚
  */
+const BROWSE_STATE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const BROWSE_STATE_MAX_TEXT_LENGTH = 120;
+const BROWSE_STATE_MAX_SEARCH_LENGTH = 300;
+const BROWSE_STATE_MAX_HISTORY_TEXT_LENGTH = 160;
+const BROWSE_STATE_MAX_PAGE_SIZE = 200;
+const BROWSE_STATE_VIEW_MODES = new Set(['grid', 'list']);
+const BROWSE_STATE_SORT_FIELDS = new Set(['title', 'category', 'frequency', 'difficulty', 'date', 'score']);
+const BROWSE_STATE_SORT_ORDERS = new Set(['asc', 'desc']);
+
+function createDefaultBrowseState() {
+    return {
+        currentCategory: null,
+        currentFrequency: null,
+        viewMode: 'grid',
+        sortBy: 'title',
+        sortOrder: 'asc',
+        filters: {
+            frequency: 'all',
+            status: 'all',
+            difficulty: 'all'
+        },
+        searchQuery: '',
+        pagination: {
+            page: 1,
+            pageSize: 20,
+            total: 0
+        }
+    };
+}
+
+function isPlainBrowseObject(value) {
+    return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function isUnsafeBrowseKey(key) {
+    return BROWSE_STATE_POLLUTION_KEYS.has(String(key));
+}
+
+function safeBrowseEntries(value) {
+    if (!isPlainBrowseObject(value)) {
+        return [];
+    }
+    return Object.entries(value).filter(([key]) => !isUnsafeBrowseKey(key));
+}
+
+function normalizeBrowseText(value, maxLength = BROWSE_STATE_MAX_TEXT_LENGTH) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    const text = String(value)
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .trim()
+        .slice(0, maxLength);
+    return text || null;
+}
+
+function normalizeBrowseEnum(value, allowed, fallback) {
+    const text = normalizeBrowseText(value, BROWSE_STATE_MAX_TEXT_LENGTH);
+    return text && allowed.has(text) ? text : fallback;
+}
+
+function normalizeBrowseInteger(value, fallback, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return fallback;
+    }
+    return Math.min(Math.max(Math.trunc(number), min), max);
+}
+
+function cloneBrowseState(state) {
+    return {
+        currentCategory: state.currentCategory || null,
+        currentFrequency: state.currentFrequency || null,
+        viewMode: state.viewMode || 'grid',
+        sortBy: state.sortBy || 'title',
+        sortOrder: state.sortOrder || 'asc',
+        filters: {
+            frequency: state.filters?.frequency || 'all',
+            status: state.filters?.status || 'all',
+            difficulty: state.filters?.difficulty || 'all'
+        },
+        searchQuery: state.searchQuery || '',
+        pagination: {
+            page: state.pagination?.page || 1,
+            pageSize: state.pagination?.pageSize || 20,
+            total: state.pagination?.total || 0
+        }
+    };
+}
+
+function normalizeBrowseStatePatch(input) {
+    if (!isPlainBrowseObject(input)) {
+        return {};
+    }
+    const patch = {};
+    for (const [key, value] of safeBrowseEntries(input)) {
+        if (key === 'currentCategory') {
+            patch.currentCategory = normalizeBrowseText(value);
+        } else if (key === 'currentFrequency') {
+            patch.currentFrequency = normalizeBrowseText(value);
+        } else if (key === 'viewMode') {
+            patch.viewMode = normalizeBrowseEnum(value, BROWSE_STATE_VIEW_MODES, undefined);
+        } else if (key === 'sortBy') {
+            patch.sortBy = normalizeBrowseEnum(value, BROWSE_STATE_SORT_FIELDS, undefined);
+        } else if (key === 'sortOrder') {
+            patch.sortOrder = normalizeBrowseEnum(value, BROWSE_STATE_SORT_ORDERS, undefined);
+        } else if (key === 'searchQuery') {
+            patch.searchQuery = normalizeBrowseText(value, BROWSE_STATE_MAX_SEARCH_LENGTH) || '';
+        } else if (key === 'filters' && isPlainBrowseObject(value)) {
+            patch.filters = {};
+            for (const filterKey of ['frequency', 'status', 'difficulty']) {
+                if (Object.prototype.hasOwnProperty.call(value, filterKey) && !isUnsafeBrowseKey(filterKey)) {
+                    patch.filters[filterKey] = normalizeBrowseText(value[filterKey]) || 'all';
+                }
+            }
+        } else if (key === 'pagination' && isPlainBrowseObject(value)) {
+            patch.pagination = {};
+            if (Object.prototype.hasOwnProperty.call(value, 'page')) {
+                patch.pagination.page = normalizeBrowseInteger(value.page, 1, 1, Number.MAX_SAFE_INTEGER);
+            }
+            if (Object.prototype.hasOwnProperty.call(value, 'pageSize')) {
+                patch.pagination.pageSize = normalizeBrowseInteger(value.pageSize, 20, 1, BROWSE_STATE_MAX_PAGE_SIZE);
+            }
+            if (Object.prototype.hasOwnProperty.call(value, 'total')) {
+                patch.pagination.total = normalizeBrowseInteger(value.total, 0, 0, Number.MAX_SAFE_INTEGER);
+            }
+        }
+    }
+    return patch;
+}
+
+function mergeBrowseState(baseState, patchInput) {
+    const base = cloneBrowseState(baseState || createDefaultBrowseState());
+    const patch = normalizeBrowseStatePatch(patchInput);
+    if (Object.prototype.hasOwnProperty.call(patch, 'currentCategory')) base.currentCategory = patch.currentCategory;
+    if (Object.prototype.hasOwnProperty.call(patch, 'currentFrequency')) base.currentFrequency = patch.currentFrequency;
+    if (patch.viewMode) base.viewMode = patch.viewMode;
+    if (patch.sortBy) base.sortBy = patch.sortBy;
+    if (patch.sortOrder) base.sortOrder = patch.sortOrder;
+    if (Object.prototype.hasOwnProperty.call(patch, 'searchQuery')) base.searchQuery = patch.searchQuery;
+    if (patch.filters) base.filters = { ...base.filters, ...patch.filters };
+    if (patch.pagination) base.pagination = { ...base.pagination, ...patch.pagination };
+    return base;
+}
+
+function normalizeBrowseHistoryItem(item) {
+    if (!isPlainBrowseObject(item)) {
+        return null;
+    }
+    const normalized = {};
+    const allowedKeys = new Set(['action', 'filter', 'from', 'to', 'timestamp']);
+    for (const [key, value] of safeBrowseEntries(item)) {
+        if (!allowedKeys.has(key)) {
+            continue;
+        }
+        if (key === 'timestamp') {
+            normalized.timestamp = normalizeBrowseInteger(value, Date.now(), 0, Number.MAX_SAFE_INTEGER);
+        } else {
+            normalized[key] = normalizeBrowseText(value, BROWSE_STATE_MAX_HISTORY_TEXT_LENGTH);
+        }
+    }
+    return normalized.action ? normalized : null;
+}
+
+function normalizeBrowseHistory(history, maxHistorySize) {
+    if (!Array.isArray(history)) {
+        return [];
+    }
+    return history
+        .slice(-maxHistorySize)
+        .map(normalizeBrowseHistoryItem)
+        .filter(Boolean);
+}
+
 class BrowseStateManager {
     constructor() {
         this.currentFilter = 'all';
@@ -9,24 +183,7 @@ class BrowseStateManager {
         this.browseHistory = [];
         this.maxHistorySize = 10;
         this.subscribers = [];
-        this.state = {
-            currentCategory: null,
-            currentFrequency: null,
-            viewMode: 'grid',
-            sortBy: 'title',
-            sortOrder: 'asc',
-            filters: {
-                frequency: 'all',
-                status: 'all',
-                difficulty: 'all'
-            },
-            searchQuery: '',
-            pagination: {
-                page: 1,
-                pageSize: 20,
-                total: 0
-            }
-        };
+        this.state = createDefaultBrowseState();
 
         // 全局引用，供事件委托使用
         window.browseStateManager = this;
@@ -113,32 +270,33 @@ class BrowseStateManager {
      * 设置浏览过滤器
      */
     setBrowseFilter(filter) {
-        console.log(`[BrowseStateManager] 设置浏览过滤器: ${filter}`);
+        const safeFilter = normalizeBrowseText(filter) || 'all';
+        console.log(`[BrowseStateManager] 设置浏览过滤器: ${safeFilter}`);
         
         // 保存之前的过滤器
-        this.previousFilter = this.currentFilter;
+        this.previousFilter = normalizeBrowseText(this.currentFilter);
         
         // 设置新的过滤器
-        this.currentFilter = filter;
+        this.currentFilter = safeFilter;
         
         // 更新全局变量（保持向后兼容）
         if (window.currentCategory !== undefined) {
-            window.currentCategory = filter;
+            window.currentCategory = safeFilter;
         }
         
         // 更新状态
         this.setState({
-            currentCategory: filter === 'all' ? null : filter
+            currentCategory: safeFilter === 'all' ? null : safeFilter
         });
         
         // 更新浏览标题
-        this.updateBrowseTitle(filter);
+        this.updateBrowseTitle(safeFilter);
         
         // 记录状态变更
         this.addToHistory({
             action: 'filter_change',
             from: this.previousFilter,
-            to: filter,
+            to: safeFilter,
             timestamp: Date.now()
         });
         
@@ -146,7 +304,7 @@ class BrowseStateManager {
         this.saveBrowseState();
         
         // 触发过滤器变更事件
-        this.dispatchFilterChangeEvent(filter);
+        this.dispatchFilterChangeEvent(safeFilter);
     }
 
     /**
@@ -156,8 +314,8 @@ class BrowseStateManager {
         // 保存历史状态
         this.browseHistory.push({
             action: 'state_change',
-            previousState: JSON.parse(JSON.stringify(this.state)),
-            newState: JSON.parse(JSON.stringify(newState)),
+            previousState: cloneBrowseState(this.state),
+            newState: normalizeBrowseStatePatch(newState),
             timestamp: Date.now()
         });
         
@@ -166,7 +324,7 @@ class BrowseStateManager {
         }
         
         // 更新状态
-        this.state = { ...this.state, ...newState };
+        this.state = mergeBrowseState(this.state, newState);
         
         // 通知订阅者
         this.notifySubscribers();
@@ -209,10 +367,10 @@ class BrowseStateManager {
     persistState() {
         try {
             const dataToSave = {
-                currentFilter: this.currentFilter,
-                previousFilter: this.previousFilter,
-                state: this.state,
-                browseHistory: this.browseHistory.slice(-this.maxHistorySize),
+                currentFilter: normalizeBrowseText(this.currentFilter) || 'all',
+                previousFilter: normalizeBrowseText(this.previousFilter),
+                state: cloneBrowseState(this.state),
+                browseHistory: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize),
                 timestamp: Date.now()
             };
             
@@ -231,14 +389,17 @@ class BrowseStateManager {
             const savedData = localStorage.getItem('browse_state');
             if (savedData) {
                 const data = JSON.parse(savedData);
+                if (!isPlainBrowseObject(data)) {
+                    throw new Error('Invalid browse state payload');
+                }
                 
                 // 恢复基本状态
-                this.previousFilter = data.previousFilter || null;
-                this.browseHistory = data.browseHistory || [];
+                this.previousFilter = normalizeBrowseText(data.previousFilter);
+                this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
                 
                 // 恢复完整状态
                 if (data.state) {
-                    this.state = { ...this.state, ...data.state };
+                    this.state = mergeBrowseState(this.state, data.state);
                 }
                 
                 // 默认重置为'all'，确保主界面浏览按钮总是显示所有考试
@@ -260,31 +421,14 @@ class BrowseStateManager {
         this.currentFilter = 'all';
         this.previousFilter = null;
         this.browseHistory = [];
-        this.state = {
-            currentCategory: null,
-            currentFrequency: null,
-            viewMode: 'grid',
-            sortBy: 'title',
-            sortOrder: 'asc',
-            filters: {
-                frequency: 'all',
-                status: 'all',
-                difficulty: 'all'
-            },
-            searchQuery: '',
-            pagination: {
-                page: 1,
-                pageSize: 20,
-                total: 0
-            }
-        };
+        this.state = createDefaultBrowseState();
     }
 
     /**
      * 获取当前状态
      */
     getState() {
-        return { ...this.state };
+        return cloneBrowseState(this.state);
     }
 
     /**
@@ -344,9 +488,10 @@ class BrowseStateManager {
      * 更新浏览标题
      */
     updateBrowseTitle(filter) {
-        const label = filter === 'all'
+        const safeFilter = normalizeBrowseText(filter) || 'all';
+        const label = safeFilter === 'all'
             ? '题库浏览'
-            : `${filter} 题库浏览`;
+            : `${safeFilter} 题库浏览`;
         if (typeof window.setBrowseTitle === 'function') {
             window.setBrowseTitle(label);
             return;
@@ -385,7 +530,11 @@ class BrowseStateManager {
      * 添加到历史记录
      */
     addToHistory(historyItem) {
-        this.browseHistory.push(historyItem);
+        const normalized = normalizeBrowseHistoryItem(historyItem);
+        if (!normalized) {
+            return;
+        }
+        this.browseHistory.push(normalized);
         
         // 限制历史记录大小
         if (this.browseHistory.length > this.maxHistorySize) {
@@ -406,21 +555,21 @@ class BrowseStateManager {
      * 获取当前过滤器
      */
     getCurrentFilter() {
-        return this.currentFilter;
+        return normalizeBrowseText(this.currentFilter) || 'all';
     }
 
     /**
      * 获取之前的过滤器
      */
     getPreviousFilter() {
-        return this.previousFilter;
+        return normalizeBrowseText(this.previousFilter);
     }
 
     /**
      * 获取浏览历史
      */
     getBrowseHistory() {
-        return [...this.browseHistory];
+        return normalizeBrowseHistory(this.browseHistory, this.maxHistorySize);
     }
 
     /**
@@ -448,10 +597,11 @@ class BrowseStateManager {
      * 触发过滤器变更事件
      */
     dispatchFilterChangeEvent(filter) {
+        const safeFilter = normalizeBrowseText(filter) || 'all';
         const event = new CustomEvent('browseFilterChanged', {
             detail: {
-                filter: filter,
-                previousFilter: this.previousFilter,
+                filter: safeFilter,
+                previousFilter: this.getPreviousFilter(),
                 timestamp: Date.now()
             }
         });
@@ -464,7 +614,7 @@ class BrowseStateManager {
     dispatchResetEvent() {
         const event = new CustomEvent('browseReset', {
             detail: {
-                previousFilter: this.previousFilter,
+                previousFilter: this.getPreviousFilter(),
                 timestamp: Date.now()
             }
         });
@@ -478,17 +628,18 @@ class BrowseStateManager {
         const filterCounts = {};
         this.browseHistory.forEach(item => {
             if (item.action === 'filter_change') {
-                filterCounts[item.to] = (filterCounts[item.to] || 0) + 1;
+                const key = normalizeBrowseText(item.to) || 'unknown';
+                filterCounts[key] = (filterCounts[key] || 0) + 1;
             }
         });
 
         return {
-            currentFilter: this.currentFilter,
-            previousFilter: this.previousFilter,
-            historySize: this.browseHistory.length,
+            currentFilter: this.getCurrentFilter(),
+            previousFilter: this.getPreviousFilter(),
+            historySize: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize).length,
             filterUsage: filterCounts,
-            lastActivity: this.browseHistory.length > 0 ? 
-                this.browseHistory[this.browseHistory.length - 1].timestamp : null
+            lastActivity: this.browseHistory.length > 0 ?
+                normalizeBrowseInteger(this.browseHistory[this.browseHistory.length - 1].timestamp, 0, 0, Number.MAX_SAFE_INTEGER) : null
         };
     }
 
@@ -523,9 +674,9 @@ class BrowseStateManager {
      */
     exportBrowseHistory() {
         const exportData = {
-            currentFilter: this.currentFilter,
-            previousFilter: this.previousFilter,
-            browseHistory: this.browseHistory,
+            currentFilter: this.getCurrentFilter(),
+            previousFilter: this.getPreviousFilter(),
+            browseHistory: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize),
             stats: this.getBrowseStats(),
             exportTime: new Date().toISOString()
         };
@@ -540,8 +691,8 @@ class BrowseStateManager {
         try {
             const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
             
-            if (data.browseHistory && Array.isArray(data.browseHistory)) {
-                this.browseHistory = data.browseHistory.slice(-this.maxHistorySize);
+            if (isPlainBrowseObject(data) && data.browseHistory && Array.isArray(data.browseHistory)) {
+                this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
                 this.saveBrowseState();
                 
                 console.log('[BrowseStateManager] 浏览历史导入成功');

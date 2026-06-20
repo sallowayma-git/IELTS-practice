@@ -3,6 +3,63 @@
  * 负责数据备份、验证、修复和导入导出功能
  * 基于统一的数据仓库接口执行原子操作
  */
+let dataIntegrityFallbackIdCounter = 0;
+const DEFAULT_MAX_IMPORT_SOURCE_BYTES = 10 * 1024 * 1024;
+const MAX_DATA_INTEGRITY_IMPORT_RECORDS = 5000;
+const MAX_DATA_INTEGRITY_IMPORT_NODES = 50000;
+const MAX_DATA_INTEGRITY_IMPORT_DEPTH = 40;
+const MAX_DATA_INTEGRITY_RECORD_ID_LENGTH = 512;
+const MAX_DATA_INTEGRITY_RECORD_TITLE_LENGTH = 500;
+const MAX_DATA_INTEGRITY_RECORD_TYPE_LENGTH = 64;
+const MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH = 4000;
+const MAX_DATA_INTEGRITY_EXTRA_DEPTH = 8;
+const MAX_DATA_INTEGRITY_EXTRA_ARRAY_ITEMS = 200;
+const MAX_DATA_INTEGRITY_EXTRA_OBJECT_KEYS = 200;
+const MAX_DATA_INTEGRITY_SCORE = 100;
+const MAX_DATA_INTEGRITY_DURATION_SECONDS = 365 * 24 * 60 * 60;
+const MAX_DATA_INTEGRITY_QUESTION_COUNT = 10000;
+const IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function normalizeImportSourceByteLimit(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) {
+        return DEFAULT_MAX_IMPORT_SOURCE_BYTES;
+    }
+    return Math.min(Math.floor(number), DEFAULT_MAX_IMPORT_SOURCE_BYTES);
+}
+
+function getTextByteLength(value) {
+    const text = String(value ?? '');
+    if (typeof TextEncoder === 'function') {
+        return new TextEncoder().encode(text).byteLength;
+    }
+    if (typeof Blob === 'function') {
+        return new Blob([text]).size;
+    }
+    return text.length;
+}
+
+function createDataIntegrityId(prefix) {
+    const cryptoObj = window.crypto || window.msCrypto;
+    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+        return `${prefix}_${Date.now()}_${cryptoObj.randomUUID()}`;
+    }
+    if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        cryptoObj.getRandomValues(bytes);
+        const suffix = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        return `${prefix}_${Date.now()}_${suffix}`;
+    }
+    dataIntegrityFallbackIdCounter += 1;
+    return `${prefix}_${Date.now()}_fallback_${dataIntegrityFallbackIdCounter.toString(36)}`;
+}
+
+function createImportLimitError(message) {
+    const error = new Error(message);
+    error.name = 'ImportLimitError';
+    return error;
+}
+
 class DataIntegrityManager {
     constructor(options = {}) {
         this.backupInterval = 600000; // 10分钟自动备份
@@ -15,6 +72,7 @@ class DataIntegrityManager {
         this.isInitialized = false;
         this.registry = options.registry || window.StorageProviderRegistry || null;
         this._unsubscribe = null;
+        this.maxImportSourceBytes = normalizeImportSourceByteLimit(options.maxImportSourceBytes);
 
         this.registerDefaultValidationRules();
         this.connectToProviders();
@@ -114,7 +172,7 @@ class DataIntegrityManager {
             if (Object.keys(data).length === 0) {
                 throw new Error('无数据可备份');
             }
-            const id = `backup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const id = createDataIntegrityId('backup');
             const timestamp = new Date().toISOString();
             const backupObj = {
                 id,
@@ -152,7 +210,7 @@ class DataIntegrityManager {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
             console.log('[DataIntegrityManager] 配额溢出备份已下载');
         } catch (fallbackError) {
             console.error('[DataIntegrityManager] fallback 导出失败:', fallbackError);
@@ -250,10 +308,17 @@ class DataIntegrityManager {
                 throw new Error('备份不存在');
             }
             const data = backup.data || {};
+            this._assertSafeImportValue(data, 'backup.data');
+            const practiceRecords = Array.isArray(data.practice_records)
+                ? this._preparePracticeRecords(data.practice_records)
+                : [];
+            const systemSettings = data.system_settings && typeof data.system_settings === 'object'
+                ? this._prepareSystemSettings(data.system_settings)
+                : {};
             await this.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
-                await repos.practice.overwrite(data.practice_records || [], { transaction: tx });
+                await repos.practice.overwrite(practiceRecords, { transaction: tx });
                 const currentSettings = await repos.settings.getAll({ transaction: tx });
-                const restoredSettings = { ...currentSettings, ...(data.system_settings || {}) };
+                const restoredSettings = { ...currentSettings, ...systemSettings };
                 await repos.settings.saveAll(restoredSettings, { transaction: tx });
             });
             console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功`);
@@ -279,7 +344,7 @@ class DataIntegrityManager {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
             console.log('[DataIntegrityManager] 数据导出成功');
         } catch (error) {
             console.error('[DataIntegrityManager] 导出数据失败:', error);
@@ -391,9 +456,14 @@ class DataIntegrityManager {
 
     async _normalizeImportPayload(source) {
         const raw = await this._resolveImportSource(source);
+        this._assertSafeImportValue(raw);
         const container = this._unwrapDataSection(raw);
+        const practiceRecords = this._extractField(container, ['practice_records', 'practiceRecords', 'practice']);
+        if (Array.isArray(practiceRecords) && practiceRecords.length > MAX_DATA_INTEGRITY_IMPORT_RECORDS) {
+            throw createImportLimitError(`Import contains too many practice records. Maximum supported count is ${MAX_DATA_INTEGRITY_IMPORT_RECORDS}.`);
+        }
         return {
-            practice_records: this._extractField(container, ['practice_records', 'practiceRecords', 'practice']),
+            practice_records: practiceRecords,
             system_settings: this._extractField(container, ['system_settings', 'systemSettings', 'settings']),
             version: typeof raw?.version === 'string' ? raw.version : null
         };
@@ -404,24 +474,75 @@ class DataIntegrityManager {
             throw new Error('未提供导入数据源');
         }
         if (typeof source === 'string') {
+            this._assertImportSourceSize(getTextByteLength(source), 'string');
             return JSON.parse(source);
         }
-        if (source instanceof Blob && typeof source.text === 'function') {
+        if (typeof File !== 'undefined' && source instanceof File && typeof source.text === 'function') {
+            this._assertImportSourceSize(source.size, 'file');
             const text = await source.text();
+            this._assertImportSourceSize(getTextByteLength(text), 'file');
             return JSON.parse(text);
         }
-        if (typeof File !== 'undefined' && source instanceof File) {
+        if (typeof Blob !== 'undefined' && source instanceof Blob && typeof source.text === 'function') {
+            this._assertImportSourceSize(source.size, 'blob');
             const text = await source.text();
+            this._assertImportSourceSize(getTextByteLength(text), 'blob');
             return JSON.parse(text);
         }
         if (source instanceof ArrayBuffer) {
+            this._assertImportSourceSize(source.byteLength, 'arrayBuffer');
             const text = new TextDecoder('utf-8').decode(source);
+            this._assertImportSourceSize(getTextByteLength(text), 'arrayBuffer');
             return JSON.parse(text);
         }
         if (typeof source === 'object') {
             return source;
         }
         throw new Error('不支持的导入数据类型');
+    }
+
+    _assertImportSourceSize(size, kind) {
+        const byteLength = Number(size);
+        if (Number.isFinite(byteLength) && byteLength > this.maxImportSourceBytes) {
+            throw new Error(`Import ${kind || 'source'} is too large`);
+        }
+    }
+
+    _assertSafeImportValue(value, path = 'import', depth = 0, state = null) {
+        if (value === null || typeof value !== 'object') {
+            return;
+        }
+
+        const scanState = state || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+
+        if (depth > MAX_DATA_INTEGRITY_IMPORT_DEPTH) {
+            throw createImportLimitError(`Import structure is too deep at ${path}`);
+        }
+        if (scanState.seen.has(value)) {
+            return;
+        }
+        scanState.seen.add(value);
+        scanState.nodes += 1;
+        if (scanState.nodes > MAX_DATA_INTEGRITY_IMPORT_NODES) {
+            throw createImportLimitError(`Import structure is too large to scan safely. Maximum supported node count is ${MAX_DATA_INTEGRITY_IMPORT_NODES}.`);
+        }
+
+        if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+                this._assertSafeImportValue(item, `${path}[${index}]`, depth + 1, scanState);
+            });
+            return;
+        }
+
+        Object.keys(value).forEach((key) => {
+            if (IMPORT_POLLUTION_KEYS.has(key)) {
+                throw new Error(`Import contains an unsafe key at ${path}.${key}`);
+            }
+            this._assertSafeImportValue(value[key], `${path}.${key}`, depth + 1, scanState);
+        });
     }
 
     _unwrapDataSection(raw) {
@@ -459,6 +580,9 @@ class DataIntegrityManager {
         if (!Array.isArray(list)) {
             return [];
         }
+        if (list.length > MAX_DATA_INTEGRITY_IMPORT_RECORDS) {
+            throw createImportLimitError(`Import contains too many practice records. Maximum supported count is ${MAX_DATA_INTEGRITY_IMPORT_RECORDS}.`);
+        }
         const prepared = [];
         for (const entry of list) {
             const normalized = this._normalizePracticeRecord(entry);
@@ -473,13 +597,21 @@ class DataIntegrityManager {
         if (!record || typeof record !== 'object') {
             return null;
         }
-        const normalized = { ...record };
+        const normalized = this._cloneImportRecord(record) || {};
         const now = new Date().toISOString();
 
-        normalized.id = this._stringify(record.id) || `imported_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        normalized.examId = this._stringify(record.examId) || this._stringify(record.sessionId) || 'imported_exam';
-        normalized.title = this._stringify(record.title) || this._stringify(record.examTitle) || normalized.examId;
-        normalized.type = this._pickString([record.type, record.category, record.mode, record.section, 'practice']);
+        normalized.id = this._stringify(record.id, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH) || createDataIntegrityId('imported');
+        normalized.sessionId = this._stringify(record.sessionId, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH) || normalized.sessionId;
+        normalized.examId = this._stringify(record.examId, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH)
+            || this._stringify(record.sessionId, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH)
+            || 'imported_exam';
+        normalized.title = this._stringify(record.title, MAX_DATA_INTEGRITY_RECORD_TITLE_LENGTH)
+            || this._stringify(record.examTitle, MAX_DATA_INTEGRITY_RECORD_TITLE_LENGTH)
+            || normalized.examId;
+        normalized.type = this._pickString(
+            [record.type, record.category, record.mode, record.section, 'practice'],
+            MAX_DATA_INTEGRITY_RECORD_TYPE_LENGTH
+        );
         normalized.date = this._normalizeDate(record.date || record.startTime || record.createdAt || now) || now;
         normalized.startTime = this._normalizeDate(record.startTime || record.date || record.createdAt) || normalized.date;
         normalized.endTime = this._normalizeDate(record.endTime || record.completedAt || record.finishTime) || normalized.startTime;
@@ -495,29 +627,32 @@ class DataIntegrityManager {
             record.realData?.percentage,
             record.percentage,
             record.accuracy
-        ], 0);
+        ], 0, 0, MAX_DATA_INTEGRITY_SCORE);
         normalized.totalQuestions = this._pickInteger([
             record.totalQuestions,
             record.questionCount,
             record.realData?.totalQuestions,
             record.realData?.questionCount
-        ], 0);
-        normalized.correctAnswers = this._pickInteger([
+        ], 0, 0, MAX_DATA_INTEGRITY_QUESTION_COUNT);
+        const correctAnswers = this._pickInteger([
             record.correctAnswers,
             record.correct,
             record.realData?.correctAnswers,
             record.realData?.correct
-        ], 0);
+        ], 0, 0, MAX_DATA_INTEGRITY_QUESTION_COUNT);
+        normalized.correctAnswers = normalized.totalQuestions > 0
+            ? Math.min(correctAnswers, normalized.totalQuestions)
+            : correctAnswers;
 
-        if (normalized.accuracy === undefined) {
-            const accuracy = this._pickNumber([record.accuracy, record.realData?.accuracy]);
-            if (accuracy !== null) {
-                normalized.accuracy = accuracy;
-            }
+        const accuracy = this._pickNumber([record.accuracy, record.realData?.accuracy], null, 0, MAX_DATA_INTEGRITY_SCORE);
+        if (accuracy !== null) {
+            normalized.accuracy = accuracy;
+        } else if (normalized.accuracy !== undefined) {
+            delete normalized.accuracy;
         }
 
         if (record.realData && typeof record.realData === 'object') {
-            normalized.realData = { ...record.realData };
+            normalized.realData = this._cloneImportRecord(record.realData) || {};
         }
 
         return normalized;
@@ -527,47 +662,149 @@ class DataIntegrityManager {
         if (!settings || typeof settings !== 'object') {
             return {};
         }
-        const allowed = ['theme', 'language', 'autoSave', 'notifications'];
         const prepared = {};
-        for (const key of allowed) {
-            if (settings[key] !== undefined) {
-                prepared[key] = settings[key];
-            }
+
+        const theme = this._normalizeSettingsToken(settings.theme, 64).toLowerCase();
+        if (theme && ['auto', 'light', 'dark'].includes(theme)) {
+            prepared.theme = theme;
         }
+
+        const language = this._normalizeSettingsToken(settings.language, 32);
+        if (language && /^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,3}$/i.test(language)) {
+            prepared.language = language;
+        }
+
+        if (typeof settings.autoSave === 'boolean') {
+            prepared.autoSave = settings.autoSave;
+        }
+
+        if (typeof settings.notifications === 'boolean') {
+            prepared.notifications = settings.notifications;
+        }
+
         return prepared;
     }
 
-    _stringify(value) {
+    _normalizeSettingsToken(value, maxLength) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const token = value.trim().slice(0, maxLength);
+        return /^[a-z0-9_-]+(?:-[a-z0-9_-]+)*$/i.test(token) ? token : '';
+    }
+
+    _stringify(value, maxLength = MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH) {
         if (value === undefined || value === null) {
             return '';
         }
-        return String(value);
+        return this._limitText(String(value), maxLength).trim();
     }
 
-    _pickString(values) {
+    _pickString(values, maxLength = MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH, fallback = 'practice') {
         for (const value of values) {
             if (typeof value === 'string' && value.trim()) {
-                return value.trim();
+                return this._limitText(value, maxLength).trim();
             }
         }
-        return 'practice';
+        return fallback;
     }
 
-    _pickNumber(values, fallback = null) {
+    _limitText(value, maxLength = MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH) {
+        const text = String(value ?? '');
+        return text.length > maxLength ? text.slice(0, maxLength) : text;
+    }
+
+    _cloneImportRecord(value, depth = 0, state = null) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return this._limitText(value);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth > MAX_DATA_INTEGRITY_EXTRA_DEPTH) {
+            return undefined;
+        }
+
+        const cloneState = state || { seen: new WeakSet(), nodes: 0 };
+        if (cloneState.seen.has(value)) {
+            return undefined;
+        }
+        cloneState.seen.add(value);
+        cloneState.nodes += 1;
+        if (cloneState.nodes > MAX_DATA_INTEGRITY_IMPORT_NODES) {
+            return undefined;
+        }
+
+        if (Array.isArray(value)) {
+            const list = value
+                .slice(0, MAX_DATA_INTEGRITY_EXTRA_ARRAY_ITEMS)
+                .map((item) => this._cloneImportRecord(item, depth + 1, cloneState))
+                .filter((item) => item !== undefined);
+            cloneState.seen.delete(value);
+            return list;
+        }
+
+        const output = {};
+        Object.keys(value)
+            .slice(0, MAX_DATA_INTEGRITY_EXTRA_OBJECT_KEYS)
+            .forEach((key) => {
+                if (IMPORT_POLLUTION_KEYS.has(key)) {
+                    return;
+                }
+                const safeKey = this._limitText(key, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH).trim();
+                if (!safeKey || IMPORT_POLLUTION_KEYS.has(safeKey)) {
+                    return;
+                }
+                const safeValue = this._cloneImportRecord(value[key], depth + 1, cloneState);
+                if (safeValue !== undefined) {
+                    output[safeKey] = safeValue;
+                }
+            });
+        cloneState.seen.delete(value);
+        return output;
+    }
+
+    _clampNumber(value, min = null, max = null) {
+        let number = Number(value);
+        if (!Number.isFinite(number)) {
+            return null;
+        }
+        if (min !== null) {
+            number = Math.max(Number(min), number);
+        }
+        if (max !== null) {
+            number = Math.min(Number(max), number);
+        }
+        return number;
+    }
+
+    _pickNumber(values, fallback = null, min = null, max = null) {
         for (const value of values) {
-            const number = Number(value);
-            if (Number.isFinite(number)) {
+            const number = this._clampNumber(value, min, max);
+            if (number !== null) {
                 return number;
             }
         }
         return fallback;
     }
 
-    _pickInteger(values, fallback = 0) {
+    _pickInteger(values, fallback = 0, min = null, max = null) {
         for (const value of values) {
-            const number = Number(value);
-            if (Number.isInteger(number)) {
-                return number;
+            const number = this._clampNumber(value, min, max);
+            if (number !== null) {
+                return Math.floor(number);
             }
         }
         return fallback;
@@ -581,7 +818,8 @@ class DataIntegrityManager {
             return value.toISOString();
         }
         if (typeof value === 'number' && Number.isFinite(value)) {
-            return new Date(value).toISOString();
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? null : date.toISOString();
         }
         if (typeof value === 'string') {
             const trimmed = value.trim();
@@ -592,7 +830,8 @@ class DataIntegrityManager {
                 const numeric = Number(trimmed);
                 if (Number.isFinite(numeric)) {
                     const millis = trimmed.length > 10 ? numeric : numeric * 1000;
-                    return new Date(millis).toISOString();
+                    const numericDate = new Date(millis);
+                    return Number.isNaN(numericDate.getTime()) ? null : numericDate.toISOString();
                 }
             }
             const date = new Date(trimmed);
@@ -605,15 +844,18 @@ class DataIntegrityManager {
 
     _pickDuration(values, start, end) {
         for (const value of values) {
-            const number = Number(value);
-            if (Number.isFinite(number) && number >= 0) {
+            const number = this._clampNumber(value, 0, MAX_DATA_INTEGRITY_DURATION_SECONDS);
+            if (number !== null) {
                 return number;
             }
         }
         const startTime = start ? new Date(start).getTime() : NaN;
         const endTime = end ? new Date(end).getTime() : NaN;
         if (Number.isFinite(startTime) && Number.isFinite(endTime) && endTime > startTime) {
-            return Math.round((endTime - startTime) / 1000);
+            return Math.min(
+                MAX_DATA_INTEGRITY_DURATION_SECONDS,
+                Math.round((endTime - startTime) / 1000)
+            );
         }
         return 0;
     }

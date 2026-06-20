@@ -770,6 +770,21 @@ function setupMessageListener() {
         return null;
     };
 
+    const findFallbackSessionBySessionId = (sessionId, sourceWindow) => {
+        const safeSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+        if (!safeSessionId || !window.fallbackExamSessions || typeof fallbackExamSessions.get !== 'function') {
+            return null;
+        }
+        const rec = fallbackExamSessions.get(safeSessionId);
+        if (!rec) {
+            return null;
+        }
+        if (!sourceWindow || (rec.win && rec.win !== sourceWindow)) {
+            return null;
+        }
+        return { sid: safeSessionId, rec };
+    };
+
     const sendFallbackInit = (entry) => {
         if (!entry || !entry.rec || !entry.rec.win || entry.rec.win.closed) {
             return;
@@ -788,10 +803,16 @@ function setupMessageListener() {
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
         try {
-            if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
+            if (!event.origin || event.origin === 'null') {
+                if (!(window.location && window.location.protocol === 'file:')) {
+                    return;
+                }
+            } else if (event.origin !== window.location.origin) {
                 return;
             }
-        } catch (_) { }
+        } catch (_) {
+            return;
+        }
 
         const data = event.data || {};
         const type = data.type;
@@ -813,6 +834,9 @@ function setupMessageListener() {
         } else if (type === 'REQUEST_INIT') {
             sendFallbackInit(findFallbackSessionByWindow(event.source));
         } else if (type === 'VOCAB_HIGHLIGHT_SAVE') {
+            if (!findFallbackSessionByWindow(event.source)) {
+                return;
+            }
             const payload = data.data && typeof data.data === 'object' ? data.data : data;
             saveReadingHighlightVocab(payload).catch((error) => {
                 console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
@@ -821,31 +845,27 @@ function setupMessageListener() {
             const payload = extractCompletionPayload(data) || {};
             const sessionId = extractCompletionSessionId(data);
             const matchedByWindow = findFallbackSessionByWindow(event.source);
-            const rec = sessionId ? (fallbackExamSessions.get(sessionId) || (matchedByWindow && matchedByWindow.rec)) : (matchedByWindow && matchedByWindow.rec);
-            const recSessionId = rec && (rec.sessionId || (matchedByWindow && matchedByWindow.sid) || sessionId);
+            const matchedBySession = findFallbackSessionBySessionId(sessionId, event.source);
+            const matched = matchedBySession || matchedByWindow;
+            const rec = matched && matched.rec;
+            if (!rec) {
+                return;
+            }
+            const recSessionId = rec && (rec.sessionId || matched.sid || sessionId);
             if (recSessionId && payload && typeof payload === 'object') {
                 payload.sessionId = recSessionId;
             }
             const shouldNotify = shouldAnnounceCompletion(recSessionId || sessionId);
-            if (rec) {
-                console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
-                savePracticeRecordFallback(rec.examId, payload).finally(() => {
-                    try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
-                    try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
-                    if (shouldNotify) {
-                        showMessage('练习已完成，正在更新记录...', 'success');
-                        showCompletionSummary(payload);
-                    }
-                    setTimeout(syncPracticeRecords, 300);
-                });
-            } else {
-                console.log('[System] 收到练习完成消息，正在同步记录...');
+            console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
+            savePracticeRecordFallback(rec.examId, payload).finally(() => {
+                try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
+                try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
                 if (shouldNotify) {
                     showMessage('练习已完成，正在更新记录...', 'success');
                     showCompletionSummary(payload);
                 }
                 setTimeout(syncPracticeRecords, 300);
-            }
+            });
         }
     });
 }
@@ -2796,10 +2816,25 @@ window.setActivePathMap = function (map) {
     return map || null;
 };
 
+function findExamInCurrentIndex(examId) {
+    const list = typeof getExamIndexState === 'function'
+        ? getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const hasIndex = Array.isArray(list) && list.length > 0;
+    const exam = hasIndex
+        ? list.find((item) => item && String(item.id) === String(examId))
+        : null;
+    return { exam, hasIndex };
+}
+
 function openExam(examId, options = {}) {
+    const lookup = findExamInCurrentIndex(examId);
+    if (lookup.hasIndex && !lookup.exam) {
+        return showMessage('题目不存在或已不可用', 'error');
+    }
     if (window.app && typeof window.app.openExam === 'function') {
         try {
-            return window.app.openExam(examId, options || {});
+            return window.app.openExam(lookup.exam ? lookup.exam.id : examId, options || {});
         } catch (error) {
             console.error('[Main] app.openExam 调用失败，已停止原始 HTML 兜底:', error);
             return showMessage('统一练习入口启动失败：app.openExam 抛出异常，已阻止打开原始题源 HTML。', 'error');
@@ -2811,9 +2846,7 @@ function openExam(examId, options = {}) {
 }
 
 function viewPDF(examId) {
-    // 增加数组化防御
-    const list = getExamIndexState();
-    const exam = list.find(e => e.id === examId);
+    const { exam } = findExamInCurrentIndex(examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
 
     const fullPath = window.buildResourcePath(exam, 'pdf');
@@ -2843,19 +2876,56 @@ function showRecordDetails(recordId) {
 }
 
 // Provide a local implementation to avoid dependency on legacy js/script.js
+function resolveSafePdfPath(pdfPath) {
+    if (!pdfPath || typeof pdfPath !== 'string') {
+        return '';
+    }
+    const rawPath = pdfPath.trim();
+    if (!rawPath || /(^|[\\/])\.\.([\\/]|$)/.test(rawPath)) {
+        return '';
+    }
+    try {
+        const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+        const resolved = new URL(rawPath, baseHref);
+        if (!resolved.pathname.toLowerCase().endsWith('.pdf')) {
+            return '';
+        }
+        if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+            const currentOrigin = window.location && window.location.origin;
+            return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                ? resolved.href
+                : '';
+        }
+        if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+            return resolved.href;
+        }
+    } catch (_) {
+        return '';
+    }
+    return '';
+}
+
 function openPDFSafely(pdfPath, examTitle = 'PDF') {
     try {
         if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
             return pdfHandler.openPDF(pdfPath, examTitle, { width: 1000, height: 800 });
         }
+        const safePdfPath = resolveSafePdfPath(pdfPath);
+        if (!safePdfPath) {
+            showMessage('PDF path is invalid or untrusted', 'error');
+            return null;
+        }
         let pdfWindow = null;
         try {
-            pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+            pdfWindow = window.open(safePdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes,noopener,noreferrer');
+            if (pdfWindow) {
+                try { pdfWindow.opener = null; } catch (_) { }
+            }
         } catch (_) { }
         if (!pdfWindow) {
             try {
                 // 降级：当前窗口打开
-                window.location.href = pdfPath;
+                window.location.href = safePdfPath;
                 return window;
             } catch (e) {
                 showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');

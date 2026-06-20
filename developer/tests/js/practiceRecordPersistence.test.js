@@ -56,6 +56,7 @@ function createHarness(options = {}) {
     const sessionStorage = createWebStorage();
     const listeners = new Map();
     const savedSpellingErrors = [];
+    const savedHighlightWords = [];
     const quietConsole = {
         log() {},
         warn() {},
@@ -175,6 +176,12 @@ function createHarness(options = {}) {
                     return true;
                 }
             },
+            VocabStore: {
+                async upsertReadingHighlightWord(payload) {
+                    savedHighlightWords.push({ ...(payload || {}) });
+                    return { word: payload && payload.word ? payload.word : 'saved-word' };
+                }
+            },
             app: {
                 state: {
                     practice: {
@@ -219,6 +226,7 @@ function createHarness(options = {}) {
         sessionStorage,
         messageLog,
         savedSpellingErrors,
+        savedHighlightWords,
         getRenderCount() {
             return renderCount;
         }
@@ -352,15 +360,151 @@ async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
     );
 }
 
+async function testFallbackVocabHighlightRequiresKnownWindow() {
+    const harness = createHarness();
+    const childWindow = { closed: false, postMessage() {} };
+    const unknownWindow = { closed: false, postMessage() {} };
+
+    harness.sandbox.window.fallbackExamSessions.set('known-session', {
+        examId: 'listening-p1-fallback',
+        sessionId: 'known-session',
+        win: childWindow,
+        initPayload: {
+            examId: 'listening-p1-fallback',
+            sessionId: 'known-session'
+        },
+        timer: null
+    });
+
+    harness.sandbox.setupMessageListener();
+    await harness.sandbox.window.__dispatchWindowEvent('message', {
+        origin: 'http://localhost',
+        source: unknownWindow,
+        data: {
+            type: 'VOCAB_HIGHLIGHT_SAVE',
+            data: { word: 'untrusted' }
+        }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(
+        harness.savedHighlightWords.length,
+        0,
+        'unknown same-origin windows must not be able to save highlighted vocab'
+    );
+
+    await harness.sandbox.window.__dispatchWindowEvent('message', {
+        origin: 'http://localhost',
+        source: childWindow,
+        data: {
+            type: 'VOCAB_HIGHLIGHT_SAVE',
+            data: { word: 'trusted' }
+        }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepStrictEqual(
+        harness.savedHighlightWords,
+        [{ word: 'trusted' }],
+        'registered fallback windows may save highlighted vocab'
+    );
+}
+
+async function testFallbackCompletionRejectsKnownSessionFromWrongWindow() {
+    const harness = createHarness();
+    const childWindow = { closed: false, postMessage() {} };
+    const unknownWindow = { closed: false, postMessage() {} };
+
+    harness.sandbox.window.fallbackExamSessions.set('known-session', {
+        examId: 'listening-p1-fallback',
+        sessionId: 'known-session',
+        win: childWindow,
+        initPayload: {
+            examId: 'listening-p1-fallback',
+            sessionId: 'known-session'
+        },
+        timer: null
+    });
+
+    harness.sandbox.setupMessageListener();
+    await harness.sandbox.window.__dispatchWindowEvent('message', {
+        origin: 'http://localhost',
+        source: unknownWindow,
+        data: {
+            type: 'PRACTICE_COMPLETE',
+            data: {
+                examId: 'listening-p1-fallback',
+                sessionId: 'known-session',
+                scoreInfo: {
+                    correct: 1,
+                    total: 1,
+                    percentage: 100
+                }
+            }
+        }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(
+        harness.practiceState.some((record) => record && record.examId === 'listening-p1-fallback'),
+        false,
+        'same-origin windows must not save fallback completions for sessions owned by another window'
+    );
+    assert.strictEqual(
+        harness.sandbox.window.fallbackExamSessions.has('known-session'),
+        true,
+        'rejected fallback completion must not clear the legitimate session'
+    );
+}
+
+async function testFallbackCompletionRejectsUnknownWindowSideEffects() {
+    const harness = createHarness();
+    const unknownWindow = { closed: false, postMessage() {} };
+    const beforeIds = harness.practiceState.map((record) => record.id);
+
+    harness.sandbox.setupMessageListener();
+    await harness.sandbox.window.__dispatchWindowEvent('message', {
+        origin: 'http://localhost',
+        source: unknownWindow,
+        data: {
+            type: 'PRACTICE_COMPLETE',
+            data: {
+                examId: 'listening-p1-fallback',
+                sessionId: 'unknown-session',
+                scoreInfo: {
+                    correct: 1,
+                    total: 1,
+                    percentage: 100
+                }
+            }
+        }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepStrictEqual(
+        harness.practiceState.map((record) => record.id),
+        beforeIds,
+        'unknown same-origin windows must not create fallback practice records'
+    );
+    assert.deepStrictEqual(
+        harness.messageLog,
+        [],
+        'unknown same-origin completion messages must not trigger completion notifications'
+    );
+}
+
 async function main() {
     try {
         await testDeleteRecordPersistsAndCleansLegacyKeys();
         await testClearPracticeDataPersistsAndClearsLegacyKeys();
         await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
         await testFallbackCompletionPersistsNormalizedSpellingErrors();
+        await testFallbackVocabHighlightRequiresKnownWindow();
+        await testFallbackCompletionRejectsKnownSessionFromWrongWindow();
+        await testFallbackCompletionRejectsUnknownWindowSideEffects();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'practice record persistence and fallback listening spelling errors are covered'
+            detail: 'practice record persistence and fallback message trust are covered'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

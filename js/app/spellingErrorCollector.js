@@ -19,6 +19,10 @@
         'cambridge', 'oxford', 'london', 'sydney', 'melbourne', 'canada', 'australia',
         'britain', 'america', 'europe', 'asia', 'africa', 'nasa', 'nesa', 'ielts'
     ]);
+    const MAX_SPELLING_VOCAB_WORDS = 5000;
+    const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
+    const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     /**
      * 拼写错误记录数据结构
@@ -197,6 +201,71 @@
             return fallback || 'other';
         }
 
+        isUnsafeImportKey(key) {
+            return SPELLING_IMPORT_POLLUTION_KEYS.has(String(key));
+        }
+
+        cloneSafeObject(value) {
+            if (!value || Object.prototype.toString.call(value) !== '[object Object]') {
+                return {};
+            }
+            const clone = {};
+            Object.entries(value).forEach(([key, item]) => {
+                if (this.isUnsafeImportKey(key)) {
+                    return;
+                }
+                clone[key] = item;
+            });
+            return clone;
+        }
+
+        limitText(value, maxLength = MAX_SPELLING_NOTE_TEXT_LENGTH) {
+            if (typeof value !== 'string') {
+                return value;
+            }
+            return value.length > maxLength ? value.slice(0, maxLength) : value;
+        }
+
+        wordTimestamp(entry) {
+            const candidates = [entry?.updatedAt, entry?.timestamp, entry?.createdAt];
+            for (const value of candidates) {
+                const numeric = typeof value === 'number' ? value : Number(new Date(value));
+                if (Number.isFinite(numeric)) {
+                    return numeric;
+                }
+            }
+            return 0;
+        }
+
+        normalizeStoredWordEntry(entry) {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const safe = this.cloneSafeObject(entry);
+            if (safe.metadata && typeof safe.metadata === 'object') {
+                safe.metadata = this.cloneSafeObject(safe.metadata);
+            }
+            ['word', 'userInput'].forEach((key) => {
+                safe[key] = this.limitText(safe[key], MAX_SPELLING_WORD_TEXT_LENGTH);
+            });
+            ['questionId', 'suiteId', 'examId', 'meaning', 'example', 'note', 'spellingNote', 'source'].forEach((key) => {
+                safe[key] = this.limitText(safe[key], MAX_SPELLING_NOTE_TEXT_LENGTH);
+            });
+            return safe;
+        }
+
+        normalizeStoredWords(words) {
+            const normalized = Array.isArray(words)
+                ? words.map((entry) => this.normalizeStoredWordEntry(entry)).filter(Boolean)
+                : [];
+            if (normalized.length <= MAX_SPELLING_VOCAB_WORDS) {
+                return normalized;
+            }
+            return normalized
+                .sort((a, b) => this.wordTimestamp(b) - this.wordTimestamp(a))
+                .slice(0, MAX_SPELLING_VOCAB_WORDS);
+        }
+
         normalizeVocabListShape(rawList, listId, source) {
             const normalizedSource = this.normalizeListSource(listId, source);
             const base = this.createEmptyList(listId, normalizedSource);
@@ -204,7 +273,7 @@
             if (Array.isArray(rawList)) {
                 return {
                     ...base,
-                    words: rawList.filter((entry) => entry && typeof entry === 'object'),
+                    words: this.normalizeStoredWords(rawList),
                     updatedAt: Date.now()
                 };
             }
@@ -213,19 +282,19 @@
                 return null;
             }
 
-            const words = Array.isArray(rawList.words)
-                ? rawList.words.filter((entry) => entry && typeof entry === 'object')
-                : [];
+            const safeList = this.cloneSafeObject(rawList);
+            const words = this.normalizeStoredWords(safeList.words);
+            const safeStats = this.cloneSafeObject(safeList.stats);
 
             return {
                 ...base,
-                ...rawList,
+                ...safeList,
                 id: listId,
-                source: rawList.source || normalizedSource,
+                source: safeList.source || normalizedSource,
                 words,
                 stats: {
                     ...base.stats,
-                    ...(rawList.stats && typeof rawList.stats === 'object' ? rawList.stats : {}),
+                    ...safeStats,
                     totalWords: words.length
                 }
             };
@@ -242,8 +311,34 @@
                 : [];
         }
 
+        resolveTrustedAssetUrl(rawUrl) {
+            try {
+                const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
+                    ? window.location.href
+                    : 'http://localhost/';
+                const resolved = new URL(String(rawUrl), baseHref);
+                const protocol = (resolved.protocol || '').toLowerCase();
+
+                if (protocol === 'http:' || protocol === 'https:') {
+                    const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+                        ? window.location.origin
+                        : new URL(baseHref).origin;
+                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                        ? resolved.href
+                        : '';
+                }
+
+                if (protocol === 'file:' && typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                    return resolved.href;
+                }
+            } catch (_) {
+                return '';
+            }
+            return '';
+        }
+
         resolveAssetUrl(relativePath) {
-            const fallback = relativePath;
+            const fallback = this.resolveTrustedAssetUrl(relativePath) || relativePath;
             if (typeof document === 'undefined') {
                 return fallback;
             }
@@ -262,9 +357,9 @@
                 const markerIndex = src.search(/\/js\/(?:bundles|app)\//i);
                 if (markerIndex !== -1) {
                     const root = src.slice(0, markerIndex + 1);
-                    return new URL(relativePath, root).href;
+                    return this.resolveTrustedAssetUrl(new URL(relativePath, root).href) || fallback;
                 }
-                return new URL(relativePath, document.baseURI || window.location.href).href;
+                return this.resolveTrustedAssetUrl(new URL(relativePath, document.baseURI || window.location.href).href) || fallback;
             } catch (_) {
                 return fallback;
             }
@@ -274,7 +369,11 @@
             if (typeof fetch !== 'function') {
                 throw new Error('fetch_unavailable');
             }
-            const response = await fetch(url, { cache: 'no-store' });
+            const trustedUrl = this.resolveTrustedAssetUrl(url);
+            if (!trustedUrl) {
+                throw new Error('untrusted_asset_url');
+            }
+            const response = await fetch(trustedUrl, { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -289,7 +388,12 @@
                 }
                 try {
                     const xhr = new XMLHttpRequest();
-                    xhr.open('GET', url, true);
+                    const trustedUrl = this.resolveTrustedAssetUrl(url);
+                    if (!trustedUrl) {
+                        reject(new Error('untrusted_asset_url'));
+                        return;
+                    }
+                    xhr.open('GET', trustedUrl, true);
                     xhr.overrideMimeType('application/json');
                     xhr.onreadystatechange = () => {
                         if (xhr.readyState !== 4) {
@@ -401,38 +505,42 @@
             if (!error || typeof error !== 'object') {
                 return null;
             }
-            const word = typeof error.word === 'string' ? error.word.trim() : '';
+            const safeError = this.cloneSafeObject(error);
+            const safeExisting = existing && typeof existing === 'object' ? this.cloneSafeObject(existing) : null;
+            const word = typeof safeError.word === 'string'
+                ? this.limitText(safeError.word.trim(), MAX_SPELLING_WORD_TEXT_LENGTH)
+                : '';
             if (!word) {
                 return null;
             }
 
-            const incomingCount = Math.max(1, Number(error.errorCount) || 1);
-            const existingCount = existing ? Math.max(0, Number(existing.errorCount) || 0) : 0;
-            const errorCount = existing ? existingCount + incomingCount : incomingCount;
-            const timestamp = error.timestamp || Date.now();
+            const incomingCount = Math.max(1, Number(safeError.errorCount) || 1);
+            const existingCount = safeExisting ? Math.max(0, Number(safeExisting.errorCount) || 0) : 0;
+            const errorCount = safeExisting ? existingCount + incomingCount : incomingCount;
+            const timestamp = safeError.timestamp || Date.now();
             const lexiconEntry = this.findLexiconEntry(word);
-            const existingMeaning = existing && typeof existing.meaning === 'string' ? existing.meaning.trim() : '';
-            const errorMeaning = typeof error.meaning === 'string' ? error.meaning.trim() : '';
+            const existingMeaning = safeExisting && typeof safeExisting.meaning === 'string' ? safeExisting.meaning.trim() : '';
+            const errorMeaning = typeof safeError.meaning === 'string' ? safeError.meaning.trim() : '';
             const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
                 ? lexiconEntry.meaning.trim()
                 : (errorMeaning || existingMeaning || '暂无中文释义');
             const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
                 ? lexiconEntry.example.trim()
-                : (error.example || existing?.example || this.buildSourceNote(error));
-            const spellingNote = this.buildSpellingNote({ ...existing, ...error }, errorCount);
-            const sourceNote = this.buildSourceNote(error);
-            const existingNote = existing && typeof existing.note === 'string' ? existing.note.trim() : '';
+                : (safeError.example || safeExisting?.example || this.buildSourceNote(safeError));
+            const spellingNote = this.buildSpellingNote({ ...(safeExisting || {}), ...safeError }, errorCount);
+            const sourceNote = this.buildSourceNote(safeError);
+            const existingNote = safeExisting && typeof safeExisting.note === 'string' ? safeExisting.note.trim() : '';
             const noteParts = [spellingNote, sourceNote];
             if (existingNote && !this.isGeneratedSpellingNote(existingNote) && !noteParts.includes(existingNote)) {
                 noteParts.push(existingNote);
             }
             const normalizedWord = this.normalizeLexiconLookupKey(word) || word.toLowerCase();
-            const source = error.source || existing?.source || listSource || 'other';
+            const source = safeError.source || safeExisting?.source || listSource || 'other';
 
-            return {
-                ...(existing || {}),
-                ...error,
-                id: existing?.id || error.id || `spelling-${source}-${normalizedWord}`,
+            return this.normalizeStoredWordEntry({
+                ...(safeExisting || {}),
+                ...safeError,
+                id: safeExisting?.id || safeError.id || `spelling-${source}-${normalizedWord}`,
                 word,
                 meaning,
                 example,
@@ -441,16 +549,16 @@
                 source,
                 errorCount,
                 timestamp,
-                easeFactor: existing?.easeFactor ?? error.easeFactor ?? null,
-                interval: existing?.interval ?? error.interval ?? 1,
-                repetitions: existing?.repetitions ?? error.repetitions ?? 0,
-                intraCycles: existing?.intraCycles ?? error.intraCycles ?? 0,
-                correctCount: existing?.correctCount ?? error.correctCount ?? 0,
-                lastReviewed: existing?.lastReviewed ?? error.lastReviewed ?? null,
-                nextReview: existing?.nextReview ?? error.nextReview ?? null,
-                createdAt: existing?.createdAt || error.createdAt || new Date(timestamp).toISOString(),
+                easeFactor: safeExisting?.easeFactor ?? safeError.easeFactor ?? null,
+                interval: safeExisting?.interval ?? safeError.interval ?? 1,
+                repetitions: safeExisting?.repetitions ?? safeError.repetitions ?? 0,
+                intraCycles: safeExisting?.intraCycles ?? safeError.intraCycles ?? 0,
+                correctCount: safeExisting?.correctCount ?? safeError.correctCount ?? 0,
+                lastReviewed: safeExisting?.lastReviewed ?? safeError.lastReviewed ?? null,
+                nextReview: safeExisting?.nextReview ?? safeError.nextReview ?? null,
+                createdAt: safeExisting?.createdAt || safeError.createdAt || new Date(timestamp).toISOString(),
                 updatedAt: new Date().toISOString()
-            };
+            });
         }
 
         /**

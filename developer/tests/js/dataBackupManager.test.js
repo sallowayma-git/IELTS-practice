@@ -1,0 +1,295 @@
+#!/usr/bin/env node
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import vm from 'vm';
+import { fileURLToPath } from 'url';
+import { webcrypto } from 'crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+
+const source = fs.readFileSync(path.join(repoRoot, 'js/utils/dataBackupManager.js'), 'utf8');
+
+function createContext() {
+    const store = new Map();
+    const storage = {
+        async get(key, fallback) { return store.has(key) ? store.get(key) : fallback; },
+        async set(key, value) { store.set(key, value); }
+    };
+    const context = {
+        console,
+        setInterval() { return 1; },
+        clearInterval() {},
+        URL,
+        window: {
+            crypto: webcrypto,
+            location: {
+                href: 'http://127.0.0.1:3000/index.html',
+                origin: 'http://127.0.0.1:3000'
+            }
+        },
+        storage,
+        fetchCalls: []
+    };
+    context.fetch = async (url, options) => {
+        context.fetchCalls.push({ url, options });
+        return {
+            ok: true,
+            headers: {
+                get(name) {
+                    return String(name).toLowerCase() === 'content-length' ? '22' : null;
+                }
+            },
+            async text() {
+                return '{"practiceRecords":[]}';
+            }
+        };
+    };
+    context.window.storage = storage;
+    vm.createContext(context);
+    vm.runInContext(source, context, { filename: 'js/utils/dataBackupManager.js' });
+    return context;
+}
+
+const context = createContext();
+const manager = new context.window.DataBackupManager();
+
+await assert.rejects(
+    () => manager.parseImportSource('https://example.com/records.json', { allowFetch: true }),
+    /invalid or untrusted/
+);
+assert.equal(context.fetchCalls.length, 0);
+
+const payload = await manager.parseImportSource('/records.json', { allowFetch: true });
+assert.deepEqual(payload, { practiceRecords: [] });
+assert.equal(context.fetchCalls.length, 1);
+assert.equal(context.fetchCalls[0].url, 'http://127.0.0.1:3000/records.json');
+assert.deepEqual(context.fetchCalls[0].options, {
+    credentials: 'same-origin',
+    cache: 'no-store'
+});
+
+await assert.rejects(
+    () => manager.parseImportSource('http://127.0.0.1:3001/records.json', { allowFetch: true }),
+    /invalid or untrusted/
+);
+assert.equal(context.fetchCalls.length, 1);
+
+const sampleRecord = {
+    id: 'record-1',
+    examId: 'reading-1',
+    status: 'completed',
+    startTime: '2026-01-01T00:00:00.000Z'
+};
+const normalized = manager.normalizeImportPayload({ practiceRecords: [sampleRecord] });
+assert.equal(normalized.practiceRecords.length, 1);
+assert.equal(normalized.sources.length, 1);
+
+const pollutedPayload = JSON.parse(`{
+    "practiceRecords": [{
+        "id": "polluted-record",
+        "examId": "reading-1",
+        "status": "completed",
+        "startTime": "2026-01-01T00:00:00.000Z",
+        "__proto__": { "polluted": true },
+        "constructor": { "prototype": { "polluted": true } },
+        "metadata": {
+            "title": "Safe title",
+            "__proto__": { "nestedPolluted": true },
+            "prototype": { "nestedPolluted": true }
+        },
+        "realData": {
+            "duration": 60,
+            "__proto__": { "nestedPolluted": true }
+        }
+    }],
+    "userStats": {
+        "totalPractice": 1,
+        "__proto__": { "statsPolluted": true },
+        "constructor": { "prototype": { "statsPolluted": true } }
+    }
+}`);
+const safeImport = manager.normalizeImportPayload(pollutedPayload);
+assert.equal(Object.prototype.polluted, undefined);
+assert.equal(Object.prototype.nestedPolluted, undefined);
+assert.equal(Object.prototype.statsPolluted, undefined);
+assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0], '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0], 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0].metadata, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0].metadata, 'prototype'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0].realData, '__proto__'), false);
+
+const nestedUnsafePayload = JSON.parse(`{
+    "practiceRecords": [{
+        "id": "${'x'.repeat(700)}",
+        "examId": "${'reading-long-'.repeat(80)}",
+        "title": "${'Long title '.repeat(80)}",
+        "status": "${'completed-'.repeat(20)}",
+        "metadata": {
+            "notes": "${'metadata note '.repeat(600)}",
+            "safe": {
+                "constructor": { "prototype": { "polluted": true } },
+                "child": { "prototype": { "polluted": true } }
+            }
+        },
+        "realData": {
+            "items": ${JSON.stringify(Array.from({ length: 700 }, (_, index) => index))},
+            "nested": {
+                "level1": {
+                    "level2": {
+                        "level3": {
+                            "constructor": { "prototype": { "polluted": true } }
+                        }
+                    }
+                }
+            }
+        }
+    }]
+}`);
+const boundedImport = manager.normalizeImportPayload(nestedUnsafePayload);
+const boundedRecord = boundedImport.practiceRecords[0];
+assert.equal(Object.prototype.polluted, undefined);
+assert.equal(boundedRecord.id.length, 512);
+assert.equal(boundedRecord.examId.length, 512);
+assert.equal(boundedRecord.title.length, 500);
+assert.equal(boundedRecord.status.length, 64);
+assert.equal(boundedRecord.metadata.notes.length, 5000);
+assert.equal(boundedRecord.realData.items.length, 500);
+assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.metadata.safe, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.metadata.safe.child, 'prototype'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.realData.nested.level1.level2.level3, 'constructor'), false);
+
+const wideRecord = {
+    id: 'wide-record',
+    examId: 'reading-wide',
+    status: 'completed',
+    startTime: '2026-01-01T00:00:00.000Z',
+    ...Object.fromEntries(Array.from({ length: 1000 }, (_, index) => [`extra_${index}`, `value-${index}`]))
+};
+const wideStats = {
+    totalPractice: 3,
+    totalTimeSpent: 120,
+    nestedStats: {
+        values: Array.from({ length: 700 }, (_, index) => index)
+    },
+    ...Object.fromEntries(Array.from({ length: 1000 }, (_, index) => [`stats_key_${index}`, `value-${index}`]))
+};
+const wideImport = manager.normalizeImportPayload({
+    practiceRecords: [wideRecord],
+    userStats: wideStats
+});
+const normalizedWideRecord = wideImport.practiceRecords[0];
+assert.equal(normalizedWideRecord.extra_999, undefined);
+assert(Object.keys(normalizedWideRecord).length <= 210);
+assert.equal(wideImport.userStats.totalPractice, 3);
+assert.equal(wideImport.userStats.practiceRecords, undefined);
+assert.equal(wideImport.userStats.userStats, undefined);
+assert.equal(wideImport.userStats.statsKey999, undefined);
+assert.equal(wideImport.userStats.nestedStats.values.length, 500);
+assert(Object.keys(wideImport.userStats).length <= 200);
+
+await manager.mergeUserStats(wideStats, 'replace');
+const storedStats = await context.storage.get('user_stats', {});
+assert.equal(storedStats.stats_key_999, undefined);
+assert(Object.keys(storedStats).length <= 200);
+
+await context.storage.set('practice_records', [{ id: 'current', examId: 'reading-current' }]);
+await context.storage.set('user_stats', { totalPractice: 99 });
+await context.storage.set('exam_index', [{ id: 'current-index' }]);
+await context.storage.set('manual_backups', [JSON.parse(`{
+    "id": "backup-safe",
+    "data": {
+        "practice_records": [{
+            "id": "restored",
+            "examId": "reading-restored",
+            "title": "Restored record",
+            "__proto__": { "pollutedRestore": true },
+            "metadata": {
+                "constructor": { "prototype": { "pollutedRestore": true } }
+            }
+        }],
+        "user_stats": {
+            "totalPractice": 3,
+            "constructor": { "prototype": { "pollutedRestore": true } }
+        },
+        "exam_index": [{
+            "id": "reading-restored",
+            "title": "Restored index",
+            "__proto__": { "pollutedRestore": true }
+        }]
+    }
+}`)]);
+const restored = await manager.restoreBackup('backup-safe');
+assert.equal(restored.success, true);
+assert.equal(restored.restored.practiceRecords, 1);
+assert.equal(restored.restored.userStats, 1);
+assert.equal(restored.restored.examIndex, 1);
+const restoredRecords = await context.storage.get('practice_records', []);
+const restoredStats = await context.storage.get('user_stats', {});
+const restoredIndex = await context.storage.get('exam_index', []);
+assert.equal(restoredRecords[0].id, 'restored');
+assert.equal(Object.prototype.hasOwnProperty.call(restoredRecords[0].metadata, 'constructor'), false);
+assert.deepEqual(restoredStats, { totalPractice: 3 });
+assert.equal(restoredIndex[0].id, 'reading-restored');
+assert.equal(Object.prototype.pollutedRestore, undefined);
+
+await context.storage.set('manual_backups', [{
+    id: 'backup-score-storage',
+    data: {
+        practiceRecords: [{
+            id: 'score-restored',
+            examId: 'reading-score-storage',
+            title: 'ScoreStorage backup'
+        }],
+        userStats: {
+            totalPractices: 4
+        },
+        examIndex: [{
+            id: 'score-index',
+            title: 'Score index'
+        }],
+        storageVersion: '2.0.0'
+    }
+}]);
+const scoreStyleRestore = await manager.restoreBackup('backup-score-storage');
+assert.equal(scoreStyleRestore.success, true);
+assert.deepEqual(scoreStyleRestore.restored, {
+    practiceRecords: 1,
+    userStats: 1,
+    examIndex: 1,
+    storageVersion: true
+});
+assert.equal((await context.storage.get('practice_records', []))[0].id, 'score-restored');
+assert.deepEqual(await context.storage.get('user_stats', {}), { totalPractices: 4 });
+assert.equal((await context.storage.get('exam_index', []))[0].id, 'score-index');
+assert.equal(await context.storage.get('storage_version'), '2.0.0');
+
+const tooDeep = {};
+let cursor = tooDeep;
+for (let index = 0; index < 42; index += 1) {
+    cursor.child = {};
+    cursor = cursor.child;
+}
+await assert.rejects(
+    () => manager.importPracticeData(tooDeep, { createBackup: false }),
+    /too deeply nested/
+);
+
+await assert.rejects(
+    () => manager.importPracticeData({
+        practiceRecords: Array.from({ length: 5001 }, (_, index) => ({
+            id: `record-${index}`,
+            examId: `reading-${index}`,
+            status: 'completed',
+            startTime: '2026-01-01T00:00:00.000Z'
+        }))
+    }, { createBackup: false }),
+    /too many practice records/
+);
+
+console.log(JSON.stringify({
+    status: 'pass',
+    detail: 'data backup manager import fetch guard tests passed'
+}, null, 2));

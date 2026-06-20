@@ -124,10 +124,88 @@ async function testNormalizeCompletionPayloadKeepsHighlights(PracticeRecorder) {
     });
 
     assert(payload, '完成负载应可归一化');
-    assert.deepStrictEqual(payload.results.highlights, [{ id: 'hl-1', text: 'highlight' }], '结果层应保留高亮');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(payload.results.highlights)), [{ id: 'hl-1', text: 'highlight' }], '结果层应保留高亮');
     assert.strictEqual(payload.results.scrollY, 240, '结果层应保留滚动位置');
-    assert.deepStrictEqual(payload.results.realData.highlights, [{ id: 'hl-1', text: 'highlight' }], 'realData 应保留高亮');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(payload.results.realData.highlights)), [{ id: 'hl-1', text: 'highlight' }], 'realData 应保留高亮');
     recordResult('完成负载保留高亮回灌字段', { highlights: payload.results.highlights, scrollY: payload.results.scrollY });
+}
+
+async function testNormalizeCompletionPayloadStripsPollutionKeys(PracticeRecorder) {
+    const recorder = Object.create(PracticeRecorder.prototype);
+    recorder.normalizeAnswerComparison = (value) => value || {};
+    recorder.normalizeAnswerMap = (value) => value || {};
+    recorder.buildAnswerDetails = () => ({});
+    recorder.convertAnswerMapToArray = () => [];
+
+    const payload = recorder.normalizePracticeCompletePayload({
+        examId: 'reading-pollution-guard',
+        sessionId: 'session-pollution-guard',
+        duration: 1200,
+        answers: { q1: 'A' },
+        correctAnswers: { q1: 'A' },
+        scoreInfo: JSON.parse('{"correct":1,"total":1,"constructor":{"prototype":{"polluted":true}}}'),
+        metadata: JSON.parse('{"examTitle":"Guard","type":"reading","__proto__":{"polluted":true}}'),
+        realData: JSON.parse('{"__proto__":{"polluted":true},"questionTypeMap":{"prototype":{"polluted":true}},"highlights":[{"id":"hl-1","text":"highlight"}]}')
+    });
+
+    assert(payload, 'pollution guard completion payload should normalize');
+    assert.strictEqual(Object.prototype.polluted, undefined);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(payload.results.metadata, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(payload.results.realData, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(payload.results.realData.scoreInfo, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(payload.results.realData.questionTypeMap, 'prototype'), false);
+    assert.strictEqual(payload.results.realData.polluted, undefined);
+
+    recordResult('PracticeRecorder normalizes completion payload without pollution keys', {
+        metadataKeys: Object.keys(payload.results.metadata),
+        realDataKeys: Object.keys(payload.results.realData)
+    });
+}
+
+async function testFallbackStandardizeStripsPollutionKeys(PracticeRecorder) {
+    const recorder = Object.create(PracticeRecorder.prototype);
+    recorder.practiceTypeCache = new Map();
+    recorder.generateRecordId = () => 'record-pollution-guard';
+    recorder.normalizePracticeType = () => 'reading';
+    recorder.inferPracticeType = () => 'reading';
+    recorder.inferExamId = (record) => record.examId || record.metadata?.examId || null;
+    recorder.normalizeAnswerMap = (value) => value || {};
+    recorder.buildAnswerDetails = () => ({});
+    recorder.normalizeAnswerComparison = (value) => value || {};
+    recorder.convertAnswerMapToArray = () => [];
+    recorder.deriveCorrectMapFromDetails = () => ({});
+
+    const record = recorder.standardizeRecordForFallback({
+        id: 'record-pollution-guard',
+        examId: 'reading-pollution-guard',
+        sessionId: 'session-pollution-guard',
+        title: 'Fallback Pollution Guard',
+        date: '2026-05-07T00:00:00.000Z',
+        startTime: '2026-05-07T00:00:00.000Z',
+        endTime: '2026-05-07T00:10:00.000Z',
+        duration: 600,
+        score: 1,
+        totalQuestions: 1,
+        correctAnswers: 1,
+        accuracy: 1,
+        answers: { q1: 'A' },
+        correctAnswerMap: { q1: 'A' },
+        scoreInfo: JSON.parse('{"details":{},"constructor":{"prototype":{"polluted":true}}}'),
+        metadata: JSON.parse('{"examTitle":"Guard","type":"reading","__proto__":{"polluted":true}}'),
+        realData: JSON.parse('{"__proto__":{"polluted":true},"scoreInfo":{"constructor":{"prototype":{"polluted":true}}}}')
+    });
+
+    assert(record, 'fallback record should standardize');
+    assert.strictEqual(Object.prototype.polluted, undefined);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.metadata, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.realData, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.scoreInfo, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.realData.scoreInfo, 'constructor'), false);
+
+    recordResult('PracticeRecorder fallback standardize strips pollution keys', {
+        recordId: record.id,
+        metadataKeys: Object.keys(record.metadata)
+    });
 }
 
 async function main() {
@@ -164,6 +242,8 @@ async function main() {
         await testManualStatsFailureDoesNotBreakFallbackSave(PracticeRecorder);
         await testFallbackAnswerComparisonKeepsListeningCandidates(PracticeRecorder);
         await testNormalizeCompletionPayloadKeepsHighlights(PracticeRecorder);
+        await testNormalizeCompletionPayloadStripsPollutionKeys(PracticeRecorder);
+        await testFallbackStandardizeStripsPollutionKeys(PracticeRecorder);
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

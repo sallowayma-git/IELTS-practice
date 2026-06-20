@@ -1,0 +1,150 @@
+#!/usr/bin/env node
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import vm from 'vm';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '..', '..', '..');
+
+function createPanelHarness({ missingControls = false } = {}) {
+    const selectedFileName = { textContent: '' };
+    const importButton = { disabled: true };
+    const documentStub = {
+        getElementById(id) {
+            if (missingControls) {
+                return null;
+            }
+            return id === 'selectedFileName' ? selectedFileName : null;
+        },
+        querySelector(selector) {
+            if (missingControls) {
+                return null;
+            }
+            return selector === '[data-action="import"]' ? importButton : null;
+        },
+        createElement() {
+            return {};
+        }
+    };
+    const context = vm.createContext({
+        window: {},
+        document: documentStub,
+        console: { log() {}, warn() {}, error() {}, info() {} },
+        setTimeout,
+        clearTimeout,
+        Blob,
+        URL,
+        String,
+        Number,
+        Object,
+        Array,
+        Set,
+        JSON
+    });
+    const source = fs.readFileSync(path.join(repoRoot, 'js/components/dataManagementPanel.js'), 'utf8');
+    vm.runInContext(source, context, { filename: 'js/components/dataManagementPanel.js' });
+
+    const pendingReads = new Map();
+    const panel = Object.create(context.window.DataManagementPanel.prototype);
+    panel.selectedFileContent = null;
+    panel.fileReadToken = 0;
+    panel.showMessage = () => {};
+    panel.loadDataStats = async () => {};
+    panel.loadHistory = async () => {};
+    panel.backupManager = {
+        async importPracticeData() {
+            return { success: true, importedCount: 1, skippedCount: 0 };
+        }
+    };
+    panel.readFile = (file) => new Promise((resolve, reject) => {
+        pendingReads.set(file.name, { resolve, reject });
+    });
+
+    const makeFile = (name) => ({ name, size: 32, type: 'application/json' });
+    const makeEvent = (file) => ({
+        target: {
+            files: [file],
+            value: file.name
+        }
+    });
+
+    return {
+        panel,
+        pendingReads,
+        selectedFileName,
+        importButton,
+        makeFile,
+        makeEvent
+    };
+}
+
+async function flushPromises() {
+    await Promise.resolve();
+    await Promise.resolve();
+}
+
+{
+    const harness = createPanelHarness();
+    const oldFile = harness.makeFile('old.json');
+    const nextFile = harness.makeFile('next.json');
+
+    harness.panel.handleFileSelect(harness.makeEvent(oldFile));
+    harness.panel.handleFileSelect(harness.makeEvent(nextFile));
+
+    harness.pendingReads.get('next.json').resolve('{"id":"next"}');
+    await flushPromises();
+    assert.deepEqual(harness.panel.selectedFileContent, { id: 'next' });
+
+    harness.pendingReads.get('old.json').resolve('{"id":"old"}');
+    await flushPromises();
+    assert.deepEqual(harness.panel.selectedFileContent, { id: 'next' });
+}
+
+{
+    const harness = createPanelHarness();
+    const oldFile = harness.makeFile('stale.json');
+    const nextFile = harness.makeFile('current.json');
+
+    harness.panel.handleFileSelect(harness.makeEvent(oldFile));
+    harness.panel.handleFileSelect(harness.makeEvent(nextFile));
+
+    harness.pendingReads.get('current.json').resolve('{"id":"current"}');
+    await flushPromises();
+    harness.pendingReads.get('stale.json').reject(new Error('stale read failed'));
+    await flushPromises();
+
+    assert.deepEqual(harness.panel.selectedFileContent, { id: 'current' });
+    assert.equal(harness.selectedFileName.textContent, 'current.json');
+    assert.equal(harness.importButton.disabled, false);
+}
+
+{
+    const harness = createPanelHarness({ missingControls: true });
+
+    assert.doesNotThrow(() => harness.panel.handleFileSelect({
+        target: {
+            files: [],
+            value: ''
+        }
+    }));
+    assert.equal(harness.panel.selectedFileContent, null);
+
+    assert.doesNotThrow(() => harness.panel.showProgress('loading'));
+    assert.doesNotThrow(() => harness.panel.updateProgress('still loading'));
+    assert.doesNotThrow(() => harness.panel.hideProgress());
+}
+
+{
+    const harness = createPanelHarness({ missingControls: true });
+    harness.panel.selectedFileContent = { practiceRecords: [{ id: 'cached' }] };
+    await harness.panel.handleImport('merge');
+    assert.equal(harness.panel.selectedFileContent, null);
+}
+
+console.log(JSON.stringify({
+    status: 'pass',
+    detail: 'data management panel stale file read guard tests passed'
+}, null, 2));

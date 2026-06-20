@@ -74,10 +74,34 @@
             return '';
         }
         try {
-            return new URL(url, document.baseURI).href;
+            return resolveTrustedScriptUrl(url);
         } catch (_) {
-            return String(url);
+            return '';
         }
+    }
+
+    function resolveTrustedScriptUrl(url) {
+        if (!url) {
+            return '';
+        }
+        try {
+            var baseHref = document.baseURI || (global.location && global.location.href) || 'http://localhost/';
+            var resolved = new URL(String(url), baseHref);
+            var protocol = (resolved.protocol || '').toLowerCase();
+            if (!resolved.pathname || !resolved.pathname.toLowerCase().endsWith('.js')) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                var origin = global.location && global.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+            if (protocol === 'file:' && global.location && global.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
     }
 
     function findExistingScriptTag(url) {
@@ -128,6 +152,11 @@
         if (!url) {
             return Promise.resolve();
         }
+        var safeUrl = resolveTrustedScriptUrl(url);
+        if (!safeUrl) {
+            return Promise.reject(new Error('加载脚本失败: 不可信或不支持的脚本地址'));
+        }
+        url = safeUrl;
         if (isProvided(url)) {
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
@@ -147,7 +176,7 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
-            script.src = url;
+            script.src = safeUrl;
             script.async = true;
             script.onload = function handleLoad() {
                 scriptStatus[url] = 'loaded';

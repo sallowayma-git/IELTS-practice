@@ -222,12 +222,27 @@ function testMainOpenExamDoesNotFallbackToRawHtml() {
     assert(match, 'main.js 应保留 openExam 函数，并位于 viewPDF 之前');
 
     const openExamBody = match[1];
+    assert(source.includes('function findExamInCurrentIndex(examId)'), 'main.js openExam 必须通过当前题库索引解析 examId');
+    assert(openExamBody.includes('const lookup = findExamInCurrentIndex(examId);'), 'openExam 必须先解析当前题库索引');
+    assert(openExamBody.includes('题目不存在或已不可用'), 'openExam 必须拒绝索引中不存在的题目 ID');
+    assert(openExamBody.includes('lookup.exam ? lookup.exam.id : examId'), 'openExam 必须优先使用索引中的规范题目 ID');
     assert(openExamBody.includes('window.app.openExam'), 'openExam 必须只委托统一 App 练习入口');
     assert(openExamBody.includes('统一练习入口未就绪'), 'openExam 在统一入口不可用时必须提示明确错误点');
     assert(!openExamBody.includes("buildResourcePath(exam, 'html')"), 'openExam 禁止拼接原始 HTML 题源路径');
     assert(!openExamBody.includes('window.open('), 'openExam 禁止直接打开原始题源窗口');
     assert(!openExamBody.includes('startHandshakeFallback'), 'openExam 禁止启动旧 HTML 握手兜底');
     assert(!source.includes('function startHandshakeFallback('), 'main.js 禁止保留旧 HTML 握手兜底函数');
+}
+
+function testExamActionsResolveActionExamIds() {
+    const source = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
+    assert(source.includes('function resolveActionExam(examId)'), 'examActions 必须在执行题目动作前解析 examId');
+    assert(source.includes('var exam = resolveActionExam(examId);'), 'examActions 事件委托必须使用解析后的题目对象');
+    assert(source.includes('global.app.openExam(exam.id)'), 'examActions 启动练习必须使用规范题目 ID');
+    assert(source.includes('global.viewPDF(exam.id)'), 'examActions 打开 PDF 必须使用规范题目 ID');
+    assert(source.includes('global.generateHTML(exam.id)'), 'examActions 生成动作必须使用规范题目 ID');
+    assert(!source.includes('global.app.openExam(examId);'), 'examActions 不得把原始 dataset examId 直接传给 app.openExam');
+    assert(!source.includes('global.viewPDF(examId);'), 'examActions 不得把原始 dataset examId 直接传给 viewPDF');
 }
 
 async function main() {
@@ -237,6 +252,7 @@ async function main() {
     testBuildBundlesNoDeletedScriptRefs();
     testReadingLaunchHost();
     testMainOpenExamDoesNotFallbackToRawHtml();
+    testExamActionsResolveActionExamIds();
     testCompatPatchRegistry();
     console.log(JSON.stringify({
         status: 'pass',

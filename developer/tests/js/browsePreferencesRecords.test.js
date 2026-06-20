@@ -14,8 +14,8 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
-function createHarness({ examIndex = [], records = [] } = {}) {
-    const localStorageState = new Map();
+function createHarness({ examIndex = [], records = [], initialStorage = {} } = {}) {
+    const localStorageState = new Map(Object.entries(initialStorage));
     const documentStub = {
         addEventListener() {},
         getElementById() { return null; },
@@ -74,6 +74,10 @@ function recordResult(name, detail) {
 
 function readPreferences(windowStub) {
     return JSON.parse(windowStub.localStorage.getItem('browse_view_preferences_v2') || '{}');
+}
+
+function hasOwn(object, key) {
+    return Object.prototype.hasOwnProperty.call(object, key);
 }
 
 function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
@@ -164,11 +168,68 @@ function testLatestTimestampWinsPerFilter() {
     recordResult('浏览锚点按时间保留最新记录', prefs.listAnchors['P3|reading']);
 }
 
+function testStoredBrowsePreferencesRejectUnsafeKeys() {
+    const rawPreferences = '{"scrollPositions":{"P1|reading":42,"__proto__":99,"constructor":100,"bad":-1},"listAnchors":{"P1|reading":{"examId":" exam-1 ","title":" Title ","scrollTop":12,"timestamp":1800000000000},"__proto__":{"examId":"polluted"},"constructor":{"examId":"ctor"}},"lastFilter":{"category":"Part 2","type":"Listening","constructor":{"prototype":{"polluted":true}}},"__proto__":{"polluted":true}}';
+    const { window } = createHarness({
+        initialStorage: {
+            browse_view_preferences_v2: rawPreferences
+        }
+    });
+
+    const prefs = window.getBrowseViewPreferences();
+    assert.strictEqual(Object.prototype.polluted, undefined, 'loading preferences must not pollute Object.prototype');
+    assert.strictEqual(prefs.scrollPositions['P1|reading'], 42);
+    assert.strictEqual(hasOwn(prefs.scrollPositions, '__proto__'), false, 'scroll positions must drop __proto__');
+    assert.strictEqual(hasOwn(prefs.scrollPositions, 'constructor'), false, 'scroll positions must drop constructor');
+    assert.strictEqual(hasOwn(prefs.listAnchors, '__proto__'), false, 'anchors must drop __proto__');
+    assert.strictEqual(hasOwn(prefs.listAnchors, 'constructor'), false, 'anchors must drop constructor');
+    assert.strictEqual(prefs.listAnchors['P1|reading'].examId, 'exam-1');
+    assert.strictEqual(prefs.lastFilter.category, 'P2');
+    assert.strictEqual(prefs.lastFilter.type, 'listening');
+
+    recordResult('stored browse preferences reject unsafe keys', {
+        scrollPositions: prefs.scrollPositions,
+        listAnchors: prefs.listAnchors,
+        lastFilter: prefs.lastFilter
+    });
+}
+
+function testSavedBrowsePreferencesRejectUnsafeKeys() {
+    const { window } = createHarness();
+    const unsafeScrollPositions = JSON.parse('{"P2|reading":35,"__proto__":99,"constructor":100,"negative":-1}');
+    const unsafeAnchors = JSON.parse('{"P2|reading":{"examId":" exam-2 ","title":" Reading ","scrollTop":24,"timestamp":1800000000000},"__proto__":{"examId":"polluted"},"prototype":{"examId":"bad"}}');
+
+    window.saveBrowseViewPreferences({
+        scrollPositions: unsafeScrollPositions,
+        listAnchors: unsafeAnchors,
+        lastFilter: JSON.parse('{"category":"Part 3","type":"reading","__proto__":{"polluted":true}}')
+    });
+
+    const prefs = readPreferences(window);
+    assert.strictEqual(Object.prototype.polluted, undefined, 'saving preferences must not pollute Object.prototype');
+    assert.strictEqual(prefs.scrollPositions['P2|reading'], 35);
+    assert.strictEqual(hasOwn(prefs.scrollPositions, '__proto__'), false, 'saved scroll positions must drop __proto__');
+    assert.strictEqual(hasOwn(prefs.scrollPositions, 'constructor'), false, 'saved scroll positions must drop constructor');
+    assert.strictEqual(hasOwn(prefs.listAnchors, '__proto__'), false, 'saved anchors must drop __proto__');
+    assert.strictEqual(hasOwn(prefs.listAnchors, 'prototype'), false, 'saved anchors must drop prototype');
+    assert.strictEqual(prefs.listAnchors['P2|reading'].examId, 'exam-2');
+    assert.strictEqual(prefs.lastFilter.category, 'P3');
+    assert.strictEqual(prefs.lastFilter.type, 'reading');
+
+    recordResult('saved browse preferences reject unsafe keys', {
+        scrollPositions: prefs.scrollPositions,
+        listAnchors: prefs.listAnchors,
+        lastFilter: prefs.lastFilter
+    });
+}
+
 function main() {
     try {
         testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
         testExplicitMetadataOutranksCurrentExamIndex();
         testLatestTimestampWinsPerFilter();
+        testStoredBrowsePreferencesRejectUnsafeKeys();
+        testSavedBrowsePreferencesRejectUnsafeKeys();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

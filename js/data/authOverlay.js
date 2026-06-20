@@ -38,6 +38,11 @@
         return element;
     }
 
+    function normalizeTotpQrDataUrl(value) {
+        const text = String(value || '').trim();
+        return /^data:image\/(?:png|gif|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(text) ? text : '';
+    }
+
     function isAuthSurface(element) {
         return element.id === 'remote-auth-overlay'
             || element.classList.contains('remote-auth-account')
@@ -402,7 +407,7 @@
 
             async function beginOverlayTotpSetup() {
                 const setup = await apiClient.startTotpSetup();
-                setupQr.src = setup.qrCodeDataUrl || '';
+                setupQr.src = normalizeTotpQrDataUrl(setup.qrCodeDataUrl);
                 setupSecret.textContent = setup.secret || '';
                 tokenInput.value = '';
                 setMode('setup');
@@ -892,10 +897,12 @@
                 regenerate.type = 'button';
                 disable.type = 'button';
                 regenerate.addEventListener('click', async () => {
+                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
+                    if (token === null) return;
                     regenerate.disabled = true;
                     body.textContent = '';
                     try {
-                        const result = await apiClient.regenerateTotpRecoveryCodes();
+                        const result = await apiClient.regenerateTotpRecoveryCodes(token);
                         renderRecoveryCodes(body, result.recoveryCodes || []);
                         statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
                     } catch (requestError) {
@@ -950,7 +957,7 @@
             statusNode.textContent = '扫描二维码后输入 6 位验证码完成绑定。';
             const qr = createElement('img', 'remote-auth-totp__qr');
             qr.alt = 'TOTP QR code';
-            qr.src = setup.qrCodeDataUrl || '';
+            qr.src = normalizeTotpQrDataUrl(setup.qrCodeDataUrl);
             const secret = createElement('code', 'remote-auth-totp__secret', setup.secret || '');
             const token = createElement('input', 'remote-auth-totp__input');
             token.inputMode = 'numeric';

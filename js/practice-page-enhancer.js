@@ -15,6 +15,22 @@
 
     console.log('[PracticeEnhancer] 初始化增强器');
 
+    let fallbackTokenCounter = 0;
+
+    function randomTokenSuffix() {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackTokenCounter += 1;
+        return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
+
     const DEFAULT_ENHANCER_CONFIG = {
         autoInitialize: true,
         excludedSelectors: [
@@ -110,25 +126,50 @@
     };
 
     const ENHANCER_BASE_URL = resolveEnhancerBaseUrl();
+
+    const resolveTrustedDependencyScriptUrl = (rawUrl) => {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const resolved = new URL(String(rawUrl), window.location.href);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            if (!resolved.pathname || !resolved.pathname.toLowerCase().endsWith('.js')) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                const origin = window.location && window.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+            if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    };
+
     const dependencyLoader = {
         cache: new Map(),
         loadScript(url) {
-            if (!url) {
+            const safeUrl = resolveTrustedDependencyScriptUrl(url);
+            if (!safeUrl) {
                 return Promise.reject(new Error('script url missing'));
             }
-            if (this.cache.has(url)) {
-                return this.cache.get(url);
+            if (this.cache.has(safeUrl)) {
+                return this.cache.get(safeUrl);
             }
             const promise = new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.type = 'text/javascript';
                 script.defer = true;
-                script.src = url;
+                script.src = safeUrl;
                 script.onload = () => resolve(true);
                 script.onerror = (err) => reject(err);
                 (document.head || document.body || document.documentElement).appendChild(script);
             });
-            this.cache.set(url, promise);
+            this.cache.set(safeUrl, promise);
             return promise;
         }
     };
@@ -172,13 +213,35 @@
         if (event.source && event.source !== parentWindow) {
             return false;
         }
-        if (event.origin && event.origin !== 'null') {
-            const allowedOrigin = window.location && window.location.origin;
-            if (allowedOrigin && allowedOrigin !== 'null' && event.origin !== allowedOrigin) {
-                return false;
-            }
+        if (!event.origin || event.origin === 'null') {
+            return Boolean(window.location && window.location.protocol === 'file:');
+        }
+        const allowedOrigin = window.location && window.location.origin;
+        if (!allowedOrigin || allowedOrigin === 'null' || event.origin !== allowedOrigin) {
+            return false;
         }
         return true;
+    }
+
+    function resolveTrustedSuiteNavigationUrl(rawUrl) {
+        if (rawUrl == null) {
+            return '';
+        }
+        try {
+            const resolved = new URL(String(rawUrl), window.location.href);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+            if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            // Invalid navigation payloads are ignored.
+        }
+        return '';
     }
 
     const enhancerMixinRegistry = [];
@@ -1679,9 +1742,14 @@
                 `;
             }).join('');
 
+            const scoreInfo = results.scoreInfo || {};
+            const safeCorrect = escapeHtml(scoreInfo.correct ?? 0);
+            const safeTotal = escapeHtml(scoreInfo.total ?? 0);
+            const safePercentage = escapeHtml(scoreInfo.percentage ?? 0);
+
             resultsEl.innerHTML = `
                 <h4>回顾结果</h4>
-                <p>得分 ${results.scoreInfo?.correct ?? 0} / ${results.scoreInfo?.total ?? 0} · ${results.scoreInfo?.percentage ?? 0}%</p>
+                <p>得分 ${safeCorrect} / ${safeTotal} · ${safePercentage}%</p>
                 <table class="results-table">
                     <thead>
                         <tr>
@@ -1993,7 +2061,7 @@
             }
 
             // Fallback path when shared back guard helper is unavailable.
-            this._suiteHistoryGuardToken = `suite_guard_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            this._suiteHistoryGuardToken = `suite_guard_${Date.now()}_${randomTokenSuffix()}`;
             this._suitePopstateHandler = (event) => {
                 if (this._suiteHistoryBypassPopstate) {
                     return;
@@ -2123,7 +2191,12 @@
             }
 
             try {
-                window.location.href = data.url;
+                const targetUrl = resolveTrustedSuiteNavigationUrl(data.url);
+                if (!targetUrl) {
+                    console.warn('[PracticeEnhancer] Blocked untrusted suite navigation URL');
+                    return;
+                }
+                window.location.href = targetUrl;
             } catch (error) {
                 console.warn('[PracticeEnhancer] 套题导航失败:', error);
             }
@@ -3144,25 +3217,26 @@
          */
         getSuiteContainer: function (suiteId) {
             // 方法1: 通过data-suite-id查找
-            let container = document.querySelector(`[data-suite-id="${suiteId}"]`);
+            const normalizedSuiteId = String(suiteId || '');
+            let container = document.querySelector(`[data-suite-id="${cssEscape(normalizedSuiteId)}"]`);
             if (container) return container;
 
             // 方法2: 通过ID查找（如果suiteId是"set1"，查找"page-test1"）
-            if (suiteId.startsWith('set')) {
-                const pageNum = suiteId.replace('set', '');
+            if (normalizedSuiteId.startsWith('set')) {
+                const pageNum = normalizedSuiteId.replace('set', '');
                 container = document.getElementById(`page-test${pageNum}`);
                 if (container) return container;
             }
 
             // 方法3: 直接通过ID查找
-            container = document.getElementById(suiteId);
+            container = document.getElementById(normalizedSuiteId);
             if (container) return container;
 
             // 方法4: 查找当前激活的test-page
             container = document.querySelector('.test-page.active');
             if (container) {
                 const extractedId = this.extractSuiteId(container);
-                if (extractedId === suiteId) {
+                if (extractedId === normalizedSuiteId) {
                     return container;
                 }
             }
@@ -3719,7 +3793,7 @@
                 parent = parent.parentElement;
             }
 
-            const label = input.id ? document.querySelector(`label[for="${input.id}"]`) : null;
+            const label = input.id ? document.querySelector(`label[for="${cssEscape(input.id)}"]`) : null;
             if (label && label.textContent) {
                 const match = label.textContent.match(/(\d+)/);
                 if (match) return 'q' + match[1];

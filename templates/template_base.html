@@ -1144,6 +1144,15 @@
       "q7": "Roman army", "q8": "gardens", "q9": "floors", "q10": "wall", "q11": "93", "q12": "ring", "q13": "museum"
     };
 
+    function escapeResultHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     function grade() {
       var total = 0, correct = 0, lines = [];
 
@@ -1163,7 +1172,7 @@
 
         const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
         if (isCorrect) correct++;
-        lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+        lines.push(`${q.toUpperCase()}: ${escapeResultHtml(userAnswer || 'None')} ${isCorrect ? '✓' : '✗'}`);
       }
 
       // 显示结果
@@ -1273,8 +1282,12 @@
         },
 
         setupCommunication: function () {
-          this.parentWindow = window.opener || window.parent;
+          this.parentWindow = window.opener || (window.parent !== window ? window.parent : null);
+          this.parentOrigin = '';
           window.addEventListener('message', (event) => {
+            if (!this.isTrustedParentMessage(event)) {
+              return;
+            }
             if (event.data && event.data.type === 'INIT_SESSION') {
               this.sessionId = event.data.data.sessionId;
               this.sendMessage('SESSION_READY', {
@@ -1283,6 +1296,35 @@
               });
             }
           });
+        },
+
+        isTrustedParentMessage: function (event) {
+          if (!event || !event.source || !this.parentWindow || event.source !== this.parentWindow) {
+            return false;
+          }
+          if (!event.origin || event.origin === 'null') {
+            return window.location.protocol === 'file:';
+          }
+          if (!window.location.origin || window.location.origin === 'null') {
+            return false;
+          }
+          if (event.origin !== window.location.origin) {
+            return false;
+          }
+          this.parentOrigin = event.origin;
+          return true;
+        },
+
+        getTargetOrigin: function () {
+          if (this.parentOrigin) {
+            return this.parentOrigin;
+          }
+          if (window.location.protocol === 'file:') {
+            return '*';
+          }
+          return window.location.origin && window.location.origin !== 'null'
+            ? window.location.origin
+            : '*';
         },
 
         detectPageType: function () {
@@ -1372,7 +1414,7 @@
               type: type,
               data: data,
               source: 'practice_page'
-            }, '*');
+            }, this.getTargetOrigin());
           }
         }
       };

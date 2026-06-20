@@ -10,6 +10,35 @@
   const VIEW_KEYS = ['overview', 'practice', 'history', 'settings'];
   const PRACTICE_VIRTUAL_THRESHOLD = 28;
   const BACKUP_STORAGE_KEY = 'hp.portal.backups';
+  const MAX_HP_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+  const MAX_HP_IMPORT_ITEMS = 5000;
+  const MAX_HP_IMPORT_DEPTH = 24;
+  const HP_JSON_MIME_TYPES = new Set(['', 'application/json', 'text/json', 'text/plain']);
+  const HP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+  function resolveTrustedPortalTarget(rawTarget) {
+    if (!rawTarget) return '';
+    const target = String(rawTarget).trim();
+    if (!target) return '';
+    if (VIEW_KEYS.includes(target.replace(/^#/, '').toLowerCase())) {
+      return target;
+    }
+    try {
+      const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+      const resolved = new URL(target, baseHref);
+      const protocol = (resolved.protocol || '').toLowerCase();
+      if (protocol === 'http:' || protocol === 'https:') {
+        const origin = window.location && window.location.origin;
+        return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+      }
+      if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+        return resolved.href;
+      }
+    } catch (_) {
+      return '';
+    }
+    return '';
+  }
 
   function consumePendingView() {
     try {
@@ -63,6 +92,90 @@
     const minute = pad(now.getMinutes());
     const second = pad(now.getSeconds());
     return `${year}${month}${day}-${hour}${minute}${second}`;
+  }
+
+  function validateHpJsonFile(file) {
+    if (!file || typeof file.size !== 'number') {
+      throw new Error('Invalid import file.');
+    }
+    if (file.size > MAX_HP_IMPORT_FILE_BYTES) {
+      throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+    const filename = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+    if (!/\.json$/.test(filename)) {
+      throw new Error('Only JSON import files are supported.');
+    }
+    const type = typeof file.type === 'string' ? file.type.split(';')[0].trim().toLowerCase() : '';
+    if (!HP_JSON_MIME_TYPES.has(type)) {
+      throw new Error('Unsupported import file type.');
+    }
+  }
+
+  function isPlainObject(value) {
+    return Object.prototype.toString.call(value) === '[object Object]';
+  }
+
+  function sanitizeHpImportValue(value, depth = 0) {
+    if (depth > MAX_HP_IMPORT_DEPTH) {
+      throw new Error('Import data is too deeply nested.');
+    }
+    if (Array.isArray(value)) {
+      if (value.length > MAX_HP_IMPORT_ITEMS) {
+        throw new Error(`Import contains too many entries. Maximum supported count is ${MAX_HP_IMPORT_ITEMS}.`);
+      }
+      return value.map((item) => sanitizeHpImportValue(item, depth + 1));
+    }
+    if (!isPlainObject(value)) {
+      return value;
+    }
+    const sanitized = {};
+    Object.entries(value).forEach(([key, item]) => {
+      if (HP_IMPORT_POLLUTION_KEYS.has(String(key))) {
+        return;
+      }
+      sanitized[key] = sanitizeHpImportValue(item, depth + 1);
+    });
+    return sanitized;
+  }
+
+  function sanitizeHpImportList(list) {
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    if (list.length > MAX_HP_IMPORT_ITEMS) {
+      throw new Error(`Import contains too many entries. Maximum supported count is ${MAX_HP_IMPORT_ITEMS}.`);
+    }
+    return list.map((item) => sanitizeHpImportValue(item));
+  }
+
+  function normalizeHpBackupItem(item, fallbackIndex = 0) {
+    if (!isPlainObject(item)) {
+      return null;
+    }
+    const safeItem = sanitizeHpImportValue(item);
+    const id = typeof safeItem.id === 'string' && safeItem.id.trim()
+      ? safeItem.id.trim().slice(0, 120)
+      : 'backup-' + fallbackIndex;
+    const createdAtNumber = Number(safeItem.createdAt);
+    const createdAt = Number.isFinite(createdAtNumber) && createdAtNumber > 0
+      ? createdAtNumber
+      : Date.now();
+    return {
+      id,
+      createdAt,
+      exams: sanitizeHpImportList(safeItem.exams),
+      records: sanitizeHpImportList(safeItem.records)
+    };
+  }
+
+  function normalizeHpBackupList(list) {
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    return list
+      .slice(0, 20)
+      .map((item, index) => normalizeHpBackupItem(item, index))
+      .filter(Boolean);
   }
 
   function readState() {
@@ -309,10 +422,11 @@
             const normalized = (typeof window.normalizeThemePortalTarget === 'function')
               ? window.normalizeThemePortalTarget(target)
               : (target || '');
-            if (normalized && typeof window.navigateToThemePortal === 'function') {
-              window.navigateToThemePortal(normalized, { label, theme: label || undefined });
-            } else if (normalized) {
-              window.location.href = normalized;
+            const trustedTarget = resolveTrustedPortalTarget(normalized);
+            if (trustedTarget && typeof window.navigateToThemePortal === 'function') {
+              window.navigateToThemePortal(trustedTarget, { label, theme: label || undefined });
+            } else if (trustedTarget) {
+              window.location.href = trustedTarget;
             } else {
               hpCore.showMessage('缺少目标链接', 'warning');
             }
@@ -474,7 +588,7 @@
         const raw = localStorage.getItem(this.storageKeys.backups);
         if (!raw) return [];
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        return normalizeHpBackupList(parsed);
       } catch (_) {
         return [];
       }
@@ -482,7 +596,7 @@
 
     writeBackups(list) {
       try {
-        localStorage.setItem(this.storageKeys.backups, JSON.stringify(list.slice(0, 20)));
+        localStorage.setItem(this.storageKeys.backups, JSON.stringify(normalizeHpBackupList(list)));
       } catch (error) {
         console.warn('[hp-portal] write backups failed', error);
       }
@@ -637,7 +751,7 @@
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
       hpCore.showMessage('备份文件已导出', 'success');
     },
 
@@ -651,6 +765,13 @@
       const files = event && event.target && event.target.files;
       if (!files || !files.length) return;
       const file = files[0];
+      try {
+        validateHpJsonFile(file);
+      } catch (error) {
+        hpCore.showMessage(error.message || 'Import file is invalid.', 'error');
+        this.dom.importInput.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         try {
@@ -681,8 +802,8 @@
         ? payload.records
         : (Array.isArray(payload.practiceRecords) ? payload.practiceRecords : []);
       hpCore.emit('dataUpdated', {
-        examIndex: exams,
-        practiceRecords: records,
+        examIndex: sanitizeHpImportList(exams),
+        practiceRecords: sanitizeHpImportList(records),
         __source: 'hp-portal-import'
       });
       this.renderAll();

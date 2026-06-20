@@ -24,9 +24,10 @@ class PDFHandler {
     openPDF(pdfPath, examTitle = 'PDF Exam', options = {}) {
         try {
             console.log('[PDFHandler] Opening PDF:', pdfPath);
-            
+
             // Validate PDF path
-            if (!this.isValidPDFPath(pdfPath)) {
+            const safePdfPath = this.resolvePDFPath(pdfPath);
+            if (!safePdfPath) {
                 throw new Error('Invalid PDF path provided');
             }
 
@@ -37,17 +38,23 @@ class PDFHandler {
             const windowName = this.generateWindowName(examTitle);
             
             // Open PDF in new window
-            const pdfWindow = window.open(pdfPath, windowName, windowOptions);
+            const pdfWindow = window.open(safePdfPath, windowName, windowOptions);
             
             if (!pdfWindow) {
                 throw new Error('Failed to open PDF window. Please check popup blocker settings.');
             }
 
+            try {
+                pdfWindow.opener = null;
+            } catch (_) {
+                // Some browsers block access when noopener is enforced.
+            }
+
             // Track the opened window
-            this.trackPDFWindow(pdfPath, pdfWindow, examTitle);
+            this.trackPDFWindow(safePdfPath, pdfWindow, examTitle);
             
             // Set up window event handlers
-            this.setupWindowHandlers(pdfWindow, pdfPath);
+            this.setupWindowHandlers(pdfWindow, safePdfPath);
             
             console.log('[PDFHandler] PDF opened successfully:', examTitle);
             return pdfWindow;
@@ -67,13 +74,14 @@ class PDFHandler {
     async validatePDF(pdfPath) {
         try {
             console.log('[PDFHandler] Validating PDF:', pdfPath);
-            
-            if (!this.isValidPDFPath(pdfPath)) {
+
+            const safePdfPath = this.resolvePDFPath(pdfPath);
+            if (!safePdfPath) {
                 return false;
             }
 
             // Use HEAD request to check if file exists
-            const response = await fetch(pdfPath, { 
+            const response = await fetch(safePdfPath, {
                 method: 'HEAD',
                 cache: 'no-cache'
             });
@@ -97,15 +105,20 @@ class PDFHandler {
     async getPDFInfo(pdfPath) {
         try {
             console.log('[PDFHandler] Getting PDF info:', pdfPath);
-            
-            const response = await fetch(pdfPath, { method: 'HEAD' });
+
+            const safePdfPath = this.resolvePDFPath(pdfPath);
+            if (!safePdfPath) {
+                return null;
+            }
+
+            const response = await fetch(safePdfPath, { method: 'HEAD' });
             
             if (!response.ok) {
                 return null;
             }
 
             const info = {
-                path: pdfPath,
+                path: safePdfPath,
                 size: response.headers.get('content-length'),
                 lastModified: response.headers.get('last-modified'),
                 contentType: response.headers.get('content-type'),
@@ -133,21 +146,57 @@ class PDFHandler {
      * @returns {boolean} - True if valid PDF path
      */
     isValidPDFPath(path) {
+        return Boolean(this.resolvePDFPath(path));
+    }
+
+    resolvePDFPath(path) {
         if (!path || typeof path !== 'string') {
-            return false;
+            return '';
         }
 
-        // Check file extension
-        const hasValidExtension = this.supportedFormats.some(ext => 
-            path.toLowerCase().endsWith(ext)
-        );
+        const rawPath = path.trim();
+        if (!rawPath || /[\u0000-\u001F\u007F]/.test(rawPath) || this.hasPathTraversal(rawPath)) {
+            return '';
+        }
 
-        // Basic path validation
-        const isValidPath = !path.includes('..') && // Prevent directory traversal
-                           !path.startsWith('javascript:') && // Prevent XSS
-                           !path.startsWith('data:'); // Prevent data URLs
+        try {
+            const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+            const resolved = new URL(rawPath, baseHref);
+            const hasValidExtension = this.supportedFormats.some(ext =>
+                resolved.pathname.toLowerCase().endsWith(ext)
+            );
+            if (!hasValidExtension) {
+                return '';
+            }
 
-        return hasValidExtension && isValidPath;
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+
+            if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+
+        return '';
+    }
+
+    hasPathTraversal(path) {
+        const text = String(path || '').replace(/\\/g, '/');
+        if (/(^|\/)\.\.(?:\/|$)/.test(text)) {
+            return true;
+        }
+        try {
+            const decoded = decodeURIComponent(text).replace(/\\/g, '/');
+            return /(^|\/)\.\.(?:\/|$)/.test(decoded);
+        } catch (_) {
+            return true;
+        }
     }
 
     /**
@@ -182,11 +231,37 @@ class PDFHandler {
             location: 'yes' // Show location bar for PDF URL
         };
 
-        const finalOptions = { ...defaultOptions, ...options };
+        const allowedFeatures = ['width', 'height', 'left', 'top', 'scrollbars', 'resizable', 'status', 'toolbar', 'menubar', 'location'];
+        const finalOptions = { ...defaultOptions };
+        allowedFeatures.forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(options || {}, key)) {
+                finalOptions[key] = this.normalizeWindowFeatureValue(key, options[key], defaultOptions[key]);
+            } else {
+                finalOptions[key] = this.normalizeWindowFeatureValue(key, defaultOptions[key], defaultOptions[key]);
+            }
+        });
+        finalOptions.noopener = 'yes';
+        finalOptions.noreferrer = 'yes';
 
         return Object.entries(finalOptions)
             .map(([key, value]) => `${key}=${value}`)
             .join(',');
+    }
+
+    normalizeWindowFeatureValue(key, value, fallback) {
+        if (['width', 'height', 'left', 'top'].includes(key)) {
+            const number = Number(value);
+            const safeNumber = Number.isFinite(number) ? Math.round(number) : Number(fallback);
+            return String(Math.max(0, Math.min(10000, safeNumber || 0)));
+        }
+        const text = String(value).trim().toLowerCase();
+        if (['yes', '1', 'true'].includes(text)) {
+            return 'yes';
+        }
+        if (['no', '0', 'false'].includes(text)) {
+            return 'no';
+        }
+        return String(fallback).trim().toLowerCase() === 'no' ? 'no' : 'yes';
     }
 
     /**
@@ -195,7 +270,10 @@ class PDFHandler {
      * @returns {string} - Unique window name
      */
     generateWindowName(examTitle) {
-        const cleanTitle = examTitle.replace(/[^a-zA-Z0-9]/g, '_');
+        const cleanTitle = String(examTitle || 'PDF Exam')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .slice(0, 80);
         const timestamp = Date.now();
         return `pdf_${cleanTitle}_${timestamp}`;
     }

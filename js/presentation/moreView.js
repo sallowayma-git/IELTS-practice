@@ -655,8 +655,23 @@
 
         state.lastRendered = timeString;
         var colonClass = state.renderOptions && state.renderOptions.colonClass ? state.renderOptions.colonClass : '';
-        var colonMarkup = colonClass ? '<span class=\"' + colonClass + '\">:</span>' : ':';
-        state.container.innerHTML = '' + hours + colonMarkup + minutes + colonMarkup + seconds;
+        state.container.textContent = '';
+        state.container.appendChild(document.createTextNode(hours));
+        state.container.appendChild(createClockColon(colonClass));
+        state.container.appendChild(document.createTextNode(minutes));
+        state.container.appendChild(createClockColon(colonClass));
+        state.container.appendChild(document.createTextNode(seconds));
+    }
+
+    function createClockColon(colonClass) {
+        var safeClass = String(colonClass || '').trim().replace(/[^a-z0-9_-]/gi, '');
+        if (!safeClass) {
+            return document.createTextNode(':');
+        }
+        var span = document.createElement('span');
+        span.className = safeClass;
+        span.textContent = ':';
+        return span;
     }
 
     function stopSimpleDigitalClock(state) {

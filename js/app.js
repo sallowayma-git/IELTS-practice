@@ -63,6 +63,108 @@ class ExamSystemApp {
 }
 
 (function(global) {
+    function escapeCssSelectorValue(value) {
+        if (global.CSS && typeof global.CSS.escape === 'function') {
+            try {
+                return global.CSS.escape(String(value == null ? '' : value));
+            } catch (_) {
+                // fallback below
+            }
+        }
+        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+    }
+
+    function isAppUnsafeAttributeName(name) {
+        const key = String(name || '').toLowerCase();
+        return key.startsWith('on') || key === 'srcdoc';
+    }
+
+    function isAppUnsafeUrlAttribute(name, value, tagName) {
+        const key = String(name || '').toLowerCase();
+        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+        if (!urlAttributes.has(key)) {
+            return false;
+        }
+        const text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return false;
+        }
+        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+            return true;
+        }
+        if (compact.startsWith('data:')) {
+            const tag = String(tagName || '').toLowerCase();
+            if (key !== 'src' || tag !== 'img') {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return false;
+    }
+
+    function isAppUnsafeObjectKey(name) {
+        const key = String(name || '').toLowerCase();
+        return key === '__proto__' || key === 'prototype' || key === 'constructor';
+    }
+
+    function isAppUnsafeStyleValue(name, value) {
+        if (isAppUnsafeObjectKey(name) || value == null) {
+            return true;
+        }
+        const compact = String(value)
+            .replace(/[\u0000-\u001f\u007f\s]+/g, '')
+            .toLowerCase();
+        return compact.includes('javascript:')
+            || compact.includes('vbscript:')
+            || compact.includes('expression(')
+            || compact.includes('data:text/html')
+            || compact.includes('data:application/xhtml+xml')
+            || compact.includes('data:image/svg+xml');
+    }
+
+    function applySafeElementAttributes(element, attrs) {
+        if (!element || !attrs || typeof attrs !== 'object') {
+            return;
+        }
+        Object.keys(attrs).forEach((key) => {
+            const value = attrs[key];
+            if (value == null || value === false) {
+                return;
+            }
+            if (isAppUnsafeAttributeName(key) || isAppUnsafeUrlAttribute(key, value, element.tagName)) {
+                console.warn(`[App] Skipped unsafe fallback attribute: ${key}`);
+                return;
+            }
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'dataset' && typeof value === 'object') {
+                Object.keys(value).forEach((dataKey) => {
+                    if (!isAppUnsafeObjectKey(dataKey) && value[dataKey] != null) {
+                        element.dataset[dataKey] = String(value[dataKey]);
+                    }
+                });
+                return;
+            }
+            if (key === 'style' && typeof value === 'object') {
+                Object.keys(value).forEach((styleKey) => {
+                    const styleValue = value[styleKey];
+                    if (!isAppUnsafeStyleValue(styleKey, styleValue)) {
+                        element.style[styleKey] = styleValue;
+                    }
+                });
+                return;
+            }
+            if (key === 'type') {
+                element.setAttribute('type', value);
+                return;
+            }
+            element.setAttribute(key, value === true ? '' : String(value));
+        });
+    }
+
     const integratedStateMixin = {
         getState(path) {
             return path.split('.').reduce((obj, key) => obj && obj[key], this.state);
@@ -412,29 +514,7 @@ class ExamSystemApp {
                     return adapter.create(tag, attrs, children);
                 }
                 const element = document.createElement(tag);
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach((key) => {
-                        const value = attrs[key];
-                        if (value == null) {
-                            return;
-                        }
-                        if (key === 'className') {
-                            element.className = value;
-                            return;
-                        }
-                        if (key === 'dataset' && typeof value === 'object') {
-                            Object.keys(value).forEach((dataKey) => {
-                                element.dataset[dataKey] = String(value[dataKey]);
-                            });
-                            return;
-                        }
-                        if (key === 'type') {
-                            element.setAttribute('type', value);
-                            return;
-                        }
-                        element.setAttribute(key, value);
-                    });
-                }
+                applySafeElementAttributes(element, attrs);
                 const nodes = Array.isArray(children) ? children : [children];
                 nodes.forEach((child) => {
                     if (child == null) {
@@ -528,29 +608,7 @@ class ExamSystemApp {
                     return adapter.create(tag, attrs, children);
                 }
                 const element = document.createElement(tag);
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach((key) => {
-                        const value = attrs[key];
-                        if (value == null) {
-                            return;
-                        }
-                        if (key === 'className') {
-                            element.className = value;
-                            return;
-                        }
-                        if (key === 'dataset' && typeof value === 'object') {
-                            Object.keys(value).forEach((dataKey) => {
-                                element.dataset[dataKey] = String(value[dataKey]);
-                            });
-                            return;
-                        }
-                        if (key === 'type') {
-                            element.setAttribute('type', value);
-                            return;
-                        }
-                        element.setAttribute(key, value);
-                    });
-                }
+                applySafeElementAttributes(element, attrs);
                 const nodes = Array.isArray(children) ? children : [children];
                 nodes.forEach((child) => {
                     if (child == null) {
@@ -629,7 +687,7 @@ class ExamSystemApp {
                 document.querySelectorAll('.nav-btn').forEach((btn) => {
                     btn.classList.remove('active');
                 });
-                const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
+                const activeNavBtn = document.querySelector(`[data-view="${escapeCssSelectorValue(viewName)}"]`);
                 if (activeNavBtn) {
                     activeNavBtn.classList.add('active');
                 }
@@ -1010,6 +1068,7 @@ class ExamSystemApp {
             const categories = ['P1', 'P2', 'P3'];
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             categories.forEach((category) => {
+                const escapedCategory = escapeCssSelectorValue(category);
                 const categoryExams = list.filter((exam) => exam.category === category);
                 const categoryRecords = practiceRecords.filter((record) => {
                     const exam = list.find((e) => e.id === record.examId);
@@ -1018,12 +1077,12 @@ class ExamSystemApp {
                 const completed = new Set(categoryRecords.map((r) => r.examId)).size;
                 const total = categoryExams.length;
                 const progress = total > 0 ? (completed / total) * 100 : 0;
-                const progressBar = document.querySelector(`[data-category="${category}"] .progress-fill`);
+                const progressBar = document.querySelector(`[data-category="${escapedCategory}"] .progress-fill`);
                 if (progressBar) {
                     progressBar.style.width = `${progress}%`;
                     progressBar.dataset.progress = progress;
                 }
-                const progressText = document.querySelector(`[data-category="${category}"] .progress-text`);
+                const progressText = document.querySelector(`[data-category="${escapedCategory}"] .progress-text`);
                 if (progressText) {
                     progressText.textContent = `${completed}/${total} 已完成`;
                 }

@@ -121,7 +121,29 @@ async function testDiscoversListeningHtmlAtAnyDepth() {
     assert(runtimeUrl.startsWith('blob:library-discovery-test/'), '当前会话应注册可打开的运行时 HTML URL');
     const htmlBlob = objectUrlPayloads.find((payload) => payload.url === runtimeUrl)?.value;
     assert(htmlBlob && Array.isArray(htmlBlob.parts), '运行时 HTML 应来自重写后的 Blob');
-    assert(String(htmlBlob.parts[0]).includes('blob:library-discovery-test/'), 'HTML 内相对音频引用应被重写为 Blob URL');
+    const runtimeHtml = String(htmlBlob.parts[0]);
+    assert(runtimeHtml.includes('blob:library-discovery-test/'), 'HTML 内相对音频引用应被重写为 Blob URL');
+    assert(runtimeHtml.includes('id="imported-practice-frame"'), 'runtime HTML should wrap imported content in a sandbox iframe');
+    assert(runtimeHtml.includes('sandbox="allow-scripts"'), 'runtime sandbox should grant only the script capability needed for imported exercises');
+    assert(!runtimeHtml.includes('allow-same-origin'), 'imported HTML must not inherit the app origin');
+    assert(!runtimeHtml.includes('allow-forms'), 'imported HTML must not submit forms from the app wrapper');
+    assert(!runtimeHtml.includes('allow-downloads'), 'imported HTML must not trigger downloads from the app wrapper');
+    assert(!runtimeHtml.includes('allow-modals'), 'imported HTML must not open modal dialogs from the app wrapper');
+    assert(runtimeHtml.includes("connect-src 'none'"), 'runtime wrapper CSP should block imported page network requests');
+    assert(runtimeHtml.includes("frame-src 'none'"), 'runtime wrapper CSP should block nested frames in imported content');
+    assert(runtimeHtml.includes("worker-src 'none'"), 'runtime wrapper CSP should block imported content workers');
+    assert(runtimeHtml.includes("navigate-to 'none'"), 'runtime wrapper CSP should block imported content navigation');
+    assert(runtimeHtml.includes('&lt;script&gt;'), 'original imported scripts should be encoded into srcdoc instead of top-level HTML');
+    for (const blockedType of [
+        'VOCAB_HIGHLIGHT_SAVE',
+        'SIMULATION_DRAFT_SYNC',
+        'SIMULATION_NAVIGATE',
+        'SIMULATION_SUBMIT',
+        'SUITE_CLOSE_ATTEMPT',
+        'ENDLESS_USER_EXIT'
+    ]) {
+        assert(!runtimeHtml.includes(`${blockedType}: true`), `runtime bridge must not forward imported ${blockedType} messages`);
+    }
     assert.strictEqual(result.report.accepted, 1, '报告应包含识别题目数量');
     assert.strictEqual(result.report.runtime.html, 1, '报告应包含运行时 HTML 资源数量');
     assert(result.report.warnings.includes('file-picker-session-resources'), '报告应提示 file picker 会话资源边界');

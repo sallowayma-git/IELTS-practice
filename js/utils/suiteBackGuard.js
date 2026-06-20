@@ -1,6 +1,22 @@
 (function initSuiteBackGuard(global) {
     'use strict';
 
+    let fallbackTokenCounter = 0;
+
+    function randomTokenSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackTokenCounter += 1;
+        return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
+
     function createSuiteBackGuard(options = {}) {
         const context = options.context || global;
         const historyRef = options.history || context.history;
@@ -71,7 +87,7 @@
             installed = true;
             pushed = false;
             bypass = false;
-            token = `${tokenPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            token = `${tokenPrefix}_${Date.now()}_${randomTokenSuffix()}`;
 
             popstateHandler = (event) => {
                 if (bypass || !installed) {

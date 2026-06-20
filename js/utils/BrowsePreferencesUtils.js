@@ -5,6 +5,11 @@
     'use strict';
 
     const BROWSE_VIEW_PREFERENCE_KEY = 'browse_view_preferences_v2';
+    const BROWSE_PREFERENCE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_BROWSE_PREFERENCE_ENTRIES = 200;
+    const MAX_BROWSE_PREFERENCE_KEY_LENGTH = 160;
+    const MAX_BROWSE_PREFERENCE_TEXT_LENGTH = 300;
+    const MAX_BROWSE_SCROLL_TOP = 10000000;
     let browsePreferencesCache = null;
     let currentBrowseScrollElement = null;
     let removeBrowseScrollListener = null;
@@ -84,29 +89,120 @@
         return `${normalizeCategoryKey(category)}|${normalizeExamType(type)}`;
     }
 
+    function createPreferenceMap() {
+        return Object.create(null);
+    }
+
+    function isUnsafePreferenceKey(key) {
+        return BROWSE_PREFERENCE_UNSAFE_KEYS.has(key);
+    }
+
+    function normalizePreferenceKey(key) {
+        if (typeof key !== 'string') {
+            return '';
+        }
+        const trimmed = key.trim();
+        if (!trimmed || trimmed.length > MAX_BROWSE_PREFERENCE_KEY_LENGTH) {
+            return '';
+        }
+        if (isUnsafePreferenceKey(trimmed) || /[\u0000-\u001F\u007F]/.test(trimmed)) {
+            return '';
+        }
+        return trimmed;
+    }
+
+    function normalizePreferenceText(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value
+            .replace(/[\u0000-\u001F\u007F]/g, ' ')
+            .trim()
+            .slice(0, MAX_BROWSE_PREFERENCE_TEXT_LENGTH);
+    }
+
+    function normalizeScrollTop(value) {
+        const scrollTop = Number(value);
+        if (!Number.isFinite(scrollTop) || scrollTop < 0) {
+            return null;
+        }
+        return Math.min(MAX_BROWSE_SCROLL_TOP, Math.round(scrollTop));
+    }
+
+    function normalizeBrowseScrollPositions(value) {
+        const next = createPreferenceMap();
+        if (!value || typeof value !== 'object') {
+            return next;
+        }
+
+        let copied = 0;
+        for (const [rawKey, rawValue] of Object.entries(value)) {
+            if (copied >= MAX_BROWSE_PREFERENCE_ENTRIES) {
+                break;
+            }
+            const key = normalizePreferenceKey(rawKey);
+            const scrollTop = normalizeScrollTop(rawValue);
+            if (!key || scrollTop === null) {
+                continue;
+            }
+            next[key] = scrollTop;
+            copied += 1;
+        }
+        return next;
+    }
+
+    function mergeBrowseScrollPositions(currentPositions, updates) {
+        const next = normalizeBrowseScrollPositions(currentPositions);
+        const normalizedUpdates = normalizeBrowseScrollPositions(updates);
+        let copied = Object.keys(next).length;
+        for (const [key, value] of Object.entries(normalizedUpdates)) {
+            if (!Object.prototype.hasOwnProperty.call(next, key) && copied >= MAX_BROWSE_PREFERENCE_ENTRIES) {
+                break;
+            }
+            if (!Object.prototype.hasOwnProperty.call(next, key)) {
+                copied += 1;
+            }
+            next[key] = value;
+        }
+        return next;
+    }
+
+    function normalizeBrowseLastFilter(value) {
+        if (!value || typeof value !== 'object') {
+            return null;
+        }
+        return {
+            category: normalizeCategoryKey(value.category),
+            type: normalizeExamType(value.type)
+        };
+    }
+
     // --- Preference Management ---
 
     function getDefaultBrowsePreferences() {
         return {
-            scrollPositions: {},
-            listAnchors: {},
+            scrollPositions: createPreferenceMap(),
+            listAnchors: createPreferenceMap(),
             autoScrollEnabled: true,
             lastFilter: null
         };
     }
 
-    function mergeBrowseAnchors(currentAnchors = {}, updates) {
-        const next = Object.assign({}, currentAnchors);
-        if (!updates || typeof updates !== 'object') {
-            return next;
+    function copyBrowseAnchorEntries(target, source, allowDelete) {
+        if (!source || typeof source !== 'object') {
+            return;
         }
 
-        for (const [key, value] of Object.entries(updates)) {
-            if (typeof key !== 'string' || !key) {
+        let copied = Object.keys(target).length;
+        for (const [rawKey, value] of Object.entries(source)) {
+            const key = normalizePreferenceKey(rawKey);
+            if (!key) {
                 continue;
             }
             if (value === null) {
-                delete next[key];
+                if (allowDelete) {
+                    delete target[key];
+                }
                 continue;
             }
             if (!value || typeof value !== 'object') {
@@ -114,26 +210,42 @@
             }
 
             const normalized = {};
-            if (typeof value.examId === 'string' && value.examId.trim()) {
-                normalized.examId = value.examId.trim();
+            const examId = normalizePreferenceText(value.examId);
+            const title = normalizePreferenceText(value.title);
+            const scrollTop = normalizeScrollTop(value.scrollTop);
+            if (examId) {
+                normalized.examId = examId;
             }
-            if (typeof value.title === 'string' && value.title.trim()) {
-                normalized.title = value.title.trim();
+            if (title) {
+                normalized.title = title;
             }
-            if (Number.isFinite(value.scrollTop) && value.scrollTop >= 0) {
-                normalized.scrollTop = Math.round(value.scrollTop);
+            if (scrollTop !== null) {
+                normalized.scrollTop = scrollTop;
             }
             const ts = Number(value.timestamp);
             normalized.timestamp = Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now();
 
             if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
-                delete next[key];
+                if (allowDelete) {
+                    delete target[key];
+                }
                 continue;
             }
 
-            next[key] = normalized;
+            if (!Object.prototype.hasOwnProperty.call(target, key) && copied >= MAX_BROWSE_PREFERENCE_ENTRIES) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(target, key)) {
+                copied += 1;
+            }
+            target[key] = normalized;
         }
+    }
 
+    function mergeBrowseAnchors(currentAnchors = {}, updates) {
+        const next = createPreferenceMap();
+        copyBrowseAnchorEntries(next, currentAnchors, false);
+        copyBrowseAnchorEntries(next, updates, true);
         return next;
     }
 
@@ -145,12 +257,15 @@
             }
             const parsed = JSON.parse(raw);
             const defaults = getDefaultBrowsePreferences();
-            const next = Object.assign({}, defaults, parsed || {});
-            if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
-                next.scrollPositions = {};
-            }
-            next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-            return next;
+            const source = parsed && typeof parsed === 'object' ? parsed : {};
+            return {
+                scrollPositions: normalizeBrowseScrollPositions(source.scrollPositions),
+                listAnchors: mergeBrowseAnchors(createPreferenceMap(), source.listAnchors),
+                autoScrollEnabled: typeof source.autoScrollEnabled === 'boolean'
+                    ? source.autoScrollEnabled
+                    : defaults.autoScrollEnabled,
+                lastFilter: normalizeBrowseLastFilter(source.lastFilter)
+            };
         } catch (error) {
             console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
             return getDefaultBrowsePreferences();
@@ -167,14 +282,14 @@
     function saveBrowseViewPreferences(partial = {}) {
         const current = getBrowseViewPreferences();
         const next = {
-            scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+            scrollPositions: mergeBrowseScrollPositions(current.scrollPositions, partial.scrollPositions),
             listAnchors: mergeBrowseAnchors(current.listAnchors, partial.listAnchors),
             autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
                 ? !!partial.autoScrollEnabled
                 : current.autoScrollEnabled,
             lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
-                ? (partial.lastFilter || null)
-                : current.lastFilter
+                ? normalizeBrowseLastFilter(partial.lastFilter)
+                : normalizeBrowseLastFilter(current.lastFilter)
         };
 
         try {

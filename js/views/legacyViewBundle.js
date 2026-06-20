@@ -3,6 +3,110 @@
 
     var domAdapter = global.DOMAdapter || null;
 
+    function isLegacyUnsafeAttributeName(name) {
+        var key = String(name || '').toLowerCase();
+        return key.indexOf('on') === 0 || key === 'srcdoc';
+    }
+
+    function isLegacyUnsafeUrlAttribute(name, value, tagName) {
+        var key = String(name || '').toLowerCase();
+        var urlAttributes = {
+            href: true,
+            src: true,
+            'xlink:href': true,
+            action: true,
+            formaction: true,
+            poster: true
+        };
+        if (!urlAttributes[key]) {
+            return false;
+        }
+        var text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return false;
+        }
+        var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+            return true;
+        }
+        if (compact.indexOf('data:') === 0) {
+            var tag = String(tagName || '').toLowerCase();
+            if (key !== 'src' || tag !== 'img') {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return false;
+    }
+
+    function isLegacyUnsafeObjectKey(name) {
+        var key = String(name || '').toLowerCase();
+        return key === '__proto__' || key === 'prototype' || key === 'constructor';
+    }
+
+    function isLegacyUnsafeStyleValue(name, value) {
+        if (isLegacyUnsafeObjectKey(name) || value == null) {
+            return true;
+        }
+        var compact = String(value).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        return compact.indexOf('javascript:') !== -1
+            || compact.indexOf('vbscript:') !== -1
+            || compact.indexOf('expression(') !== -1
+            || compact.indexOf('data:text/html') !== -1
+            || compact.indexOf('data:application/xhtml+xml') !== -1
+            || compact.indexOf('data:image/svg+xml') !== -1;
+    }
+
+    function applyLegacyElementAttributes(element, attributes) {
+        if (!element || !attributes || typeof attributes !== 'object') {
+            return;
+        }
+        Object.keys(attributes).forEach(function (key) {
+            var value = attributes[key];
+            if (value == null || value === false) {
+                return;
+            }
+            if (isLegacyUnsafeAttributeName(key) || isLegacyUnsafeUrlAttribute(key, value, element.tagName)) {
+                console.warn('[LegacyView] Skipped unsafe attribute: ' + key);
+                return;
+            }
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'dataset' && typeof value === 'object') {
+                Object.keys(value).forEach(function (dataKey) {
+                    var dataValue = value[dataKey];
+                    if (dataValue != null && !isLegacyUnsafeObjectKey(dataKey)) {
+                        element.dataset[dataKey] = String(dataValue);
+                    }
+                });
+                return;
+            }
+            if (key === 'style' && typeof value === 'object') {
+                Object.keys(value).forEach(function (styleKey) {
+                    if (!isLegacyUnsafeStyleValue(styleKey, value[styleKey])) {
+                        element.style[styleKey] = value[styleKey];
+                    }
+                });
+                return;
+            }
+            if (key === 'ariaHidden') {
+                element.setAttribute('aria-hidden', value === true ? 'true' : String(value));
+                return;
+            }
+            if (key === 'ariaLabel') {
+                element.setAttribute('aria-label', String(value));
+                return;
+            }
+            if (key === 'disabled') {
+                element.disabled = !!value;
+                return;
+            }
+            element.setAttribute(key, value === true ? '' : String(value));
+        });
+    }
+
     // --- Practice statistics service ---
     function ensureArray(value) {
         return Array.isArray(value) ? value : [];
@@ -2143,29 +2247,7 @@
             return domAdapter.create(tag, attributes, children);
         }
         var element = document.createElement(tag);
-        var attrs = attributes || {};
-        Object.keys(attrs).forEach(function (key) {
-            var value = attrs[key];
-            if (value == null) return;
-            if (key === 'className') {
-                element.className = value;
-                return;
-            }
-            if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function (dataKey) {
-                    var dataValue = value[dataKey];
-                    if (dataValue != null) {
-                        element.dataset[dataKey] = String(dataValue);
-                    }
-                });
-                return;
-            }
-            if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
-                return;
-            }
-            element.setAttribute(key, value === true ? '' : value);
-        });
+        applyLegacyElementAttributes(element, attributes);
 
         var list = Array.isArray(children) ? children : [children];
         list.forEach(function (child) {
@@ -2944,35 +3026,7 @@
         }
 
         var element = document.createElement(tag);
-        var attrs = attributes || {};
-        var keys = Object.keys(attrs);
-        for (var i = 0; i < keys.length; i += 1) {
-            var key = keys[i];
-            var value = attrs[key];
-            if (value == null) {
-                continue;
-            }
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function (dataKey) {
-                    var dataValue = value[dataKey];
-                    if (dataValue != null) {
-                        element.dataset[dataKey] = String(dataValue);
-                    }
-                });
-            } else if (key === 'style' && typeof value === 'object') {
-                Object.keys(value).forEach(function (styleKey) {
-                    element.style[styleKey] = value[styleKey];
-                });
-            } else if (key === 'ariaHidden') {
-                element.setAttribute('aria-hidden', value);
-            } else if (key === 'ariaLabel') {
-                element.setAttribute('aria-label', value);
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        }
+        applyLegacyElementAttributes(element, attributes);
 
         if (children != null) {
             var normalizedChildren = Array.isArray(children) ? children : [children];
@@ -3489,40 +3543,7 @@
         }
 
         var element = document.createElement(tag);
-        if (attributes) {
-            Object.keys(attributes).forEach(function (key) {
-                var value = attributes[key];
-                if (value == null || value === false) {
-                    return;
-                }
-                if (key === 'className') {
-                    element.className = value;
-                    return;
-                }
-                if (key === 'dataset' && typeof value === 'object') {
-                    Object.keys(value).forEach(function (dataKey) {
-                        var dataValue = value[dataKey];
-                        if (dataValue != null) {
-                            element.dataset[dataKey] = String(dataValue);
-                        }
-                    });
-                    return;
-                }
-                if (key === 'ariaLabel') {
-                    element.setAttribute('aria-label', value);
-                    return;
-                }
-                if (key === 'ariaHidden') {
-                    element.setAttribute('aria-hidden', value);
-                    return;
-                }
-                if (key === 'disabled') {
-                    element.disabled = !!value;
-                    return;
-                }
-                element.setAttribute(key, value === true ? '' : value);
-            });
-        }
+        applyLegacyElementAttributes(element, attributes);
 
         var nodes = Array.isArray(children) ? children : (children != null ? [children] : []);
         for (var i = 0; i < nodes.length; i += 1) {

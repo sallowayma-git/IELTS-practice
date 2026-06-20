@@ -636,23 +636,176 @@
         dom.exitBtn = document.getElementById('exit-btn');
     }
 
+    function resolveTrustedReadingScriptUrl(rawUrl) {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const baseHref = global.location && global.location.href ? global.location.href : 'http://localhost/assets/generated/reading-exams/';
+            const resolved = new URL(String(rawUrl), baseHref);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            const currentDir = new URL('.', baseHref).pathname;
+            const explanationDir = new URL('../reading-explanations/', baseHref).pathname;
+            const path = resolved.pathname || '';
+
+            if (!path.toLowerCase().endsWith('.js')) {
+                return '';
+            }
+            if (!path.startsWith(currentDir) && !path.startsWith(explanationDir)) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                const origin = global.location && global.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+            if (protocol === 'file:' && global.location && global.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    }
+
     function loadScript(url) {
-        if (!url) {
+        const safeUrl = resolveTrustedReadingScriptUrl(url);
+        if (!safeUrl) {
             return Promise.reject(new Error('reading_exam_script_missing'));
         }
-        if (scriptCache.has(url)) {
-            return scriptCache.get(url);
+        if (scriptCache.has(safeUrl)) {
+            return scriptCache.get(safeUrl);
         }
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = url;
+            script.src = safeUrl;
             script.defer = true;
             script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${url}`));
+            script.onerror = () => reject(new Error(`reading_exam_script_failed:${safeUrl}`));
             document.head.appendChild(script);
         });
-        scriptCache.set(url, promise);
+        scriptCache.set(safeUrl, promise);
         return promise;
+    }
+
+    const UNSAFE_READING_HTML_TAGS = new Set([
+        'script',
+        'iframe',
+        'object',
+        'embed',
+        'svg',
+        'math',
+        'foreignobject',
+        'base',
+        'link',
+        'meta',
+        'style'
+    ]);
+
+    const READING_HTML_URL_ATTRIBUTES = new Set([
+        'action',
+        'formaction',
+        'href',
+        'poster',
+        'src',
+        'xlink:href'
+    ]);
+
+    function isUnsafeReadingStyleValue(value) {
+        const text = String(value == null ? '' : value).toLowerCase();
+        return text.includes('expression(')
+            || text.includes('@import')
+            || text.includes('-moz-binding')
+            || /url\s*\(/i.test(text)
+            || text.replace(/[\u0000-\u001f\u007f\s]+/g, '').includes('javascript:')
+            || text.replace(/[\u0000-\u001f\u007f\s]+/g, '').includes('vbscript:');
+    }
+
+    function isTrustedReadingHtmlUrl(value) {
+        const text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return true;
+        }
+        try {
+            const baseHref = global.location && global.location.href
+                ? global.location.href
+                : 'http://localhost/assets/generated/reading-exams/';
+            const resolved = new URL(text, baseHref);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = global.location && global.location.origin
+                    ? global.location.origin
+                    : new URL(baseHref).origin;
+                return Boolean(currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin);
+            }
+            return resolved.protocol === 'file:'
+                && Boolean(global.location && global.location.protocol === 'file:');
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function isUnsafeReadingHtmlAttribute(name, value, tagName) {
+        const key = String(name || '').toLowerCase();
+        if (key.startsWith('on') || key === 'srcdoc') {
+            return true;
+        }
+        if (key === 'style') {
+            return isUnsafeReadingStyleValue(value);
+        }
+        if (!READING_HTML_URL_ATTRIBUTES.has(key)) {
+            return false;
+        }
+        const text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return false;
+        }
+        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+            return true;
+        }
+        if (compact.startsWith('data:')) {
+            const tag = String(tagName || '').toLowerCase();
+            if (key !== 'src' || tag !== 'img') {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return !isTrustedReadingHtmlUrl(text);
+    }
+
+    function sanitizeReadingDatasetHtml(html) {
+        const raw = String(html || '');
+        if (!raw || typeof document === 'undefined' || typeof document.createElement !== 'function') {
+            return raw
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)\b[\s\S]*?<\/(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)>/gi, '')
+                .replace(/<(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)\b[^>]*\/?>/gi, '')
+                .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+                .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+                .replace(/\s+([^\s="'<>\/]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (match, name, rawValue) => {
+                    const value = String(rawValue || '').replace(/^['"]|['"]$/g, '');
+                    return isUnsafeReadingHtmlAttribute(name, value, '') ? '' : match;
+                });
+        }
+
+        const template = document.createElement('template');
+        template.innerHTML = raw;
+        const nodes = template.content.querySelectorAll('*');
+        nodes.forEach((node) => {
+            const tagName = String(node.localName || node.tagName || '').toLowerCase();
+            if (UNSAFE_READING_HTML_TAGS.has(tagName)) {
+                node.remove();
+                return;
+            }
+            Array.from(node.attributes || []).forEach((attr) => {
+                if (isUnsafeReadingHtmlAttribute(attr.name, attr.value, tagName)) {
+                    node.removeAttribute(attr.name);
+                }
+            });
+            if (tagName === 'a' && node.getAttribute('target') === '_blank') {
+                node.setAttribute('rel', 'noopener noreferrer');
+            }
+        });
+        return template.innerHTML;
     }
 
     async function ensureManifest() {
@@ -903,7 +1056,7 @@
             : '';
         return `
             <section class="unified-group" data-group-id="${safeGroupId}" data-question-ids="${safeQuestionIds}"${allowOptionReuse}>
-                ${group.bodyHtml || ''}
+                ${sanitizeReadingDatasetHtml(group.bodyHtml || '')}
             </section>
         `;
     }
@@ -911,7 +1064,7 @@
     function renderDataset(dataset) {
         clearExplanations();
         const passageHtml = (dataset.passage?.blocks || [])
-            .map((block) => block?.bodyHtml || block?.html || '')
+            .map((block) => sanitizeReadingDatasetHtml(block?.bodyHtml || block?.html || ''))
             .join('\n');
         const groupsHtml = (dataset.questionGroups || [])
             .map((group) => createGroupMarkup(group))
@@ -1890,8 +2043,9 @@
         if (!dropzone || !payload || !payload.value) {
             return;
         }
+        const escapedSourceDropzoneId = payload.sourceDropzoneId ? escapeSelector(payload.sourceDropzoneId) : '';
         const sourceDropzone = payload.sourceDropzoneId
-            ? document.querySelector(`[data-dropzone-id="${payload.sourceDropzoneId}"]`)
+            ? document.querySelector(`[data-dropzone-id="${escapedSourceDropzoneId}"]`)
             : null;
         if (sourceDropzone && sourceDropzone === dropzone) {
             updateDropzoneState(dropzone);
@@ -1913,7 +2067,7 @@
         if (!payload || !payload.sourceDropzoneId) {
             return;
         }
-        const sourceDropzone = document.querySelector(`[data-dropzone-id="${payload.sourceDropzoneId}"]`);
+        const sourceDropzone = document.querySelector(`[data-dropzone-id="${escapeSelector(payload.sourceDropzoneId)}"]`);
         if (!sourceDropzone) {
             return;
         }
@@ -2011,7 +2165,7 @@
         const aliases = resolveAnswerAliases(questionId);
         const fieldMap = new Map();
         aliases.forEach((alias) => {
-            document.querySelectorAll(`[name="${alias}"]`).forEach((field) => {
+            document.querySelectorAll(`[name="${escapeSelector(alias)}"]`).forEach((field) => {
                 if (!fieldMap.has(field)) {
                     fieldMap.set(field, true);
                 }
@@ -2140,6 +2294,15 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function normalizeResultNumber(value, fallback = 0) {
+        const number = Number(value);
+        if (Number.isFinite(number)) {
+            return number;
+        }
+        const fallbackNumber = Number(fallback);
+        return Number.isFinite(fallbackNumber) ? fallbackNumber : 0;
     }
 
     function splitAnswerTokens(rawValue) {
@@ -2277,7 +2440,7 @@
             if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
                 return;
             }
-            const radios = document.querySelectorAll(`input[type="radio"][name="${questionId}"]`);
+            const radios = document.querySelectorAll(`input[type="radio"][name="${escapeSelector(questionId)}"]`);
             if (radios.length) {
                 const checked = Array.from(radios).find((input) => input.checked);
                 answers[questionId] = checked ? String(checked.value).trim() : '';
@@ -2465,6 +2628,10 @@
 
     function renderResults(results) {
         if (!dom.results) return;
+        const scoreInfo = results.scoreInfo || {};
+        const safeCorrect = escapeHtml(normalizeResultNumber(scoreInfo.correct, 0));
+        const safeTotalQuestions = escapeHtml(normalizeResultNumber(scoreInfo.totalQuestions, scoreInfo.total || 0));
+        const safePercentage = escapeHtml(normalizeResultNumber(scoreInfo.percentage, 0));
         const rows = Object.values(results.answerComparison).map((entry) => {
             const label = escapeHtml(displayLabel(entry.questionId));
             const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
@@ -2481,7 +2648,7 @@
         }).join('');
         dom.results.innerHTML = `
             <h4>答题结果</h4>
-            <p>得分 ${results.scoreInfo.correct} / ${results.scoreInfo.totalQuestions} · ${results.scoreInfo.percentage}%</p>
+            <p>得分 ${safeCorrect} / ${safeTotalQuestions} · ${safePercentage}%</p>
             <table class="results-table">
                 <thead>
                     <tr>
@@ -2992,11 +3159,51 @@
     }
 
     function isAllowedIncomingMessageOrigin(event) {
-        if (!event || !event.origin || event.origin === 'null') {
-            return true;
+        if (!event) {
+            return false;
+        }
+        if (!event.origin || event.origin === 'null') {
+            return Boolean(global.location && global.location.protocol === 'file:');
         }
         const origin = global.location && global.location.origin;
         return Boolean(origin && origin !== 'null' && event.origin === origin);
+    }
+
+    function isAllowedIncomingMessageSource(event) {
+        if (!event || !event.source) {
+            return false;
+        }
+
+        const source = event.source;
+        const candidates = [state.parentWindow, global.opener, global.parent];
+        for (let index = 0; index < candidates.length; index += 1) {
+            const candidate = candidates[index];
+            if (candidate && candidate !== global && source === candidate) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function resolveTrustedSuiteNavigationUrl(rawUrl) {
+        if (rawUrl == null) {
+            return '';
+        }
+        try {
+            const resolved = new URL(String(rawUrl), global.location && global.location.href ? global.location.href : undefined);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = global.location && global.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+            if (resolved.protocol === 'file:' && global.location && global.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            // Invalid navigation payloads are ignored.
+        }
+        return '';
     }
 
     function postMessage(type, payload) {
@@ -3640,6 +3847,9 @@
         if (!isAllowedIncomingMessageOrigin(event)) {
             return;
         }
+        if (!isAllowedIncomingMessageSource(event)) {
+            return;
+        }
         const payload = event?.data;
         if (!payload || typeof payload !== 'object') {
             return;
@@ -3759,7 +3969,12 @@
             if (targetSuiteSessionId && currentSuiteSessionId && targetSuiteSessionId !== currentSuiteSessionId) {
                 return;
             }
-            global.location.href = data.url;
+            const targetUrl = resolveTrustedSuiteNavigationUrl(data.url);
+            if (!targetUrl) {
+                console.warn('[UnifiedReading] Blocked untrusted suite navigation URL');
+                return;
+            }
+            global.location.href = targetUrl;
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {

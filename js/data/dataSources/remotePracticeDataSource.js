@@ -16,6 +16,19 @@
         return error && error.status === 401;
     }
 
+    function clearApiAuthState(apiClient) {
+        if (!apiClient) {
+            return;
+        }
+        if (typeof apiClient.clearAuthState === 'function') {
+            apiClient.clearAuthState();
+            return;
+        }
+        apiClient.user = null;
+        apiClient.csrfToken = null;
+        apiClient.pendingTotp = null;
+    }
+
     class RemotePracticeTransactionContext {
         constructor(dataSource) {
             this.dataSource = dataSource;
@@ -86,7 +99,7 @@
                 return records;
             } catch (error) {
                 if (isUnauthorized(error)) {
-                    this.apiClient.user = null;
+                    clearApiAuthState(this.apiClient);
                 }
                 console.warn('[RemotePracticeDataSource] 读取远端练习记录失败，回退本地:', error);
                 return this.localDataSource.read(key, defaultValue);
@@ -104,7 +117,7 @@
                     return true;
                 } catch (error) {
                     if (isUnauthorized(error)) {
-                        this.apiClient.user = null;
+                        clearApiAuthState(this.apiClient);
                     }
                     console.warn('[RemotePracticeDataSource] 写入远端练习记录失败，回退本地:', error);
                     return this.localDataSource.write(key, value);
@@ -123,7 +136,7 @@
                     return true;
                 } catch (error) {
                     if (isUnauthorized(error)) {
-                        this.apiClient.user = null;
+                        clearApiAuthState(this.apiClient);
                     }
                     console.warn('[RemotePracticeDataSource] 清空远端练习记录失败，回退本地:', error);
                     return this.localDataSource.remove(key);

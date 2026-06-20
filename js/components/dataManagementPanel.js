@@ -2,6 +2,40 @@
  * 数据管理面板组件
  * 提供数据导入导出、备份恢复的用户界面
  */
+function isUnsafeElementAttributeName(name) {
+    const key = String(name || '').toLowerCase();
+    return key.startsWith('on') || key === 'srcdoc';
+}
+
+function isUnsafeElementUrlAttribute(name, value, tagName) {
+    const key = String(name || '').toLowerCase();
+    const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+    if (!urlAttributes.has(key)) {
+        return false;
+    }
+    const text = String(value == null ? '' : value).trim();
+    if (!text) {
+        return false;
+    }
+    const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+        return true;
+    }
+    if (compact.startsWith('data:')) {
+        const tag = String(tagName || '').toLowerCase();
+        if (key !== 'src' || tag !== 'img') {
+            return true;
+        }
+        return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+    }
+    return false;
+}
+
+function isUnsafeElementObjectKey(name) {
+    const key = String(name || '').toLowerCase();
+    return key === '__proto__' || key === 'prototype' || key === 'constructor';
+}
+
 function createElement(tagName, options = {}) {
     const el = document.createElement(tagName);
     if (options.className) {
@@ -12,15 +46,109 @@ function createElement(tagName, options = {}) {
     }
     if (options.attrs) {
         Object.keys(options.attrs).forEach((key) => {
-            el.setAttribute(key, options.attrs[key]);
+            const value = options.attrs[key];
+            if (value == null || value === false) {
+                return;
+            }
+            if (isUnsafeElementAttributeName(key) || isUnsafeElementUrlAttribute(key, value, el.tagName)) {
+                console.warn(`[DataManagementPanel] Skipped unsafe attribute: ${key}`);
+                return;
+            }
+            el.setAttribute(key, value === true ? '' : String(value));
         });
     }
     if (options.dataset) {
         Object.keys(options.dataset).forEach((key) => {
-            el.dataset[key] = options.dataset[key];
+            if (!isUnsafeElementObjectKey(key) && options.dataset[key] != null) {
+                el.dataset[key] = String(options.dataset[key]);
+            }
         });
     }
     return el;
+}
+
+const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMPORT_EXTENSIONS = new Set(['.json']);
+const ALLOWED_IMPORT_MIME_TYPES = new Set([
+    '',
+    'application/json',
+    'text/json',
+    'text/plain'
+]);
+const SAFE_DOWNLOAD_MIME_TYPES = new Set([
+    'application/json',
+    'text/csv',
+    'text/plain',
+    'text/markdown',
+    'application/octet-stream'
+]);
+
+function getFileExtension(filename) {
+    const match = String(filename || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match ? `.${match[1]}` : '';
+}
+
+function validateImportFile(file) {
+    if (!file || typeof file.size !== 'number') {
+        throw new Error('Invalid import file.');
+    }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+        throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+
+    const extension = getFileExtension(file.name);
+    if (!ALLOWED_IMPORT_EXTENSIONS.has(extension)) {
+        throw new Error('Only JSON import files are supported.');
+    }
+
+    const mimeType = String(file.type || '').split(';')[0].trim().toLowerCase();
+    if (!ALLOWED_IMPORT_MIME_TYPES.has(mimeType)) {
+        throw new Error('Unsupported import file type.');
+    }
+}
+
+function sanitizeDownloadFilename(filename, fallback = 'ielts-export.json') {
+    const value = String(filename || '')
+        .replace(/[\x00-\x1f\x7f\\/:"*?<>|]+/g, '_')
+        .replace(/\s+/g, '_')
+        .replace(/^\.+/, '')
+        .slice(0, 120);
+    return value || fallback;
+}
+
+function normalizeDownloadMimeType(mimeType) {
+    const value = String(mimeType || '').split(';')[0].trim().toLowerCase();
+    return SAFE_DOWNLOAD_MIME_TYPES.has(value) ? value : 'application/octet-stream';
+}
+
+function normalizeMessageType(type) {
+    const value = String(type || '').trim().toLowerCase();
+    return ['info', 'success', 'warning', 'error'].includes(value) ? value : 'info';
+}
+
+function setElementText(element, value) {
+    if (element) {
+        element.textContent = value == null ? '' : String(value);
+    }
+}
+
+function setElementDisabled(element, disabled) {
+    if (element) {
+        element.disabled = Boolean(disabled);
+    }
+}
+
+function setElementDisplay(element, value) {
+    if (element && element.style) {
+        element.style.display = value;
+    }
+}
+
+function getFileFromInput(fileInput) {
+    if (!fileInput || !fileInput.files || !fileInput.files.length) {
+        return null;
+    }
+    return fileInput.files[0] || null;
 }
 
 class DataManagementPanel {
@@ -30,6 +158,7 @@ class DataManagementPanel {
         this.isVisible = false;
         this.selectedFileContent = null;
         this.pendingImportMode = null;
+        this.fileReadToken = 0;
         
         this.initialize();
     }
@@ -169,7 +298,7 @@ class DataManagementPanel {
             attrs: {
                 type: 'file',
                 id: 'importFile',
-                accept: '.json,.csv'
+                accept: '.json,application/json'
             }
         });
         fileInput.style.display = 'none';
@@ -501,7 +630,7 @@ class DataManagementPanel {
      * 显示面板
      */
     async show() {
-        this.container.style.display = 'block';
+        setElementDisplay(this.container, 'block');
         this.isVisible = true;
         await this.loadDataStats();
         await this.loadHistory();
@@ -511,7 +640,7 @@ class DataManagementPanel {
      * 隐藏面板
      */
     hide() {
-        this.container.style.display = 'none';
+        setElementDisplay(this.container, 'none');
         this.isVisible = false;
     }
 
@@ -521,15 +650,15 @@ class DataManagementPanel {
     async loadDataStats() {
         try {
             const stats = await this.backupManager.getDataStats();
-            
+
             if (stats) {
-                document.getElementById('recordCount').textContent = stats.practiceRecords.count;
-                document.getElementById('totalTime').textContent = this.formatTime(stats.userStats.totalTimeSpent);
-                document.getElementById('avgScore').textContent = Math.round(stats.userStats.averageScore * 100) + '%';
-                
+                setElementText(document.getElementById('recordCount'), stats.practiceRecords.count);
+                setElementText(document.getElementById('totalTime'), this.formatTime(stats.userStats.totalTimeSpent));
+                setElementText(document.getElementById('avgScore'), Math.round(stats.userStats.averageScore * 100) + '%');
+
                 if (stats.storage) {
                     const usageKB = Math.round(stats.storage.used / 1024);
-                    document.getElementById('storageUsage').textContent = `${usageKB} KB`;
+                    setElementText(document.getElementById('storageUsage'), `${usageKB} KB`);
                 }
             }
         } catch (error) {
@@ -581,16 +710,33 @@ class DataManagementPanel {
      */
     handleFileSelect(event) {
         console.log('[DataManagementPanel] handleFileSelect called');
-        const file = event.target.files[0];
+        const target = event && event.target ? event.target : {};
+        const file = getFileFromInput(target);
+        const readToken = this.fileReadToken + 1;
+        this.fileReadToken = readToken;
         const fileNameSpan = document.getElementById('selectedFileName');
         const importBtn = document.querySelector('[data-action="import"]');
 
         if (file) {
-            fileNameSpan.textContent = file.name;
-            importBtn.disabled = false;
-            
+            try {
+                validateImportFile(file);
+            } catch (error) {
+                setElementText(fileNameSpan, '未选择文件');
+                setElementDisabled(importBtn, true);
+                this.selectedFileContent = null;
+                target.value = '';
+                this.showMessage(error.message, 'error');
+                return;
+            }
+
+            setElementText(fileNameSpan, file.name);
+            setElementDisabled(importBtn, false);
+
             // 异步读取文件内容
             this.readFile(file).then(content => {
+                if (readToken !== this.fileReadToken) {
+                    return;
+                }
                 try {
                     this.selectedFileContent = JSON.parse(content);
                 } catch (_) {
@@ -598,12 +744,19 @@ class DataManagementPanel {
                 }
                 console.log('[DataManagementPanel] File content loaded');
             }).catch(error => {
+                if (readToken !== this.fileReadToken) {
+                    return;
+                }
                 console.error('[DataManagementPanel] Failed to read file:', error);
-                this.showMessage('文件读取失败', 'error');
+                setElementText(fileNameSpan, '未选择文件');
+                setElementDisabled(importBtn, true);
+                this.selectedFileContent = null;
+                target.value = '';
+                this.showMessage(error.message || '文件读取失败', 'error');
             });
         } else {
-            fileNameSpan.textContent = '未选择文件';
-            importBtn.disabled = true;
+            setElementText(fileNameSpan, '未选择文件');
+            setElementDisabled(importBtn, true);
             this.selectedFileContent = null;
         }
     }
@@ -616,38 +769,17 @@ class DataManagementPanel {
         try {
             let fileContent;
             const fileInput = document.getElementById('importFile');
-            const file = fileInput.files[0];
+            const file = getFileFromInput(fileInput);
 
             if (this.selectedFileContent) {
                 console.log('[DataManagementPanel] using cached file content');
                 fileContent = this.selectedFileContent;
             } else if (file) {
-                // 添加文件大小检查
-                if (file.size > 5 * 1024 * 1024) {
-                    this.showMessage('文件过大 (>5MB)，请分批导入或使用小文件测试。');
-                    return;
-                }
+                validateImportFile(file);
                 this.showProgress('读取文件...');
-                // 直接使用FileReader添加详细日志
-                fileContent = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onerror = (e) => {
-                        console.error('[DataManagementPanel] File read error:', e);
-                        reject(new Error('文件读取失败'));
-                    };
-                    reader.onload = (e) => {
-                        console.log('[DataManagementPanel] File loaded, size:', file.size);
-                        try {
-                            const data = JSON.parse(e.target.result);
-                            console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(data) ? 'array' : typeof data, 'length:', data.length || data.practiceRecords?.length || data.practice_records?.length || data.data?.practice_records?.length);
-                            resolve(data);
-                        } catch (err) {
-                            console.error('[DataManagementPanel] JSON parse error:', err);
-                            reject(err);
-                        }
-                    };
-                    reader.readAsText(file);
-                });
+                const rawContent = await this.readFile(file);
+                fileContent = JSON.parse(rawContent);
+                console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(fileContent) ? 'array' : typeof fileContent, 'length:', fileContent.length || fileContent.practiceRecords?.length || fileContent.practice_records?.length || fileContent.data?.practice_records?.length);
             } else {
                 this.showMessage('请先选择要导入的文件', 'warning');
                 return;
@@ -663,7 +795,8 @@ class DataManagementPanel {
                 return;
             }
 
-            const createBackup = document.getElementById('createBackupBeforeImport').checked;
+            const createBackupInput = document.getElementById('createBackupBeforeImport');
+            const createBackup = Boolean(createBackupInput && createBackupInput.checked);
 
             const options = {
                 mergeMode: resolvedMode,
@@ -692,11 +825,13 @@ class DataManagementPanel {
                 );
                 this.loadDataStats();
                 this.loadHistory();
-                
+
                 // 清空文件选择
-                fileInput.value = '';
-                document.getElementById('selectedFileName').textContent = '未选择文件';
-                document.querySelector('[data-action="import"]').disabled = true;
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+                setElementText(document.getElementById('selectedFileName'), '未选择文件');
+                setElementDisabled(document.querySelector('[data-action="import"]'), true);
                 this.selectedFileContent = null;
                 this.pendingImportMode = null;
             }
@@ -911,9 +1046,9 @@ class DataManagementPanel {
     showProgress(text) {
         const overlay = document.getElementById('progressOverlay');
         const progressText = document.getElementById('progressText');
-        
-        progressText.textContent = text;
-        overlay.style.display = 'flex';
+
+        setElementText(progressText, text);
+        setElementDisplay(overlay, 'flex');
     }
 
     /**
@@ -921,7 +1056,7 @@ class DataManagementPanel {
      */
     updateProgress(text) {
         const progressText = document.getElementById('progressText');
-        progressText.textContent = text;
+        setElementText(progressText, text);
     }
 
     /**
@@ -929,7 +1064,7 @@ class DataManagementPanel {
      */
     hideProgress() {
         const overlay = document.getElementById('progressOverlay');
-        overlay.style.display = 'none';
+        setElementDisplay(overlay, 'none');
     }
 
     /**
@@ -937,8 +1072,9 @@ class DataManagementPanel {
      */
     showMessage(message, type = 'info') {
         // 创建消息元素
-        const messageEl = createElement('div', { className: `message-toast ${type}` });
-        const icon = createElement('i', { className: `fas fa-${this.getMessageIcon(type)}` });
+        const safeType = normalizeMessageType(type);
+        const messageEl = createElement('div', { className: `message-toast ${safeType}` });
+        const icon = createElement('i', { className: `fas fa-${this.getMessageIcon(safeType)}` });
         const text = createElement('span', { text: message });
         messageEl.append(icon, text);
 
@@ -968,6 +1104,7 @@ class DataManagementPanel {
      * 读取文件内容
      */
     readFile(file) {
+        validateImportFile(file);
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             
@@ -987,26 +1124,26 @@ class DataManagementPanel {
      * 下载文件
      */
     downloadFile(content, filename, mimeType) {
+        const safeMimeType = normalizeDownloadMimeType(mimeType);
+        const safeFilename = sanitizeDownloadFilename(filename);
         // 对于文本类型的内容，添加UTF-8编码支持
-        const isTextType = mimeType.includes('text/') ||
-                          mimeType.includes('application/json') ||
-                          mimeType.includes('application/javascript') ||
-                          mimeType.includes('application/xml');
+        const isTextType = safeMimeType.includes('text/') ||
+                          safeMimeType.includes('application/json');
 
-        const blobOptions = isTextType ? { type: mimeType + '; charset=utf-8' } : { type: mimeType };
+        const blobOptions = isTextType ? { type: safeMimeType + '; charset=utf-8' } : { type: safeMimeType };
         const blob = new Blob([content], blobOptions);
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = safeFilename;
         a.style.display = 'none';
 
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
 
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
     /**

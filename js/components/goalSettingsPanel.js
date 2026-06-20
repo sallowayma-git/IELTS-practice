@@ -14,9 +14,9 @@
     };
 
     var TYPE_ICONS = {
-        practice_count: '📝',
-        study_time: '⏱️',
-        accuracy: '🎯'
+        practice_count: '练',
+        study_time: '时',
+        accuracy: '准'
     };
 
     function escapeHtml(value) {
@@ -34,6 +34,8 @@
         if (!Number.isFinite(numeric)) return 0;
         return Math.max(0, Math.min(100, numeric));
     }
+
+    var MAX_RENDERED_GOALS = 100;
 
     function GoalSettingsPanel(options) {
         this.container = options.container || null;
@@ -68,33 +70,33 @@
             return;
         }
 
-        var goals = this.goalManager.getGoals();
         var allProgress = this.goalManager.getAllProgress();
+        if (Array.isArray(allProgress)) {
+            allProgress = allProgress.slice(0, MAX_RENDERED_GOALS);
+        } else {
+            allProgress = [];
+        }
         var streak = this.goalManager.getStreak();
-
         var html = '';
 
-        // Streak display
         html += '<div class="goal-streak-bar">';
-        html += '<span class="goal-streak-icon">🔥</span>';
-        html += '<span class="goal-streak-text">连续学习 <strong>' + streak.current + '</strong> 天</span>';
+        html += '<span class="goal-streak-icon">连续</span>';
+        html += '<span class="goal-streak-text">连续学习 <strong>' + escapeHtml(streak.current) + '</strong> 天</span>';
         if (streak.best > 0) {
-            html += '<span class="goal-streak-best">最佳 ' + streak.best + ' 天</span>';
+            html += '<span class="goal-streak-best">最佳 ' + escapeHtml(streak.best) + ' 天</span>';
         }
         html += '</div>';
 
-        // Goal list
         if (allProgress.length > 0) {
             html += '<div class="goal-list">';
-            for (var i = 0; i < allProgress.length; i++) {
+            for (var i = 0; i < allProgress.length; i += 1) {
                 html += this._renderGoalCard(allProgress[i]);
             }
             html += '</div>';
         } else {
-            html += '<div class="goal-empty">暂无学习目标，点击下方按钮创建</div>';
+            html += '<div class="goal-empty">暂无学习目标，点击下方按钮创建。</div>';
         }
 
-        // Add button
         html += '<div class="goal-actions">';
         html += '<button class="goal-btn goal-btn-add" data-action="add-goal">+ 添加目标</button>';
         html += '</div>';
@@ -105,7 +107,7 @@
 
     GoalSettingsPanel.prototype._renderGoalCard = function (progress) {
         var goal = progress.goal;
-        var icon = TYPE_ICONS[goal.type] || '📌';
+        var icon = TYPE_ICONS[goal.type] || '目';
         var typeLabel = TYPE_LABELS[goal.type] || goal.type;
         var periodLabel = PERIOD_LABELS[goal.period] || goal.period;
         var percent = progress.percent;
@@ -125,7 +127,7 @@
         html += '<span class="goal-card-icon">' + icon + '</span>';
         html += '<span class="goal-card-title">' + safeTitle + '</span>';
         if (completed) {
-            html += '<span class="goal-card-badge">✅</span>';
+            html += '<span class="goal-card-badge">完成</span>';
         }
         html += '<button class="goal-btn-delete" data-action="delete-goal" data-goal-id="' + safeGoalId + '" title="删除">×</button>';
         html += '</div>';
@@ -156,7 +158,7 @@
         }
 
         var deleteBtns = container.querySelectorAll('[data-action="delete-goal"]');
-        for (var i = 0; i < deleteBtns.length; i++) {
+        for (var i = 0; i < deleteBtns.length; i += 1) {
             deleteBtns[i].addEventListener('click', function () {
                 var gid = this.getAttribute('data-goal-id');
                 if (gid && self.goalManager) {
@@ -178,8 +180,8 @@
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
 
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) {
+        overlay.addEventListener('click', function (event) {
+            if (event.target === overlay) {
                 document.body.removeChild(overlay);
             }
         });
@@ -217,14 +219,13 @@
             });
         }
 
-        // Update target placeholder on type change
         var typeSelect = dialog.querySelector('#goal-type');
         if (typeSelect) {
             typeSelect.addEventListener('change', function () {
-                var ph = dialog.querySelector('#goal-target');
-                if (this.value === 'practice_count') ph.placeholder = '例：3';
-                else if (this.value === 'study_time') ph.placeholder = '例：60';
-                else if (this.value === 'accuracy') ph.placeholder = '例：80';
+                var placeholder = dialog.querySelector('#goal-target');
+                if (this.value === 'practice_count') placeholder.placeholder = '例如：3';
+                else if (this.value === 'study_time') placeholder.placeholder = '例如：30';
+                else if (this.value === 'accuracy') placeholder.placeholder = '例如：80';
             });
         }
     };
@@ -253,7 +254,7 @@
 
         html += '<div class="goal-form-group">';
         html += '<label for="goal-target">目标值</label>';
-        html += '<input type="number" id="goal-target" min="1" placeholder="例：3" />';
+        html += '<input type="number" id="goal-target" min="1" placeholder="例如：3" />';
         html += '</div>';
 
         html += '<div class="goal-form-group">';

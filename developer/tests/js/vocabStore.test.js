@@ -201,6 +201,81 @@ async function testSpellingErrorMetadataSurvivesStudyUpdates() {
     assert.strictEqual(updated.canonicalAnswer, 'green garden');
 }
 
+async function testVocabStoreCapsImportedWordPayloads() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {}
+    });
+
+    await vocabStore.init();
+    const longWord = 'w'.repeat(300);
+    const longMeaning = 'm'.repeat(5000);
+    const longNote = 'n'.repeat(5000);
+    const oversizedMetadata = { body: 'x'.repeat(9000) };
+    const manyWords = Array.from({ length: 5002 }, (_, index) => ({
+        id: `word-${index}`,
+        word: index === 0 ? longWord : `word-${index}`,
+        meaning: index === 0 ? longMeaning : `meaning-${index}`,
+        note: index === 0 ? longNote : '',
+        source: index === 0 ? 's'.repeat(300) : 'test',
+        acceptedAnswers: index === 0 ? ['a'.repeat(1200)] : [],
+        metadata: index === 0 ? oversizedMetadata : { index }
+    }));
+
+    await vocabStore.setWords(manyWords);
+    const words = vocabStore.getWords();
+    assert.strictEqual(words.length, 5000, 'stored vocab lists must be capped');
+    assert.strictEqual(words[0].word.length, 160, 'word text must be truncated');
+    assert.strictEqual(words[0].meaning.length, 4000, 'meaning text must be truncated');
+    assert.strictEqual(words[0].note.length, 4000, 'note text must be truncated');
+    assert.strictEqual(words[0].source.length, 200, 'source text must be truncated');
+    assert.strictEqual(words[0].acceptedAnswers[0].length, 1000, 'extra string arrays must be truncated');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(words[0], 'metadata'), false, 'oversized metadata must be dropped');
+
+    await vocabStore.setReviewQueue(Array.from({ length: 5002 }, (_, index) => index === 0 ? 'q'.repeat(300) : `q-${index}`));
+    const queue = vocabStore.getReviewQueue();
+    assert.strictEqual(queue.length, 5000, 'review queue must be capped');
+    assert.strictEqual(queue[0].length, 200, 'review queue ids must be truncated');
+}
+
+async function testVocabStoreDropsUnsafeExtraMetadataKeys() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {}
+    });
+    const payload = JSON.parse(`{
+        "word": "garden",
+        "meaning": "place with plants",
+        "isAdmin": true,
+        "metadata": {
+            "ok": "yes",
+            "__proto__": { "pollutedMetadata": true },
+            "constructor": { "prototype": { "pollutedMetadata": true } }
+        },
+        "acceptedAnswers": [
+            "garden",
+            {
+                "text": "safe",
+                "__proto__": { "pollutedAnswer": true }
+            }
+        ]
+    }`);
+
+    await vocabStore.init();
+    await vocabStore.setWords([payload]);
+    const [word] = vocabStore.getWords();
+
+    assert.strictEqual(word.isAdmin, undefined, 'unknown top-level fields must not be stored');
+    assert.strictEqual(word.metadata.ok, 'yes');
+    assert.strictEqual(word.metadata.pollutedMetadata, undefined);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(word.metadata, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(word.metadata, 'constructor'), false);
+    assert.strictEqual(word.acceptedAnswers[1].text, 'safe');
+    assert.strictEqual(word.acceptedAnswers[1].pollutedAnswer, undefined);
+    assert.strictEqual(Object.prototype.pollutedMetadata, undefined);
+    assert.strictEqual(Object.prototype.pollutedAnswer, undefined);
+}
+
 async function main() {
     const results = [];
     try {
@@ -212,6 +287,10 @@ async function main() {
         results.push({ name: '错词保留已补全释义和元数据', status: 'pass' });
         await testSpellingErrorMetadataSurvivesStudyUpdates();
         results.push({ name: '背诵更新保留错词业务元数据', status: 'pass' });
+        await testVocabStoreCapsImportedWordPayloads();
+        results.push({ name: '词库存储限制异常导入负载', status: 'pass' });
+        await testVocabStoreDropsUnsafeExtraMetadataKeys();
+        results.push({ name: 'vocab metadata strips prototype pollution keys', status: 'pass' });
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

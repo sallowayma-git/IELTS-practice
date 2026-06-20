@@ -1,6 +1,30 @@
 (function (global) {
     'use strict';
 
+    let fallbackIdCounter = 0;
+    const LIBRARY_CONFIG_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_LIBRARY_CONFIGURATIONS = 100;
+    const MAX_LIBRARY_CONFIG_METADATA_DEPTH = 8;
+    const MAX_LIBRARY_CONFIG_ARRAY_ITEMS = 100;
+    const MAX_LIBRARY_CONFIG_OBJECT_KEYS = 100;
+    const MAX_LIBRARY_CONFIG_KEY_LENGTH = 128;
+    const MAX_LIBRARY_CONFIG_TEXT_LENGTH = 1000;
+    const MAX_LIBRARY_CONFIG_NAME_LENGTH = 160;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
     function getResourceCore() {
         return global.ResourceCore || null;
     }
@@ -15,6 +39,120 @@
 
     function hasProtocolPath(value) {
         return /^(?:[a-z]+:)?\/\//i.test(String(value || '')) || /^[A-Za-z]:\\/.test(String(value || ''));
+    }
+
+    function isPlainObject(value) {
+        if (!value || Object.prototype.toString.call(value) !== '[object Object]') {
+            return false;
+        }
+        const proto = Object.getPrototypeOf(value);
+        return proto === Object.prototype || proto === null;
+    }
+
+    function isUnsafeLibraryConfigKey(key) {
+        return LIBRARY_CONFIG_POLLUTION_KEYS.has(String(key || '').trim());
+    }
+
+    function normalizeLibraryConfigText(value, maxLength = MAX_LIBRARY_CONFIG_TEXT_LENGTH) {
+        return String(value == null ? '' : value)
+            .replace(/\u0000/g, '')
+            .slice(0, maxLength);
+    }
+
+    function normalizeLibraryConfigName(value) {
+        const name = normalizeLibraryConfigText(value, MAX_LIBRARY_CONFIG_NAME_LENGTH).trim();
+        return name || '未命名题库';
+    }
+
+    function normalizeLibraryConfigNumber(value, fallback = 0) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+    }
+
+    function cloneLibraryConfigMetadata(value, depth = 0, seen = new WeakSet()) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return normalizeLibraryConfigText(value);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (seen.has(value) || depth >= MAX_LIBRARY_CONFIG_METADATA_DEPTH) {
+            return undefined;
+        }
+        seen.add(value);
+        if (Array.isArray(value)) {
+            const clone = value
+                .slice(0, MAX_LIBRARY_CONFIG_ARRAY_ITEMS)
+                .map((item) => cloneLibraryConfigMetadata(item, depth + 1, seen))
+                .filter((item) => item !== undefined);
+            seen.delete(value);
+            return clone;
+        }
+        if (!isPlainObject(value)) {
+            return undefined;
+        }
+        const clone = {};
+        for (const [key, item] of Object.entries(value)) {
+            if (isUnsafeLibraryConfigKey(key)) {
+                continue;
+            }
+            const safeKey = normalizeLibraryConfigText(key, MAX_LIBRARY_CONFIG_KEY_LENGTH).trim();
+            if (!safeKey || isUnsafeLibraryConfigKey(safeKey)) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(clone, safeKey)
+                && Object.keys(clone).length >= MAX_LIBRARY_CONFIG_OBJECT_KEYS) {
+                break;
+            }
+            const safeValue = cloneLibraryConfigMetadata(item, depth + 1, seen);
+            if (safeValue !== undefined) {
+                clone[safeKey] = safeValue;
+            }
+        }
+        seen.delete(value);
+        return clone;
+    }
+
+    function sanitizeLibraryConfigurationEntry(config) {
+        if (!config || typeof config !== 'object') {
+            return null;
+        }
+        const clone = cloneLibraryConfigMetadata(config);
+        if (!clone || typeof clone !== 'object') {
+            return null;
+        }
+        const key = normalizeLibraryConfigKey(clone.key);
+        if (!key) {
+            return null;
+        }
+        clone.key = key;
+        clone.name = normalizeLibraryConfigName(clone.name || key);
+        clone.examCount = Math.max(0, Math.floor(normalizeLibraryConfigNumber(clone.examCount, 0)));
+        clone.timestamp = normalizeLibraryConfigNumber(clone.timestamp, Date.now());
+        return clone;
+    }
+
+    function normalizeLibraryConfigKey(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const key = value.trim();
+        if (!key || key.length > 128) {
+            return '';
+        }
+        if (key === 'exam_index') {
+            return key;
+        }
+        return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
     }
 
     function countIndexTypes(index) {
@@ -165,14 +303,26 @@
         }
 
         async getActiveLibraryConfigurationKey() {
-            return global.storage.get('active_exam_index_key', 'exam_index');
+            try {
+                const key = await global.storage.get('active_exam_index_key', 'exam_index');
+                return normalizeLibraryConfigKey(key) || 'exam_index';
+            } catch (_) {
+                return 'exam_index';
+            }
         }
 
         async setActiveLibraryConfiguration(key) {
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                console.warn('[LibraryManager] 拒绝写入无效题库配置 key:', key);
+                return false;
+            }
             try {
-                await global.storage.set('active_exam_index_key', key);
+                await global.storage.set('active_exam_index_key', configKey);
+                return true;
             } catch (error) {
                 console.error('[LibraryManager] 设置活动题库配置失败:', error);
+                return false;
             }
         }
 
@@ -181,22 +331,40 @@
         }
 
         async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                console.warn('[LibraryManager] 拒绝保存无效题库配置 key:', key);
+                return false;
+            }
             try {
                 let configs = await global.storage.get('exam_index_configurations', []);
                 if (!Array.isArray(configs)) {
                     configs = [];
                 }
-                const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
-                const entry = Object.assign({}, safeMetadata, { name, key, examCount, timestamp: Date.now() });
-                const existingIndex = configs.findIndex((item) => item && item.key === key);
+                configs = configs
+                    .map((item) => sanitizeLibraryConfigurationEntry(item))
+                    .filter(Boolean)
+                    .slice(-MAX_LIBRARY_CONFIGURATIONS);
+                const safeMetadata = metadata && typeof metadata === 'object'
+                    ? (cloneLibraryConfigMetadata(metadata) || {})
+                    : {};
+                const entry = Object.assign({}, safeMetadata, {
+                    name: normalizeLibraryConfigName(name),
+                    key: configKey,
+                    examCount: Math.max(0, Math.floor(normalizeLibraryConfigNumber(examCount, 0))),
+                    timestamp: Date.now()
+                });
+                const existingIndex = configs.findIndex((item) => item && item.key === configKey);
                 if (existingIndex >= 0) {
-                    configs[existingIndex] = Object.assign({}, configs[existingIndex], entry);
+                    configs[existingIndex] = Object.assign({}, sanitizeLibraryConfigurationEntry(configs[existingIndex]), entry);
                 } else {
                     configs.push(entry);
                 }
                 await global.storage.set('exam_index_configurations', configs);
+                return true;
             } catch (error) {
                 console.error('[LibraryManager] 保存题库配置失败:', error);
+                return false;
             }
         }
 
@@ -428,14 +596,16 @@
         }
 
         async fetchLibraryDataset(key) {
-            if (!key) {
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                console.warn('[LibraryManager] 拒绝读取无效题库配置 key:', key);
                 return [];
             }
             try {
-                const dataset = await global.storage.get(key);
+                const dataset = await global.storage.get(configKey);
                 return Array.isArray(dataset) ? dataset : [];
             } catch (error) {
-                console.warn('[LibraryManager] 无法读取题库数据:', key, error);
+                console.warn('[LibraryManager] 无法读取题库数据:', configKey, error);
                 return [];
             }
         }
@@ -527,7 +697,7 @@
                     return key;
                 }
             }
-            return `${prefix}_${now}_${Math.random().toString(36).slice(2, 8)}`;
+            return `${prefix}_${now}_${randomIdSuffix()}`;
         }
 
         buildImportedConfigName(type, mode, label) {
@@ -596,7 +766,7 @@
                 try { global.assignExamSequenceNumbers(newIndex); } catch (_) { }
             }
 
-            const key = options.key || await this.buildUniqueImportedConfigKey('exam_index');
+            const key = normalizeLibraryConfigKey(options.key) || await this.buildUniqueImportedConfigKey('exam_index');
             const name = options.name || this.buildImportedConfigName(type, mode, options.label);
             const counts = countIndexTypes(newIndex);
             const sourceReport = options.discoveryResult && options.discoveryResult.report
@@ -648,7 +818,14 @@
         }
 
         async applyLibraryConfiguration(key, dataset, options = {}) {
-            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('题库配置 key 无效，已拒绝切换。', 'warning');
+                }
+                return false;
+            }
+            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(configKey);
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');
@@ -656,7 +833,7 @@
                 return false;
             }
 
-            const currentPathMap = await this.loadPathMapForConfiguration(key);
+            const currentPathMap = await this.loadPathMapForConfiguration(configKey);
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
                 : (currentPathMap || null);
@@ -674,13 +851,13 @@
             }
 
             try {
-                await this.setActiveLibraryConfiguration(key);
+                await this.setActiveLibraryConfiguration(configKey);
             } catch (error) {
                 console.warn('[LibraryManager] 无法写入当前题库配置:', error);
             }
 
-            await this.updateLibraryConfigurationMetadata(key, exams.length);
-            await this.savePathMapForConfiguration(key, exams, {
+            await this.updateLibraryConfigurationMetadata(configKey, exams.length);
+            await this.savePathMapForConfiguration(configKey, exams, {
                 overrideMap: pathMap,
                 setActive: true
             });
@@ -690,7 +867,7 @@
             try { global.loadExamList && global.loadExamList(); } catch (_) { }
 
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key } }));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: configKey } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
             }
@@ -700,7 +877,7 @@
                     try {
                         global.renderLibraryConfigList({
                             allowDelete: true,
-                            activeKey: key
+                            activeKey: configKey
                         });
                     } catch (error) {
                         console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
@@ -712,7 +889,7 @@
         }
 
         async deleteLibraryConfiguration(key) {
-            const configKey = typeof key === 'string' ? key.trim() : '';
+            const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
                 return { deleted: false, reason: 'invalid-key' };
             }
@@ -798,7 +975,11 @@
 
     async function switchLibraryConfig(key) {
         const manager = getInstance();
-        const nextKey = key || await manager.getActiveLibraryConfigurationKey() || 'exam_index';
+        if (key !== undefined && key !== null && String(key).trim()) {
+            const explicitKey = normalizeLibraryConfigKey(key);
+            return explicitKey ? manager.applyLibraryConfiguration(explicitKey) : false;
+        }
+        const nextKey = await manager.getActiveLibraryConfigurationKey() || 'exam_index';
         return manager.applyLibraryConfiguration(nextKey);
     }
 

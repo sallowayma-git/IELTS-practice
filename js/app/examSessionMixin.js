@@ -4,10 +4,60 @@
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
+    let fallbackIdCounter = 0;
 
-    function getMessageTargetOrigin() {
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
+    function getMessageTargetOrigin(options = {}) {
+        if (options && options.allowOpaqueOrigin) {
+            return '*';
+        }
         const origin = global && global.location && global.location.origin;
         return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function escapeHtml(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function escapeCssSelectorValue(value) {
+        if (global.CSS && typeof global.CSS.escape === 'function') {
+            try {
+                return global.CSS.escape(value);
+            } catch (_) {
+                // fallback below
+            }
+        }
+        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+    }
+
+    function toSafeCount(value, fallback = 0) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : fallback;
     }
 
     async function getActiveExamIndexSnapshot() {
@@ -451,6 +501,9 @@
 
         _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
             let pdfWin = null;
+            if (!resolvedPdfUrl) {
+                throw new Error('PDF URL is invalid or untrusted');
+            }
 
             if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {
@@ -465,11 +518,21 @@
             if (!pdfWin) {
                 if (options.target === 'tab') {
                     try {
-                        pdfWin = window.open(resolvedPdfUrl, '_blank');
+                        pdfWin = window.open(resolvedPdfUrl, '_blank', 'noopener,noreferrer');
+                        if (pdfWin) {
+                            try { pdfWin.opener = null; } catch (_) { }
+                        }
                     } catch (_) { }
                 } else {
                     try {
-                        pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                        pdfWin = window.open(
+                            resolvedPdfUrl,
+                            this._sanitizeWindowName('pdf', exam && exam.id),
+                            'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes,noopener,noreferrer'
+                        );
+                        if (pdfWin) {
+                            try { pdfWin.opener = null; } catch (_) { }
+                        }
                     } catch (_) { }
                 }
             }
@@ -520,6 +583,9 @@
         openExamWindow(examUrl, exam, options = {}) {
             const reuseWindow = options.reuseWindow;
             const finalUrl = this._ensureAbsoluteUrl(examUrl);
+            if (!finalUrl) {
+                throw new Error('Exam URL is invalid or untrusted');
+            }
             if (reuseWindow && !reuseWindow.closed) {
                 try {
                     reuseWindow.location.href = finalUrl;
@@ -533,7 +599,7 @@
             if (options.target === 'tab') {
                 let tabWindow = null;
                 const requestedName = typeof options.windowName === 'string' && options.windowName.trim()
-                    ? options.windowName.trim()
+                    ? this._sanitizeWindowName('exam', options.windowName.trim())
                     : '_blank';
                 try {
                     tabWindow = window.open(finalUrl, requestedName);
@@ -555,7 +621,7 @@
             try {
                 examWindow = window.open(
                     finalUrl,
-                    `exam_${exam.id}`,
+                    this._sanitizeWindowName('exam', exam && exam.id),
                     windowFeatures
                 );
             } catch (_) { }
@@ -579,19 +645,29 @@
             }
 
             try {
-                if (typeof rawUrl === 'string' && /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawUrl)) {
-                    return rawUrl;
+                const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
+                    ? window.location.href
+                    : 'http://localhost/';
+                const resolved = new URL(String(rawUrl), baseHref);
+                const protocol = resolved.protocol.toLowerCase();
+
+                if (protocol === 'http:' || protocol === 'https:') {
+                    const currentOrigin = typeof window !== 'undefined' && window.location
+                        ? window.location.origin
+                        : '';
+                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                        ? resolved.href
+                        : '';
                 }
 
-                if (typeof window !== 'undefined' && window.location) {
-                    return new URL(rawUrl, window.location.href).href;
+                if (protocol === 'file:' && typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                    return resolved.href;
                 }
 
-                return new URL(rawUrl, 'http://localhost/').href;
             } catch (error) {
                 console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
-                return rawUrl;
             }
+            return '';
         },
 
         _appendSuiteContextToExamUrl(rawUrl, options = {}) {
@@ -995,6 +1071,15 @@
             ].join(',');
         },
 
+        _sanitizeWindowName(prefix, value) {
+            const safePrefix = String(prefix || 'window').replace(/[^\w-]/g, '_').slice(0, 32) || 'window';
+            const safeValue = String(value || Date.now())
+                .replace(/[^\w-]/g, '_')
+                .replace(/_+/g, '_')
+                .slice(0, 80) || 'target';
+            return `${safePrefix}_${safeValue}`;
+        },
+
         /**
          * 注入数据采集脚本到练习页面
          */
@@ -1284,7 +1369,12 @@
                                 return;
                             }
                             try {
-                                window.location.href = data.url;
+                                var targetUrl = resolveTrustedSuiteNavigationUrl(data.url);
+                                if (!targetUrl) {
+                                    console.warn('[InlineEnhancer] Blocked untrusted suite navigation URL');
+                                    return;
+                                }
+                                window.location.href = targetUrl;
                             } catch (error) {
                                 console.warn('[InlineEnhancer] 套题导航失败:', error);
                             }
@@ -1313,11 +1403,35 @@
                         }
 
                         function isAllowedIncomingMessage(event) {
-                            if (!event || !event.origin || event.origin === 'null') {
-                                return true;
+                            if (!event) {
+                                return false;
+                            }
+                            if (!event.origin || event.origin === 'null') {
+                                return !!(window.location && window.location.protocol === 'file:');
                             }
                             var origin = window.location && window.location.origin;
                             return !!(origin && origin !== 'null' && event.origin === origin);
+                        }
+
+                        function resolveTrustedSuiteNavigationUrl(rawUrl) {
+                            if (rawUrl == null) {
+                                return '';
+                            }
+                            try {
+                                var resolved = new URL(String(rawUrl), window.location.href);
+                                if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                                    var currentOrigin = window.location && window.location.origin;
+                                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                                        ? resolved.href
+                                        : '';
+                                }
+                                if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                                    return resolved.href;
+                                }
+                            } catch (_) {
+                                // Invalid navigation payloads are ignored.
+                            }
+                            return '';
                         }
 
                         window.addEventListener('message', function(event) {
@@ -1476,7 +1590,7 @@
                 examWindow.postMessage({
                     type: 'INIT_SESSION',
                     data: initPayload
-                }, getMessageTargetOrigin());
+                }, getMessageTargetOrigin(windowInfo));
 
                 // 存储会话信息
                 if (!this.examWindows) {
@@ -1554,6 +1668,10 @@
                 console.warn('[App] 守护题目窗口内容失败:', guardError);
             }
 
+            const allowOpaqueOrigin = typeof this._isListeningLibraryExam === 'function'
+                ? this._isListeningLibraryExam(exam)
+                : false;
+
             // 存储窗口引用
             if (!this.examWindows) {
                 this.examWindows = new Map();
@@ -1577,7 +1695,8 @@
                     : null,
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
-                    : Boolean(options && options.reviewMode)
+                    : Boolean(options && options.reviewMode),
+                allowOpaqueOrigin
             });
 
             // 监听窗口关闭事件
@@ -1616,8 +1735,8 @@
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 const initPayload = this._buildExamInitPayload(examId, windowInfo);
                 try {
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
+                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                 } catch (postError) {
                     console.warn('[App] 跨源初始化题目窗口失败:', postError);
                 }
@@ -1644,6 +1763,15 @@
          * 设置题目窗口通信
          */
         setupExamWindowCommunication(examWindow, examId, exam = null, options = {}) {
+            const allowOpaqueOrigin = typeof this._isListeningLibraryExam === 'function'
+                ? this._isListeningLibraryExam(exam)
+                : false;
+            if (allowOpaqueOrigin) {
+                const existingInfo = this.ensureExamWindowSession(examId, examWindow);
+                existingInfo.allowOpaqueOrigin = true;
+                this.examWindows.set(examId, existingInfo);
+            }
+
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
                 try {
@@ -1815,14 +1943,6 @@
                     return;
                 }
 
-                // 校验来源域，允许 file:// (origin 为 null) 与同源页面
-                if (event.origin && event.origin !== 'null') {
-                    const allowedOrigin = window.location && window.location.origin;
-                    if (allowedOrigin && event.origin !== allowedOrigin) {
-                        return;
-                    }
-                }
-
                 const normalized = normalizeMessage(event.data);
                 if (!normalized) {
                     return;
@@ -1856,6 +1976,7 @@
                     && Array.isArray(this.currentSuiteSession.sequence)
                     && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
                 );
+                const sourceIsExpectedWindow = sourceWindow === expectedWindow;
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
                 const isListeningBridgeSource = src === 'listening_record_bridge';
                 const isListeningBridgeProtocolMessage = Boolean(
@@ -1868,14 +1989,32 @@
                         || type === 'PROGRESS_UPDATE'
                     )
                 );
+                const isOpaqueOrigin = !event.origin || event.origin === 'null';
+                const allowSandboxedListeningOrigin = Boolean(
+                    isOpaqueOrigin
+                    && windowInfo.allowOpaqueOrigin
+                    && sourceIsExpectedWindow
+                    && isListeningBridgeProtocolMessage
+                );
+                // 校验来源域：常规页面必须同源；file:// 保留兼容；沙盒听力页只接受预期窗口的 bridge 协议消息。
+                if (isOpaqueOrigin) {
+                    if (!(window.location && window.location.protocol === 'file:') && !allowSandboxedListeningOrigin) {
+                        return;
+                    }
+                } else {
+                    const allowedOrigin = window.location && window.location.origin;
+                    if (!allowedOrigin || allowedOrigin === 'null' || event.origin !== allowedOrigin) {
+                        return;
+                    }
+                }
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
                     && payloadExamId === expectedExamId
-                    && (
-                        (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
-                        || isExamInActiveSuite
-                    )
+                    && payloadSuiteSessionId
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && isExamInActiveSuite
                 );
                 const allowListeningSourceFallback = Boolean(
                     !sourceMatched
@@ -2131,8 +2270,8 @@
                 try {
                     const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
                     const initPayload = this._buildExamInitPayload(examId, windowInfo);
-                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
-                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
+                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                 } catch (initError) {
                     console.warn('[App] 发送初始化消息失败:', initError);
                 }
@@ -2192,8 +2331,8 @@
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
                         // 直接发送两种事件名，确保增强器任何实现都能收到
-                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
-                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
+                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                     } catch (_) { /* 忽略 */ }
                 }
                 attempts++;
@@ -2329,7 +2468,7 @@
          */
         createSimplePracticeRecord(exam, realData) {
             const now = new Date();
-            const recordId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const recordId = createLocalId('fallback');
 
             // 提取分数信息
             const scoreInfo = realData.scoreInfo || {};
@@ -2393,7 +2532,7 @@
          * 生成会话ID
          */
         generateSessionId(examId) {
-            const suffix = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const suffix = `${Date.now()}_${randomIdSuffix()}`;
             const normalizedExamId = typeof examId === 'string'
                 ? examId.trim().replace(/\s+/g, '-')
                 : (examId != null ? String(examId).trim().replace(/\s+/g, '-') : '');
@@ -2816,7 +2955,7 @@
                 return null;
             }
             return {
-                sessionId: `review_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+                sessionId: createLocalId('review'),
                 entries: validEntries,
                 currentIndex: 0,
                 windowRef: null,
@@ -2871,8 +3010,9 @@
             };
             const contextPayload = this._buildReviewContextPayload(session, safeIndex);
             try {
-                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, getMessageTargetOrigin());
-                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin());
+                const windowInfo = (this.examWindows && this.examWindows.get(examId)) || {};
+                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, getMessageTargetOrigin(windowInfo));
+                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin(windowInfo));
                 return true;
             } catch (error) {
                 console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
@@ -3054,8 +3194,8 @@
             try {
                 const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
-                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
-                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
+                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                 return initPayload;
             } catch (initError) {
                 console.warn('[App] 发送初始化消息失败:', initError);
@@ -3098,7 +3238,8 @@
                     reviewMode: false,
                     reviewSessionId: null,
                     reviewEntryIndex: 0,
-                    readOnly: false
+                    readOnly: false,
+                    allowOpaqueOrigin: false
                 });
             }
 
@@ -3124,6 +3265,9 @@
             }
             if (!Object.prototype.hasOwnProperty.call(windowInfo, 'readOnly')) {
                 windowInfo.readOnly = Boolean(windowInfo.reviewMode);
+            }
+            if (typeof windowInfo.allowOpaqueOrigin !== 'boolean') {
+                windowInfo.allowOpaqueOrigin = false;
             }
 
             this.examWindows.set(examId, windowInfo);
@@ -3331,8 +3475,14 @@
             this.updateExamStatus(examId, 'in-progress');
 
             // 尝试打开练习页面
-            const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
-            window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
+            const params = new URLSearchParams();
+            params.set('examId', String(examId || ''));
+            const practiceUrl = this._ensureAbsoluteUrl(`templates/ielts-exam-template.html?${params.toString()}`);
+            if (!practiceUrl) {
+                throw new Error('Practice URL is invalid or untrusted');
+            }
+            const windowName = this._sanitizeWindowName('practice', sessionData.sessionId);
+            window.open(practiceUrl, windowName, 'width=1200,height=800');
         },
 
         /**
@@ -3431,8 +3581,8 @@
                     const targetWindow = (windowInfo && windowInfo.window) || null;
                     if (targetWindow && typeof targetWindow.postMessage === 'function') {
                         const initPayload = this._buildExamInitPayload(examId, windowInfo || {});
-                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
-                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
+                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo || {}));
+                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo || {}));
                     }
                 } catch (initError) {
                     console.warn('[App] 听力桥预初始化 ready 后补发 INIT_SESSION 失败:', initError);
@@ -3809,7 +3959,7 @@
          */
         updateRealTimeProgress(examId, progressData) {
             // 在UI中显示实时进度
-            const examCards = document.querySelectorAll(`[data-exam-id="${examId}"]`);
+            const examCards = document.querySelectorAll(`[data-exam-id="${escapeCssSelectorValue(examId)}"]`);
             examCards.forEach(card => {
                 let progressInfo = card.querySelector('.real-progress-info');
                 if (!progressInfo) {
@@ -4145,18 +4295,19 @@
          * 更新题目状态
          */
         updateExamStatus(examId, status) {
+            const safeStatus = ['in-progress', 'completed', 'interrupted', 'error'].includes(status) ? status : 'error';
             // 更新UI中的题目状态指示器
-            const examCards = document.querySelectorAll(`[data-exam-id="${examId}"]`);
+            const examCards = document.querySelectorAll(`[data-exam-id="${escapeCssSelectorValue(examId)}"]`);
             examCards.forEach(card => {
                 const statusIndicator = card.querySelector('.exam-status');
                 if (statusIndicator) {
-                    statusIndicator.className = `exam-status ${status}`;
+                    statusIndicator.className = `exam-status ${safeStatus}`;
                 }
             });
 
             // 触发状态更新事件
             document.dispatchEvent(new CustomEvent('examStatusChanged', {
-                detail: { examId, status }
+                detail: { examId, status: safeStatus }
             }));
         },
 
@@ -4168,7 +4319,7 @@
             const progressPercentage = Math.round((progressData.completed / progressData.total) * 100);
 
             // 更新进度显示
-            const examCards = document.querySelectorAll(`[data-exam-id="${examId}"]`);
+            const examCards = document.querySelectorAll(`[data-exam-id="${escapeCssSelectorValue(examId)}"]`);
             examCards.forEach(card => {
                 let progressBar = card.querySelector('.exam-progress-bar');
                 if (!progressBar) {
@@ -4229,6 +4380,11 @@
 
             const accuracy = Math.round((resultData.accuracy || 0) * 100);
             const duration = this.formatDuration(resultData.duration || 0);
+            const safeExamId = escapeHtml(examId);
+            const safeExamTitle = escapeHtml(exam.title || '');
+            const safeDuration = escapeHtml(duration);
+            const safeTotalQuestions = escapeHtml(toSafeCount(resultData.totalQuestions || exam.totalQuestions || 0));
+            const safeCorrectAnswers = escapeHtml(toSafeCount(resultData.correctAnswers || 0));
 
             const resultContent = `
                 <div class="exam-result-modal">
@@ -4239,7 +4395,7 @@
                         </div>
                     </div>
                     <div class="result-body">
-                        <h4>${exam.title}</h4>
+                        <h4>${safeExamTitle}</h4>
                         <div class="result-stats">
                             <div class="result-stat">
                                 <span class="stat-label">正确率</span>
@@ -4247,25 +4403,25 @@
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">用时</span>
-                                <span class="stat-value">${duration}</span>
+                                <span class="stat-value">${safeDuration}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">题目数</span>
-                                <span class="stat-value">${resultData.totalQuestions || exam.totalQuestions || 0}</span>
+                                <span class="stat-value">${safeTotalQuestions}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">正确数</span>
-                                <span class="stat-value">${resultData.correctAnswers || 0}</span>
+                                <span class="stat-value">${safeCorrectAnswers}</span>
                             </div>
                         </div>
                         <div class="result-actions">
-                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                            <button class="btn btn-primary" type="button" data-exam-modal-action="open-exam" data-exam-id="${safeExamId}">
                                 再次练习
                             </button>
-                            <button class="btn btn-secondary" onclick="window.app.navigateToView('analysis')">
+                            <button class="btn btn-secondary" type="button" data-exam-modal-action="navigate" data-target-view="analysis">
                                 查看分析
                             </button>
-                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
+                            <button class="btn btn-outline" type="button" data-exam-modal-action="close">
                                 关闭
                             </button>
                         </div>
@@ -4312,6 +4468,33 @@
             }
 
             this._practiceRecorderEventsBound = true;
+
+            if (!this._examModalActionsBound) {
+                this._examModalActionsBound = true;
+                document.addEventListener('click', (event) => {
+                    const trigger = event.target instanceof HTMLElement
+                        ? event.target.closest('[data-exam-modal-action]')
+                        : null;
+                    if (!trigger) {
+                        return;
+                    }
+                    const action = trigger.getAttribute('data-exam-modal-action');
+                    const targetExamId = trigger.getAttribute('data-exam-id') || '';
+                    if (action === 'close') {
+                        trigger.closest('.modal-overlay')?.remove();
+                    } else if (action === 'open-exam' && targetExamId) {
+                        this.openExam(targetExamId);
+                    } else if (action === 'navigate') {
+                        this.navigateToView(trigger.getAttribute('data-target-view') || 'practice');
+                    } else if (action === 'focus-session' && targetExamId) {
+                        this.focusExamWindow(targetExamId);
+                    } else if (action === 'close-session' && targetExamId) {
+                        this.closeExamSession(targetExamId);
+                    } else if (action === 'close-all-sessions') {
+                        this.closeAllExamSessions();
+                    }
+                });
+            }
 
             // 监听练习完成事件
             document.addEventListener('practiceSessionCompleted', (event) => {
@@ -4368,6 +4551,11 @@
 
             const accuracy = Math.round((practiceRecord.accuracy || 0) * 100);
             const duration = this.formatDuration(practiceRecord.duration || 0);
+            const safeExamId = escapeHtml(examId);
+            const safeExamTitle = escapeHtml(exam.title || '');
+            const safeDuration = escapeHtml(duration);
+            const safeTotalQuestions = escapeHtml(toSafeCount(practiceRecord.totalQuestions || 0));
+            const safeCorrectAnswers = escapeHtml(toSafeCount(practiceRecord.correctAnswers || 0));
 
             // 显示简单通知
             const message = `练习完成！\n${exam.title}\n正确率: ${accuracy}% | 用时: ${duration}`;
@@ -4400,7 +4588,7 @@
                         </div>
                     </div>
                     <div class="result-body">
-                        <h4>${exam.title}</h4>
+                        <h4>${safeExamTitle}</h4>
                         <div class="result-stats">
                             <div class="result-stat">
                                 <span class="stat-label">正确率</span>
@@ -4408,15 +4596,15 @@
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">用时</span>
-                                <span class="stat-value">${duration}</span>
+                                <span class="stat-value">${safeDuration}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">题目数</span>
-                                <span class="stat-value">${practiceRecord.totalQuestions || 0}</span>
+                                <span class="stat-value">${safeTotalQuestions}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">正确数</span>
-                                <span class="stat-value">${practiceRecord.correctAnswers || 0}</span>
+                                <span class="stat-value">${safeCorrectAnswers}</span>
                             </div>
                         </div>
                         ${practiceRecord.questionTypePerformance && Object.keys(practiceRecord.questionTypePerformance).length > 0 ? `
@@ -4425,22 +4613,22 @@
                                 <div class="type-performance-list">
                                     ${Object.entries(practiceRecord.questionTypePerformance).map(([type, perf]) => `
                                         <div class="type-performance-item">
-                                            <span class="type-name">${this.formatQuestionType(type)}</span>
-                                            <span class="type-accuracy">${Math.round((perf.accuracy || 0) * 100)}%</span>
-                                            <span class="type-count">(${perf.correct || 0}/${perf.total || 0})</span>
+                                            <span class="type-name">${escapeHtml(this.formatQuestionType(type))}</span>
+                                            <span class="type-accuracy">${escapeHtml(Math.round((Number(perf.accuracy) || 0) * 100))}%</span>
+                                            <span class="type-count">(${escapeHtml(toSafeCount(perf.correct || 0))}/${escapeHtml(toSafeCount(perf.total || 0))})</span>
                                         </div>
                                     `).join('')}
                                 </div>
                             </div>
                         ` : ''}
                         <div class="result-actions">
-                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                            <button class="btn btn-primary" type="button" data-exam-modal-action="open-exam" data-exam-id="${safeExamId}">
                                 再次练习
                             </button>
-                            <button class="btn btn-secondary" onclick="window.app.navigateToView('practice')">
+                            <button class="btn btn-secondary" type="button" data-exam-modal-action="navigate" data-target-view="practice">
                                 查看记录
                             </button>
-                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
+                            <button class="btn btn-outline" type="button" data-exam-modal-action="close">
                                 关闭
                             </button>
                         </div>
@@ -4490,31 +4678,37 @@
                 return;
             }
 
+            const safeActiveSessionCount = escapeHtml(activeSessions.length);
+
             const sessionsContent = `
                 <div class="active-sessions-modal">
                     <div class="sessions-header">
-                        <h3>活动练习会话 (${activeSessions.length})</h3>
-                        <button class="close-sessions" onclick="this.closest('.modal-overlay').remove()">×</button>
+                        <h3>活动练习会话 (${safeActiveSessionCount})</h3>
+                        <button class="close-sessions" type="button" data-exam-modal-action="close">×</button>
                     </div>
                     <div class="sessions-body">
                         ${activeSessions.map(session => {
                 const exam = examIndex.find(e => e.id === session.examId);
                 const duration = Date.now() - new Date(session.startTime).getTime();
+                const safeSessionExamId = escapeHtml(session.examId || '');
+                const safeSessionTitle = escapeHtml(exam ? exam.title : '未知题目');
+                const safeStartTime = escapeHtml(this.formatDate(session.startTime, 'HH:mm'));
+                const safeSessionDuration = escapeHtml(this.formatDuration(Math.floor(duration / 1000)));
 
                 return `
                                 <div class="session-item">
                                     <div class="session-info">
-                                        <h4>${exam ? exam.title : '未知题目'}</h4>
+                                        <h4>${safeSessionTitle}</h4>
                                         <div class="session-meta">
-                                            <span>开始时间: ${this.formatDate(session.startTime, 'HH:mm')}</span>
-                                            <span>已用时: ${this.formatDuration(Math.floor(duration / 1000))}</span>
+                                            <span>开始时间: ${safeStartTime}</span>
+                                            <span>已用时: ${safeSessionDuration}</span>
                                         </div>
                                     </div>
                                     <div class="session-actions">
-                                        <button class="btn btn-sm btn-primary" onclick="window.app.focusExamWindow('${session.examId}')">
+                                        <button class="btn btn-sm btn-primary" type="button" data-exam-modal-action="focus-session" data-exam-id="${safeSessionExamId}">
                                             切换到窗口
                                         </button>
-                                        <button class="btn btn-sm btn-secondary" onclick="window.app.closeExamSession('${session.examId}')">
+                                        <button class="btn btn-sm btn-secondary" type="button" data-exam-modal-action="close-session" data-exam-id="${safeSessionExamId}">
                                             结束会话
                                         </button>
                                     </div>
@@ -4523,10 +4717,10 @@
             }).join('')}
                     </div>
                     <div class="sessions-footer">
-                        <button class="btn btn-outline" onclick="window.app.closeAllExamSessions()">
+                        <button class="btn btn-outline" type="button" data-exam-modal-action="close-all-sessions">
                             结束所有会话
                         </button>
-                        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
+                        <button class="btn btn-secondary" type="button" data-exam-modal-action="close">
                             关闭
                         </button>
                     </div>

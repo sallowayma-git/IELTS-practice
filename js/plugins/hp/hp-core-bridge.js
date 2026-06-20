@@ -34,11 +34,23 @@
   }
 
   function hasAllowedMessageOrigin(event) {
-    if (!event || !event.origin || event.origin === 'null') {
-      return true;
+    if (!event) {
+      return false;
+    }
+    if (!event.origin || event.origin === 'null') {
+      return Boolean(window.location && window.location.protocol === 'file:');
     }
     const origin = window.location && window.location.origin;
     return Boolean(origin && origin !== 'null' && event.origin === origin);
+  }
+
+  function safeWindowName(prefix, value) {
+    const safePrefix = String(prefix || 'window').replace(/[^\w-]/g, '_').slice(0, 32) || 'window';
+    const safeValue = String(value || Date.now())
+      .replace(/[^\w-]/g, '_')
+      .replace(/_+/g, '_')
+      .slice(0, 80) || 'target';
+    return `${safePrefix}_${safeValue}`;
   }
 
   function findLocalSessionForMessage(event, payload) {
@@ -531,15 +543,29 @@
 
   function resolveAttemptUrl(path) {
     if (!path) return '';
-    if (isAbsolutePath(path)) return path;
     try {
+      const rawPath = String(path).trim();
+      if (!rawPath) return '';
       const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
         ? window.location.href
-        : undefined;
-      return new URL(path, baseHref).href;
+        : 'http://localhost/';
+      const resolved = /^[A-Za-z]:[\\/]/.test(rawPath) && window.location && window.location.protocol === 'file:'
+        ? new URL(`file:///${rawPath.replace(/\\/g, '/')}`)
+        : new URL(rawPath, baseHref);
+      const protocol = (resolved.protocol || '').toLowerCase();
+
+      if (protocol === 'http:' || protocol === 'https:') {
+        const origin = window.location && window.location.origin;
+        return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+      }
+
+      if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+        return resolved.href;
+      }
     } catch (_) {
-      return path;
+      return '';
     }
+    return '';
   }
 
   function getResourceAttemptsFromCore(exam, kind) {
@@ -550,16 +576,17 @@
   }
 
   function probeResource(url) {
-    if (!url) return Promise.resolve(false);
-    if (resourceProbeCache.has(url)) {
-      return resourceProbeCache.get(url);
+    const trustedUrl = resolveAttemptUrl(url);
+    if (!trustedUrl) return Promise.resolve(false);
+    if (resourceProbeCache.has(trustedUrl)) {
+      return resourceProbeCache.get(trustedUrl);
     }
     const attempt = (async () => {
-      if (shouldBypassProbe(url)) {
+      if (shouldBypassProbe(trustedUrl)) {
         return true;
       }
       try {
-        const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+        const response = await fetch(trustedUrl, { method: 'HEAD', cache: 'no-store' });
         if (response && (response.ok || response.status === 304 || response.status === 405 || response.type === 'opaque')) {
           return true;
         }
@@ -567,18 +594,18 @@
           return false;
         }
       } catch (headError) {
-        if (shouldBypassProbe(url)) {
+        if (shouldBypassProbe(trustedUrl)) {
           return true;
         }
         try {
-          const response = await fetch(url, { method: 'GET', cache: 'no-store', mode: 'no-cors' });
+          const response = await fetch(trustedUrl, { method: 'GET', cache: 'no-store', mode: 'no-cors' });
           if (!response) return false;
           if (typeof response.ok === 'boolean') {
             return response.ok;
           }
           return response.type === 'opaque';
         } catch (_) {
-          if (shouldBypassProbe(url)) {
+          if (shouldBypassProbe(trustedUrl)) {
             return true;
           }
           return false;
@@ -586,7 +613,7 @@
       }
       return false;
     })();
-    resourceProbeCache.set(url, attempt);
+    resourceProbeCache.set(trustedUrl, attempt);
     return attempt;
   }
 
@@ -595,9 +622,13 @@
     for (let i = 0; i < attempts.length; i += 1) {
       const entry = attempts[i];
       try {
-        const ok = await probeResource(entry.path);
+        const safeUrl = resolveAttemptUrl(entry && entry.path);
+        if (!safeUrl) {
+          continue;
+        }
+        const ok = await probeResource(safeUrl);
         if (ok) {
-          return { url: entry.path, attempts };
+          return { url: safeUrl, attempts };
         }
       } catch (error) {
         console.warn('[hpCore] 资源探测失败', entry, error);
@@ -1022,9 +1053,17 @@
               }
 
               const resolvedUrl = resolveAttemptUrl(entry.path);
+              if (!resolvedUrl) {
+                tryOpen(index + 1);
+                return;
+              }
               let win = null;
               try {
-                win = window.open(resolvedUrl, 'exam_' + examId, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+                win = window.open(
+                  resolvedUrl,
+                  safeWindowName('exam', examId),
+                  'width=1200,height=800,scrollbars=yes,resizable=yes'
+                );
               } catch (_) {}
 
               if (!win) {
@@ -1082,7 +1121,10 @@
               if (typeof window.openPDFSafely === 'function') {
                 window.openPDFSafely(targetUrl, exam.title || 'PDF');
               } else {
-                const win = window.open(targetUrl, 'pdf_' + examId, 'width=1000,height=800,scrollbars=yes,resizable=yes');
+                const win = window.open(targetUrl, safeWindowName('pdf', examId), 'width=1000,height=800,scrollbars=yes,resizable=yes,noopener,noreferrer');
+                if (win) {
+                  try { win.opener = null; } catch (_) {}
+                }
                 if (!win) self.showMessage('无法打开PDF窗口', 'error');
               }
             } else {

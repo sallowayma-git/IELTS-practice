@@ -64,6 +64,18 @@
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
+    const MAX_STORED_VOCAB_WORDS = 5000;
+    const MAX_WORD_TEXT_LENGTH = 160;
+    const MAX_MEANING_TEXT_LENGTH = 4000;
+    const MAX_EXAMPLE_TEXT_LENGTH = 4000;
+    const MAX_NOTE_TEXT_LENGTH = 4000;
+    const MAX_SOURCE_TEXT_LENGTH = 200;
+    const MAX_EXTRA_TEXT_LENGTH = 1000;
+    const MAX_METADATA_JSON_CHARS = 8000;
+    const MAX_EXTRA_DEPTH = 8;
+    const MAX_EXTRA_OBJECT_KEYS = 100;
+    const MAX_EXTRA_ARRAY_ITEMS = 100;
+    const EXTRA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     const state = {
         repositories: null,
@@ -112,35 +124,101 @@
     }
 
     function generateId(seed) {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            var seedStr = seed ? String(seed).trim() : '';
-            if (seedStr) {
-                var hash = 0;
-                for (var i = 0; i < seedStr.length; i++) {
-                    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
-                    hash |= 0;
-                }
-                return 'word-' + Math.abs(hash).toString(36);
+        var seedStr = seed ? String(seed).trim() : '';
+        if (seedStr) {
+            var hash = 0;
+            for (var i = 0; i < seedStr.length; i++) {
+                hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+                hash |= 0;
             }
+            return 'word-' + Math.abs(hash).toString(36);
+        }
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
             return crypto.randomUUID();
         }
-        const base = seed ? String(seed).trim().toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'word';
-        return `${base}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+            var bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            return 'word-' + Array.prototype.map.call(bytes, function (byte) {
+                return byte.toString(16).padStart(2, '0');
+            }).join('');
+        }
+        return 'word-' + Date.now();
+    }
+
+    function normalizeTextField(value, maxLength) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().slice(0, maxLength);
+    }
+
+    function normalizeExtraValue(value, depth = 0, seen = new WeakSet()) {
+        if (typeof value === 'string') {
+            return normalizeTextField(value, MAX_EXTRA_TEXT_LENGTH);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (value == null || typeof value === 'boolean') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            if (depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
+                return null;
+            }
+            seen.add(value);
+            return value
+                .slice(0, MAX_EXTRA_ARRAY_ITEMS)
+                .map((item) => normalizeExtraValue(item, depth + 1, seen))
+                .filter((item) => item !== null && item !== undefined);
+        }
+        if (value && typeof value === 'object') {
+            if (depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
+                return null;
+            }
+            seen.add(value);
+            try {
+                if (JSON.stringify(value).length > MAX_METADATA_JSON_CHARS) {
+                    return null;
+                }
+                const clone = {};
+                Object.keys(value)
+                    .slice(0, MAX_EXTRA_OBJECT_KEYS)
+                    .forEach((key) => {
+                        if (EXTRA_POLLUTION_KEYS.has(String(key))) {
+                            return;
+                        }
+                        const safeKey = normalizeTextField(key, MAX_SOURCE_TEXT_LENGTH);
+                        if (!safeKey || EXTRA_POLLUTION_KEYS.has(safeKey)) {
+                            return;
+                        }
+                        const normalized = normalizeExtraValue(value[key], depth + 1, seen);
+                        if (normalized !== null && normalized !== undefined) {
+                            clone[safeKey] = normalized;
+                        }
+                    });
+                return JSON.stringify(clone).length <= MAX_METADATA_JSON_CHARS ? clone : null;
+            } catch (_) {
+                return null;
+            }
+        }
+        return null;
     }
 
     function normalizeWordRecord(entry) {
         if (!entry || typeof entry !== 'object') {
             return null;
         }
-        const baseWord = typeof entry.word === 'string' ? entry.word.trim() : '';
-        const baseMeaning = typeof entry.meaning === 'string' ? entry.meaning.trim() : '';
+        const baseWord = normalizeTextField(entry.word, MAX_WORD_TEXT_LENGTH);
+        const baseMeaning = normalizeTextField(entry.meaning, MAX_MEANING_TEXT_LENGTH);
         if (!baseWord || !baseMeaning) {
             return null;
         }
-        const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : generateId(baseWord);
-        const example = typeof entry.example === 'string' ? entry.example.trim() : '';
-        const note = typeof entry.note === 'string' ? entry.note.trim() : '';
-        const source = typeof entry.source === 'string' ? entry.source.trim() : '';
+        const id = normalizeTextField(entry.id, MAX_SOURCE_TEXT_LENGTH) || generateId(baseWord);
+        const example = normalizeTextField(entry.example, MAX_EXAMPLE_TEXT_LENGTH);
+        const note = normalizeTextField(entry.note, MAX_NOTE_TEXT_LENGTH);
+        const source = normalizeTextField(entry.source, MAX_SOURCE_TEXT_LENGTH);
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
         
         // SM-2 字段
@@ -218,7 +296,10 @@
             'spellingNote'
         ].forEach((key) => {
             if (entry[key] !== undefined) {
-                record[key] = entry[key];
+                const normalizedExtra = normalizeExtraValue(entry[key]);
+                if (normalizedExtra !== null && normalizedExtra !== undefined) {
+                    record[key] = normalizedExtra;
+                }
             }
         });
         return record;
@@ -349,7 +430,7 @@
     }
 
     function setWordsInternal(words) {
-        state.words = words;
+        state.words = Array.isArray(words) ? words.slice(0, MAX_STORED_VOCAB_WORDS) : [];
         rebuildIndex();
     }
 
@@ -380,11 +461,44 @@
         if (!listWords) {
             return [];
         }
-        return listWords.map((entry) => normalizeListEntry(entry, listId)).filter(Boolean);
+        return listWords
+            .slice(0, MAX_STORED_VOCAB_WORDS)
+            .map((entry) => normalizeListEntry(entry, listId))
+            .filter(Boolean);
+    }
+
+    function resolveTrustedVocabJsonUrl(rawUrl) {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+            const resolved = new URL(String(rawUrl), baseHref);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            if (!resolved.pathname || !resolved.pathname.toLowerCase().endsWith('.json')) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+            if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
     }
 
     async function fetchJsonWithFileFallback(url) {
-        const primary = await fetch(url, { cache: 'no-store' });
+        const trustedUrl = resolveTrustedVocabJsonUrl(url);
+        if (!trustedUrl) {
+            throw new Error('untrusted_vocab_json_url');
+        }
+        const primary = await fetch(trustedUrl, { cache: 'no-store' });
         if (!primary.ok) {
             throw new Error(`HTTP ${primary.status}`);
         }
@@ -398,8 +512,13 @@
                 return;
             }
             try {
+                const trustedUrl = resolveTrustedVocabJsonUrl(url);
+                if (!trustedUrl) {
+                    reject(new Error('untrusted_vocab_json_url'));
+                    return;
+                }
                 const xhr = new XMLHttpRequest();
-                xhr.open('GET', url, true);
+                xhr.open('GET', trustedUrl, true);
                 xhr.overrideMimeType('application/json');
                 xhr.onreadystatechange = () => {
                     if (xhr.readyState !== 4) {
@@ -466,6 +585,7 @@
             ? (Array.isArray(payload) ? payload.map(validator.normalizeEntry).filter(Boolean) : [])
             : (Array.isArray(payload) ? payload : []);
         return entries
+            .slice(0, MAX_STORED_VOCAB_WORDS)
             .map((entry) => normalizeWordRecord({ ...entry, box: 1, correctCount: 0, lastReviewed: null, nextReview: null }))
             .filter(Boolean);
     }
@@ -494,7 +614,9 @@
             }
 
             state.config = mergeConfig(storedConfig);
-            state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
+            state.reviewQueue = Array.isArray(storedQueue)
+                ? storedQueue.slice(0, MAX_STORED_VOCAB_WORDS).map((id) => normalizeTextField(String(id), MAX_SOURCE_TEXT_LENGTH)).filter(Boolean)
+                : [];
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
@@ -614,7 +736,7 @@
 
     async function setWords(words) {
         const normalized = Array.isArray(words)
-            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            ? words.slice(0, MAX_STORED_VOCAB_WORDS).map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
         setWordsInternal(normalized);
         await persist(getActiveStorageKey(), normalized);
@@ -659,7 +781,9 @@
     }
 
     async function setReviewQueue(queue) {
-        state.reviewQueue = Array.isArray(queue) ? queue.map((id) => String(id)) : [];
+        state.reviewQueue = Array.isArray(queue)
+            ? queue.slice(0, MAX_STORED_VOCAB_WORDS).map((id) => normalizeTextField(String(id), MAX_SOURCE_TEXT_LENGTH)).filter(Boolean)
+            : [];
         await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
         return getReviewQueue();
     }
@@ -1005,10 +1129,11 @@
         } else {
             words.push(normalized);
         }
-        await persist(listConfig.storageKey, words.filter(Boolean));
+        const limitedWords = words.filter(Boolean).slice(0, MAX_STORED_VOCAB_WORDS);
+        await persist(listConfig.storageKey, limitedWords);
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
-            setWordsInternal(words.filter(Boolean));
+            setWordsInternal(limitedWords);
         }
         return normalized;
     }

@@ -2,6 +2,67 @@
  * 成绩记录和存储系统
  * 负责答题结果解析、标准化存储和数据备份恢复
  */
+let scoreStorageFallbackIdCounter = 0;
+const MAX_SCORE_IMPORT_SOURCE_BYTES = 10 * 1024 * 1024;
+const SCORE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const MAX_SCORE_BACKUP_NODES = 50000;
+const MAX_SCORE_BACKUP_DEPTH = 40;
+const SCORE_RECORD_CLONE_LIMITS = Object.freeze({
+    maxDepth: 12,
+    maxNodes: 20000,
+    maxArrayItems: 1000,
+    maxObjectKeys: 1000,
+    maxTextLength: 4000
+});
+
+function createScoreStorageId(prefix) {
+    const cryptoObj = window.crypto || window.msCrypto;
+    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+        return `${prefix}_${Date.now()}_${cryptoObj.randomUUID()}`;
+    }
+    if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        cryptoObj.getRandomValues(bytes);
+        const suffix = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        return `${prefix}_${Date.now()}_${suffix}`;
+    }
+    scoreStorageFallbackIdCounter += 1;
+    return `${prefix}_${Date.now()}_fallback_${scoreStorageFallbackIdCounter.toString(36)}`;
+}
+
+function formatScoreCsvCell(value) {
+    let cell = value == null ? '' : String(value);
+    if (/^\s*[=+\-@]/.test(cell) || /^[\t\r\n]/.test(cell)) {
+        cell = `'${cell}`;
+    }
+    return `"${cell.replace(/"/g, '""')}"`;
+}
+
+function getScoreImportTextByteLength(value) {
+    const text = String(value || '');
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(text).byteLength;
+    }
+    return text.length;
+}
+
+function assertScoreImportStringSize(value) {
+    if (getScoreImportTextByteLength(value) > MAX_SCORE_IMPORT_SOURCE_BYTES) {
+        throw new Error('Import string is too large');
+    }
+}
+
+function isUnsafeScoreRecordCloneKey(key) {
+    return SCORE_BACKUP_POLLUTION_KEYS.has(String(key));
+}
+
+function limitScoreRecordCloneText(value) {
+    const text = String(value ?? '');
+    return text.length > SCORE_RECORD_CLONE_LIMITS.maxTextLength
+        ? text.slice(0, SCORE_RECORD_CLONE_LIMITS.maxTextLength)
+        : text;
+}
+
 class ScoreStorage {
     constructor(options = {}) {
         this.repositories = options.repositories || window.dataRepositories;
@@ -823,6 +884,7 @@ class ScoreStorage {
                 generateRecordId: () => this.generateRecordId()
             });
         }
+        recordData = this.clonePlainObject(recordData) || {};
         const now = new Date().toISOString();
         const type = this.inferPracticeType(recordData);
         const recordDate = this.resolveRecordDate(recordData, now);
@@ -1029,20 +1091,63 @@ class ScoreStorage {
         }));
     }
 
-    clonePlainObject(value) {
-        if (value == null || typeof value !== 'object') {
+    clonePlainObject(value, depth = 0, state = null) {
+        if (value === null || value === undefined) {
             return value ?? null;
         }
-        if (Array.isArray(value)) {
-            return value.map(item => this.clonePlainObject(item)).filter(item => item !== undefined);
+        if (typeof value === 'string') {
+            return limitScoreRecordCloneText(value);
         }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth > SCORE_RECORD_CLONE_LIMITS.maxDepth) {
+            return undefined;
+        }
+
+        const cloneState = state || { stack: new WeakSet(), nodes: 0 };
+        if (cloneState.stack.has(value)) {
+            return undefined;
+        }
+        cloneState.nodes += 1;
+        if (cloneState.nodes > SCORE_RECORD_CLONE_LIMITS.maxNodes) {
+            return undefined;
+        }
+        cloneState.stack.add(value);
+
+        if (Array.isArray(value)) {
+            const clone = value
+                .slice(0, SCORE_RECORD_CLONE_LIMITS.maxArrayItems)
+                .map(item => this.clonePlainObject(item, depth + 1, cloneState))
+                .filter(item => item !== undefined);
+            cloneState.stack.delete(value);
+            return clone;
+        }
+
         const clone = {};
-        Object.keys(value).forEach((key) => {
-            const entry = value[key];
-            clone[key] = (entry && typeof entry === 'object')
-                ? this.clonePlainObject(entry)
-                : entry;
+        Object.keys(value).slice(0, SCORE_RECORD_CLONE_LIMITS.maxObjectKeys).forEach((key) => {
+            if (isUnsafeScoreRecordCloneKey(key)) {
+                return;
+            }
+            const safeKey = limitScoreRecordCloneText(key).trim();
+            if (!safeKey || isUnsafeScoreRecordCloneKey(safeKey)) {
+                return;
+            }
+            const safeValue = this.clonePlainObject(value[key], depth + 1, cloneState);
+            if (safeValue !== undefined) {
+                clone[safeKey] = safeValue;
+            }
         });
+        cloneState.stack.delete(value);
         return clone;
     }
 
@@ -1085,6 +1190,7 @@ class ScoreStorage {
             if (!entry || typeof entry !== 'object') {
                 return null;
             }
+            entry = this.clonePlainObject(entry) || {};
             const normalizedAnswers = this.standardizeAnswers(entry.answers || entry.answerList || []);
             const answerMap = normalizedAnswers.reduce((map, item) => {
                 if (item && item.questionId) {
@@ -1399,7 +1505,7 @@ class ScoreStorage {
         }
         
         // 分类掌握成就
-        const category = practiceRecord.metadata.category;
+        const category = practiceRecord.metadata?.category;
         if (category && stats.categoryStats[category]) {
             const catStats = stats.categoryStats[category];
             if (catStats.practices >= 10 && catStats.avgScore >= 0.8) {
@@ -1432,7 +1538,7 @@ class ScoreStorage {
             if (filters.examId && record.examId !== filters.examId) return false;
             
             // 按分类筛选
-            if (filters.category && record.metadata.category !== filters.category) return false;
+            if (filters.category && record.metadata?.category !== filters.category) return false;
             
             // 按时间范围筛选
             if (filters.startDate && new Date(record.startTime) < new Date(filters.startDate)) return false;
@@ -1706,9 +1812,12 @@ class ScoreStorage {
             }
 
             if (backup.data) {
-                await this.storage.set(this.storageKeys.practiceRecords, backup.data.practiceRecords);
-                await this.storage.set(this.storageKeys.userStats, backup.data.userStats);
-                if (backup.data.storageVersion) {
+                this.assertSafeBackupValue(backup.data, 'backup.data');
+                const practiceRecords = this.normalizeBackupPracticeRecords(backup.data.practiceRecords);
+                const userStats = this.normalizeBackupUserStats(backup.data.userStats);
+                await this.storage.set(this.storageKeys.practiceRecords, practiceRecords);
+                await this.storage.set(this.storageKeys.userStats, userStats);
+                if (typeof backup.data.storageVersion === 'string' && backup.data.storageVersion.trim()) {
                     await this.storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
                 }
             }
@@ -1724,6 +1833,63 @@ class ScoreStorage {
     /**
      * 获取备份列表 - 直接从manual_backups存储获取
      */
+    normalizeBackupPracticeRecords(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        if (records.length > this.maxRecords) {
+            throw new Error(`Backup contains too many practice records. Maximum supported count is ${this.maxRecords}.`);
+        }
+        return records.map((record) => {
+            try {
+                return this.standardizeRecord(record);
+            } catch (error) {
+                console.warn('[ScoreStorage] Failed to normalize backup record, skipping:', record && record.id, error);
+                return null;
+            }
+        }).filter(Boolean);
+    }
+
+    normalizeBackupUserStats(stats) {
+        if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
+            return this.getDefaultUserStats();
+        }
+        return this.clonePlainObject(stats) || this.getDefaultUserStats();
+    }
+
+    assertSafeBackupValue(value, path = 'backup', depth = 0, state = null) {
+        if (value === null || typeof value !== 'object') {
+            return;
+        }
+        const scanState = state || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (depth > MAX_SCORE_BACKUP_DEPTH) {
+            throw new Error(`Backup structure is too deep at ${path}`);
+        }
+        if (scanState.seen.has(value)) {
+            return;
+        }
+        scanState.seen.add(value);
+        scanState.nodes += 1;
+        if (scanState.nodes > MAX_SCORE_BACKUP_NODES) {
+            throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${MAX_SCORE_BACKUP_NODES}.`);
+        }
+        if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+                this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
+            });
+            return;
+        }
+        Object.keys(value).forEach((key) => {
+            if (SCORE_BACKUP_POLLUTION_KEYS.has(key)) {
+                throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+            }
+            this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
+        });
+    }
+
     async getBackups() {
         try {
             await this.ensureReady();
@@ -1773,24 +1939,31 @@ class ScoreStorage {
             '分类', '频率', '题目标题'
         ];
         
-        const rows = records.map(record => [
-            record.id,
-            record.examId,
-            record.startTime,
-            record.endTime,
-            record.duration,
-            record.status,
-            record.score,
-            record.totalQuestions,
-            record.correctAnswers,
-            Math.round(record.accuracy * 100) + '%',
-            record.metadata.category || '',
-            record.metadata.frequency || '',
-            record.metadata.examTitle || ''
-        ]);
+        const rows = records.map(record => {
+            const safeRecord = record && typeof record === 'object' ? record : {};
+            const metadata = safeRecord.metadata && typeof safeRecord.metadata === 'object'
+                ? safeRecord.metadata
+                : {};
+            const accuracy = Number(safeRecord.accuracy);
+            return [
+                safeRecord.id,
+                safeRecord.examId,
+                safeRecord.startTime,
+                safeRecord.endTime,
+                safeRecord.duration,
+                safeRecord.status,
+                safeRecord.score,
+                safeRecord.totalQuestions,
+                safeRecord.correctAnswers,
+                Number.isFinite(accuracy) ? Math.round(accuracy * 100) + '%' : '',
+                metadata.category || '',
+                metadata.frequency || '',
+                metadata.examTitle || ''
+            ];
+        });
         
         return [headers, ...rows]
-            .map(row => row.map(cell => `"${cell}"`).join(','))
+            .map(row => row.map(formatScoreCsvCell).join(','))
             .join('\n');
     }
 
@@ -1800,13 +1973,20 @@ class ScoreStorage {
     async importData(importData, options = {}) {
         try {
             await this.ensureReady();
-            const payload = typeof importData === 'string' ? JSON.parse(importData) : importData;
+            let payload = importData;
+            if (typeof importData === 'string') {
+                assertScoreImportStringSize(importData);
+                payload = JSON.parse(importData);
+            }
 
             const records = this.extractPracticeRecordsFromPayload(payload);
             const stats = this.extractUserStatsFromPayload(payload);
 
             if (!Array.isArray(records) || records.length === 0) {
                 throw new Error('Invalid import data format: no practice records found');
+            }
+            if (records.length > this.maxRecords) {
+                throw new Error(`Import contains too many practice records. Maximum supported count is ${this.maxRecords}.`);
             }
 
             // 标准化记录，避免字段缺失
@@ -1819,12 +1999,27 @@ class ScoreStorage {
                 }
             }).filter(Boolean);
 
+            let existingRecordsForMerge = null;
+            if (options.merge) {
+                existingRecordsForMerge = await this.storage.get(this.storageKeys.practiceRecords, []);
+                const mergedPreview = new Map();
+                (Array.isArray(existingRecordsForMerge) ? existingRecordsForMerge : []).forEach((rec) => {
+                    if (rec && rec.id) mergedPreview.set(rec.id, rec);
+                });
+                standardizedRecords.forEach((rec) => {
+                    if (rec && rec.id) mergedPreview.set(rec.id, rec);
+                });
+                if (mergedPreview.size > this.maxRecords) {
+                    throw new Error(`Import would exceed maximum stored practice records (${this.maxRecords}).`);
+                }
+            }
+
             // 创建备份
             await this.createBackup('pre_import_backup');
 
             if (options.merge) {
                 // 合并模式：按 id 去重，保留导入集中的最新（后出现的覆盖）
-                const existingRecords = await this.storage.get(this.storageKeys.practiceRecords, []);
+                const existingRecords = existingRecordsForMerge || await this.storage.get(this.storageKeys.practiceRecords, []);
                 const mergedMap = new Map();
                 existingRecords.forEach((rec) => {
                     if (rec && rec.id) mergedMap.set(rec.id, rec);
@@ -1891,7 +2086,7 @@ class ScoreStorage {
      * 生成记录ID
      */
     generateRecordId() {
-        return `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return createScoreStorageId('record');
     }
 
     /**

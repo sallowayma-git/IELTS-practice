@@ -12,9 +12,40 @@
     }
 
     function isAllowedMessageOrigin(event) {
-        if (!event || !event.origin || event.origin === 'null') return true;
+        if (!event) return false;
+        if (!event.origin || event.origin === 'null') {
+            return Boolean(global.location && global.location.protocol === 'file:');
+        }
         var origin = global.location && global.location.origin;
         return Boolean(origin && origin !== 'null' && event.origin === origin);
+    }
+
+    function isAllowedEndlessMessageSource(event) {
+        if (!event || !event.source || !endlessState || !endlessState.active) return false;
+        var currentWindow = endlessState.currentWindow;
+        if (!currentWindow || currentWindow.closed) return false;
+        return event.source === currentWindow;
+    }
+
+    function resolveTrustedAppActionUrl(rawUrl) {
+        if (!rawUrl) return '';
+        try {
+            var baseHref = global.location && global.location.href ? global.location.href : 'http://localhost/';
+            var resolved = new URL(String(rawUrl), baseHref);
+            var protocol = (resolved.protocol || '').toLowerCase();
+
+            if (protocol === 'http:' || protocol === 'https:') {
+                var origin = global.location && global.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+
+            if (protocol === 'file:' && global.location && global.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
     }
 
     function ensurePracticeSuite() {
@@ -652,8 +683,7 @@
                 if (!p.endsWith('/')) p += '/';
                 url = p + exam.filename;
             }
-            // resolve to absolute
-            url = new URL(url, window.location.href).href;
+            url = resolveTrustedAppActionUrl(url);
         } catch (_) { }
         if (!url) return null;
 
@@ -786,6 +816,7 @@
         var handler = function (event) {
             if (!isAllowedMessageOrigin(event)) return;
             if (!endlessState || !endlessState.active) return;
+            if (!isAllowedEndlessMessageSource(event)) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;
             if (msg.type === 'ENDLESS_USER_EXIT') {

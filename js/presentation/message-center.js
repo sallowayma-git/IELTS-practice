@@ -15,11 +15,17 @@
         return node;
     }
 
+    function normalizeMessageType(type) {
+        const value = String(type || '').trim().toLowerCase();
+        return ['info', 'success', 'warning', 'error'].includes(value) ? value : 'info';
+    }
+
     function createMessageNode(message, type) {
+        const safeType = normalizeMessageType(type);
         const note = document.createElement('div');
-        note.className = 'message ' + (type || 'info') + ' message-entering';
-        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
-        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        note.className = 'message ' + safeType + ' message-entering';
+        note.setAttribute('role', safeType === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', safeType === 'error' ? 'assertive' : 'polite');
 
         const indicator = document.createElement('span');
         indicator.className = 'message-indicator';
@@ -45,10 +51,11 @@
         }
 
         show(message, type = 'info', duration = 4000) {
+            const safeType = normalizeMessageType(type);
             if (typeof document === 'undefined') {
                 if (typeof console !== 'undefined') {
-                    const logMethod = type === 'error' ? 'error' : 'log';
-                    console[logMethod]('[Message:' + type + ']', message);
+                    const logMethod = safeType === 'error' ? 'error' : 'log';
+                    console[logMethod]('[Message:' + safeType + ']', message);
                 }
                 return null;
             }
@@ -58,7 +65,7 @@
                 return null;
             }
 
-            const note = createMessageNode(message, type);
+            const note = createMessageNode(message, safeType);
             this.dismiss(180);
             container.appendChild(note);
             this.activeMessage = note;

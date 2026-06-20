@@ -41,6 +41,7 @@ function createExamWindow(parentWindow) {
                     Date,
                     Array,
                     JSON,
+                    URL,
                 });
                 scriptContext.globalThis = examWindow;
                 examWindow.window = examWindow;
@@ -87,7 +88,7 @@ function createExamWindow(parentWindow) {
         document: doc,
         opener: parentWindow,
         parent: parentWindow,
-        location: { href: 'http://localhost/p1.html' },
+        location: { origin: 'http://localhost', protocol: 'http:', href: 'http://localhost/p1.html' },
         closed: false,
         _messageListeners: messageListeners,
         _messages: [],
@@ -101,7 +102,7 @@ function createExamWindow(parentWindow) {
         postMessage(message) {
             this._messages.push(message);
             messageListeners.slice().forEach(listener => {
-                listener({ data: message, source: parentWindow });
+                listener({ data: message, source: parentWindow, origin: parentWindow.location.origin });
             });
         },
         focus() {},
@@ -132,7 +133,7 @@ async function main() {
     const parentWindow = {
         _messages: [],
         showMessage() {},
-        location: { origin: 'http://localhost', href: 'http://localhost/index.html' },
+        location: { origin: 'http://localhost', protocol: 'http:', href: 'http://localhost/index.html' },
         screen: { availWidth: 1920, availHeight: 1080 },
         document: { title: 'IELTS Practice' },
         postMessage(message) {
@@ -151,6 +152,7 @@ async function main() {
         Date,
         JSON,
         Array,
+        URL,
     };
     sandbox.globalThis = sandbox.window;
 
@@ -210,11 +212,19 @@ async function main() {
     assert.strictEqual(examWindow.closed, false, '窗口状态应保持开启');
 
     const navigateMessage = { type: 'SUITE_NAVIGATE', data: { url: 'http://localhost/p2.html', examId: 'reading-inline-2' } };
-    examWindow._messageListeners.forEach(listener => listener({ data: navigateMessage }));
+    examWindow._messageListeners.forEach(listener => listener({
+        data: navigateMessage,
+        source: parentWindow,
+        origin: parentWindow.location.origin
+    }));
     assert.strictEqual(examWindow.location.href, 'http://localhost/p2.html', '应在标签页内导航至下一篇');
 
     const forceCloseMessage = { type: 'SUITE_FORCE_CLOSE', data: { suiteSessionId } };
-    examWindow._messageListeners.forEach(listener => listener({ data: forceCloseMessage }));
+    examWindow._messageListeners.forEach(listener => listener({
+        data: forceCloseMessage,
+        source: parentWindow,
+        origin: parentWindow.location.origin
+    }));
     assert.strictEqual(examWindow._nativeCloseCalled, true, '强制关闭应调用原生 close');
     assert.strictEqual(examWindow.closed, true, '强制关闭后窗口应标记为关闭');
 

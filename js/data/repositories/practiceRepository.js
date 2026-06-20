@@ -6,6 +6,26 @@
         return Array.isArray(value) ? value : [];
     }
 
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
     class PracticeRepository extends BaseRepository {
         constructor(dataSource, options = {}) {
             super({
@@ -32,7 +52,7 @@
             }
             const normalized = { ...record };
             if (!normalized.id) {
-                normalized.id = `record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                normalized.id = createLocalId('record');
             } else {
                 normalized.id = String(normalized.id);
             }

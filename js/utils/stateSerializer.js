@@ -1,108 +1,188 @@
 /**
- * 状态序列化适配器
- * 解决Set/Map对象无法直接JSON序列化的问题
+ * Safe state serializer for app state persisted in local storage.
+ * Supports Set, Map, and Date while bounding recursive structures and
+ * dropping prototype-pollution keys during serialization and restore.
  */
+const STATE_SERIALIZER_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const STATE_SERIALIZER_MAX_DEPTH = 32;
+const STATE_SERIALIZER_MAX_NODES = 50000;
+const STATE_SERIALIZER_MAX_ARRAY_ITEMS = 5000;
+const STATE_SERIALIZER_MAX_OBJECT_KEYS = 500;
+const STATE_SERIALIZER_MAX_COLLECTION_ITEMS = 5000;
 
 class StateSerializer {
-    /**
-     * 序列化状态值，处理特殊对象类型
-     */
     static serialize(value) {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        // 处理Set对象
-        if (value instanceof Set) {
-            return {
-                __type: 'Set',
-                __value: Array.from(value)
-            };
-        }
-
-        // 处理Map对象
-        if (value instanceof Map) {
-            return {
-                __type: 'Map',
-                __value: Array.from(value.entries())
-            };
-        }
-
-        // 处理Date对象
-        if (value instanceof Date) {
-            return {
-                __type: 'Date',
-                __value: value.toISOString()
-            };
-        }
-
-        // 处理普通对象，递归处理嵌套
-        if (typeof value === 'object') {
-            if (Array.isArray(value)) {
-                return value.map(item => StateSerializer.serialize(item));
-            } else {
-                const serialized = {};
-                for (const [key, val] of Object.entries(value)) {
-                    serialized[key] = StateSerializer.serialize(val);
-                }
-                return serialized;
-            }
-        }
-
-        // 基本类型直接返回
-        return value;
+        return StateSerializer._serialize(value, {
+            nodes: 0,
+            stack: new WeakSet()
+        }, 0);
     }
 
-    /**
-     * 反序列化状态值，恢复特殊对象类型
-     */
     static deserialize(value) {
+        return StateSerializer._deserialize(value, {
+            nodes: 0,
+            stack: new WeakSet()
+        }, 0);
+    }
+
+    static _serialize(value, state, depth) {
         if (value === null || value === undefined) {
             return value;
         }
+        if (typeof value !== 'object') {
+            return value;
+        }
+        if (!StateSerializer.enterTraversal(value, state, depth, 'serialize')) {
+            return null;
+        }
 
-        // 检查是否是特殊类型对象
-        if (typeof value === 'object' && value !== null && '__type' in value) {
-            switch (value.__type) {
-                case 'Set':
-                    return new Set(value.__value);
-                case 'Map':
-                    return new Map(value.__value);
-                case 'Date':
-                    return new Date(value.__value);
-                default:
-                    console.warn(`[StateSerializer] 未知类型: ${value.__type}`);
-                    return value.__value;
+        try {
+            if (value instanceof Set) {
+                return {
+                    __type: 'Set',
+                    __value: Array.from(value)
+                        .slice(0, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                        .map((item) => StateSerializer._serialize(item, state, depth + 1))
+                };
             }
+
+            if (value instanceof Map) {
+                return {
+                    __type: 'Map',
+                    __value: Array.from(value.entries())
+                        .slice(0, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                        .map(([key, item]) => [
+                            StateSerializer._serialize(key, state, depth + 1),
+                            StateSerializer._serialize(item, state, depth + 1)
+                        ])
+                };
+            }
+
+            if (value instanceof Date) {
+                return {
+                    __type: 'Date',
+                    __value: Number.isNaN(value.getTime()) ? null : value.toISOString()
+                };
+            }
+
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, STATE_SERIALIZER_MAX_ARRAY_ITEMS)
+                    .map((item) => StateSerializer._serialize(item, state, depth + 1));
+            }
+
+            const serialized = {};
+            for (const [key, item] of StateSerializer.safeEntries(value).slice(0, STATE_SERIALIZER_MAX_OBJECT_KEYS)) {
+                const safeValue = StateSerializer._serialize(item, state, depth + 1);
+                if (safeValue !== undefined) {
+                    serialized[key] = safeValue;
+                }
+            }
+            return serialized;
+        } finally {
+            StateSerializer.exitTraversal(value, state);
+        }
+    }
+
+    static _deserialize(value, state, depth) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return value;
+        }
+        if (!StateSerializer.enterTraversal(value, state, depth, 'deserialize')) {
+            return null;
         }
 
-        // 处理数组
-        if (Array.isArray(value)) {
-            return value.map(item => StateSerializer.deserialize(item));
-        }
+        try {
+            if (Object.prototype.hasOwnProperty.call(value, '__type')) {
+                const type = typeof value.__type === 'string' ? value.__type : '';
+                if (type === 'Set') {
+                    return new Set(
+                        StateSerializer.normalizeArray(value.__value, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                            .map((item) => StateSerializer._deserialize(item, state, depth + 1))
+                    );
+                }
+                if (type === 'Map') {
+                    return new Map(
+                        StateSerializer.normalizeArray(value.__value, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                            .filter((entry) => Array.isArray(entry) && entry.length >= 2)
+                            .map(([key, item]) => [
+                                StateSerializer._deserialize(key, state, depth + 1),
+                                StateSerializer._deserialize(item, state, depth + 1)
+                            ])
+                    );
+                }
+                if (type === 'Date') {
+                    if (typeof value.__value !== 'string') {
+                        return null;
+                    }
+                    const date = new Date(value.__value);
+                    return Number.isNaN(date.getTime()) ? null : date;
+                }
+                console.warn(`[StateSerializer] Unknown type: ${type}`);
+                return StateSerializer._deserialize(value.__value, state, depth + 1);
+            }
 
-        // 处理普通对象，递归处理嵌套
-        if (typeof value === 'object') {
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, STATE_SERIALIZER_MAX_ARRAY_ITEMS)
+                    .map((item) => StateSerializer._deserialize(item, state, depth + 1));
+            }
+
             const deserialized = {};
-            for (const [key, val] of Object.entries(value)) {
-                deserialized[key] = StateSerializer.deserialize(val);
+            for (const [key, item] of StateSerializer.safeEntries(value).slice(0, STATE_SERIALIZER_MAX_OBJECT_KEYS)) {
+                const safeValue = StateSerializer._deserialize(item, state, depth + 1);
+                if (safeValue !== undefined) {
+                    deserialized[key] = safeValue;
+                }
             }
             return deserialized;
+        } finally {
+            StateSerializer.exitTraversal(value, state);
         }
-
-        // 基本类型直接返回
-        return value;
     }
 
-    /**
-     * 验证序列化/反序列化的一致性
-     */
+    static enterTraversal(value, state, depth, operation) {
+        if (depth > STATE_SERIALIZER_MAX_DEPTH) {
+            throw new Error(`State is too deeply nested to ${operation} safely. Maximum supported depth is ${STATE_SERIALIZER_MAX_DEPTH}.`);
+        }
+        if (state.stack.has(value)) {
+            return false;
+        }
+        state.stack.add(value);
+        state.nodes += 1;
+        if (state.nodes > STATE_SERIALIZER_MAX_NODES) {
+            throw new Error(`State is too large to ${operation} safely. Maximum supported node count is ${STATE_SERIALIZER_MAX_NODES}.`);
+        }
+        return true;
+    }
+
+    static exitTraversal(value, state) {
+        state.stack.delete(value);
+    }
+
+    static isUnsafeKey(key) {
+        return STATE_SERIALIZER_POLLUTION_KEYS.has(String(key));
+    }
+
+    static safeEntries(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return [];
+        }
+        return Object.entries(value).filter(([key]) => !StateSerializer.isUnsafeKey(key));
+    }
+
+    static normalizeArray(value, limit = STATE_SERIALIZER_MAX_ARRAY_ITEMS) {
+        return Array.isArray(value) ? value.slice(0, limit) : [];
+    }
+
     static validate(originalValue) {
         try {
             const serialized = StateSerializer.serialize(originalValue);
             const deserialized = StateSerializer.deserialize(serialized);
 
-            // 对于Set/Map，深度比较内容
             if (originalValue instanceof Set) {
                 const originalArray = Array.from(originalValue);
                 const deserializedArray = Array.from(deserialized);
@@ -115,17 +195,13 @@ class StateSerializer {
                 return JSON.stringify(originalArray) === JSON.stringify(deserializedArray);
             }
 
-            // 其他类型直接比较
             return JSON.stringify(originalValue) === JSON.stringify(deserialized);
         } catch (error) {
-            console.error('[StateSerializer] 验证失败:', error);
+            console.error('[StateSerializer] Validation failed:', error);
             return false;
         }
     }
 
-    /**
-     * 创建存储适配器，包装storage对象
-     */
     static createStorageAdapter(baseStorage) {
         return {
             async get(key, defaultValue = null) {
@@ -133,7 +209,7 @@ class StateSerializer {
                     const value = await baseStorage.get(key, defaultValue);
                     return StateSerializer.deserialize(value);
                 } catch (error) {
-                    console.error(`[StateSerializer] 获取数据失败 ${key}:`, error);
+                    console.error(`[StateSerializer] get failed ${key}:`, error);
                     return defaultValue;
                 }
             },
@@ -143,7 +219,7 @@ class StateSerializer {
                     const serializedValue = StateSerializer.serialize(value);
                     return await baseStorage.set(key, serializedValue);
                 } catch (error) {
-                    console.error(`[StateSerializer] 设置数据失败 ${key}:`, error);
+                    console.error(`[StateSerializer] set failed ${key}:`, error);
                     throw error;
                 }
             },
@@ -152,7 +228,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.remove(key);
                 } catch (error) {
-                    console.error(`[StateSerializer] 删除数据失败 ${key}:`, error);
+                    console.error(`[StateSerializer] remove failed ${key}:`, error);
                     throw error;
                 }
             },
@@ -161,7 +237,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.clear();
                 } catch (error) {
-                    console.error('[StateSerializer] 清空存储失败:', error);
+                    console.error('[StateSerializer] clear failed:', error);
                     throw error;
                 }
             }
@@ -169,7 +245,6 @@ class StateSerializer {
     }
 }
 
-// 导出供使用
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = StateSerializer;
 }

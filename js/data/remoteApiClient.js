@@ -24,6 +24,12 @@
             return Boolean(this.user && this.user.id);
         }
 
+        clearAuthState() {
+            this.user = null;
+            this.csrfToken = null;
+            this.pendingTotp = null;
+        }
+
         async getAuthState() {
             if (!this.fetchImpl) {
                 return { available: false, authenticated: false, user: null };
@@ -32,9 +38,7 @@
                 const response = await this._fetch('/api/auth/me', { method: 'GET' });
                 this.available = true;
                 if (response.status === 401) {
-                    this.user = null;
-                    this.csrfToken = null;
-                    this.pendingTotp = null;
+                    this.clearAuthState();
                     return { available: true, authenticated: false, user: null };
                 }
                 const payload = await this._parseJson(response);
@@ -46,7 +50,7 @@
                 }
                 if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'user')) {
                     this.available = false;
-                    this.user = null;
+                    this.clearAuthState();
                     return { available: false, authenticated: false, user: null };
                 }
                 this.user = payload.user || null;
@@ -59,8 +63,7 @@
                     throw error;
                 }
                 this.available = false;
-                this.user = null;
-                this.pendingTotp = null;
+                this.clearAuthState();
                 return { available: false, authenticated: false, user: null, error };
             }
         }
@@ -144,8 +147,11 @@
             return payload;
         }
 
-        async regenerateTotpRecoveryCodes() {
-            return this.request('/api/auth/totp/recovery-codes', { method: 'POST' });
+        async regenerateTotpRecoveryCodes(token) {
+            return this.request('/api/auth/totp/recovery-codes', {
+                method: 'POST',
+                body: { token }
+            });
         }
 
         async disableTotp(password, token) {
@@ -153,6 +159,10 @@
                 method: 'POST',
                 body: { password, token }
             });
+            this.user = payload.user || this.user;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
@@ -185,19 +195,23 @@
                 method: 'DELETE',
                 body: { password, confirm }
             });
-            this.user = null;
-            this.csrfToken = null;
-            this.pendingTotp = null;
+            this.clearAuthState();
             return payload;
         }
 
         async logout() {
-            const payload = await this.request('/api/auth/logout', {
-                method: 'POST'
-            });
-            this.user = null;
-            this.csrfToken = null;
-            this.pendingTotp = null;
+            let payload;
+            try {
+                payload = await this.request('/api/auth/logout', {
+                    method: 'POST'
+                });
+            } catch (error) {
+                if (!(error instanceof RemoteApiError) || error.status !== 401) {
+                    throw error;
+                }
+                payload = { ok: true, alreadyLoggedOut: true };
+            }
+            this.clearAuthState();
             return payload;
         }
 
@@ -256,9 +270,10 @@
             this.available = true;
             const payload = await this._parseJson(response);
             if (response.status === 401) {
-                this.user = null;
+                this.clearAuthState();
+            }
+            if (response.status === 403 && payload?.error === 'CSRF token invalid') {
                 this.csrfToken = null;
-                this.pendingTotp = null;
             }
             if (!response.ok) {
                 throw new RemoteApiError(payload?.error || `Request failed with ${response.status}`, {

@@ -1,3 +1,19 @@
+function sanitizeFilenamePart(value, fallback = 'record') {
+    const safeValue = String(value || '')
+        .replace(/[\x00-\x1f\x7f\\/:"*?<>|]+/g, '_')
+        .replace(/\s+/g, '_')
+        .replace(/^\.+/, '')
+        .slice(0, 80);
+    return safeValue || fallback;
+}
+
+const MAX_MODAL_ANSWER_ROWS = 500;
+const MAX_MODAL_ANSWER_ARRAY_ITEMS = 50;
+const MAX_MODAL_ANSWER_TEXT_LENGTH = 200;
+const MAX_MODAL_QUESTION_LABEL_LENGTH = 80;
+const MAX_MODAL_JSON_TEXT_LENGTH = 1000;
+const MAX_MODAL_ANSWER_DEPTH = 6;
+
 class PracticeRecordModal {
     constructor() {
         this.modalId = 'practice-record-modal';
@@ -164,10 +180,11 @@ class PracticeRecordModal {
         const formattedDuration = this.formatDuration(durationSeconds);
         const score = this.resolveScore(record);
         const accuracy = this.resolveAccuracy(record);
-        const accuracyPercent = accuracy != null ? Math.round(accuracy * 100) : null;
+        const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
+        const accuracyPercent = safeAccuracy != null ? Math.round(safeAccuracy * 100) : null;
         const summaryCounts = this.getEntriesSummary(this.collectAllEntries(record));
-        const incorrectCount = summaryCounts.incorrect || 0;
-        const unansweredCount = summaryCounts.unanswered || 0;
+        const incorrectCount = this.normalizeDisplayCount(summaryCounts.incorrect);
+        const unansweredCount = this.normalizeDisplayCount(summaryCounts.unanswered);
 
         // 多套题模式的额外信息
         let multiSuiteInfo = '';
@@ -177,7 +194,7 @@ class PracticeRecordModal {
             multiSuiteInfo = `
                 <div class="meta-item">
                     <span class="meta-label">\u5b8c\u6210\u5957\u9898\uff1a</span>
-                    <span class="meta-value">${suiteCount}/${expectedCount}</span>
+                    <span class="meta-value">${this.escapeHtml(suiteCount)}/${this.escapeHtml(expectedCount)}</span>
                 </div>
             `;
         }
@@ -397,9 +414,9 @@ class PracticeRecordModal {
                     // 为多套题模式添加套题得分信息
                     let scoreInfo = '';
                     if (record.multiSuite === true && entry.scoreInfo) {
-                        const correct = entry.scoreInfo.correct || 0;
-                        const total = entry.scoreInfo.total || 0;
-                        const percentage = entry.scoreInfo.percentage || 0;
+                        const correct = this.escapeHtml(entry.scoreInfo.correct || 0);
+                        const total = this.escapeHtml(entry.scoreInfo.total || 0);
+                        const percentage = this.escapeHtml(entry.scoreInfo.percentage || 0);
                         scoreInfo = `<div class="suite-score-info">得分: ${correct}/${total} (${percentage}%)</div>`;
                     }
 
@@ -506,8 +523,18 @@ class PracticeRecordModal {
         return { total, correct, incorrect, unanswered };
     }
 
+    normalizeDisplayCount(value) {
+        const count = Number(value);
+        if (!Number.isFinite(count) || count < 0) {
+            return 0;
+        }
+        return Math.trunc(count);
+    }
+
     renderAnswersSection(entries, options = {}) {
-        const normalizedEntries = Array.isArray(entries) ? entries : [];
+        const normalizedEntries = Array.isArray(entries)
+            ? entries.slice(0, MAX_MODAL_ANSWER_ROWS)
+            : [];
         if (normalizedEntries.length === 0) {
             return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
         }
@@ -535,10 +562,17 @@ class PracticeRecordModal {
         }
 
         const rows = entries
+            .slice(0, MAX_MODAL_ANSWER_ROWS)
             .map((entry) => {
-                const questionLabel = this.escapeHtml(entry.displayNumber || '');
-                const userDisplay = this.escapeHtml(entry.userAnswer || '\u672a\u4f5c\u7b54');
-                const correctDisplay = this.escapeHtml(entry.correctAnswer || '\u65e0');
+                const rawUserAnswer = entry.userAnswer == null || entry.userAnswer === ''
+                    ? '\u672a\u4f5c\u7b54'
+                    : entry.userAnswer;
+                const rawCorrectAnswer = entry.correctAnswer == null || entry.correctAnswer === ''
+                    ? '\u65e0'
+                    : entry.correctAnswer;
+                const questionLabel = this.escapeHtml(this.truncateAnswer(entry.displayNumber || '', MAX_MODAL_QUESTION_LABEL_LENGTH));
+                const userDisplay = this.escapeHtml(this.truncateAnswer(rawUserAnswer, MAX_MODAL_ANSWER_TEXT_LENGTH));
+                const correctDisplay = this.escapeHtml(this.truncateAnswer(rawCorrectAnswer, MAX_MODAL_ANSWER_TEXT_LENGTH));
 
                 let resultIcon = '\u2753';
                 let resultClass = 'unknown';
@@ -600,6 +634,7 @@ class PracticeRecordModal {
         }
 
         const rows = questionNumbers
+            .slice(0, MAX_MODAL_ANSWER_ROWS)
             .map((questionNumber) => {
                 const userAnswer = this.getLegacyUserAnswer(answers, questionNumber);
                 const correctAnswer = this.getLegacyCorrectAnswer(correctAnswers, questionNumber);
@@ -648,9 +683,8 @@ class PracticeRecordModal {
             return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
         }
 
-        const cloneDeep = (data) => JSON.parse(JSON.stringify(data || {}));
         const normalized = (() => {
-            const comp = cloneDeep(answerComparison);
+            const comp = this.safeCloneObject(answerComparison);
             const letterKeys = Object.keys(comp).filter(key => /^q[a-z]$/i.test(key)).sort();
             const numericKeys = Object.keys(comp)
                 .filter(key => /q\d+$/i.test(key))
@@ -708,14 +742,16 @@ class PracticeRecordModal {
             return comp;
         })();
 
-        const sortedKeys = Object.keys(normalized).sort((a, b) => {
-            const numA = parseInt(a.replace(/\D/g, ''), 10);
-            const numB = parseInt(b.replace(/\D/g, ''), 10);
-            if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
-                return numA - numB;
-            }
-            return a.localeCompare(b);
-        });
+        const sortedKeys = Object.keys(normalized)
+            .sort((a, b) => {
+                const numA = parseInt(a.replace(/\D/g, ''), 10);
+                const numB = parseInt(b.replace(/\D/g, ''), 10);
+                if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+                    return numA - numB;
+                }
+                return a.localeCompare(b);
+            })
+            .slice(0, MAX_MODAL_ANSWER_ROWS);
 
         const sanitizedRows = sortedKeys
             .map((key) => {
@@ -792,19 +828,23 @@ class PracticeRecordModal {
         `;
     }
 
-    normalizeAnswerDisplay(value) {
+    normalizeAnswerDisplay(value, depth = 0) {
         if (value === undefined || value === null) {
             return '';
         }
+        if (depth > MAX_MODAL_ANSWER_DEPTH) {
+            return '';
+        }
         if (typeof value === 'string') {
-            return value.trim();
+            return this.limitDisplayText(value.trim(), MAX_MODAL_JSON_TEXT_LENGTH);
         }
         if (typeof value === 'number' || typeof value === 'boolean') {
             return String(value).trim();
         }
         if (Array.isArray(value)) {
             return value
-                .map((item) => this.normalizeAnswerDisplay(item))
+                .slice(0, MAX_MODAL_ANSWER_ARRAY_ITEMS)
+                .map((item) => this.normalizeAnswerDisplay(item, depth + 1))
                 .filter(Boolean)
                 .join(',');
         }
@@ -822,7 +862,7 @@ class PracticeRecordModal {
                 return value.textContent.trim();
             }
             try {
-                return JSON.stringify(value);
+                return this.limitDisplayText(JSON.stringify(value), MAX_MODAL_JSON_TEXT_LENGTH);
             } catch (_) {
                 return String(value);
             }
@@ -849,7 +889,7 @@ class PracticeRecordModal {
     }
 
     mergeComparisonWithCorrections(record) {
-        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const comparison = this.safeCloneObject(record.answerComparison || {});
         const sources = [
             record.correctAnswers || {},
             record.realData && record.realData.correctAnswers,
@@ -1014,7 +1054,9 @@ class PracticeRecordModal {
             }
         });
 
-        return Array.from(allQuestions).sort((a, b) => a - b);
+        return Array.from(allQuestions)
+            .sort((a, b) => a - b)
+            .slice(0, MAX_MODAL_ANSWER_ROWS);
     }
 
     extractLegacyNumber(key) {
@@ -1062,8 +1104,11 @@ class PracticeRecordModal {
         return normalize(userAnswer) === normalize(correctAnswer);
     }
 
-    normalizeAnswerValue(value) {
+    normalizeAnswerValue(value, depth = 0) {
         if (value === null || value === undefined) {
+            return '';
+        }
+        if (depth > MAX_MODAL_ANSWER_DEPTH) {
             return '';
         }
 
@@ -1073,7 +1118,8 @@ class PracticeRecordModal {
 
         if (Array.isArray(value)) {
             return value
-                .map(item => this.normalizeAnswerValue(item))
+                .slice(0, MAX_MODAL_ANSWER_ARRAY_ITEMS)
+                .map(item => this.normalizeAnswerValue(item, depth + 1))
                 .filter(Boolean)
                 .join(', ');
         }
@@ -1095,7 +1141,7 @@ class PracticeRecordModal {
             try {
                 const json = JSON.stringify(value);
                 if (json && json !== '{}') {
-                    return json;
+                    return this.limitDisplayText(json, MAX_MODAL_JSON_TEXT_LENGTH);
                 }
             } catch (_) {
                 // ignore JSON errors and fallback
@@ -1118,6 +1164,26 @@ class PracticeRecordModal {
             return normalized;
         }
         return `${normalized.substring(0, Math.max(0, maxLength - 3))}...`;
+    }
+
+    limitDisplayText(value, maxLength = MAX_MODAL_ANSWER_TEXT_LENGTH) {
+        const text = String(value == null ? '' : value);
+        if (text.length <= maxLength) {
+            return text;
+        }
+        return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+    }
+
+    safeCloneObject(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return {};
+        }
+        try {
+            const cloned = JSON.parse(JSON.stringify(value));
+            return cloned && typeof cloned === 'object' && !Array.isArray(cloned) ? cloned : {};
+        } catch (_) {
+            return {};
+        }
     }
 
     escapeHtml(value) {
@@ -1166,11 +1232,11 @@ class PracticeRecordModal {
             const url = URL.createObjectURL(blob);
             const anchor = document.createElement('a');
             anchor.href = url;
-            anchor.download = `practice_record_${recordId}_${new Date().toISOString().split('T')[0]}.md`;
+            anchor.download = `practice_record_${sanitizeFilenamePart(recordId)}_${new Date().toISOString().split('T')[0]}.md`;
             document.body.appendChild(anchor);
             anchor.click();
             document.body.removeChild(anchor);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
 
             if (typeof window.showMessage === 'function') {
                 window.showMessage('\u7ec3\u4e60\u8bb0\u5f55\u5df2\u5bfc\u51fa', 'success');

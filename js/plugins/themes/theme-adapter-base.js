@@ -35,11 +35,46 @@
   }
 
   function hasAllowedMessageOrigin(event) {
-    if (!event || !event.origin || event.origin === 'null') {
-      return true;
+    if (!event) {
+      return false;
+    }
+    if (!event.origin || event.origin === 'null') {
+      return Boolean(window.location && window.location.protocol === 'file:');
     }
     const origin = window.location && window.location.origin;
     return Boolean(origin && origin !== 'null' && event.origin === origin);
+  }
+
+  function resolveTrustedResourceUrl(rawUrl) {
+    if (!rawUrl) {
+      return '';
+    }
+    try {
+      const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+      const resolved = new URL(String(rawUrl), baseHref);
+      const protocol = (resolved.protocol || '').toLowerCase();
+
+      if (protocol === 'http:' || protocol === 'https:') {
+        const origin = window.location && window.location.origin;
+        return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+      }
+
+      if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+        return resolved.href;
+      }
+    } catch (_) {
+      return '';
+    }
+    return '';
+  }
+
+  function safeWindowName(prefix, value) {
+    const safePrefix = String(prefix || 'window').replace(/[^\w-]/g, '_').slice(0, 32) || 'window';
+    const safeValue = String(value || Date.now())
+      .replace(/[^\w-]/g, '_')
+      .replace(/_+/g, '_')
+      .slice(0, 80) || 'target';
+    return `${safePrefix}_${safeValue}`;
   }
 
   function extractPayloadSessionId(payload) {
@@ -617,13 +652,19 @@
       }
 
       // 计算窗口特性
+      const trustedPath = resolveTrustedResourceUrl(fullPath);
+      if (!trustedPath) {
+        this.showMessage('Resource path is not trusted or supported', 'error');
+        return null;
+      }
+
       const windowFeatures = options.windowFeatures || this._calculateWindowFeatures();
-      const windowName = options.windowName || `exam_${exam.id}`;
+      const windowName = safeWindowName('exam', options.windowName || exam.id);
 
       // 打开窗口
       let examWindow = null;
       try {
-        examWindow = window.open(fullPath, windowName, windowFeatures);
+        examWindow = window.open(trustedPath, windowName, windowFeatures);
       } catch (error) {
         console.error('[ThemeAdapterBase] window.open 失败:', error);
       }
@@ -660,9 +701,15 @@
       }
 
       // 优先使用主系统的 PDF 打开函数
+      const trustedPath = resolveTrustedResourceUrl(fullPath);
+      if (!trustedPath) {
+        this.showMessage('PDF path is not trusted or supported', 'error');
+        return null;
+      }
+
       if (typeof window.openPDFSafely === 'function') {
         try {
-          window.openPDFSafely(fullPath, exam.title);
+          window.openPDFSafely(trustedPath, exam.title);
           return null;
         } catch (error) {
           console.warn('[ThemeAdapterBase] openPDFSafely 失败:', error);
@@ -670,7 +717,10 @@
       }
 
       // 回退到直接打开
-      const pdfWindow = window.open(fullPath, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes');
+      const pdfWindow = window.open(trustedPath, safeWindowName('pdf', exam.id), 'width=1000,height=800,scrollbars=yes,resizable=yes,noopener,noreferrer');
+      if (pdfWindow) {
+        try { pdfWindow.opener = null; } catch (_) {}
+      }
       if (!pdfWindow) {
         this.showMessage('无法打开 PDF，请检查弹窗设置', 'error');
         return null;

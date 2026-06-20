@@ -158,11 +158,11 @@ function baseSeed() {
         listeningOld,
         records,
         storage: {
-            active_exam_index_key: 'custom_active',
-            custom_active: [readingA, listeningOld],
+            active_exam_index_key: 'exam_index_custom_active',
+            exam_index_custom_active: [readingA, listeningOld],
             exam_index: [readingA, listeningOld],
             exam_index_configurations: [
-                { name: '当前题库', key: 'custom_active', examCount: 2, timestamp: 1 },
+                { name: '当前题库', key: 'exam_index_custom_active', examCount: 2, timestamp: 1 },
                 { name: '默认题库', key: 'exam_index', examCount: 2, timestamp: 1 }
             ],
             practice_records: records
@@ -200,9 +200,9 @@ async function testFullListeningCreatesSnapshotAndKeepsReading() {
         activate: true
     });
 
-    assert.notStrictEqual(created.key, 'custom_active', '导入必须创建新配置，不能污染当前配置');
+    assert.notStrictEqual(created.key, 'exam_index_custom_active', '导入必须创建新配置，不能污染当前配置');
     assert.strictEqual(await window.storage.get('active_exam_index_key'), created.key, '新配置应成为活动配置');
-    const oldConfig = await window.storage.get('custom_active');
+    const oldConfig = await window.storage.get('exam_index_custom_active');
     assert.deepStrictEqual(oldConfig, [seed.readingA, seed.listeningOld], '旧配置索引必须原样保留');
     const next = await window.storage.get(created.key);
     assert(next.some((exam) => exam.id === 'reading-a'), '听力全量导入必须继承阅读索引');
@@ -241,7 +241,7 @@ async function testFullReadingCreatesSnapshotAndKeepsListening() {
     assert(next.some((exam) => exam.id === 'reading-new'), '阅读全量导入必须进入新配置');
     assert(!next.some((exam) => exam.id === 'reading-a'), '阅读全量导入应替换旧阅读索引');
     assert(next.some((exam) => exam.id === 'listening-old'), '阅读全量导入必须继承听力索引');
-    assert.deepStrictEqual(await window.storage.get('custom_active'), [seed.readingA, seed.listeningOld], '旧配置不能被阅读全量改写');
+    assert.deepStrictEqual(await window.storage.get('exam_index_custom_active'), [seed.readingA, seed.listeningOld], '旧配置不能被阅读全量改写');
     assert.deepStrictEqual(await window.storage.get('practice_records'), seed.records, '阅读导入不能修改练习记录');
 
     recordResult('阅读全量导入创建新配置并继承听力', { key: created.key, counts: created.counts });
@@ -273,7 +273,7 @@ async function testIncrementalCreatesSnapshotAndDedupes() {
         activate: true
     });
 
-    assert.notStrictEqual(created.key, 'custom_active', '增量导入也必须创建新配置');
+    assert.notStrictEqual(created.key, 'exam_index_custom_active', '增量导入也必须创建新配置');
     assert.strictEqual(created.merge.updated, 1, '同 importKey 的题源应更新');
     assert.strictEqual(created.merge.added, 1, '新 importKey 的题源应追加');
     const next = await window.storage.get(created.key);
@@ -281,7 +281,7 @@ async function testIncrementalCreatesSnapshotAndDedupes() {
     assert(next.some((exam) => exam.title === 'P2 Listening Updated'), '增量导入应更新旧题');
     assert(next.some((exam) => exam.id === 'listening-extra'), '增量导入应追加新题');
     assert(!next.some((exam) => exam.id === 'listening-old'), '同 importKey 旧题不应重复保留');
-    assert.deepStrictEqual(await window.storage.get('custom_active'), [seed.readingA, seed.listeningOld], '增量导入不能改写原活动配置');
+    assert.deepStrictEqual(await window.storage.get('exam_index_custom_active'), [seed.readingA, seed.listeningOld], '增量导入不能改写原活动配置');
     assert.deepStrictEqual(await window.storage.get('practice_records'), seed.records, '增量导入不能修改练习记录');
 
     recordResult('增量导入创建新配置并按 importKey 去重更新', { key: created.key, merge: created.merge });
@@ -289,7 +289,7 @@ async function testIncrementalCreatesSnapshotAndDedupes() {
 
 async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const seed = baseSeed();
-    seed.storage.alt_config = [{
+    seed.storage.exam_index_alt_config = [{
         id: 'listening-alt',
         examId: 'listening-alt',
         type: 'listening',
@@ -298,23 +298,23 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
         path: 'Alt/',
         filename: 'alt.html'
     }];
-    seed.storage.exam_index_configurations.push({ name: 'Alt', key: 'alt_config', examCount: 1, timestamp: 2 });
+    seed.storage.exam_index_configurations.push({ name: 'Alt', key: 'exam_index_alt_config', examCount: 1, timestamp: 2 });
 
     const { window } = createHarness(seed);
     const manager = window.LibraryManager.getInstance();
     const before = await window.storage.get('practice_records');
-    const applied = await manager.applyLibraryConfiguration('alt_config');
+    const applied = await manager.applyLibraryConfiguration('exam_index_alt_config');
 
     assert.strictEqual(applied, true, '配置切换应该成功');
-    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'alt_config', '活动配置应切换到目标配置');
+    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'exam_index_alt_config', '活动配置应切换到目标配置');
     assert.deepStrictEqual(await window.storage.get('practice_records'), before, '配置切换不能触碰练习记录');
 
-    recordResult('切换题库配置不触碰练习记录', { activeKey: 'alt_config' });
+    recordResult('切换题库配置不触碰练习记录', { activeKey: 'exam_index_alt_config' });
 }
 
 async function testDeleteInactiveConfigurationCleansDatasetAndPathMap() {
     const seed = baseSeed();
-    seed.storage.delete_me = [{
+    seed.storage.exam_index_delete_me = [{
         id: 'delete-me-listening',
         examId: 'delete-me-listening',
         type: 'listening',
@@ -323,26 +323,26 @@ async function testDeleteInactiveConfigurationCleansDatasetAndPathMap() {
         path: 'DeleteMe/',
         filename: 'delete.html'
     }];
-    seed.storage['exam_path_map__delete_me'] = {
+    seed.storage['exam_path_map__exam_index_delete_me'] = {
         reading: { root: 'ReadingCustom/', exceptions: {} },
         listening: { root: 'DeleteMe/', exceptions: {} }
     };
-    seed.storage.exam_index_configurations.push({ name: 'Delete Me', key: 'delete_me', examCount: 1, timestamp: 3 });
+    seed.storage.exam_index_configurations.push({ name: 'Delete Me', key: 'exam_index_delete_me', examCount: 1, timestamp: 3 });
 
     const { window } = createHarness(seed);
     const manager = window.LibraryManager.getInstance();
     const before = await window.storage.get('practice_records');
-    const result = await manager.deleteLibraryConfiguration('delete_me');
+    const result = await manager.deleteLibraryConfiguration('exam_index_delete_me');
 
     assert.strictEqual(result.deleted, true, '非活动自定义配置应允许删除');
-    assert.strictEqual(await window.storage.get('delete_me', null), null, '删除配置时必须删除对应题库数据集');
-    assert.strictEqual(await window.storage.get('exam_path_map__delete_me', null), null, '删除配置时必须清理对应 path map');
+    assert.strictEqual(await window.storage.get('exam_index_delete_me', null), null, '删除配置时必须删除对应题库数据集');
+    assert.strictEqual(await window.storage.get('exam_path_map__exam_index_delete_me', null), null, '删除配置时必须清理对应 path map');
     const configs = await window.storage.get('exam_index_configurations', []);
-    assert(!configs.some((config) => config && config.key === 'delete_me'), '配置列表中不应残留已删除配置');
+    assert(!configs.some((config) => config && config.key === 'exam_index_delete_me'), '配置列表中不应残留已删除配置');
     assert.deepStrictEqual(await window.storage.get('practice_records'), before, '删除题库配置不能删除练习记录');
-    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'custom_active', '删除非活动配置不能改变当前活动配置');
+    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'exam_index_custom_active', '删除非活动配置不能改变当前活动配置');
 
-    recordResult('删除非活动配置会清理数据集和 path map 且保留练习记录', { key: 'delete_me' });
+    recordResult('删除非活动配置会清理数据集和 path map 且保留练习记录', { key: 'exam_index_delete_me' });
 }
 
 async function testDeleteConfigurationGuardsDefaultAndActive() {
@@ -353,7 +353,7 @@ async function testDeleteConfigurationGuardsDefaultAndActive() {
     const beforeRecords = await window.storage.get('practice_records');
 
     const defaultResult = await manager.deleteLibraryConfiguration('exam_index');
-    const activeResult = await manager.deleteLibraryConfiguration('custom_active');
+    const activeResult = await manager.deleteLibraryConfiguration('exam_index_custom_active');
 
     assert.strictEqual(defaultResult.deleted, false, '默认配置不能删除');
     assert.strictEqual(defaultResult.reason, 'default-config', '默认配置删除应返回明确原因');
@@ -365,6 +365,123 @@ async function testDeleteConfigurationGuardsDefaultAndActive() {
     recordResult('删除配置保护默认和当前活动配置', {
         defaultReason: defaultResult.reason,
         activeReason: activeResult.reason
+    });
+}
+
+async function testRejectsPollutedLibraryConfigKeys() {
+    const safeReading = {
+        id: 'safe-reading',
+        examId: 'safe-reading',
+        type: 'reading',
+        title: 'Safe Reading',
+        category: 'P1',
+        path: 'Reading/safe/',
+        filename: 'safe.html'
+    };
+    const pollutedExam = {
+        id: 'polluted-backup-exam',
+        examId: 'polluted-backup-exam',
+        type: 'reading',
+        title: 'Polluted Backup',
+        category: 'P4',
+        path: 'Polluted/',
+        filename: 'polluted.html'
+    };
+    const { window } = createHarness({
+        storage: {
+            active_exam_index_key: 'manual_backups',
+            exam_index: [safeReading],
+            manual_backups: [pollutedExam],
+            exam_path_map__manual_backups: {
+                reading: { root: 'https://attacker.example/', exceptions: {} },
+                listening: { root: '', exceptions: {} }
+            },
+            exam_index_configurations: [
+                { name: 'Default', key: 'exam_index', examCount: 1, timestamp: 1 }
+            ],
+            practice_records: []
+        },
+        completeExamIndex: [safeReading],
+        listeningExamIndex: []
+    });
+    const manager = window.LibraryManager.getInstance();
+
+    const loaded = await manager.loadActiveLibrary(false);
+    assert(loaded.some((exam) => exam.id === 'safe-reading'), 'invalid active key should fall back to the default library');
+    assert(!loaded.some((exam) => exam.id === 'polluted-backup-exam'), 'persistent non-library arrays must not be treated as exam indexes');
+    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'exam_index', 'fallback should repair the active library key');
+
+    const applied = await manager.applyLibraryConfiguration('manual_backups');
+    assert.strictEqual(applied, false, 'direct application of non-library storage keys should be rejected');
+    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'exam_index', 'rejected key must not become active');
+
+    const switched = await window.LibraryManager.switchLibraryConfig('manual_backups');
+    assert.strictEqual(switched, false, 'global switch helper should also reject explicit non-library storage keys');
+    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'exam_index', 'rejected global switch must not change the active key');
+
+    recordResult('polluted library config keys are rejected', { activeKey: 'exam_index' });
+}
+
+async function testSanitizesLibraryConfigurationMetadata() {
+    const seed = baseSeed();
+    seed.storage.exam_index_configurations.push(JSON.parse(`{
+        "name": "Polluted",
+        "key": "exam_index_polluted_existing",
+        "examCount": 1,
+        "timestamp": 1,
+        "__proto__": { "polluted": true },
+        "constructor": { "prototype": { "polluted": true } },
+        "safe": {
+            "prototype": { "polluted": true },
+            "label": "keep"
+        }
+    }`));
+    const { window } = createHarness(seed);
+    const manager = window.LibraryManager.getInstance();
+    const metadata = JSON.parse(`{
+        "sourceType": "file-picker",
+        "__proto__": { "polluted": true },
+        "constructor": { "prototype": { "polluted": true } },
+        "lastImport": {
+            "label": "safe",
+            "prototype": { "polluted": true }
+        },
+        "longText": "${'x'.repeat(1200)}"
+    }`);
+    const sharedTags = ['alpha', 'beta'];
+    metadata.sharedTagsA = sharedTags;
+    metadata.sharedTagsB = sharedTags;
+    metadata.self = metadata;
+
+    const saved = await manager.saveLibraryConfiguration(
+        'Unsafe metadata',
+        'exam_index_sanitized_config',
+        3,
+        metadata
+    );
+
+    assert.strictEqual(saved, true, 'library config save should succeed after sanitizing metadata');
+    assert.strictEqual(Object.prototype.polluted, undefined, 'unsafe metadata must not pollute Object.prototype');
+    const configs = await window.storage.get('exam_index_configurations', []);
+    const created = configs.find((config) => config && config.key === 'exam_index_sanitized_config');
+    const existing = configs.find((config) => config && config.key === 'exam_index_polluted_existing');
+    assert(created, 'new sanitized config should be stored');
+    assert(existing, 'existing valid config should be preserved after sanitization');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(created, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(created, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(created.lastImport, 'prototype'), false);
+    assert.strictEqual(created.longText.length, 1000, 'metadata strings should be bounded before storage');
+    assert.deepStrictEqual(created.sharedTagsA, ['alpha', 'beta']);
+    assert.deepStrictEqual(created.sharedTagsB, ['alpha', 'beta']);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(created, 'self'), false, 'cyclic metadata should be dropped');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(existing, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(existing, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(existing.safe, 'prototype'), false);
+    assert.strictEqual(existing.safe.label, 'keep');
+
+    recordResult('library configuration metadata is sanitized before storage', {
+        created: created.key,
+        existing: existing.key
     });
 }
 
@@ -489,6 +606,8 @@ async function main() {
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
         await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
         await testDeleteConfigurationGuardsDefaultAndActive();
+        await testRejectsPollutedLibraryConfigKeys();
+        await testSanitizesLibraryConfigurationMetadata();
         await testDefaultLibrarySkipsListeningWithoutManifest();
         await testDefaultLibraryKeepsListeningWithManifest();
         await testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing();

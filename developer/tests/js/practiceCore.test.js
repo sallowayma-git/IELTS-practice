@@ -100,7 +100,7 @@ async function testCompletionIngestion(PracticeCore) {
     assert.strictEqual(record.answers.length, 2);
     assert.strictEqual(record.correctAnswerMap.q1, 'A');
     assert.strictEqual(record.metadata.category, 'P1');
-    assert.deepStrictEqual(record.highlights, highlights, '单题记录应保留回顾高亮');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(record.highlights)), highlights, '单题记录应保留回顾高亮');
     assert.strictEqual(record.scrollY, 360, '单题记录应保留滚动位置');
     recordResult('PracticeCore 完成负载入站', true, { id: record.id, metadata: record.metadata });
 }
@@ -126,6 +126,62 @@ async function testAnswerComparisonKeepsListeningCandidates(PracticeCore) {
         canonicalAnswer: 'accommodation'
     });
     recordResult('PracticeCore 答案比较保留听力候选答案', true, q12);
+}
+
+async function testClonePlainObjectGuardsUntrustedPayloads(PracticeCore) {
+    const polluted = JSON.parse('{"safe":"ok","__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},"nested":{"prototype":{"polluted":true}}}');
+    polluted.nested.text = 'x'.repeat(5000);
+
+    const clone = PracticeCore.contracts.clonePlainObject(polluted);
+
+    assert.strictEqual(Object.prototype.polluted, undefined);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(clone, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(clone, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(clone.nested, 'prototype'), false);
+    assert.strictEqual(clone.nested.text.length, 4000);
+
+    const cyclic = { id: 'cycle' };
+    cyclic.self = cyclic;
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(PracticeCore.contracts.clonePlainObject(cyclic))), { id: 'cycle' });
+
+    const arrayClone = PracticeCore.contracts.clonePlainObject(Array.from({ length: 1100 }, (_, index) => index));
+    assert.strictEqual(arrayClone.length, 1000);
+
+    recordResult('PracticeCore clone guards untrusted payloads', true, {
+        textLength: clone.nested.text.length,
+        arrayLength: arrayClone.length
+    });
+}
+
+async function testCompletionIngestionStripsPollutionKeys(PracticeCore) {
+    const pollutedScoreInfo = JSON.parse('{"correct":1,"total":1,"constructor":{"prototype":{"polluted":true}}}');
+    const pollutedRealData = JSON.parse('{"__proto__":{"polluted":true},"answerComparison":{"q1":{"userAnswer":"A","correctAnswer":"A","isCorrect":true,"prototype":{"polluted":true}}}}');
+
+    const record = PracticeCore.ingestor.fromCompletion({
+        type: 'practice_complete',
+        data: {
+            examId: 'reading-pollution-guard',
+            sessionId: 'session-pollution-guard',
+            title: 'Pollution Guard',
+            answers: { q1: 'A' },
+            correctAnswers: { q1: 'A' },
+            scoreInfo: pollutedScoreInfo,
+            realData: pollutedRealData,
+            metadata: JSON.parse('{"type":"reading","__proto__":{"polluted":true}}')
+        }
+    });
+
+    assert(record, 'pollution guard record should be created');
+    assert.strictEqual(Object.prototype.polluted, undefined);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.scoreInfo, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.realData, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.metadata, '__proto__'), false);
+    assert.strictEqual(record.realData.polluted, undefined);
+
+    recordResult('PracticeCore completion ingestion strips pollution keys', true, {
+        recordId: record.id,
+        scoreInfoKeys: Object.keys(record.scoreInfo)
+    });
 }
 
 async function testStoreWritePath(PracticeCore, practiceState, metaState) {
@@ -205,6 +261,8 @@ async function main() {
         await testProtocolNormalization(PracticeCore);
         await testCompletionIngestion(PracticeCore);
         await testAnswerComparisonKeepsListeningCandidates(PracticeCore);
+        await testClonePlainObjectGuardsUntrustedPayloads(PracticeCore);
+        await testCompletionIngestionStripsPollutionKeys(PracticeCore);
         await testStoreWritePath(PracticeCore, practiceState, metaState);
 
         const summary = {

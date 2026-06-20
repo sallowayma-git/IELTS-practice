@@ -6,6 +6,26 @@
         return Array.isArray(value) ? value : [];
     }
 
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
     class BackupRepository extends BaseRepository {
         constructor(dataSource, options = {}) {
             super({
@@ -31,7 +51,7 @@
                 throw new Error('备份数据必须是对象');
             }
             const normalized = { ...backup };
-            normalized.id = normalized.id ? String(normalized.id) : `backup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            normalized.id = normalized.id ? String(normalized.id) : createLocalId('backup');
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
             normalized.version = normalized.version || '1.0.0';

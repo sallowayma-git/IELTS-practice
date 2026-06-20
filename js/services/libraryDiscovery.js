@@ -460,6 +460,98 @@
         return source.split(needle).join(replacement);
     }
 
+    function escapeHtmlAttribute(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function createSandboxedRuntimeHtml(innerHtml, title) {
+        const safeTitle = cleanTitle(title) || 'Imported Practice';
+        const csp = [
+            "default-src 'self' blob: data:",
+            "script-src 'unsafe-inline' blob: data:",
+            "style-src 'unsafe-inline' blob: data:",
+            "img-src blob: data:",
+            "media-src blob: data:",
+            "font-src blob: data:",
+            "connect-src 'none'",
+            "object-src 'none'",
+            "frame-src 'none'",
+            "child-src 'none'",
+            "worker-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "navigate-to 'none'",
+            "frame-ancestors 'self'"
+        ].join('; ');
+        const frameSrcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}">${innerHtml}`;
+        return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtmlAttribute(safeTitle)}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; frame-src 'self' blob: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}#imported-practice-frame{border:0;width:100%;height:100%;display:block}</style>
+</head>
+<body>
+  <iframe id="imported-practice-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttribute(frameSrcdoc)}"></iframe>
+  <script>
+    (function () {
+      var frame = document.getElementById('imported-practice-frame');
+      var targetOrigin = (location.origin && location.origin !== 'null' && /^https?:\\/\\//i.test(location.origin)) ? location.origin : '*';
+      var allowedFromFrame = {
+        SESSION_READY: true,
+        REQUEST_INIT: true,
+        PRACTICE_COMPLETE: true,
+        practice_completed: true
+      };
+      var allowedFromParent = {
+        INIT_SESSION: true,
+        init_exam_session: true,
+        REPLAY_PRACTICE_RECORD: true,
+        REVIEW_CONTEXT: true,
+        SUITE_NAVIGATE: true,
+        SUITE_FORCE_CLOSE: true,
+        ENDLESS_COUNTDOWN: true
+      };
+      function isParent(event) {
+        return event && event.source && (event.source === window.opener || event.source === window.parent);
+      }
+      function sameOriginParent(event) {
+        if (!isParent(event)) return false;
+        if (!event.origin || event.origin === 'null') {
+          return location.protocol === 'file:';
+        }
+        return location.origin && location.origin !== 'null' && event.origin === location.origin;
+      }
+      function getType(data) {
+        return data && typeof data.type === 'string' ? data.type : '';
+      }
+      window.addEventListener('message', function (event) {
+        var type = getType(event.data);
+        if (!type) return;
+        if (frame && event.source === frame.contentWindow) {
+          if (!allowedFromFrame[type]) return;
+          if (window.opener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage(event.data, targetOrigin);
+          } else if (window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+            window.parent.postMessage(event.data, targetOrigin);
+          }
+          return;
+        }
+        if (sameOriginParent(event) && allowedFromParent[type] && frame && frame.contentWindow) {
+          frame.contentWindow.postMessage(event.data, '*');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`;
+    }
+
     function buildRuntimeHtml(record, groupRecords, assetUrls) {
         let html = String(record && record.text || '');
         groupRecords.forEach(function (asset) {
@@ -475,7 +567,7 @@
             html = replaceAllLiteral(html, relative, url);
             html = replaceAllLiteral(html, name, url);
         });
-        return html;
+        return createSandboxedRuntimeHtml(html, record && (record.title || record.name || record.path));
     }
 
     function registerRuntimeResources(entries, records) {

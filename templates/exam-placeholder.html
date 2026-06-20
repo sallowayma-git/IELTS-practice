@@ -304,6 +304,8 @@
     if (overlay) {
         overlay.style.display = 'none';
     }
+    let trustedParentOrigin = '';
+
     const state = {
         examId: null,
         title: 'IELTS 阅读练习',
@@ -481,13 +483,66 @@
         return { type, data, source: 'suite_placeholder' };
     }
 
+    function isTrustedIncomingMessage(event) {
+        if (!event || !event.source || !opener || opener === window) {
+            return false;
+        }
+        if (event.source !== opener) {
+            return false;
+        }
+        if (!event.origin || event.origin === 'null') {
+            return window.location.protocol === 'file:';
+        }
+        if (!window.location.origin || window.location.origin === 'null') {
+            return false;
+        }
+        if (event.origin !== window.location.origin) {
+            return false;
+        }
+        trustedParentOrigin = event.origin;
+        return true;
+    }
+
+    function getMessageTargetOrigin() {
+        if (trustedParentOrigin) {
+            return trustedParentOrigin;
+        }
+        if (window.location.protocol === 'file:') {
+            return '*';
+        }
+        return window.location.origin && window.location.origin !== 'null'
+            ? window.location.origin
+            : '*';
+    }
+
+    function resolveTrustedSuiteNavigationUrl(rawUrl) {
+        if (rawUrl == null) {
+            return '';
+        }
+        try {
+            const resolved = new URL(String(rawUrl), window.location.href);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+            if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            // Invalid navigation payloads are ignored.
+        }
+        return '';
+    }
+
     function postMessage(type, payload) {
         if (!opener || opener === window) {
             log('未检测到父窗口，消息未发送。', 'warn');
             return;
         }
         try {
-            opener.postMessage(buildEnvelope(type, payload), '*');
+            opener.postMessage(buildEnvelope(type, payload), getMessageTargetOrigin());
             log(`已发送 ${type} 消息`, 'info');
         } catch (error) {
             log(`发送 ${type} 消息失败: ${error}`, 'error');
@@ -725,6 +780,9 @@
     }
 
     function handleIncoming(event) {
+        if (!isTrustedIncomingMessage(event)) {
+            return;
+        }
         const payload = event && event.data ? event.data : null;
         if (!payload || typeof payload !== 'object') {
             return;
@@ -798,7 +856,7 @@
 
         if (type === 'SUITE_NAVIGATE') {
             log('收到套题导航指令，准备跳转下一篇。', 'info');
-            const nextUrl = data.url || '';
+            const nextUrl = resolveTrustedSuiteNavigationUrl(data.url || '');
             if (nextUrl) {
                 try {
                     teardownSuiteBackGuard();

@@ -5,6 +5,26 @@
         return;
     }
 
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
     const MESSAGE_TYPE_ALIASES = Object.freeze({
         practice_complete: 'PRACTICE_COMPLETE',
         practice_completed: 'PRACTICE_COMPLETE',
@@ -57,6 +77,15 @@
         tempPracticeRecords: 'temp_practice_records'
     });
 
+    const PRACTICE_CLONE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const PRACTICE_CLONE_LIMITS = Object.freeze({
+        maxDepth: 12,
+        maxNodes: 20000,
+        maxArrayItems: 1000,
+        maxObjectKeys: 1000,
+        maxTextLength: 4000
+    });
+
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
     }
@@ -72,17 +101,74 @@
         }
     }
 
-    function clonePlainObject(value) {
-        if (value == null || typeof value !== 'object') {
+    function isUnsafePracticeCloneKey(key) {
+        return PRACTICE_CLONE_POLLUTION_KEYS.has(String(key));
+    }
+
+    function limitPracticeCloneText(value) {
+        const text = String(value ?? '');
+        return text.length > PRACTICE_CLONE_LIMITS.maxTextLength
+            ? text.slice(0, PRACTICE_CLONE_LIMITS.maxTextLength)
+            : text;
+    }
+
+    function clonePlainObject(value, depth = 0, state = null) {
+        if (value === null || value === undefined) {
             return value ?? null;
         }
-        if (Array.isArray(value)) {
-            return value.map((item) => clonePlainObject(item)).filter((item) => item !== undefined);
+        if (typeof value === 'string') {
+            return limitPracticeCloneText(value);
         }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth > PRACTICE_CLONE_LIMITS.maxDepth) {
+            return undefined;
+        }
+
+        const cloneState = state || { stack: new WeakSet(), nodes: 0 };
+        if (cloneState.stack.has(value)) {
+            return undefined;
+        }
+        cloneState.nodes += 1;
+        if (cloneState.nodes > PRACTICE_CLONE_LIMITS.maxNodes) {
+            return undefined;
+        }
+        cloneState.stack.add(value);
+
+        if (Array.isArray(value)) {
+            const clone = value
+                .slice(0, PRACTICE_CLONE_LIMITS.maxArrayItems)
+                .map((item) => clonePlainObject(item, depth + 1, cloneState))
+                .filter((item) => item !== undefined);
+            cloneState.stack.delete(value);
+            return clone;
+        }
+
         const clone = {};
-        Object.keys(value).forEach((key) => {
-            clone[key] = clonePlainObject(value[key]);
+        Object.keys(value).slice(0, PRACTICE_CLONE_LIMITS.maxObjectKeys).forEach((key) => {
+            if (isUnsafePracticeCloneKey(key)) {
+                return;
+            }
+            const safeKey = limitPracticeCloneText(key).trim();
+            if (!safeKey || isUnsafePracticeCloneKey(safeKey)) {
+                return;
+            }
+            const safeValue = clonePlainObject(value[key], depth + 1, cloneState);
+            if (safeValue !== undefined) {
+                clone[safeKey] = safeValue;
+            }
         });
+        cloneState.stack.delete(value);
         return clone;
     }
 
@@ -629,10 +715,11 @@
     }
 
     function defaultGenerateRecordId() {
-        return `record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        return createLocalId('record');
     }
 
     function standardizeRecord(recordData, options = {}) {
+        recordData = clonePlainObject(recordData) || {};
         const now = new Date().toISOString();
         const type = inferPracticeType(recordData);
         const recordDate = resolveRecordDate(recordData, now);
@@ -904,9 +991,10 @@
 
     function fromCompletion(payload, sessionContext = {}, examEntry = null, options = {}) {
         const normalizedMessage = normalizeMessage(payload);
-        const rawPayload = normalizedMessage && isPracticeCompleteType(normalizedMessage.type)
+        const rawPayloadSource = normalizedMessage && isPracticeCompleteType(normalizedMessage.type)
             ? normalizedMessage.data
             : (isPlainObject(payload) ? payload : {});
+        const rawPayload = clonePlainObject(rawPayloadSource) || {};
 
         if (!rawPayload || typeof rawPayload !== 'object') {
             return null;

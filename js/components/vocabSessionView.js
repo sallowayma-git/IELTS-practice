@@ -17,6 +17,7 @@
         reviewLimit: { min: 1, max: 300 },
         masteryCount: { min: 1, max: 10 }
     });
+    const MAX_SPELLING_ANSWER_LENGTH = 160;
 
     const state = {
         container: null,
@@ -74,6 +75,17 @@
             return document.querySelector(target);
         }
         return target;
+    }
+
+    function escapeCssSelectorValue(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            try {
+                return window.CSS.escape(String(value));
+            } catch (_) {
+                // Fall through to the conservative escape below.
+            }
+        }
+        return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
     }
 
     function showFeedbackMessage(message, type = 'info') {
@@ -454,7 +466,7 @@
         if (!state.elements.sessionCard || !action) {
             return false;
         }
-        const trigger = state.elements.sessionCard.querySelector(`[data-action="${action}"]`);
+        const trigger = state.elements.sessionCard.querySelector(`[data-action="${escapeCssSelectorValue(action)}"]`);
         if (!trigger || trigger.disabled) {
             return false;
         }
@@ -1141,6 +1153,29 @@
             .replace(/'/g, '&#039;');
     }
 
+    function toFiniteNumber(value, fallback = 0) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+    }
+
+    function toNonNegativeInteger(value, fallback = 0) {
+        return Math.max(0, Math.trunc(toFiniteNumber(value, fallback)));
+    }
+
+    function formatDecimal(value, fallback = 0, digits = 2) {
+        return toFiniteNumber(value, fallback).toFixed(digits);
+    }
+
+    function limitSpellingAnswer(value) {
+        return String(value == null ? '' : value)
+            .replace(/[\u0000-\u001F\u007F]/g, '')
+            .slice(0, MAX_SPELLING_ANSWER_LENGTH);
+    }
+
+    function normalizeSpellingAnswer(value) {
+        return limitSpellingAnswer(value).trim();
+    }
+
     function buildFeedbackSummary(status, word) {
         const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '稍后安排';
         if (status === 'correct') {
@@ -1255,8 +1290,8 @@
     }
 
     function levenshteinDistance(a, b) {
-        const s = (a || '').toLowerCase().trim();
-        const t = (b || '').toLowerCase().trim();
+        const s = normalizeSpellingAnswer(a).toLowerCase();
+        const t = normalizeSpellingAnswer(b).toLowerCase();
         if (!s.length) {
             return t.length;
         }
@@ -1284,8 +1319,8 @@
     }
 
     function evaluateAnswer(input, word) {
-        const normalizedAnswer = (input || '').trim();
-        const normalizedWord = (word.word || '').trim();
+        const normalizedAnswer = normalizeSpellingAnswer(input);
+        const normalizedWord = normalizeSpellingAnswer(word.word);
         if (!normalizedWord) {
             return { status: 'wrong', quality: 'wrong', distance: 0 };
         }
@@ -1326,7 +1361,10 @@
         if (!input) {
             return;
         }
-        const answer = input.value.trim();
+        const answer = normalizeSpellingAnswer(input.value);
+        if (input.value !== answer) {
+            input.value = answer;
+        }
         const word = state.session.currentWord;
         
         if (!answer) {
@@ -1467,7 +1505,7 @@
             recognitionQuality,
             spellingAttempts,
             spellingCorrect: spellingAttempts === 0 && !skipped,
-            typed: options.answer ?? session.typedAnswer,
+            typed: normalizeSpellingAnswer(options.answer ?? session.typedAnswer),
             skipped,
             finalQuality,
             isIntraReview,
@@ -1749,7 +1787,7 @@
                     <p class="vocab-card__instruction">${instructionText}</p>
                     ${attemptsHint}
                     <div class="vocab-card__input-block">
-                        <input type="text" name="answer" autocomplete="off" placeholder="在此输入拼写" value="${escapeHtml(session.typedAnswer)}" autofocus>
+                        <input type="text" name="answer" autocomplete="off" maxlength="${MAX_SPELLING_ANSWER_LENGTH}" placeholder="在此输入拼写" value="${escapeHtml(limitSpellingAnswer(session.typedAnswer))}" autofocus>
                         <div class="vocab-card__input-actions">
                             <button class="btn btn-ghost" type="button" data-action="skip-spelling">跳过</button>
                             <button class="btn btn-primary" type="button" data-action="submit-spelling">提交 (Enter)</button>
@@ -1762,30 +1800,36 @@
                 input.focus();
                 input.setSelectionRange(input.value.length, input.value.length);
                 input.addEventListener('input', (event) => {
-                    state.session.typedAnswer = event.target.value;
+                    const limited = limitSpellingAnswer(event.target.value);
+                    if (event.target.value !== limited) {
+                        event.target.value = limited;
+                    }
+                    state.session.typedAnswer = limited;
                 });
             }
             return;
         }
         if (session.stage === 'feedback') {
             const recognitionQuality = session.lastAnswer?.recognitionQuality || 'good';
-            const spellingAttempts = session.lastAnswer?.spellingAttempts || 0;
+            const spellingAttempts = toNonNegativeInteger(session.lastAnswer?.spellingAttempts, 0);
             const spellingCorrect = session.lastAnswer?.spellingCorrect !== false;
             const skipped = session.lastAnswer?.skipped || false;
-            const baseEF = session.lastAnswer?.baseEF || word.easeFactor;
-            const finalEF = session.lastAnswer?.finalEF || word.easeFactor;
-            const penalty = session.lastAnswer?.penalty || 0;
+            const currentEaseFactor = toFiniteNumber(word.easeFactor, 2.5);
+            const baseEF = toFiniteNumber(session.lastAnswer?.baseEF, currentEaseFactor);
+            const finalEF = toFiniteNumber(session.lastAnswer?.finalEF, currentEaseFactor);
+            const penalty = toFiniteNumber(session.lastAnswer?.penalty, 0);
             
             const icon = spellingAttempts >= 3 ? '❌' : (spellingAttempts > 0 || skipped ? '🟡' : '✅');
             const title = spellingAttempts >= 3 ? '需要加强' : (spellingAttempts > 0 || skipped ? '接近了' : '太棒了！');
             
             const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '待安排';
+            const safeNextReview = escapeHtml(nextReview);
             const typedAnswer = session.lastAnswer?.typed ? escapeHtml(session.lastAnswer.typed) : '';
             
             // SM-2 信息展示
-            const intervalDays = word.interval || 1;
-            const easeFactor = finalEF.toFixed(2);
-            const repetitions = word.repetitions || 0;
+            const intervalDays = escapeHtml(toNonNegativeInteger(word.interval, 1) || 1);
+            const easeFactor = escapeHtml(finalEF.toFixed(2));
+            const repetitions = escapeHtml(toNonNegativeInteger(word.repetitions, 0));
             
             // 拼写结果提示
             let spellingFeedback = '';
@@ -1801,12 +1845,14 @@
             
             // 认识质量标签
             const recognitionLabel = recognitionQuality === 'easy' ? '简单' : recognitionQuality === 'good' ? '一般' : '困难';
-            const recognitionChange = baseEF > word.easeFactor ? `(EF +${(baseEF - (word.easeFactor || 2.5)).toFixed(2)})` : '';
+            const safeRecognitionLabel = escapeHtml(recognitionLabel);
+            const recognitionChange = baseEF > currentEaseFactor ? `(EF +${(baseEF - currentEaseFactor).toFixed(2)})` : '';
             
             // 质量分解
             const isIntraReview = session.lastAnswer?.isIntraReview || false;
             const cycleType = session.lastAnswer?.cycleType || 'normal';
-            const intraCycles = session.lastAnswer?.intraCycles || 0;
+            const intraCyclesValue = toNonNegativeInteger(session.lastAnswer?.intraCycles, 0);
+            const intraCycles = escapeHtml(intraCyclesValue);
             const needsContinueIntra = session.lastAnswer?.needsContinueIntra || false;
             const needsEasyVerification = session.lastAnswer?.needsEasyVerification || false;
             const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
@@ -1826,7 +1872,7 @@
             } else if (needsContinueIntra) {
                 // 继续轮内循环
                 const maxCycles = 12;
-                const remaining = maxCycles - intraCycles;
+                const remaining = maxCycles - intraCyclesValue;
                 qualityBreakdown = `
                     <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; border-radius: 8px; font-size: 0.875rem;">
                         <p style="margin: 0 0 0.5rem; font-weight: 600; color: #856404;">🔄 继续轮内学习</p>
@@ -1857,12 +1903,13 @@
                 // 轮内循环中的调整
                 const adjustment = session.lastAnswer?.finalQuality === 'easy' ? '+0.15' : 
                                  session.lastAnswer?.finalQuality === 'good' ? '+0.05' : '-0.10';
+                const safeAdjustment = escapeHtml(adjustment);
                 qualityBreakdown = `
                     <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(0,0,0,0.02); border-radius: 8px; font-size: 0.875rem;">
                         <p style="margin: 0 0 0.5rem; font-weight: 600;">🔄 轮内循环调整：</p>
-                        <p style="margin: 0.25rem 0;">认识判断：${recognitionLabel}</p>
+                        <p style="margin: 0.25rem 0;">认识判断：${safeRecognitionLabel}</p>
                         ${spellingFeedback}
-                        <p style="margin: 0.25rem 0;">EF 调整：${adjustment}</p>
+                        <p style="margin: 0.25rem 0;">EF 调整：${safeAdjustment}</p>
                         <p style="margin: 0.5rem 0 0; font-weight: 600; color: #667eea;">当前 EF：${easeFactor} | 循环次数：${intraCycles}</p>
                     </div>
                 `;
@@ -1870,11 +1917,11 @@
                 // 正常流程或新词
                 const isNewWord = !word.lastReviewed;
                 if (isNewWord) {
-                    const initialEF = state.scheduler.INITIAL_EASE_FACTORS[finalQuality] || 2.5;
+                    const initialEF = escapeHtml(formatDecimal(state.scheduler.INITIAL_EASE_FACTORS[finalQuality], 2.5));
                     qualityBreakdown = `
                         <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(33, 150, 243, 0.1); border-left: 4px solid #2196f3; border-radius: 8px; font-size: 0.875rem;">
                             <p style="margin: 0 0 0.5rem; font-weight: 600; color: #1565c0;">🆕 新词学习</p>
-                            <p style="margin: 0.25rem 0; color: #1565c0;">认识判断：${recognitionLabel}</p>
+                            <p style="margin: 0.25rem 0; color: #1565c0;">认识判断：${safeRecognitionLabel}</p>
                             ${spellingFeedback}
                             <p style="margin: 0.5rem 0 0; font-weight: 600; color: #1565c0;">起始难度因子：${initialEF}</p>
                         </div>
@@ -1883,7 +1930,7 @@
                     qualityBreakdown = `
                         <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(0,0,0,0.02); border-radius: 8px; font-size: 0.875rem;">
                             <p style="margin: 0 0 0.5rem; font-weight: 600;">📈 复习完成：</p>
-                            <p style="margin: 0.25rem 0;">认识判断：${recognitionLabel}</p>
+                            <p style="margin: 0.25rem 0;">认识判断：${safeRecognitionLabel}</p>
                             ${spellingFeedback}
                             <p style="margin: 0.5rem 0 0; font-weight: 600; color: #667eea;">最终难度因子：${easeFactor}</p>
                         </div>
@@ -1897,7 +1944,7 @@
                         <span class="vocab-feedback__icon">${icon}</span>
                         <div>
                             <h3>${title}</h3>
-                            <p>将于 ${nextReview} 再次复习</p>
+                            <p>将于 ${safeNextReview} 再次复习</p>
                         </div>
                     </div>
                     <dl class="vocab-feedback__details">

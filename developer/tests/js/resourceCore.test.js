@@ -243,13 +243,14 @@ function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
 }
 
 async function testDeletePathMapForConfiguration(context, ResourceCore) {
-    const key = ResourceCore.getPathMapStorageKey('custom_config');
+    const configKey = 'exam_index_custom_config';
+    const key = ResourceCore.getPathMapStorageKey(configKey);
     await context.window.storage.set(key, {
         reading: { root: 'ReadingCustom/', exceptions: {} },
         listening: { root: 'ListeningCustom/', exceptions: {} }
     });
 
-    const deleted = await ResourceCore.deletePathMapForConfiguration('custom_config');
+    const deleted = await ResourceCore.deletePathMapForConfiguration(configKey);
 
     assert.strictEqual(deleted, true, '删除 path map 应返回 true');
     assert.strictEqual(await context.window.storage.get(key, null), null, '删除配置时 path map 存储键必须被移除');

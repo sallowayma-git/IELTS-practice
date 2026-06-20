@@ -414,6 +414,15 @@
                     navItem.classList.toggle('answered', answered);
                 }
             }
+
+            function escapeResultHtml(value) {
+                return String(value == null ? '' : value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
             
             function gradeAnswers() {
                 timerRunning = false;
@@ -443,7 +452,7 @@
                         navItem.classList.remove('answered');
                         navItem.classList.add(isCorrect ? 'correct' : 'incorrect');
                     }
-                    resultsHTML += `<tr><td>${i}</td><td>${userAnswerDisplay}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                    resultsHTML += `<tr><td>${i}</td><td>${escapeResultHtml(userAnswerDisplay)}</td><td>${escapeResultHtml(correctAnswer)}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
                 }
                 
                 const score = Math.round((correctCount / totalQuestions) * 100);
@@ -883,6 +892,7 @@ if (!window.practicePageEnhancer) {
     window.practicePageEnhancer = {
         sessionId: null,
         parentWindow: null,
+        parentOrigin: '',
         answers: {},
         correctAnswers: {},
         interactions: [],
@@ -953,12 +963,15 @@ if (!window.practicePageEnhancer) {
         },
 
         setupCommunication: function () {
-            this.parentWindow = window.opener || window.parent;
+            this.parentWindow = window.opener || (window.parent !== window ? window.parent : null);
             if (!this.parentWindow || this.parentWindow === window) {
                 console.warn('[PracticeEnhancer] 未检测到父窗口');
                 return;
             }
             window.addEventListener('message', (event) => {
+                if (!this.isTrustedParentMessage(event)) {
+                    return;
+                }
                 if (event.data && event.data.type === 'INIT_SESSION') {
                     this.sessionId = event.data.data.sessionId;
                     console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId);
@@ -970,6 +983,35 @@ if (!window.practicePageEnhancer) {
                 }
             });
             console.log('[PracticeEnhancer] 通信设置完成');
+        },
+
+        isTrustedParentMessage: function (event) {
+            if (!event || !event.source || !this.parentWindow || event.source !== this.parentWindow) {
+                return false;
+            }
+            if (!event.origin || event.origin === 'null') {
+                return window.location.protocol === 'file:';
+            }
+            if (!window.location.origin || window.location.origin === 'null') {
+                return false;
+            }
+            if (event.origin !== window.location.origin) {
+                return false;
+            }
+            this.parentOrigin = event.origin;
+            return true;
+        },
+
+        getTargetOrigin: function () {
+            if (this.parentOrigin) {
+                return this.parentOrigin;
+            }
+            if (window.location.protocol === 'file:') {
+                return '*';
+            }
+            return window.location.origin && window.location.origin !== 'null'
+                ? window.location.origin
+                : '*';
         },
 
         detectPageType: function () {
@@ -1778,7 +1820,7 @@ if (!window.practicePageEnhancer) {
             };
 
             try {
-                this.parentWindow.postMessage(message, '*');
+                this.parentWindow.postMessage(message, this.getTargetOrigin());
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
                 console.error('[PracticeEnhancer] 发送消息失败:', error);

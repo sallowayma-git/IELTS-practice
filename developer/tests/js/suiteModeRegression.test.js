@@ -21,8 +21,12 @@ function createStubWindow(name) {
         closed: false,
         location: { href: 'about:blank' },
         _messages: [],
-        postMessage(payload) {
-            this._messages.push(payload);
+        postMessage(payload, targetOrigin) {
+            if (payload && typeof payload === 'object') {
+                this._messages.push({ ...payload, targetOrigin });
+            } else {
+                this._messages.push({ payload, targetOrigin });
+            }
         },
         focus() {}
     };
@@ -940,6 +944,90 @@ async function run() {
         assert.strictEqual(captured.examId, examId, '父应用应使用当前打开的题源 examId');
         assert.strictEqual(captured.data.examId, examId, 'payload examId 应被纠正为父应用题源');
         assert.strictEqual(captured.data.sessionId, expectedSessionId, 'payload sessionId 应被纠正为父应用会话');
+    }
+
+    // Case 9b: CSP sandbox 下的 Listening bridge origin 为 null，只能由预期窗口走受限协议
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('sandboxed-listening-window');
+        const unknownWindow = createStubWindow('sandboxed-listening-attacker');
+        const examId = 'sandboxed-listening-p1';
+        const expectedSessionId = 'sandboxed-listening-p1_expected';
+        let captured = null;
+
+        app.handlePracticeComplete = async (handledExamId, data) => {
+            captured = { examId: handledExamId, data };
+        };
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Sandboxed Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '沙盒听力题源应注册 message handler');
+
+        const completionMessage = {
+            type: 'PRACTICE_COMPLETE',
+            source: 'listening_record_bridge',
+            data: {
+                source: 'listening_record_bridge',
+                examId: 'listening-unknown',
+                sessionId: 'listening-unknown_opaque',
+                practiceType: 'listening',
+                pageType: 'listening',
+                answers: { q1: 'acommodation' },
+                correctAnswers: { q1: 'accommodation' },
+                answerComparison: {
+                    q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+                },
+                scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+            }
+        };
+
+        await handler({
+            source: unknownWindow,
+            origin: 'null',
+            data: completionMessage
+        });
+
+        assert.strictEqual(captured, null, '未知 null-origin 窗口不得冒充听力桥');
+
+        await handler({
+            source: examWindow,
+            origin: 'null',
+            data: completionMessage
+        });
+
+        assert(captured, '预期沙盒听力桥消息应被接受');
+        assert.strictEqual(captured.examId, examId, '沙盒听力桥仍应使用父应用题源 examId');
+        assert.strictEqual(captured.data.sessionId, expectedSessionId, '沙盒听力桥 sessionId 应被纠正为父页面会话');
+
+        examWindow._messages.length = 0;
+        await handler({
+            source: examWindow,
+            origin: 'null',
+            data: {
+                type: 'REQUEST_INIT',
+                source: 'listening_record_bridge',
+                data: {
+                    source: 'listening_record_bridge',
+                    examId,
+                    sessionId: expectedSessionId,
+                    pageType: 'listening'
+                }
+            }
+        });
+
+        assert(
+            examWindow._messages.some(message => message && message.type === 'INIT_SESSION' && message.targetOrigin === '*'),
+            '沙盒听力页初始化必须用通配 targetOrigin'
+        );
     }
 
     // Case 10: 任意目录听力完成后必须进入 PracticeRecorder，并保存错词

@@ -2,6 +2,78 @@
  * Data backup and recovery manager.
  * Provides export/import/cleanup functionality for the shared storage layer.
  */
+let dataBackupFallbackIdCounter = 0;
+const DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES = 10 * 1024 * 1024;
+const MAX_BACKUP_IMPORT_RECORDS = 5000;
+const MAX_BACKUP_IMPORT_NODES = 50000;
+const MAX_BACKUP_IMPORT_DEPTH = 40;
+const MAX_BACKUP_RECORD_CLONE_DEPTH = 16;
+const MAX_BACKUP_RECORD_ARRAY_ITEMS = 500;
+const MAX_BACKUP_RECORD_OBJECT_KEYS = 200;
+const MAX_BACKUP_RECORD_TEXT_LENGTH = 5000;
+const MAX_BACKUP_RECORD_ID_LENGTH = 512;
+const MAX_BACKUP_RECORD_TITLE_LENGTH = 500;
+const MAX_BACKUP_RECORD_STATUS_LENGTH = 64;
+const BACKUP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function createDataBackupId(prefix) {
+    const cryptoObj = window.crypto || window.msCrypto;
+    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+        return `${prefix}_${Date.now()}_${cryptoObj.randomUUID()}`;
+    }
+    if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        cryptoObj.getRandomValues(bytes);
+        const suffix = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        return `${prefix}_${Date.now()}_${suffix}`;
+    }
+    dataBackupFallbackIdCounter += 1;
+    return `${prefix}_${Date.now()}_fallback_${dataBackupFallbackIdCounter.toString(36)}`;
+}
+
+function formatCsvCell(value) {
+    let cell = value == null ? '' : String(value);
+    if (/^\s*[=+\-@]/.test(cell) || /^[\t\r\n]/.test(cell)) {
+        cell = `'${cell}`;
+    }
+    return `"${cell.replace(/"/g, '""')}"`;
+}
+
+function resolveTrustedImportFetchUrl(rawUrl) {
+    try {
+        const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
+            ? window.location.href
+            : 'http://localhost/';
+        const resolved = new URL(String(rawUrl), baseHref);
+        const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+            ? window.location.origin
+            : new URL(baseHref).origin;
+        if ((resolved.protocol === 'http:' || resolved.protocol === 'https:') && resolved.origin === currentOrigin) {
+            return resolved.href;
+        }
+    } catch (_) {
+        return null;
+    }
+    return null;
+}
+
+function getBackupTextByteLength(value) {
+    const text = String(value ?? '');
+    if (typeof TextEncoder === 'function') {
+        return new TextEncoder().encode(text).byteLength;
+    }
+    if (typeof Blob === 'function') {
+        return new Blob([text]).size;
+    }
+    return text.length;
+}
+
+function createImportLimitError(message) {
+    const error = new Error(message);
+    error.name = 'ImportLimitError';
+    return error;
+}
+
 class DataBackupManager {
     constructor() {
         this.storageKeys = {
@@ -201,7 +273,7 @@ class DataBackupManager {
         });
 
         const csvContent = [headers, ...rows]
-            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .map(row => row.map(formatCsvCell).join(','))
             .join('\n');
 
         return {
@@ -224,12 +296,13 @@ class DataBackupManager {
             mergeMode = 'merge',
             validateData = true,
             createBackup = true,
-            preserveIds = true
+            preserveIds = true,
+            allowFetch = false
         } = options;
 
         let payload;
         try {
-            payload = await this.parseImportSource(source, { allowFetch: true });
+            payload = await this.parseImportSource(source, { allowFetch: Boolean(allowFetch) });
         } catch (error) {
             throw new Error(`Failed to read import source: ${error.message}`);
         }
@@ -332,10 +405,16 @@ class DataBackupManager {
         }
 
         if (typeof File !== 'undefined' && source instanceof File) {
+            if (Number.isFinite(source.size) && source.size > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+            }
             return this.parseImportSource(await source.text(), { allowFetch });
         }
 
         if (typeof Blob !== 'undefined' && source instanceof Blob) {
+            if (Number.isFinite(source.size) && source.size > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+            }
             return this.parseImportSource(await source.text(), { allowFetch });
         }
 
@@ -346,6 +425,9 @@ class DataBackupManager {
             }
 
             if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                if (getBackupTextByteLength(trimmed) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                    throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+                }
                 try {
                     return JSON.parse(trimmed);
                 } catch (error) {
@@ -357,9 +439,30 @@ class DataBackupManager {
                 throw new Error('Import string is neither JSON nor a fetchable path.');
             }
 
-            const response = await fetch(trimmed);
+            const fetchUrl = resolveTrustedImportFetchUrl(trimmed);
+            if (!fetchUrl) {
+                throw new Error('Import fetch URL is invalid or untrusted.');
+            }
+            const response = await fetch(fetchUrl, { credentials: 'same-origin', cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`Failed to fetch import file: ${response.status}`);
+            }
+            const contentLength = response.headers && typeof response.headers.get === 'function'
+                ? Number(response.headers.get('content-length'))
+                : 0;
+            if (Number.isFinite(contentLength) && contentLength > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+            }
+            if (typeof response.text === 'function') {
+                const body = await response.text();
+                if (getBackupTextByteLength(body) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                    throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+                }
+                try {
+                    return JSON.parse(body);
+                } catch (_) {
+                    throw new Error('Fetched import file is not valid JSON.');
+                }
             }
             return await response.json();
         }
@@ -380,36 +483,30 @@ class DataBackupManager {
         const sources = [];
         let userStats = null;
         const visited = new WeakSet();
+        const collectedArrays = new WeakSet();
+        let visitedNodes = 0;
 
-        // Fast-path: extract from common shapes (avoids deep traversal misses)
-        try {
-            const direct = this.extractRecordsFromCommonShapes(payload);
-            if (direct.records && direct.records.length) {
-                const normalizedDirect = direct.records
-                    .map((record, index) => this.normalizeRecord(record, {
-                        preserveIds,
-                        fallbackIdPrefix: direct.source || 'record',
-                        index
-                    }))
-                    .filter(Boolean);
-                if (normalizedDirect.length) {
-                    practiceRecords.push(...normalizedDirect);
-                    sources.push({ path: direct.source || '(direct)', count: normalizedDirect.length });
-                }
+        const assertRecordBudget = (records) => {
+            if (practiceRecords.length + records.length > MAX_BACKUP_IMPORT_RECORDS) {
+                throw createImportLimitError(`Import contains too many practice records. Maximum supported count is ${MAX_BACKUP_IMPORT_RECORDS}.`);
             }
-        } catch (_) {
-            // ignore and continue with generic traversal
-        }
+        };
 
         const collectRecords = (records, originPath) => {
             if (!Array.isArray(records) || !records.length) {
                 return;
             }
-
-            const pathString = originPath ? originPath : '';
-            if (!this.isPracticeRecordPath(pathString)) {
+            if (collectedArrays.has(records)) {
                 return;
             }
+
+            const pathString = originPath ? originPath : '';
+            const rootCollection = pathString === '(root array)' || pathString === '(direct)';
+            if (!rootCollection && !this.isPracticeRecordPath(pathString)) {
+                return;
+            }
+            assertRecordBudget(records);
+            collectedArrays.add(records);
 
             const normalizedRecords = records
                 .map((record, index) => this.normalizeRecord(record, {
@@ -427,6 +524,19 @@ class DataBackupManager {
             sources.push({ path: pathString || '(root array)', count: normalizedRecords.length });
         };
 
+        // Fast-path: extract from common shapes (avoids deep traversal misses)
+        try {
+            const direct = this.extractRecordsFromCommonShapes(payload);
+            if (direct.records && direct.records.length) {
+                collectRecords(direct.records, direct.source || '(direct)');
+            }
+        } catch (error) {
+            if (error && error.name === 'ImportLimitError') {
+                throw error;
+            }
+            // ignore and continue with generic traversal
+        }
+
         const visit = (node, pathSegments = []) => {
             if (!node || typeof node !== 'object') {
                 return;
@@ -436,6 +546,13 @@ class DataBackupManager {
                 return;
             }
             visited.add(node);
+            if (pathSegments.length > MAX_BACKUP_IMPORT_DEPTH) {
+                throw createImportLimitError(`Import structure is too deeply nested. Maximum supported depth is ${MAX_BACKUP_IMPORT_DEPTH}.`);
+            }
+            visitedNodes += 1;
+            if (visitedNodes > MAX_BACKUP_IMPORT_NODES) {
+                throw createImportLimitError(`Import structure is too large to scan safely. Maximum supported node count is ${MAX_BACKUP_IMPORT_NODES}.`);
+            }
 
             if (Array.isArray(node)) {
                 if (this.isRecordArray(node)) {
@@ -455,7 +572,7 @@ class DataBackupManager {
                 userStats = this.extractUserStats(node);
             }
 
-            for (const [key, value] of Object.entries(node)) {
+            for (const [key, value] of this.safeEntries(node)) {
                 const nextPath = pathSegments.concat(String(key));
 
                 if (Array.isArray(value)) {
@@ -517,7 +634,7 @@ class DataBackupManager {
 
             // 检查并修复缺失字段
             if (!record.id) {
-                record.id = `imported_${now.split('T')[0]}_${Math.random().toString(36).substr(2, 9)}`;
+                record.id = createDataBackupId('imported');
             }
             if (!record.examId) {
                 record.examId = 'imported_ielts';
@@ -732,16 +849,28 @@ class DataBackupManager {
             return;
         }
 
+        const cloneOptions = {
+            maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+        };
+        const incomingStats = this.cloneSafePlainObject(stats, cloneOptions);
+
         if (mergeMode === 'replace') {
-            await storage.set('user_stats', stats);
+            await storage.set('user_stats', incomingStats);
             return;
         }
 
-        const existing = await storage.get('user_stats', {}) || {};
-        const merged = { ...existing };
+        const existing = this.cloneSafePlainObject(await storage.get('user_stats', {}) || {}, cloneOptions);
+        const merged = this.cloneSafePlainObject(existing, cloneOptions);
 
-        for (const [key, value] of Object.entries(stats)) {
+        for (const [key, value] of this.safeEntries(incomingStats)) {
             if (value === undefined || value === null) {
+                continue;
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(merged, key) && Object.keys(merged).length >= MAX_BACKUP_RECORD_OBJECT_KEYS) {
                 continue;
             }
 
@@ -752,36 +881,42 @@ class DataBackupManager {
             }
 
             if (this.isPlainObject(value) && this.isPlainObject(current)) {
-                merged[key] = { ...current, ...value };
+                merged[key] = this.mergeSafePlainObjects(current, value);
                 continue;
             }
 
             if (current === undefined) {
-                merged[key] = value;
+                const safeValue = this.cloneSafeValue(value, cloneOptions);
+                if (safeValue !== undefined) {
+                    merged[key] = safeValue;
+                }
                 continue;
             }
 
-            merged[key] = value;
+            const safeValue = this.cloneSafeValue(value, cloneOptions);
+            if (safeValue !== undefined) {
+                merged[key] = safeValue;
+            }
         }
 
         await storage.set('user_stats', merged);
     }
 
     mergeRecordDetails(existing, incoming) {
-        const merged = { ...existing, ...incoming };
+        const merged = this.mergeSafePlainObjects(existing, incoming);
 
         if (this.isPlainObject(existing?.metadata) || this.isPlainObject(incoming?.metadata)) {
-            merged.metadata = {
-                ...(this.isPlainObject(existing?.metadata) ? existing.metadata : {}),
-                ...(this.isPlainObject(incoming?.metadata) ? incoming.metadata : {})
-            };
+            merged.metadata = this.mergeSafePlainObjects(
+                this.isPlainObject(existing?.metadata) ? existing.metadata : {},
+                this.isPlainObject(incoming?.metadata) ? incoming.metadata : {}
+            );
         }
 
         if (this.isPlainObject(existing?.realData) || this.isPlainObject(incoming?.realData)) {
-            merged.realData = {
-                ...(this.isPlainObject(existing?.realData) ? existing.realData : {}),
-                ...(this.isPlainObject(incoming?.realData) ? incoming.realData : {})
-            };
+            merged.realData = this.mergeSafePlainObjects(
+                this.isPlainObject(existing?.realData) ? existing.realData : {},
+                this.isPlainObject(incoming?.realData) ? incoming.realData : {}
+            );
         }
 
         merged.startTime = this.normalizeDateValue(merged.startTime || incoming.startTime || existing.startTime) || merged.startTime;
@@ -923,6 +1058,16 @@ class DataBackupManager {
         }
 
         const keys = Object.keys(candidate).map(key => key.toLowerCase());
+        const recordContainerKeys = new Set([
+            'practicerecords',
+            'practice_records',
+            'exam_system_practice_records',
+            'mymelodypracticerecords',
+            'my_melody_practice_records'
+        ]);
+        if (keys.some(key => recordContainerKeys.has(key))) {
+            return false;
+        }
         return keys.some(key => key.includes('stats') || key.includes('practicecount') || key.includes('totalpractice') || key.includes('total_practice'));
     }
 
@@ -932,8 +1077,24 @@ class DataBackupManager {
         }
 
         const normalized = {};
-        for (const [key, value] of Object.entries(candidate)) {
-            normalized[this.toCamelCaseKey(key)] = value;
+        const cloneOptions = {
+            maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+        };
+        for (const [key, value] of this.safeEntries(candidate)) {
+            const safeKey = this.normalizeText(this.toCamelCaseKey(key), MAX_BACKUP_RECORD_ID_LENGTH);
+            if (!safeKey || this.isUnsafeImportKey(safeKey)) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(normalized, safeKey) && Object.keys(normalized).length >= MAX_BACKUP_RECORD_OBJECT_KEYS) {
+                continue;
+            }
+            const safeValue = this.cloneSafeValue(value, cloneOptions);
+            if (safeValue !== undefined) {
+                normalized[safeKey] = safeValue;
+            }
         }
         return normalized;
     }
@@ -951,18 +1112,23 @@ class DataBackupManager {
         const safePrefix = fallbackIdPrefix || 'record';
         const sourceId = record.id ?? record.recordId ?? record.practiceId ?? record.sessionId ?? record.timestamp ?? record.uuid;
 
-        let id = preserveIds && sourceId ? String(sourceId).trim() : '';
+        let id = preserveIds && sourceId ? this.normalizeText(sourceId, MAX_BACKUP_RECORD_ID_LENGTH) : '';
         if (!id) {
-            id = `${safePrefix}_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+            id = `${safePrefix}_${Date.now()}_${index}_${createDataBackupId('normalized')}`;
         }
 
         const examId = record.examId ?? record.exam_id ?? record.examID ?? record.examName ?? record.title ?? record.name;
 
-        const normalized = { ...record };
+        const normalized = this.cloneSafePlainObject(record, {
+            maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+        });
         normalized.id = id;
-        normalized.examId = examId ? String(examId) : id;
-        normalized.title = record.title ?? record.examTitle ?? record.examName ?? record.name ?? 'Practice record';
-        normalized.status = record.status ?? record.recordStatus ?? 'completed';
+        normalized.examId = examId ? this.normalizeText(examId, MAX_BACKUP_RECORD_ID_LENGTH) : id;
+        normalized.title = this.normalizeText(record.title ?? record.examTitle ?? record.examName ?? record.name ?? 'Practice record', MAX_BACKUP_RECORD_TITLE_LENGTH) || 'Practice record';
+        normalized.status = this.normalizeText(record.status ?? record.recordStatus ?? 'completed', MAX_BACKUP_RECORD_STATUS_LENGTH) || 'completed';
 
         const startTimeRaw = record.startTime ?? record.start_time ?? record.startedAt ?? record.createdAt ?? record.timestamp ?? record.date;
         const endTimeRaw = record.endTime ?? record.end_time ?? record.finishedAt ?? record.completedAt;
@@ -996,22 +1162,39 @@ class DataBackupManager {
         normalized.correctAnswers = this.parseInteger(record.correctAnswers ?? record.correctCount ?? record.realData?.correctAnswers ?? record.realData?.correct) ?? normalized.correctAnswers;
         normalized.accuracy = this.parseNumber(record.accuracy ?? record.realData?.accuracy ?? record.percentage) ?? normalized.accuracy;
 
-        normalized.metadata = this.isPlainObject(record.metadata) ? { ...record.metadata } : {};
+        normalized.metadata = this.isPlainObject(record.metadata)
+            ? this.cloneSafePlainObject(record.metadata, {
+                maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+                maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+                maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+                maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+            })
+            : {};
         const category = record.category ?? record.examCategory ?? record.section ?? record.mode;
         if (category && !normalized.metadata.category) {
-            normalized.metadata.category = category;
+            normalized.metadata.category = this.normalizeText(category, MAX_BACKUP_RECORD_TEXT_LENGTH);
         }
         if (record.frequency !== undefined && normalized.metadata.frequency === undefined) {
-            normalized.metadata.frequency = record.frequency;
+            normalized.metadata.frequency = this.normalizeText(record.frequency, MAX_BACKUP_RECORD_TEXT_LENGTH);
         }
 
         if (this.isPlainObject(record.realData)) {
-            normalized.realData = { ...record.realData };
+            normalized.realData = this.cloneSafePlainObject(record.realData, {
+                maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+                maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+                maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+                maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+            });
         } else if (this.isPlainObject(record.details)) {
-            normalized.realData = { ...record.details };
+            normalized.realData = this.cloneSafePlainObject(record.details, {
+                maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+                maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+                maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+                maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+            });
         }
 
-        normalized.source = record.source ?? record.dataSource ?? normalized.source ?? 'imported';
+        normalized.source = this.normalizeText(record.source ?? record.dataSource ?? normalized.source ?? 'imported', MAX_BACKUP_RECORD_TEXT_LENGTH) || 'imported';
 
         if ((!normalized.duration || normalized.duration <= 0) && normalized.startTime && normalized.endTime) {
             const start = new Date(normalized.startTime).getTime();
@@ -1196,7 +1379,75 @@ class DataBackupManager {
             }
 
             // 返回备份对象，让调用者决定如何处理数据
-            return backup;
+            if (!this.isPlainObject(backup.data)) {
+                throw new Error(`Backup ${backupId} does not contain restorable data.`);
+            }
+
+            const restored = {};
+
+            const practiceRecordSource = Array.isArray(backup.data.practice_records)
+                ? backup.data.practice_records
+                : (Array.isArray(backup.data.practiceRecords) ? backup.data.practiceRecords : null);
+            if (practiceRecordSource) {
+                if (practiceRecordSource.length > MAX_BACKUP_IMPORT_RECORDS) {
+                    throw createImportLimitError(`Backup contains too many practice records. Maximum supported count is ${MAX_BACKUP_IMPORT_RECORDS}.`);
+                }
+                const normalizedRecords = practiceRecordSource
+                    .map((record, index) => this.normalizeRecord(record, {
+                        preserveIds: true,
+                        fallbackIdPrefix: 'backup',
+                        index
+                    }))
+                    .filter(Boolean);
+                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                    await window.PracticeCore.store.replacePracticeRecords(normalizedRecords);
+                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                    await window.simpleStorageWrapper.savePracticeRecords(normalizedRecords);
+                } else {
+                    await storage.set('practice_records', normalizedRecords);
+                }
+                restored.practiceRecords = normalizedRecords.length;
+            }
+
+            const userStatsSource = this.isPlainObject(backup.data.user_stats)
+                ? backup.data.user_stats
+                : (this.isPlainObject(backup.data.userStats) ? backup.data.userStats : null);
+            if (userStatsSource) {
+                const userStats = this.cloneSafePlainObject(userStatsSource, {
+                    maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+                    maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+                    maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+                    maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+                });
+                await storage.set('user_stats', userStats);
+                restored.userStats = Object.keys(userStats).length;
+            }
+
+            const examIndexSource = Array.isArray(backup.data.exam_index)
+                ? backup.data.exam_index
+                : (Array.isArray(backup.data.examIndex) ? backup.data.examIndex : null);
+            if (examIndexSource) {
+                const examIndex = this.cloneSafeValue(examIndexSource, {
+                    maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+                    maxArrayItems: MAX_BACKUP_IMPORT_RECORDS,
+                    maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+                    maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+                }) || [];
+                await storage.set('exam_index', Array.isArray(examIndex) ? examIndex : []);
+                restored.examIndex = Array.isArray(examIndex) ? examIndex.length : 0;
+            }
+
+            const storageVersion = backup.data.storage_version ?? backup.data.storageVersion;
+            if (typeof storageVersion === 'string' && storageVersion.trim()) {
+                await storage.set('storage_version', this.normalizeText(storageVersion, MAX_BACKUP_RECORD_ID_LENGTH));
+                restored.storageVersion = true;
+            }
+
+            return {
+                success: true,
+                backupId,
+                restored
+            };
         } catch (error) {
             console.error('[DataBackupManager] backup restore failed', error);
             throw error;
@@ -1360,6 +1611,131 @@ class DataBackupManager {
         return String(key)
             .replace(/[-_\s]+([a-zA-Z0-9])/g, (_, group) => group.toUpperCase())
             .replace(/^[A-Z]/, match => match.toLowerCase());
+    }
+
+    isUnsafeImportKey(key) {
+        return BACKUP_IMPORT_POLLUTION_KEYS.has(String(key));
+    }
+
+    safeEntries(value) {
+        if (!this.isPlainObject(value)) {
+            return [];
+        }
+        return Object.entries(value).filter(([key]) => !this.isUnsafeImportKey(key));
+    }
+
+    normalizeText(value, maxLength = MAX_BACKUP_RECORD_TEXT_LENGTH) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+        return String(value)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .trim()
+            .slice(0, maxLength);
+    }
+
+    cloneSafeValue(value, options = {}, depth = 0, seen = null) {
+        const {
+            maxDepth = MAX_BACKUP_RECORD_CLONE_DEPTH,
+            maxArrayItems = MAX_BACKUP_RECORD_ARRAY_ITEMS,
+            maxObjectKeys = MAX_BACKUP_RECORD_OBJECT_KEYS,
+            maxTextLength = MAX_BACKUP_RECORD_TEXT_LENGTH
+        } = options;
+
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return this.normalizeText(value, maxTextLength);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth >= maxDepth) {
+            return undefined;
+        }
+
+        const scanState = seen || new WeakSet();
+        if (scanState.has(value)) {
+            return undefined;
+        }
+        scanState.add(value);
+
+        if (Array.isArray(value)) {
+            return value
+                .slice(0, maxArrayItems)
+                .map((item) => this.cloneSafeValue(item, options, depth + 1, scanState))
+                .filter((item) => item !== undefined);
+        }
+
+        if (!this.isPlainObject(value)) {
+            return this.normalizeText(value, maxTextLength);
+        }
+
+        const clone = {};
+        this.safeEntries(value)
+            .slice(0, maxObjectKeys)
+            .forEach(([key, item]) => {
+                const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
+                if (!safeKey || this.isUnsafeImportKey(safeKey)) {
+                    return;
+                }
+                const safeValue = this.cloneSafeValue(item, options, depth + 1, scanState);
+                if (safeValue !== undefined) {
+                    clone[safeKey] = safeValue;
+                }
+            });
+        return clone;
+    }
+
+    cloneSafePlainObject(value, options = {}) {
+        const {
+            maxObjectKeys = MAX_BACKUP_RECORD_OBJECT_KEYS
+        } = options;
+        const clone = {};
+        for (const [key, item] of this.safeEntries(value)) {
+            const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
+            if (!safeKey || this.isUnsafeImportKey(safeKey)) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(clone, safeKey) && Object.keys(clone).length >= maxObjectKeys) {
+                continue;
+            }
+            const safeValue = this.cloneSafeValue(item, options, 0);
+            if (safeValue !== undefined) {
+                clone[safeKey] = safeValue;
+            }
+        }
+        return clone;
+    }
+
+    mergeSafePlainObjects(...objects) {
+        const merged = {};
+        objects.forEach((object) => {
+            for (const [key, value] of this.safeEntries(object)) {
+                const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
+                if (!safeKey || this.isUnsafeImportKey(safeKey)) {
+                    continue;
+                }
+                if (!Object.prototype.hasOwnProperty.call(merged, safeKey) && Object.keys(merged).length >= MAX_BACKUP_RECORD_OBJECT_KEYS) {
+                    continue;
+                }
+                const safeValue = this.cloneSafeValue(value);
+                if (safeValue !== undefined) {
+                    merged[safeKey] = safeValue;
+                }
+            }
+        });
+        return merged;
     }
 
     isPlainObject(value) {

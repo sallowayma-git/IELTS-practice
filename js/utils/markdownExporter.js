@@ -3,6 +3,22 @@
  * 用于将练习数据导出为 Markdown 格式
  */
 class MarkdownExporter {
+    escapeMarkdownText(value, maxLength = 200) {
+        const text = String(value ?? '')
+            .replace(/[\x00-\x1f\x7f]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, maxLength);
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\\/g, '\\\\')
+            .replace(/\|/g, '\\|')
+            .replace(/([`*_{}\[\]()#+\-.!>])/g, '\\$1');
+    }
+
     normalizeTitle(rawTitle) {
         if (!rawTitle) return '未知题目';
         const title = String(rawTitle).trim();
@@ -23,6 +39,25 @@ class MarkdownExporter {
         }
 
         return title;
+    }
+
+    resolveRecordDateKey(record) {
+        const candidates = [
+            record?.startTime,
+            record?.date,
+            record?.createdAt,
+            record?.endTime
+        ];
+        for (const candidate of candidates) {
+            if (candidate == null || candidate === '') {
+                continue;
+            }
+            const date = new Date(candidate);
+            if (!Number.isNaN(date.getTime())) {
+                return date.toISOString().split('T')[0];
+            }
+        }
+        return 'unknown-date';
     }
 
     hasAnswerDetails(record) {
@@ -305,7 +340,7 @@ class MarkdownExporter {
             const record = practiceRecords[i];
             
             // 获取日期字符串 (YYYY-MM-DD)
-            const date = new Date(record.startTime || record.date).toISOString().split('T')[0];
+            const date = this.resolveRecordDateKey(record);
             
             if (!grouped[date]) {
                 grouped[date] = [];
@@ -340,7 +375,7 @@ class MarkdownExporter {
         
         practiceRecords.forEach(record => {
             // 获取日期字符串 (YYYY-MM-DD)
-            const date = new Date(record.startTime || record.date).toISOString().split('T')[0];
+            const date = this.resolveRecordDateKey(record);
             
             if (!grouped[date]) {
                 grouped[date] = [];
@@ -383,7 +418,7 @@ class MarkdownExporter {
             this.updateProgress(`正在处理 ${date} 的记录... (${i + 1}/${datesToProcess.length})`);
             
             // 添加日期标题
-            markdown += `## ${date}\n\n`;
+            markdown += `## ${this.escapeMarkdownText(date, 40) || 'unknown-date'}\n\n`;
             
             // 处理当天全部记录
             const recordsToProcess = records;
@@ -396,7 +431,7 @@ class MarkdownExporter {
                     markdown += '\n\n'; // 记录之间空两行
                 } catch (error) {
                     console.warn('[MarkdownExporter] 生成记录Markdown失败:', error);
-                    markdown += `### 记录处理失败: ${record.id || 'unknown'}\n\n`;
+                    markdown += `### 记录处理失败: ${this.escapeMarkdownText(record?.id || 'unknown', 80)}\n\n`;
                 }
                 
                 // 每处理5条记录就让出控制权
@@ -427,7 +462,7 @@ class MarkdownExporter {
             const records = recordsByDate[date];
             
             // 添加日期标题
-            markdown += `## ${date}\n\n`;
+            markdown += `## ${this.escapeMarkdownText(date, 40) || 'unknown-date'}\n\n`;
             
             for (let j = 0; j < records.length; j++) {
                 const record = records[j];
@@ -445,15 +480,15 @@ class MarkdownExporter {
     generateRecordMarkdown(record) {
         const { title, category, frequency } = record;
         const metadata = record.metadata || {};
-        const displayTitle = this.normalizeTitle(
+        const displayTitle = this.escapeMarkdownText(this.normalizeTitle(
             metadata.examTitle
             || metadata.title
             || title
             || record.examId
             || '未知题目'
-        );
-        const categoryLabel = metadata.category || category || 'Unknown';
-        const frequencyLabel = metadata.frequency || frequency || 'unknown';
+        ), 160);
+        const categoryLabel = this.escapeMarkdownText(metadata.category || category || 'Unknown', 80);
+        const frequencyLabel = this.escapeMarkdownText(metadata.frequency || frequency || 'unknown', 80);
         const metrics = this.resolveScoreMetrics(record);
         
         // 标题行
@@ -466,7 +501,7 @@ class MarkdownExporter {
             // 如果没有详细数据，显示基本信息
             markdown += `**分数:** ${metrics.correct}/${metrics.total}\n`;
             markdown += `**准确率:** ${metrics.percentage}%\n`;
-            markdown += `**用时:** ${record.duration || 0}秒\n`;
+            markdown += `**用时:** ${this.escapeMarkdownText(record.duration || 0, 40)}秒\n`;
         }
         
         return markdown;
@@ -591,10 +626,10 @@ class MarkdownExporter {
                     const cleanUserAnswer = this.cleanAnswerText(userAnswer || 'No Answer');
                     const cleanCorrectAnswer = this.cleanAnswerText(correctAnswer || 'N/A');
                     
-                    table += `| ${qNum} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
+                    table += `| ${this.escapeMarkdownText(qNum, 20)} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
                     console.warn('[MarkdownExporter] 处理题目失败:', qNum, error);
-                    table += `| ${qNum} | Error | Error | ✗ |\n`;
+                    table += `| ${this.escapeMarkdownText(qNum, 20)} | Error | Error | ✗ |\n`;
                 }
             }
             
@@ -652,7 +687,7 @@ class MarkdownExporter {
                     const cleanUserAnswer = this.cleanAnswerText(userAnswer);
                     const cleanCorrectAnswer = this.cleanAnswerText(correctAnswer);
                     
-                    table += `| ${questionNum} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
+                    table += `| ${this.escapeMarkdownText(questionNum, 20)} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
                     console.warn('[MarkdownExporter] 处理比较数据失败:', key, error);
                 }
@@ -671,12 +706,7 @@ class MarkdownExporter {
     cleanAnswerText(text) {
         if (!text) return '';
         
-        return String(text)
-            .replace(/\|/g, '\\|')  // 转义管道符
-            .replace(/\n/g, ' ')    // 替换换行符
-            .replace(/\r/g, '')     // 移除回车符
-            .trim()
-            .substring(0, 100);     // 限制长度
+        return this.escapeMarkdownText(text, 100);
     }
 
     /**
@@ -927,7 +957,7 @@ class MarkdownExporter {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
             
             console.log('[MarkdownExporter] 文件下载完成');
         } catch (error) {

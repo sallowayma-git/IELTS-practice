@@ -1,6 +1,21 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
 
     function getMessageTargetOrigin() {
         const origin = global && global.location && global.location.origin;
@@ -2116,7 +2131,7 @@
             }
         },
         _generateSuiteSessionId() {
-            return 'suite_' + Date.now().toString(36) + '_' + Math.random().toString(16).slice(2, 8);
+            return 'suite_' + Date.now().toString(36) + '_' + randomIdSuffix();
         },
 
         _registerSuiteSequence(session) {
@@ -2815,7 +2830,7 @@
          */
         _generateMultiSuiteSessionId(baseExamId) {
             const timestamp = Date.now().toString(36);
-            const random = Math.random().toString(16).slice(2, 8);
+            const random = randomIdSuffix();
             const prefix = baseExamId ? baseExamId + '_' : '';
             return 'multi_' + prefix + timestamp + '_' + random;
         },

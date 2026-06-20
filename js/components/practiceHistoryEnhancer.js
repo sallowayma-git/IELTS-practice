@@ -2,6 +2,15 @@
  * 练习历史增强器
  * 为练习历史组件添加 Markdown 导出和详情弹窗功能
  */
+const MAX_RECORD_LOOKUP_ID_LENGTH = 200;
+const MAX_JSON_EXPORT_RECORDS = 5000;
+const MAX_JSON_EXPORT_ARRAY_ITEMS = 500;
+const MAX_JSON_EXPORT_OBJECT_KEYS = 200;
+const MAX_JSON_EXPORT_STRING_LENGTH = 20000;
+const MAX_JSON_EXPORT_DEPTH = 8;
+const MAX_JSON_EXPORT_NODES = 50000;
+const JSON_EXPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
 class PracticeHistoryEnhancer {
     constructor() {
         this.initialized = false;
@@ -28,6 +37,103 @@ class PracticeHistoryEnhancer {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    normalizeRecordLookupId(value) {
+        if (value == null) {
+            return '';
+        }
+        try {
+            const text = String(value);
+            return text.length <= MAX_RECORD_LOOKUP_ID_LENGTH ? text : '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    createSafeJsonExportPayload(records, stats) {
+        const safeRecords = Array.isArray(records) ? records.slice(0, MAX_JSON_EXPORT_RECORDS) : [];
+        const state = {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        const payload = {
+            exportDate: new Date().toISOString(),
+            stats: this.sanitizeJsonExportValue(stats || {}, 0, state),
+            records: safeRecords.map(record => this.sanitizeJsonExportValue(record, 0, state))
+        };
+        if (Array.isArray(records) && records.length > safeRecords.length) {
+            payload.truncated = {
+                records: true,
+                maxRecords: MAX_JSON_EXPORT_RECORDS,
+                originalRecordCount: records.length
+            };
+        }
+        return payload;
+    }
+
+    sanitizeJsonExportValue(value, depth = 0, state = { seen: new WeakSet(), nodes: 0 }) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_JSON_EXPORT_STRING_LENGTH
+                ? `${value.slice(0, MAX_JSON_EXPORT_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number' || valueType === 'boolean') {
+            return Number.isNaN(value) ? null : value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return null;
+        }
+        if (depth > MAX_JSON_EXPORT_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_JSON_EXPORT_NODES) {
+            return '[Truncated]';
+        }
+        state.seen.add(value);
+        state.nodes++;
+
+        if (Array.isArray(value)) {
+            const safeItems = value.slice(0, MAX_JSON_EXPORT_ARRAY_ITEMS)
+                .map(item => this.sanitizeJsonExportValue(item, depth + 1, state));
+            if (value.length > safeItems.length) {
+                safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
+            }
+            return safeItems;
+        }
+
+        const safeObject = {};
+        let allKeys;
+        try {
+            allKeys = Object.keys(value);
+        } catch (error) {
+            return '[Unreadable]';
+        }
+        const keys = allKeys.slice(0, MAX_JSON_EXPORT_OBJECT_KEYS);
+        for (const key of keys) {
+            if (JSON_EXPORT_POLLUTION_KEYS.has(key)) {
+                continue;
+            }
+            try {
+                safeObject[key] = this.sanitizeJsonExportValue(value[key], depth + 1, state);
+            } catch (error) {
+                safeObject[key] = '[Unreadable]';
+            }
+        }
+        if (allKeys.length > keys.length) {
+            safeObject.__truncatedKeys = allKeys.length - keys.length;
+        }
+        return safeObject;
     }
 
     /**
@@ -145,7 +251,7 @@ class PracticeHistoryEnhancer {
                 if (originalCreateRecordItem) {
                     practiceHistory.createRecordItem = (record) => {
                         const html = originalCreateRecordItem(record);
-                        const recordId = this.escapeHtml(record && record.id);
+                        const recordId = this.escapeHtml(this.normalizeRecordLookupId(record && record.id));
                         // 替换标题，使其可点击
                         return html.replace(
                             /<h4 class="record-title clickable">([^<]+)<\/h4>/,
@@ -199,12 +305,13 @@ class PracticeHistoryEnhancer {
      * 显示导出选择对话框
      */
     showExportDialog() {
+        document.getElementById('export-dialog')?.remove();
         const dialogHtml = `
             <div id="export-dialog" class="modal-overlay">
                 <div class="modal-container" style="max-width: 500px;">
                     <div class="modal-header">
                         <h3 class="modal-title">导出练习记录</h3>
-                        <button class="modal-close" onclick="document.getElementById('export-dialog').remove()">
+                        <button class="modal-close" type="button" data-action="export-dialog-close">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -232,10 +339,10 @@ class PracticeHistoryEnhancer {
                     </div>
                     
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" onclick="document.getElementById('export-dialog').remove()">
+                        <button class="btn btn-secondary" type="button" data-action="export-dialog-close">
                             取消
                         </button>
-                        <button class="btn btn-primary" onclick="window.practiceHistoryEnhancer.performExport()">
+                        <button class="btn btn-primary" type="button" data-action="export-dialog-submit">
                             <i class="fas fa-download"></i> 导出
                         </button>
                     </div>
@@ -244,6 +351,24 @@ class PracticeHistoryEnhancer {
         `;
 
         document.body.insertAdjacentHTML('beforeend', dialogHtml);
+        const dialog = document.getElementById('export-dialog');
+        if (!dialog) {
+            return;
+        }
+        dialog.addEventListener('click', (event) => {
+            const trigger = event.target instanceof HTMLElement
+                ? event.target.closest('[data-action]')
+                : null;
+            if (!trigger) {
+                return;
+            }
+            const action = trigger.getAttribute('data-action');
+            if (action === 'export-dialog-close') {
+                dialog.remove();
+            } else if (action === 'export-dialog-submit') {
+                this.performExport();
+            }
+        });
     }
 
     /**
@@ -299,7 +424,7 @@ class PracticeHistoryEnhancer {
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 0);
                 
                 if (window.showMessage) {
                     window.showMessage('JSON 格式导出成功', 'success');
@@ -326,11 +451,7 @@ class PracticeHistoryEnhancer {
                 throw new Error('没有练习记录可导出');
             }
             
-            const data = {
-                exportDate: new Date().toISOString(),
-                stats: practiceStats,
-                records: practiceRecords
-            };
+            const data = this.createSafeJsonExportPayload(practiceRecords, practiceStats);
 
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -340,7 +461,7 @@ class PracticeHistoryEnhancer {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
             
             if (window.showMessage) {
                 window.showMessage('JSON 格式导出成功', 'success');
@@ -356,8 +477,11 @@ class PracticeHistoryEnhancer {
      * 优先从核心数据仓库获取练习记录，避免 legacy storage 造成数据缺失
      */
     async fetchRecordById(recordId) {
-        const toIdStr = (v) => v == null ? '' : String(v);
+        const toIdStr = (v) => this.normalizeRecordLookupId(v);
         const targetIdStr = toIdStr(recordId);
+        if (!targetIdStr) {
+            return null;
+        }
 
         // 1) 优先通过 PracticeRecorder / ScoreStorage 获取最新记录
         const practiceRecorder = window.app?.components?.practiceRecorder;

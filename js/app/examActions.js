@@ -363,6 +363,14 @@
             : null;
     }
 
+    function resolveActionExam(examId) {
+        const exam = findExamById(examId);
+        if (!exam && typeof global.showMessage === 'function') {
+            global.showMessage('题目不存在或已不可用', 'error');
+        }
+        return exam || null;
+    }
+
     function isReadingMemorizeBrowseMode() {
         return global.__readingMemorizeBrowseMode === true
             || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
@@ -419,11 +427,11 @@
             global.setBrowseTitle('阅读理解');
         }
         if (global.app && typeof global.app.openExam === 'function') {
-            global.app.openExam(examId, launchOptions);
+            global.app.openExam(exam.id, launchOptions);
             return;
         }
         if (typeof global.openExam === 'function') {
-            global.openExam(examId, launchOptions);
+            global.openExam(exam.id, launchOptions);
             return;
         }
         if (global.AppActions && typeof global.AppActions.openExamWithFallback === 'function') {
@@ -1228,24 +1236,29 @@
                 return;
             }
 
+            var exam = resolveActionExam(examId);
+            if (!exam) {
+                return;
+            }
+
             if (action === 'start') {
                 if (global.app && typeof global.app.openExam === 'function') {
-                    global.app.openExam(examId);
+                    global.app.openExam(exam.id);
                     return;
                 }
                 if (typeof global.openExam === 'function') {
-                    global.openExam(examId);
+                    global.openExam(exam.id);
                 }
                 return;
             }
 
             if (action === 'pdf' && typeof global.viewPDF === 'function') {
-                global.viewPDF(examId);
+                global.viewPDF(exam.id);
                 return;
             }
 
             if (action === 'generate' && typeof global.generateHTML === 'function') {
-                global.generateHTML(examId);
+                global.generateHTML(exam.id);
             }
         };
 
@@ -1349,7 +1362,7 @@
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
             try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
         } catch (e) {
             try { global.showMessage && global.showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }

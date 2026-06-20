@@ -2,6 +2,46 @@
  * 虚拟滚动器组件
  * 用于处理大量数据的高性能渲染
  */
+function resolveTrustedImagePreloadUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return '';
+    }
+    try {
+        const baseHref = (typeof document !== 'undefined' && document.baseURI)
+            || (typeof window !== 'undefined' && window.location && window.location.href)
+            || 'http://localhost/';
+        const resolved = new URL(rawUrl.trim(), baseHref);
+        const protocol = (resolved.protocol || '').toLowerCase();
+        if (protocol === 'http:' || protocol === 'https:') {
+            const currentOrigin = typeof window !== 'undefined' && window.location
+                ? window.location.origin
+                : '';
+            return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                ? resolved.href
+                : '';
+        }
+        if (protocol === 'file:') {
+            return typeof window !== 'undefined' && window.location && window.location.protocol === 'file:'
+                ? resolved.href
+                : '';
+        }
+        if (protocol === 'blob:') {
+            const currentOrigin = typeof window !== 'undefined' && window.location
+                ? window.location.origin
+                : '';
+            return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                ? resolved.href
+                : '';
+        }
+        if (protocol === 'data:' && /^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(resolved.href)) {
+            return resolved.href;
+        }
+    } catch (_) {
+        return '';
+    }
+    return '';
+}
+
 class VirtualScroller {
     constructor(container, items, renderer, options = {}) {
         this.container = container;
@@ -465,7 +505,10 @@ class PerformanceOptimizer {
      * 预加载图片
      */
     preloadImages(imageUrls) {
-        const promises = imageUrls.map(url => {
+        const safeUrls = (Array.isArray(imageUrls) ? imageUrls : [])
+            .map((url) => resolveTrustedImagePreloadUrl(url))
+            .filter(Boolean);
+        const promises = safeUrls.map(url => {
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => resolve(url);

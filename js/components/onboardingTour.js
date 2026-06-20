@@ -13,16 +13,6 @@
     LAST_SHOWN: 'onboardingLastShown'
   };
 
-  function escapeHtml(value) {
-    if (value == null) return '';
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
   // 默认步骤配置
   const DEFAULT_STEPS = [
     {
@@ -458,56 +448,91 @@
       this._tooltip.appendChild(arrow);
     }
 
+    _appendTextElement(parent, tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) {
+        element.className = className;
+      }
+      element.textContent = String(text || '');
+      parent.appendChild(element);
+      return element;
+    }
+
+    _createActionButton(action, text, modifierClass) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `onboarding-tooltip__btn ${modifierClass}`;
+      button.dataset.action = action;
+      button.textContent = String(text || '');
+      return button;
+    }
+
+    _appendVisible() {
+      requestAnimationFrame(() => {
+        this._tooltip?.classList.add('is-visible');
+      });
+    }
+
     renderTooltipContent(step, current, total) {
       if (!this._tooltip) return;
 
-      const progressPercent = ((current + 1) / total) * 100;
-      const title = escapeHtml(step.title);
-      const content = escapeHtml(step.content);
-      const nextText = escapeHtml(step.nextText || '下一步');
+      const safeTotal = Number.isFinite(Number(total)) && Number(total) > 0 ? Number(total) : 1;
+      const safeCurrent = Math.min(Math.max(Number(current) || 0, 0), safeTotal - 1);
+      const progressPercent = Math.min(Math.max(((safeCurrent + 1) / safeTotal) * 100, 0), 100);
+      const nextText = step.nextText || '下一步';
 
-      this._tooltip.innerHTML = `
-        <div class="onboarding-tooltip__progress">
-          <div class="onboarding-tooltip__progress-bar">
-            <div class="onboarding-tooltip__progress-fill" style="width: ${progressPercent}%"></div>
-          </div>
-          <span class="onboarding-tooltip__progress-text">${current + 1} / ${total}</span>
-        </div>
-        <h3 class="onboarding-tooltip__title">${title}</h3>
-        <p class="onboarding-tooltip__content">${content}</p>
-        <div class="onboarding-tooltip__actions">
-          ${step.showPrev ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--secondary" data-action="prev">上一步</button>' : '<div></div>'}
-          <div>
-            ${step.showSkip ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--skip" data-action="skip">跳过</button>' : ''}
-            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${nextText}</button>`}
-          </div>
-        </div>
-      `;
+      const progress = document.createElement('div');
+      progress.className = 'onboarding-tooltip__progress';
+      const progressBar = document.createElement('div');
+      progressBar.className = 'onboarding-tooltip__progress-bar';
+      const progressFill = document.createElement('div');
+      progressFill.className = 'onboarding-tooltip__progress-fill';
+      progressFill.style.width = `${progressPercent}%`;
+      progressBar.appendChild(progressFill);
+      progress.appendChild(progressBar);
+      this._appendTextElement(progress, 'span', 'onboarding-tooltip__progress-text', `${safeCurrent + 1} / ${safeTotal}`);
 
-      requestAnimationFrame(() => {
-        this._tooltip.classList.add('is-visible');
-      });
+      const title = document.createElement('h3');
+      title.className = 'onboarding-tooltip__title';
+      title.textContent = String(step.title || '');
+
+      const content = document.createElement('p');
+      content.className = 'onboarding-tooltip__content';
+      content.textContent = String(step.content || '');
+
+      const actions = document.createElement('div');
+      actions.className = 'onboarding-tooltip__actions';
+      if (step.showPrev) {
+        actions.appendChild(this._createActionButton('prev', '上一步', 'onboarding-tooltip__btn--secondary'));
+      } else {
+        actions.appendChild(document.createElement('div'));
+      }
+      const rightActions = document.createElement('div');
+      if (step.showSkip) {
+        rightActions.appendChild(this._createActionButton('skip', '跳过', 'onboarding-tooltip__btn--skip'));
+      }
+      if (!step.hideNext) {
+        rightActions.appendChild(this._createActionButton('next', nextText, 'onboarding-tooltip__btn--primary'));
+      }
+      actions.appendChild(rightActions);
+
+      this._tooltip.replaceChildren(progress, title, content, actions);
+      this._appendVisible();
     }
 
     showWelcome(step) {
       if (!this._tooltip) return;
 
-      const title = escapeHtml(step.title);
-      const content = escapeHtml(step.content);
-      const nextText = escapeHtml(step.nextText || '下一步');
-
-      this._tooltip.innerHTML = `
-        <div class="onboarding-welcome">
-          <div class="onboarding-welcome__icon">🎓</div>
-          <h3 class="onboarding-tooltip__title">${title}</h3>
-          <p class="onboarding-tooltip__content">${content}</p>
-          <button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next" style="margin-top: 16px;">${nextText}</button>
-        </div>
-      `;
-
-      requestAnimationFrame(() => {
-        this._tooltip.classList.add('is-visible');
-      });
+      const welcome = document.createElement('div');
+      welcome.className = 'onboarding-welcome';
+      this._appendTextElement(welcome, 'div', 'onboarding-welcome__icon', '🎓');
+      this._appendTextElement(welcome, 'h3', 'onboarding-tooltip__title', step.title);
+      this._appendTextElement(welcome, 'p', 'onboarding-tooltip__content', step.content);
+      const nextButton = this._createActionButton('next', step.nextText || '下一步', 'onboarding-tooltip__btn--primary');
+      nextButton.style.marginTop = '16px';
+      welcome.appendChild(nextButton);
+      this._tooltip.replaceChildren(welcome);
+      this._appendVisible();
     }
 
     destroy() {

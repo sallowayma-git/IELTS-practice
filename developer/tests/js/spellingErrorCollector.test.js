@@ -236,6 +236,60 @@ function testIsSpellingError() {
 /**
  * 测试：来源检测
  */
+function testLexiconAssetUrlRejectsCrossOriginScriptRoot() {
+    console.log('Test: lexicon asset URL rejects cross-origin script roots');
+
+    const previousDocument = global.document;
+    const previousLocation = global.window.location;
+    const script = {
+        src: 'https://attacker.example/js/bundles/core-foundation.bundle.js',
+        getAttribute(name) {
+            return name === 'src' ? this.src : '';
+        }
+    };
+
+    global.window.location = {
+        href: 'http://127.0.0.1:3000/',
+        origin: 'http://127.0.0.1:3000',
+        protocol: 'http:'
+    };
+    global.document = {
+        currentScript: script,
+        baseURI: 'http://127.0.0.1:3000/',
+        querySelectorAll() {
+            return [script];
+        }
+    };
+
+    try {
+        const collector = new window.SpellingErrorCollector();
+        const resolved = collector.resolveAssetUrl('assets/wordlists/ielts_core.json');
+        assert.strictEqual(
+            resolved,
+            'http://127.0.0.1:3000/assets/wordlists/ielts_core.json',
+            'cross-origin script roots must not change bundled lexicon requests'
+        );
+        assert.strictEqual(
+            collector.resolveTrustedAssetUrl('https://attacker.example/assets/wordlists/ielts_core.json'),
+            '',
+            'cross-origin HTTP(S) lexicon URLs must be rejected'
+        );
+    } finally {
+        if (previousDocument === undefined) {
+            delete global.document;
+        } else {
+            global.document = previousDocument;
+        }
+        if (previousLocation === undefined) {
+            delete global.window.location;
+        } else {
+            global.window.location = previousLocation;
+        }
+    }
+
+    console.log('  OK lexicon asset URL same-origin guard');
+}
+
 function testDetectSource() {
     console.log('测试: 来源检测');
     
@@ -527,6 +581,100 @@ async function testMergeErrorsToList() {
 /**
  * 测试：保存错误到词表
  */
+function testVocabListSanitization() {
+    console.log('Test: vocab list sanitization');
+
+    const collector = new window.SpellingErrorCollector();
+    const payload = JSON.parse(`{
+        "id": "p1",
+        "source": "p1",
+        "__proto__": { "polluted": true },
+        "constructor": { "prototype": { "polluted": true } },
+        "stats": {
+            "reviewingWords": 1,
+            "__proto__": { "statsPolluted": true }
+        },
+        "words": [{
+            "word": "${'a'.repeat(220)}",
+            "userInput": "${'b'.repeat(220)}",
+            "__proto__": { "wordPolluted": true },
+            "metadata": {
+                "origin": "import",
+                "constructor": { "prototype": { "wordPolluted": true } }
+            }
+        }]
+    }`);
+    payload.words.push(...Array.from({ length: 5001 }, (_, index) => ({
+        word: `word${index}`,
+        userInput: `input${index}`,
+        timestamp: index
+    })));
+
+    const normalized = collector.normalizeVocabListShape(payload, 'p1', 'p1');
+    assert(normalized, 'expected sanitized vocab list');
+    assert.equal(Object.prototype.polluted, undefined);
+    assert.equal(Object.prototype.statsPolluted, undefined);
+    assert.equal(Object.prototype.wordPolluted, undefined);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, '__proto__'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'constructor'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized.stats, '__proto__'), false);
+    assert.equal(normalized.words.length, 5000);
+    assert(normalized.words.every((entry) => !Object.prototype.hasOwnProperty.call(entry, '__proto__')));
+    assert(normalized.words.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'constructor')));
+    assert(normalized.words.every((entry) => !entry.metadata || !Object.prototype.hasOwnProperty.call(entry.metadata, 'constructor')));
+    assert(normalized.words.every((entry) => typeof entry.word !== 'string' || entry.word.length <= 160));
+    assert(normalized.words.every((entry) => typeof entry.userInput !== 'string' || entry.userInput.length <= 160));
+
+    console.log('  ok vocab list sanitization');
+}
+/*
+    console.log('娴嬭瘯: 璇嶈〃瀹夊叏鍑€鍖?);
+
+    const collector = new window.SpellingErrorCollector();
+    const payload = JSON.parse(`{
+        "id": "p1",
+        "source": "p1",
+        "__proto__": { "polluted": true },
+        "constructor": { "prototype": { "polluted": true } },
+        "stats": {
+            "reviewingWords": 1,
+            "__proto__": { "statsPolluted": true }
+        },
+        "words": [{
+            "word": "${'a'.repeat(220)}",
+            "userInput": "${'b'.repeat(220)}",
+            "__proto__": { "wordPolluted": true },
+            "metadata": {
+                "origin": "import",
+                "constructor": { "prototype": { "wordPolluted": true } }
+            }
+        }]
+    }`);
+    payload.words.push(...Array.from({ length: 5001 }, (_, index) => ({
+        word: `word${index}`,
+        userInput: `input${index}`,
+        timestamp: index
+    })));
+
+    const normalized = collector.normalizeVocabListShape(payload, 'p1', 'p1');
+    assert(normalized, '搴旇繑鍥炲噣鍖栧悗璇嶈〃');
+    assert.equal(Object.prototype.polluted, undefined);
+    assert.equal(Object.prototype.statsPolluted, undefined);
+    assert.equal(Object.prototype.wordPolluted, undefined);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, '__proto__'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'constructor'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized.stats, '__proto__'), false);
+    assert.equal(normalized.words.length, 5000);
+    assert(normalized.words.every((entry) => !Object.prototype.hasOwnProperty.call(entry, '__proto__')));
+    assert(normalized.words.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'constructor')));
+    assert(normalized.words.every((entry) => !entry.metadata || !Object.prototype.hasOwnProperty.call(entry.metadata, 'constructor')));
+    assert(normalized.words.every((entry) => typeof entry.word !== 'string' || entry.word.length <= 160));
+    assert(normalized.words.every((entry) => typeof entry.userInput !== 'string' || entry.userInput.length <= 160));
+
+    console.log('  鉁?璇嶈〃瀹夊叏鍑€鍖栨纭?);
+}
+
+*/
 async function testSaveErrors() {
     console.log('测试: 保存错误到词表');
     
@@ -662,6 +810,7 @@ async function runTests() {
         testIsWord();
         testIsSimilarSpelling();
         testIsSpellingError();
+        testLexiconAssetUrlRejectsCrossOriginScriptRoot();
         testDetectSource();
         testSpellingFalsePositiveFilters();
         
@@ -670,6 +819,7 @@ async function runTests() {
         await testListeningCandidateSpellingDetection();
         await testVocabListSaveAndLoad();
         await testMergeErrorsToList();
+        testVocabListSanitization();
         await testSaveErrors();
         await testRemoveWord();
         await testClearList();

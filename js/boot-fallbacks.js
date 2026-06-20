@@ -38,6 +38,72 @@
   }
 
   var storage = window.storage;
+  var MAX_FALLBACK_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+  var FALLBACK_JSON_MIME_TYPES = {
+    '': true,
+    'application/json': true,
+    'text/json': true,
+    'text/plain': true
+  };
+
+  function validateFallbackJsonFile(file) {
+    if (!file || typeof file.size !== 'number') {
+      throw new Error('Invalid import file.');
+    }
+    if (file.size > MAX_FALLBACK_IMPORT_FILE_BYTES) {
+      throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+    var name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+    if (!/\.json$/.test(name)) {
+      throw new Error('Only JSON import files are supported.');
+    }
+    var type = typeof file.type === 'string' ? file.type.split(';')[0].trim().toLowerCase() : '';
+    if (!FALLBACK_JSON_MIME_TYPES[type]) {
+      throw new Error('Unsupported import file type.');
+    }
+  }
+
+  function isFallbackUnsafeAttributeName(name) {
+    var key = String(name || '').toLowerCase();
+    return key.indexOf('on') === 0 || key === 'srcdoc';
+  }
+
+  function isFallbackUnsafeUrlAttribute(name, value, tagName) {
+    var key = String(name || '').toLowerCase();
+    var urlAttrs = {
+      href: true,
+      src: true,
+      'xlink:href': true,
+      action: true,
+      formaction: true,
+      poster: true
+    };
+    if (!urlAttrs[key]) {
+      return false;
+    }
+    var text = String(value == null ? '' : value).trim();
+    if (!text) {
+      return false;
+    }
+    var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+      return true;
+    }
+    if (compact.indexOf('data:') === 0) {
+      var tag = String(tagName || '').toLowerCase();
+      if (key !== 'src' || tag !== 'img') {
+        return true;
+      }
+      return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+    }
+    return false;
+  }
+
+  function isFallbackUnsafeObjectKey(name) {
+    var key = String(name || '').toLowerCase();
+    return key === '__proto__' || key === 'prototype' || key === 'constructor';
+  }
+
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
@@ -205,6 +271,11 @@
         return;
       }
 
+      if (isFallbackUnsafeAttributeName(key) || isFallbackUnsafeUrlAttribute(key, value, element.tagName)) {
+        console.warn('[FallbackDOM] Skipped unsafe attribute: ' + key);
+        return;
+      }
+
       if (key === 'className') {
         element.className = value;
         return;
@@ -214,6 +285,9 @@
         Object.keys(value).forEach(function (dataKey) {
           var dataValue = value[dataKey];
           if (dataValue == null) {
+            return;
+          }
+          if (isFallbackUnsafeObjectKey(dataKey)) {
             return;
           }
           element.dataset[dataKey] = String(dataValue);
@@ -330,8 +404,13 @@
 
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
+    var normalizeFallbackMessageType = function (type) {
+      var value = String(type || '').trim().toLowerCase();
+      return ['info', 'success', 'warning', 'error'].indexOf(value) !== -1 ? value : 'info';
+    };
     window.showMessage = function (message, type, duration) {
       try {
+        var safeType = normalizeFallbackMessageType(type);
         var container = document.getElementById('message-container');
         if (!container) {
           container = document.createElement('div');
@@ -341,9 +420,9 @@
         }
 
         var note = document.createElement('div');
-        note.className = 'message ' + (type || 'info') + ' message-entering';
-        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
-        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        note.className = 'message ' + safeType + ' message-entering';
+        note.setAttribute('role', safeType === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', safeType === 'error' ? 'assertive' : 'polite');
 
         var indicator = document.createElement('span');
         indicator.className = 'message-indicator';
@@ -589,6 +668,12 @@
       window.showMessage && window.showMessage('请选择要导入的文件', 'warning');
       return;
     }
+    try {
+      validateFallbackJsonFile(inputFile);
+    } catch (error) {
+      window.showMessage && window.showMessage(error.message || 'Import file is invalid.', 'error');
+      return;
+    }
     const reader = new FileReader();
     reader.onerror = () => window.showMessage && window.showMessage('文件读取失败', 'error');
     reader.onload = async () => {
@@ -827,6 +912,20 @@
     }
   }
 
+  function normalizeFallbackLibraryConfigKey(value) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    var key = value.trim();
+    if (!key || key.length > 128) {
+      return '';
+    }
+    if (key === 'exam_index') {
+      return key;
+    }
+    return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
+  }
+
   async function ensureDefaultConfig() {
     try {
       var configs = [];
@@ -851,6 +950,7 @@
           try {
             var currentActive = storage.get('active_exam_index_key');
             currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
+            currentActive = normalizeFallbackLibraryConfigKey(currentActive);
             if (!currentActive && window.storage && storage.set) {
               var maybeSetActive = storage.set('active_exam_index_key', 'exam_index');
               if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
@@ -888,6 +988,7 @@
       try {
         if (window.storage && storage.get) {
           activeKey = await storage.get('active_exam_index_key', 'exam_index');
+          activeKey = normalizeFallbackLibraryConfigKey(activeKey) || 'exam_index';
         }
       } catch (e) { }
 
@@ -1036,11 +1137,12 @@
 
     _fallbackClearElement(container);
     container.hidden = false;
-    container.className = 'library-loader-report library-loader-report--' + (report.status || 'info');
+    var safeStatus = ['info', 'success', 'empty', 'warning', 'error'].includes(report.status) ? report.status : 'info';
+    container.className = 'library-loader-report library-loader-report--' + safeStatus;
 
-    var title = report.status === 'success'
+    var title = safeStatus === 'success'
       ? '导入完成'
-      : (report.status === 'empty' ? '未识别到可用题源' : '导入报告');
+      : (safeStatus === 'empty' ? '未识别到可用题源' : '导入报告');
     container.appendChild(_fallbackCreateElement('div', { className: 'library-loader-report__title' }, title));
 
     if (report.message) {
@@ -1330,19 +1432,20 @@
 
     async function _fallbackGetActiveLibraryKey() {
       if (typeof window.getActiveLibraryConfigurationKey === 'function') {
-        try { return await window.getActiveLibraryConfigurationKey(); } catch (_) { }
+        try { return normalizeFallbackLibraryConfigKey(await window.getActiveLibraryConfigurationKey()) || 'exam_index'; } catch (_) { }
       }
       if (storage && storage.get) {
         try {
           var maybeKey = storage.get('active_exam_index_key', 'exam_index');
           var key = (maybeKey && typeof maybeKey.then === 'function') ? await maybeKey : maybeKey;
-          return key || 'exam_index';
+          return normalizeFallbackLibraryConfigKey(key) || 'exam_index';
         } catch (_) { }
       }
       return 'exam_index';
     }
 
     async function _fallbackSetActiveLibraryKey(key) {
+      key = normalizeFallbackLibraryConfigKey(key);
       if (!key) return;
       if (typeof window.setActiveLibraryConfiguration === 'function') {
         try { await window.setActiveLibraryConfiguration(key); return; } catch (_) { }
@@ -1358,6 +1461,8 @@
     }
 
     async function _fallbackSaveLibraryConfiguration(name, key, count) {
+      key = normalizeFallbackLibraryConfigKey(key);
+      if (!key) return;
       var entry = { name: name, key: key, examCount: count, timestamp: Date.now() };
       if (typeof window.saveLibraryConfiguration === 'function') {
         try { await window.saveLibraryConfiguration(name, key, count); return; } catch (_) { }
@@ -1378,6 +1483,8 @@
     }
 
     async function _fallbackSaveIndexForKey(key, list) {
+      key = normalizeFallbackLibraryConfigKey(key);
+      if (!key) return;
       if (storage && storage.set) {
         var maybe = storage.set(key, list);
         if (maybe && typeof maybe.then === 'function') {
@@ -1389,6 +1496,8 @@
     }
 
     async function _fallbackApplyLibraryConfig(key, dataset, options) {
+      key = normalizeFallbackLibraryConfigKey(key);
+      if (!key) return false;
       if (typeof window.applyLibraryConfiguration === 'function') {
         try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
       }

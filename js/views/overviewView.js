@@ -226,12 +226,29 @@
             }, [browseButton, randomButton]);
         }
 
-        createSvgIcon(svgContent) {
+        createSvgIcon(paths) {
             const span = document.createElement('span');
             span.className = 'ui-emoji-icon';
             span.setAttribute('aria-hidden', 'true');
             span.style.display = 'inline-flex';
-            span.innerHTML = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`;
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('width', '1em');
+            svg.setAttribute('height', '1em');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '1.8');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            (Array.isArray(paths) ? paths : []).forEach((d) => {
+                if (typeof d !== 'string' || !d.trim()) {
+                    return;
+                }
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', d);
+                svg.appendChild(path);
+            });
+            span.appendChild(svg);
             return span;
         }
 
@@ -249,7 +266,11 @@
                     gap: '6px'
                 }
             }, [
-                this.createSvgIcon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8M8 17h6"></path>'),
+                this.createSvgIcon([
+                    'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z',
+                    'M14 3v6h6',
+                    'M8 13h8M8 17h6'
+                ]),
                 this.dom.create('span', {}, '套题模式')
             ]);
         }
@@ -269,7 +290,12 @@
                     gap: '6px'
                 }
             }, [
-                this.createSvgIcon('<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M6.2 11a6 6 0 0 1 10.6-2.4L20 11"></path><path d="M17.8 13a6 6 0 0 1-10.6 2.4L4 13"></path>'),
+                this.createSvgIcon([
+                    'M20 6v5h-5',
+                    'M4 18v-5h5',
+                    'M6.2 11a6 6 0 0 1 10.6-2.4L20 11',
+                    'M17.8 13a6 6 0 0 1-10.6 2.4L4 13'
+                ]),
                 this.dom.create('span', {}, '无尽模式')
             ]);
         }

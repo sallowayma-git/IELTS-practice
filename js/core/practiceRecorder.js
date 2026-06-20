@@ -11,6 +11,117 @@ function getMessageTargetOrigin() {
     return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
 }
 
+function isFileProtocolContext() {
+    return Boolean(window.location && window.location.protocol === 'file:');
+}
+
+function isAllowedSameOriginMessage(event) {
+    if (!event) {
+        return false;
+    }
+    if (!event.origin || event.origin === 'null') {
+        return isFileProtocolContext();
+    }
+    const allowedOrigin = window.location && window.location.origin;
+    return Boolean(allowedOrigin && allowedOrigin !== 'null' && event.origin === allowedOrigin);
+}
+
+let practiceRecorderFallbackIdCounter = 0;
+const PRACTICE_RECORDER_CLONE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const PRACTICE_RECORDER_CLONE_LIMITS = Object.freeze({
+    maxDepth: 12,
+    maxNodes: 20000,
+    maxArrayItems: 1000,
+    maxObjectKeys: 1000,
+    maxTextLength: 4000
+});
+
+function createPracticeRecorderId(prefix) {
+    const cryptoObj = window.crypto || window.msCrypto;
+    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+        return `${prefix}_${Date.now()}_${cryptoObj.randomUUID()}`;
+    }
+    if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        cryptoObj.getRandomValues(bytes);
+        const suffix = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        return `${prefix}_${Date.now()}_${suffix}`;
+    }
+    practiceRecorderFallbackIdCounter += 1;
+    return `${prefix}_${Date.now()}_fallback_${practiceRecorderFallbackIdCounter.toString(36)}`;
+}
+
+function isUnsafePracticeRecorderCloneKey(key) {
+    return PRACTICE_RECORDER_CLONE_UNSAFE_KEYS.has(String(key));
+}
+
+function limitPracticeRecorderCloneText(value) {
+    const text = String(value ?? '');
+    return text.length > PRACTICE_RECORDER_CLONE_LIMITS.maxTextLength
+        ? text.slice(0, PRACTICE_RECORDER_CLONE_LIMITS.maxTextLength)
+        : text;
+}
+
+function cloneRecorderData(value, depth = 0, state = null) {
+    if (value === null || value === undefined) {
+        return value ?? null;
+    }
+    if (typeof value === 'string') {
+        return limitPracticeRecorderCloneText(value);
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : undefined;
+    }
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+    }
+    if (typeof value !== 'object') {
+        return undefined;
+    }
+    if (depth > PRACTICE_RECORDER_CLONE_LIMITS.maxDepth) {
+        return undefined;
+    }
+
+    const cloneState = state || { stack: new WeakSet(), nodes: 0 };
+    if (cloneState.stack.has(value)) {
+        return undefined;
+    }
+    cloneState.nodes += 1;
+    if (cloneState.nodes > PRACTICE_RECORDER_CLONE_LIMITS.maxNodes) {
+        return undefined;
+    }
+    cloneState.stack.add(value);
+
+    if (Array.isArray(value)) {
+        const clone = value
+            .slice(0, PRACTICE_RECORDER_CLONE_LIMITS.maxArrayItems)
+            .map((item) => cloneRecorderData(item, depth + 1, cloneState))
+            .filter((item) => item !== undefined);
+        cloneState.stack.delete(value);
+        return clone;
+    }
+
+    const clone = {};
+    Object.keys(value).slice(0, PRACTICE_RECORDER_CLONE_LIMITS.maxObjectKeys).forEach((key) => {
+        if (isUnsafePracticeRecorderCloneKey(key)) {
+            return;
+        }
+        const safeKey = limitPracticeRecorderCloneText(key).trim();
+        if (!safeKey || isUnsafePracticeRecorderCloneKey(safeKey)) {
+            return;
+        }
+        const safeValue = cloneRecorderData(value[key], depth + 1, cloneState);
+        if (safeValue !== undefined) {
+            clone[safeKey] = safeValue;
+        }
+    });
+    cloneState.stack.delete(value);
+    return clone;
+}
+
 class PracticeRecorder {
     constructor() {
         this.activeSessions = new Map();
@@ -90,7 +201,7 @@ class PracticeRecorder {
             const existing = await this.metaRepo.get('rejected_completion_payloads', []);
             const list = Array.isArray(existing) ? existing : [];
             const snapshot = {
-                id: `rejected_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                id: createPracticeRecorderId('rejected'),
                 createdAt: new Date().toISOString(),
                 context: Object.assign({}, context),
                 payload: payload && typeof payload === 'object'
@@ -380,11 +491,8 @@ class PracticeRecorder {
             return false;
         }
 
-        if (event.origin && event.origin !== 'null') {
-            const allowedOrigin = window.location && window.location.origin;
-            if (allowedOrigin && allowedOrigin !== 'null' && event.origin !== allowedOrigin) {
-                return false;
-            }
+        if (!isAllowedSameOriginMessage(event)) {
+            return false;
         }
 
         const data = normalized.data;
@@ -394,20 +502,47 @@ class PracticeRecorder {
             data.derivedExamId,
             data.rawExamId
         ].map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean);
-        if (candidateExamIds.some((examId) => this.activeSessions.has(examId))) {
+        const sessionId = typeof data.sessionId === 'string' ? data.sessionId.trim() : '';
+
+        if (candidateExamIds.some((examId) => this.isAllowedActiveSessionMessage(event, examId, sessionId))) {
             return true;
         }
 
-        const sessionId = typeof data.sessionId === 'string' ? data.sessionId.trim() : '';
         if (sessionId) {
-            for (const session of this.activeSessions.values()) {
-                if (session && session.sessionId === sessionId) {
+            for (const [examId, session] of this.activeSessions.entries()) {
+                if (session && session.sessionId === sessionId && this.isAllowedActiveSessionMessage(event, examId, sessionId)) {
                     return true;
                 }
             }
         }
 
         return normalized.type === 'session_completed' && this.isSyntheticSessionAllowed(data);
+    }
+
+    getExpectedExamMessageWindow(examId) {
+        if (!examId || !window.app || !window.app.examWindows || typeof window.app.examWindows.get !== 'function') {
+            return null;
+        }
+        const windowInfo = window.app.examWindows.get(examId);
+        const expectedWindow = windowInfo && windowInfo.window;
+        return expectedWindow && !expectedWindow.closed ? expectedWindow : null;
+    }
+
+    isAllowedActiveSessionMessage(event, examId, sessionId = '') {
+        if (!examId || !this.activeSessions.has(examId)) {
+            return false;
+        }
+
+        const expectedWindow = this.getExpectedExamMessageWindow(examId);
+        if (expectedWindow) {
+            return Boolean(event && event.source && event.source === expectedWindow);
+        }
+
+        const session = this.activeSessions.get(examId);
+        const expectedSessionId = session && typeof session.sessionId === 'string'
+            ? session.sessionId.trim()
+            : '';
+        return Boolean(sessionId && expectedSessionId && sessionId === expectedSessionId);
     }
 
     normalizeIncomingMessage(rawMessage) {
@@ -468,6 +603,7 @@ class PracticeRecorder {
         if (!payload || typeof payload !== 'object') {
             return null;
         }
+        payload = cloneRecorderData(payload) || {};
 
         const scoreInfo = payload.scoreInfo || {};
         const toNumber = (value, fallback = 0) => {
@@ -1637,6 +1773,7 @@ class PracticeRecorder {
      * 标准化记录格式（用于降级保存）
      */
     standardizeRecordForFallback(recordData) {
+        recordData = cloneRecorderData(recordData) || {};
         const now = new Date().toISOString();
         const resolvedExamId = this.inferExamId(recordData);
         const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
@@ -2147,14 +2284,14 @@ class PracticeRecorder {
         if (this.scoreStorage && typeof this.scoreStorage.generateRecordId === 'function') {
             return this.scoreStorage.generateRecordId();
         }
-        return `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return createPracticeRecorderId('record');
     }
 
     /**
      * 生成会话ID
      */
     generateSessionId() {
-        return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return createPracticeRecorderId('session');
     }
 
     extractExamIdFromRecordId(recordId) {
@@ -2299,7 +2436,7 @@ class PracticeRecorder {
      */
     createRealPracticeRecord(exam, realData) {
         const now = new Date();
-        const recordId = `real_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const recordId = createPracticeRecorderId('real');
 
         // 提取分数信息
         const scoreInfo = realData.scoreInfo || {};

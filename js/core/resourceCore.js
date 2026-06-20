@@ -21,6 +21,20 @@
         return PATH_PROTOCOL_RE.test(value || '') || WINDOWS_DRIVE_RE.test(value || '');
     }
 
+    function normalizeLibraryConfigKey(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const key = value.trim();
+        if (!key || key.length > 128) {
+            return '';
+        }
+        if (key === 'exam_index') {
+            return key;
+        }
+        return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
+    }
+
     function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
         const source = map && typeof map === 'object' ? map : fallback;
         const cloneCategory = (category) => {
@@ -172,7 +186,8 @@
     }
 
     function getPathMapStorageKey(key) {
-        return PATH_MAP_STORAGE_PREFIX + key;
+        const configKey = normalizeLibraryConfigKey(key);
+        return configKey ? PATH_MAP_STORAGE_PREFIX + configKey : '';
     }
 
     function setActivePathMap(map) {
@@ -193,11 +208,12 @@
     }
 
     async function loadPathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.get !== 'function') {
+        const configKey = normalizeLibraryConfigKey(key);
+        if (!configKey || !global.storage || typeof global.storage.get !== 'function') {
             return clonePathMap(DEFAULT_PATH_MAP);
         }
         try {
-            const stored = await global.storage.get(getPathMapStorageKey(key));
+            const stored = await global.storage.get(getPathMapStorageKey(configKey));
             if (stored && typeof stored === 'object') {
                 return normalizePathMap(stored, DEFAULT_PATH_MAP);
             }
@@ -208,7 +224,8 @@
     }
 
     async function savePathMapForConfiguration(key, exams, options = {}) {
-        if (!key || !Array.isArray(exams)) {
+        const configKey = normalizeLibraryConfigKey(key);
+        if (!configKey || !Array.isArray(exams)) {
             return null;
         }
         const fallback = options.fallbackMap || getPathMap();
@@ -219,7 +236,7 @@
 
         if (global.storage && typeof global.storage.set === 'function') {
             try {
-                await global.storage.set(getPathMapStorageKey(key), derived);
+                await global.storage.set(getPathMapStorageKey(configKey), derived);
             } catch (error) {
                 console.warn('[ResourceCore] 写入路径映射失败:', error);
             }
@@ -232,11 +249,12 @@
     }
 
     async function deletePathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.remove !== 'function') {
+        const configKey = normalizeLibraryConfigKey(key);
+        if (!configKey || !global.storage || typeof global.storage.remove !== 'function') {
             return false;
         }
         try {
-            await global.storage.remove(getPathMapStorageKey(key));
+            await global.storage.remove(getPathMapStorageKey(configKey));
             return true;
         } catch (error) {
             console.warn('[ResourceCore] 删除路径映射失败:', error);
@@ -250,7 +268,7 @@
         }
         try {
             const key = await global.storage.get('active_exam_index_key', 'exam_index');
-            const next = await loadPathMapForConfiguration(key || 'exam_index');
+            const next = await loadPathMapForConfiguration(normalizeLibraryConfigKey(key) || 'exam_index');
             return setActivePathMap(next);
         } catch (error) {
             console.warn('[ResourceCore] 刷新路径映射失败:', error);
@@ -578,6 +596,29 @@
         return false;
     }
 
+    function resolveTrustedProbeUrl(rawUrl) {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const baseHref = global.location && global.location.href ? global.location.href : 'http://localhost/';
+            const resolved = new URL(String(rawUrl), baseHref);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            const currentOrigin = global.location && global.location.origin;
+
+            if (protocol === 'http:' || protocol === 'https:') {
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin ? resolved.href : '';
+            }
+
+            if (protocol === 'blob:') {
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin ? resolved.href : '';
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    }
+
     const resourceProbeCache = new Map();
 
     function probeResource(url) {
@@ -591,8 +632,12 @@
             if (shouldBypassProbe(url)) {
                 return true;
             }
+            const trustedUrl = resolveTrustedProbeUrl(url);
+            if (!trustedUrl) {
+                return false;
+            }
             try {
-                const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+                const response = await fetch(trustedUrl, { method: 'HEAD', cache: 'no-store' });
                 if (response && (response.ok || response.status === 304 || response.status === 405 || response.type === 'opaque')) {
                     return true;
                 }
