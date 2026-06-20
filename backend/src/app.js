@@ -9,7 +9,7 @@ const db = require('./db');
 const { PostgresAuthStore, createAuthRouter, publicUser, requireAdmin } = require('./auth');
 const { PostgresAdminStore, createAdminRouter, createTrafficMiddleware } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
-const { PostgresTotpStore, createRequireAdminTotp, createTotpRouter } = require('./totp');
+const { PostgresTotpStore, createRequireAdminTotp, createTotpRouter, hasSessionTotpVerification } = require('./totp');
 
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
@@ -321,6 +321,9 @@ function createApp(options = {}) {
                 const totpStatus = await totpStore.getStatus(req.session.user.id);
                 if (!totpStatus.enabled) {
                     return res.status(403).type('text/plain').send('Admin TOTP setup required');
+                }
+                if (!hasSessionTotpVerification(req, req.session.user)) {
+                    return res.status(403).type('text/plain').send('Admin TOTP verification required');
                 }
             }
             return res.sendFile(path.join(adminRoot, 'index.html'));

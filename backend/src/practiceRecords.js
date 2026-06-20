@@ -173,11 +173,17 @@ function requireRecordId(value, fieldName = 'id') {
     return id;
 }
 
-function normalizeLimitedText(value, maxLength) {
+function normalizeLimitedText(value, maxLength, fieldName = 'record metadata') {
     if (!isNonEmptyString(value)) {
         return null;
     }
     const text = String(value).trim();
+    assertSafeUnicodeText(text, fieldName);
+    if (CONTROL_CHARACTER_PATTERN.test(text)) {
+        throw requestError(`${fieldName} contains unsafe control characters`, 400, {
+            field: fieldName
+        });
+    }
     return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
@@ -264,11 +270,11 @@ function normalizePracticeRecord(record) {
     if (examId && !normalized.examId) {
         normalized.examId = examId;
     }
-    const type = normalizeLimitedText(normalized.type || normalized.examType, MAX_TYPE_LENGTH);
+    const type = normalizeLimitedText(normalized.type || normalized.examType, MAX_TYPE_LENGTH, 'type');
     if (type) {
         normalized.type = type;
     }
-    const title = normalizeLimitedText(normalized.title, MAX_TITLE_LENGTH);
+    const title = normalizeLimitedText(normalized.title, MAX_TITLE_LENGTH, 'title');
     if (title) {
         normalized.title = title;
     }
@@ -391,8 +397,8 @@ function extractColumns(record) {
     return {
         sessionId: getSessionId(record),
         examId: getExamId(record),
-        type: normalizeLimitedText(record.type || record.examType, MAX_TYPE_LENGTH),
-        title: normalizeLimitedText(record.title, MAX_TITLE_LENGTH),
+        type: normalizeLimitedText(record.type || record.examType, MAX_TYPE_LENGTH, 'type'),
+        title: normalizeLimitedText(record.title, MAX_TITLE_LENGTH, 'title'),
         score: toNullableNumber(record.score ?? record.percentage ?? scoreInfo.percentage, 0, MAX_SCORE),
         totalQuestions: toNullableInteger(record.totalQuestions ?? scoreInfo.total, 0, MAX_QUESTION_COUNT),
         correctAnswers: toNullableInteger(

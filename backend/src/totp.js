@@ -17,6 +17,7 @@ const RECOVERY_CODE_BYTES = 8;
 const DEFAULT_PENDING_TOTP_MAX_AGE_MS = 10 * 60 * 1000;
 const DEFAULT_SESSION_SECRET = 'development-session-secret-change-me';
 const PLACEHOLDER_SESSION_SECRET = 'replace-with-a-long-random-session-secret';
+const TOTP_SESSION_MARKER_KEY = 'totpVerified';
 
 const tokenSchema = z.object({
     token: z.string().trim().min(1).max(64)
@@ -412,6 +413,29 @@ function isPendingExpired(pending, config) {
     return Date.now() - startedAt > config.pendingMaxAgeMs;
 }
 
+function markSessionTotpVerified(req, user) {
+    const safeUser = publicUser(user);
+    if (!req.session || !safeUser?.id) {
+        return;
+    }
+    req.session[TOTP_SESSION_MARKER_KEY] = {
+        userId: safeUser.id,
+        verifiedAt: Date.now()
+    };
+}
+
+function hasSessionTotpVerification(req, user) {
+    const safeUser = publicUser(user);
+    const marker = req.session && req.session[TOTP_SESSION_MARKER_KEY];
+    const verifiedAt = Number(marker?.verifiedAt);
+    return Boolean(
+        safeUser?.id
+        && marker?.userId === safeUser.id
+        && Number.isFinite(verifiedAt)
+        && verifiedAt > 0
+    );
+}
+
 function createRequireAdminTotp(store) {
     return async function requireAdminTotp(req, res, next) {
         try {
@@ -421,6 +445,9 @@ function createRequireAdminTotp(store) {
             const status = await store.getStatus(req.session.user.id);
             if (!status.enabled) {
                 return res.status(403).json({ error: 'Admin TOTP setup required' });
+            }
+            if (!hasSessionTotpVerification(req, req.session.user)) {
+                return res.status(403).json({ error: 'Admin TOTP verification required' });
             }
             return next();
         } catch (error) {
@@ -477,6 +504,9 @@ function createTotpRouter(options = {}) {
             req.session.regenerate((error) => error ? reject(error) : resolve());
         });
         req.session.user = safeUser;
+        if (options.totpVerified) {
+            markSessionTotpVerified(req, safeUser);
+        }
         return safeUser;
     }
 
@@ -564,7 +594,10 @@ function createTotpRouter(options = {}) {
                 recoveryCodeHashes,
                 result.timeStep
             );
-            const safeUser = await rotateAuthenticatedSession(req, user, { revokeOtherSessions: true });
+            const safeUser = await rotateAuthenticatedSession(req, user, {
+                revokeOtherSessions: true,
+                totpVerified: true
+            });
             return res.json({
                 user: safeUser,
                 status,
@@ -592,7 +625,7 @@ function createTotpRouter(options = {}) {
             if (!parsed.success || !(await verifyStoredToken(pending.user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
-            const user = await rotateAuthenticatedSession(req, pending.user);
+            const user = await rotateAuthenticatedSession(req, pending.user, { totpVerified: true });
             return res.json({ user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);
@@ -611,6 +644,7 @@ function createTotpRouter(options = {}) {
             if (!parsed.success || !(await verifyStoredToken(req.session.user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
+            markSessionTotpVerified(req, req.session.user);
             const recoveryCodes = generateRecoveryCodes(config.recoveryCodeCount);
             const recoveryCodeHashes = await hashRecoveryCodes(
                 recoveryCodes,
@@ -674,7 +708,9 @@ module.exports = {
     encryptSecret,
     generateRecoveryCodes,
     getTotpConfig,
+    hasSessionTotpVerification,
     isRecoveryCodeToken,
+    markSessionTotpVerified,
     normalizeRecoveryCode,
     normalizeToken,
     serializeStatus,

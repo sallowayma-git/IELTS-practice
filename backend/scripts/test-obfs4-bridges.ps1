@@ -3,7 +3,10 @@ param(
     [string]$BridgeFile = '',
     [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env'),
     [string]$Image = 'backend-tor',
+    [ValidateRange(10, 600)]
     [int]$TimeoutSeconds = 75,
+    [ValidateRange(1, 100)]
+    [int]$MaxCandidates = 20,
     [switch]$RevealBridgeLines
 )
 
@@ -145,7 +148,7 @@ function Test-Bridge {
     }
 }
 
-$candidates = @(Get-CandidateBridges)
+$candidates = @(Get-CandidateBridges | Select-Object -First $MaxCandidates)
 if ($candidates.Count -eq 0) {
     throw 'No obfs4 bridge candidates found.'
 }

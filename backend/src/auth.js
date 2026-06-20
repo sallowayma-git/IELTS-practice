@@ -180,6 +180,35 @@ function destroySession(req) {
     });
 }
 
+function getSessionTotpVerificationMarker(req, user) {
+    const safeUser = publicUser(user);
+    const marker = req.session && req.session.totpVerified;
+    const verifiedAt = Number(marker?.verifiedAt);
+    if (
+        safeUser?.id
+        && marker?.userId === safeUser.id
+        && Number.isFinite(verifiedAt)
+        && verifiedAt > 0
+    ) {
+        return {
+            userId: marker.userId,
+            verifiedAt
+        };
+    }
+    return null;
+}
+
+function restoreSessionTotpVerification(req, marker, user) {
+    const safeUser = publicUser(user);
+    if (!req.session || !marker || !safeUser?.id || marker.userId !== safeUser.id) {
+        return;
+    }
+    req.session.totpVerified = {
+        userId: marker.userId,
+        verifiedAt: marker.verifiedAt
+    };
+}
+
 class PostgresAuthStore {
     constructor(db) {
         this.db = db;
@@ -574,8 +603,10 @@ function createAuthRouter(options = {}) {
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
+            const totpVerification = getSessionTotpVerificationMarker(req, currentUser);
             await regenerateSession(req);
             req.session.user = publicUser(updatedUser);
+            restoreSessionTotpVerification(req, totpVerification, req.session.user);
             return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);
@@ -612,8 +643,10 @@ function createAuthRouter(options = {}) {
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
+            const totpVerification = getSessionTotpVerificationMarker(req, currentUser);
             await regenerateSession(req);
             req.session.user = publicUser(updatedUser);
+            restoreSessionTotpVerification(req, totpVerification, req.session.user);
             return res.json({ ok: true, user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);

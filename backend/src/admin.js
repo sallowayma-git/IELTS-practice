@@ -12,6 +12,7 @@ const {
     validatePasswordStrength,
     verifyCsrfToken
 } = require('./auth');
+const { hasSessionTotpVerification, markSessionTotpVerified } = require('./totp');
 
 const ADMIN_SEARCH_QUERY_MAX_LENGTH = 80;
 
@@ -97,12 +98,20 @@ function normalizeRequestPath(value) {
     if (!text) {
         return '/';
     }
+    const sanitizeNormalizedPath = (path) => {
+        const cleanPath = stripQueryAndFragment(path, '/')
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .trim();
+        if (!cleanPath) {
+            return '/';
+        }
+        return cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+    };
     try {
         const url = new URL(text, 'http://local.invalid');
-        return url.pathname || '/';
+        return sanitizeNormalizedPath(url.pathname || '/');
     } catch (_) {
-        const path = stripQueryAndFragment(text, '/');
-        return path.startsWith('/') ? path : `/${path}`;
+        return sanitizeNormalizedPath(text);
     }
 }
 
@@ -1379,8 +1388,12 @@ function createAdminRouter(options = {}) {
                 await store.deleteSessionsForUser(userId, req.sessionID);
             }
             if (current.id === req.session.user.id && parsed.data.password !== undefined) {
+                const preserveTotpVerification = hasSessionTotpVerification(req, req.session.user);
                 await regenerateSession(req);
                 req.session.user = publicUser(user);
+                if (preserveTotpVerification) {
+                    markSessionTotpVerified(req, req.session.user);
+                }
                 return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
             }
             return res.json({ user });

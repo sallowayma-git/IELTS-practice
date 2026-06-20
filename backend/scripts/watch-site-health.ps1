@@ -1,12 +1,16 @@
 param(
+    [ValidateRange(1, 86400)]
     [int]$IntervalSeconds = 60,
+    [ValidateRange(0, 1000)]
     [int]$BridgeWarningThreshold = 3,
     [string]$ComposeFile = (Join-Path $PSScriptRoot '..\docker-compose.yml'),
     [string]$HealthUrl = 'http://127.0.0.1:3000/api/health',
     [string]$HomeUrl = 'http://127.0.0.1:3000/',
     [string]$LogPath = (Join-Path $PSScriptRoot '..\logs\site-health.jsonl'),
     [string]$AlertPath = (Join-Path $PSScriptRoot '..\logs\site-health-alerts.log'),
+    [ValidateRange(1, 60)]
     [int]$HttpTimeoutSeconds = 5,
+    [ValidateRange(1, 5000)]
     [int]$TorLogTail = 300,
     [switch]$IncludeBridgeFingerprints,
     [switch]$Once
@@ -14,8 +18,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Resolve-IntegerInRange {
+    param(
+        [string]$Name,
+        [object]$Value,
+        [int]$Min,
+        [int]$Max
+    )
+    if ($Value -notmatch '^\d+$') {
+        throw "$Name must be an integer between $Min and $Max."
+    }
+    $number = [int]$Value
+    if ($number -lt $Min -or $number -gt $Max) {
+        throw "$Name must be an integer between $Min and $Max."
+    }
+    return $number
+}
+
 if (-not $PSBoundParameters.ContainsKey('BridgeWarningThreshold') -and $env:SITE_HEALTH_BRIDGE_WARNING_THRESHOLD -match '^\d+$') {
-    $BridgeWarningThreshold = [int]$env:SITE_HEALTH_BRIDGE_WARNING_THRESHOLD
+    $BridgeWarningThreshold = Resolve-IntegerInRange `
+        -Name 'SITE_HEALTH_BRIDGE_WARNING_THRESHOLD' `
+        -Value $env:SITE_HEALTH_BRIDGE_WARNING_THRESHOLD `
+        -Min 0 `
+        -Max 1000
 }
 
 function Ensure-ParentDirectory {

@@ -464,6 +464,10 @@
     }
 
     function confirmAction(options) {
+        if (state.confirmResolver) {
+            state.confirmResolver(false);
+            state.confirmResolver = null;
+        }
         nodes.confirmTitle.textContent = options.title || 'Confirm action';
         nodes.confirmMessage.textContent = options.message || '';
         nodes.confirmSubmit.textContent = options.confirmText || 'Confirm';
@@ -1112,6 +1116,8 @@
             formatScore,
             safeStringifyRecordPayload,
             request,
+            confirmAction,
+            closeConfirm,
             state
         };
     } else {

@@ -54,10 +54,20 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(siteHealthWatcher.includes('$response.StatusCode -lt 400'));
     assert(!siteHealthWatcher.includes('$response.StatusCode -lt 500'));
     assert(siteHealthWatcher.includes('$env:SITE_HEALTH_BRIDGE_WARNING_THRESHOLD'));
+    assert(siteHealthWatcher.includes('[ValidateRange(1, 86400)]'));
+    assert(siteHealthWatcher.includes('[ValidateRange(0, 1000)]'));
+    assert(siteHealthWatcher.includes('[ValidateRange(1, 60)]'));
+    assert(siteHealthWatcher.includes('[ValidateRange(1, 5000)]'));
+    assert(siteHealthWatcher.includes('function Resolve-IntegerInRange'));
+    assert(siteHealthWatcher.includes("-Name 'SITE_HEALTH_BRIDGE_WARNING_THRESHOLD'"));
     assert(siteHealthWatcher.includes('[switch]$IncludeBridgeFingerprints'));
     assert(siteHealthWatcher.includes('fingerprints = if ($IncludeBridgeFingerprints) { $fingerprints } else { @() }'));
     assert(siteHealthWatcher.includes('seenFingerprints = if ($IncludeBridgeFingerprints) { $seenFingerprints } else { @() }'));
     assert(bridgeTester.includes('[switch]$RevealBridgeLines'));
+    assert(bridgeTester.includes('[ValidateRange(10, 600)]'));
+    assert(bridgeTester.includes('[ValidateRange(1, 100)]'));
+    assert(bridgeTester.includes('[int]$MaxCandidates = 20'));
+    assert(bridgeTester.includes('Get-CandidateBridges | Select-Object -First $MaxCandidates'));
     assert.match(bridgeTester, /if \(\$RevealBridgeLines\) \{\s*\$result\.line = \$Candidate\.line\s*\}/);
     assert.match(bridgeTester, /\$seen\.Add\(\$item\.line\)/);
     assert.doesNotMatch(bridgeTester, /\$seen\.Add\(\$item\.fingerprint\)/);
@@ -1555,6 +1565,20 @@ test('practice API rejects unsafe record identifiers and oversized batches', asy
         assert.equal(controlSession.json.error, 'sessionId contains unsafe control characters');
         assert.equal(controlSession.json.details.field, 'sessionId');
 
+        const controlTitle = await client.request('PUT', '/api/practice-records', {
+            records: [{ id: 'safe-title-id', title: 'Bad\ntitle' }]
+        });
+        assert.equal(controlTitle.response.status, 400);
+        assert.equal(controlTitle.json.error, 'title contains unsafe control characters');
+        assert.equal(controlTitle.json.details.field, 'title');
+
+        const controlType = await client.request('PUT', '/api/practice-records', {
+            records: [{ id: 'safe-type-id', type: 'reading\ttab' }]
+        });
+        assert.equal(controlType.response.status, 400);
+        assert.equal(controlType.json.error, 'type contains unsafe control characters');
+        assert.equal(controlType.json.details.field, 'type');
+
         const oversized = await client.request('PUT', '/api/practice-records', {
             records: Array.from({ length: 5001 }, (_, index) => ({ id: `record-${index}` }))
         });
@@ -1763,6 +1787,28 @@ test('admin can list users, inspect records, and delete one record', async () =>
 
         const afterDelete = await client.request('GET', `/api/admin/users/${managedUserId}/practice-records`);
         assert.equal(afterDelete.json.records.length, 0);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin routes require TOTP verification in the current session', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'stale_admin_session', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const userId = created.json.user.id;
+        const storedUser = client.authStore.users.get('stale_admin_session');
+        storedUser.role = 'admin';
+        await client.totpStore.saveEnabled(userId, 'not-needed-for-status-check', [], null);
+
+        const blockedSummary = await client.request('GET', '/api/admin/summary');
+        assert.equal(blockedSummary.response.status, 403);
+        assert.equal(blockedSummary.json.error, 'Admin TOTP verification required');
+
+        const blockedAdminPage = await client.request('GET', '/admin');
+        assert.equal(blockedAdminPage.response.status, 403);
+        assert.match(blockedAdminPage.text, /Admin TOTP verification required/);
     } finally {
         await client.close();
     }
@@ -2012,6 +2058,11 @@ test('traffic middleware truncates untrusted request metadata', async () => {
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.userAgent));
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.referrer));
         assert.equal(normalized.referrer, '/');
+
+        assert.equal(normalizeTrafficEvent({ path: 'admin/users?token=secret' }).path, '/admin/users');
+        assert.equal(normalizeTrafficEvent({ path: 'javascript:alert(1)' }).path, '/alert(1)');
+        assert.equal(normalizeTrafficEvent({ path: 'https://example.test/admin?token=secret' }).path, '/admin');
+        assert.equal(normalizeTrafficEvent({ path: '\r\n' }).path, '/');
     } finally {
         await client.close();
     }
@@ -2168,6 +2219,47 @@ test('admin self password update rotates the current session', async () => {
         });
         assert.equal(newPasswordLogin.response.status, 200);
         assert.equal(newPasswordLogin.json.requiresTotp, true);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin account settings updates preserve current TOTP verification', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'account_admin', 'StrongPass1');
+        const adminSession = client.createSession();
+        await adminSession.csrf();
+        const login = await adminSession.request('POST', '/api/auth/login', {
+            username: 'account_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(adminSession);
+
+        const beforeUpdate = await adminSession.request('GET', '/api/admin/summary');
+        assert.equal(beforeUpdate.response.status, 200);
+
+        const rename = await adminSession.request('PATCH', '/api/auth/account/username', {
+            username: 'account_admin_renamed',
+            password: 'StrongPass1'
+        });
+        assert.equal(rename.response.status, 200);
+        assert.equal(rename.json.user.username, 'account_admin_renamed');
+
+        const afterRename = await adminSession.request('GET', '/api/admin/summary');
+        assert.equal(afterRename.response.status, 200);
+
+        const passwordUpdate = await adminSession.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'StrongPass1',
+            newPassword: 'StrongerPass2'
+        });
+        assert.equal(passwordUpdate.response.status, 200);
+        assert.equal(passwordUpdate.json.user.role, 'admin');
+
+        const afterPasswordUpdate = await adminSession.request('GET', '/api/admin/summary');
+        assert.equal(afterPasswordUpdate.response.status, 200);
     } finally {
         await client.close();
     }
