@@ -72,6 +72,30 @@ await assert.rejects(
     /Import string is too large/
 );
 
+const maliciousImport = createScoreStorageHarness({
+    existingRecords: [{ id: 'existing-safe', examId: 'reading-existing' }]
+});
+await assert.rejects(
+    () => maliciousImport.importData(JSON.parse(`{
+        "practiceRecords": [{
+            "id": "bad-import",
+            "examId": "reading-bad",
+            "metadata": {
+                "__proto__": { "pollutedScoreImport": true }
+            }
+        }],
+        "userStats": {
+            "constructor": { "prototype": { "pollutedScoreImport": true } }
+        }
+    }`)),
+    /unsafe key/
+);
+assert.deepEqual(
+    await maliciousImport.storage.get('practice_records', []),
+    [{ id: 'existing-safe', examId: 'reading-existing' }]
+);
+assert.equal(Object.prototype.pollutedScoreImport, undefined);
+
 await assert.rejects(
     () => createScoreStorageHarness({
         existingRecords: [

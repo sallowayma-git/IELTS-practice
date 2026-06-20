@@ -185,6 +185,37 @@ async function createStorageHarness(options = {}) {
 }
 
 {
+    const { manager, localStorage } = await createStorageHarness();
+    manager.fallbackStorage = new Map([
+        ['exam_system_practice_records', JSON.stringify([{ id: 'memory-record', examId: 'reading-memory' }])],
+        ['exam_system_user_stats', '{bad json']
+    ]);
+    manager.indexedDB = {};
+    manager.getAllFromIndexedDB = async () => [
+        { key: 'exam_system_settings', value: JSON.stringify({ data: { theme: 'dark' } }) },
+        { key: 'exam_system_import_history', value: '{"data":[{"__proto__":{"polluted":true}}]}' },
+        { key: 'exam_system_backup_settings', value: '{not json' }
+    ];
+    localStorage.removeItem('exam_system_practice_records');
+    localStorage.removeItem('exam_system_settings');
+    localStorage.removeItem('exam_system_user_stats');
+    localStorage.setItem('exam_system_vocab_words', JSON.stringify({ data: [{ word: 'safe' }] }));
+    localStorage.setItem('exam_system_manual_backups', '{"data":[{"constructor":{"prototype":{"polluted":true}}}]}');
+
+    const exported = await manager.exportData({ skipReady: true });
+
+    assert(exported);
+    assert.deepEqual(exported.data.practice_records, [{ id: 'memory-record', examId: 'reading-memory' }]);
+    assert.deepEqual(exported.data.settings, { data: { theme: 'dark' } });
+    assert.deepEqual(exported.data.vocab_words, { data: [{ word: 'safe' }] });
+    assert.equal(exported.data.user_stats, undefined);
+    assert.equal(exported.data.import_history, undefined);
+    assert.equal(exported.data.backup_settings, undefined);
+    assert.equal(exported.data.manual_backups, undefined);
+    assert.equal(Object.prototype.polluted, undefined);
+}
+
+{
     const { manager } = await createStorageHarness({
         async fetch(url, options) {
             assert.equal(url, 'http://127.0.0.1:3000/assets/data/backup-practice-records.json');

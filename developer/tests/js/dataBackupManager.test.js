@@ -77,6 +77,30 @@ await assert.rejects(
 );
 assert.equal(context.fetchCalls.length, 1);
 
+await context.storage.set('backup_settings', JSON.parse(`{
+    "autoBackup": false,
+    "backupInterval": 0,
+    "maxBackups": 1000,
+    "compressionEnabled": true,
+    "encryptionEnabled": "yes",
+    "lastAutoBackup": "2026-01-01T00:00:00.000Z",
+    "__proto__": { "pollutedSettings": true },
+    "constructor": { "prototype": { "pollutedSettings": true } }
+}`));
+await manager.initializeSettings();
+const normalizedSettings = await context.storage.get('backup_settings', {});
+assert.deepEqual(normalizedSettings, {
+    autoBackup: false,
+    backupInterval: 24,
+    maxBackups: 100,
+    compressionEnabled: true,
+    encryptionEnabled: false,
+    lastAutoBackup: '2026-01-01T00:00:00.000Z'
+});
+assert.equal(Object.prototype.hasOwnProperty.call(normalizedSettings, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(normalizedSettings, 'constructor'), false);
+assert.equal(Object.prototype.pollutedSettings, undefined);
+
 const sampleRecord = {
     id: 'record-1',
     examId: 'reading-1',
@@ -120,6 +144,57 @@ assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0],
 assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0].metadata, '__proto__'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0].metadata, 'prototype'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(safeImport.practiceRecords[0].realData, '__proto__'), false);
+
+await context.storage.set('practice_records', []);
+const legacyRecordsPayload = JSON.parse(`{
+    "records": [{
+        "id": "legacy-record",
+        "examId": "reading-legacy",
+        "title": "Legacy import",
+        "status": "completed",
+        "startTime": "2026-01-01T00:00:00.000Z",
+        "__proto__": { "pollutedFallback": true },
+        "constructor": { "prototype": { "pollutedFallback": true } },
+        "metadata": {
+            "category": "reading",
+            "__proto__": { "pollutedFallback": true },
+            "constructor": { "prototype": { "pollutedFallback": true } }
+        },
+        "realData": {
+            "duration": 90,
+            "prototype": { "pollutedFallback": true }
+        }
+    }]
+}`);
+const legacyImportResult = await manager.importPracticeData(legacyRecordsPayload, {
+    createBackup: false,
+    mergeMode: 'replace'
+});
+assert.equal(legacyImportResult.importedCount, 1);
+const legacyStoredRecords = await context.storage.get('practice_records', []);
+assert.equal(legacyStoredRecords.length, 1);
+assert.equal(legacyStoredRecords[0].id, 'legacy-record');
+assert.equal(legacyStoredRecords[0].examId, 'reading-legacy');
+assert.equal(legacyStoredRecords[0].metadata.category, 'reading');
+assert.equal(legacyStoredRecords[0].realData.duration, 90);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyStoredRecords[0], '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyStoredRecords[0], 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyStoredRecords[0].metadata, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyStoredRecords[0].metadata, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyStoredRecords[0].realData, 'prototype'), false);
+assert.equal(Object.prototype.pollutedFallback, undefined);
+
+await assert.rejects(
+    () => manager.importPracticeData({
+        records: Array.from({ length: 5001 }, (_, index) => ({
+            id: `legacy-${index}`,
+            examId: `reading-${index}`,
+            status: 'completed',
+            startTime: '2026-01-01T00:00:00.000Z'
+        }))
+    }, { createBackup: false }),
+    /too many practice records/
+);
 
 const nestedUnsafePayload = JSON.parse(`{
     "practiceRecords": [{
@@ -194,6 +269,74 @@ await manager.mergeUserStats(wideStats, 'replace');
 const storedStats = await context.storage.get('user_stats', {});
 assert.equal(storedStats.stats_key_999, undefined);
 assert(Object.keys(storedStats).length <= 200);
+
+assert.equal(manager.normalizeDateValue(Number.MAX_VALUE), null);
+assert.equal(manager.normalizeDateValue(String(Number.MAX_VALUE)), null);
+
+const currentHistoryTimestamp = new Date().toISOString();
+const expiredHistoryTimestamp = new Date(Date.now() - (31 * 24 * 60 * 60 * 1000)).toISOString();
+const unsafeHistoryEntry = JSON.parse(`{
+    "id": "unsafe-history",
+    "timestamp": "${currentHistoryTimestamp}",
+    "success": true,
+    "error": "${'x'.repeat(1200)}",
+    "__proto__": { "pollutedHistory": true },
+    "constructor": { "prototype": { "pollutedHistory": true } },
+    "details": {
+        "format": "json",
+        "prototype": { "pollutedHistory": true }
+    }
+}`);
+await context.storage.set('export_history', { not: 'an array' });
+assert.deepEqual(await manager.getExportHistory(), []);
+await manager.recordExportHistory({
+    timestamp: currentHistoryTimestamp,
+    format: 'json',
+    note: 'n'.repeat(1200),
+    details: unsafeHistoryEntry
+});
+const exportHistory = await manager.getExportHistory();
+assert.equal(exportHistory.length, 1);
+assert.equal(exportHistory[0].note.length, 1000);
+assert.equal(Object.prototype.hasOwnProperty.call(exportHistory[0], 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(exportHistory[0].details, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(exportHistory[0].details.details, 'prototype'), false);
+assert.equal(Object.prototype.pollutedHistory, undefined);
+
+await context.storage.set('import_history', [
+    unsafeHistoryEntry,
+    { id: 'bad-date', timestamp: 'not-a-date', success: true },
+    { id: 'huge-date', timestamp: String(Number.MAX_VALUE), success: true },
+    'not an object'
+]);
+await manager.recordImportHistory({
+    timestamp: currentHistoryTimestamp,
+    success: false,
+    error: 'e'.repeat(1200),
+    sources: [{
+        path: 'practice_records',
+        count: 1,
+        constructor: { prototype: { pollutedHistory: true } }
+    }]
+});
+const importHistory = await manager.getImportHistory();
+assert.equal(importHistory.length, 2);
+assert(importHistory.every(entry => entry.timestamp === currentHistoryTimestamp));
+const unsafeImportHistory = importHistory.find(entry => entry.id === 'unsafe-history');
+const failedImportHistory = importHistory.find(entry => entry.success === false);
+assert.equal(unsafeImportHistory.error.length, 1000);
+assert.equal(failedImportHistory.error.length, 1000);
+assert.equal(Object.prototype.hasOwnProperty.call(failedImportHistory.sources[0], 'constructor'), false);
+assert.equal(Object.prototype.pollutedHistory, undefined);
+
+await context.storage.set('export_history', [
+    { id: 'old-export', timestamp: expiredHistoryTimestamp },
+    { id: 'fresh-export', timestamp: currentHistoryTimestamp }
+]);
+await context.storage.set('import_history', { corrupted: true });
+await manager.cleanupExpiredData();
+assert.deepEqual((await context.storage.get('export_history', [])).map(entry => entry.id), ['fresh-export']);
+assert.deepEqual(await manager.getImportHistory(), []);
 
 await context.storage.set('practice_records', [{ id: 'current', examId: 'reading-current' }]);
 await context.storage.set('user_stats', { totalPractice: 99 });

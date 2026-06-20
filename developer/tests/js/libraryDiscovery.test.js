@@ -27,6 +27,7 @@ function makeFile(relativePath, content = '', options = {}) {
         name,
         webkitRelativePath: relativePath,
         type: options.type || '',
+        size: options.size,
         async text() {
             return content;
         }
@@ -250,6 +251,34 @@ async function testIncrementalMergeDedupesByImportKey() {
     });
 }
 
+async function testCapsImportedFileCountAndHtmlSize() {
+    const oversized = createHarness();
+    const oversizedResult = await oversized.discovery.discover([
+        makeFile('oversized/listening.html', listeningHtml('Oversized'), { size: 6 * 1024 * 1024 }),
+        makeFile('oversized/audio.mp3', '', { type: 'audio/mpeg' })
+    ], { type: 'listening', registerRuntime: true });
+
+    assert.strictEqual(oversizedResult.entries.length, 0, 'oversized imported HTML must not be accepted');
+    assert.strictEqual(oversized.objectUrlPayloads.length, 0, 'oversized imported HTML must not create runtime blobs');
+
+    const capped = createHarness();
+    const manyFiles = Array.from({ length: 5000 }, function (_, index) {
+        return makeFile(`bulk/ignore-${index}.txt`, 'ignore');
+    });
+    manyFiles.push(makeFile('bulk/valid-listening.html', listeningHtml('Dropped Valid Exam')));
+    manyFiles.push(makeFile('bulk/audio.mp3', '', { type: 'audio/mpeg' }));
+    const cappedResult = await capped.discovery.discover(manyFiles, { type: 'listening', registerRuntime: true });
+
+    assert.strictEqual(cappedResult.stats.files, 5000, 'file picker imports must cap processed file count');
+    assert.strictEqual(cappedResult.entries.length, 0, 'files after the cap must not be processed');
+    assert.strictEqual(capped.objectUrlPayloads.length, 0, 'files after the cap must not create runtime blobs');
+
+    recordResult('文件夹导入限制文件数量和 HTML 体积', true, {
+        oversizedEntries: oversizedResult.entries.length,
+        cappedFiles: cappedResult.stats.files
+    });
+}
+
 async function main() {
     try {
         await testDiscoversListeningHtmlAtAnyDepth();
@@ -257,6 +286,7 @@ async function main() {
         await testRejectsAudioPageWithoutAnswerPath();
         await testReadingImportRejectsListeningHtml();
         await testIncrementalMergeDedupesByImportKey();
+        await testCapsImportedFileCountAndHtmlSize();
 
         console.log(JSON.stringify({
             status: 'pass',

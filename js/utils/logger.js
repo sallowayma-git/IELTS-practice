@@ -31,6 +31,54 @@
         debug: 3,
         trace: 4
     };
+    const UNSAFE_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_CATEGORY_CONFIG_ENTRIES = 80;
+    const MAX_CATEGORY_NAME_LENGTH = 80;
+    const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/;
+
+    function isPlainRecord(value) {
+        return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function normalizeLogLevel(level, fallback = '') {
+        if (typeof level !== 'string') {
+            return fallback;
+        }
+        const normalized = level.trim().toLowerCase();
+        return Object.prototype.hasOwnProperty.call(LOG_LEVELS, normalized)
+            ? normalized
+            : fallback;
+    }
+
+    function normalizeCategoryName(category) {
+        if (typeof category !== 'string') {
+            return '';
+        }
+        const normalized = category.trim();
+        if (!normalized || normalized.length > MAX_CATEGORY_NAME_LENGTH) {
+            return '';
+        }
+        if (UNSAFE_CONFIG_KEYS.has(normalized) || CONTROL_CHAR_PATTERN.test(normalized)) {
+            return '';
+        }
+        return normalized;
+    }
+
+    function normalizeCategoryLevels(categories) {
+        if (!isPlainRecord(categories)) {
+            return {};
+        }
+
+        const normalized = {};
+        for (const [rawCategory, rawLevel] of Object.entries(categories).slice(0, MAX_CATEGORY_CONFIG_ENTRIES)) {
+            const category = normalizeCategoryName(rawCategory);
+            const level = normalizeLogLevel(rawLevel);
+            if (category && level) {
+                normalized[category] = level;
+            }
+        }
+        return normalized;
+    }
 
     class AppLogger {
         constructor(config = {}) {
@@ -61,18 +109,23 @@
             try {
                 const stored = global.localStorage.getItem(STORAGE_KEY);
                 if (stored) {
-                    storedConfig = JSON.parse(stored);
+                    const parsed = JSON.parse(stored);
+                    storedConfig = isPlainRecord(parsed) ? parsed : {};
                 }
             } catch (e) {
                 // Ignore storage errors
             }
 
+            const safeExternalConfig = isPlainRecord(externalConfig) ? externalConfig : {};
+            const storedLevel = normalizeLogLevel(storedConfig.level, DEFAULT_CONFIG.level);
+            const externalLevel = normalizeLogLevel(safeExternalConfig.level, storedLevel);
+
             return {
-                level: externalConfig.level || storedConfig.level || DEFAULT_CONFIG.level,
+                level: externalLevel,
                 categories: {
                     ...DEFAULT_CONFIG.categories,
-                    ...(storedConfig.categories || {}),
-                    ...(externalConfig.categories || {})
+                    ...normalizeCategoryLevels(storedConfig.categories),
+                    ...normalizeCategoryLevels(safeExternalConfig.categories)
                 }
             };
         }
@@ -82,6 +135,13 @@
          */
         saveConfig() {
             try {
+                this.config = {
+                    level: normalizeLogLevel(this.config.level, DEFAULT_CONFIG.level),
+                    categories: {
+                        ...DEFAULT_CONFIG.categories,
+                        ...normalizeCategoryLevels(this.config.categories)
+                    }
+                };
                 global.localStorage.setItem(STORAGE_KEY, JSON.stringify({
                     level: this.config.level,
                     categories: this.config.categories
@@ -231,10 +291,11 @@
          * Update global log level
          */
         setGlobalLevel(level) {
-            if (LOG_LEVELS[level] !== undefined) {
-                this.config.level = level;
+            const normalized = normalizeLogLevel(level);
+            if (normalized) {
+                this.config.level = normalized;
                 this.saveConfig();
-                this.internalLog('info', `Global log level set to: ${level}`);
+                this.internalLog('info', `Global log level set to: ${normalized}`);
             } else {
                 this.internalLog('warn', `Invalid log level: ${level}`);
             }
@@ -244,12 +305,14 @@
          * Update category specific log level
          */
         setCategoryLevel(category, level) {
-            if (LOG_LEVELS[level] !== undefined) {
-                this.config.categories[category] = level;
+            const normalizedCategory = normalizeCategoryName(category);
+            const normalizedLevel = normalizeLogLevel(level);
+            if (normalizedCategory && normalizedLevel) {
+                this.config.categories[normalizedCategory] = normalizedLevel;
                 this.saveConfig();
-                this.internalLog('info', `Category '${category}' log level set to: ${level}`);
+                this.internalLog('info', `Category '${normalizedCategory}' log level set to: ${normalizedLevel}`);
             } else {
-                this.internalLog('warn', `Invalid log level: ${level}`);
+                this.internalLog('warn', `Invalid category or log level: ${category}=${level}`);
             }
         }
 

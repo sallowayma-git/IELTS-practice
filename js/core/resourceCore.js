@@ -2,10 +2,13 @@
     'use strict';
 
     const PATH_PROTOCOL_RE = /^(?:[a-z]+:)?\/\//i;
+    const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
     const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
     const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
     const BASE_PREFIX_STORAGE_KEY = 'hp.basePrefix';
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
+    const BASE_PREFIX_CONTROL_RE = /[\u0000-\u001f\u007f<>"'`]/;
+    const RESOURCE_PATH_CONTROL_RE = /[\u0000-\u001f\u007f<>"'`]/;
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
             root: '睡着过项目组/2. 所有文章(11.20)[192篇]/',
@@ -19,6 +22,49 @@
 
     function isAbsolutePath(value) {
         return PATH_PROTOCOL_RE.test(value || '') || WINDOWS_DRIVE_RE.test(value || '');
+    }
+
+    function hasUnsafeRelativeResourcePath(value) {
+        if (value == null) {
+            return false;
+        }
+        const raw = String(value).trim().replace(/\\/g, '/');
+        if (!raw) {
+            return false;
+        }
+        if (
+            PATH_PROTOCOL_RE.test(raw)
+            || URL_SCHEME_RE.test(raw)
+            || WINDOWS_DRIVE_RE.test(String(value).trim())
+            || RESOURCE_PATH_CONTROL_RE.test(raw)
+            || raw.includes('?')
+            || raw.includes('#')
+        ) {
+            return true;
+        }
+
+        const candidates = [raw];
+        try {
+            const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
+            if (decoded !== raw) {
+                candidates.push(decoded);
+            }
+        } catch (_) {
+            return true;
+        }
+
+        return candidates.some((candidate) => candidate
+            .split('/')
+            .filter(Boolean)
+            .some((segment) => segment === '.' || segment === '..'));
+    }
+
+    function normalizeResourceRelativePath(value) {
+        if (!value) {
+            return '';
+        }
+        const normalized = String(value).trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+        return hasUnsafeRelativeResourcePath(normalized) ? '' : normalized;
     }
 
     function normalizeLibraryConfigKey(value) {
@@ -317,7 +363,10 @@
         if (!name) {
             return '';
         }
-        const value = String(name);
+        const value = normalizeResourceRelativePath(name);
+        if (!value || value.startsWith('/')) {
+            return '';
+        }
         if (/\.html?$/i.test(value) || /\.pdf$/i.test(value)) {
             return value;
         }
@@ -349,7 +398,17 @@
         if (!normalized || normalized === '.' || normalized === './') {
             return './';
         }
-        return normalized.replace(/\/+$/g, '');
+        if (
+            PATH_PROTOCOL_RE.test(normalized)
+            || URL_SCHEME_RE.test(normalized)
+            || WINDOWS_DRIVE_RE.test(String(prefix).trim())
+            || BASE_PREFIX_CONTROL_RE.test(normalized)
+            || normalized.includes('?')
+            || normalized.includes('#')
+        ) {
+            return './';
+        }
+        return normalized.replace(/\/{2,}/g, '/').replace(/\/+$/g, '') || './';
     }
 
     function detectScriptBasePrefix() {
@@ -443,7 +502,10 @@
 
     function resolveExamBasePath(exam) {
         const relativePath = exam && exam.path ? String(exam.path) : '';
-        const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
+        const normalizedRelative = normalizeResourceRelativePath(relativePath);
+        if (relativePath && !normalizedRelative) {
+            return '';
+        }
         if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
             return ensureTrailingSlash(normalizedRelative);
         }
@@ -494,6 +556,9 @@
         if (!exam) {
             return '';
         }
+        if (exam.path && hasUnsafeRelativeResourcePath(exam.path)) {
+            return '';
+        }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
@@ -506,6 +571,9 @@
 
         const rawName = resourceKind === 'pdf' ? exam.pdfFilename : exam.filename;
         const file = sanitizeFilename(rawName, resourceKind);
+        if (!file) {
+            return '';
+        }
         const basePath = resolveExamBasePath(exam);
         const prefix = getBasePrefix();
 
@@ -544,6 +612,9 @@
         if (!exam) {
             return [];
         }
+        if (exam.path && hasUnsafeRelativeResourcePath(exam.path)) {
+            return [];
+        }
         const attempts = [];
         const seen = new Set();
         const addAttempt = (label, path) => {
@@ -568,7 +639,10 @@
             return attempts;
         }
 
-        const folder = exam.path || '';
+        const folder = normalizeResourceRelativePath(exam.path || '');
+        if (exam.path && !folder) {
+            return attempts;
+        }
         addAttempt('fallback', encodePathSegments(joinResourcePath(getBasePrefix(), folder, file)));
         addAttempt('raw', encodePathSegments(joinResourcePath('', folder, file)));
         addAttempt('relative-up', encodePathSegments(joinResourcePath('..', folder, file)));
@@ -577,23 +651,35 @@
         return attempts;
     }
 
-    function shouldBypassProbe(url) {
-        if (!url) return false;
+    function resolveProbeBypassUrl(rawUrl) {
+        if (!rawUrl) return '';
         try {
-            const resolved = new URL(url, global.location && global.location.href ? global.location.href : undefined);
+            const baseHref = global.location && global.location.href ? global.location.href : undefined;
+            const resolved = new URL(String(rawUrl), baseHref);
             const protocol = (resolved.protocol || '').toLowerCase();
-            if (protocol === 'file:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
-                return true;
+            const currentProtocol = global.location && global.location.protocol
+                ? String(global.location.protocol).toLowerCase()
+                : '';
+            if (protocol === 'file:' && currentProtocol === 'file:') {
+                return resolved.href;
             }
-            if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
-                return true;
+            if (
+                currentProtocol
+                && protocol === currentProtocol
+                && ['app:', 'chrome-extension:', 'capacitor:', 'ionic:'].includes(protocol)
+            ) {
+                return resolved.href;
             }
         } catch (_) {
-            if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
-                return true;
+            if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(rawUrl)) {
+                return String(rawUrl);
             }
         }
-        return false;
+        return '';
+    }
+
+    function shouldBypassProbe(url) {
+        return Boolean(resolveProbeBypassUrl(url));
     }
 
     function resolveTrustedProbeUrl(rawUrl) {
@@ -629,7 +715,7 @@
             return resourceProbeCache.get(url);
         }
         const attempt = (async () => {
-            if (shouldBypassProbe(url)) {
+            if (resolveProbeBypassUrl(url)) {
                 return true;
             }
             const trustedUrl = resolveTrustedProbeUrl(url);
@@ -645,7 +731,7 @@
                     return false;
                 }
             } catch (_) {
-                if (shouldBypassProbe(url)) {
+                if (resolveProbeBypassUrl(url)) {
                     return true;
                 }
             }

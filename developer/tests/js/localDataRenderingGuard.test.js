@@ -88,6 +88,14 @@ assert(
     !achievementsSource.includes('escapeHtml(a.description)'),
     'achievement modal must not interpolate achievement content through innerHTML templates'
 );
+assert(
+    achievementsSource.includes('MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200') &&
+    achievementsSource.includes("UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    achievementsSource.includes('_normalizeUnlockedState(value)') &&
+    achievementsSource.includes('return this._normalizeUnlockedState(value)') &&
+    achievementsSource.includes('this.unlocked = this._normalizeUnlockedState(this.unlocked)'),
+    'achievement unlocked state must strip unsafe keys and unknown IDs before use or persistence'
+);
 
 const practiceHistoryEnhancerSource = fs.readFileSync(path.join(repoRoot, 'js/components/practiceHistoryEnhancer.js'), 'utf8');
 assert(

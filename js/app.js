@@ -1050,18 +1050,41 @@ class ExamSystemApp {
                 element.textContent = value;
             }
         },
+        normalizePracticeAccuracy(record) {
+            const value = record && record.accuracy;
+            if (value == null || value === '') {
+                return null;
+            }
+            const numeric = typeof value === 'number' ? value : Number(value);
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return null;
+            }
+            return Math.min(1, numeric > 1 && numeric <= 100 ? numeric / 100 : numeric);
+        },
         calculateAverageAccuracy(records) {
-            if (records.length === 0) {
+            if (!Array.isArray(records) || records.length === 0) {
                 return 0;
             }
-            const totalAccuracy = records.reduce((sum, record) => sum + (record.accuracy || 0), 0);
-            return Math.round((totalAccuracy / records.length) * 100);
+            const validAccuracies = records
+                .map((record) => this.normalizePracticeAccuracy(record))
+                .filter((value) => value !== null);
+            if (!validAccuracies.length) {
+                return 0;
+            }
+            const totalAccuracy = validAccuracies.reduce((sum, value) => sum + value, 0);
+            return Math.round((totalAccuracy / validAccuracies.length) * 100);
         },
         calculateStudyDays(records) {
-            if (records.length === 0) {
+            if (!Array.isArray(records) || records.length === 0) {
                 return 0;
             }
-            const dates = new Set(records.map((record) => new Date(record.startTime).toDateString()));
+            const dates = new Set(records
+                .map((record) => {
+                    const timestamp = record && (record.startTime || record.completedAt || record.timestamp);
+                    const date = new Date(timestamp);
+                    return Number.isFinite(date.getTime()) ? date.toDateString() : '';
+                })
+                .filter(Boolean));
             return dates.size;
         },
         updateCategoryStats(examIndex, practiceRecords) {

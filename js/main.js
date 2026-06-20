@@ -570,6 +570,60 @@ const completionNoticeState = {
     lastShownAt: 0
 };
 
+const MAX_FALLBACK_ANSWER_ENTRIES = 200;
+const MAX_FALLBACK_ANSWER_TEXT_LENGTH = 500;
+const MAX_FALLBACK_ANSWER_KEY_LENGTH = 80;
+const MAX_FALLBACK_ANSWER_ARRAY_ITEMS = 25;
+const MAX_FALLBACK_ANSWER_OBJECT_KEYS = 25;
+const MAX_FALLBACK_ANSWER_DEPTH = 4;
+const FALLBACK_ANSWER_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function truncateFallbackAnswerText(value) {
+    const text = String(value == null ? '' : value)
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .trim();
+    return text.length > MAX_FALLBACK_ANSWER_TEXT_LENGTH
+        ? `${text.slice(0, MAX_FALLBACK_ANSWER_TEXT_LENGTH)}...`
+        : text;
+}
+
+function normalizeFallbackAnswerKey(value, fallback = '', options = {}) {
+    const prefixNonQuestion = options.prefixNonQuestion === true;
+    let key = truncateFallbackAnswerText(value).slice(0, MAX_FALLBACK_ANSWER_KEY_LENGTH);
+    if (!key) {
+        key = fallback;
+    }
+    if (!key) {
+        return '';
+    }
+    if (prefixNonQuestion && !key.startsWith('q')) {
+        key = `q${key}`;
+    }
+    if (FALLBACK_ANSWER_POLLUTION_KEYS.has(key)) {
+        return fallback && !FALLBACK_ANSWER_POLLUTION_KEYS.has(fallback) ? fallback : '';
+    }
+    return key;
+}
+
+function countFallbackAnswerKeys(value, max = MAX_FALLBACK_ANSWER_ENTRIES) {
+    if (!value || typeof value !== 'object') {
+        return 0;
+    }
+    if (Array.isArray(value)) {
+        return Math.min(value.length, max);
+    }
+    let count = 0;
+    for (const key in value) {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+            count += 1;
+            if (count >= max) {
+                return max;
+            }
+        }
+    }
+    return count;
+}
+
 function extractCompletionPayload(envelope) {
     if (!envelope || typeof envelope !== 'object') {
         return null;
@@ -669,10 +723,10 @@ function extractCompletionStats(payload) {
         payload.questionCount,
         payload.realData && payload.realData.totalQuestions,
         payload.answerComparison && typeof payload.answerComparison === 'object'
-            ? Object.keys(payload.answerComparison).length
+            ? countFallbackAnswerKeys(payload.answerComparison)
             : null,
         payload.answers && typeof payload.answers === 'object'
-            ? Object.keys(payload.answers).length
+            ? countFallbackAnswerKeys(payload.answers)
             : null
     ]);
     let percentage = pickNumericValue([
@@ -880,77 +934,131 @@ function setupStorageSyncListener() {
     });
 }
 
-function normalizeFallbackAnswerValue(value) {
+function normalizeFallbackAnswerValue(value, depth = 0, state = { seen: new WeakSet() }) {
     if (value === null || value === undefined) {
         return '';
+    }
+    if (depth > MAX_FALLBACK_ANSWER_DEPTH) {
+        return '[MaxDepth]';
     }
     if (typeof value === 'boolean') {
         return value ? 'True' : 'False';
     }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? String(value) : '';
+    }
+    if (typeof value === 'bigint') {
+        return value.toString();
+    }
+    if (typeof value === 'string') {
+        return truncateFallbackAnswerText(value);
+    }
     if (Array.isArray(value)) {
         return value
-            .map((item) => normalizeFallbackAnswerValue(item))
+            .slice(0, MAX_FALLBACK_ANSWER_ARRAY_ITEMS)
+            .map((item) => normalizeFallbackAnswerValue(item, depth + 1, state))
             .filter(Boolean)
-            .join(', ');
+            .join(', ')
+            .slice(0, MAX_FALLBACK_ANSWER_TEXT_LENGTH);
     }
     if (typeof value === 'object') {
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        state.seen.add(value);
         const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
         for (const key of preferKeys) {
             if (typeof value[key] === 'string' && value[key].trim()) {
-                return value[key].trim();
+                return truncateFallbackAnswerText(value[key]);
             }
         }
         if (typeof value.innerText === 'string' && value.innerText.trim()) {
-            return value.innerText.trim();
+            return truncateFallbackAnswerText(value.innerText);
         }
         if (typeof value.textContent === 'string' && value.textContent.trim()) {
-            return value.textContent.trim();
+            return truncateFallbackAnswerText(value.textContent);
         }
         try {
-            const json = JSON.stringify(value);
+            const safeObject = Object.create(null);
+            let copied = 0;
+            for (const key in value) {
+                if (!Object.prototype.hasOwnProperty.call(value, key)) {
+                    continue;
+                }
+                const safeKey = normalizeFallbackAnswerKey(key);
+                if (!safeKey) {
+                    continue;
+                }
+                safeObject[safeKey] = normalizeFallbackAnswerValue(value[key], depth + 1, state);
+                copied += 1;
+                if (copied >= MAX_FALLBACK_ANSWER_OBJECT_KEYS) {
+                    break;
+                }
+            }
+            const json = JSON.stringify(safeObject);
             if (json && json !== '{}' && json !== '[]') {
-                return json;
+                return truncateFallbackAnswerText(json);
             }
         } catch (_) { }
-        return String(value);
+        return '[Object]';
     }
-    return String(value).trim();
+    return truncateFallbackAnswerText(value);
 }
 
 function normalizeFallbackAnswerMap(rawAnswers) {
-    const map = {};
+    const map = Object.create(null);
     if (!rawAnswers) {
         return map;
     }
     if (Array.isArray(rawAnswers)) {
-        rawAnswers.forEach((entry, index) => {
+        rawAnswers.slice(0, MAX_FALLBACK_ANSWER_ENTRIES).forEach((entry, index) => {
             if (!entry) return;
-            const key = entry.questionId || `q${index + 1}`;
+            const rawKey = entry && typeof entry === 'object' ? entry.questionId : '';
+            const key = normalizeFallbackAnswerKey(rawKey, `q${index + 1}`);
+            if (!key) return;
             map[key] = normalizeFallbackAnswerValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
         });
         return map;
     }
-    Object.entries(rawAnswers).forEach(([rawKey, rawValue]) => {
-        if (!rawKey) return;
-        const key = rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
+    let count = 0;
+    for (const rawKey in rawAnswers) {
+        if (!Object.prototype.hasOwnProperty.call(rawAnswers, rawKey)) {
+            continue;
+        }
+        if (!rawKey) {
+            continue;
+        }
+        const rawValue = rawAnswers[rawKey];
+        const key = normalizeFallbackAnswerKey(rawKey, '', { prefixNonQuestion: true });
+        if (!key) {
+            continue;
+        }
         map[key] = normalizeFallbackAnswerValue(
             rawValue && typeof rawValue === 'object' && 'answer' in rawValue
                 ? rawValue.answer
                 : rawValue
         );
-    });
+        count += 1;
+        if (count >= MAX_FALLBACK_ANSWER_ENTRIES) {
+            break;
+        }
+    }
     return map;
 }
 
 function buildFallbackAnswerDetails(answerMap = {}, correctMap = {}) {
-    const details = {};
+    const details = Object.create(null);
     const keys = new Set([
         ...Object.keys(answerMap || {}),
         ...Object.keys(correctMap || {})
     ]);
-    keys.forEach((key) => {
-        const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
-        const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+    Array.from(keys).slice(0, MAX_FALLBACK_ANSWER_ENTRIES).forEach((rawKey) => {
+        const key = normalizeFallbackAnswerKey(rawKey);
+        if (!key) {
+            return;
+        }
+        const userAnswer = normalizeFallbackAnswerValue(answerMap[rawKey]);
+        const correctAnswer = normalizeFallbackAnswerValue(correctMap[rawKey]);
         let isCorrect = null;
         if (correctAnswer) {
             isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
@@ -965,26 +1073,45 @@ function buildFallbackAnswerDetails(answerMap = {}, correctMap = {}) {
 }
 
 function normalizeFallbackAnswerComparison(existingComparison, answerMap, correctMap) {
-    const normalized = {};
+    const normalized = Object.create(null);
     const source = existingComparison && typeof existingComparison === 'object' ? existingComparison : {};
-    Object.entries(source).forEach(([questionId, entry]) => {
-        if (!entry || typeof entry !== 'object') return;
-        normalized[questionId] = {
-            questionId,
+    let sourceCount = 0;
+    for (const questionId in source) {
+        if (!Object.prototype.hasOwnProperty.call(source, questionId)) {
+            continue;
+        }
+        const safeQuestionId = normalizeFallbackAnswerKey(questionId);
+        if (!safeQuestionId) {
+            continue;
+        }
+        const entry = source[questionId];
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+        normalized[safeQuestionId] = {
+            questionId: safeQuestionId,
             userAnswer: normalizeFallbackAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
             correctAnswer: normalizeFallbackAnswerValue(entry.correctAnswer ?? entry.correct),
             isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
         };
-    });
+        sourceCount += 1;
+        if (sourceCount >= MAX_FALLBACK_ANSWER_ENTRIES) {
+            break;
+        }
+    }
 
     const mergedKeys = new Set([
         ...Object.keys(answerMap || {}),
         ...Object.keys(correctMap || {})
     ]);
-    mergedKeys.forEach((key) => {
+    Array.from(mergedKeys).slice(0, MAX_FALLBACK_ANSWER_ENTRIES).forEach((rawKey) => {
+        const key = normalizeFallbackAnswerKey(rawKey);
+        if (!key) {
+            return;
+        }
         if (normalized[key]) return;
-        const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
-        const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+        const userAnswer = normalizeFallbackAnswerValue(answerMap[rawKey]);
+        const correctAnswer = normalizeFallbackAnswerValue(correctMap[rawKey]);
         let isCorrect = null;
         if (correctAnswer) {
             isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();

@@ -13,6 +13,17 @@
     LAST_SHOWN: 'onboardingLastShown'
   };
 
+  function safeQuerySelector(selector) {
+    if (!selector || typeof document === 'undefined') {
+      return null;
+    }
+    try {
+      return document.querySelector(String(selector));
+    } catch (_) {
+      return null;
+    }
+  }
+
   // 默认步骤配置
   const DEFAULT_STEPS = [
     {
@@ -699,7 +710,7 @@
 
       const selector = navMap[viewId];
       if (selector) {
-        const navBtn = document.querySelector(selector);
+        const navBtn = safeQuerySelector(selector);
         if (navBtn) {
           navBtn.click();
           return;
@@ -717,7 +728,7 @@
 
       const viewSelector = viewMap[viewId];
       if (viewSelector) {
-        const targetView = document.querySelector(viewSelector);
+        const targetView = safeQuerySelector(viewSelector);
         if (targetView) {
           // 隐藏所有视图
           document.querySelectorAll('.view-container, [id$="-view"]').forEach(v => {
@@ -757,7 +768,7 @@
       if (step.waitForElement && step.target) {
         // 先触发按钮打开模态框
         if (step.triggerElement) {
-          const triggerEl = document.querySelector(step.triggerElement);
+          const triggerEl = safeQuerySelector(step.triggerElement);
           if (triggerEl) {
             triggerEl.click();
           }
@@ -829,7 +840,7 @@
           this._unlockPointer();
         }
 
-        const targetEl = subStep.target ? document.querySelector(subStep.target) : null;
+        const targetEl = subStep.target ? safeQuerySelector(subStep.target) : null;
         this._renderer.highlightElement(targetEl, { disablePointer: subStep.disableHighlightPointer });
         this._renderer.positionTooltip(targetEl, subStep.position, subStep.offsetY);
 
@@ -963,7 +974,7 @@
         this._renderer._tooltip?.classList.remove('is-visible');
 
         // 高亮目标元素
-        const targetEl = step.target ? document.querySelector(step.target) : null;
+        const targetEl = step.target ? safeQuerySelector(step.target) : null;
         this._renderer.highlightElement(targetEl, { disablePointer: step.disableHighlightPointer });
 
         // 定位提示框
@@ -985,7 +996,7 @@
       const startTime = Date.now();
 
       const check = () => {
-        const el = document.querySelector(selector);
+        const el = safeQuerySelector(selector);
         if (el) {
           callback();
           return;

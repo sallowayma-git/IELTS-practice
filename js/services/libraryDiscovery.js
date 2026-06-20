@@ -7,6 +7,8 @@
     const VIDEO_RE = /\.(?:mp4|mov|m4v)$/i;
     const MAX_TITLE_LENGTH = 96;
     const LISTENING_THRESHOLD = 5;
+    const MAX_DISCOVERY_FILES = 5000;
+    const MAX_DISCOVERY_HTML_BYTES = 5 * 1024 * 1024;
     const runtimeResources = new Map();
     const runtimeObjectUrls = [];
 
@@ -58,6 +60,27 @@
         if (AUDIO_RE.test(name)) return 'audio';
         if (VIDEO_RE.test(name)) return 'video';
         return 'other';
+    }
+
+    function getTextByteLength(value) {
+        const text = String(value || '');
+        if (typeof TextEncoder !== 'undefined') {
+            return new TextEncoder().encode(text).byteLength;
+        }
+        return text.length;
+    }
+
+    function getDeclaredFileSize(file) {
+        const size = Number(file && file.size);
+        return Number.isFinite(size) && size >= 0 ? size : 0;
+    }
+
+    function isHtmlTooLarge(file, text) {
+        const declaredSize = getDeclaredFileSize(file);
+        if (declaredSize > MAX_DISCOVERY_HTML_BYTES) {
+            return true;
+        }
+        return text !== undefined && getTextByteLength(text) > MAX_DISCOVERY_HTML_BYTES;
     }
 
     function decodeHtmlEntities(value) {
@@ -324,24 +347,45 @@
         if (!file) {
             return '';
         }
+        if (isHtmlTooLarge(file)) {
+            console.warn('[LibraryDiscovery] HTML file skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+            return '';
+        }
         if (typeof file.text === 'function') {
             try {
-                return await file.text();
+                const text = await file.text();
+                if (isHtmlTooLarge(file, text)) {
+                    console.warn('[LibraryDiscovery] HTML file skipped because decoded text is too large:', getFilePath(file) || getBaseName(file && file.name));
+                    return '';
+                }
+                return text;
             } catch (error) {
                 console.warn('[LibraryDiscovery] file.text failed:', error);
             }
         }
         if (typeof file.content === 'string') {
+            if (isHtmlTooLarge(file, file.content)) {
+                console.warn('[LibraryDiscovery] HTML content skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                return '';
+            }
             return file.content;
         }
         if (typeof file.__text === 'string') {
+            if (isHtmlTooLarge(file, file.__text)) {
+                console.warn('[LibraryDiscovery] HTML text skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                return '';
+            }
             return file.__text;
         }
         return '';
     }
 
     async function toFileRecords(files) {
-        const input = Array.isArray(files) ? files : Array.prototype.slice.call(files || []);
+        const allInput = Array.isArray(files) ? files : Array.prototype.slice.call(files || []);
+        const input = allInput.slice(0, MAX_DISCOVERY_FILES);
+        if (allInput.length > MAX_DISCOVERY_FILES) {
+            console.warn(`[LibraryDiscovery] File picker import truncated to ${MAX_DISCOVERY_FILES} files.`);
+        }
         const records = [];
         for (let i = 0; i < input.length; i += 1) {
             const file = input[i];

@@ -7,6 +7,55 @@
         '.reading-question-explanation',
         '.reading-question-explanation-list'
     ].join(', ');
+    const DEFAULT_HIGHLIGHT_CLASS = 'hl';
+    const MAX_HIGHLIGHT_CLASS_TOKENS = 4;
+    const MAX_HIGHLIGHT_ATTRS = 12;
+    const MAX_HIGHLIGHT_ATTR_VALUE_LENGTH = 256;
+    const SAFE_CLASS_TOKEN_RE = /^[A-Za-z0-9_-]{1,64}$/;
+    const SAFE_DATA_ATTR_RE = /^data-[A-Za-z0-9_.:-]{1,64}$/;
+    const SAFE_ARIA_ATTR_RE = /^aria-[A-Za-z0-9_.:-]{1,64}$/;
+    const SAFE_LITERAL_ATTRS = new Set(['id', 'title', 'role']);
+    const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    function normalizeHighlightClassName(className) {
+        const tokens = String(className || '')
+            .split(/\s+/)
+            .map((token) => token.trim())
+            .filter(Boolean)
+            .slice(0, MAX_HIGHLIGHT_CLASS_TOKENS)
+            .filter((token) => SAFE_CLASS_TOKEN_RE.test(token));
+        return tokens.length ? tokens.join(' ') : DEFAULT_HIGHLIGHT_CLASS;
+    }
+
+    function isSafeHighlightAttrName(name) {
+        if (UNSAFE_OBJECT_KEYS.has(name) || /^on/i.test(name) || name === 'style') {
+            return false;
+        }
+        return SAFE_LITERAL_ATTRS.has(name)
+            || SAFE_DATA_ATTR_RE.test(name)
+            || SAFE_ARIA_ATTR_RE.test(name);
+    }
+
+    function applySafeHighlightAttrs(span, attrs) {
+        if (!span || !attrs || typeof attrs !== 'object') {
+            return;
+        }
+        Object.keys(attrs).slice(0, MAX_HIGHLIGHT_ATTRS).forEach((key) => {
+            if (!isSafeHighlightAttrName(key)) {
+                return;
+            }
+            let value;
+            try {
+                value = attrs[key];
+            } catch (_) {
+                return;
+            }
+            if (value == null) {
+                return;
+            }
+            span.setAttribute(key, String(value).slice(0, MAX_HIGHLIGHT_ATTR_VALUE_LENGTH));
+        });
+    }
 
     function isHighlightNode(node) {
         return node instanceof Element && node.classList.contains('hl');
@@ -345,11 +394,8 @@
 
     function createInlineHighlight(className, attrs) {
         const span = document.createElement('span');
-        span.className = className || 'hl';
-        Object.entries(attrs || {}).forEach(([key, value]) => {
-            if (value == null) return;
-            span.setAttribute(key, String(value));
-        });
+        span.className = normalizeHighlightClassName(className);
+        applySafeHighlightAttrs(span, attrs);
         return span;
     }
 

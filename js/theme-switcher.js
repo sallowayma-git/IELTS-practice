@@ -1,5 +1,23 @@
 const THEME_PORTAL_STORAGE_KEY = 'preferred_theme_portal';
 const THEME_PORTAL_SESSION_SKIP_KEY = 'preferred_theme_skip_session';
+const INTERNAL_THEME_DEFAULT = 'default';
+const INTERNAL_THEME_IDS = Object.freeze(['blue']);
+
+function isPlainRecord(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+}
+
+function normalizeInternalTheme(theme) {
+    const value = String(theme || '').trim().toLowerCase();
+    if (!value || value === INTERNAL_THEME_DEFAULT) {
+        return INTERNAL_THEME_DEFAULT;
+    }
+    return INTERNAL_THEME_IDS.includes(value) ? value : '';
+}
 
 function safeParse(json) {
     if (!json) {
@@ -7,7 +25,7 @@ function safeParse(json) {
     }
     try {
         const value = JSON.parse(json);
-        return value && typeof value === 'object' ? value : null;
+        return isPlainRecord(value) ? value : null;
     } catch (error) {
         console.warn('[Theme] 无法解析主题首选项:', error);
         return null;
@@ -47,10 +65,14 @@ const themePreferenceController = {
         }
     },
 
-    recordInternalTheme(themeId = 'default') {
+    recordInternalTheme(themeId = INTERNAL_THEME_DEFAULT) {
+        const normalized = normalizeInternalTheme(themeId);
+        if (!normalized) {
+            return this.load();
+        }
         const snapshot = {
             mode: 'internal',
-            theme: themeId,
+            theme: normalized,
             updatedAt: Date.now()
         };
         this.save(snapshot);
@@ -65,11 +87,22 @@ if (typeof window !== 'undefined') {
 // Theme switching functionality
 function applyTheme(theme) {
     const root = document.documentElement;
-    if (!theme) return;
+    const normalized = normalizeInternalTheme(theme);
+    if (!normalized) {
+        try {
+            root.removeAttribute('data-theme');
+            localStorage.removeItem('theme');
+        } catch (e) {}
+        return;
+    }
+    if (normalized === INTERNAL_THEME_DEFAULT) {
+        applyDefaultTheme();
+        return;
+    }
     try {
-        root.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
-        themePreferenceController.recordInternalTheme(theme);
+        root.setAttribute('data-theme', normalized);
+        localStorage.setItem('theme', normalized);
+        themePreferenceController.recordInternalTheme(normalized);
     } catch (e) {}
 }
 
@@ -101,7 +134,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Restore general theme
     try {
         const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) applyTheme(savedTheme);
+        if (savedTheme) {
+            const normalized = normalizeInternalTheme(savedTheme);
+            if (normalized && normalized !== INTERNAL_THEME_DEFAULT) {
+                applyTheme(normalized);
+            } else {
+                localStorage.removeItem('theme');
+            }
+        }
     } catch (e) {}
 
     // Close modal when clicking outside
@@ -124,3 +164,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+if (typeof window !== 'undefined') {
+    window.applyTheme = applyTheme;
+    window.applyDefaultTheme = applyDefaultTheme;
+    window.normalizeInternalTheme = normalizeInternalTheme;
+}

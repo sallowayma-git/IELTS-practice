@@ -8,6 +8,8 @@
 
   const STORAGE_KEY = 'hp.portal.state';
   const VIEW_KEYS = ['overview', 'practice', 'history', 'settings'];
+  const PRACTICE_FILTER_TYPES = ['all', 'reading', 'listening'];
+  const MAX_PRACTICE_FILTER_QUERY_LENGTH = 120;
   const PRACTICE_VIRTUAL_THRESHOLD = 28;
   const BACKUP_STORAGE_KEY = 'hp.portal.backups';
   const MAX_HP_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
@@ -115,6 +117,44 @@
     return Object.prototype.toString.call(value) === '[object Object]';
   }
 
+  function normalizePortalView(value) {
+    if (typeof value !== 'string') return '';
+    const normalized = value.trim().toLowerCase();
+    return VIEW_KEYS.includes(normalized) ? normalized : '';
+  }
+
+  function normalizePracticeFilterType(value, fallback = 'all') {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (PRACTICE_FILTER_TYPES.includes(normalized)) {
+      return normalized;
+    }
+    return PRACTICE_FILTER_TYPES.includes(fallback) ? fallback : 'all';
+  }
+
+  function normalizePracticeFilter(value, fallback = {}) {
+    const source = isPlainObject(value) ? value : {};
+    const fallbackSource = isPlainObject(fallback) ? fallback : {};
+    const rawQuery = typeof source.query === 'string' ? source.query : '';
+    return {
+      type: normalizePracticeFilterType(source.type, normalizePracticeFilterType(fallbackSource.type)),
+      query: rawQuery.trim().slice(0, MAX_PRACTICE_FILTER_QUERY_LENGTH)
+    };
+  }
+
+  function normalizePortalState(value, fallback = {}) {
+    const source = isPlainObject(value) ? value : {};
+    const fallbackSource = isPlainObject(fallback) ? fallback : {};
+    const normalized = {};
+    normalized.activeView = normalizePortalView(source.activeView)
+      || normalizePortalView(fallbackSource.activeView)
+      || 'overview';
+    normalized.practiceFilter = normalizePracticeFilter(
+      source.practiceFilter,
+      fallbackSource.practiceFilter || { type: 'all', query: '' }
+    );
+    return normalized;
+  }
+
   function sanitizeHpImportValue(value, depth = 0) {
     if (depth > MAX_HP_IMPORT_DEPTH) {
       throw new Error('Import data is too deeply nested.');
@@ -183,7 +223,7 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return {};
       const parsed = JSON.parse(raw);
-      return typeof parsed === 'object' && parsed ? parsed : {};
+      return normalizePortalState(parsed);
     } catch (_) {
       return {};
     }
@@ -191,7 +231,7 @@
 
   function writeState(state) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizePortalState(state)));
     } catch (_) {
       /* ignore quota errors */
     }
@@ -303,30 +343,30 @@
     restoreState() {
       const saved = readState();
       if (saved && typeof saved === 'object') {
-        if (saved.activeView && VIEW_KEYS.includes(saved.activeView)) {
+        if (saved.activeView) {
           this.state.activeView = saved.activeView;
         }
-        if (saved.practiceFilter && typeof saved.practiceFilter === 'object') {
-          this.state.practiceFilter = Object.assign({}, this.state.practiceFilter, saved.practiceFilter);
+        if (saved.practiceFilter) {
+          this.state.practiceFilter = normalizePracticeFilter(saved.practiceFilter, this.state.practiceFilter);
         }
       }
 
-      const hashView = (window.location.hash || '').replace('#', '');
-      if (hashView && VIEW_KEYS.includes(hashView)) {
+      const hashView = normalizePortalView((window.location.hash || '').replace('#', ''));
+      if (hashView) {
         this.state.activeView = hashView;
         return;
       }
 
-      const pendingView = consumePendingView();
-      if (pendingView && VIEW_KEYS.includes(pendingView)) {
+      const pendingView = normalizePortalView(consumePendingView());
+      if (pendingView) {
         this.state.activeView = pendingView;
         return;
       }
 
       try {
         const params = new URLSearchParams(window.location.search || '');
-        const queryView = (params.get('view') || '').trim();
-        if (queryView && VIEW_KEYS.includes(queryView)) {
+        const queryView = normalizePortalView(params.get('view') || '');
+        if (queryView) {
           this.state.activeView = queryView;
         }
       } catch (error) {
@@ -375,7 +415,7 @@
       }
 
       this.dom.practiceTypeButtons.forEach((btn) => {
-        const type = btn.getAttribute('data-practice-type');
+        const type = normalizePracticeFilterType(btn.getAttribute('data-practice-type'));
         this.togglePracticeTab(btn, type === this.state.practiceFilter.type);
         btn.addEventListener('click', (event) => {
           event.preventDefault();

@@ -17,6 +17,7 @@
     const MAX_CONTEXT_OBJECT_KEYS = 50;
     const MAX_CONTEXT_ARRAY_ITEMS = 50;
     const CONTEXT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const FALLBACK_STORAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     let currentOptions = {};
     let activeHighlight = null;
@@ -104,6 +105,82 @@
             }
         }
         return null;
+    }
+
+    function isPlainObject(value) {
+        return value && Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function isUnsafeStorageKey(key) {
+        return FALLBACK_STORAGE_POLLUTION_KEYS.has(String(key));
+    }
+
+    function cleanNumber(value, fallback = null) {
+        const numeric = typeof value === 'number' ? value : Number(value);
+        return Number.isFinite(numeric) ? numeric : fallback;
+    }
+
+    function cleanDateLike(value, fallback = '') {
+        const text = cleanText(value, MAX_SOURCE_TEXT_LENGTH);
+        return text || fallback;
+    }
+
+    function sanitizeFallbackWordEntry(entry) {
+        if (!isPlainObject(entry)) {
+            return null;
+        }
+        if (Object.keys(entry).some((key) => isUnsafeStorageKey(key))) {
+            entry = Object.keys(entry).reduce((safe, key) => {
+                if (!isUnsafeStorageKey(key)) {
+                    safe[key] = entry[key];
+                }
+                return safe;
+            }, {});
+        }
+        const word = cleanText(entry.word, MAX_WORD_TEXT_LENGTH);
+        if (!word) {
+            return null;
+        }
+        return {
+            id: cleanText(entry.id, MAX_SOURCE_TEXT_LENGTH) || buildHighlightId(word),
+            word,
+            meaning: cleanText(entry.meaning, MAX_MEANING_TEXT_LENGTH),
+            example: cleanText(entry.example, MAX_MEANING_TEXT_LENGTH),
+            note: cleanText(entry.note, MAX_MEANING_TEXT_LENGTH),
+            timestamp: cleanNumber(entry.timestamp, Date.now()),
+            source: cleanText(entry.source || 'reading-highlight', MAX_SOURCE_TEXT_LENGTH),
+            easeFactor: cleanNumber(entry.easeFactor, null),
+            interval: cleanNumber(entry.interval, 1),
+            repetitions: cleanNumber(entry.repetitions, 0),
+            intraCycles: cleanNumber(entry.intraCycles, 0),
+            correctCount: cleanNumber(entry.correctCount, 0),
+            lastReviewed: entry.lastReviewed == null ? null : cleanDateLike(entry.lastReviewed),
+            nextReview: entry.nextReview == null ? null : cleanDateLike(entry.nextReview),
+            createdAt: cleanDateLike(entry.createdAt),
+            updatedAt: cleanDateLike(entry.updatedAt)
+        };
+    }
+
+    function sanitizeFallbackList(rawList) {
+        if (!isPlainObject(rawList)) {
+            return null;
+        }
+        const now = new Date().toISOString();
+        const words = Array.isArray(rawList.words)
+            ? rawList.words
+                .map((entry) => sanitizeFallbackWordEntry(entry))
+                .filter(Boolean)
+                .slice(-MAX_STORED_HIGHLIGHT_WORDS)
+            : [];
+        return {
+            id: cleanText(rawList.id, MAX_SOURCE_TEXT_LENGTH) || 'reading-highlights',
+            name: cleanText(rawList.name, MAX_SOURCE_TEXT_LENGTH) || '闃呰楂樹寒鐢熻瘝',
+            icon: cleanText(rawList.icon, MAX_SOURCE_TEXT_LENGTH) || '馃摉',
+            source: cleanText(rawList.source || 'reading-highlight', MAX_SOURCE_TEXT_LENGTH),
+            words,
+            createdAt: cleanDateLike(rawList.createdAt, now),
+            updatedAt: cleanDateLike(rawList.updatedAt, now)
+        };
     }
 
     function getMessageTargetOrigin() {
@@ -528,7 +605,7 @@
             const data = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
                 ? parsed.data
                 : parsed;
-            return data && typeof data === 'object' && Array.isArray(data.words) ? data : null;
+            return sanitizeFallbackList(data);
         } catch (_) {
             return null;
         }
@@ -549,7 +626,7 @@
             updatedAt: now
         };
         list.words = Array.isArray(list.words)
-            ? list.words.filter((item) => item && typeof item === 'object').slice(-MAX_STORED_HIGHLIGHT_WORDS)
+            ? list.words.map((item) => sanitizeFallbackWordEntry(item)).filter(Boolean).slice(-MAX_STORED_HIGHLIGHT_WORDS)
             : [];
         const safeWord = cleanText(payload.word, MAX_WORD_TEXT_LENGTH);
         if (!safeWord) {
@@ -687,6 +764,11 @@
     };
 
     if (typeof module !== 'undefined' && module.exports) {
+        api._test = {
+            sanitizeFallbackList,
+            sanitizeFallbackWordEntry,
+            writeFallbackVocab
+        };
         module.exports = api;
     } else {
         global.ReviewHighlightDictionary = api;

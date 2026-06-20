@@ -1372,7 +1372,10 @@ class StorageManager {
                         if (!cleanKey) {
                             return;
                         }
-                        data[cleanKey] = JSON.parse(value);
+                        const parsed = this.parseExportStorageValue(cleanKey, value, 'memory');
+                        if (parsed !== undefined) {
+                            data[cleanKey] = parsed;
+                        }
                     }
                 });
                 console.log(`[Storage] 已导出内存存储数据 ${this.fallbackStorage.size} 条`);
@@ -1389,7 +1392,10 @@ class StorageManager {
                             if (!cleanKey) {
                                 return;
                             }
-                            indexedDBData[cleanKey] = JSON.parse(item.value);
+                            const parsed = this.parseExportStorageValue(cleanKey, item.value, 'indexedDB');
+                            if (parsed !== undefined) {
+                                indexedDBData[cleanKey] = parsed;
+                            }
                         }
                     });
                     // 合并IndexedDB数据
@@ -1411,7 +1417,10 @@ class StorageManager {
                 try {
                     const value = localStorage.getItem(key);
                     if (value) {
-                        data[cleanKey] = JSON.parse(value);
+                        const parsed = this.parseExportStorageValue(cleanKey, value, 'localStorage');
+                        if (parsed !== undefined) {
+                            data[cleanKey] = parsed;
+                        }
                     }
                 } catch (error) {
                     console.warn(`[Storage] 解析localStorage数据失败: ${cleanKey}`, error);
@@ -1596,6 +1605,30 @@ class StorageManager {
 
         const validator = validators[key];
         return validator ? validator(data) : true;
+    }
+
+    parseExportStorageValue(cleanKey, serializedValue, source = 'storage') {
+        if (!cleanKey || serializedValue === undefined || serializedValue === null || serializedValue === '') {
+            return undefined;
+        }
+        try {
+            const parsed = typeof serializedValue === 'string'
+                ? JSON.parse(serializedValue)
+                : serializedValue;
+            this.assertSafeBackupValue(parsed, `export.${source}.${cleanKey}`);
+            if (cleanKey === 'practice_records') {
+                const records = Array.isArray(parsed)
+                    ? parsed
+                    : (parsed && typeof parsed === 'object' && Array.isArray(parsed.data) ? parsed.data : null);
+                if (records) {
+                    this.validateBackupPracticeRecords(records);
+                }
+            }
+            return parsed;
+        } catch (error) {
+            console.warn(`[Storage] Skipping invalid ${source} export data: ${cleanKey}`, error);
+            return undefined;
+        }
     }
 
     /**

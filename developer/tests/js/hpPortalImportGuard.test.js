@@ -45,15 +45,59 @@ const context = {
         getItem(key) { return localStorageState.has(key) ? localStorageState.get(key) : null; },
         setItem(key, value) { localStorageState.set(key, String(value)); }
     },
-    URL
+    sessionStorage: {
+        getItem() { return null; },
+        removeItem() {}
+    },
+    URL,
+    URLSearchParams
 };
 context.window.document = context.document;
 context.window.localStorage = context.localStorage;
+context.window.sessionStorage = context.sessionStorage;
 
 vm.createContext(context);
 vm.runInContext(source, context, { filename: 'js/plugins/hp/hp-portal.js' });
 
 assert(context.window.__hpPortalTest, 'hp portal test handle should be available');
+
+localStorageState.set('hp.portal.state', JSON.stringify({
+    activeView: ' SETTINGS ',
+    practiceFilter: {
+        type: 'javascript:alert(1)',
+        query: ` ${'search'.repeat(40)} `,
+        '__proto__': { polluted: true },
+        constructor: { prototype: { polluted: true } }
+    },
+    prototype: { polluted: true }
+}));
+context.window.__hpPortalTest.state = {
+    activeView: 'overview',
+    practiceFilter: { type: 'all', query: '' }
+};
+context.window.__hpPortalTest.restoreState();
+assert.equal(context.window.__hpPortalTest.state.activeView, 'settings');
+assert.equal(context.window.__hpPortalTest.state.practiceFilter.type, 'all');
+assert.equal(context.window.__hpPortalTest.state.practiceFilter.query.length, 120);
+assert.deepStrictEqual(Object.keys(context.window.__hpPortalTest.state.practiceFilter).sort(), ['query', 'type']);
+assert.equal(Object.prototype.polluted, undefined);
+
+context.window.__hpPortalTest.state = {
+    activeView: 'not-a-view',
+    practiceFilter: {
+        type: 'LISTENING',
+        query: ' recent tests ',
+        prototype: { polluted: true }
+    }
+};
+context.window.__hpPortalTest.persistState();
+const persistedState = JSON.parse(localStorageState.get('hp.portal.state'));
+assert.equal(persistedState.activeView, 'overview');
+assert.deepStrictEqual(persistedState.practiceFilter, {
+    type: 'listening',
+    query: 'recent tests'
+});
+assert.equal(Object.prototype.hasOwnProperty.call(persistedState.practiceFilter, 'prototype'), false);
 
 const payload = JSON.parse(`{
   "examIndex": [{

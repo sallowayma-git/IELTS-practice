@@ -96,6 +96,15 @@ assert(
     'unified reading drag/drop must escape dynamic dropzone IDs before using them in selectors'
 );
 assert(
+    unifiedReadingPageSource.includes('const MAX_DRAG_PAYLOAD_CHARS = 4096') &&
+    unifiedReadingPageSource.includes('const MAX_DRAG_TEXT_CHARS = 500') &&
+    unifiedReadingPageSource.includes('if (rawText.length > MAX_DRAG_PAYLOAD_CHARS)') &&
+    unifiedReadingPageSource.includes('function cleanDragText(value)') &&
+    unifiedReadingPageSource.includes('const normalizedValue = cleanDragText(value)') &&
+    unifiedReadingPageSource.includes('const fallback = cleanDragText(rawText)'),
+    'unified reading drag/drop must bound external dataTransfer payloads before parsing or storing them'
+);
+assert(
     unifiedReadingPageSource.includes('document.querySelectorAll(`[name="${escapeSelector(alias)}"]`)') &&
     unifiedReadingPageSource.includes('document.querySelectorAll(`input[type="radio"][name="${escapeSelector(questionId)}"]`)') &&
     !unifiedReadingPageSource.includes('document.querySelectorAll(`[name="${alias}"]`)') &&

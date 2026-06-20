@@ -8,6 +8,8 @@
     const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
+    const MAX_DRAG_PAYLOAD_CHARS = 4096;
+    const MAX_DRAG_TEXT_CHARS = 500;
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -1941,39 +1943,54 @@
 
     function getDropzonePayload(dropzone) {
         if (!dropzone) return null;
-        const value = String(dropzone.dataset.answerValue || '').trim();
+        const value = cleanDragText(dropzone.dataset.answerValue || '');
         if (!value) return null;
         return {
             value,
-            label: String(dropzone.dataset.answerLabel || value).trim(),
-            sourceDropzoneId: String(dropzone.dataset.dropzoneId || '').trim()
+            label: cleanDragText(dropzone.dataset.answerLabel || value),
+            sourceDropzoneId: cleanDragText(dropzone.dataset.dropzoneId || '')
         };
+    }
+
+    function cleanDragText(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, MAX_DRAG_TEXT_CHARS);
     }
 
     function buildDragPayload(item) {
         if (!item) return null;
         const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
         return {
-            value: item.dataset.heading || item.dataset.option || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
-            label: item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent.trim(),
-            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || ''
+            value: cleanDragText(item.dataset.heading || item.dataset.option || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent),
+            label: cleanDragText(item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent),
+            sourceDropzoneId: cleanDragText(sourceDropzone?.dataset?.dropzoneId || '')
         };
     }
 
     function parseDragPayload(rawValue) {
         if (!rawValue) return null;
+        const rawText = String(rawValue);
+        if (rawText.length > MAX_DRAG_PAYLOAD_CHARS) {
+            return null;
+        }
         try {
-            const payload = JSON.parse(rawValue);
+            const payload = JSON.parse(rawText);
             if (!payload || typeof payload !== 'object') {
                 return null;
             }
             return {
-                value: String(payload.value || payload.label || '').trim(),
-                label: String(payload.label || payload.value || '').trim(),
-                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim()
+                value: cleanDragText(payload.value || payload.label || ''),
+                label: cleanDragText(payload.label || payload.value || ''),
+                sourceDropzoneId: cleanDragText(payload.sourceDropzoneId || '')
             };
         } catch (_) {
-            const fallback = String(rawValue).trim();
+            const fallback = cleanDragText(rawText);
             if (!fallback) {
                 return null;
             }
@@ -2007,8 +2024,8 @@
 
     function setDropzoneAnswer(dropzone, value, label) {
         if (!dropzone) return;
-        const normalizedValue = String(value || '').trim();
-        const normalizedLabel = String(label || value || '').trim();
+        const normalizedValue = cleanDragText(value);
+        const normalizedLabel = cleanDragText(label || value);
         dropzone.dataset.answerValue = normalizedValue;
         dropzone.dataset.answerLabel = normalizedLabel;
         const holder = ensureDropzoneHolder(dropzone);
