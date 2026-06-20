@@ -5,6 +5,13 @@
     'use strict';
 
     const THREE = global.THREE;
+    const DEFAULT_BACKGROUND_THEME = 'misty-mountain';
+    const BACKGROUND_THEME_IDS = Object.freeze(['misty-mountain', 'teal-ocean', 'floral-bloom']);
+
+    function normalizeBackgroundThemeName(themeName) {
+        const value = String(themeName || '').trim().toLowerCase();
+        return BACKGROUND_THEME_IDS.includes(value) ? value : DEFAULT_BACKGROUND_THEME;
+    }
 
     const vertexShader = `
         varying vec2 vUv;
@@ -306,7 +313,8 @@
         `
     };
 
-    function createBackground(theme = 'misty-mountain') {
+    function createBackground(theme = DEFAULT_BACKGROUND_THEME) {
+        theme = normalizeBackgroundThemeName(theme);
         if (!THREE) {
             document.body.classList.add('three-bg-fallback');
             return null;
@@ -338,7 +346,7 @@
             uResolution: { value: new THREE.Vector2(1, 1) }
         };
 
-        const fragmentShader = shaders[theme] || shaders['misty-mountain'];
+        const fragmentShader = shaders[theme] || shaders[DEFAULT_BACKGROUND_THEME];
 
         const material = new THREE.ShaderMaterial({
             uniforms,
@@ -421,10 +429,16 @@
     function start(themeName = null) {
         if (!themeName) {
             try {
-                themeName = localStorage.getItem('three_bg_theme') || 'misty-mountain';
+                const savedTheme = localStorage.getItem('three_bg_theme');
+                themeName = normalizeBackgroundThemeName(savedTheme || DEFAULT_BACKGROUND_THEME);
+                if (savedTheme && savedTheme !== themeName) {
+                    localStorage.removeItem('three_bg_theme');
+                }
             } catch(e) {
-                themeName = 'misty-mountain';
+                themeName = DEFAULT_BACKGROUND_THEME;
             }
+        } else {
+            themeName = normalizeBackgroundThemeName(themeName);
         }
 
         try {
@@ -439,11 +453,13 @@
     }
 
     global.switchBgTheme = function(themeName) {
+        const normalized = normalizeBackgroundThemeName(themeName);
         try {
-            localStorage.setItem('three_bg_theme', themeName);
+            localStorage.setItem('three_bg_theme', normalized);
         } catch(e){}
-        start(themeName);
+        start(normalized);
     };
+    global.normalizeBackgroundThemeName = normalizeBackgroundThemeName;
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         start();

@@ -898,6 +898,13 @@ const MAX_BACKUP_RECORD_TEXT_LENGTH = 5000;
 const MAX_BACKUP_RECORD_ID_LENGTH = 512;
 const MAX_BACKUP_RECORD_TITLE_LENGTH = 500;
 const MAX_BACKUP_RECORD_STATUS_LENGTH = 64;
+const MAX_BACKUP_HISTORY_CLONE_DEPTH = 4;
+const MAX_BACKUP_HISTORY_ARRAY_ITEMS = 50;
+const MAX_BACKUP_HISTORY_OBJECT_KEYS = 50;
+const MAX_BACKUP_HISTORY_TEXT_LENGTH = 1000;
+const MAX_BACKUP_HISTORY_ID_LENGTH = 160;
+const MAX_BACKUP_INTERVAL_HOURS = 24 * 365;
+const MAX_BACKUP_SETTING_COUNT = 100;
 const BACKUP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 function createDataBackupId(prefix) {
@@ -1034,10 +1041,38 @@ class DataBackupManager {
 
         try {
             const stored = await storage.get(this.storageKeys.backupSettings, defaults);
-            await storage.set(this.storageKeys.backupSettings, { ...defaults, ...stored });
+            await storage.set(this.storageKeys.backupSettings, this.normalizeBackupSettings(stored, defaults));
         } catch (error) {
             console.error('[DataBackupManager] unable to persist settings', error);
         }
+    }
+
+    normalizeBackupSettings(stored, defaults) {
+        const normalized = { ...defaults };
+        const source = this.isPlainObject(stored) ? stored : {};
+
+        if (typeof source.autoBackup === 'boolean') {
+            normalized.autoBackup = source.autoBackup;
+        }
+        if (typeof source.compressionEnabled === 'boolean') {
+            normalized.compressionEnabled = source.compressionEnabled;
+        }
+        if (typeof source.encryptionEnabled === 'boolean') {
+            normalized.encryptionEnabled = source.encryptionEnabled;
+        }
+
+        const backupInterval = Number(source.backupInterval);
+        if (Number.isFinite(backupInterval) && backupInterval > 0) {
+            normalized.backupInterval = Math.min(MAX_BACKUP_INTERVAL_HOURS, Math.max(1, Math.floor(backupInterval)));
+        }
+
+        const maxBackups = Number(source.maxBackups);
+        if (Number.isFinite(maxBackups) && maxBackups > 0) {
+            normalized.maxBackups = Math.min(MAX_BACKUP_SETTING_COUNT, Math.max(1, Math.floor(maxBackups)));
+        }
+
+        normalized.lastAutoBackup = this.normalizeDateValue(source.lastAutoBackup) || null;
+        return normalized;
     }
 
     async exportPracticeRecords(options = {}) {
@@ -1196,6 +1231,7 @@ class DataBackupManager {
 
         // 优先使用标准化提取结果，必要时再回退到原始载荷路径
         let practiceRecords = Array.isArray(normalized.practiceRecords) ? normalized.practiceRecords : [];
+        let recordsNeedNormalization = false;
 
         if (!practiceRecords.length) {
             if (Array.isArray(payload)) {
@@ -1210,13 +1246,30 @@ class DataBackupManager {
                     || payload.records
                     || [];
             }
+            recordsNeedNormalization = true;
         }
 
         if (!practiceRecords.length) {
             throw new Error('Import file does not contain any practice records.');
         }
 
-        practiceRecords = practiceRecords.map((r) => this.sanitizeRecord(r));
+        if (practiceRecords.length > MAX_BACKUP_IMPORT_RECORDS) {
+            throw createImportLimitError(`Import contains too many practice records. Maximum supported count is ${MAX_BACKUP_IMPORT_RECORDS}.`);
+        }
+
+        practiceRecords = practiceRecords
+            .map((record, index) => {
+                const sanitized = this.sanitizeRecord(record);
+                if (!recordsNeedNormalization) {
+                    return sanitized;
+                }
+                return this.normalizeRecord(sanitized, {
+                    preserveIds,
+                    fallbackIdPrefix: 'import',
+                    index
+                });
+            })
+            .filter(Boolean);
         normalized.practiceRecords = practiceRecords;
         console.log('[DataBackupManager] After sanitize, records:', normalized.practiceRecords.length);
 
@@ -2119,7 +2172,8 @@ class DataBackupManager {
         }
 
         if (typeof value === 'number' && Number.isFinite(value)) {
-            return new Date(value).toISOString();
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
         }
 
         if (typeof value === 'string') {
@@ -2132,7 +2186,8 @@ class DataBackupManager {
                 const numeric = Number(trimmed);
                 if (Number.isFinite(numeric)) {
                     const milliseconds = trimmed.length > 10 ? numeric : numeric * 1000;
-                    return new Date(milliseconds).toISOString();
+                    const parsed = new Date(milliseconds);
+                    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
                 }
             }
 
@@ -2392,32 +2447,109 @@ class DataBackupManager {
         };
     }
 
-    async recordExportHistory(info) {
-        const history = await storage.get(this.storageKeys.exportHistory, []);
-        history.push({ ...info, id: `export_${Date.now()}` });
-        while (history.length > this.maxExportHistory) {
-            history.shift();
+    getMaxHistoryEntries() {
+        return Number.isInteger(this.maxExportHistory) && this.maxExportHistory > 0
+            ? this.maxExportHistory
+            : 50;
+    }
+
+    getHistoryCloneOptions() {
+        return {
+            maxDepth: MAX_BACKUP_HISTORY_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_HISTORY_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_HISTORY_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_HISTORY_TEXT_LENGTH
+        };
+    }
+
+    normalizeHistoryEntry(entry, prefix, options = {}) {
+        const { requireTimestamp = false, fallbackTimestamp = null } = options;
+        if (!this.isPlainObject(entry)) {
+            return null;
         }
-        await storage.set(this.storageKeys.exportHistory, history);
+
+        const normalized = this.cloneSafePlainObject(entry, this.getHistoryCloneOptions());
+        if (!this.isPlainObject(normalized)) {
+            return null;
+        }
+
+        const timestamp = this.normalizeDateValue(normalized.timestamp)
+            || this.normalizeDateValue(fallbackTimestamp);
+        if (!timestamp && requireTimestamp) {
+            return null;
+        }
+        normalized.timestamp = timestamp || new Date().toISOString();
+
+        const id = this.normalizeText(normalized.id, MAX_BACKUP_HISTORY_ID_LENGTH);
+        normalized.id = id || createDataBackupId(prefix);
+        return normalized;
+    }
+
+    normalizeHistoryList(history, prefix) {
+        if (!Array.isArray(history)) {
+            return [];
+        }
+
+        const maxEntries = this.getMaxHistoryEntries();
+        return history
+            .slice(-maxEntries * 2)
+            .map((entry) => this.normalizeHistoryEntry(entry, prefix, { requireTimestamp: true }))
+            .filter(Boolean)
+            .slice(-maxEntries);
+    }
+
+    async readHistory(storageKey, prefix) {
+        return this.normalizeHistoryList(await storage.get(storageKey, []), prefix);
+    }
+
+    async writeHistory(storageKey, prefix, history) {
+        const normalized = this.normalizeHistoryList(history, prefix);
+        await storage.set(storageKey, normalized);
+        return normalized;
+    }
+
+    sortHistoryByTimestamp(history) {
+        return [...history].sort((a, b) => {
+            const left = new Date(a.timestamp).getTime();
+            const right = new Date(b.timestamp).getTime();
+            return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
+        });
+    }
+
+    async recordExportHistory(info) {
+        const history = await this.readHistory(this.storageKeys.exportHistory, 'export');
+        const source = this.isPlainObject(info) ? info : {};
+        const entry = this.normalizeHistoryEntry({
+            ...source,
+            id: createDataBackupId('export'),
+            timestamp: source.timestamp || new Date().toISOString()
+        }, 'export');
+        if (entry) {
+            history.push(entry);
+        }
+        await this.writeHistory(this.storageKeys.exportHistory, 'export', history);
     }
 
     async recordImportHistory(info) {
-        const history = await storage.get(this.storageKeys.importHistory, []);
-        history.push({ ...info, id: `import_${Date.now()}` });
-        while (history.length > this.maxExportHistory) {
-            history.shift();
+        const history = await this.readHistory(this.storageKeys.importHistory, 'import');
+        const source = this.isPlainObject(info) ? info : {};
+        const entry = this.normalizeHistoryEntry({
+            ...source,
+            id: createDataBackupId('import'),
+            timestamp: source.timestamp || new Date().toISOString()
+        }, 'import');
+        if (entry) {
+            history.push(entry);
         }
-        await storage.set(this.storageKeys.importHistory, history);
+        await this.writeHistory(this.storageKeys.importHistory, 'import', history);
     }
 
     async getExportHistory() {
-        const history = await storage.get(this.storageKeys.exportHistory, []);
-        return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        return this.sortHistoryByTimestamp(await this.readHistory(this.storageKeys.exportHistory, 'export'));
     }
 
     async getImportHistory() {
-        const history = await storage.get(this.storageKeys.importHistory, []);
-        return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        return this.sortHistoryByTimestamp(await this.readHistory(this.storageKeys.importHistory, 'import'));
     }
     async getDataStats() {
         try {
@@ -2471,16 +2603,16 @@ class DataBackupManager {
             const limit = 30 * 24 * 60 * 60 * 1000;
             const now = Date.now();
 
-            const exportHistory = await storage.get(this.storageKeys.exportHistory, []);
+            const exportHistory = await this.readHistory(this.storageKeys.exportHistory, 'export');
             const freshExports = exportHistory.filter(item => now - new Date(item.timestamp).getTime() < limit);
             if (freshExports.length !== exportHistory.length) {
-                await storage.set(this.storageKeys.exportHistory, freshExports);
+                await this.writeHistory(this.storageKeys.exportHistory, 'export', freshExports);
             }
 
-            const importHistory = await storage.get(this.storageKeys.importHistory, []);
+            const importHistory = await this.readHistory(this.storageKeys.importHistory, 'import');
             const freshImports = importHistory.filter(item => now - new Date(item.timestamp).getTime() < limit);
             if (freshImports.length !== importHistory.length) {
-                await storage.set(this.storageKeys.importHistory, freshImports);
+                await this.writeHistory(this.storageKeys.importHistory, 'import', freshImports);
             }
         } catch (error) {
             console.error('[DataBackupManager] cleanup error', error);

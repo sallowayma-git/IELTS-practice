@@ -118,6 +118,54 @@
         debug: 3,
         trace: 4
     };
+    const UNSAFE_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_CATEGORY_CONFIG_ENTRIES = 80;
+    const MAX_CATEGORY_NAME_LENGTH = 80;
+    const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/;
+
+    function isPlainRecord(value) {
+        return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function normalizeLogLevel(level, fallback = '') {
+        if (typeof level !== 'string') {
+            return fallback;
+        }
+        const normalized = level.trim().toLowerCase();
+        return Object.prototype.hasOwnProperty.call(LOG_LEVELS, normalized)
+            ? normalized
+            : fallback;
+    }
+
+    function normalizeCategoryName(category) {
+        if (typeof category !== 'string') {
+            return '';
+        }
+        const normalized = category.trim();
+        if (!normalized || normalized.length > MAX_CATEGORY_NAME_LENGTH) {
+            return '';
+        }
+        if (UNSAFE_CONFIG_KEYS.has(normalized) || CONTROL_CHAR_PATTERN.test(normalized)) {
+            return '';
+        }
+        return normalized;
+    }
+
+    function normalizeCategoryLevels(categories) {
+        if (!isPlainRecord(categories)) {
+            return {};
+        }
+
+        const normalized = {};
+        for (const [rawCategory, rawLevel] of Object.entries(categories).slice(0, MAX_CATEGORY_CONFIG_ENTRIES)) {
+            const category = normalizeCategoryName(rawCategory);
+            const level = normalizeLogLevel(rawLevel);
+            if (category && level) {
+                normalized[category] = level;
+            }
+        }
+        return normalized;
+    }
 
     class AppLogger {
         constructor(config = {}) {
@@ -148,18 +196,23 @@
             try {
                 const stored = global.localStorage.getItem(STORAGE_KEY);
                 if (stored) {
-                    storedConfig = JSON.parse(stored);
+                    const parsed = JSON.parse(stored);
+                    storedConfig = isPlainRecord(parsed) ? parsed : {};
                 }
             } catch (e) {
                 // Ignore storage errors
             }
 
+            const safeExternalConfig = isPlainRecord(externalConfig) ? externalConfig : {};
+            const storedLevel = normalizeLogLevel(storedConfig.level, DEFAULT_CONFIG.level);
+            const externalLevel = normalizeLogLevel(safeExternalConfig.level, storedLevel);
+
             return {
-                level: externalConfig.level || storedConfig.level || DEFAULT_CONFIG.level,
+                level: externalLevel,
                 categories: {
                     ...DEFAULT_CONFIG.categories,
-                    ...(storedConfig.categories || {}),
-                    ...(externalConfig.categories || {})
+                    ...normalizeCategoryLevels(storedConfig.categories),
+                    ...normalizeCategoryLevels(safeExternalConfig.categories)
                 }
             };
         }
@@ -169,6 +222,13 @@
          */
         saveConfig() {
             try {
+                this.config = {
+                    level: normalizeLogLevel(this.config.level, DEFAULT_CONFIG.level),
+                    categories: {
+                        ...DEFAULT_CONFIG.categories,
+                        ...normalizeCategoryLevels(this.config.categories)
+                    }
+                };
                 global.localStorage.setItem(STORAGE_KEY, JSON.stringify({
                     level: this.config.level,
                     categories: this.config.categories
@@ -318,10 +378,11 @@
          * Update global log level
          */
         setGlobalLevel(level) {
-            if (LOG_LEVELS[level] !== undefined) {
-                this.config.level = level;
+            const normalized = normalizeLogLevel(level);
+            if (normalized) {
+                this.config.level = normalized;
                 this.saveConfig();
-                this.internalLog('info', `Global log level set to: ${level}`);
+                this.internalLog('info', `Global log level set to: ${normalized}`);
             } else {
                 this.internalLog('warn', `Invalid log level: ${level}`);
             }
@@ -331,12 +392,14 @@
          * Update category specific log level
          */
         setCategoryLevel(category, level) {
-            if (LOG_LEVELS[level] !== undefined) {
-                this.config.categories[category] = level;
+            const normalizedCategory = normalizeCategoryName(category);
+            const normalizedLevel = normalizeLogLevel(level);
+            if (normalizedCategory && normalizedLevel) {
+                this.config.categories[normalizedCategory] = normalizedLevel;
                 this.saveConfig();
-                this.internalLog('info', `Category '${category}' log level set to: ${level}`);
+                this.internalLog('info', `Category '${normalizedCategory}' log level set to: ${normalizedLevel}`);
             } else {
-                this.internalLog('warn', `Invalid log level: ${level}`);
+                this.internalLog('warn', `Invalid category or log level: ${category}=${level}`);
             }
         }
 
@@ -1741,7 +1804,10 @@ class StorageManager {
                         if (!cleanKey) {
                             return;
                         }
-                        data[cleanKey] = JSON.parse(value);
+                        const parsed = this.parseExportStorageValue(cleanKey, value, 'memory');
+                        if (parsed !== undefined) {
+                            data[cleanKey] = parsed;
+                        }
                     }
                 });
                 console.log(`[Storage] 已导出内存存储数据 ${this.fallbackStorage.size} 条`);
@@ -1758,7 +1824,10 @@ class StorageManager {
                             if (!cleanKey) {
                                 return;
                             }
-                            indexedDBData[cleanKey] = JSON.parse(item.value);
+                            const parsed = this.parseExportStorageValue(cleanKey, item.value, 'indexedDB');
+                            if (parsed !== undefined) {
+                                indexedDBData[cleanKey] = parsed;
+                            }
                         }
                     });
                     // 合并IndexedDB数据
@@ -1780,7 +1849,10 @@ class StorageManager {
                 try {
                     const value = localStorage.getItem(key);
                     if (value) {
-                        data[cleanKey] = JSON.parse(value);
+                        const parsed = this.parseExportStorageValue(cleanKey, value, 'localStorage');
+                        if (parsed !== undefined) {
+                            data[cleanKey] = parsed;
+                        }
                     }
                 } catch (error) {
                     console.warn(`[Storage] 解析localStorage数据失败: ${cleanKey}`, error);
@@ -1965,6 +2037,30 @@ class StorageManager {
 
         const validator = validators[key];
         return validator ? validator(data) : true;
+    }
+
+    parseExportStorageValue(cleanKey, serializedValue, source = 'storage') {
+        if (!cleanKey || serializedValue === undefined || serializedValue === null || serializedValue === '') {
+            return undefined;
+        }
+        try {
+            const parsed = typeof serializedValue === 'string'
+                ? JSON.parse(serializedValue)
+                : serializedValue;
+            this.assertSafeBackupValue(parsed, `export.${source}.${cleanKey}`);
+            if (cleanKey === 'practice_records') {
+                const records = Array.isArray(parsed)
+                    ? parsed
+                    : (parsed && typeof parsed === 'object' && Array.isArray(parsed.data) ? parsed.data : null);
+                if (records) {
+                    this.validateBackupPracticeRecords(records);
+                }
+            }
+            return parsed;
+        } catch (error) {
+            console.warn(`[Storage] Skipping invalid ${source} export data: ${cleanKey}`, error);
+            return undefined;
+        }
     }
 
     /**
@@ -7618,10 +7714,13 @@ storageManager.ready
     'use strict';
 
     const PATH_PROTOCOL_RE = /^(?:[a-z]+:)?\/\//i;
+    const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
     const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
     const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
     const BASE_PREFIX_STORAGE_KEY = 'hp.basePrefix';
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
+    const BASE_PREFIX_CONTROL_RE = /[\u0000-\u001f\u007f<>"'`]/;
+    const RESOURCE_PATH_CONTROL_RE = /[\u0000-\u001f\u007f<>"'`]/;
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
             root: '睡着过项目组/2. 所有文章(11.20)[192篇]/',
@@ -7635,6 +7734,49 @@ storageManager.ready
 
     function isAbsolutePath(value) {
         return PATH_PROTOCOL_RE.test(value || '') || WINDOWS_DRIVE_RE.test(value || '');
+    }
+
+    function hasUnsafeRelativeResourcePath(value) {
+        if (value == null) {
+            return false;
+        }
+        const raw = String(value).trim().replace(/\\/g, '/');
+        if (!raw) {
+            return false;
+        }
+        if (
+            PATH_PROTOCOL_RE.test(raw)
+            || URL_SCHEME_RE.test(raw)
+            || WINDOWS_DRIVE_RE.test(String(value).trim())
+            || RESOURCE_PATH_CONTROL_RE.test(raw)
+            || raw.includes('?')
+            || raw.includes('#')
+        ) {
+            return true;
+        }
+
+        const candidates = [raw];
+        try {
+            const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
+            if (decoded !== raw) {
+                candidates.push(decoded);
+            }
+        } catch (_) {
+            return true;
+        }
+
+        return candidates.some((candidate) => candidate
+            .split('/')
+            .filter(Boolean)
+            .some((segment) => segment === '.' || segment === '..'));
+    }
+
+    function normalizeResourceRelativePath(value) {
+        if (!value) {
+            return '';
+        }
+        const normalized = String(value).trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+        return hasUnsafeRelativeResourcePath(normalized) ? '' : normalized;
     }
 
     function normalizeLibraryConfigKey(value) {
@@ -7933,7 +8075,10 @@ storageManager.ready
         if (!name) {
             return '';
         }
-        const value = String(name);
+        const value = normalizeResourceRelativePath(name);
+        if (!value || value.startsWith('/')) {
+            return '';
+        }
         if (/\.html?$/i.test(value) || /\.pdf$/i.test(value)) {
             return value;
         }
@@ -7965,7 +8110,17 @@ storageManager.ready
         if (!normalized || normalized === '.' || normalized === './') {
             return './';
         }
-        return normalized.replace(/\/+$/g, '');
+        if (
+            PATH_PROTOCOL_RE.test(normalized)
+            || URL_SCHEME_RE.test(normalized)
+            || WINDOWS_DRIVE_RE.test(String(prefix).trim())
+            || BASE_PREFIX_CONTROL_RE.test(normalized)
+            || normalized.includes('?')
+            || normalized.includes('#')
+        ) {
+            return './';
+        }
+        return normalized.replace(/\/{2,}/g, '/').replace(/\/+$/g, '') || './';
     }
 
     function detectScriptBasePrefix() {
@@ -8059,7 +8214,10 @@ storageManager.ready
 
     function resolveExamBasePath(exam) {
         const relativePath = exam && exam.path ? String(exam.path) : '';
-        const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
+        const normalizedRelative = normalizeResourceRelativePath(relativePath);
+        if (relativePath && !normalizedRelative) {
+            return '';
+        }
         if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
             return ensureTrailingSlash(normalizedRelative);
         }
@@ -8110,6 +8268,9 @@ storageManager.ready
         if (!exam) {
             return '';
         }
+        if (exam.path && hasUnsafeRelativeResourcePath(exam.path)) {
+            return '';
+        }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
@@ -8122,6 +8283,9 @@ storageManager.ready
 
         const rawName = resourceKind === 'pdf' ? exam.pdfFilename : exam.filename;
         const file = sanitizeFilename(rawName, resourceKind);
+        if (!file) {
+            return '';
+        }
         const basePath = resolveExamBasePath(exam);
         const prefix = getBasePrefix();
 
@@ -8160,6 +8324,9 @@ storageManager.ready
         if (!exam) {
             return [];
         }
+        if (exam.path && hasUnsafeRelativeResourcePath(exam.path)) {
+            return [];
+        }
         const attempts = [];
         const seen = new Set();
         const addAttempt = (label, path) => {
@@ -8184,7 +8351,10 @@ storageManager.ready
             return attempts;
         }
 
-        const folder = exam.path || '';
+        const folder = normalizeResourceRelativePath(exam.path || '');
+        if (exam.path && !folder) {
+            return attempts;
+        }
         addAttempt('fallback', encodePathSegments(joinResourcePath(getBasePrefix(), folder, file)));
         addAttempt('raw', encodePathSegments(joinResourcePath('', folder, file)));
         addAttempt('relative-up', encodePathSegments(joinResourcePath('..', folder, file)));
@@ -8193,23 +8363,35 @@ storageManager.ready
         return attempts;
     }
 
-    function shouldBypassProbe(url) {
-        if (!url) return false;
+    function resolveProbeBypassUrl(rawUrl) {
+        if (!rawUrl) return '';
         try {
-            const resolved = new URL(url, global.location && global.location.href ? global.location.href : undefined);
+            const baseHref = global.location && global.location.href ? global.location.href : undefined;
+            const resolved = new URL(String(rawUrl), baseHref);
             const protocol = (resolved.protocol || '').toLowerCase();
-            if (protocol === 'file:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
-                return true;
+            const currentProtocol = global.location && global.location.protocol
+                ? String(global.location.protocol).toLowerCase()
+                : '';
+            if (protocol === 'file:' && currentProtocol === 'file:') {
+                return resolved.href;
             }
-            if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
-                return true;
+            if (
+                currentProtocol
+                && protocol === currentProtocol
+                && ['app:', 'chrome-extension:', 'capacitor:', 'ionic:'].includes(protocol)
+            ) {
+                return resolved.href;
             }
         } catch (_) {
-            if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
-                return true;
+            if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(rawUrl)) {
+                return String(rawUrl);
             }
         }
-        return false;
+        return '';
+    }
+
+    function shouldBypassProbe(url) {
+        return Boolean(resolveProbeBypassUrl(url));
     }
 
     function resolveTrustedProbeUrl(rawUrl) {
@@ -8245,7 +8427,7 @@ storageManager.ready
             return resourceProbeCache.get(url);
         }
         const attempt = (async () => {
-            if (shouldBypassProbe(url)) {
+            if (resolveProbeBypassUrl(url)) {
                 return true;
             }
             const trustedUrl = resolveTrustedProbeUrl(url);
@@ -8261,7 +8443,7 @@ storageManager.ready
                     return false;
                 }
             } catch (_) {
-                if (shouldBypassProbe(url)) {
+                if (resolveProbeBypassUrl(url)) {
                     return true;
                 }
             }
@@ -10992,6 +11174,8 @@ if (typeof module !== 'undefined' && module.exports) {
     const VIDEO_RE = /\.(?:mp4|mov|m4v)$/i;
     const MAX_TITLE_LENGTH = 96;
     const LISTENING_THRESHOLD = 5;
+    const MAX_DISCOVERY_FILES = 5000;
+    const MAX_DISCOVERY_HTML_BYTES = 5 * 1024 * 1024;
     const runtimeResources = new Map();
     const runtimeObjectUrls = [];
 
@@ -11043,6 +11227,27 @@ if (typeof module !== 'undefined' && module.exports) {
         if (AUDIO_RE.test(name)) return 'audio';
         if (VIDEO_RE.test(name)) return 'video';
         return 'other';
+    }
+
+    function getTextByteLength(value) {
+        const text = String(value || '');
+        if (typeof TextEncoder !== 'undefined') {
+            return new TextEncoder().encode(text).byteLength;
+        }
+        return text.length;
+    }
+
+    function getDeclaredFileSize(file) {
+        const size = Number(file && file.size);
+        return Number.isFinite(size) && size >= 0 ? size : 0;
+    }
+
+    function isHtmlTooLarge(file, text) {
+        const declaredSize = getDeclaredFileSize(file);
+        if (declaredSize > MAX_DISCOVERY_HTML_BYTES) {
+            return true;
+        }
+        return text !== undefined && getTextByteLength(text) > MAX_DISCOVERY_HTML_BYTES;
     }
 
     function decodeHtmlEntities(value) {
@@ -11309,24 +11514,45 @@ if (typeof module !== 'undefined' && module.exports) {
         if (!file) {
             return '';
         }
+        if (isHtmlTooLarge(file)) {
+            console.warn('[LibraryDiscovery] HTML file skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+            return '';
+        }
         if (typeof file.text === 'function') {
             try {
-                return await file.text();
+                const text = await file.text();
+                if (isHtmlTooLarge(file, text)) {
+                    console.warn('[LibraryDiscovery] HTML file skipped because decoded text is too large:', getFilePath(file) || getBaseName(file && file.name));
+                    return '';
+                }
+                return text;
             } catch (error) {
                 console.warn('[LibraryDiscovery] file.text failed:', error);
             }
         }
         if (typeof file.content === 'string') {
+            if (isHtmlTooLarge(file, file.content)) {
+                console.warn('[LibraryDiscovery] HTML content skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                return '';
+            }
             return file.content;
         }
         if (typeof file.__text === 'string') {
+            if (isHtmlTooLarge(file, file.__text)) {
+                console.warn('[LibraryDiscovery] HTML text skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                return '';
+            }
             return file.__text;
         }
         return '';
     }
 
     async function toFileRecords(files) {
-        const input = Array.isArray(files) ? files : Array.prototype.slice.call(files || []);
+        const allInput = Array.isArray(files) ? files : Array.prototype.slice.call(files || []);
+        const input = allInput.slice(0, MAX_DISCOVERY_FILES);
+        if (allInput.length > MAX_DISCOVERY_FILES) {
+            console.warn(`[LibraryDiscovery] File picker import truncated to ${MAX_DISCOVERY_FILES} files.`);
+        }
         const records = [];
         for (let i = 0; i < input.length; i += 1) {
             const file = input[i];

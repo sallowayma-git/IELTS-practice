@@ -3035,18 +3035,41 @@ class ExamSystemApp {
                 element.textContent = value;
             }
         },
+        normalizePracticeAccuracy(record) {
+            const value = record && record.accuracy;
+            if (value == null || value === '') {
+                return null;
+            }
+            const numeric = typeof value === 'number' ? value : Number(value);
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return null;
+            }
+            return Math.min(1, numeric > 1 && numeric <= 100 ? numeric / 100 : numeric);
+        },
         calculateAverageAccuracy(records) {
-            if (records.length === 0) {
+            if (!Array.isArray(records) || records.length === 0) {
                 return 0;
             }
-            const totalAccuracy = records.reduce((sum, record) => sum + (record.accuracy || 0), 0);
-            return Math.round((totalAccuracy / records.length) * 100);
+            const validAccuracies = records
+                .map((record) => this.normalizePracticeAccuracy(record))
+                .filter((value) => value !== null);
+            if (!validAccuracies.length) {
+                return 0;
+            }
+            const totalAccuracy = validAccuracies.reduce((sum, value) => sum + value, 0);
+            return Math.round((totalAccuracy / validAccuracies.length) * 100);
         },
         calculateStudyDays(records) {
-            if (records.length === 0) {
+            if (!Array.isArray(records) || records.length === 0) {
                 return 0;
             }
-            const dates = new Set(records.map((record) => new Date(record.startTime).toDateString()));
+            const dates = new Set(records
+                .map((record) => {
+                    const timestamp = record && (record.startTime || record.completedAt || record.timestamp);
+                    const date = new Date(timestamp);
+                    return Number.isFinite(date.getTime()) ? date.toDateString() : '';
+                })
+                .filter(Boolean));
             return dates.size;
         },
         updateCategoryStats(examIndex, practiceRecords) {
@@ -3337,6 +3360,17 @@ window.addEventListener('beforeunload', () => {
     CURRENT_STEP: 'onboardingStep',
     LAST_SHOWN: 'onboardingLastShown'
   };
+
+  function safeQuerySelector(selector) {
+    if (!selector || typeof document === 'undefined') {
+      return null;
+    }
+    try {
+      return document.querySelector(String(selector));
+    } catch (_) {
+      return null;
+    }
+  }
 
   // 默认步骤配置
   const DEFAULT_STEPS = [
@@ -4024,7 +4058,7 @@ window.addEventListener('beforeunload', () => {
 
       const selector = navMap[viewId];
       if (selector) {
-        const navBtn = document.querySelector(selector);
+        const navBtn = safeQuerySelector(selector);
         if (navBtn) {
           navBtn.click();
           return;
@@ -4042,7 +4076,7 @@ window.addEventListener('beforeunload', () => {
 
       const viewSelector = viewMap[viewId];
       if (viewSelector) {
-        const targetView = document.querySelector(viewSelector);
+        const targetView = safeQuerySelector(viewSelector);
         if (targetView) {
           // 隐藏所有视图
           document.querySelectorAll('.view-container, [id$="-view"]').forEach(v => {
@@ -4082,7 +4116,7 @@ window.addEventListener('beforeunload', () => {
       if (step.waitForElement && step.target) {
         // 先触发按钮打开模态框
         if (step.triggerElement) {
-          const triggerEl = document.querySelector(step.triggerElement);
+          const triggerEl = safeQuerySelector(step.triggerElement);
           if (triggerEl) {
             triggerEl.click();
           }
@@ -4154,7 +4188,7 @@ window.addEventListener('beforeunload', () => {
           this._unlockPointer();
         }
 
-        const targetEl = subStep.target ? document.querySelector(subStep.target) : null;
+        const targetEl = subStep.target ? safeQuerySelector(subStep.target) : null;
         this._renderer.highlightElement(targetEl, { disablePointer: subStep.disableHighlightPointer });
         this._renderer.positionTooltip(targetEl, subStep.position, subStep.offsetY);
 
@@ -4288,7 +4322,7 @@ window.addEventListener('beforeunload', () => {
         this._renderer._tooltip?.classList.remove('is-visible');
 
         // 高亮目标元素
-        const targetEl = step.target ? document.querySelector(step.target) : null;
+        const targetEl = step.target ? safeQuerySelector(step.target) : null;
         this._renderer.highlightElement(targetEl, { disablePointer: step.disableHighlightPointer });
 
         // 定位提示框
@@ -4310,7 +4344,7 @@ window.addEventListener('beforeunload', () => {
       const startTime = Date.now();
 
       const check = () => {
-        const el = document.querySelector(selector);
+        const el = safeQuerySelector(selector);
         if (el) {
           callback();
           return;

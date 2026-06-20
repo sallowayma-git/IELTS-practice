@@ -6222,6 +6222,7 @@ class ScoreStorage {
                 assertScoreImportStringSize(importData);
                 payload = JSON.parse(importData);
             }
+            this.assertSafeBackupValue(payload, 'import');
 
             const records = this.extractPracticeRecordsFromPayload(payload);
             const stats = this.extractUserStatsFromPayload(payload);

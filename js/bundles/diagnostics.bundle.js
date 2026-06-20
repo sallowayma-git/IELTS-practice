@@ -71,6 +71,45 @@ function formatDiagnosticNumber(value, fallback = 0) {
     return Number.isFinite(number) ? number : fallback;
 }
 
+const MAX_DIAGNOSTIC_EXAMS = 200;
+const MAX_COMMUNICATION_TEST_EXAMS = 25;
+const MAX_COMMUNICATION_CONCURRENCY = 5;
+const VALIDATION_CONCURRENCY = 10;
+
+function normalizeDiagnosticExamList(examIndex, maxItems = MAX_DIAGNOSTIC_EXAMS) {
+    return Array.isArray(examIndex)
+        ? examIndex.filter(Boolean).slice(0, maxItems)
+        : [];
+}
+
+function normalizeDiagnosticExamIds(examIds) {
+    return Array.isArray(examIds)
+        ? examIds
+            .map((examId) => String(examId || '').trim())
+            .filter(Boolean)
+            .slice(0, MAX_COMMUNICATION_TEST_EXAMS)
+        : [];
+}
+
+function normalizeDiagnosticConcurrency(value, fallback = 3) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+        return fallback;
+    }
+    return Math.max(1, Math.min(MAX_COMMUNICATION_CONCURRENCY, Math.floor(numeric)));
+}
+
+async function runDiagnosticBatches(items, concurrency, worker) {
+    const safeConcurrency = normalizeDiagnosticConcurrency(concurrency);
+    const results = [];
+    for (let i = 0; i < items.length; i += safeConcurrency) {
+        const batch = items.slice(i, i + safeConcurrency);
+        const batchResults = await Promise.all(batch.map(worker));
+        results.push(...batchResults);
+    }
+    return results;
+}
+
 class SystemDiagnostics {
     constructor() {
         // 索引验证相关
@@ -169,13 +208,12 @@ class SystemDiagnostics {
         this.totalChecked = 0;
         this.successCount = 0;
         this.failureCount = 0;
+        const exams = normalizeDiagnosticExamList(examIndex);
 
-        const promises = examIndex.map(exam => {
+        this.validationResults = await runDiagnosticBatches(exams, VALIDATION_CONCURRENCY, async (exam) => {
             this.totalChecked++;
             return this.validateExamFile(exam);
         });
-
-        this.validationResults = await Promise.all(promises);
         const report = this.generateValidationReport();
         console.log('[SystemDiagnostics] 验证完成:', report);
 
@@ -193,7 +231,9 @@ class SystemDiagnostics {
                 total: this.totalChecked,
                 success: this.successCount,
                 failed: this.failureCount,
-                successRate: Math.round((this.successCount / this.totalChecked) * 100)
+                successRate: this.totalChecked
+                    ? Math.round((this.successCount / this.totalChecked) * 100)
+                    : 0
             },
             failedExams: failedExams,
             allResults: this.validationResults
@@ -331,11 +371,13 @@ class SystemDiagnostics {
      * 批量测试通信功能
      */
     async testMultipleExams(examIds, concurrency = 3) {
-        console.log(`[SystemDiagnostics] 开始批量测试 ${examIds.length} 个题目的通信功能`);
+        const safeExamIds = normalizeDiagnosticExamIds(examIds);
+        const safeConcurrency = normalizeDiagnosticConcurrency(concurrency);
+        console.log(`[SystemDiagnostics] 开始批量测试 ${safeExamIds.length} 个题目的通信功能`);
 
         const results = [];
-        for (let i = 0; i < examIds.length; i += concurrency) {
-            const batch = examIds.slice(i, i + concurrency);
+        for (let i = 0; i < safeExamIds.length; i += safeConcurrency) {
+            const batch = safeExamIds.slice(i, i + safeConcurrency);
             const batchResults = await Promise.all(
                 batch.map(examId => this.testExamCommunication(examId))
             );
@@ -347,7 +389,9 @@ class SystemDiagnostics {
                 total: results.length,
                 success: results.filter(r => r.success).length,
                 failed: results.filter(r => !r.success).length,
-                successRate: Math.round((results.filter(r => r.success).length / results.length) * 100)
+                successRate: results.length
+                    ? Math.round((results.filter(r => r.success).length / results.length) * 100)
+                    : 0
             },
             details: results,
             timestamp: Date.now()

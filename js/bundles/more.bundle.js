@@ -6543,6 +6543,16 @@
 (function (window) {
     'use strict';
 
+    const MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200;
+    const UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    function isPlainRecord(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return false;
+        }
+        return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
     class AchievementManager {
         constructor() {
             this.storageKey = 'user_achievements';
@@ -6835,22 +6845,54 @@
          * Load unlocked state from storage
          */
         async _loadUnlockedState() {
+            let value;
             if (window.storage) {
-                return await window.storage.get(this.storageKey, {});
+                value = await window.storage.get(this.storageKey, {});
+                return this._normalizeUnlockedState(value);
             }
             const raw = localStorage.getItem(this.storageKey);
-            return raw ? JSON.parse(raw) : {};
+            value = raw ? JSON.parse(raw) : {};
+            return this._normalizeUnlockedState(value);
         }
 
         /**
          * Save unlocked state to storage
          */
         async _saveUnlockedState() {
+            this.unlocked = this._normalizeUnlockedState(this.unlocked);
             if (window.storage) {
                 await window.storage.set(this.storageKey, this.unlocked);
                 return;
             }
             localStorage.setItem(this.storageKey, JSON.stringify(this.unlocked));
+        }
+
+        _normalizeUnlockedState(value) {
+            if (!isPlainRecord(value)) {
+                return {};
+            }
+            const knownIds = new Set(this.achievements.map((achievement) => achievement.id));
+            const normalized = {};
+            Object.keys(value).slice(0, MAX_STORED_UNLOCKED_ACHIEVEMENTS).forEach((id) => {
+                if (UNSAFE_UNLOCKED_STATE_KEYS.has(id) || !knownIds.has(id)) {
+                    return;
+                }
+                const entry = value[id];
+                if (!isPlainRecord(entry)) {
+                    return;
+                }
+                const unlockedAt = typeof entry.unlockedAt === 'string'
+                    ? entry.unlockedAt.trim().slice(0, 64)
+                    : '';
+                const timestamp = Date.parse(unlockedAt);
+                if (!Number.isFinite(timestamp)) {
+                    return;
+                }
+                normalized[id] = {
+                    unlockedAt: new Date(timestamp).toISOString()
+                };
+            });
+            return normalized;
         }
 
         _getDefaultUserStats() {
