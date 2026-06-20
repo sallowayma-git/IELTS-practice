@@ -1,6 +1,12 @@
-# Fallback obfs4 bridges. Lines are normalized and deduplicated by docker-entrypoint.sh.
-obfs4 51.38.220.224:30996 22494A012CFA8C88B1D907E2CCB8409AC35B537B cert=dOPijSCG6FD89fYv5N2F9QoeK1od3tpG6VBE/kMY0Bt1aW/7aXPIzsENDoLWZe43gI8efw iat-mode=0
-obfs4 51.79.88.193:45529 9A7BA1AE905FBE24FCEACCA09C42ED1B59340D6C cert=5TSiurscOytr5+TpcKG9qQry0UCMkq9eIlHr1ANxFJ0SWujMjUCOpWpDx30eUUIWHC0QSg iat-mode=0
-obfs4 162.55.219.253:21358 A43C6D5A85CE5D52486293C507983409ED7C1EC0 cert=t0TUwf8Gu+jz8nxWYAPR/VMqh9k8+efrZFTIg6HNpitEdNH1fT1KlAz51jAZqxQq8/9nEA iat-mode=0
-obfs4 57.128.57.245:3099 D655AC9C21147BB62C781149150F0E723C4F8FBC cert=fnU2eGPmE6L53eXZf/29d1JloUD2XI/4KHNImTquPr/eBvkrOuuutIlpwvJsZTV1NvZ4aw iat-mode=0
-obfs4 157.180.65.109:22530 FD109070400963AF84C09A419B1F0C5E1E923CA3 cert=kw1Q+JOt45xn1RgkV37IK7+0KYT4gaMnAz1+F+sJ4yviq7WzlruQdYntW4GZhSSeeQ5STQ iat-mode=0
+# Template for obfs4 bridges.
+#
+# Do not commit real bridges here. Publicly publishing bridges makes them less
+# useful and leaks deployment details. Put private bridge lines in
+# backend/tor/bridges.local.txt and set:
+#
+#   TOR_BRIDGES_LOCAL_FILE=./tor/bridges.local.txt
+#
+# Valid obfs4 lines are normalized and deduplicated by docker-entrypoint.sh.
+# This template file alone does not enable bridge mode.
+# Example:
+# obfs4 127.0.0.1:443 FINGERPRINT cert=BASE64 iat-mode=0

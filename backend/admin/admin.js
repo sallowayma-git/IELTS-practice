@@ -1,4 +1,11 @@
 (function() {
+    const MAX_RECORD_DETAIL_PAYLOAD_CHARS = 20000;
+    const MAX_RECORD_DETAIL_PAYLOAD_DEPTH = 8;
+    const MAX_RECORD_DETAIL_PAYLOAD_NODES = 5000;
+    const MAX_RECORD_DETAIL_ARRAY_ITEMS = 500;
+    const MAX_RECORD_DETAIL_OBJECT_KEYS = 200;
+    const RECORD_DETAIL_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
     const state = {
         csrfToken: '',
         currentUserId: '',
@@ -121,17 +128,107 @@
         return new Intl.NumberFormat().format(Math.round(number * 10) / 10);
     }
 
+    function toFiniteNumber(value) {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+
     function formatScoreValue(value) {
         if (value === null || value === undefined || value === '') return '-';
-        return `${Math.round(Number(value) * 10) / 10}%`;
+        const number = toFiniteNumber(value);
+        if (number === null) return '-';
+        return `${Math.round(number * 10) / 10}%`;
     }
 
     function formatScore(record) {
-        if (record.score === null || record.score === undefined || record.score === '') {
+        const score = toFiniteNumber(record && record.score);
+        if (score === null) {
             return '-';
         }
-        const suffix = record.totalQuestions ? ` / ${record.totalQuestions}` : '';
-        return `${record.score}${suffix}`;
+        const totalQuestions = toFiniteNumber(record && record.totalQuestions);
+        const suffix = totalQuestions === null ? '' : ` / ${Math.max(0, Math.round(totalQuestions))}`;
+        return `${Math.round(score * 10) / 10}${suffix}`;
+    }
+
+    function sanitizeRecordDetailValue(value, depth = 0, state = { seen: new WeakSet(), nodes: 0 }) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string' || valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return null;
+        }
+        if (depth > MAX_RECORD_DETAIL_PAYLOAD_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_RECORD_DETAIL_PAYLOAD_NODES) {
+            return '[Truncated]';
+        }
+        state.seen.add(value);
+        state.nodes++;
+
+        if (Array.isArray(value)) {
+            const safeItems = value
+                .slice(0, MAX_RECORD_DETAIL_ARRAY_ITEMS)
+                .map((item) => sanitizeRecordDetailValue(item, depth + 1, state));
+            if (value.length > safeItems.length) {
+                safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
+            }
+            return safeItems;
+        }
+
+        let keys;
+        try {
+            keys = Object.keys(value);
+        } catch (_) {
+            return '[Unreadable]';
+        }
+        const safeObject = {};
+        for (const key of keys.slice(0, MAX_RECORD_DETAIL_OBJECT_KEYS)) {
+            if (RECORD_DETAIL_POLLUTION_KEYS.has(key)) {
+                continue;
+            }
+            try {
+                safeObject[key] = sanitizeRecordDetailValue(value[key], depth + 1, state);
+            } catch (_) {
+                safeObject[key] = '[Unreadable]';
+            }
+        }
+        if (keys.length > MAX_RECORD_DETAIL_OBJECT_KEYS) {
+            safeObject.__truncatedKeys = keys.length - MAX_RECORD_DETAIL_OBJECT_KEYS;
+        }
+        return safeObject;
+    }
+
+    function safeStringifyRecordPayload(payload) {
+        let text;
+        try {
+            text = JSON.stringify(sanitizeRecordDetailValue(payload || {}), null, 2);
+        } catch (_) {
+            text = '"[Unable to render payload]"';
+        }
+        if (typeof text !== 'string') {
+            text = String(text || '');
+        }
+        if (text.length > MAX_RECORD_DETAIL_PAYLOAD_CHARS) {
+            return `${text.slice(0, MAX_RECORD_DETAIL_PAYLOAD_CHARS)}\n... truncated`;
+        }
+        return text;
     }
 
     function setRowMessage(tbody, colSpan, message) {
@@ -422,12 +519,19 @@
             payload = null;
         }
         if (response.status === 401) {
+            state.csrfToken = '';
             window.location.href = '/';
             return null;
+        }
+        if (response.status === 403 && payload && payload.error === 'CSRF token invalid') {
+            state.csrfToken = '';
         }
         if (!response.ok) {
             const detail = payload && payload.details ? ` ${JSON.stringify(payload.details)}` : '';
             throw new Error(payload && payload.error ? `${payload.error}${detail}` : `Request failed with ${response.status}`);
+        }
+        if (payload && payload.csrfToken) {
+            state.csrfToken = payload.csrfToken;
         }
         return payload;
     }
@@ -650,7 +754,7 @@
             summary.append(term, description);
         }
         const payload = document.createElement('pre');
-        payload.textContent = JSON.stringify(record.payload || {}, null, 2);
+        payload.textContent = safeStringifyRecordPayload(record.payload || {});
         nodes.recordDetailBody.textContent = '';
         nodes.recordDetailBody.append(summary, payload);
     }
@@ -693,6 +797,12 @@
             remove.type = 'button';
             remove.textContent = 'Delete';
             remove.addEventListener('click', async () => {
+                const selectedUser = state.selectedUser;
+                if (!selectedUser) {
+                    return;
+                }
+                const userId = selectedUser.id;
+                const username = selectedUser.username;
                 const label = record.title || record.examId || record.id;
                 const confirmed = await confirmAction({
                     title: 'Delete practice record',
@@ -703,15 +813,17 @@
                     return;
                 }
                 await withButtonBusy(remove, 'Deleting...', async () => {
-                    await request(`/api/admin/users/${encodeURIComponent(state.selectedUser.id)}/practice-records/${encodeURIComponent(record.id)}`, {
+                    await request(`/api/admin/users/${encodeURIComponent(userId)}/practice-records/${encodeURIComponent(record.id)}`, {
                         method: 'DELETE'
                     });
                     setStatus('Record deleted');
-                    if (state.records.offset >= state.records.total - 1 && state.records.offset > 0) {
+                    if (state.selectedUser && state.selectedUser.id === userId && state.records.offset >= state.records.total - 1 && state.records.offset > 0) {
                         state.records.offset = Math.max(0, state.records.offset - state.records.limit);
                     }
                     await refreshAfterMutation();
-                    await loadRecords(state.selectedUser.id, state.selectedUser.username);
+                    if (state.selectedUser && state.selectedUser.id === userId) {
+                        await loadRecords(userId, username);
+                    }
                 }).catch((error) => setStatus(error.message, 'error'));
             });
             action.append(details, remove);
@@ -993,5 +1105,16 @@
         await refreshAll();
     }
 
-    boot().catch((error) => setStatus(error.message, 'error'));
+    if (window.__IELTS_ADMIN_TEST__) {
+        window.__IELTS_ADMIN_TEST_HOOKS__ = {
+            formatNumber,
+            formatScoreValue,
+            formatScore,
+            safeStringifyRecordPayload,
+            request,
+            state
+        };
+    } else {
+        boot().catch((error) => setStatus(error.message, 'error'));
+    }
 })();

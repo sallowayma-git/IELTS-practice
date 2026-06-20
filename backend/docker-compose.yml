@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ielts_practice
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env to a strong value}
     ports:
       - "127.0.0.1:55432:5432"
     healthcheck:
@@ -23,7 +23,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ielts_practice
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ielts_practice
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env to a strong value}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in backend/.env to a long random value}
       PORT: 3000
       HOST: 0.0.0.0
@@ -58,11 +62,17 @@ services:
     container_name: ielts-practice-tor
     environment:
       TOR_BRIDGES: ${TOR_BRIDGES:-}
-      TOR_BRIDGES_FILE: ${TOR_BRIDGES_FILE:-/etc/tor/bridges.txt}
+      TOR_BRIDGES_FILE: ${TOR_BRIDGES_FILE:-/etc/tor/bridges.local.txt}
     depends_on:
       app:
         condition: service_healthy
     volumes:
+      - type: bind
+        source: ${TOR_BRIDGES_LOCAL_FILE:-./tor/bridges.txt}
+        target: /etc/tor/bridges.local.txt
+        read_only: true
+        bind:
+          create_host_path: false
       - tor_hidden_service:/var/lib/tor/hidden_service
 
 volumes:

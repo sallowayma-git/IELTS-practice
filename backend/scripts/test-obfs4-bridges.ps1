@@ -1,12 +1,19 @@
 param(
     [string[]]$Bridge = @(),
-    [string]$BridgeFile = (Join-Path $PSScriptRoot '..\tor\bridges.txt'),
+    [string]$BridgeFile = '',
     [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env'),
     [string]$Image = 'backend-tor',
-    [int]$TimeoutSeconds = 75
+    [int]$TimeoutSeconds = 75,
+    [switch]$RevealBridgeLines
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $BridgeFile) {
+    $localBridgeFile = Join-Path $PSScriptRoot '..\tor\bridges.local.txt'
+    $templateBridgeFile = Join-Path $PSScriptRoot '..\tor\bridges.txt'
+    $BridgeFile = if (Test-Path $localBridgeFile) { $localBridgeFile } else { $templateBridgeFile }
+}
 
 function Normalize-Bridge {
     param([string]$Line)
@@ -68,7 +75,7 @@ function Get-CandidateBridges {
 
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($item in $items) {
-        if ($seen.Add($item.fingerprint)) {
+        if ($seen.Add($item.line)) {
             $item
         }
     }
@@ -106,14 +113,17 @@ function Test-Bridge {
             Start-Sleep -Seconds 3
             $logs = (& docker logs $container 2>&1) -join "`n"
             if ($logs -match 'Bootstrapped 100% \(done\): Done') {
-                return [ordered]@{
+                $result = [ordered]@{
                     fingerprint = $Candidate.fingerprint
                     endpoint = $Candidate.endpoint
                     reachable = $true
                     bootstrapPercent = 100
                     error = $null
-                    line = $Candidate.line
                 }
+                if ($RevealBridgeLines) {
+                    $result.line = $Candidate.line
+                }
+                return $result
             }
             $state = (& docker inspect --format '{{.State.Running}}' $container 2>&1) -join ''
             if ($LASTEXITCODE -ne 0 -or $state.Trim() -ne 'true') {

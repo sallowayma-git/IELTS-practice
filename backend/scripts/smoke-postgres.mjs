@@ -1,12 +1,21 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const backendRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(backendRoot, '..');
 
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:55432/ielts_practice';
+dotenv.config({ path: path.join(backendRoot, '.env') });
+
+if (!process.env.DATABASE_URL && !process.env.POSTGRES_PASSWORD) {
+    throw new Error('Set DATABASE_URL or POSTGRES_PASSWORD before running the PostgreSQL smoke test');
+}
+if (!process.env.DATABASE_URL) {
+    const smokePostgresPassword = encodeURIComponent(process.env.POSTGRES_PASSWORD);
+    process.env.DATABASE_URL = `postgres://postgres:${smokePostgresPassword}@127.0.0.1:55432/ielts_practice`;
+}
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'local-postgres-smoke-session-secret';
 process.env.COOKIE_SECURE = process.env.COOKIE_SECURE || 'false';
 

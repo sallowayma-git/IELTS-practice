@@ -36,6 +36,26 @@ async function resetAdminTotpIfRequested(db, userId, value) {
     return true;
 }
 
+async function deleteSessionsForUserIfPossible(db, userId) {
+    try {
+        const result = await db.query(
+            `DELETE FROM "session"
+             WHERE (
+                    sess::jsonb #>> '{user,id}' = $1
+                 OR sess::jsonb #>> '{pendingTotpLogin,user,id}' = $1
+                 OR sess::jsonb #>> '{pendingTotpSetup,user,id}' = $1
+             )`,
+            [userId]
+        );
+        return result.rowCount || 0;
+    } catch (error) {
+        if (error && error.code === '42P01') {
+            return 0;
+        }
+        throw error;
+    }
+}
+
 async function bootstrapAdmin(options = {}) {
     const db = options.db;
     if (!db || typeof db.query !== 'function') {
@@ -49,14 +69,22 @@ async function bootstrapAdmin(options = {}) {
 
     const normalizedUsername = validateAdminInput(username, password);
     const usernameLower = normalizedUsername.toLowerCase();
-    const passwordHash = await (options.bcrypt || bcrypt).hash(password, 12);
+    const bcryptImpl = options.bcrypt || bcrypt;
 
     const existing = await db.query(
-        'SELECT id FROM users WHERE username_lower = $1',
+        'SELECT id, password_hash, role FROM users WHERE username_lower = $1',
         [usernameLower]
     );
 
     if (existing.rows[0]) {
+        const existingUser = existing.rows[0];
+        const passwordMatches = existingUser.password_hash && typeof bcryptImpl.compare === 'function'
+            ? await bcryptImpl.compare(password, existingUser.password_hash)
+            : false;
+        const passwordHash = passwordMatches
+            ? existingUser.password_hash
+            : await bcryptImpl.hash(password, 12);
+        const roleChanged = existingUser.role !== 'admin';
         const result = await db.query(
             `UPDATE users
              SET username = $1, password_hash = $2, role = 'admin'
@@ -69,9 +97,13 @@ async function bootstrapAdmin(options = {}) {
             result.rows[0].id,
             options.resetTotp ?? process.env.ADMIN_RESET_TOTP
         );
-        return { skipped: false, created: false, totpReset, user: result.rows[0] };
+        const sessionsDeleted = (!passwordMatches || roleChanged || totpReset)
+            ? await deleteSessionsForUserIfPossible(db, result.rows[0].id)
+            : 0;
+        return { skipped: false, created: false, totpReset, sessionsDeleted, user: result.rows[0] };
     }
 
+    const passwordHash = await bcryptImpl.hash(password, 12);
     const result = await db.query(
         `INSERT INTO users (username, username_lower, password_hash, role)
          VALUES ($1, $2, $3, 'admin')
@@ -84,6 +116,7 @@ async function bootstrapAdmin(options = {}) {
 
 module.exports = {
     bootstrapAdmin,
+    deleteSessionsForUserIfPossible,
     resetAdminTotpIfRequested,
     validateAdminInput
 };

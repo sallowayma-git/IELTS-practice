@@ -1,8 +1,10 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
+const { requireRecordId } = require('./practiceRecords');
 const {
     USERNAME_PATTERN,
+    ensureCsrfToken,
     normalizeUsername,
     publicUser,
     requireAdmin,
@@ -11,8 +13,10 @@ const {
     verifyCsrfToken
 } = require('./auth');
 
+const ADMIN_SEARCH_QUERY_MAX_LENGTH = 80;
+
 const listQuerySchema = z.object({
-    q: z.string().optional().default(''),
+    q: z.string().trim().max(ADMIN_SEARCH_QUERY_MAX_LENGTH).optional().default(''),
     role: z.enum(['all', 'user', 'admin']).optional().default('all'),
     limit: z.coerce.number().int().min(1).max(100).optional().default(25),
     offset: z.coerce.number().int().min(0).optional().default(0)
@@ -41,6 +45,13 @@ const analyticsQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(50).optional().default(10)
 });
 
+const userIdParamSchema = z.string().uuid();
+const TRAFFIC_METHOD_MAX_LENGTH = 16;
+const TRAFFIC_PATH_MAX_LENGTH = 300;
+const TRAFFIC_ROUTE_GROUP_MAX_LENGTH = 32;
+const TRAFFIC_HEADER_MAX_LENGTH = 500;
+const DEFAULT_MEMORY_TRAFFIC_MAX_EVENTS = 10000;
+
 function toInteger(value) {
     const number = Number(value);
     return Number.isFinite(number) ? Math.trunc(number) : 0;
@@ -55,6 +66,57 @@ function roundNumber(value, digits = 1) {
     const number = toNumber(value);
     const factor = 10 ** digits;
     return Math.round(number * factor) / factor;
+}
+
+function truncateText(value, maxLength, fallback = '') {
+    const text = String(value ?? fallback)
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .trim();
+    return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function stripQueryAndFragment(value, fallback = '') {
+    const text = String(value ?? fallback).trim();
+    if (!text) {
+        return fallback;
+    }
+    return text.split(/[?#]/, 1)[0] || fallback;
+}
+
+function escapeLikePattern(value) {
+    return String(value).replace(/[!%_]/g, '!$&');
+}
+
+function normalizeAdminSearchQuery(value) {
+    const q = String(value ?? '').trim().toLowerCase();
+    return q.length > ADMIN_SEARCH_QUERY_MAX_LENGTH ? q.slice(0, ADMIN_SEARCH_QUERY_MAX_LENGTH) : q;
+}
+
+function normalizeRequestPath(value) {
+    const text = String(value ?? '/').trim();
+    if (!text) {
+        return '/';
+    }
+    try {
+        const url = new URL(text, 'http://local.invalid');
+        return url.pathname || '/';
+    } catch (_) {
+        const path = stripQueryAndFragment(text, '/');
+        return path.startsWith('/') ? path : `/${path}`;
+    }
+}
+
+function normalizeReferrer(value) {
+    const text = String(value ?? '').trim();
+    if (!text) {
+        return null;
+    }
+    try {
+        const url = new URL(text);
+        return url.origin === 'null' ? null : url.origin;
+    } catch (_) {
+        return stripQueryAndFragment(text, '') ? '/' : null;
+    }
 }
 
 function normalizeRole(value) {
@@ -181,6 +243,23 @@ function serializeTrafficStatus(row) {
     return {
         statusClass: row.status_class || row.statusClass || 'unknown',
         requests: toInteger(row.requests)
+    };
+}
+
+function normalizeTrafficEvent(event = {}) {
+    const rawPath = normalizeRequestPath(event.path || '/');
+    const rawReferrer = normalizeReferrer(event.referrer);
+    return {
+        userId: event.userId || null,
+        sessionId: event.sessionId || null,
+        method: truncateText(event.method || 'GET', TRAFFIC_METHOD_MAX_LENGTH, 'GET').toUpperCase(),
+        path: truncateText(rawPath, TRAFFIC_PATH_MAX_LENGTH, '/') || '/',
+        routeGroup: truncateText(event.routeGroup || classifyRouteGroup(rawPath), TRAFFIC_ROUTE_GROUP_MAX_LENGTH, 'other') || 'other',
+        statusCode: toInteger(event.statusCode),
+        durationMs: Math.max(0, toInteger(event.durationMs)),
+        ipHash: event.ipHash ? truncateText(event.ipHash, 128) : null,
+        userAgent: event.userAgent ? truncateText(event.userAgent, TRAFFIC_HEADER_MAX_LENGTH) : null,
+        referrer: rawReferrer ? truncateText(rawReferrer, TRAFFIC_HEADER_MAX_LENGTH) : null
     };
 }
 
@@ -398,7 +477,8 @@ class PostgresAdminStore {
     }
 
     async listUsers(options = {}) {
-        const q = String(options.q || '').trim().toLowerCase();
+        const q = normalizeAdminSearchQuery(options.q);
+        const searchPattern = escapeLikePattern(q);
         const role = options.role === 'admin' || options.role === 'user' ? options.role : 'all';
         const limit = options.limit;
         const offset = options.offset;
@@ -417,19 +497,19 @@ class PostgresAdminStore {
                 coalesce(sum(pr.total_questions), 0)::int AS total_questions
              FROM users u
              LEFT JOIN practice_records pr ON pr.user_id = u.id
-             WHERE ($1 = '' OR u.username_lower LIKE '%' || $1 || '%' OR lower(u.username) LIKE '%' || $1 || '%')
+             WHERE ($1 = '' OR u.username_lower LIKE '%' || $1 || '%' ESCAPE '!' OR lower(u.username) LIKE '%' || $1 || '%' ESCAPE '!')
                AND ($4 = 'all' OR u.role = $4)
              GROUP BY u.id
              ORDER BY u.created_at DESC, u.username_lower ASC
              LIMIT $2 OFFSET $3`,
-            [q, limit, offset, role]
+            [searchPattern, limit, offset, role]
         );
         const total = await this.db.query(
             `SELECT count(*)::int AS total
              FROM users
-             WHERE ($1 = '' OR username_lower LIKE '%' || $1 || '%' OR lower(username) LIKE '%' || $1 || '%')
+             WHERE ($1 = '' OR username_lower LIKE '%' || $1 || '%' ESCAPE '!' OR lower(username) LIKE '%' || $1 || '%' ESCAPE '!')
                AND ($2 = 'all' OR role = $2)`,
-            [q, role]
+            [searchPattern, role]
         );
         return {
             users: users.rows.map(serializeUser),
@@ -585,6 +665,7 @@ class PostgresAdminStore {
     }
 
     async recordTraffic(event) {
+        const safeEvent = normalizeTrafficEvent(event);
         await this.db.query(
             `INSERT INTO traffic_events (
                 occurred_at, user_id, session_id, method, path, route_group,
@@ -592,16 +673,16 @@ class PostgresAdminStore {
              )
              VALUES (now(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
             [
-                event.userId || null,
-                event.sessionId || null,
-                event.method,
-                event.path,
-                event.routeGroup,
-                event.statusCode,
-                event.durationMs,
-                event.ipHash || null,
-                event.userAgent || null,
-                event.referrer || null
+                safeEvent.userId,
+                safeEvent.sessionId,
+                safeEvent.method,
+                safeEvent.path,
+                safeEvent.routeGroup,
+                safeEvent.statusCode,
+                safeEvent.durationMs,
+                safeEvent.ipHash,
+                safeEvent.userAgent,
+                safeEvent.referrer
             ]
         );
     }
@@ -678,9 +759,10 @@ class PostgresAdminStore {
         const recent = await this.db.query(
             `SELECT occurred_at, method, path, route_group, status_code, duration_ms, user_id
              FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')
              ORDER BY occurred_at DESC
-             LIMIT $1`,
-            [limit]
+             LIMIT $2`,
+            [days, limit]
         );
         const row = totals.rows[0] || {};
         return {
@@ -703,7 +785,9 @@ class MemoryAdminStore {
     constructor(options = {}) {
         this.authStore = options.authStore;
         this.practiceStore = options.practiceStore;
+        this.totpStore = options.totpStore;
         this.sessionStore = options.sessionStore;
+        this.maxTrafficEvents = Math.max(1, toInteger(options.maxTrafficEvents || DEFAULT_MEMORY_TRAFFIC_MAX_EVENTS));
         this.trafficEvents = [];
     }
 
@@ -853,7 +937,7 @@ class MemoryAdminStore {
     }
 
     async listUsers(options = {}) {
-        const q = String(options.q || '').trim().toLowerCase();
+        const q = normalizeAdminSearchQuery(options.q);
         const role = options.role === 'admin' || options.role === 'user' ? options.role : 'all';
         const filtered = this._users()
             .filter((user) => !q || user.username.toLowerCase().includes(q))
@@ -952,6 +1036,9 @@ class MemoryAdminStore {
         if (this.practiceStore?.recordsByUser) {
             this.practiceStore.recordsByUser.delete(userId);
         }
+        if (this.totpStore && typeof this.totpStore.disable === 'function') {
+            await this.totpStore.disable(userId);
+        }
         return serializeUser(user);
     }
 
@@ -994,10 +1081,14 @@ class MemoryAdminStore {
     }
 
     async recordTraffic(event) {
+        const safeEvent = normalizeTrafficEvent(event);
         this.trafficEvents.push({
-            ...event,
+            ...safeEvent,
             occurredAt: new Date().toISOString()
         });
+        if (this.trafficEvents.length > this.maxTrafficEvents) {
+            this.trafficEvents.splice(0, this.trafficEvents.length - this.maxTrafficEvents);
+        }
     }
 
     _trafficTotals(events) {
@@ -1089,16 +1180,51 @@ class MemoryAdminStore {
     }
 }
 
+function parseQuery(schema, query, message) {
+    const parsed = schema.safeParse(query || {});
+    if (!parsed.success) {
+        const error = new Error(message);
+        error.status = 400;
+        error.details = parsed.error.flatten();
+        throw error;
+    }
+    return parsed.data;
+}
+
+function parseParam(schema, value, message) {
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) {
+        const error = new Error(message);
+        error.status = 400;
+        error.details = parsed.error.flatten();
+        throw error;
+    }
+    return parsed.data;
+}
+
 function parseListQuery(query) {
-    return listQuerySchema.parse(query || {});
+    return parseQuery(listQuerySchema, query, 'Invalid list query');
 }
 
 function parseTrafficQuery(query) {
-    return trafficQuerySchema.parse(query || {});
+    return parseQuery(trafficQuerySchema, query, 'Invalid traffic query');
 }
 
 function parseAnalyticsQuery(query) {
-    return analyticsQuerySchema.parse(query || {});
+    return parseQuery(analyticsQuerySchema, query, 'Invalid analytics query');
+}
+
+function parseUserIdParam(value) {
+    return parseParam(userIdParamSchema, value, 'Invalid user id');
+}
+
+function parseRecordIdParam(value) {
+    try {
+        return requireRecordId(value, 'recordId');
+    } catch (error) {
+        error.message = 'Invalid record id';
+        throw error;
+    }
 }
 
 function validateNewPassword(password) {
@@ -1109,6 +1235,15 @@ function validateNewPassword(password) {
         error.details = passwordCheck.errors;
         throw error;
     }
+}
+
+function regenerateSession(req) {
+    return new Promise((resolve, reject) => {
+        req.session.regenerate((error) => {
+            if (error) reject(error);
+            else resolve();
+        });
+    });
 }
 
 function sendError(res, error) {
@@ -1208,7 +1343,8 @@ function createAdminRouter(options = {}) {
 
     router.get('/users/:userId/stats', async (req, res, next) => {
         try {
-            const stats = await store.userStats(req.params.userId);
+            const userId = parseUserIdParam(req.params.userId);
+            const stats = await store.userStats(userId);
             if (!stats) {
                 return res.status(404).json({ error: 'User not found' });
             }
@@ -1220,11 +1356,12 @@ function createAdminRouter(options = {}) {
 
     router.patch('/users/:userId', verifyCsrfToken, async (req, res, next) => {
         try {
+            const userId = parseUserIdParam(req.params.userId);
             const parsed = updateUserSchema.safeParse(req.body || {});
             if (!parsed.success) {
                 return res.status(400).json({ error: 'Invalid user update', details: parsed.error.flatten() });
             }
-            const current = await store.getUser(req.params.userId);
+            const current = await store.getUser(userId);
             if (!current) {
                 return res.status(404).json({ error: 'User not found' });
             }
@@ -1237,9 +1374,14 @@ function createAdminRouter(options = {}) {
             if (current.role === 'admin' && parsed.data.role === 'user' && await store.countAdmins() <= 1) {
                 return res.status(400).json({ error: 'Cannot demote the last admin' });
             }
-            const user = await store.updateUser(req.params.userId, parsed.data);
+            const user = await store.updateUser(userId, parsed.data);
             if (typeof store.deleteSessionsForUser === 'function') {
-                await store.deleteSessionsForUser(req.params.userId, req.sessionID);
+                await store.deleteSessionsForUser(userId, req.sessionID);
+            }
+            if (current.id === req.session.user.id && parsed.data.password !== undefined) {
+                await regenerateSession(req);
+                req.session.user = publicUser(user);
+                return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
             }
             return res.json({ user });
         } catch (error) {
@@ -1250,7 +1392,8 @@ function createAdminRouter(options = {}) {
 
     router.delete('/users/:userId', verifyCsrfToken, async (req, res, next) => {
         try {
-            const current = await store.getUser(req.params.userId);
+            const userId = parseUserIdParam(req.params.userId);
+            const current = await store.getUser(userId);
             if (!current) {
                 return res.status(404).json({ error: 'User not found' });
             }
@@ -1260,7 +1403,10 @@ function createAdminRouter(options = {}) {
             if (current.role === 'admin' && await store.countAdmins() <= 1) {
                 return res.status(400).json({ error: 'Cannot delete the last admin' });
             }
-            const user = await store.deleteUser(req.params.userId);
+            const user = await store.deleteUser(userId);
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
             return res.json({ deleted: Boolean(user), user });
         } catch (error) {
             return next(error);
@@ -1269,8 +1415,13 @@ function createAdminRouter(options = {}) {
 
     router.get('/users/:userId/practice-records', async (req, res, next) => {
         try {
+            const userId = parseUserIdParam(req.params.userId);
             const query = parseListQuery(req.query);
-            return res.json(await store.listPracticeRecords(req.params.userId, query));
+            const user = await store.getUser(userId);
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            return res.json(await store.listPracticeRecords(userId, query));
         } catch (error) {
             return next(error);
         }
@@ -1278,7 +1429,16 @@ function createAdminRouter(options = {}) {
 
     router.delete('/users/:userId/practice-records/:recordId', verifyCsrfToken, async (req, res, next) => {
         try {
-            const removed = await store.deletePracticeRecord(req.params.userId, req.params.recordId);
+            const userId = parseUserIdParam(req.params.userId);
+            const recordId = parseRecordIdParam(req.params.recordId);
+            const user = await store.getUser(userId);
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            const removed = await store.deletePracticeRecord(userId, recordId);
+            if (!removed) {
+                return res.status(404).json({ error: 'Record not found' });
+            }
             return res.json({ removed });
         } catch (error) {
             return next(error);
@@ -1289,19 +1449,20 @@ function createAdminRouter(options = {}) {
 }
 
 function classifyRouteGroup(pathname) {
-    if (pathname === '/' || pathname === '/admin' || pathname === '/admin/') {
+    const path = normalizeRequestPath(pathname);
+    if (path === '/' || path === '/admin' || path === '/admin/') {
         return 'page';
     }
-    if (pathname.startsWith('/api/')) {
+    if (path.startsWith('/api/')) {
         return 'api';
     }
     if (
-        pathname.startsWith('/assets/')
-        || pathname.startsWith('/css/')
-        || pathname.startsWith('/js/')
-        || pathname.startsWith('/templates/')
-        || pathname.startsWith('/ListeningPractice/')
-        || pathname.startsWith('/admin/')
+        path.startsWith('/assets/')
+        || path.startsWith('/css/')
+        || path.startsWith('/js/')
+        || path.startsWith('/templates/')
+        || path.startsWith('/ListeningPractice/')
+        || path.startsWith('/admin/')
     ) {
         return 'asset';
     }
@@ -1317,6 +1478,13 @@ function hashVisitor(req, secret) {
     return crypto.createHmac('sha256', secret).update(source).digest('hex');
 }
 
+function hashTrafficIdentifier(value, secret) {
+    if (!value) {
+        return null;
+    }
+    return crypto.createHmac('sha256', secret).update(String(value)).digest('hex');
+}
+
 function createTrafficMiddleware(options = {}) {
     const store = options.store;
     const enabled = options.enabled !== false && store && typeof store.recordTraffic === 'function';
@@ -1330,18 +1498,18 @@ function createTrafficMiddleware(options = {}) {
             if (req.path === '/api/health') {
                 return;
             }
-            const event = {
+            const event = normalizeTrafficEvent({
                 userId: req.session?.user?.id || null,
-                sessionId: req.sessionID || null,
+                sessionId: hashTrafficIdentifier(req.sessionID, secret),
                 method: req.method,
                 path: req.path || '/',
                 routeGroup: classifyRouteGroup(req.path || '/'),
                 statusCode: res.statusCode,
                 durationMs: Math.max(0, Date.now() - startedAt),
                 ipHash: hashVisitor(req, secret),
-                userAgent: String(req.get('user-agent') || '').slice(0, 500),
-                referrer: String(req.get('referer') || '').slice(0, 500)
-            };
+                userAgent: req.get('user-agent') || '',
+                referrer: req.get('referer') || ''
+            });
             Promise.resolve(store.recordTraffic(event)).catch((error) => {
                 console.error('[backend] traffic record failed:', error);
             });
@@ -1356,8 +1524,10 @@ module.exports = {
     classifyRouteGroup,
     createAdminRouter,
     createTrafficMiddleware,
+    normalizeTrafficEvent,
     parseAnalyticsQuery,
     parseListQuery,
+    parseUserIdParam,
     parseTrafficQuery,
     serializeRecord,
     serializeUser

@@ -14,6 +14,9 @@ const {
 const DEFAULT_ISSUER = 'IELTS Atlas';
 const RECOVERY_CODE_COUNT = 10;
 const RECOVERY_CODE_BYTES = 8;
+const DEFAULT_PENDING_TOTP_MAX_AGE_MS = 10 * 60 * 1000;
+const DEFAULT_SESSION_SECRET = 'development-session-secret-change-me';
+const PLACEHOLDER_SESSION_SECRET = 'replace-with-a-long-random-session-secret';
 
 const tokenSchema = z.object({
     token: z.string().trim().min(1).max(64)
@@ -29,19 +32,35 @@ function parseBoolean(value, fallback = false) {
     return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
+function resolveEncryptionKeySource(options = {}) {
+    const source = options.encryptionKey
+        || process.env.TOTP_ENCRYPTION_KEY
+        || process.env.SESSION_SECRET
+        || DEFAULT_SESSION_SECRET;
+    const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
+    const weakSource = !source
+        || String(source).length < 32
+        || source === DEFAULT_SESSION_SECRET
+        || source === PLACEHOLDER_SESSION_SECRET;
+
+    if (production && weakSource) {
+        throw new Error('TOTP_ENCRYPTION_KEY or SESSION_SECRET must be a non-placeholder value of at least 32 characters in production');
+    }
+
+    return source;
+}
+
 function getTotpConfig(options = {}) {
     return {
         enabled: options.enabled !== undefined
             ? Boolean(options.enabled)
             : parseBoolean(process.env.TOTP_ENABLED, true),
         issuer: options.issuer || process.env.TOTP_ISSUER || DEFAULT_ISSUER,
-        encryptionKeySource: options.encryptionKey
-            || process.env.TOTP_ENCRYPTION_KEY
-            || process.env.SESSION_SECRET
-            || 'development-session-secret-change-me',
+        encryptionKeySource: resolveEncryptionKeySource(options),
         epochTolerance: options.epochTolerance ?? 30,
         recoveryCodeCount: options.recoveryCodeCount || RECOVERY_CODE_COUNT,
-        recoveryHashRounds: options.recoveryHashRounds || 10
+        recoveryHashRounds: options.recoveryHashRounds || 10,
+        pendingMaxAgeMs: options.pendingMaxAgeMs || DEFAULT_PENDING_TOTP_MAX_AGE_MS
     };
 }
 
@@ -87,6 +106,10 @@ function normalizeRecoveryCode(value) {
     return String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 }
 
+function isRecoveryCodeToken(value) {
+    return /^[A-F0-9]{16}$/.test(normalizeRecoveryCode(value));
+}
+
 function formatRecoveryCode(raw) {
     return raw.match(/.{1,4}/g).join('-');
 }
@@ -103,16 +126,21 @@ async function hashRecoveryCodes(codes, bcryptImpl = bcrypt, rounds = 10) {
 }
 
 function verifyTotpToken(token, secret, config) {
+    return verifyTotpTokenWithReplayWindow(token, secret, config).valid;
+}
+
+function verifyTotpTokenWithReplayWindow(token, secret, config, afterTimeStep = undefined) {
     const normalized = normalizeToken(token);
     if (!/^\d{6}$/.test(normalized)) {
-        return false;
+        return { valid: false };
     }
     const result = otp.verifySync({
         token: normalized,
         secret,
-        epochTolerance: config.epochTolerance
+        epochTolerance: config.epochTolerance,
+        afterTimeStep
     });
-    return Boolean(result && result.valid);
+    return result && result.valid ? result : { valid: false };
 }
 
 function serializeStatus(row, recoveryCodesRemaining = 0) {
@@ -155,18 +183,31 @@ class PostgresTotpStore {
         return result.rows[0]?.secret_encrypted || null;
     }
 
-    async saveEnabled(userId, secretEncrypted, recoveryCodeHashes) {
+    async getLastTotpStep(userId) {
+        const result = await this.db.query(
+            `SELECT last_totp_step
+             FROM user_totp_settings
+             WHERE user_id = $1 AND enabled = true`,
+            [userId]
+        );
+        const value = result.rows[0]?.last_totp_step;
+        const step = Number(value);
+        return Number.isSafeInteger(step) && step >= 0 ? step : undefined;
+    }
+
+    async saveEnabled(userId, secretEncrypted, recoveryCodeHashes, lastTotpStep = null) {
         const run = async (client) => {
             const result = await client.query(
-                `INSERT INTO user_totp_settings (user_id, secret_encrypted, enabled, confirmed_at, last_used_at)
-                 VALUES ($1, $2, true, now(), NULL)
+                `INSERT INTO user_totp_settings (user_id, secret_encrypted, enabled, confirmed_at, last_used_at, last_totp_step)
+                 VALUES ($1, $2, true, now(), NULL, $3)
                  ON CONFLICT (user_id) DO UPDATE
                  SET secret_encrypted = EXCLUDED.secret_encrypted,
                      enabled = true,
                      confirmed_at = now(),
-                     last_used_at = NULL
+                     last_used_at = NULL,
+                     last_totp_step = EXCLUDED.last_totp_step
                  RETURNING enabled, confirmed_at, last_used_at`,
-                [userId, secretEncrypted]
+                [userId, secretEncrypted, lastTotpStep]
             );
             await client.query('DELETE FROM user_totp_recovery_codes WHERE user_id = $1', [userId]);
             for (const hash of recoveryCodeHashes) {
@@ -192,6 +233,18 @@ class PostgresTotpStore {
         );
     }
 
+    async consumeTotpStep(userId, timeStep) {
+        const result = await this.db.query(
+            `UPDATE user_totp_settings
+             SET last_used_at = now(), last_totp_step = $2
+             WHERE user_id = $1
+               AND enabled = true
+               AND (last_totp_step IS NULL OR last_totp_step < $2)`,
+            [userId, timeStep]
+        );
+        return Boolean(result && result.rowCount === 1);
+    }
+
     async replaceRecoveryCodes(userId, recoveryCodeHashes) {
         const run = async (client) => {
             await client.query('DELETE FROM user_totp_recovery_codes WHERE user_id = $1', [userId]);
@@ -212,7 +265,7 @@ class PostgresTotpStore {
 
     async consumeRecoveryCode(userId, code, bcryptImpl = bcrypt) {
         const normalized = normalizeRecoveryCode(code);
-        if (!normalized) {
+        if (!isRecoveryCodeToken(normalized)) {
             return false;
         }
         const result = await this.db.query(
@@ -224,10 +277,13 @@ class PostgresTotpStore {
         );
         for (const row of result.rows) {
             if (await bcryptImpl.compare(normalized, row.code_hash)) {
-                await this.db.query(
-                    'UPDATE user_totp_recovery_codes SET used_at = now() WHERE id = $1',
+                const updated = await this.db.query(
+                    'UPDATE user_totp_recovery_codes SET used_at = now() WHERE id = $1 AND used_at IS NULL',
                     [row.id]
                 );
+                if (!updated || updated.rowCount !== 1) {
+                    return false;
+                }
                 await this.markUsed(userId);
                 return true;
             }
@@ -259,13 +315,20 @@ class MemoryTotpStore {
         return setting && setting.enabled ? setting.secret_encrypted : null;
     }
 
-    async saveEnabled(userId, secretEncrypted, recoveryCodeHashes) {
+    async getLastTotpStep(userId) {
+        const setting = this.settings.get(userId);
+        const step = Number(setting?.last_totp_step);
+        return Number.isSafeInteger(step) && step >= 0 ? step : undefined;
+    }
+
+    async saveEnabled(userId, secretEncrypted, recoveryCodeHashes, lastTotpStep = null) {
         const setting = {
             user_id: userId,
             secret_encrypted: secretEncrypted,
             enabled: true,
             confirmed_at: new Date().toISOString(),
-            last_used_at: null
+            last_used_at: null,
+            last_totp_step: lastTotpStep
         };
         this.settings.set(userId, setting);
         this.recoveryCodes.set(userId, recoveryCodeHashes.map((hash, index) => ({
@@ -284,6 +347,20 @@ class MemoryTotpStore {
         }
     }
 
+    async consumeTotpStep(userId, timeStep) {
+        const setting = this.settings.get(userId);
+        if (!setting || !setting.enabled) {
+            return false;
+        }
+        const current = Number(setting.last_totp_step);
+        if (Number.isSafeInteger(current) && current >= timeStep) {
+            return false;
+        }
+        setting.last_totp_step = timeStep;
+        setting.last_used_at = new Date().toISOString();
+        return true;
+    }
+
     async replaceRecoveryCodes(userId, recoveryCodeHashes) {
         this.recoveryCodes.set(userId, recoveryCodeHashes.map((hash, index) => ({
             id: `${userId}:${index}`,
@@ -296,6 +373,9 @@ class MemoryTotpStore {
 
     async consumeRecoveryCode(userId, code, bcryptImpl = bcrypt) {
         const normalized = normalizeRecoveryCode(code);
+        if (!isRecoveryCodeToken(normalized)) {
+            return false;
+        }
         const codes = this.recoveryCodes.get(userId) || [];
         for (const entry of codes) {
             if (!entry.usedAt && await bcryptImpl.compare(normalized, entry.code_hash)) {
@@ -322,6 +402,14 @@ function getSetupUser(req) {
         return publicUser(req.session.pendingTotpSetup.user);
     }
     return null;
+}
+
+function isPendingExpired(pending, config) {
+    const startedAt = Number(pending?.startedAt);
+    if (!Number.isFinite(startedAt) || startedAt <= 0) {
+        return true;
+    }
+    return Date.now() - startedAt > config.pendingMaxAgeMs;
 }
 
 function createRequireAdminTotp(store) {
@@ -364,11 +452,32 @@ function createTotpRouter(options = {}) {
             return false;
         }
         const secret = decryptSecret(secretPayload, config.encryptionKeySource);
-        if (verifyTotpToken(token, secret, config)) {
+        const afterTimeStep = typeof store.getLastTotpStep === 'function'
+            ? await store.getLastTotpStep(userId)
+            : undefined;
+        const result = verifyTotpTokenWithReplayWindow(token, secret, config, afterTimeStep);
+        if (result.valid) {
+            if (typeof store.consumeTotpStep === 'function') {
+                return store.consumeTotpStep(userId, result.timeStep);
+            }
             await store.markUsed(userId);
             return true;
         }
-        return store.consumeRecoveryCode(userId, token, bcryptImpl);
+        return isRecoveryCodeToken(token)
+            ? store.consumeRecoveryCode(userId, token, bcryptImpl)
+            : false;
+    }
+
+    async function rotateAuthenticatedSession(req, user, options = {}) {
+        const safeUser = publicUser(user);
+        if (options.revokeOtherSessions && authStore && typeof authStore.deleteSessionsForUser === 'function') {
+            await authStore.deleteSessionsForUser(safeUser.id, req.sessionID);
+        }
+        await new Promise((resolve, reject) => {
+            req.session.regenerate((error) => error ? reject(error) : resolve());
+        });
+        req.session.user = safeUser;
+        return safeUser;
     }
 
     router.get('/status', requireAuth, async (req, res, next) => {
@@ -382,9 +491,21 @@ function createTotpRouter(options = {}) {
     router.post('/setup', verifyCsrfToken, async (req, res, next) => {
         try {
             assertEnabled();
+            const hadPendingSetup = Boolean(req.session?.pendingTotpSetup);
+            if (hadPendingSetup && isPendingExpired(req.session.pendingTotpSetup, config)) {
+                delete req.session.pendingTotpSetup;
+                if (!req.session.user) {
+                    return res.status(401).json({ error: 'TOTP setup expired' });
+                }
+            }
             const user = getSetupUser(req);
             if (!user) {
                 return res.status(401).json({ error: 'Authentication required' });
+            }
+            checkRateLimit(`totp-setup-start:${req.ip}:${user.id}`);
+            const status = await store.getStatus(user.id);
+            if (status.enabled) {
+                return res.status(409).json({ error: 'TOTP is already enabled' });
             }
             const secret = otp.generateSecret();
             const otpauthUrl = otp.generateURI({
@@ -419,8 +540,16 @@ function createTotpRouter(options = {}) {
             if (!user || !setup?.secret) {
                 return res.status(400).json({ error: 'TOTP setup was not started' });
             }
+            if (isPendingExpired(setup, config)) {
+                delete req.session.pendingTotpSetup;
+                return res.status(401).json({ error: 'TOTP setup expired' });
+            }
+            checkRateLimit(`totp-setup:${req.ip}:${user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
-            if (!parsed.success || !verifyTotpToken(parsed.data.token, setup.secret, config)) {
+            const result = parsed.success
+                ? verifyTotpTokenWithReplayWindow(parsed.data.token, setup.secret, config)
+                : { valid: false };
+            if (!result.valid) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
             const recoveryCodes = generateRecoveryCodes(config.recoveryCodeCount);
@@ -432,12 +561,12 @@ function createTotpRouter(options = {}) {
             const status = await store.saveEnabled(
                 user.id,
                 encryptSecret(setup.secret, config.encryptionKeySource),
-                recoveryCodeHashes
+                recoveryCodeHashes,
+                result.timeStep
             );
-            req.session.user = publicUser(user);
-            delete req.session.pendingTotpSetup;
+            const safeUser = await rotateAuthenticatedSession(req, user, { revokeOtherSessions: true });
             return res.json({
-                user: publicUser(user),
+                user: safeUser,
                 status,
                 recoveryCodes,
                 csrfToken: ensureCsrfToken(req)
@@ -454,16 +583,16 @@ function createTotpRouter(options = {}) {
             if (!pending?.user) {
                 return res.status(400).json({ error: 'TOTP login was not started' });
             }
+            if (isPendingExpired(pending, config)) {
+                delete req.session.pendingTotpLogin;
+                return res.status(401).json({ error: 'TOTP login expired' });
+            }
             checkRateLimit(`totp-login:${req.ip}:${pending.user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
             if (!parsed.success || !(await verifyStoredToken(pending.user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
-            const user = publicUser(pending.user);
-            await new Promise((resolve, reject) => {
-                req.session.regenerate((error) => error ? reject(error) : resolve());
-            });
-            req.session.user = user;
+            const user = await rotateAuthenticatedSession(req, pending.user);
             return res.json({ user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);
@@ -476,6 +605,11 @@ function createTotpRouter(options = {}) {
             const status = await store.getStatus(req.session.user.id);
             if (!status.enabled) {
                 return res.status(400).json({ error: 'TOTP is not enabled' });
+            }
+            checkRateLimit(`totp-recovery-codes:${req.ip}:${req.session.user.id}`);
+            const parsed = tokenSchema.safeParse(req.body || {});
+            if (!parsed.success || !(await verifyStoredToken(req.session.user.id, parsed.data.token))) {
+                return res.status(401).json({ error: 'TOTP code is invalid' });
             }
             const recoveryCodes = generateRecoveryCodes(config.recoveryCodeCount);
             const recoveryCodeHashes = await hashRecoveryCodes(
@@ -507,6 +641,7 @@ function createTotpRouter(options = {}) {
             if (!parsed.success) {
                 return res.status(400).json({ error: 'Password and TOTP code are required' });
             }
+            checkRateLimit(`totp-disable:${req.ip}:${user.id}`);
             const account = await authStore.findByUsernameLower(user.username.toLowerCase());
             const passwordOk = account && await bcryptImpl.compare(parsed.data.password, account.password_hash);
             if (!passwordOk) {
@@ -516,7 +651,12 @@ function createTotpRouter(options = {}) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
             await store.disable(user.id);
-            return res.json({ status: await store.getStatus(user.id) });
+            const safeUser = await rotateAuthenticatedSession(req, user, { revokeOtherSessions: true });
+            return res.json({
+                user: safeUser,
+                status: await store.getStatus(user.id),
+                csrfToken: ensureCsrfToken(req)
+            });
         } catch (error) {
             return next(error);
         }
@@ -534,8 +674,10 @@ module.exports = {
     encryptSecret,
     generateRecoveryCodes,
     getTotpConfig,
+    isRecoveryCodeToken,
     normalizeRecoveryCode,
     normalizeToken,
     serializeStatus,
-    verifyTotpToken
+    verifyTotpToken,
+    verifyTotpTokenWithReplayWindow
 };

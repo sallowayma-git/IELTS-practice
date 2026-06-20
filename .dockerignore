@@ -3,7 +3,14 @@
 .codex
 .npm-cache
 .pnpm-store
+.env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
+backend/logs
 backend/node_modules
+backend/tor/bridges.local.txt
 ListeningPractice
 node_modules

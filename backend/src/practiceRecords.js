@@ -1,55 +1,299 @@
+const crypto = require('node:crypto');
 const { z } = require('zod');
 const { requireAuth, verifyCsrfToken } = require('./auth');
 
 const practiceRecordSchema = z.object({}).passthrough();
+const MAX_RECORDS_PER_REQUEST = 5000;
+const MAX_INDEXED_TEXT_LENGTH = 512;
+const MAX_TYPE_LENGTH = 64;
+const MAX_TITLE_LENGTH = 500;
+const MAX_PAYLOAD_DEPTH = 40;
+const MAX_PAYLOAD_NODES = 20000;
+const MAX_SCORE = 100;
+const MAX_QUESTION_COUNT = 10000;
+const MAX_DURATION_SECONDS = 365 * 24 * 60 * 60;
+const POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/;
+const NULL_CHARACTER_PATTERN = /\u0000/;
+
+function requestError(message, status = 400, details = undefined) {
+    const error = new Error(message);
+    error.status = status;
+    if (details) {
+        error.details = details;
+    }
+    return error;
+}
 
 function isNonEmptyString(value) {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
+function hasUnpairedSurrogate(value) {
+    const text = String(value);
+    for (let index = 0; index < text.length; index += 1) {
+        const code = text.charCodeAt(index);
+        if (code >= 0xD800 && code <= 0xDBFF) {
+            const next = text.charCodeAt(index + 1);
+            if (!(next >= 0xDC00 && next <= 0xDFFF)) {
+                return true;
+            }
+            index += 1;
+        } else if (code >= 0xDC00 && code <= 0xDFFF) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function assertSafeUnicodeText(value, fieldName) {
+    const text = String(value);
+    if (hasUnpairedSurrogate(text)) {
+        throw requestError(`${fieldName} contains invalid Unicode`, 400, {
+            field: fieldName
+        });
+    }
+}
+
+function normalizeIndexedText(value, fieldName) {
+    if (!isNonEmptyString(value)) {
+        return null;
+    }
+    const text = String(value).trim();
+    assertSafeUnicodeText(text, fieldName);
+    if (CONTROL_CHARACTER_PATTERN.test(text)) {
+        throw requestError(`${fieldName} contains unsafe control characters`, 400, {
+            field: fieldName
+        });
+    }
+    if (text.length > MAX_INDEXED_TEXT_LENGTH) {
+        throw requestError(`${fieldName} is too long`, 400, {
+            field: fieldName,
+            maxLength: MAX_INDEXED_TEXT_LENGTH
+        });
+    }
+    return text;
+}
+
+function createRecordId() {
+    return `record_${Date.now()}_${crypto.randomUUID()}`;
+}
+
+function assertSafeJsonPayload(value, path = 'record', depth = 0, state = { nodes: 0, seen: new WeakSet() }) {
+    state.nodes += 1;
+    if (state.nodes > MAX_PAYLOAD_NODES) {
+        throw requestError('practice record payload is too complex', 413, {
+            maxNodes: MAX_PAYLOAD_NODES
+        });
+    }
+    if (depth > MAX_PAYLOAD_DEPTH) {
+        throw requestError('practice record payload is too deeply nested', 400, {
+            maxDepth: MAX_PAYLOAD_DEPTH
+        });
+    }
+    const valueType = typeof value;
+    if (valueType === 'bigint' || valueType === 'function' || valueType === 'symbol') {
+        throw requestError('practice record payload contains a non-JSON value', 400, {
+            field: path
+        });
+    }
+    if (valueType === 'number' && !Number.isFinite(value)) {
+        throw requestError('practice record payload contains a non-finite number', 400, {
+            field: path
+        });
+    }
+    if (valueType === 'string') {
+        if (NULL_CHARACTER_PATTERN.test(value)) {
+            throw requestError('practice record payload contains an unsupported null character', 400, {
+                field: path
+            });
+        }
+        if (hasUnpairedSurrogate(value)) {
+            throw requestError('practice record payload contains invalid Unicode', 400, {
+                field: path
+            });
+        }
+        return;
+    }
+    if (!value || typeof value !== 'object') {
+        return;
+    }
+    if (state.seen.has(value)) {
+        throw requestError('practice record payload contains a circular reference', 400, {
+            field: path
+        });
+    }
+    state.seen.add(value);
+    try {
+        if (Array.isArray(value)) {
+            value.forEach((entry, index) => assertSafeJsonPayload(entry, `${path}[${index}]`, depth + 1, state));
+            return;
+        }
+        for (const key of Object.keys(value)) {
+            if (POLLUTION_KEYS.has(key)) {
+                throw requestError('practice record contains an unsafe key', 400, {
+                    field: `${path}.${key}`
+                });
+            }
+            assertSafeJsonPayload(value[key], `${path}.${key}`, depth + 1, state);
+        }
+    } finally {
+        state.seen.delete(value);
+    }
+}
+
+function normalizeRecordId(value, fieldName = 'id') {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+    const text = String(value).trim();
+    if (!text) {
+        return null;
+    }
+    assertSafeUnicodeText(text, fieldName);
+    if (CONTROL_CHARACTER_PATTERN.test(text)) {
+        throw requestError(`${fieldName} contains unsafe control characters`, 400, {
+            field: fieldName
+        });
+    }
+    if (text.length > MAX_INDEXED_TEXT_LENGTH) {
+        throw requestError(`${fieldName} is too long`, 400, {
+            field: fieldName,
+            maxLength: MAX_INDEXED_TEXT_LENGTH
+        });
+    }
+    return text;
+}
+
+function requireRecordId(value, fieldName = 'id') {
+    const id = normalizeRecordId(value, fieldName);
+    if (!id) {
+        throw requestError(`${fieldName} is required`);
+    }
+    return id;
+}
+
+function normalizeLimitedText(value, maxLength) {
+    if (!isNonEmptyString(value)) {
+        return null;
+    }
+    const text = String(value).trim();
+    return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
 function getSessionId(record) {
     const value = record && (record.sessionId || record.session_id || record.realData?.sessionId);
-    return isNonEmptyString(value) ? String(value).trim() : null;
+    return normalizeIndexedText(value, 'sessionId');
 }
 
 function getExamId(record) {
     const value = record && (record.examId || record.exam_id || record.metadata?.examId);
-    return isNonEmptyString(value) ? String(value).trim() : null;
+    return normalizeIndexedText(value, 'examId');
 }
 
-function toNullableNumber(value) {
+function toNullableNumber(value, min = null, max = null) {
     if (value === null || value === undefined || value === '') return null;
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
+    let number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    if (min !== null) number = Math.max(min, number);
+    if (max !== null) number = Math.min(max, number);
+    return number;
 }
 
-function toNullableInteger(value) {
-    const number = toNullableNumber(value);
+function toNullableInteger(value, min = null, max = null) {
+    const number = toNullableNumber(value, min, max);
     return number === null ? null : Math.trunc(number);
 }
 
-function normalizePracticeRecord(record) {
-    const parsed = practiceRecordSchema.parse(record);
-    const normalized = { ...parsed };
-    if (!normalized.id) {
-        normalized.id = `record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+function normalizeTopLevelNumbers(record) {
+    const scoreInfo = record.scoreInfo || record.realData?.scoreInfo || {};
+    const score = toNullableNumber(record.score ?? record.percentage ?? scoreInfo.percentage, 0, MAX_SCORE);
+    if (score !== null) {
+        record.score = score;
     } else {
-        normalized.id = String(normalized.id);
+        delete record.score;
+    }
+
+    const accuracy = toNullableNumber(record.accuracy, 0, MAX_SCORE);
+    if (accuracy !== null) {
+        record.accuracy = accuracy;
+    } else if (record.accuracy !== undefined) {
+        delete record.accuracy;
+    }
+
+    const totalQuestions = toNullableInteger(record.totalQuestions ?? scoreInfo.total, 0, MAX_QUESTION_COUNT);
+    if (totalQuestions !== null) {
+        record.totalQuestions = totalQuestions;
+    } else if (record.totalQuestions !== undefined) {
+        delete record.totalQuestions;
+    }
+
+    const correctMax = totalQuestions !== null ? totalQuestions : MAX_QUESTION_COUNT;
+    const correctAnswers = toNullableInteger(record.correctAnswers ?? scoreInfo.correct, 0, correctMax);
+    if (correctAnswers !== null) {
+        record.correctAnswers = correctAnswers;
+    } else if (record.correctAnswers !== undefined) {
+        delete record.correctAnswers;
+    }
+
+    const duration = toNullableNumber(record.duration, 0, MAX_DURATION_SECONDS);
+    if (duration !== null) {
+        record.duration = duration;
+    } else if (record.duration !== undefined) {
+        delete record.duration;
+    }
+}
+
+function normalizePracticeRecord(record) {
+    const parsed = practiceRecordSchema.safeParse(record);
+    if (!parsed.success) {
+        throw requestError('practice record must be an object', 400, parsed.error.flatten());
+    }
+    assertSafeJsonPayload(parsed.data);
+    const normalized = { ...parsed.data };
+    if (!normalizeRecordId(normalized.id)) {
+        normalized.id = createRecordId();
+    } else {
+        normalized.id = normalizeRecordId(normalized.id, 'id');
     }
     const sessionId = getSessionId(normalized);
     if (sessionId && !normalized.sessionId) {
         normalized.sessionId = sessionId;
     }
+    const examId = getExamId(normalized);
+    if (examId && !normalized.examId) {
+        normalized.examId = examId;
+    }
+    const type = normalizeLimitedText(normalized.type || normalized.examType, MAX_TYPE_LENGTH);
+    if (type) {
+        normalized.type = type;
+    }
+    const title = normalizeLimitedText(normalized.title, MAX_TITLE_LENGTH);
+    if (title) {
+        normalized.title = title;
+    }
+    normalizeTopLevelNumbers(normalized);
     return normalized;
 }
 
 function normalizeRecordList(records) {
     if (!Array.isArray(records)) {
-        const error = new Error('practice records must be an array');
-        error.status = 400;
-        throw error;
+        throw requestError('practice records must be an array');
+    }
+    if (records.length > MAX_RECORDS_PER_REQUEST) {
+        throw requestError('too many practice records', 413, {
+            maxRecords: MAX_RECORDS_PER_REQUEST
+        });
     }
     return records.map(normalizePracticeRecord);
+}
+
+function assertCanAppendMergedRecord(currentLength) {
+    if (currentLength >= MAX_RECORDS_PER_REQUEST) {
+        throw requestError('too many practice records', 413, {
+            maxRecords: MAX_RECORDS_PER_REQUEST
+        });
+    }
 }
 
 function getRecordsFromBody(body) {
@@ -98,6 +342,16 @@ function mergePracticeRecords(existingRecords = [], incomingRecords = []) {
         }
     }
 
+    function unindexRecord(record, index) {
+        if (record && idIndex.get(String(record.id)) === index) {
+            idIndex.delete(String(record.id));
+        }
+        const sessionId = getSessionId(record);
+        if (sessionId && sessionIndex.get(sessionId) === index) {
+            sessionIndex.delete(sessionId);
+        }
+    }
+
     normalizeRecordList(existingRecords).forEach((record) => {
         const index = merged.length;
         merged.push(record);
@@ -111,12 +365,15 @@ function mergePracticeRecords(existingRecords = [], incomingRecords = []) {
             : (sessionId && sessionIndex.has(sessionId) ? sessionIndex.get(sessionId) : -1);
 
         if (currentIndex >= 0) {
-            const next = mergeRecord(merged[currentIndex], record);
+            const previous = merged[currentIndex];
+            const next = mergeRecord(previous, record);
+            unindexRecord(previous, currentIndex);
             merged[currentIndex] = next;
             indexRecord(next, currentIndex);
             return;
         }
 
+        assertCanAppendMergedRecord(merged.length);
         const nextIndex = merged.length;
         merged.push(record);
         indexRecord(record, nextIndex);
@@ -125,17 +382,25 @@ function mergePracticeRecords(existingRecords = [], incomingRecords = []) {
     return merged;
 }
 
+function deduplicatePracticeRecordList(records) {
+    return mergePracticeRecords([], records);
+}
+
 function extractColumns(record) {
     const scoreInfo = record.scoreInfo || record.realData?.scoreInfo || {};
     return {
         sessionId: getSessionId(record),
         examId: getExamId(record),
-        type: isNonEmptyString(record.type) ? String(record.type) : (isNonEmptyString(record.examType) ? String(record.examType) : null),
-        title: isNonEmptyString(record.title) ? String(record.title) : null,
-        score: toNullableNumber(record.score ?? record.percentage ?? scoreInfo.percentage),
-        totalQuestions: toNullableInteger(record.totalQuestions ?? scoreInfo.total),
-        correctAnswers: toNullableInteger(record.correctAnswers ?? scoreInfo.correct),
-        duration: toNullableNumber(record.duration)
+        type: normalizeLimitedText(record.type || record.examType, MAX_TYPE_LENGTH),
+        title: normalizeLimitedText(record.title, MAX_TITLE_LENGTH),
+        score: toNullableNumber(record.score ?? record.percentage ?? scoreInfo.percentage, 0, MAX_SCORE),
+        totalQuestions: toNullableInteger(record.totalQuestions ?? scoreInfo.total, 0, MAX_QUESTION_COUNT),
+        correctAnswers: toNullableInteger(
+            record.correctAnswers ?? scoreInfo.correct,
+            0,
+            toNullableInteger(record.totalQuestions ?? scoreInfo.total, 0, MAX_QUESTION_COUNT) ?? MAX_QUESTION_COUNT
+        ),
+        duration: toNullableNumber(record.duration, 0, MAX_DURATION_SECONDS)
     };
 }
 
@@ -156,7 +421,7 @@ class PostgresPracticeRecordStore {
     }
 
     async replace(userId, records) {
-        const list = normalizeRecordList(records);
+        const list = deduplicatePracticeRecordList(records);
         await this.db.withTransaction(async (client) => {
             await client.query('DELETE FROM practice_records WHERE user_id = $1', [userId]);
             for (let index = 0; index < list.length; index += 1) {
@@ -167,9 +432,10 @@ class PostgresPracticeRecordStore {
     }
 
     async deleteById(userId, id) {
+        const recordId = requireRecordId(id);
         const result = await this.db.query(
             'DELETE FROM practice_records WHERE user_id = $1 AND id = $2',
-            [userId, String(id)]
+            [userId, recordId]
         );
         return result.rowCount || 0;
     }
@@ -227,14 +493,15 @@ class MemoryPracticeRecordStore {
     }
 
     async replace(userId, records) {
-        const list = normalizeRecordList(records);
+        const list = deduplicatePracticeRecordList(records);
         this.recordsByUser.set(userId, list.map((record) => ({ ...record })));
         return this.list(userId);
     }
 
     async deleteById(userId, id) {
+        const recordId = requireRecordId(id);
         const records = this.recordsByUser.get(userId) || [];
-        const next = records.filter((record) => record.id !== String(id));
+        const next = records.filter((record) => record.id !== recordId);
         this.recordsByUser.set(userId, next);
         return records.length - next.length;
     }
@@ -251,7 +518,7 @@ function createPracticeRecordService(store) {
             return store.list(userId);
         },
         async replace(userId, records) {
-            return store.replace(userId, normalizeRecordList(records));
+            return store.replace(userId, deduplicatePracticeRecordList(records));
         },
         async import(userId, records) {
             const existing = await store.list(userId);
@@ -259,7 +526,7 @@ function createPracticeRecordService(store) {
             return store.replace(userId, merged);
         },
         async deleteById(userId, id) {
-            return store.deleteById(userId, id);
+            return store.deleteById(userId, requireRecordId(id));
         },
         async clear(userId) {
             return store.clear(userId);
@@ -336,9 +603,12 @@ module.exports = {
     PostgresPracticeRecordStore,
     createPracticeRecordService,
     createPracticeRecordsRouter,
+    deduplicatePracticeRecordList,
     extractColumns,
     getSessionId,
     mergePracticeRecords,
     normalizePracticeRecord,
-    normalizeRecordList
+    normalizeRecordList,
+    normalizeRecordId,
+    requireRecordId
 };

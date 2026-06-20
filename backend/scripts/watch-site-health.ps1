@@ -8,10 +8,15 @@ param(
     [string]$AlertPath = (Join-Path $PSScriptRoot '..\logs\site-health-alerts.log'),
     [int]$HttpTimeoutSeconds = 5,
     [int]$TorLogTail = 300,
+    [switch]$IncludeBridgeFingerprints,
     [switch]$Once
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $PSBoundParameters.ContainsKey('BridgeWarningThreshold') -and $env:SITE_HEALTH_BRIDGE_WARNING_THRESHOLD -match '^\d+$') {
+    $BridgeWarningThreshold = [int]$env:SITE_HEALTH_BRIDGE_WARNING_THRESHOLD
+}
 
 function Ensure-ParentDirectory {
     param([string]$Path)
@@ -75,7 +80,7 @@ function Test-HttpEndpoint {
         $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec $HttpTimeoutSeconds
         $timer.Stop()
         return [ordered]@{
-            ok = ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500)
+            ok = ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400)
             statusCode = [int]$response.StatusCode
             elapsedMs = [int]$timer.ElapsedMilliseconds
             error = $null
@@ -117,7 +122,7 @@ function Get-TorBridgeConfig {
         exitCode = $result.exitCode
         configuredBridgeCount = [int]$fingerprints.Count
         bridgeLines = [int]$lines.Count
-        fingerprints = $fingerprints
+        fingerprints = if ($IncludeBridgeFingerprints) { $fingerprints } else { @() }
     }
 }
 
@@ -152,7 +157,7 @@ function Get-TorStatus {
         recentProxyFailure = [bool]$proxyFailure
         seenBridgeCount = [int]$seenFingerprints.Count
         usableBridgeEstimate = $usableBridgeEstimate
-        seenFingerprints = $seenFingerprints
+        seenFingerprints = if ($IncludeBridgeFingerprints) { $seenFingerprints } else { @() }
     }
 }
 

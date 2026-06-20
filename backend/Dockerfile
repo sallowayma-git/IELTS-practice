@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -20,5 +20,7 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 
 EXPOSE 3000
+
+USER node
 
 CMD ["sh", "-c", "node scripts/migrate.mjs && node scripts/bootstrap-admin.mjs && node src/server.js"]

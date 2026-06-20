@@ -3,6 +3,9 @@ const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
+const INVALID_CREDENTIAL_FORMAT_ERROR = 'Username or password format is invalid';
+const INVALID_CREDENTIALS_ERROR = 'Username or password is incorrect';
+const DUMMY_PASSWORD_HASH = '$2a$12$OOrmAQgyb0OR42FfRf/D6.GOTtaUGKbmYgyZT2MoQOJMTFTxYjNG.';
 
 const credentialsSchema = z.object({
     username: z.string().trim().min(3).max(32).regex(USERNAME_PATTERN),
@@ -40,19 +43,19 @@ function normalizeUsername(username) {
 function validatePasswordStrength(password) {
     const errors = [];
     if (typeof password !== 'string' || password.length < 8) {
-        errors.push('密码至少需要 8 个字符');
+        errors.push('Password must be at least 8 characters long');
     }
     if (typeof password === 'string' && password.length > 128) {
-        errors.push('密码不能超过 128 个字符');
+        errors.push('Password must not exceed 128 characters');
     }
     if (!/[a-z]/.test(password || '')) {
-        errors.push('密码需要包含小写字母');
+        errors.push('Password must include a lowercase letter');
     }
     if (!/[A-Z]/.test(password || '')) {
-        errors.push('密码需要包含大写字母');
+        errors.push('Password must include an uppercase letter');
     }
     if (!/[0-9]/.test(password || '')) {
-        errors.push('密码需要包含数字');
+        errors.push('Password must include a number');
     }
     return {
         valid: errors.length === 0,
@@ -68,22 +71,48 @@ function parseBoolean(value, fallback = false) {
 function createRateLimiter(options = {}) {
     const windowMs = options.windowMs || 10 * 60 * 1000;
     const maxAttempts = options.maxAttempts || 20;
+    const maxKeys = Number.isInteger(options.maxKeys) && options.maxKeys > 0 ? options.maxKeys : 10_000;
     const attempts = new Map();
 
-    return function checkRateLimit(key) {
+    function pruneExpired(now) {
+        for (const [entryKey, entry] of attempts.entries()) {
+            if (!entry || entry.resetAt <= now) {
+                attempts.delete(entryKey);
+            }
+        }
+    }
+
+    function pruneOverflow() {
+        while (attempts.size > maxKeys) {
+            const firstKey = attempts.keys().next().value;
+            attempts.delete(firstKey);
+        }
+    }
+
+    function checkRateLimit(key) {
         const now = Date.now();
-        const entry = attempts.get(key);
+        const safeKey = String(key || 'unknown');
+        const entry = attempts.get(safeKey);
         if (!entry || entry.resetAt <= now) {
-            attempts.set(key, { count: 1, resetAt: now + windowMs });
+            if (attempts.size >= maxKeys) {
+                pruneExpired(now);
+            }
+            attempts.set(safeKey, { count: 1, resetAt: now + windowMs });
+            pruneOverflow();
             return;
         }
         entry.count += 1;
+        attempts.delete(safeKey);
+        attempts.set(safeKey, entry);
         if (entry.count > maxAttempts) {
-            const error = new Error('请求过于频繁，请稍后再试');
+            const error = new Error('Too many requests, please try again later');
             error.status = 429;
             throw error;
         }
-    };
+    }
+
+    checkRateLimit.size = () => attempts.size;
+    return checkRateLimit;
 }
 
 function ensureCsrfToken(req) {
@@ -96,10 +125,22 @@ function ensureCsrfToken(req) {
 function verifyCsrfToken(req, res, next) {
     const expected = req.session && req.session.csrfToken;
     const actual = req.get('x-csrf-token');
-    if (!expected || !actual || actual !== expected) {
+    if (!safeTokenEqual(expected, actual)) {
         return res.status(403).json({ error: 'CSRF token invalid' });
     }
     return next();
+}
+
+function safeTokenEqual(expected, actual) {
+    if (typeof expected !== 'string' || typeof actual !== 'string') {
+        return false;
+    }
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+    const actualBuffer = Buffer.from(actual, 'utf8');
+    if (expectedBuffer.length === 0 || expectedBuffer.length !== actualBuffer.length) {
+        return false;
+    }
+    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
 function requireAuth(req, res, next) {
@@ -359,6 +400,11 @@ function createAuthRouter(options = {}) {
     const router = express.Router();
     const store = options.store || new PostgresAuthStore(options.db);
     const checkRateLimit = options.checkRateLimit || createRateLimiter(options.rateLimit);
+    const checkCsrfRateLimit = options.checkCsrfRateLimit || createRateLimiter(options.csrfRateLimit || {
+        maxAttempts: 200,
+        windowMs: 10 * 60 * 1000,
+        maxKeys: 10_000
+    });
     const bcryptImpl = options.bcrypt || bcrypt;
     const totpStore = options.totpStore || null;
     const onDeleteUser = typeof options.onDeleteUser === 'function'
@@ -367,9 +413,16 @@ function createAuthRouter(options = {}) {
     const totpEnabled = options.totpEnabled !== undefined
         ? Boolean(options.totpEnabled)
         : parseBoolean(process.env.TOTP_ENABLED, true);
+    const sessionCookieName = options.cookieName || 'ielts.sid';
+    const clearCookieOptions = options.clearCookieOptions || {};
 
-    router.get('/csrf', (req, res) => {
-        res.json({ csrfToken: ensureCsrfToken(req) });
+    router.get('/csrf', (req, res, next) => {
+        try {
+            checkCsrfRateLimit(`csrf-ip:${req.ip}`);
+            return res.json({ csrfToken: ensureCsrfToken(req) });
+        } catch (error) {
+            return next(error);
+        }
     });
 
     router.get('/me', (req, res) => {
@@ -383,15 +436,16 @@ function createAuthRouter(options = {}) {
         try {
             const parsed = credentialsSchema.safeParse(req.body || {});
             if (!parsed.success) {
-                return res.status(400).json({ error: '用户名或密码格式无效' });
+                return res.status(400).json({ error: INVALID_CREDENTIAL_FORMAT_ERROR });
             }
             const username = normalizeUsername(parsed.data.username);
             const usernameLower = username.toLowerCase();
+            checkRateLimit(`register-ip:${req.ip}`);
             checkRateLimit(`register:${req.ip}:${usernameLower}`);
 
             const passwordCheck = validatePasswordStrength(parsed.data.password);
             if (!passwordCheck.valid) {
-                return res.status(400).json({ error: '密码强度不足', details: passwordCheck.errors });
+                return res.status(400).json({ error: 'Password strength is insufficient', details: passwordCheck.errors });
             }
 
             const passwordHash = await bcryptImpl.hash(parsed.data.password, 12);
@@ -400,7 +454,7 @@ function createAuthRouter(options = {}) {
                 user = await store.createUser({ username, usernameLower, passwordHash });
             } catch (error) {
                 if (error && error.code === '23505') {
-                    return res.status(409).json({ error: '用户名已存在' });
+                    return res.status(409).json({ error: 'Username already exists' });
                 }
                 throw error;
             }
@@ -418,19 +472,21 @@ function createAuthRouter(options = {}) {
         try {
             const parsed = credentialsSchema.safeParse(req.body || {});
             if (!parsed.success) {
-                return res.status(400).json({ error: '用户名或密码格式无效' });
+                return res.status(400).json({ error: INVALID_CREDENTIAL_FORMAT_ERROR });
             }
             const username = normalizeUsername(parsed.data.username);
             const usernameLower = username.toLowerCase();
+            checkRateLimit(`login-ip:${req.ip}`);
             checkRateLimit(`login:${req.ip}:${usernameLower}`);
 
             const user = await store.findByUsernameLower(usernameLower);
             if (!user) {
-                return res.status(401).json({ error: '用户名或密码错误' });
+                await bcryptImpl.compare(parsed.data.password, DUMMY_PASSWORD_HASH);
+                return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
             }
             const ok = await bcryptImpl.compare(parsed.data.password, user.password_hash);
             if (!ok) {
-                return res.status(401).json({ error: '用户名或密码错误' });
+                return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
             }
 
             const safeUser = publicUser(user);
@@ -438,7 +494,10 @@ function createAuthRouter(options = {}) {
                 const status = await totpStore.getStatus(user.id);
                 if (status.enabled) {
                     await regenerateSession(req);
-                    req.session.pendingTotpLogin = { user: safeUser };
+                    req.session.pendingTotpLogin = {
+                        user: safeUser,
+                        startedAt: Date.now()
+                    };
                     return res.json({
                         requiresTotp: true,
                         csrfToken: ensureCsrfToken(req)
@@ -471,7 +530,7 @@ function createAuthRouter(options = {}) {
     router.post('/logout', verifyCsrfToken, async (req, res, next) => {
         try {
             await destroySession(req);
-            res.clearCookie(options.cookieName || 'ielts.sid');
+            res.clearCookie(sessionCookieName, clearCookieOptions);
             return res.json({ ok: true });
         } catch (error) {
             return next(error);
@@ -484,6 +543,7 @@ function createAuthRouter(options = {}) {
             if (!parsed.success) {
                 return sendValidationError(res, parsed, 'Invalid account update payload');
             }
+            checkRateLimit(`account-username:${req.ip}:${req.session.user.id}`);
             const currentUser = await getCurrentStoredUser(store, req.session.user);
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
@@ -514,6 +574,7 @@ function createAuthRouter(options = {}) {
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
+            await regenerateSession(req);
             req.session.user = publicUser(updatedUser);
             return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
@@ -527,6 +588,7 @@ function createAuthRouter(options = {}) {
             if (!parsed.success) {
                 return sendValidationError(res, parsed, 'Invalid password update payload');
             }
+            checkRateLimit(`account-password:${req.ip}:${req.session.user.id}`);
             const currentUser = await getCurrentStoredUser(store, req.session.user);
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
@@ -550,6 +612,7 @@ function createAuthRouter(options = {}) {
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
+            await regenerateSession(req);
             req.session.user = publicUser(updatedUser);
             return res.json({ ok: true, user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
@@ -563,6 +626,7 @@ function createAuthRouter(options = {}) {
             if (!parsed.success) {
                 return sendValidationError(res, parsed, 'Invalid account deletion payload');
             }
+            checkRateLimit(`account-delete:${req.ip}:${req.session.user.id}`);
             const currentUser = await getCurrentStoredUser(store, req.session.user);
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
@@ -588,7 +652,7 @@ function createAuthRouter(options = {}) {
             }
             await onDeleteUser(currentUser.id, deletedUser);
             await destroySession(req);
-            res.clearCookie(options.cookieName || 'ielts.sid');
+            res.clearCookie(sessionCookieName, clearCookieOptions);
             return res.json({ ok: true, deleted: true });
         } catch (error) {
             return next(error);

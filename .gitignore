@@ -32,9 +32,15 @@
 
 
 package-lock.json
+.env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
 backend/logs/
 backend/node_modules/
+backend/tor/bridges.local.txt
 !backend/package-lock.json
 # 忽略可能的系统文件
 .DS_Store
