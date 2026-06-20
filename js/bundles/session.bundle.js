@@ -4,6 +4,26 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function getMessageTargetOrigin() {
+        const origin = global && global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
 
     function getSuitePreferenceUtils() {
         return global.SuitePreferenceUtils || null;
@@ -546,9 +566,9 @@
                             markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
                             entry: replayEntry
                         }
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 }
-                resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin());
                 return true;
             } catch (error) {
                 console.warn('[SuitePractice] 发送套题回看上下文失败:', error);
@@ -908,7 +928,7 @@
                 }
             };
             try {
-                targetWindow.postMessage(payload, '*');
+                targetWindow.postMessage(payload, getMessageTargetOrigin());
                 return true;
             } catch (e) {
                 console.warn('[SuitePractice] 发送模拟上下文失败:', e);
@@ -2114,7 +2134,7 @@
             }
         },
         _generateSuiteSessionId() {
-            return 'suite_' + Date.now().toString(36) + '_' + Math.random().toString(16).slice(2, 8);
+            return 'suite_' + Date.now().toString(36) + '_' + randomIdSuffix();
         },
 
         _registerSuiteSequence(session) {
@@ -2459,7 +2479,7 @@
                         data: {
                             suiteSessionId: session.id || null
                         }
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 } catch (forceCloseError) {
                     console.warn('[SuitePractice] 无法通知套题窗口关闭:', forceCloseError);
                 }
@@ -2813,7 +2833,7 @@
          */
         _generateMultiSuiteSessionId(baseExamId) {
             const timestamp = Date.now().toString(36);
-            const random = Math.random().toString(16).slice(2, 8);
+            const random = randomIdSuffix();
             const prefix = baseExamId ? baseExamId + '_' : '';
             return 'multi_' + prefix + timestamp + '_' + random;
         },

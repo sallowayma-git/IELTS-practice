@@ -371,6 +371,11 @@
  * 本地存储工具类
  * 提供统一的数据存储和检索接口
  */
+const STORAGE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const STORAGE_BACKUP_MAX_PRACTICE_RECORDS = 5000;
+const STORAGE_BACKUP_MAX_NODES = 50000;
+const STORAGE_BACKUP_MAX_DEPTH = 40;
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
@@ -392,7 +397,17 @@ class StorageManager {
             'exam_index_configurations',
             'active_exam_index_key',
             'settings',
-            'learning_goals'
+            'learning_goals',
+            'vocab_words',
+            'vocab_user_config',
+            'vocab_review_queue',
+            'vocab_active_list_id',
+            'vocab_active_list',
+            'vocab_list_p1_errors',
+            'vocab_list_p4_errors',
+            'vocab_list_master_errors',
+            'vocab_list_custom',
+            'vocab_list_reading_highlights'
         ]);
         this.ready = this.initializeStorage().catch(error => {
             console.error('[Storage] 初始化失败:', error);
@@ -1595,7 +1610,18 @@ class StorageManager {
         }
 
         try {
-            const response = await fetch(backupPath);
+            const baseHref = typeof window !== 'undefined' && window.location && window.location.href
+                ? window.location.href
+                : 'http://localhost/';
+            const backupUrl = new URL(backupPath, baseHref);
+            const currentOrigin = typeof window !== 'undefined' && window.location && window.location.origin
+                ? window.location.origin
+                : new URL(baseHref).origin;
+            if ((backupUrl.protocol !== 'http:' && backupUrl.protocol !== 'https:') || backupUrl.origin !== currentOrigin) {
+                console.warn('[Storage] 内置备份路径无效，已跳过');
+                return false;
+            }
+            const response = await fetch(backupUrl.href, { credentials: 'same-origin', cache: 'no-store' });
             if (!response.ok) {
                 return false;
             }
@@ -1605,7 +1631,8 @@ class StorageManager {
                 return false;
             }
             // 恢复 practice_records
-            await this.set('practice_records', backupData.practice_records, { skipReady });
+            const practiceRecords = this.validateBackupPracticeRecords(backupData.practice_records);
+            await this.set('practice_records', practiceRecords, { skipReady });
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
@@ -1617,6 +1644,50 @@ class StorageManager {
     /**
      * 处理存储配额超限
      */
+    validateBackupPracticeRecords(records) {
+        if (!Array.isArray(records)) {
+            throw new Error('Backup practice records must be an array');
+        }
+        if (records.length > STORAGE_BACKUP_MAX_PRACTICE_RECORDS) {
+            throw new Error(`Backup contains too many practice records. Maximum supported count is ${STORAGE_BACKUP_MAX_PRACTICE_RECORDS}.`);
+        }
+        this.assertSafeBackupValue(records, 'backup.practice_records');
+        return records;
+    }
+
+    assertSafeBackupValue(value, path = 'backup', depth = 0, state = null) {
+        if (value === null || typeof value !== 'object') {
+            return;
+        }
+        const scanState = state || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (depth > STORAGE_BACKUP_MAX_DEPTH) {
+            throw new Error(`Backup structure is too deep at ${path}`);
+        }
+        if (scanState.seen.has(value)) {
+            return;
+        }
+        scanState.seen.add(value);
+        scanState.nodes += 1;
+        if (scanState.nodes > STORAGE_BACKUP_MAX_NODES) {
+            throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${STORAGE_BACKUP_MAX_NODES}.`);
+        }
+        if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+                this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
+            });
+            return;
+        }
+        Object.keys(value).forEach((key) => {
+            if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
+                throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+            }
+            this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
+        });
+    }
+
     handleStorageQuotaExceeded(key, value) {
         console.error('[Storage] 存储配额超限，无法保存数据:', key);
 
@@ -1666,7 +1737,10 @@ class StorageManager {
             if (this.fallbackStorage) {
                 this.fallbackStorage.forEach((value, key) => {
                     if (key.startsWith(this.prefix)) {
-                        const cleanKey = key.replace(this.prefix, '');
+                        const cleanKey = this.normalizeImportKey(key);
+                        if (!cleanKey) {
+                            return;
+                        }
                         data[cleanKey] = JSON.parse(value);
                     }
                 });
@@ -1680,7 +1754,10 @@ class StorageManager {
                     const indexedDBData = {};
                     items.forEach(item => {
                         if (item.key.startsWith(this.prefix)) {
-                            const cleanKey = item.key.replace(this.prefix, '');
+                            const cleanKey = this.normalizeImportKey(item.key);
+                            if (!cleanKey) {
+                                return;
+                            }
                             indexedDBData[cleanKey] = JSON.parse(item.value);
                         }
                     });
@@ -1696,7 +1773,10 @@ class StorageManager {
             const localStorageKeys = Object.keys(localStorage);
             const appKeys = localStorageKeys.filter(key => key.startsWith(this.prefix));
             appKeys.forEach(key => {
-                const cleanKey = key.replace(this.prefix, '');
+                const cleanKey = this.normalizeImportKey(key);
+                if (!cleanKey) {
+                    return;
+                }
                 try {
                     const value = localStorage.getItem(key);
                     if (value) {
@@ -1755,8 +1835,15 @@ class StorageManager {
         const { skipReady = false } = options;
         await this.waitForInitialization(skipReady);
         try {
-            if (!importedData || !importedData.data) {
+            if (!importedData || !importedData.data || typeof importedData.data !== 'object' || Array.isArray(importedData.data)) {
                 throw new Error('Invalid import data format');
+            }
+            const rawEntries = Object.entries(importedData.data);
+            const importEntries = rawEntries
+                .map(([key, value]) => this.normalizeImportDataEntry(key, value))
+                .filter(Boolean);
+            if (rawEntries.length > 0 && importEntries.length === 0) {
+                throw new Error('Import data contains no allowed storage keys');
             }
 
             // 备份当前数据
@@ -1767,21 +1854,29 @@ class StorageManager {
                 await this.clear({ skipReady });
 
                 // 导入新数据
-                const importPromises = Object.entries(importedData.data).map(([key, value]) => {
-                    return this.set(key, value.data, { skipReady });
+                const importPromises = importEntries.map(({ key, value }) => {
+                    return this.set(key, value, { skipReady });
                 });
 
                 await Promise.all(importPromises);
 
-                return { success: true, message: 'Data imported successfully' };
+                return {
+                    success: true,
+                    message: 'Data imported successfully',
+                    importedKeys: importEntries.length,
+                    skippedKeys: rawEntries.length - importEntries.length
+                };
             } catch (importError) {
                 // 恢复备份
                 console.error('Import failed, restoring backup:', importError);
                 await this.clear({ skipReady });
 
                 if (backup && backup.data) {
-                    const restorePromises = Object.entries(backup.data).map(([key, value]) => {
-                        return this.set(key, value.data, { skipReady });
+                    const restoreEntries = Object.entries(backup.data)
+                        .map(([key, value]) => this.normalizeImportDataEntry(key, value))
+                        .filter(Boolean);
+                    const restorePromises = restoreEntries.map(({ key, value }) => {
+                        return this.set(key, value, { skipReady });
                     });
                     await Promise.all(restorePromises);
                 }
@@ -1797,6 +1892,60 @@ class StorageManager {
     /**
      * 数据验证
      */
+    normalizeImportDataEntry(key, envelope) {
+        const cleanKey = this.normalizeImportKey(key);
+        if (!cleanKey || !this.isImportableStorageKey(cleanKey)) {
+            return null;
+        }
+        if (!envelope || typeof envelope !== 'object' || !Object.prototype.hasOwnProperty.call(envelope, 'data')) {
+            return null;
+        }
+        this.assertSafeBackupValue(envelope.data, `import.data.${cleanKey}`);
+        if (cleanKey === 'practice_records') {
+            this.validateBackupPracticeRecords(envelope.data);
+        }
+        return { key: cleanKey, value: envelope.data };
+    }
+
+    normalizeImportKey(key) {
+        if (typeof key !== 'string') {
+            return '';
+        }
+        let cleanKey = key.trim();
+        if (!cleanKey) {
+            return '';
+        }
+        if (cleanKey.startsWith(this.prefix)) {
+            cleanKey = cleanKey.slice(this.prefix.length);
+        }
+        if (!/^[A-Za-z0-9:_-]{1,160}$/.test(cleanKey)) {
+            return '';
+        }
+        if (this.isUnsafeImportKey(cleanKey)) {
+            return '';
+        }
+        return cleanKey;
+    }
+
+    isUnsafeImportKey(key) {
+        const normalized = String(key || '').trim().toLowerCase();
+        return normalized === '__proto__'
+            || normalized === 'prototype'
+            || normalized === 'constructor'
+            || normalized === 'storage_backend'
+            || normalized === this.backendPreferenceKey.toLowerCase();
+    }
+
+    isImportableStorageKey(key) {
+        if (key === 'system_version') {
+            return true;
+        }
+        if (this.persistentKeys && this.persistentKeys.has(key)) {
+            return true;
+        }
+        return /^vocab(?:_list)?_[A-Za-z0-9_-]{1,100}$/.test(key);
+    }
+
     validateData(key, data) {
         const validators = {
             practice_records: (records) => {
@@ -2867,7 +3016,7 @@ class StorageManager {
 
             // 生成文件名
             const defaultFilename = `ielts-practice-export-${new Date().toISOString().split('T')[0]}.json`;
-            const finalFilename = filename || defaultFilename;
+            const finalFilename = this.sanitizeDownloadFilename(filename || defaultFilename, defaultFilename);
 
             // 创建下载链接
             const url = URL.createObjectURL(blob);
@@ -2881,7 +3030,7 @@ class StorageManager {
 
             // 清理
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
 
             console.log(`[Storage] 数据已下载: ${finalFilename}`);
             return true;
@@ -2889,6 +3038,20 @@ class StorageManager {
             console.error('[Storage] 下载导出数据失败:', error);
             return false;
         }
+    }
+
+    sanitizeDownloadFilename(filename, fallback) {
+        const safeFallback = fallback || `ielts-practice-export-${new Date().toISOString().split('T')[0]}.json`;
+        const normalized = String(filename || safeFallback)
+            .replace(/[\u0000-\u001F\u007F<>:"/\\|?*]+/g, '_')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/^\.+/, '')
+            .slice(0, 180);
+        if (!normalized) {
+            return safeFallback;
+        }
+        return /\.json$/i.test(normalized) ? normalized : `${normalized}.json`;
     }
 
     /**
@@ -3423,6 +3586,12 @@ storageManager.ready
             return Boolean(this.user && this.user.id);
         }
 
+        clearAuthState() {
+            this.user = null;
+            this.csrfToken = null;
+            this.pendingTotp = null;
+        }
+
         async getAuthState() {
             if (!this.fetchImpl) {
                 return { available: false, authenticated: false, user: null };
@@ -3431,9 +3600,7 @@ storageManager.ready
                 const response = await this._fetch('/api/auth/me', { method: 'GET' });
                 this.available = true;
                 if (response.status === 401) {
-                    this.user = null;
-                    this.csrfToken = null;
-                    this.pendingTotp = null;
+                    this.clearAuthState();
                     return { available: true, authenticated: false, user: null };
                 }
                 const payload = await this._parseJson(response);
@@ -3445,7 +3612,7 @@ storageManager.ready
                 }
                 if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'user')) {
                     this.available = false;
-                    this.user = null;
+                    this.clearAuthState();
                     return { available: false, authenticated: false, user: null };
                 }
                 this.user = payload.user || null;
@@ -3458,8 +3625,7 @@ storageManager.ready
                     throw error;
                 }
                 this.available = false;
-                this.user = null;
-                this.pendingTotp = null;
+                this.clearAuthState();
                 return { available: false, authenticated: false, user: null, error };
             }
         }
@@ -3543,8 +3709,11 @@ storageManager.ready
             return payload;
         }
 
-        async regenerateTotpRecoveryCodes() {
-            return this.request('/api/auth/totp/recovery-codes', { method: 'POST' });
+        async regenerateTotpRecoveryCodes(token) {
+            return this.request('/api/auth/totp/recovery-codes', {
+                method: 'POST',
+                body: { token }
+            });
         }
 
         async disableTotp(password, token) {
@@ -3552,6 +3721,10 @@ storageManager.ready
                 method: 'POST',
                 body: { password, token }
             });
+            this.user = payload.user || this.user;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
@@ -3584,19 +3757,23 @@ storageManager.ready
                 method: 'DELETE',
                 body: { password, confirm }
             });
-            this.user = null;
-            this.csrfToken = null;
-            this.pendingTotp = null;
+            this.clearAuthState();
             return payload;
         }
 
         async logout() {
-            const payload = await this.request('/api/auth/logout', {
-                method: 'POST'
-            });
-            this.user = null;
-            this.csrfToken = null;
-            this.pendingTotp = null;
+            let payload;
+            try {
+                payload = await this.request('/api/auth/logout', {
+                    method: 'POST'
+                });
+            } catch (error) {
+                if (!(error instanceof RemoteApiError) || error.status !== 401) {
+                    throw error;
+                }
+                payload = { ok: true, alreadyLoggedOut: true };
+            }
+            this.clearAuthState();
             return payload;
         }
 
@@ -3655,9 +3832,10 @@ storageManager.ready
             this.available = true;
             const payload = await this._parseJson(response);
             if (response.status === 401) {
-                this.user = null;
+                this.clearAuthState();
+            }
+            if (response.status === 403 && payload?.error === 'CSRF token invalid') {
                 this.csrfToken = null;
-                this.pendingTotp = null;
             }
             if (!response.ok) {
                 throw new RemoteApiError(payload?.error || `Request failed with ${response.status}`, {
@@ -3707,6 +3885,19 @@ storageManager.ready
 
     function isUnauthorized(error) {
         return error && error.status === 401;
+    }
+
+    function clearApiAuthState(apiClient) {
+        if (!apiClient) {
+            return;
+        }
+        if (typeof apiClient.clearAuthState === 'function') {
+            apiClient.clearAuthState();
+            return;
+        }
+        apiClient.user = null;
+        apiClient.csrfToken = null;
+        apiClient.pendingTotp = null;
     }
 
     class RemotePracticeTransactionContext {
@@ -3779,7 +3970,7 @@ storageManager.ready
                 return records;
             } catch (error) {
                 if (isUnauthorized(error)) {
-                    this.apiClient.user = null;
+                    clearApiAuthState(this.apiClient);
                 }
                 console.warn('[RemotePracticeDataSource] 读取远端练习记录失败，回退本地:', error);
                 return this.localDataSource.read(key, defaultValue);
@@ -3797,7 +3988,7 @@ storageManager.ready
                     return true;
                 } catch (error) {
                     if (isUnauthorized(error)) {
-                        this.apiClient.user = null;
+                        clearApiAuthState(this.apiClient);
                     }
                     console.warn('[RemotePracticeDataSource] 写入远端练习记录失败，回退本地:', error);
                     return this.localDataSource.write(key, value);
@@ -3816,7 +4007,7 @@ storageManager.ready
                     return true;
                 } catch (error) {
                     if (isUnauthorized(error)) {
-                        this.apiClient.user = null;
+                        clearApiAuthState(this.apiClient);
                     }
                     console.warn('[RemotePracticeDataSource] 清空远端练习记录失败，回退本地:', error);
                     return this.localDataSource.remove(key);
@@ -3894,6 +4085,11 @@ storageManager.ready
             element.textContent = text;
         }
         return element;
+    }
+
+    function normalizeTotpQrDataUrl(value) {
+        const text = String(value || '').trim();
+        return /^data:image\/(?:png|gif|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(text) ? text : '';
     }
 
     function isAuthSurface(element) {
@@ -4260,7 +4456,7 @@ storageManager.ready
 
             async function beginOverlayTotpSetup() {
                 const setup = await apiClient.startTotpSetup();
-                setupQr.src = setup.qrCodeDataUrl || '';
+                setupQr.src = normalizeTotpQrDataUrl(setup.qrCodeDataUrl);
                 setupSecret.textContent = setup.secret || '';
                 tokenInput.value = '';
                 setMode('setup');
@@ -4750,10 +4946,12 @@ storageManager.ready
                 regenerate.type = 'button';
                 disable.type = 'button';
                 regenerate.addEventListener('click', async () => {
+                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
+                    if (token === null) return;
                     regenerate.disabled = true;
                     body.textContent = '';
                     try {
-                        const result = await apiClient.regenerateTotpRecoveryCodes();
+                        const result = await apiClient.regenerateTotpRecoveryCodes(token);
                         renderRecoveryCodes(body, result.recoveryCodes || []);
                         statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
                     } catch (requestError) {
@@ -4808,7 +5006,7 @@ storageManager.ready
             statusNode.textContent = '扫描二维码后输入 6 位验证码完成绑定。';
             const qr = createElement('img', 'remote-auth-totp__qr');
             qr.alt = 'TOTP QR code';
-            qr.src = setup.qrCodeDataUrl || '';
+            qr.src = normalizeTotpQrDataUrl(setup.qrCodeDataUrl);
             const secret = createElement('code', 'remote-auth-totp__secret', setup.secret || '');
             const token = createElement('input', 'remote-auth-totp__input');
             token.inputMode = 'numeric';
@@ -5129,6 +5327,26 @@ storageManager.ready
         return Array.isArray(value) ? value : [];
     }
 
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
     class PracticeRepository extends BaseRepository {
         constructor(dataSource, options = {}) {
             super({
@@ -5155,7 +5373,7 @@ storageManager.ready
             }
             const normalized = { ...record };
             if (!normalized.id) {
-                normalized.id = `record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                normalized.id = createLocalId('record');
             } else {
                 normalized.id = String(normalized.id);
             }
@@ -5422,6 +5640,26 @@ storageManager.ready
         return Array.isArray(value) ? value : [];
     }
 
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
     class BackupRepository extends BaseRepository {
         constructor(dataSource, options = {}) {
             super({
@@ -5447,7 +5685,7 @@ storageManager.ready
                 throw new Error('备份数据必须是对象');
             }
             const normalized = { ...backup };
-            normalized.id = normalized.id ? String(normalized.id) : `backup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            normalized.id = normalized.id ? String(normalized.id) : createLocalId('backup');
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
             normalized.version = normalized.version || '1.0.0';
@@ -5854,6 +6092,26 @@ storageManager.ready
         return;
     }
 
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
     const MESSAGE_TYPE_ALIASES = Object.freeze({
         practice_complete: 'PRACTICE_COMPLETE',
         practice_completed: 'PRACTICE_COMPLETE',
@@ -5906,6 +6164,15 @@ storageManager.ready
         tempPracticeRecords: 'temp_practice_records'
     });
 
+    const PRACTICE_CLONE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const PRACTICE_CLONE_LIMITS = Object.freeze({
+        maxDepth: 12,
+        maxNodes: 20000,
+        maxArrayItems: 1000,
+        maxObjectKeys: 1000,
+        maxTextLength: 4000
+    });
+
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
     }
@@ -5921,17 +6188,74 @@ storageManager.ready
         }
     }
 
-    function clonePlainObject(value) {
-        if (value == null || typeof value !== 'object') {
+    function isUnsafePracticeCloneKey(key) {
+        return PRACTICE_CLONE_POLLUTION_KEYS.has(String(key));
+    }
+
+    function limitPracticeCloneText(value) {
+        const text = String(value ?? '');
+        return text.length > PRACTICE_CLONE_LIMITS.maxTextLength
+            ? text.slice(0, PRACTICE_CLONE_LIMITS.maxTextLength)
+            : text;
+    }
+
+    function clonePlainObject(value, depth = 0, state = null) {
+        if (value === null || value === undefined) {
             return value ?? null;
         }
-        if (Array.isArray(value)) {
-            return value.map((item) => clonePlainObject(item)).filter((item) => item !== undefined);
+        if (typeof value === 'string') {
+            return limitPracticeCloneText(value);
         }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth > PRACTICE_CLONE_LIMITS.maxDepth) {
+            return undefined;
+        }
+
+        const cloneState = state || { stack: new WeakSet(), nodes: 0 };
+        if (cloneState.stack.has(value)) {
+            return undefined;
+        }
+        cloneState.nodes += 1;
+        if (cloneState.nodes > PRACTICE_CLONE_LIMITS.maxNodes) {
+            return undefined;
+        }
+        cloneState.stack.add(value);
+
+        if (Array.isArray(value)) {
+            const clone = value
+                .slice(0, PRACTICE_CLONE_LIMITS.maxArrayItems)
+                .map((item) => clonePlainObject(item, depth + 1, cloneState))
+                .filter((item) => item !== undefined);
+            cloneState.stack.delete(value);
+            return clone;
+        }
+
         const clone = {};
-        Object.keys(value).forEach((key) => {
-            clone[key] = clonePlainObject(value[key]);
+        Object.keys(value).slice(0, PRACTICE_CLONE_LIMITS.maxObjectKeys).forEach((key) => {
+            if (isUnsafePracticeCloneKey(key)) {
+                return;
+            }
+            const safeKey = limitPracticeCloneText(key).trim();
+            if (!safeKey || isUnsafePracticeCloneKey(safeKey)) {
+                return;
+            }
+            const safeValue = clonePlainObject(value[key], depth + 1, cloneState);
+            if (safeValue !== undefined) {
+                clone[safeKey] = safeValue;
+            }
         });
+        cloneState.stack.delete(value);
         return clone;
     }
 
@@ -6478,10 +6802,11 @@ storageManager.ready
     }
 
     function defaultGenerateRecordId() {
-        return `record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        return createLocalId('record');
     }
 
     function standardizeRecord(recordData, options = {}) {
+        recordData = clonePlainObject(recordData) || {};
         const now = new Date().toISOString();
         const type = inferPracticeType(recordData);
         const recordDate = resolveRecordDate(recordData, now);
@@ -6753,9 +7078,10 @@ storageManager.ready
 
     function fromCompletion(payload, sessionContext = {}, examEntry = null, options = {}) {
         const normalizedMessage = normalizeMessage(payload);
-        const rawPayload = normalizedMessage && isPracticeCompleteType(normalizedMessage.type)
+        const rawPayloadSource = normalizedMessage && isPracticeCompleteType(normalizedMessage.type)
             ? normalizedMessage.data
             : (isPlainObject(payload) ? payload : {});
+        const rawPayload = clonePlainObject(rawPayloadSource) || {};
 
         if (!rawPayload || typeof rawPayload !== 'object') {
             return null;
@@ -7311,6 +7637,20 @@ storageManager.ready
         return PATH_PROTOCOL_RE.test(value || '') || WINDOWS_DRIVE_RE.test(value || '');
     }
 
+    function normalizeLibraryConfigKey(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const key = value.trim();
+        if (!key || key.length > 128) {
+            return '';
+        }
+        if (key === 'exam_index') {
+            return key;
+        }
+        return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
+    }
+
     function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
         const source = map && typeof map === 'object' ? map : fallback;
         const cloneCategory = (category) => {
@@ -7462,7 +7802,8 @@ storageManager.ready
     }
 
     function getPathMapStorageKey(key) {
-        return PATH_MAP_STORAGE_PREFIX + key;
+        const configKey = normalizeLibraryConfigKey(key);
+        return configKey ? PATH_MAP_STORAGE_PREFIX + configKey : '';
     }
 
     function setActivePathMap(map) {
@@ -7483,11 +7824,12 @@ storageManager.ready
     }
 
     async function loadPathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.get !== 'function') {
+        const configKey = normalizeLibraryConfigKey(key);
+        if (!configKey || !global.storage || typeof global.storage.get !== 'function') {
             return clonePathMap(DEFAULT_PATH_MAP);
         }
         try {
-            const stored = await global.storage.get(getPathMapStorageKey(key));
+            const stored = await global.storage.get(getPathMapStorageKey(configKey));
             if (stored && typeof stored === 'object') {
                 return normalizePathMap(stored, DEFAULT_PATH_MAP);
             }
@@ -7498,7 +7840,8 @@ storageManager.ready
     }
 
     async function savePathMapForConfiguration(key, exams, options = {}) {
-        if (!key || !Array.isArray(exams)) {
+        const configKey = normalizeLibraryConfigKey(key);
+        if (!configKey || !Array.isArray(exams)) {
             return null;
         }
         const fallback = options.fallbackMap || getPathMap();
@@ -7509,7 +7852,7 @@ storageManager.ready
 
         if (global.storage && typeof global.storage.set === 'function') {
             try {
-                await global.storage.set(getPathMapStorageKey(key), derived);
+                await global.storage.set(getPathMapStorageKey(configKey), derived);
             } catch (error) {
                 console.warn('[ResourceCore] 写入路径映射失败:', error);
             }
@@ -7522,11 +7865,12 @@ storageManager.ready
     }
 
     async function deletePathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.remove !== 'function') {
+        const configKey = normalizeLibraryConfigKey(key);
+        if (!configKey || !global.storage || typeof global.storage.remove !== 'function') {
             return false;
         }
         try {
-            await global.storage.remove(getPathMapStorageKey(key));
+            await global.storage.remove(getPathMapStorageKey(configKey));
             return true;
         } catch (error) {
             console.warn('[ResourceCore] 删除路径映射失败:', error);
@@ -7540,7 +7884,7 @@ storageManager.ready
         }
         try {
             const key = await global.storage.get('active_exam_index_key', 'exam_index');
-            const next = await loadPathMapForConfiguration(key || 'exam_index');
+            const next = await loadPathMapForConfiguration(normalizeLibraryConfigKey(key) || 'exam_index');
             return setActivePathMap(next);
         } catch (error) {
             console.warn('[ResourceCore] 刷新路径映射失败:', error);
@@ -7868,6 +8212,29 @@ storageManager.ready
         return false;
     }
 
+    function resolveTrustedProbeUrl(rawUrl) {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const baseHref = global.location && global.location.href ? global.location.href : 'http://localhost/';
+            const resolved = new URL(String(rawUrl), baseHref);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            const currentOrigin = global.location && global.location.origin;
+
+            if (protocol === 'http:' || protocol === 'https:') {
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin ? resolved.href : '';
+            }
+
+            if (protocol === 'blob:') {
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin ? resolved.href : '';
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    }
+
     const resourceProbeCache = new Map();
 
     function probeResource(url) {
@@ -7881,8 +8248,12 @@ storageManager.ready
             if (shouldBypassProbe(url)) {
                 return true;
             }
+            const trustedUrl = resolveTrustedProbeUrl(url);
+            if (!trustedUrl) {
+                return false;
+            }
             try {
-                const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+                const response = await fetch(trustedUrl, { method: 'HEAD', cache: 'no-store' });
                 if (response && (response.ok || response.status === 304 || response.status === 405 || response.type === 'opaque')) {
                     return true;
                 }
@@ -9534,110 +9905,190 @@ storageManager.ready
 
 /* ===== js/utils/stateSerializer.js ===== */
 /**
- * 状态序列化适配器
- * 解决Set/Map对象无法直接JSON序列化的问题
+ * Safe state serializer for app state persisted in local storage.
+ * Supports Set, Map, and Date while bounding recursive structures and
+ * dropping prototype-pollution keys during serialization and restore.
  */
+const STATE_SERIALIZER_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const STATE_SERIALIZER_MAX_DEPTH = 32;
+const STATE_SERIALIZER_MAX_NODES = 50000;
+const STATE_SERIALIZER_MAX_ARRAY_ITEMS = 5000;
+const STATE_SERIALIZER_MAX_OBJECT_KEYS = 500;
+const STATE_SERIALIZER_MAX_COLLECTION_ITEMS = 5000;
 
 class StateSerializer {
-    /**
-     * 序列化状态值，处理特殊对象类型
-     */
     static serialize(value) {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        // 处理Set对象
-        if (value instanceof Set) {
-            return {
-                __type: 'Set',
-                __value: Array.from(value)
-            };
-        }
-
-        // 处理Map对象
-        if (value instanceof Map) {
-            return {
-                __type: 'Map',
-                __value: Array.from(value.entries())
-            };
-        }
-
-        // 处理Date对象
-        if (value instanceof Date) {
-            return {
-                __type: 'Date',
-                __value: value.toISOString()
-            };
-        }
-
-        // 处理普通对象，递归处理嵌套
-        if (typeof value === 'object') {
-            if (Array.isArray(value)) {
-                return value.map(item => StateSerializer.serialize(item));
-            } else {
-                const serialized = {};
-                for (const [key, val] of Object.entries(value)) {
-                    serialized[key] = StateSerializer.serialize(val);
-                }
-                return serialized;
-            }
-        }
-
-        // 基本类型直接返回
-        return value;
+        return StateSerializer._serialize(value, {
+            nodes: 0,
+            stack: new WeakSet()
+        }, 0);
     }
 
-    /**
-     * 反序列化状态值，恢复特殊对象类型
-     */
     static deserialize(value) {
+        return StateSerializer._deserialize(value, {
+            nodes: 0,
+            stack: new WeakSet()
+        }, 0);
+    }
+
+    static _serialize(value, state, depth) {
         if (value === null || value === undefined) {
             return value;
         }
+        if (typeof value !== 'object') {
+            return value;
+        }
+        if (!StateSerializer.enterTraversal(value, state, depth, 'serialize')) {
+            return null;
+        }
 
-        // 检查是否是特殊类型对象
-        if (typeof value === 'object' && value !== null && '__type' in value) {
-            switch (value.__type) {
-                case 'Set':
-                    return new Set(value.__value);
-                case 'Map':
-                    return new Map(value.__value);
-                case 'Date':
-                    return new Date(value.__value);
-                default:
-                    console.warn(`[StateSerializer] 未知类型: ${value.__type}`);
-                    return value.__value;
+        try {
+            if (value instanceof Set) {
+                return {
+                    __type: 'Set',
+                    __value: Array.from(value)
+                        .slice(0, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                        .map((item) => StateSerializer._serialize(item, state, depth + 1))
+                };
             }
+
+            if (value instanceof Map) {
+                return {
+                    __type: 'Map',
+                    __value: Array.from(value.entries())
+                        .slice(0, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                        .map(([key, item]) => [
+                            StateSerializer._serialize(key, state, depth + 1),
+                            StateSerializer._serialize(item, state, depth + 1)
+                        ])
+                };
+            }
+
+            if (value instanceof Date) {
+                return {
+                    __type: 'Date',
+                    __value: Number.isNaN(value.getTime()) ? null : value.toISOString()
+                };
+            }
+
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, STATE_SERIALIZER_MAX_ARRAY_ITEMS)
+                    .map((item) => StateSerializer._serialize(item, state, depth + 1));
+            }
+
+            const serialized = {};
+            for (const [key, item] of StateSerializer.safeEntries(value).slice(0, STATE_SERIALIZER_MAX_OBJECT_KEYS)) {
+                const safeValue = StateSerializer._serialize(item, state, depth + 1);
+                if (safeValue !== undefined) {
+                    serialized[key] = safeValue;
+                }
+            }
+            return serialized;
+        } finally {
+            StateSerializer.exitTraversal(value, state);
+        }
+    }
+
+    static _deserialize(value, state, depth) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return value;
+        }
+        if (!StateSerializer.enterTraversal(value, state, depth, 'deserialize')) {
+            return null;
         }
 
-        // 处理数组
-        if (Array.isArray(value)) {
-            return value.map(item => StateSerializer.deserialize(item));
-        }
+        try {
+            if (Object.prototype.hasOwnProperty.call(value, '__type')) {
+                const type = typeof value.__type === 'string' ? value.__type : '';
+                if (type === 'Set') {
+                    return new Set(
+                        StateSerializer.normalizeArray(value.__value, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                            .map((item) => StateSerializer._deserialize(item, state, depth + 1))
+                    );
+                }
+                if (type === 'Map') {
+                    return new Map(
+                        StateSerializer.normalizeArray(value.__value, STATE_SERIALIZER_MAX_COLLECTION_ITEMS)
+                            .filter((entry) => Array.isArray(entry) && entry.length >= 2)
+                            .map(([key, item]) => [
+                                StateSerializer._deserialize(key, state, depth + 1),
+                                StateSerializer._deserialize(item, state, depth + 1)
+                            ])
+                    );
+                }
+                if (type === 'Date') {
+                    if (typeof value.__value !== 'string') {
+                        return null;
+                    }
+                    const date = new Date(value.__value);
+                    return Number.isNaN(date.getTime()) ? null : date;
+                }
+                console.warn(`[StateSerializer] Unknown type: ${type}`);
+                return StateSerializer._deserialize(value.__value, state, depth + 1);
+            }
 
-        // 处理普通对象，递归处理嵌套
-        if (typeof value === 'object') {
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, STATE_SERIALIZER_MAX_ARRAY_ITEMS)
+                    .map((item) => StateSerializer._deserialize(item, state, depth + 1));
+            }
+
             const deserialized = {};
-            for (const [key, val] of Object.entries(value)) {
-                deserialized[key] = StateSerializer.deserialize(val);
+            for (const [key, item] of StateSerializer.safeEntries(value).slice(0, STATE_SERIALIZER_MAX_OBJECT_KEYS)) {
+                const safeValue = StateSerializer._deserialize(item, state, depth + 1);
+                if (safeValue !== undefined) {
+                    deserialized[key] = safeValue;
+                }
             }
             return deserialized;
+        } finally {
+            StateSerializer.exitTraversal(value, state);
         }
-
-        // 基本类型直接返回
-        return value;
     }
 
-    /**
-     * 验证序列化/反序列化的一致性
-     */
+    static enterTraversal(value, state, depth, operation) {
+        if (depth > STATE_SERIALIZER_MAX_DEPTH) {
+            throw new Error(`State is too deeply nested to ${operation} safely. Maximum supported depth is ${STATE_SERIALIZER_MAX_DEPTH}.`);
+        }
+        if (state.stack.has(value)) {
+            return false;
+        }
+        state.stack.add(value);
+        state.nodes += 1;
+        if (state.nodes > STATE_SERIALIZER_MAX_NODES) {
+            throw new Error(`State is too large to ${operation} safely. Maximum supported node count is ${STATE_SERIALIZER_MAX_NODES}.`);
+        }
+        return true;
+    }
+
+    static exitTraversal(value, state) {
+        state.stack.delete(value);
+    }
+
+    static isUnsafeKey(key) {
+        return STATE_SERIALIZER_POLLUTION_KEYS.has(String(key));
+    }
+
+    static safeEntries(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return [];
+        }
+        return Object.entries(value).filter(([key]) => !StateSerializer.isUnsafeKey(key));
+    }
+
+    static normalizeArray(value, limit = STATE_SERIALIZER_MAX_ARRAY_ITEMS) {
+        return Array.isArray(value) ? value.slice(0, limit) : [];
+    }
+
     static validate(originalValue) {
         try {
             const serialized = StateSerializer.serialize(originalValue);
             const deserialized = StateSerializer.deserialize(serialized);
 
-            // 对于Set/Map，深度比较内容
             if (originalValue instanceof Set) {
                 const originalArray = Array.from(originalValue);
                 const deserializedArray = Array.from(deserialized);
@@ -9650,17 +10101,13 @@ class StateSerializer {
                 return JSON.stringify(originalArray) === JSON.stringify(deserializedArray);
             }
 
-            // 其他类型直接比较
             return JSON.stringify(originalValue) === JSON.stringify(deserialized);
         } catch (error) {
-            console.error('[StateSerializer] 验证失败:', error);
+            console.error('[StateSerializer] Validation failed:', error);
             return false;
         }
     }
 
-    /**
-     * 创建存储适配器，包装storage对象
-     */
     static createStorageAdapter(baseStorage) {
         return {
             async get(key, defaultValue = null) {
@@ -9668,7 +10115,7 @@ class StateSerializer {
                     const value = await baseStorage.get(key, defaultValue);
                     return StateSerializer.deserialize(value);
                 } catch (error) {
-                    console.error(`[StateSerializer] 获取数据失败 ${key}:`, error);
+                    console.error(`[StateSerializer] get failed ${key}:`, error);
                     return defaultValue;
                 }
             },
@@ -9678,7 +10125,7 @@ class StateSerializer {
                     const serializedValue = StateSerializer.serialize(value);
                     return await baseStorage.set(key, serializedValue);
                 } catch (error) {
-                    console.error(`[StateSerializer] 设置数据失败 ${key}:`, error);
+                    console.error(`[StateSerializer] set failed ${key}:`, error);
                     throw error;
                 }
             },
@@ -9687,7 +10134,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.remove(key);
                 } catch (error) {
-                    console.error(`[StateSerializer] 删除数据失败 ${key}:`, error);
+                    console.error(`[StateSerializer] remove failed ${key}:`, error);
                     throw error;
                 }
             },
@@ -9696,7 +10143,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.clear();
                 } catch (error) {
-                    console.error('[StateSerializer] 清空存储失败:', error);
+                    console.error('[StateSerializer] clear failed:', error);
                     throw error;
                 }
             }
@@ -9704,7 +10151,6 @@ class StateSerializer {
     }
 }
 
-// 导出供使用
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = StateSerializer;
 }
@@ -10999,6 +11445,98 @@ if (typeof module !== 'undefined' && module.exports) {
         return source.split(needle).join(replacement);
     }
 
+    function escapeHtmlAttribute(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function createSandboxedRuntimeHtml(innerHtml, title) {
+        const safeTitle = cleanTitle(title) || 'Imported Practice';
+        const csp = [
+            "default-src 'self' blob: data:",
+            "script-src 'unsafe-inline' blob: data:",
+            "style-src 'unsafe-inline' blob: data:",
+            "img-src blob: data:",
+            "media-src blob: data:",
+            "font-src blob: data:",
+            "connect-src 'none'",
+            "object-src 'none'",
+            "frame-src 'none'",
+            "child-src 'none'",
+            "worker-src 'none'",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "navigate-to 'none'",
+            "frame-ancestors 'self'"
+        ].join('; ');
+        const frameSrcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${escapeHtmlAttribute(csp)}">${innerHtml}`;
+        return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtmlAttribute(safeTitle)}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; frame-src 'self' blob: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}#imported-practice-frame{border:0;width:100%;height:100%;display:block}</style>
+</head>
+<body>
+  <iframe id="imported-practice-frame" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttribute(frameSrcdoc)}"></iframe>
+  <script>
+    (function () {
+      var frame = document.getElementById('imported-practice-frame');
+      var targetOrigin = (location.origin && location.origin !== 'null' && /^https?:\\/\\//i.test(location.origin)) ? location.origin : '*';
+      var allowedFromFrame = {
+        SESSION_READY: true,
+        REQUEST_INIT: true,
+        PRACTICE_COMPLETE: true,
+        practice_completed: true
+      };
+      var allowedFromParent = {
+        INIT_SESSION: true,
+        init_exam_session: true,
+        REPLAY_PRACTICE_RECORD: true,
+        REVIEW_CONTEXT: true,
+        SUITE_NAVIGATE: true,
+        SUITE_FORCE_CLOSE: true,
+        ENDLESS_COUNTDOWN: true
+      };
+      function isParent(event) {
+        return event && event.source && (event.source === window.opener || event.source === window.parent);
+      }
+      function sameOriginParent(event) {
+        if (!isParent(event)) return false;
+        if (!event.origin || event.origin === 'null') {
+          return location.protocol === 'file:';
+        }
+        return location.origin && location.origin !== 'null' && event.origin === location.origin;
+      }
+      function getType(data) {
+        return data && typeof data.type === 'string' ? data.type : '';
+      }
+      window.addEventListener('message', function (event) {
+        var type = getType(event.data);
+        if (!type) return;
+        if (frame && event.source === frame.contentWindow) {
+          if (!allowedFromFrame[type]) return;
+          if (window.opener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage(event.data, targetOrigin);
+          } else if (window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+            window.parent.postMessage(event.data, targetOrigin);
+          }
+          return;
+        }
+        if (sameOriginParent(event) && allowedFromParent[type] && frame && frame.contentWindow) {
+          frame.contentWindow.postMessage(event.data, '*');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`;
+    }
+
     function buildRuntimeHtml(record, groupRecords, assetUrls) {
         let html = String(record && record.text || '');
         groupRecords.forEach(function (asset) {
@@ -11014,7 +11552,7 @@ if (typeof module !== 'undefined' && module.exports) {
             html = replaceAllLiteral(html, relative, url);
             html = replaceAllLiteral(html, name, url);
         });
-        return html;
+        return createSandboxedRuntimeHtml(html, record && (record.title || record.name || record.path));
     }
 
     function registerRuntimeResources(entries, records) {
@@ -11258,6 +11796,30 @@ if (typeof module !== 'undefined' && module.exports) {
 (function (global) {
     'use strict';
 
+    let fallbackIdCounter = 0;
+    const LIBRARY_CONFIG_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_LIBRARY_CONFIGURATIONS = 100;
+    const MAX_LIBRARY_CONFIG_METADATA_DEPTH = 8;
+    const MAX_LIBRARY_CONFIG_ARRAY_ITEMS = 100;
+    const MAX_LIBRARY_CONFIG_OBJECT_KEYS = 100;
+    const MAX_LIBRARY_CONFIG_KEY_LENGTH = 128;
+    const MAX_LIBRARY_CONFIG_TEXT_LENGTH = 1000;
+    const MAX_LIBRARY_CONFIG_NAME_LENGTH = 160;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
     function getResourceCore() {
         return global.ResourceCore || null;
     }
@@ -11272,6 +11834,120 @@ if (typeof module !== 'undefined' && module.exports) {
 
     function hasProtocolPath(value) {
         return /^(?:[a-z]+:)?\/\//i.test(String(value || '')) || /^[A-Za-z]:\\/.test(String(value || ''));
+    }
+
+    function isPlainObject(value) {
+        if (!value || Object.prototype.toString.call(value) !== '[object Object]') {
+            return false;
+        }
+        const proto = Object.getPrototypeOf(value);
+        return proto === Object.prototype || proto === null;
+    }
+
+    function isUnsafeLibraryConfigKey(key) {
+        return LIBRARY_CONFIG_POLLUTION_KEYS.has(String(key || '').trim());
+    }
+
+    function normalizeLibraryConfigText(value, maxLength = MAX_LIBRARY_CONFIG_TEXT_LENGTH) {
+        return String(value == null ? '' : value)
+            .replace(/\u0000/g, '')
+            .slice(0, maxLength);
+    }
+
+    function normalizeLibraryConfigName(value) {
+        const name = normalizeLibraryConfigText(value, MAX_LIBRARY_CONFIG_NAME_LENGTH).trim();
+        return name || '未命名题库';
+    }
+
+    function normalizeLibraryConfigNumber(value, fallback = 0) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+    }
+
+    function cloneLibraryConfigMetadata(value, depth = 0, seen = new WeakSet()) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return normalizeLibraryConfigText(value);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (seen.has(value) || depth >= MAX_LIBRARY_CONFIG_METADATA_DEPTH) {
+            return undefined;
+        }
+        seen.add(value);
+        if (Array.isArray(value)) {
+            const clone = value
+                .slice(0, MAX_LIBRARY_CONFIG_ARRAY_ITEMS)
+                .map((item) => cloneLibraryConfigMetadata(item, depth + 1, seen))
+                .filter((item) => item !== undefined);
+            seen.delete(value);
+            return clone;
+        }
+        if (!isPlainObject(value)) {
+            return undefined;
+        }
+        const clone = {};
+        for (const [key, item] of Object.entries(value)) {
+            if (isUnsafeLibraryConfigKey(key)) {
+                continue;
+            }
+            const safeKey = normalizeLibraryConfigText(key, MAX_LIBRARY_CONFIG_KEY_LENGTH).trim();
+            if (!safeKey || isUnsafeLibraryConfigKey(safeKey)) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(clone, safeKey)
+                && Object.keys(clone).length >= MAX_LIBRARY_CONFIG_OBJECT_KEYS) {
+                break;
+            }
+            const safeValue = cloneLibraryConfigMetadata(item, depth + 1, seen);
+            if (safeValue !== undefined) {
+                clone[safeKey] = safeValue;
+            }
+        }
+        seen.delete(value);
+        return clone;
+    }
+
+    function sanitizeLibraryConfigurationEntry(config) {
+        if (!config || typeof config !== 'object') {
+            return null;
+        }
+        const clone = cloneLibraryConfigMetadata(config);
+        if (!clone || typeof clone !== 'object') {
+            return null;
+        }
+        const key = normalizeLibraryConfigKey(clone.key);
+        if (!key) {
+            return null;
+        }
+        clone.key = key;
+        clone.name = normalizeLibraryConfigName(clone.name || key);
+        clone.examCount = Math.max(0, Math.floor(normalizeLibraryConfigNumber(clone.examCount, 0)));
+        clone.timestamp = normalizeLibraryConfigNumber(clone.timestamp, Date.now());
+        return clone;
+    }
+
+    function normalizeLibraryConfigKey(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const key = value.trim();
+        if (!key || key.length > 128) {
+            return '';
+        }
+        if (key === 'exam_index') {
+            return key;
+        }
+        return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
     }
 
     function countIndexTypes(index) {
@@ -11422,14 +12098,26 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async getActiveLibraryConfigurationKey() {
-            return global.storage.get('active_exam_index_key', 'exam_index');
+            try {
+                const key = await global.storage.get('active_exam_index_key', 'exam_index');
+                return normalizeLibraryConfigKey(key) || 'exam_index';
+            } catch (_) {
+                return 'exam_index';
+            }
         }
 
         async setActiveLibraryConfiguration(key) {
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                console.warn('[LibraryManager] 拒绝写入无效题库配置 key:', key);
+                return false;
+            }
             try {
-                await global.storage.set('active_exam_index_key', key);
+                await global.storage.set('active_exam_index_key', configKey);
+                return true;
             } catch (error) {
                 console.error('[LibraryManager] 设置活动题库配置失败:', error);
+                return false;
             }
         }
 
@@ -11438,22 +12126,40 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                console.warn('[LibraryManager] 拒绝保存无效题库配置 key:', key);
+                return false;
+            }
             try {
                 let configs = await global.storage.get('exam_index_configurations', []);
                 if (!Array.isArray(configs)) {
                     configs = [];
                 }
-                const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
-                const entry = Object.assign({}, safeMetadata, { name, key, examCount, timestamp: Date.now() });
-                const existingIndex = configs.findIndex((item) => item && item.key === key);
+                configs = configs
+                    .map((item) => sanitizeLibraryConfigurationEntry(item))
+                    .filter(Boolean)
+                    .slice(-MAX_LIBRARY_CONFIGURATIONS);
+                const safeMetadata = metadata && typeof metadata === 'object'
+                    ? (cloneLibraryConfigMetadata(metadata) || {})
+                    : {};
+                const entry = Object.assign({}, safeMetadata, {
+                    name: normalizeLibraryConfigName(name),
+                    key: configKey,
+                    examCount: Math.max(0, Math.floor(normalizeLibraryConfigNumber(examCount, 0))),
+                    timestamp: Date.now()
+                });
+                const existingIndex = configs.findIndex((item) => item && item.key === configKey);
                 if (existingIndex >= 0) {
-                    configs[existingIndex] = Object.assign({}, configs[existingIndex], entry);
+                    configs[existingIndex] = Object.assign({}, sanitizeLibraryConfigurationEntry(configs[existingIndex]), entry);
                 } else {
                     configs.push(entry);
                 }
                 await global.storage.set('exam_index_configurations', configs);
+                return true;
             } catch (error) {
                 console.error('[LibraryManager] 保存题库配置失败:', error);
+                return false;
             }
         }
 
@@ -11685,14 +12391,16 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async fetchLibraryDataset(key) {
-            if (!key) {
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                console.warn('[LibraryManager] 拒绝读取无效题库配置 key:', key);
                 return [];
             }
             try {
-                const dataset = await global.storage.get(key);
+                const dataset = await global.storage.get(configKey);
                 return Array.isArray(dataset) ? dataset : [];
             } catch (error) {
-                console.warn('[LibraryManager] 无法读取题库数据:', key, error);
+                console.warn('[LibraryManager] 无法读取题库数据:', configKey, error);
                 return [];
             }
         }
@@ -11784,7 +12492,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     return key;
                 }
             }
-            return `${prefix}_${now}_${Math.random().toString(36).slice(2, 8)}`;
+            return `${prefix}_${now}_${randomIdSuffix()}`;
         }
 
         buildImportedConfigName(type, mode, label) {
@@ -11853,7 +12561,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 try { global.assignExamSequenceNumbers(newIndex); } catch (_) { }
             }
 
-            const key = options.key || await this.buildUniqueImportedConfigKey('exam_index');
+            const key = normalizeLibraryConfigKey(options.key) || await this.buildUniqueImportedConfigKey('exam_index');
             const name = options.name || this.buildImportedConfigName(type, mode, options.label);
             const counts = countIndexTypes(newIndex);
             const sourceReport = options.discoveryResult && options.discoveryResult.report
@@ -11905,7 +12613,14 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async applyLibraryConfiguration(key, dataset, options = {}) {
-            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
+            const configKey = normalizeLibraryConfigKey(key);
+            if (!configKey) {
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('题库配置 key 无效，已拒绝切换。', 'warning');
+                }
+                return false;
+            }
+            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(configKey);
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');
@@ -11913,7 +12628,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 return false;
             }
 
-            const currentPathMap = await this.loadPathMapForConfiguration(key);
+            const currentPathMap = await this.loadPathMapForConfiguration(configKey);
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
                 : (currentPathMap || null);
@@ -11931,13 +12646,13 @@ if (typeof module !== 'undefined' && module.exports) {
             }
 
             try {
-                await this.setActiveLibraryConfiguration(key);
+                await this.setActiveLibraryConfiguration(configKey);
             } catch (error) {
                 console.warn('[LibraryManager] 无法写入当前题库配置:', error);
             }
 
-            await this.updateLibraryConfigurationMetadata(key, exams.length);
-            await this.savePathMapForConfiguration(key, exams, {
+            await this.updateLibraryConfigurationMetadata(configKey, exams.length);
+            await this.savePathMapForConfiguration(configKey, exams, {
                 overrideMap: pathMap,
                 setActive: true
             });
@@ -11947,7 +12662,7 @@ if (typeof module !== 'undefined' && module.exports) {
             try { global.loadExamList && global.loadExamList(); } catch (_) { }
 
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key } }));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: configKey } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
             }
@@ -11957,7 +12672,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     try {
                         global.renderLibraryConfigList({
                             allowDelete: true,
-                            activeKey: key
+                            activeKey: configKey
                         });
                     } catch (error) {
                         console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
@@ -11969,7 +12684,7 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async deleteLibraryConfiguration(key) {
-            const configKey = typeof key === 'string' ? key.trim() : '';
+            const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
                 return { deleted: false, reason: 'invalid-key' };
             }
@@ -12055,7 +12770,11 @@ if (typeof module !== 'undefined' && module.exports) {
 
     async function switchLibraryConfig(key) {
         const manager = getInstance();
-        const nextKey = key || await manager.getActiveLibraryConfigurationKey() || 'exam_index';
+        if (key !== undefined && key !== null && String(key).trim()) {
+            const explicitKey = normalizeLibraryConfigKey(key);
+            return explicitKey ? manager.applyLibraryConfiguration(explicitKey) : false;
+        }
+        const nextKey = await manager.getActiveLibraryConfigurationKey() || 'exam_index';
         return manager.applyLibraryConfiguration(nextKey);
     }
 

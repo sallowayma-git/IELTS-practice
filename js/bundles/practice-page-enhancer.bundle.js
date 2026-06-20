@@ -4,6 +4,22 @@
 (function initSuiteBackGuard(global) {
     'use strict';
 
+    let fallbackTokenCounter = 0;
+
+    function randomTokenSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackTokenCounter += 1;
+        return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
+
     function createSuiteBackGuard(options = {}) {
         const context = options.context || global;
         const historyRef = options.history || context.history;
@@ -74,7 +90,7 @@
             installed = true;
             pushed = false;
             bypass = false;
-            token = `${tokenPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            token = `${tokenPrefix}_${Date.now()}_${randomTokenSuffix()}`;
 
             popstateHandler = (event) => {
                 if (bypass || !installed) {
@@ -400,6 +416,10 @@
         'cambridge', 'oxford', 'london', 'sydney', 'melbourne', 'canada', 'australia',
         'britain', 'america', 'europe', 'asia', 'africa', 'nasa', 'nesa', 'ielts'
     ]);
+    const MAX_SPELLING_VOCAB_WORDS = 5000;
+    const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
+    const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     /**
      * 拼写错误记录数据结构
@@ -578,6 +598,71 @@
             return fallback || 'other';
         }
 
+        isUnsafeImportKey(key) {
+            return SPELLING_IMPORT_POLLUTION_KEYS.has(String(key));
+        }
+
+        cloneSafeObject(value) {
+            if (!value || Object.prototype.toString.call(value) !== '[object Object]') {
+                return {};
+            }
+            const clone = {};
+            Object.entries(value).forEach(([key, item]) => {
+                if (this.isUnsafeImportKey(key)) {
+                    return;
+                }
+                clone[key] = item;
+            });
+            return clone;
+        }
+
+        limitText(value, maxLength = MAX_SPELLING_NOTE_TEXT_LENGTH) {
+            if (typeof value !== 'string') {
+                return value;
+            }
+            return value.length > maxLength ? value.slice(0, maxLength) : value;
+        }
+
+        wordTimestamp(entry) {
+            const candidates = [entry?.updatedAt, entry?.timestamp, entry?.createdAt];
+            for (const value of candidates) {
+                const numeric = typeof value === 'number' ? value : Number(new Date(value));
+                if (Number.isFinite(numeric)) {
+                    return numeric;
+                }
+            }
+            return 0;
+        }
+
+        normalizeStoredWordEntry(entry) {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const safe = this.cloneSafeObject(entry);
+            if (safe.metadata && typeof safe.metadata === 'object') {
+                safe.metadata = this.cloneSafeObject(safe.metadata);
+            }
+            ['word', 'userInput'].forEach((key) => {
+                safe[key] = this.limitText(safe[key], MAX_SPELLING_WORD_TEXT_LENGTH);
+            });
+            ['questionId', 'suiteId', 'examId', 'meaning', 'example', 'note', 'spellingNote', 'source'].forEach((key) => {
+                safe[key] = this.limitText(safe[key], MAX_SPELLING_NOTE_TEXT_LENGTH);
+            });
+            return safe;
+        }
+
+        normalizeStoredWords(words) {
+            const normalized = Array.isArray(words)
+                ? words.map((entry) => this.normalizeStoredWordEntry(entry)).filter(Boolean)
+                : [];
+            if (normalized.length <= MAX_SPELLING_VOCAB_WORDS) {
+                return normalized;
+            }
+            return normalized
+                .sort((a, b) => this.wordTimestamp(b) - this.wordTimestamp(a))
+                .slice(0, MAX_SPELLING_VOCAB_WORDS);
+        }
+
         normalizeVocabListShape(rawList, listId, source) {
             const normalizedSource = this.normalizeListSource(listId, source);
             const base = this.createEmptyList(listId, normalizedSource);
@@ -585,7 +670,7 @@
             if (Array.isArray(rawList)) {
                 return {
                     ...base,
-                    words: rawList.filter((entry) => entry && typeof entry === 'object'),
+                    words: this.normalizeStoredWords(rawList),
                     updatedAt: Date.now()
                 };
             }
@@ -594,19 +679,19 @@
                 return null;
             }
 
-            const words = Array.isArray(rawList.words)
-                ? rawList.words.filter((entry) => entry && typeof entry === 'object')
-                : [];
+            const safeList = this.cloneSafeObject(rawList);
+            const words = this.normalizeStoredWords(safeList.words);
+            const safeStats = this.cloneSafeObject(safeList.stats);
 
             return {
                 ...base,
-                ...rawList,
+                ...safeList,
                 id: listId,
-                source: rawList.source || normalizedSource,
+                source: safeList.source || normalizedSource,
                 words,
                 stats: {
                     ...base.stats,
-                    ...(rawList.stats && typeof rawList.stats === 'object' ? rawList.stats : {}),
+                    ...safeStats,
                     totalWords: words.length
                 }
             };
@@ -623,8 +708,34 @@
                 : [];
         }
 
+        resolveTrustedAssetUrl(rawUrl) {
+            try {
+                const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
+                    ? window.location.href
+                    : 'http://localhost/';
+                const resolved = new URL(String(rawUrl), baseHref);
+                const protocol = (resolved.protocol || '').toLowerCase();
+
+                if (protocol === 'http:' || protocol === 'https:') {
+                    const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+                        ? window.location.origin
+                        : new URL(baseHref).origin;
+                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                        ? resolved.href
+                        : '';
+                }
+
+                if (protocol === 'file:' && typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                    return resolved.href;
+                }
+            } catch (_) {
+                return '';
+            }
+            return '';
+        }
+
         resolveAssetUrl(relativePath) {
-            const fallback = relativePath;
+            const fallback = this.resolveTrustedAssetUrl(relativePath) || relativePath;
             if (typeof document === 'undefined') {
                 return fallback;
             }
@@ -643,9 +754,9 @@
                 const markerIndex = src.search(/\/js\/(?:bundles|app)\//i);
                 if (markerIndex !== -1) {
                     const root = src.slice(0, markerIndex + 1);
-                    return new URL(relativePath, root).href;
+                    return this.resolveTrustedAssetUrl(new URL(relativePath, root).href) || fallback;
                 }
-                return new URL(relativePath, document.baseURI || window.location.href).href;
+                return this.resolveTrustedAssetUrl(new URL(relativePath, document.baseURI || window.location.href).href) || fallback;
             } catch (_) {
                 return fallback;
             }
@@ -655,7 +766,11 @@
             if (typeof fetch !== 'function') {
                 throw new Error('fetch_unavailable');
             }
-            const response = await fetch(url, { cache: 'no-store' });
+            const trustedUrl = this.resolveTrustedAssetUrl(url);
+            if (!trustedUrl) {
+                throw new Error('untrusted_asset_url');
+            }
+            const response = await fetch(trustedUrl, { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -670,7 +785,12 @@
                 }
                 try {
                     const xhr = new XMLHttpRequest();
-                    xhr.open('GET', url, true);
+                    const trustedUrl = this.resolveTrustedAssetUrl(url);
+                    if (!trustedUrl) {
+                        reject(new Error('untrusted_asset_url'));
+                        return;
+                    }
+                    xhr.open('GET', trustedUrl, true);
                     xhr.overrideMimeType('application/json');
                     xhr.onreadystatechange = () => {
                         if (xhr.readyState !== 4) {
@@ -782,38 +902,42 @@
             if (!error || typeof error !== 'object') {
                 return null;
             }
-            const word = typeof error.word === 'string' ? error.word.trim() : '';
+            const safeError = this.cloneSafeObject(error);
+            const safeExisting = existing && typeof existing === 'object' ? this.cloneSafeObject(existing) : null;
+            const word = typeof safeError.word === 'string'
+                ? this.limitText(safeError.word.trim(), MAX_SPELLING_WORD_TEXT_LENGTH)
+                : '';
             if (!word) {
                 return null;
             }
 
-            const incomingCount = Math.max(1, Number(error.errorCount) || 1);
-            const existingCount = existing ? Math.max(0, Number(existing.errorCount) || 0) : 0;
-            const errorCount = existing ? existingCount + incomingCount : incomingCount;
-            const timestamp = error.timestamp || Date.now();
+            const incomingCount = Math.max(1, Number(safeError.errorCount) || 1);
+            const existingCount = safeExisting ? Math.max(0, Number(safeExisting.errorCount) || 0) : 0;
+            const errorCount = safeExisting ? existingCount + incomingCount : incomingCount;
+            const timestamp = safeError.timestamp || Date.now();
             const lexiconEntry = this.findLexiconEntry(word);
-            const existingMeaning = existing && typeof existing.meaning === 'string' ? existing.meaning.trim() : '';
-            const errorMeaning = typeof error.meaning === 'string' ? error.meaning.trim() : '';
+            const existingMeaning = safeExisting && typeof safeExisting.meaning === 'string' ? safeExisting.meaning.trim() : '';
+            const errorMeaning = typeof safeError.meaning === 'string' ? safeError.meaning.trim() : '';
             const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
                 ? lexiconEntry.meaning.trim()
                 : (errorMeaning || existingMeaning || '暂无中文释义');
             const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
                 ? lexiconEntry.example.trim()
-                : (error.example || existing?.example || this.buildSourceNote(error));
-            const spellingNote = this.buildSpellingNote({ ...existing, ...error }, errorCount);
-            const sourceNote = this.buildSourceNote(error);
-            const existingNote = existing && typeof existing.note === 'string' ? existing.note.trim() : '';
+                : (safeError.example || safeExisting?.example || this.buildSourceNote(safeError));
+            const spellingNote = this.buildSpellingNote({ ...(safeExisting || {}), ...safeError }, errorCount);
+            const sourceNote = this.buildSourceNote(safeError);
+            const existingNote = safeExisting && typeof safeExisting.note === 'string' ? safeExisting.note.trim() : '';
             const noteParts = [spellingNote, sourceNote];
             if (existingNote && !this.isGeneratedSpellingNote(existingNote) && !noteParts.includes(existingNote)) {
                 noteParts.push(existingNote);
             }
             const normalizedWord = this.normalizeLexiconLookupKey(word) || word.toLowerCase();
-            const source = error.source || existing?.source || listSource || 'other';
+            const source = safeError.source || safeExisting?.source || listSource || 'other';
 
-            return {
-                ...(existing || {}),
-                ...error,
-                id: existing?.id || error.id || `spelling-${source}-${normalizedWord}`,
+            return this.normalizeStoredWordEntry({
+                ...(safeExisting || {}),
+                ...safeError,
+                id: safeExisting?.id || safeError.id || `spelling-${source}-${normalizedWord}`,
                 word,
                 meaning,
                 example,
@@ -822,16 +946,16 @@
                 source,
                 errorCount,
                 timestamp,
-                easeFactor: existing?.easeFactor ?? error.easeFactor ?? null,
-                interval: existing?.interval ?? error.interval ?? 1,
-                repetitions: existing?.repetitions ?? error.repetitions ?? 0,
-                intraCycles: existing?.intraCycles ?? error.intraCycles ?? 0,
-                correctCount: existing?.correctCount ?? error.correctCount ?? 0,
-                lastReviewed: existing?.lastReviewed ?? error.lastReviewed ?? null,
-                nextReview: existing?.nextReview ?? error.nextReview ?? null,
-                createdAt: existing?.createdAt || error.createdAt || new Date(timestamp).toISOString(),
+                easeFactor: safeExisting?.easeFactor ?? safeError.easeFactor ?? null,
+                interval: safeExisting?.interval ?? safeError.interval ?? 1,
+                repetitions: safeExisting?.repetitions ?? safeError.repetitions ?? 0,
+                intraCycles: safeExisting?.intraCycles ?? safeError.intraCycles ?? 0,
+                correctCount: safeExisting?.correctCount ?? safeError.correctCount ?? 0,
+                lastReviewed: safeExisting?.lastReviewed ?? safeError.lastReviewed ?? null,
+                nextReview: safeExisting?.nextReview ?? safeError.nextReview ?? null,
+                createdAt: safeExisting?.createdAt || safeError.createdAt || new Date(timestamp).toISOString(),
                 updatedAt: new Date().toISOString()
-            };
+            });
         }
 
         /**
@@ -1721,6 +1845,22 @@
 
     console.log('[PracticeEnhancer] 初始化增强器');
 
+    let fallbackTokenCounter = 0;
+
+    function randomTokenSuffix() {
+        const cryptoObj = window.crypto || window.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackTokenCounter += 1;
+        return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
+
     const DEFAULT_ENHANCER_CONFIG = {
         autoInitialize: true,
         excludedSelectors: [
@@ -1816,25 +1956,50 @@
     };
 
     const ENHANCER_BASE_URL = resolveEnhancerBaseUrl();
+
+    const resolveTrustedDependencyScriptUrl = (rawUrl) => {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const resolved = new URL(String(rawUrl), window.location.href);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            if (!resolved.pathname || !resolved.pathname.toLowerCase().endsWith('.js')) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                const origin = window.location && window.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+            if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    };
+
     const dependencyLoader = {
         cache: new Map(),
         loadScript(url) {
-            if (!url) {
+            const safeUrl = resolveTrustedDependencyScriptUrl(url);
+            if (!safeUrl) {
                 return Promise.reject(new Error('script url missing'));
             }
-            if (this.cache.has(url)) {
-                return this.cache.get(url);
+            if (this.cache.has(safeUrl)) {
+                return this.cache.get(safeUrl);
             }
             const promise = new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.type = 'text/javascript';
                 script.defer = true;
-                script.src = url;
+                script.src = safeUrl;
                 script.onload = () => resolve(true);
                 script.onerror = (err) => reject(err);
                 (document.head || document.body || document.documentElement).appendChild(script);
             });
-            this.cache.set(url, promise);
+            this.cache.set(safeUrl, promise);
             return promise;
         }
     };
@@ -1855,6 +2020,58 @@
             }
         }
         return title;
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function getMessageTargetOrigin() {
+        const origin = window.location && window.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function isAllowedParentMessage(event, parentWindow) {
+        if (!event || !parentWindow) {
+            return false;
+        }
+        if (event.source && event.source !== parentWindow) {
+            return false;
+        }
+        if (!event.origin || event.origin === 'null') {
+            return Boolean(window.location && window.location.protocol === 'file:');
+        }
+        const allowedOrigin = window.location && window.location.origin;
+        if (!allowedOrigin || allowedOrigin === 'null' || event.origin !== allowedOrigin) {
+            return false;
+        }
+        return true;
+    }
+
+    function resolveTrustedSuiteNavigationUrl(rawUrl) {
+        if (rawUrl == null) {
+            return '';
+        }
+        try {
+            const resolved = new URL(String(rawUrl), window.location.href);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+            if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            // Invalid navigation payloads are ignored.
+        }
+        return '';
     }
 
     const enhancerMixinRegistry = [];
@@ -3347,17 +3564,22 @@
                 const statusClass = entry.isCorrect ? 'result-correct' : 'result-incorrect';
                 return `
                     <tr>
-                        <td>${label}</td>
-                        <td>${userAnswer}</td>
-                        <td>${correctAnswer}</td>
+                        <td>${escapeHtml(label)}</td>
+                        <td>${escapeHtml(userAnswer)}</td>
+                        <td>${escapeHtml(correctAnswer)}</td>
                         <td class="${statusClass}">${status}</td>
                     </tr>
                 `;
             }).join('');
 
+            const scoreInfo = results.scoreInfo || {};
+            const safeCorrect = escapeHtml(scoreInfo.correct ?? 0);
+            const safeTotal = escapeHtml(scoreInfo.total ?? 0);
+            const safePercentage = escapeHtml(scoreInfo.percentage ?? 0);
+
             resultsEl.innerHTML = `
                 <h4>回顾结果</h4>
-                <p>得分 ${results.scoreInfo?.correct ?? 0} / ${results.scoreInfo?.total ?? 0} · ${results.scoreInfo?.percentage ?? 0}%</p>
+                <p>得分 ${safeCorrect} / ${safeTotal} · ${safePercentage}%</p>
                 <table class="results-table">
                     <thead>
                         <tr>
@@ -3468,6 +3690,9 @@
             }
             this.startInitRequestLoop();
             window.addEventListener('message', (event) => {
+                if (!isAllowedParentMessage(event, this.parentWindow)) {
+                    return;
+                }
                 const payload = event && event.data ? event.data : null;
                 if (!payload || typeof payload.type !== 'string') {
                     return;
@@ -3666,7 +3891,7 @@
             }
 
             // Fallback path when shared back guard helper is unavailable.
-            this._suiteHistoryGuardToken = `suite_guard_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            this._suiteHistoryGuardToken = `suite_guard_${Date.now()}_${randomTokenSuffix()}`;
             this._suitePopstateHandler = (event) => {
                 if (this._suiteHistoryBypassPopstate) {
                     return;
@@ -3796,7 +4021,12 @@
             }
 
             try {
-                window.location.href = data.url;
+                const targetUrl = resolveTrustedSuiteNavigationUrl(data.url);
+                if (!targetUrl) {
+                    console.warn('[PracticeEnhancer] Blocked untrusted suite navigation URL');
+                    return;
+                }
+                window.location.href = targetUrl;
             } catch (error) {
                 console.warn('[PracticeEnhancer] 套题导航失败:', error);
             }
@@ -4817,25 +5047,26 @@
          */
         getSuiteContainer: function (suiteId) {
             // 方法1: 通过data-suite-id查找
-            let container = document.querySelector(`[data-suite-id="${suiteId}"]`);
+            const normalizedSuiteId = String(suiteId || '');
+            let container = document.querySelector(`[data-suite-id="${cssEscape(normalizedSuiteId)}"]`);
             if (container) return container;
 
             // 方法2: 通过ID查找（如果suiteId是"set1"，查找"page-test1"）
-            if (suiteId.startsWith('set')) {
-                const pageNum = suiteId.replace('set', '');
+            if (normalizedSuiteId.startsWith('set')) {
+                const pageNum = normalizedSuiteId.replace('set', '');
                 container = document.getElementById(`page-test${pageNum}`);
                 if (container) return container;
             }
 
             // 方法3: 直接通过ID查找
-            container = document.getElementById(suiteId);
+            container = document.getElementById(normalizedSuiteId);
             if (container) return container;
 
             // 方法4: 查找当前激活的test-page
             container = document.querySelector('.test-page.active');
             if (container) {
                 const extractedId = this.extractSuiteId(container);
-                if (extractedId === suiteId) {
+                if (extractedId === normalizedSuiteId) {
                     return container;
                 }
             }
@@ -5392,7 +5623,7 @@
                 parent = parent.parentElement;
             }
 
-            const label = input.id ? document.querySelector(`label[for="${input.id}"]`) : null;
+            const label = input.id ? document.querySelector(`label[for="${cssEscape(input.id)}"]`) : null;
             if (label && label.textContent) {
                 const match = label.textContent.match(/(\d+)/);
                 if (match) return 'q' + match[1];
@@ -6154,7 +6385,7 @@
             };
 
             try {
-                this.parentWindow.postMessage(message, '*');
+                this.parentWindow.postMessage(message, getMessageTargetOrigin());
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
                 console.error('[PracticeEnhancer] 发送消息失败:', error);

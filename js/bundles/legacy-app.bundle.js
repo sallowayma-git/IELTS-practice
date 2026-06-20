@@ -41,6 +41,72 @@
   }
 
   var storage = window.storage;
+  var MAX_FALLBACK_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+  var FALLBACK_JSON_MIME_TYPES = {
+    '': true,
+    'application/json': true,
+    'text/json': true,
+    'text/plain': true
+  };
+
+  function validateFallbackJsonFile(file) {
+    if (!file || typeof file.size !== 'number') {
+      throw new Error('Invalid import file.');
+    }
+    if (file.size > MAX_FALLBACK_IMPORT_FILE_BYTES) {
+      throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+    var name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+    if (!/\.json$/.test(name)) {
+      throw new Error('Only JSON import files are supported.');
+    }
+    var type = typeof file.type === 'string' ? file.type.split(';')[0].trim().toLowerCase() : '';
+    if (!FALLBACK_JSON_MIME_TYPES[type]) {
+      throw new Error('Unsupported import file type.');
+    }
+  }
+
+  function isFallbackUnsafeAttributeName(name) {
+    var key = String(name || '').toLowerCase();
+    return key.indexOf('on') === 0 || key === 'srcdoc';
+  }
+
+  function isFallbackUnsafeUrlAttribute(name, value, tagName) {
+    var key = String(name || '').toLowerCase();
+    var urlAttrs = {
+      href: true,
+      src: true,
+      'xlink:href': true,
+      action: true,
+      formaction: true,
+      poster: true
+    };
+    if (!urlAttrs[key]) {
+      return false;
+    }
+    var text = String(value == null ? '' : value).trim();
+    if (!text) {
+      return false;
+    }
+    var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+      return true;
+    }
+    if (compact.indexOf('data:') === 0) {
+      var tag = String(tagName || '').toLowerCase();
+      if (key !== 'src' || tag !== 'img') {
+        return true;
+      }
+      return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+    }
+    return false;
+  }
+
+  function isFallbackUnsafeObjectKey(name) {
+    var key = String(name || '').toLowerCase();
+    return key === '__proto__' || key === 'prototype' || key === 'constructor';
+  }
+
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
@@ -208,6 +274,11 @@
         return;
       }
 
+      if (isFallbackUnsafeAttributeName(key) || isFallbackUnsafeUrlAttribute(key, value, element.tagName)) {
+        console.warn('[FallbackDOM] Skipped unsafe attribute: ' + key);
+        return;
+      }
+
       if (key === 'className') {
         element.className = value;
         return;
@@ -217,6 +288,9 @@
         Object.keys(value).forEach(function (dataKey) {
           var dataValue = value[dataKey];
           if (dataValue == null) {
+            return;
+          }
+          if (isFallbackUnsafeObjectKey(dataKey)) {
             return;
           }
           element.dataset[dataKey] = String(dataValue);
@@ -333,8 +407,13 @@
 
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
+    var normalizeFallbackMessageType = function (type) {
+      var value = String(type || '').trim().toLowerCase();
+      return ['info', 'success', 'warning', 'error'].indexOf(value) !== -1 ? value : 'info';
+    };
     window.showMessage = function (message, type, duration) {
       try {
+        var safeType = normalizeFallbackMessageType(type);
         var container = document.getElementById('message-container');
         if (!container) {
           container = document.createElement('div');
@@ -344,9 +423,9 @@
         }
 
         var note = document.createElement('div');
-        note.className = 'message ' + (type || 'info') + ' message-entering';
-        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
-        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        note.className = 'message ' + safeType + ' message-entering';
+        note.setAttribute('role', safeType === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', safeType === 'error' ? 'assertive' : 'polite');
 
         var indicator = document.createElement('span');
         indicator.className = 'message-indicator';
@@ -592,6 +671,12 @@
       window.showMessage && window.showMessage('请选择要导入的文件', 'warning');
       return;
     }
+    try {
+      validateFallbackJsonFile(inputFile);
+    } catch (error) {
+      window.showMessage && window.showMessage(error.message || 'Import file is invalid.', 'error');
+      return;
+    }
     const reader = new FileReader();
     reader.onerror = () => window.showMessage && window.showMessage('文件读取失败', 'error');
     reader.onload = async () => {
@@ -830,6 +915,20 @@
     }
   }
 
+  function normalizeFallbackLibraryConfigKey(value) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    var key = value.trim();
+    if (!key || key.length > 128) {
+      return '';
+    }
+    if (key === 'exam_index') {
+      return key;
+    }
+    return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
+  }
+
   async function ensureDefaultConfig() {
     try {
       var configs = [];
@@ -854,6 +953,7 @@
           try {
             var currentActive = storage.get('active_exam_index_key');
             currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
+            currentActive = normalizeFallbackLibraryConfigKey(currentActive);
             if (!currentActive && window.storage && storage.set) {
               var maybeSetActive = storage.set('active_exam_index_key', 'exam_index');
               if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
@@ -891,6 +991,7 @@
       try {
         if (window.storage && storage.get) {
           activeKey = await storage.get('active_exam_index_key', 'exam_index');
+          activeKey = normalizeFallbackLibraryConfigKey(activeKey) || 'exam_index';
         }
       } catch (e) { }
 
@@ -1039,11 +1140,12 @@
 
     _fallbackClearElement(container);
     container.hidden = false;
-    container.className = 'library-loader-report library-loader-report--' + (report.status || 'info');
+    var safeStatus = ['info', 'success', 'empty', 'warning', 'error'].includes(report.status) ? report.status : 'info';
+    container.className = 'library-loader-report library-loader-report--' + safeStatus;
 
-    var title = report.status === 'success'
+    var title = safeStatus === 'success'
       ? '导入完成'
-      : (report.status === 'empty' ? '未识别到可用题源' : '导入报告');
+      : (safeStatus === 'empty' ? '未识别到可用题源' : '导入报告');
     container.appendChild(_fallbackCreateElement('div', { className: 'library-loader-report__title' }, title));
 
     if (report.message) {
@@ -1333,19 +1435,20 @@
 
     async function _fallbackGetActiveLibraryKey() {
       if (typeof window.getActiveLibraryConfigurationKey === 'function') {
-        try { return await window.getActiveLibraryConfigurationKey(); } catch (_) { }
+        try { return normalizeFallbackLibraryConfigKey(await window.getActiveLibraryConfigurationKey()) || 'exam_index'; } catch (_) { }
       }
       if (storage && storage.get) {
         try {
           var maybeKey = storage.get('active_exam_index_key', 'exam_index');
           var key = (maybeKey && typeof maybeKey.then === 'function') ? await maybeKey : maybeKey;
-          return key || 'exam_index';
+          return normalizeFallbackLibraryConfigKey(key) || 'exam_index';
         } catch (_) { }
       }
       return 'exam_index';
     }
 
     async function _fallbackSetActiveLibraryKey(key) {
+      key = normalizeFallbackLibraryConfigKey(key);
       if (!key) return;
       if (typeof window.setActiveLibraryConfiguration === 'function') {
         try { await window.setActiveLibraryConfiguration(key); return; } catch (_) { }
@@ -1361,6 +1464,8 @@
     }
 
     async function _fallbackSaveLibraryConfiguration(name, key, count) {
+      key = normalizeFallbackLibraryConfigKey(key);
+      if (!key) return;
       var entry = { name: name, key: key, examCount: count, timestamp: Date.now() };
       if (typeof window.saveLibraryConfiguration === 'function') {
         try { await window.saveLibraryConfiguration(name, key, count); return; } catch (_) { }
@@ -1381,6 +1486,8 @@
     }
 
     async function _fallbackSaveIndexForKey(key, list) {
+      key = normalizeFallbackLibraryConfigKey(key);
+      if (!key) return;
       if (storage && storage.set) {
         var maybe = storage.set(key, list);
         if (maybe && typeof maybe.then === 'function') {
@@ -1392,6 +1499,8 @@
     }
 
     async function _fallbackApplyLibraryConfig(key, dataset, options) {
+      key = normalizeFallbackLibraryConfigKey(key);
+      if (!key) return false;
       if (typeof window.applyLibraryConfiguration === 'function') {
         try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
       }
@@ -1939,6 +2048,108 @@ class ExamSystemApp {
 }
 
 (function(global) {
+    function escapeCssSelectorValue(value) {
+        if (global.CSS && typeof global.CSS.escape === 'function') {
+            try {
+                return global.CSS.escape(String(value == null ? '' : value));
+            } catch (_) {
+                // fallback below
+            }
+        }
+        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+    }
+
+    function isAppUnsafeAttributeName(name) {
+        const key = String(name || '').toLowerCase();
+        return key.startsWith('on') || key === 'srcdoc';
+    }
+
+    function isAppUnsafeUrlAttribute(name, value, tagName) {
+        const key = String(name || '').toLowerCase();
+        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+        if (!urlAttributes.has(key)) {
+            return false;
+        }
+        const text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return false;
+        }
+        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+            return true;
+        }
+        if (compact.startsWith('data:')) {
+            const tag = String(tagName || '').toLowerCase();
+            if (key !== 'src' || tag !== 'img') {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return false;
+    }
+
+    function isAppUnsafeObjectKey(name) {
+        const key = String(name || '').toLowerCase();
+        return key === '__proto__' || key === 'prototype' || key === 'constructor';
+    }
+
+    function isAppUnsafeStyleValue(name, value) {
+        if (isAppUnsafeObjectKey(name) || value == null) {
+            return true;
+        }
+        const compact = String(value)
+            .replace(/[\u0000-\u001f\u007f\s]+/g, '')
+            .toLowerCase();
+        return compact.includes('javascript:')
+            || compact.includes('vbscript:')
+            || compact.includes('expression(')
+            || compact.includes('data:text/html')
+            || compact.includes('data:application/xhtml+xml')
+            || compact.includes('data:image/svg+xml');
+    }
+
+    function applySafeElementAttributes(element, attrs) {
+        if (!element || !attrs || typeof attrs !== 'object') {
+            return;
+        }
+        Object.keys(attrs).forEach((key) => {
+            const value = attrs[key];
+            if (value == null || value === false) {
+                return;
+            }
+            if (isAppUnsafeAttributeName(key) || isAppUnsafeUrlAttribute(key, value, element.tagName)) {
+                console.warn(`[App] Skipped unsafe fallback attribute: ${key}`);
+                return;
+            }
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'dataset' && typeof value === 'object') {
+                Object.keys(value).forEach((dataKey) => {
+                    if (!isAppUnsafeObjectKey(dataKey) && value[dataKey] != null) {
+                        element.dataset[dataKey] = String(value[dataKey]);
+                    }
+                });
+                return;
+            }
+            if (key === 'style' && typeof value === 'object') {
+                Object.keys(value).forEach((styleKey) => {
+                    const styleValue = value[styleKey];
+                    if (!isAppUnsafeStyleValue(styleKey, styleValue)) {
+                        element.style[styleKey] = styleValue;
+                    }
+                });
+                return;
+            }
+            if (key === 'type') {
+                element.setAttribute('type', value);
+                return;
+            }
+            element.setAttribute(key, value === true ? '' : String(value));
+        });
+    }
+
     const integratedStateMixin = {
         getState(path) {
             return path.split('.').reduce((obj, key) => obj && obj[key], this.state);
@@ -2288,29 +2499,7 @@ class ExamSystemApp {
                     return adapter.create(tag, attrs, children);
                 }
                 const element = document.createElement(tag);
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach((key) => {
-                        const value = attrs[key];
-                        if (value == null) {
-                            return;
-                        }
-                        if (key === 'className') {
-                            element.className = value;
-                            return;
-                        }
-                        if (key === 'dataset' && typeof value === 'object') {
-                            Object.keys(value).forEach((dataKey) => {
-                                element.dataset[dataKey] = String(value[dataKey]);
-                            });
-                            return;
-                        }
-                        if (key === 'type') {
-                            element.setAttribute('type', value);
-                            return;
-                        }
-                        element.setAttribute(key, value);
-                    });
-                }
+                applySafeElementAttributes(element, attrs);
                 const nodes = Array.isArray(children) ? children : [children];
                 nodes.forEach((child) => {
                     if (child == null) {
@@ -2404,29 +2593,7 @@ class ExamSystemApp {
                     return adapter.create(tag, attrs, children);
                 }
                 const element = document.createElement(tag);
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach((key) => {
-                        const value = attrs[key];
-                        if (value == null) {
-                            return;
-                        }
-                        if (key === 'className') {
-                            element.className = value;
-                            return;
-                        }
-                        if (key === 'dataset' && typeof value === 'object') {
-                            Object.keys(value).forEach((dataKey) => {
-                                element.dataset[dataKey] = String(value[dataKey]);
-                            });
-                            return;
-                        }
-                        if (key === 'type') {
-                            element.setAttribute('type', value);
-                            return;
-                        }
-                        element.setAttribute(key, value);
-                    });
-                }
+                applySafeElementAttributes(element, attrs);
                 const nodes = Array.isArray(children) ? children : [children];
                 nodes.forEach((child) => {
                     if (child == null) {
@@ -2505,7 +2672,7 @@ class ExamSystemApp {
                 document.querySelectorAll('.nav-btn').forEach((btn) => {
                     btn.classList.remove('active');
                 });
-                const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
+                const activeNavBtn = document.querySelector(`[data-view="${escapeCssSelectorValue(viewName)}"]`);
                 if (activeNavBtn) {
                     activeNavBtn.classList.add('active');
                 }
@@ -2886,6 +3053,7 @@ class ExamSystemApp {
             const categories = ['P1', 'P2', 'P3'];
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             categories.forEach((category) => {
+                const escapedCategory = escapeCssSelectorValue(category);
                 const categoryExams = list.filter((exam) => exam.category === category);
                 const categoryRecords = practiceRecords.filter((record) => {
                     const exam = list.find((e) => e.id === record.examId);
@@ -2894,12 +3062,12 @@ class ExamSystemApp {
                 const completed = new Set(categoryRecords.map((r) => r.examId)).size;
                 const total = categoryExams.length;
                 const progress = total > 0 ? (completed / total) * 100 : 0;
-                const progressBar = document.querySelector(`[data-category="${category}"] .progress-fill`);
+                const progressBar = document.querySelector(`[data-category="${escapedCategory}"] .progress-fill`);
                 if (progressBar) {
                     progressBar.style.width = `${progress}%`;
                     progressBar.dataset.progress = progress;
                 }
-                const progressText = document.querySelector(`[data-category="${category}"] .progress-text`);
+                const progressText = document.querySelector(`[data-category="${escapedCategory}"] .progress-text`);
                 if (progressText) {
                     progressText.textContent = `${completed}/${total} 已完成`;
                 }
@@ -3605,49 +3773,91 @@ window.addEventListener('beforeunload', () => {
       this._tooltip.appendChild(arrow);
     }
 
+    _appendTextElement(parent, tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) {
+        element.className = className;
+      }
+      element.textContent = String(text || '');
+      parent.appendChild(element);
+      return element;
+    }
+
+    _createActionButton(action, text, modifierClass) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `onboarding-tooltip__btn ${modifierClass}`;
+      button.dataset.action = action;
+      button.textContent = String(text || '');
+      return button;
+    }
+
+    _appendVisible() {
+      requestAnimationFrame(() => {
+        this._tooltip?.classList.add('is-visible');
+      });
+    }
+
     renderTooltipContent(step, current, total) {
       if (!this._tooltip) return;
 
-      const progressPercent = ((current + 1) / total) * 100;
+      const safeTotal = Number.isFinite(Number(total)) && Number(total) > 0 ? Number(total) : 1;
+      const safeCurrent = Math.min(Math.max(Number(current) || 0, 0), safeTotal - 1);
+      const progressPercent = Math.min(Math.max(((safeCurrent + 1) / safeTotal) * 100, 0), 100);
+      const nextText = step.nextText || '下一步';
 
-      this._tooltip.innerHTML = `
-        <div class="onboarding-tooltip__progress">
-          <div class="onboarding-tooltip__progress-bar">
-            <div class="onboarding-tooltip__progress-fill" style="width: ${progressPercent}%"></div>
-          </div>
-          <span class="onboarding-tooltip__progress-text">${current + 1} / ${total}</span>
-        </div>
-        <h3 class="onboarding-tooltip__title">${step.title}</h3>
-        <p class="onboarding-tooltip__content">${step.content}</p>
-        <div class="onboarding-tooltip__actions">
-          ${step.showPrev ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--secondary" data-action="prev">上一步</button>' : '<div></div>'}
-          <div>
-            ${step.showSkip ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--skip" data-action="skip">跳过</button>' : ''}
-            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText}</button>`}
-          </div>
-        </div>
-      `;
+      const progress = document.createElement('div');
+      progress.className = 'onboarding-tooltip__progress';
+      const progressBar = document.createElement('div');
+      progressBar.className = 'onboarding-tooltip__progress-bar';
+      const progressFill = document.createElement('div');
+      progressFill.className = 'onboarding-tooltip__progress-fill';
+      progressFill.style.width = `${progressPercent}%`;
+      progressBar.appendChild(progressFill);
+      progress.appendChild(progressBar);
+      this._appendTextElement(progress, 'span', 'onboarding-tooltip__progress-text', `${safeCurrent + 1} / ${safeTotal}`);
 
-      requestAnimationFrame(() => {
-        this._tooltip.classList.add('is-visible');
-      });
+      const title = document.createElement('h3');
+      title.className = 'onboarding-tooltip__title';
+      title.textContent = String(step.title || '');
+
+      const content = document.createElement('p');
+      content.className = 'onboarding-tooltip__content';
+      content.textContent = String(step.content || '');
+
+      const actions = document.createElement('div');
+      actions.className = 'onboarding-tooltip__actions';
+      if (step.showPrev) {
+        actions.appendChild(this._createActionButton('prev', '上一步', 'onboarding-tooltip__btn--secondary'));
+      } else {
+        actions.appendChild(document.createElement('div'));
+      }
+      const rightActions = document.createElement('div');
+      if (step.showSkip) {
+        rightActions.appendChild(this._createActionButton('skip', '跳过', 'onboarding-tooltip__btn--skip'));
+      }
+      if (!step.hideNext) {
+        rightActions.appendChild(this._createActionButton('next', nextText, 'onboarding-tooltip__btn--primary'));
+      }
+      actions.appendChild(rightActions);
+
+      this._tooltip.replaceChildren(progress, title, content, actions);
+      this._appendVisible();
     }
 
     showWelcome(step) {
       if (!this._tooltip) return;
 
-      this._tooltip.innerHTML = `
-        <div class="onboarding-welcome">
-          <div class="onboarding-welcome__icon">🎓</div>
-          <h3 class="onboarding-tooltip__title">${step.title}</h3>
-          <p class="onboarding-tooltip__content">${step.content}</p>
-          <button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next" style="margin-top: 16px;">${step.nextText}</button>
-        </div>
-      `;
-
-      requestAnimationFrame(() => {
-        this._tooltip.classList.add('is-visible');
-      });
+      const welcome = document.createElement('div');
+      welcome.className = 'onboarding-welcome';
+      this._appendTextElement(welcome, 'div', 'onboarding-welcome__icon', '🎓');
+      this._appendTextElement(welcome, 'h3', 'onboarding-tooltip__title', step.title);
+      this._appendTextElement(welcome, 'p', 'onboarding-tooltip__content', step.content);
+      const nextButton = this._createActionButton('next', step.nextText || '下一步', 'onboarding-tooltip__btn--primary');
+      nextButton.style.marginTop = '16px';
+      welcome.appendChild(nextButton);
+      this._tooltip.replaceChildren(welcome);
+      this._appendVisible();
     }
 
     destroy() {

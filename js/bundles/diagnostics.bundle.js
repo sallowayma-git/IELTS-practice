@@ -5,6 +5,72 @@
  * 系统诊断和修复工具
  * 合并了索引验证、通信测试、通信恢复和错误修复功能
  */
+function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+}
+
+function isTrustedWindowMessage(event, expectedWindow) {
+    if (!event || !expectedWindow) {
+        return false;
+    }
+    if (event.source && event.source !== expectedWindow) {
+        return false;
+    }
+    if (!event.origin || event.origin === 'null') {
+        return Boolean(window.location && window.location.protocol === 'file:');
+    }
+    const origin = window.location && window.location.origin;
+    if (!origin || origin === 'null' || event.origin !== origin) {
+        return false;
+    }
+    return true;
+}
+
+function resolveTrustedDiagnosticUrl(rawUrl) {
+    if (!rawUrl) {
+        return '';
+    }
+    try {
+        const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+        const resolved = new URL(String(rawUrl), baseHref);
+        const protocol = (resolved.protocol || '').toLowerCase();
+
+        if (protocol === 'http:' || protocol === 'https:') {
+            const origin = window.location && window.location.origin;
+            return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+        }
+
+        if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+            return resolved.href;
+        }
+    } catch (_) {
+        return '';
+    }
+    return '';
+}
+
+function escapeDiagnosticHtml(value) {
+    if (value == null) {
+        return '';
+    }
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function normalizeDiagnosticClassSuffix(value) {
+    return String(value || '').replace(/[^a-z0-9_-]/gi, '') || 'unknown';
+}
+
+function formatDiagnosticNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
 class SystemDiagnostics {
     constructor() {
         // 索引验证相关
@@ -44,17 +110,31 @@ class SystemDiagnostics {
      * 验证单个题目文件
      */
     async validateExamFile(exam) {
-        const fullPath = exam.path + exam.filename;
+        const fullPath = typeof window.buildResourcePath === 'function'
+            ? window.buildResourcePath(exam, 'html')
+            : `${exam && exam.path || ''}${exam && exam.filename || ''}`;
+        const trustedPath = resolveTrustedDiagnosticUrl(fullPath);
+
+        if (!trustedPath) {
+            this.failureCount++;
+            return {
+                id: exam && exam.id,
+                title: exam && exam.title,
+                path: '',
+                status: 'error',
+                message: 'Exam URL is invalid or untrusted'
+            };
+        }
 
         try {
-            const response = await fetch(fullPath, { method: 'HEAD' });
+            const response = await fetch(trustedPath, { method: 'HEAD' });
 
             if (response.ok) {
                 this.successCount++;
                 return {
                     id: exam.id,
                     title: exam.title,
-                    path: fullPath,
+                    path: trustedPath,
                     status: 'success',
                     message: '文件存在且可访问'
                 };
@@ -63,7 +143,7 @@ class SystemDiagnostics {
                 return {
                     id: exam.id,
                     title: exam.title,
-                    path: fullPath,
+                    path: trustedPath,
                     status: 'error',
                     message: `HTTP ${response.status}: 文件不存在或无法访问`
                 };
@@ -73,7 +153,7 @@ class SystemDiagnostics {
             return {
                 id: exam.id,
                 title: exam.title,
-                path: fullPath,
+                path: trustedPath,
                 status: 'error',
                 message: `网络错误: ${error.message}`
             };
@@ -139,10 +219,23 @@ class SystemDiagnostics {
         console.log(`[SystemDiagnostics] 开始测试题目通信: ${exam.title}`);
 
         try {
-            const fullPath = exam.path + exam.filename;
+            const fullPath = typeof window.buildResourcePath === 'function'
+                ? window.buildResourcePath(exam, 'html')
+                : `${exam.path || ''}${exam.filename || ''}`;
+            const trustedPath = resolveTrustedDiagnosticUrl(fullPath);
+            if (!trustedPath) {
+                return {
+                    examId,
+                    examTitle: exam.title,
+                    success: false,
+                    error: 'Exam URL is invalid or untrusted',
+                    timestamp: Date.now()
+                };
+            }
 
             // 打开题目页面
-            const examWindow = window.open(fullPath, `comm_test_${examId}`,
+            const windowName = `comm_test_${String(examId || '').replace(/[^\w-]/g, '_')}`;
+            const examWindow = window.open(trustedPath, windowName,
                 'width=1000,height=700,scrollbars=yes,resizable=yes');
 
             if (!examWindow) {
@@ -179,7 +272,7 @@ class SystemDiagnostics {
                 }
             };
 
-            examWindow.postMessage(testMessage, '*');
+            examWindow.postMessage(testMessage, getMessageTargetOrigin());
 
             // 等待响应
             const result = await new Promise((resolve) => {
@@ -195,7 +288,7 @@ class SystemDiagnostics {
                 }, timeout);
 
                 const messageHandler = (event) => {
-                    if (event.data.type === 'COMMUNICATION_TEST_RESPONSE') {
+                    if (isTrustedWindowMessage(event, examWindow) && event.data.type === 'COMMUNICATION_TEST_RESPONSE') {
                         clearTimeout(timeoutId);
                         cleanup();
                         resolve({
@@ -298,7 +391,7 @@ class SystemDiagnostics {
                     connection.window.postMessage({
                         type: 'HEARTBEAT',
                         timestamp: Date.now()
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 }
             } catch (error) {
                 this.handleConnectionLost(examId, 'connection_error');
@@ -555,7 +648,7 @@ class SystemDiagnostics {
         }
 
         // 2. 生成问题分析和建议
-        diagnosticReport.issues = this.analyzeIssues(diagnosticReport);
+        diagnosticReport.issues = diagnosticReport.issues.concat(this.analyzeIssues(diagnosticReport));
         diagnosticReport.recommendations = this.generateRecommendations(diagnosticReport);
 
         console.log('[SystemDiagnostics] 系统诊断完成');
@@ -636,35 +729,45 @@ class SystemDiagnostics {
      * 生成诊断报告HTML
      */
     generateReportHTML(report) {
+        const timestamp = Number(report && report.timestamp);
+        const renderedTimestamp = Number.isFinite(timestamp)
+            ? new Date(timestamp).toLocaleString()
+            : '';
+        const summary = report && report.indexValidation && report.indexValidation.summary
+            ? report.indexValidation.summary
+            : null;
+        const issues = Array.isArray(report && report.issues) ? report.issues : [];
+        const recommendations = Array.isArray(report && report.recommendations) ? report.recommendations : [];
+
         return `
             <div class="system-diagnostics-report">
                 <h3>系统诊断报告</h3>
-                <p><strong>诊断时间:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
+                <p><strong>诊断时间:</strong> ${escapeDiagnosticHtml(renderedTimestamp)}</p>
 
-                ${report.indexValidation ? `
+                ${summary ? `
                 <div class="validation-results">
                     <h4>索引验证结果</h4>
-                    <p>总计: ${report.indexValidation.summary.total} |
-                       成功: ${report.indexValidation.summary.success} |
-                       失败: ${report.indexValidation.summary.failed} |
-                       成功率: ${report.indexValidation.summary.successRate}%</p>
+                    <p>总计: ${escapeDiagnosticHtml(formatDiagnosticNumber(summary.total))} |
+                       成功: ${escapeDiagnosticHtml(formatDiagnosticNumber(summary.success))} |
+                       失败: ${escapeDiagnosticHtml(formatDiagnosticNumber(summary.failed))} |
+                       成功率: ${escapeDiagnosticHtml(formatDiagnosticNumber(summary.successRate))}%</p>
                 </div>
                 ` : ''}
 
-                ${report.issues.length > 0 ? `
+                ${issues.length > 0 ? `
                 <div class="issues">
                     <h4>发现的问题</h4>
                     <ul>
-                        ${report.issues.map(issue => `<li class="issue-${issue.type}">${issue.message}</li>`).join('')}
+                        ${issues.map(issue => `<li class="issue-${normalizeDiagnosticClassSuffix(issue && issue.type)}">${escapeDiagnosticHtml(issue && issue.message)}</li>`).join('')}
                     </ul>
                 </div>
                 ` : ''}
 
-                ${report.recommendations.length > 0 ? `
+                ${recommendations.length > 0 ? `
                 <div class="recommendations">
                     <h4>建议</h4>
                     <ul>
-                        ${report.recommendations.map(rec => `<li>${rec.message}</li>`).join('')}
+                        ${recommendations.map(rec => `<li>${escapeDiagnosticHtml(rec && rec.message)}</li>`).join('')}
                     </ul>
                 </div>
                 ` : ''}
@@ -704,6 +807,46 @@ window.SystemDiagnostics = SystemDiagnostics;
  * 虚拟滚动器组件
  * 用于处理大量数据的高性能渲染
  */
+function resolveTrustedImagePreloadUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return '';
+    }
+    try {
+        const baseHref = (typeof document !== 'undefined' && document.baseURI)
+            || (typeof window !== 'undefined' && window.location && window.location.href)
+            || 'http://localhost/';
+        const resolved = new URL(rawUrl.trim(), baseHref);
+        const protocol = (resolved.protocol || '').toLowerCase();
+        if (protocol === 'http:' || protocol === 'https:') {
+            const currentOrigin = typeof window !== 'undefined' && window.location
+                ? window.location.origin
+                : '';
+            return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                ? resolved.href
+                : '';
+        }
+        if (protocol === 'file:') {
+            return typeof window !== 'undefined' && window.location && window.location.protocol === 'file:'
+                ? resolved.href
+                : '';
+        }
+        if (protocol === 'blob:') {
+            const currentOrigin = typeof window !== 'undefined' && window.location
+                ? window.location.origin
+                : '';
+            return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                ? resolved.href
+                : '';
+        }
+        if (protocol === 'data:' && /^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(resolved.href)) {
+            return resolved.href;
+        }
+    } catch (_) {
+        return '';
+    }
+    return '';
+}
+
 class VirtualScroller {
     constructor(container, items, renderer, options = {}) {
         this.container = container;
@@ -1167,7 +1310,10 @@ class PerformanceOptimizer {
      * 预加载图片
      */
     preloadImages(imageUrls) {
-        const promises = imageUrls.map(url => {
+        const safeUrls = (Array.isArray(imageUrls) ? imageUrls : [])
+            .map((url) => resolveTrustedImagePreloadUrl(url))
+            .filter(Boolean);
+        const promises = safeUrls.map(url => {
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => resolve(url);

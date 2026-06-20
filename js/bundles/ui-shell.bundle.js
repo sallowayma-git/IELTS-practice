@@ -92,6 +92,55 @@ class DOMBuilder {
         this.fragmentCache = new Map();
     }
 
+    isUnsafeAttributeName(name) {
+        const key = String(name || '').toLowerCase();
+        return key.startsWith('on') || key === 'srcdoc';
+    }
+
+    isUnsafeUrlAttribute(name, value, tagName) {
+        const key = String(name || '').toLowerCase();
+        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+        if (!urlAttributes.has(key)) {
+            return false;
+        }
+        const text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return false;
+        }
+        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+            return true;
+        }
+        if (compact.startsWith('data:')) {
+            const tag = String(tagName || '').toLowerCase();
+            if (key !== 'src' || tag !== 'img') {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return false;
+    }
+
+    isUnsafeStyleValue(name, value) {
+        if (this.isUnsafeObjectKey(name) || value == null) {
+            return true;
+        }
+        const compact = String(value)
+            .replace(/[\u0000-\u001f\u007f\s]+/g, '')
+            .toLowerCase();
+        return compact.includes('javascript:')
+            || compact.includes('vbscript:')
+            || compact.includes('expression(')
+            || compact.includes('data:text/html')
+            || compact.includes('data:application/xhtml+xml')
+            || compact.includes('data:image/svg+xml');
+    }
+
+    isUnsafeObjectKey(name) {
+        const key = String(name || '').toLowerCase();
+        return key === '__proto__' || key === 'prototype' || key === 'constructor';
+    }
+
     /**
      * 创建DOM元素的简洁方法
      * @param {string} tag 标签名
@@ -114,14 +163,26 @@ class DOMBuilder {
 
         // 设置属性
         for (const [key, value] of Object.entries(normalizedAttributes)) {
+            if (this.isUnsafeAttributeName(key) || this.isUnsafeUrlAttribute(key, value, tag)) {
+                console.warn(`[DOMBuilder] Skipped unsafe attribute: ${key}`);
+                continue;
+            }
             if (key === 'className') {
                 element.className = value;
             } else if (key === 'dataset') {
-                Object.assign(element.dataset, value);
+                if (value && typeof value === 'object') {
+                    Object.entries(value).forEach(([dataKey, dataValue]) => {
+                        if (!this.isUnsafeObjectKey(dataKey) && dataValue != null) {
+                            element.dataset[dataKey] = String(dataValue);
+                        }
+                    });
+                }
             } else if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
-            } else if (key.startsWith('on') && typeof value === 'function') {
-                console.warn(`[DOMBuilder] Use event delegation instead of direct event binding`);
+                Object.entries(value).forEach(([styleKey, styleValue]) => {
+                    if (!this.isUnsafeStyleValue(styleKey, styleValue)) {
+                        element.style[styleKey] = styleValue;
+                    }
+                });
             } else {
                 element.setAttribute(key, value);
             }
@@ -189,7 +250,7 @@ class DOMBuilder {
             container.appendChild(content);
         } else if (typeof content === 'string') {
             // 只允许静态HTML，不是动态生成的
-            container.innerHTML = content;
+            container.appendChild(document.createTextNode(content));
         }
     }
 
@@ -252,6 +313,25 @@ class DOMStyles {
         this.computedStyles = new Map();
     }
 
+    isUnsafeStyleValue(name, value) {
+        if (window.DOMBuilder && typeof window.DOMBuilder.isUnsafeStyleValue === 'function') {
+            return window.DOMBuilder.isUnsafeStyleValue(name, value);
+        }
+        const key = String(name || '').toLowerCase();
+        if (key === '__proto__' || key === 'prototype' || key === 'constructor' || value == null) {
+            return true;
+        }
+        const compact = String(value)
+            .replace(/[\u0000-\u001f\u007f\s]+/g, '')
+            .toLowerCase();
+        return compact.includes('javascript:')
+            || compact.includes('vbscript:')
+            || compact.includes('expression(')
+            || compact.includes('data:text/html')
+            || compact.includes('data:application/xhtml+xml')
+            || compact.includes('data:image/svg+xml');
+    }
+
     /**
      * 设置样式的简洁方法
      * @param {Element} element 元素
@@ -260,7 +340,11 @@ class DOMStyles {
     set(element, styles) {
         if (!element || !styles) return;
 
-        Object.assign(element.style, styles);
+        Object.entries(styles).forEach(([styleKey, styleValue]) => {
+            if (!this.isUnsafeStyleValue(styleKey, styleValue)) {
+                element.style[styleKey] = styleValue;
+            }
+        });
     }
 
     /**
@@ -356,6 +440,18 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         Object.keys(attributes).forEach(function(key) {
             var value = attributes[key];
             if (value == null || value === false) return;
+            if (global.DOMBuilder
+                && typeof global.DOMBuilder.isUnsafeAttributeName === 'function'
+                && global.DOMBuilder.isUnsafeAttributeName(key)) {
+                console.warn('[DOMAdapter] Skipped unsafe attribute: ' + key);
+                return;
+            }
+            if (global.DOMBuilder
+                && typeof global.DOMBuilder.isUnsafeUrlAttribute === 'function'
+                && global.DOMBuilder.isUnsafeUrlAttribute(key, value, element.tagName)) {
+                console.warn('[DOMAdapter] Skipped unsafe URL attribute: ' + key);
+                return;
+            }
             if (key === 'className') {
                 element.className = value;
                 return;
@@ -363,14 +459,25 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             if (key === 'dataset' && typeof value === 'object') {
                 Object.keys(value).forEach(function(dataKey) {
                     var dataValue = value[dataKey];
-                    if (dataValue != null) {
+                    if (dataValue != null
+                        && (!global.DOMBuilder
+                            || typeof global.DOMBuilder.isUnsafeObjectKey !== 'function'
+                            || !global.DOMBuilder.isUnsafeObjectKey(dataKey))) {
                         element.dataset[dataKey] = String(dataValue);
                     }
                 });
                 return;
             }
             if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
+                Object.keys(value).forEach(function(styleKey) {
+                    var styleValue = value[styleKey];
+                    if (styleValue != null
+                        && (!global.DOMBuilder
+                            || typeof global.DOMBuilder.isUnsafeStyleValue !== 'function'
+                            || !global.DOMBuilder.isUnsafeStyleValue(styleKey, styleValue))) {
+                        element.style[styleKey] = styleValue;
+                    }
+                });
                 return;
             }
             element.setAttribute(key, value === true ? '' : value);
@@ -811,12 +918,29 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             }, [browseButton, randomButton]);
         }
 
-        createSvgIcon(svgContent) {
+        createSvgIcon(paths) {
             const span = document.createElement('span');
             span.className = 'ui-emoji-icon';
             span.setAttribute('aria-hidden', 'true');
             span.style.display = 'inline-flex';
-            span.innerHTML = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`;
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('width', '1em');
+            svg.setAttribute('height', '1em');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '1.8');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            (Array.isArray(paths) ? paths : []).forEach((d) => {
+                if (typeof d !== 'string' || !d.trim()) {
+                    return;
+                }
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', d);
+                svg.appendChild(path);
+            });
+            span.appendChild(svg);
             return span;
         }
 
@@ -834,7 +958,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     gap: '6px'
                 }
             }, [
-                this.createSvgIcon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8M8 17h6"></path>'),
+                this.createSvgIcon([
+                    'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z',
+                    'M14 3v6h6',
+                    'M8 13h8M8 17h6'
+                ]),
                 this.dom.create('span', {}, '套题模式')
             ]);
         }
@@ -854,7 +982,12 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     gap: '6px'
                 }
             }, [
-                this.createSvgIcon('<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M6.2 11a6 6 0 0 1 10.6-2.4L20 11"></path><path d="M17.8 13a6 6 0 0 1-10.6 2.4L4 13"></path>'),
+                this.createSvgIcon([
+                    'M20 6v5h-5',
+                    'M4 18v-5h5',
+                    'M6.2 11a6 6 0 0 1 10.6-2.4L20 11',
+                    'M17.8 13a6 6 0 0 1-10.6 2.4L4 13'
+                ]),
                 this.dom.create('span', {}, '无尽模式')
             ]);
         }
@@ -923,11 +1056,17 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return node;
     }
 
+    function normalizeMessageType(type) {
+        const value = String(type || '').trim().toLowerCase();
+        return ['info', 'success', 'warning', 'error'].includes(value) ? value : 'info';
+    }
+
     function createMessageNode(message, type) {
+        const safeType = normalizeMessageType(type);
         const note = document.createElement('div');
-        note.className = 'message ' + (type || 'info') + ' message-entering';
-        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
-        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        note.className = 'message ' + safeType + ' message-entering';
+        note.setAttribute('role', safeType === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', safeType === 'error' ? 'assertive' : 'polite');
 
         const indicator = document.createElement('span');
         indicator.className = 'message-indicator';
@@ -953,10 +1092,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
 
         show(message, type = 'info', duration = 4000) {
+            const safeType = normalizeMessageType(type);
             if (typeof document === 'undefined') {
                 if (typeof console !== 'undefined') {
-                    const logMethod = type === 'error' ? 'error' : 'log';
-                    console[logMethod]('[Message:' + type + ']', message);
+                    const logMethod = safeType === 'error' ? 'error' : 'log';
+                    console[logMethod]('[Message:' + safeType + ']', message);
                 }
                 return null;
             }
@@ -966,7 +1106,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return null;
             }
 
-            const note = createMessageNode(message, type);
+            const note = createMessageNode(message, safeType);
             this.dismiss(180);
             container.appendChild(note);
             this.activeMessage = note;

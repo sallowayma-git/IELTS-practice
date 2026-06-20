@@ -637,10 +637,34 @@
             return '';
         }
         try {
-            return new URL(url, document.baseURI).href;
+            return resolveTrustedScriptUrl(url);
         } catch (_) {
-            return String(url);
+            return '';
         }
+    }
+
+    function resolveTrustedScriptUrl(url) {
+        if (!url) {
+            return '';
+        }
+        try {
+            var baseHref = document.baseURI || (global.location && global.location.href) || 'http://localhost/';
+            var resolved = new URL(String(url), baseHref);
+            var protocol = (resolved.protocol || '').toLowerCase();
+            if (!resolved.pathname || !resolved.pathname.toLowerCase().endsWith('.js')) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                var origin = global.location && global.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+            if (protocol === 'file:' && global.location && global.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
     }
 
     function findExistingScriptTag(url) {
@@ -691,6 +715,11 @@
         if (!url) {
             return Promise.resolve();
         }
+        var safeUrl = resolveTrustedScriptUrl(url);
+        if (!safeUrl) {
+            return Promise.reject(new Error('加载脚本失败: 不可信或不支持的脚本地址'));
+        }
+        url = safeUrl;
         if (isProvided(url)) {
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
@@ -710,7 +739,7 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
-            script.src = url;
+            script.src = safeUrl;
             script.async = true;
             script.onload = function handleLoad() {
                 scriptStatus[url] = 'loaded';
@@ -1153,6 +1182,48 @@
     var attachedPrefetchHandlers = false;
     var browsePrefetchTriggered = false;
     var morePrefetchTriggered = false;
+
+    function getMessageTargetOrigin() {
+        var origin = global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function isAllowedMessageOrigin(event) {
+        if (!event) return false;
+        if (!event.origin || event.origin === 'null') {
+            return Boolean(global.location && global.location.protocol === 'file:');
+        }
+        var origin = global.location && global.location.origin;
+        return Boolean(origin && origin !== 'null' && event.origin === origin);
+    }
+
+    function isAllowedEndlessMessageSource(event) {
+        if (!event || !event.source || !endlessState || !endlessState.active) return false;
+        var currentWindow = endlessState.currentWindow;
+        if (!currentWindow || currentWindow.closed) return false;
+        return event.source === currentWindow;
+    }
+
+    function resolveTrustedAppActionUrl(rawUrl) {
+        if (!rawUrl) return '';
+        try {
+            var baseHref = global.location && global.location.href ? global.location.href : 'http://localhost/';
+            var resolved = new URL(String(rawUrl), baseHref);
+            var protocol = (resolved.protocol || '').toLowerCase();
+
+            if (protocol === 'http:' || protocol === 'https:') {
+                var origin = global.location && global.location.origin;
+                return origin && origin !== 'null' && resolved.origin === origin ? resolved.href : '';
+            }
+
+            if (protocol === 'file:' && global.location && global.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    }
 
     function ensurePracticeSuite() {
         if (!global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
@@ -1789,8 +1860,7 @@
                 if (!p.endsWith('/')) p += '/';
                 url = p + exam.filename;
             }
-            // resolve to absolute
-            url = new URL(url, window.location.href).href;
+            url = resolveTrustedAppActionUrl(url);
         } catch (_) { }
         if (!url) return null;
 
@@ -1822,7 +1892,7 @@
                 sourceWindow.postMessage({
                     type: 'ENDLESS_COUNTDOWN',
                     data: { seconds: countdown }
-                }, '*');
+                }, getMessageTargetOrigin());
             }
         } catch (_) { }
 
@@ -1846,7 +1916,7 @@
                     sourceWindow.postMessage({
                         type: 'ENDLESS_COUNTDOWN_TICK',
                         data: { seconds: countdown }
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 }
             } catch (_) { }
 
@@ -1859,7 +1929,7 @@
                         sourceWindow.postMessage({
                             type: 'ENDLESS_COUNTDOWN_END',
                             data: {}
-                        }, '*');
+                        }, getMessageTargetOrigin());
                     }
                 } catch (_) { }
 
@@ -1921,7 +1991,9 @@
 
         // 监听 PRACTICE_COMPLETE / REQUEST_INIT 消息（无尽模式专用拦截）
         var handler = function (event) {
+            if (!isAllowedMessageOrigin(event)) return;
             if (!endlessState || !endlessState.active) return;
+            if (!isAllowedEndlessMessageSource(event)) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;
             if (msg.type === 'ENDLESS_USER_EXIT') {

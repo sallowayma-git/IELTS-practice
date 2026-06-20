@@ -6,6 +6,110 @@
 
     var domAdapter = global.DOMAdapter || null;
 
+    function isLegacyUnsafeAttributeName(name) {
+        var key = String(name || '').toLowerCase();
+        return key.indexOf('on') === 0 || key === 'srcdoc';
+    }
+
+    function isLegacyUnsafeUrlAttribute(name, value, tagName) {
+        var key = String(name || '').toLowerCase();
+        var urlAttributes = {
+            href: true,
+            src: true,
+            'xlink:href': true,
+            action: true,
+            formaction: true,
+            poster: true
+        };
+        if (!urlAttributes[key]) {
+            return false;
+        }
+        var text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return false;
+        }
+        var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+            return true;
+        }
+        if (compact.indexOf('data:') === 0) {
+            var tag = String(tagName || '').toLowerCase();
+            if (key !== 'src' || tag !== 'img') {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return false;
+    }
+
+    function isLegacyUnsafeObjectKey(name) {
+        var key = String(name || '').toLowerCase();
+        return key === '__proto__' || key === 'prototype' || key === 'constructor';
+    }
+
+    function isLegacyUnsafeStyleValue(name, value) {
+        if (isLegacyUnsafeObjectKey(name) || value == null) {
+            return true;
+        }
+        var compact = String(value).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        return compact.indexOf('javascript:') !== -1
+            || compact.indexOf('vbscript:') !== -1
+            || compact.indexOf('expression(') !== -1
+            || compact.indexOf('data:text/html') !== -1
+            || compact.indexOf('data:application/xhtml+xml') !== -1
+            || compact.indexOf('data:image/svg+xml') !== -1;
+    }
+
+    function applyLegacyElementAttributes(element, attributes) {
+        if (!element || !attributes || typeof attributes !== 'object') {
+            return;
+        }
+        Object.keys(attributes).forEach(function (key) {
+            var value = attributes[key];
+            if (value == null || value === false) {
+                return;
+            }
+            if (isLegacyUnsafeAttributeName(key) || isLegacyUnsafeUrlAttribute(key, value, element.tagName)) {
+                console.warn('[LegacyView] Skipped unsafe attribute: ' + key);
+                return;
+            }
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'dataset' && typeof value === 'object') {
+                Object.keys(value).forEach(function (dataKey) {
+                    var dataValue = value[dataKey];
+                    if (dataValue != null && !isLegacyUnsafeObjectKey(dataKey)) {
+                        element.dataset[dataKey] = String(dataValue);
+                    }
+                });
+                return;
+            }
+            if (key === 'style' && typeof value === 'object') {
+                Object.keys(value).forEach(function (styleKey) {
+                    if (!isLegacyUnsafeStyleValue(styleKey, value[styleKey])) {
+                        element.style[styleKey] = value[styleKey];
+                    }
+                });
+                return;
+            }
+            if (key === 'ariaHidden') {
+                element.setAttribute('aria-hidden', value === true ? 'true' : String(value));
+                return;
+            }
+            if (key === 'ariaLabel') {
+                element.setAttribute('aria-label', String(value));
+                return;
+            }
+            if (key === 'disabled') {
+                element.disabled = !!value;
+                return;
+            }
+            element.setAttribute(key, value === true ? '' : String(value));
+        });
+    }
+
     // --- Practice statistics service ---
     function ensureArray(value) {
         return Array.isArray(value) ? value : [];
@@ -2146,29 +2250,7 @@
             return domAdapter.create(tag, attributes, children);
         }
         var element = document.createElement(tag);
-        var attrs = attributes || {};
-        Object.keys(attrs).forEach(function (key) {
-            var value = attrs[key];
-            if (value == null) return;
-            if (key === 'className') {
-                element.className = value;
-                return;
-            }
-            if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function (dataKey) {
-                    var dataValue = value[dataKey];
-                    if (dataValue != null) {
-                        element.dataset[dataKey] = String(dataValue);
-                    }
-                });
-                return;
-            }
-            if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
-                return;
-            }
-            element.setAttribute(key, value === true ? '' : value);
-        });
+        applyLegacyElementAttributes(element, attributes);
 
         var list = Array.isArray(children) ? children : [children];
         list.forEach(function (child) {
@@ -2947,35 +3029,7 @@
         }
 
         var element = document.createElement(tag);
-        var attrs = attributes || {};
-        var keys = Object.keys(attrs);
-        for (var i = 0; i < keys.length; i += 1) {
-            var key = keys[i];
-            var value = attrs[key];
-            if (value == null) {
-                continue;
-            }
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function (dataKey) {
-                    var dataValue = value[dataKey];
-                    if (dataValue != null) {
-                        element.dataset[dataKey] = String(dataValue);
-                    }
-                });
-            } else if (key === 'style' && typeof value === 'object') {
-                Object.keys(value).forEach(function (styleKey) {
-                    element.style[styleKey] = value[styleKey];
-                });
-            } else if (key === 'ariaHidden') {
-                element.setAttribute('aria-hidden', value);
-            } else if (key === 'ariaLabel') {
-                element.setAttribute('aria-label', value);
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        }
+        applyLegacyElementAttributes(element, attributes);
 
         if (children != null) {
             var normalizedChildren = Array.isArray(children) ? children : [children];
@@ -3492,40 +3546,7 @@
         }
 
         var element = document.createElement(tag);
-        if (attributes) {
-            Object.keys(attributes).forEach(function (key) {
-                var value = attributes[key];
-                if (value == null || value === false) {
-                    return;
-                }
-                if (key === 'className') {
-                    element.className = value;
-                    return;
-                }
-                if (key === 'dataset' && typeof value === 'object') {
-                    Object.keys(value).forEach(function (dataKey) {
-                        var dataValue = value[dataKey];
-                        if (dataValue != null) {
-                            element.dataset[dataKey] = String(dataValue);
-                        }
-                    });
-                    return;
-                }
-                if (key === 'ariaLabel') {
-                    element.setAttribute('aria-label', value);
-                    return;
-                }
-                if (key === 'ariaHidden') {
-                    element.setAttribute('aria-hidden', value);
-                    return;
-                }
-                if (key === 'disabled') {
-                    element.disabled = !!value;
-                    return;
-                }
-                element.setAttribute(key, value === true ? '' : value);
-            });
-        }
+        applyLegacyElementAttributes(element, attributes);
 
         var nodes = Array.isArray(children) ? children : (children != null ? [children] : []);
         for (var i = 0; i < nodes.length; i += 1) {
@@ -3949,6 +3970,14 @@
             : null;
     }
 
+    function resolveActionExam(examId) {
+        const exam = findExamById(examId);
+        if (!exam && typeof global.showMessage === 'function') {
+            global.showMessage('题目不存在或已不可用', 'error');
+        }
+        return exam || null;
+    }
+
     function isReadingMemorizeBrowseMode() {
         return global.__readingMemorizeBrowseMode === true
             || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
@@ -4005,11 +4034,11 @@
             global.setBrowseTitle('阅读理解');
         }
         if (global.app && typeof global.app.openExam === 'function') {
-            global.app.openExam(examId, launchOptions);
+            global.app.openExam(exam.id, launchOptions);
             return;
         }
         if (typeof global.openExam === 'function') {
-            global.openExam(examId, launchOptions);
+            global.openExam(exam.id, launchOptions);
             return;
         }
         if (global.AppActions && typeof global.AppActions.openExamWithFallback === 'function') {
@@ -4814,24 +4843,29 @@
                 return;
             }
 
+            var exam = resolveActionExam(examId);
+            if (!exam) {
+                return;
+            }
+
             if (action === 'start') {
                 if (global.app && typeof global.app.openExam === 'function') {
-                    global.app.openExam(examId);
+                    global.app.openExam(exam.id);
                     return;
                 }
                 if (typeof global.openExam === 'function') {
-                    global.openExam(examId);
+                    global.openExam(exam.id);
                 }
                 return;
             }
 
             if (action === 'pdf' && typeof global.viewPDF === 'function') {
-                global.viewPDF(examId);
+                global.viewPDF(exam.id);
                 return;
             }
 
             if (action === 'generate' && typeof global.generateHTML === 'function') {
-                global.generateHTML(examId);
+                global.generateHTML(exam.id);
             }
         };
 
@@ -4935,7 +4969,7 @@
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 0);
             try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
         } catch (e) {
             try { global.showMessage && global.showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }
@@ -5058,6 +5092,10 @@
         'cambridge', 'oxford', 'london', 'sydney', 'melbourne', 'canada', 'australia',
         'britain', 'america', 'europe', 'asia', 'africa', 'nasa', 'nesa', 'ielts'
     ]);
+    const MAX_SPELLING_VOCAB_WORDS = 5000;
+    const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
+    const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     /**
      * 拼写错误记录数据结构
@@ -5236,6 +5274,71 @@
             return fallback || 'other';
         }
 
+        isUnsafeImportKey(key) {
+            return SPELLING_IMPORT_POLLUTION_KEYS.has(String(key));
+        }
+
+        cloneSafeObject(value) {
+            if (!value || Object.prototype.toString.call(value) !== '[object Object]') {
+                return {};
+            }
+            const clone = {};
+            Object.entries(value).forEach(([key, item]) => {
+                if (this.isUnsafeImportKey(key)) {
+                    return;
+                }
+                clone[key] = item;
+            });
+            return clone;
+        }
+
+        limitText(value, maxLength = MAX_SPELLING_NOTE_TEXT_LENGTH) {
+            if (typeof value !== 'string') {
+                return value;
+            }
+            return value.length > maxLength ? value.slice(0, maxLength) : value;
+        }
+
+        wordTimestamp(entry) {
+            const candidates = [entry?.updatedAt, entry?.timestamp, entry?.createdAt];
+            for (const value of candidates) {
+                const numeric = typeof value === 'number' ? value : Number(new Date(value));
+                if (Number.isFinite(numeric)) {
+                    return numeric;
+                }
+            }
+            return 0;
+        }
+
+        normalizeStoredWordEntry(entry) {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const safe = this.cloneSafeObject(entry);
+            if (safe.metadata && typeof safe.metadata === 'object') {
+                safe.metadata = this.cloneSafeObject(safe.metadata);
+            }
+            ['word', 'userInput'].forEach((key) => {
+                safe[key] = this.limitText(safe[key], MAX_SPELLING_WORD_TEXT_LENGTH);
+            });
+            ['questionId', 'suiteId', 'examId', 'meaning', 'example', 'note', 'spellingNote', 'source'].forEach((key) => {
+                safe[key] = this.limitText(safe[key], MAX_SPELLING_NOTE_TEXT_LENGTH);
+            });
+            return safe;
+        }
+
+        normalizeStoredWords(words) {
+            const normalized = Array.isArray(words)
+                ? words.map((entry) => this.normalizeStoredWordEntry(entry)).filter(Boolean)
+                : [];
+            if (normalized.length <= MAX_SPELLING_VOCAB_WORDS) {
+                return normalized;
+            }
+            return normalized
+                .sort((a, b) => this.wordTimestamp(b) - this.wordTimestamp(a))
+                .slice(0, MAX_SPELLING_VOCAB_WORDS);
+        }
+
         normalizeVocabListShape(rawList, listId, source) {
             const normalizedSource = this.normalizeListSource(listId, source);
             const base = this.createEmptyList(listId, normalizedSource);
@@ -5243,7 +5346,7 @@
             if (Array.isArray(rawList)) {
                 return {
                     ...base,
-                    words: rawList.filter((entry) => entry && typeof entry === 'object'),
+                    words: this.normalizeStoredWords(rawList),
                     updatedAt: Date.now()
                 };
             }
@@ -5252,19 +5355,19 @@
                 return null;
             }
 
-            const words = Array.isArray(rawList.words)
-                ? rawList.words.filter((entry) => entry && typeof entry === 'object')
-                : [];
+            const safeList = this.cloneSafeObject(rawList);
+            const words = this.normalizeStoredWords(safeList.words);
+            const safeStats = this.cloneSafeObject(safeList.stats);
 
             return {
                 ...base,
-                ...rawList,
+                ...safeList,
                 id: listId,
-                source: rawList.source || normalizedSource,
+                source: safeList.source || normalizedSource,
                 words,
                 stats: {
                     ...base.stats,
-                    ...(rawList.stats && typeof rawList.stats === 'object' ? rawList.stats : {}),
+                    ...safeStats,
                     totalWords: words.length
                 }
             };
@@ -5281,8 +5384,34 @@
                 : [];
         }
 
+        resolveTrustedAssetUrl(rawUrl) {
+            try {
+                const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
+                    ? window.location.href
+                    : 'http://localhost/';
+                const resolved = new URL(String(rawUrl), baseHref);
+                const protocol = (resolved.protocol || '').toLowerCase();
+
+                if (protocol === 'http:' || protocol === 'https:') {
+                    const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+                        ? window.location.origin
+                        : new URL(baseHref).origin;
+                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                        ? resolved.href
+                        : '';
+                }
+
+                if (protocol === 'file:' && typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                    return resolved.href;
+                }
+            } catch (_) {
+                return '';
+            }
+            return '';
+        }
+
         resolveAssetUrl(relativePath) {
-            const fallback = relativePath;
+            const fallback = this.resolveTrustedAssetUrl(relativePath) || relativePath;
             if (typeof document === 'undefined') {
                 return fallback;
             }
@@ -5301,9 +5430,9 @@
                 const markerIndex = src.search(/\/js\/(?:bundles|app)\//i);
                 if (markerIndex !== -1) {
                     const root = src.slice(0, markerIndex + 1);
-                    return new URL(relativePath, root).href;
+                    return this.resolveTrustedAssetUrl(new URL(relativePath, root).href) || fallback;
                 }
-                return new URL(relativePath, document.baseURI || window.location.href).href;
+                return this.resolveTrustedAssetUrl(new URL(relativePath, document.baseURI || window.location.href).href) || fallback;
             } catch (_) {
                 return fallback;
             }
@@ -5313,7 +5442,11 @@
             if (typeof fetch !== 'function') {
                 throw new Error('fetch_unavailable');
             }
-            const response = await fetch(url, { cache: 'no-store' });
+            const trustedUrl = this.resolveTrustedAssetUrl(url);
+            if (!trustedUrl) {
+                throw new Error('untrusted_asset_url');
+            }
+            const response = await fetch(trustedUrl, { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -5328,7 +5461,12 @@
                 }
                 try {
                     const xhr = new XMLHttpRequest();
-                    xhr.open('GET', url, true);
+                    const trustedUrl = this.resolveTrustedAssetUrl(url);
+                    if (!trustedUrl) {
+                        reject(new Error('untrusted_asset_url'));
+                        return;
+                    }
+                    xhr.open('GET', trustedUrl, true);
                     xhr.overrideMimeType('application/json');
                     xhr.onreadystatechange = () => {
                         if (xhr.readyState !== 4) {
@@ -5440,38 +5578,42 @@
             if (!error || typeof error !== 'object') {
                 return null;
             }
-            const word = typeof error.word === 'string' ? error.word.trim() : '';
+            const safeError = this.cloneSafeObject(error);
+            const safeExisting = existing && typeof existing === 'object' ? this.cloneSafeObject(existing) : null;
+            const word = typeof safeError.word === 'string'
+                ? this.limitText(safeError.word.trim(), MAX_SPELLING_WORD_TEXT_LENGTH)
+                : '';
             if (!word) {
                 return null;
             }
 
-            const incomingCount = Math.max(1, Number(error.errorCount) || 1);
-            const existingCount = existing ? Math.max(0, Number(existing.errorCount) || 0) : 0;
-            const errorCount = existing ? existingCount + incomingCount : incomingCount;
-            const timestamp = error.timestamp || Date.now();
+            const incomingCount = Math.max(1, Number(safeError.errorCount) || 1);
+            const existingCount = safeExisting ? Math.max(0, Number(safeExisting.errorCount) || 0) : 0;
+            const errorCount = safeExisting ? existingCount + incomingCount : incomingCount;
+            const timestamp = safeError.timestamp || Date.now();
             const lexiconEntry = this.findLexiconEntry(word);
-            const existingMeaning = existing && typeof existing.meaning === 'string' ? existing.meaning.trim() : '';
-            const errorMeaning = typeof error.meaning === 'string' ? error.meaning.trim() : '';
+            const existingMeaning = safeExisting && typeof safeExisting.meaning === 'string' ? safeExisting.meaning.trim() : '';
+            const errorMeaning = typeof safeError.meaning === 'string' ? safeError.meaning.trim() : '';
             const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
                 ? lexiconEntry.meaning.trim()
                 : (errorMeaning || existingMeaning || '暂无中文释义');
             const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
                 ? lexiconEntry.example.trim()
-                : (error.example || existing?.example || this.buildSourceNote(error));
-            const spellingNote = this.buildSpellingNote({ ...existing, ...error }, errorCount);
-            const sourceNote = this.buildSourceNote(error);
-            const existingNote = existing && typeof existing.note === 'string' ? existing.note.trim() : '';
+                : (safeError.example || safeExisting?.example || this.buildSourceNote(safeError));
+            const spellingNote = this.buildSpellingNote({ ...(safeExisting || {}), ...safeError }, errorCount);
+            const sourceNote = this.buildSourceNote(safeError);
+            const existingNote = safeExisting && typeof safeExisting.note === 'string' ? safeExisting.note.trim() : '';
             const noteParts = [spellingNote, sourceNote];
             if (existingNote && !this.isGeneratedSpellingNote(existingNote) && !noteParts.includes(existingNote)) {
                 noteParts.push(existingNote);
             }
             const normalizedWord = this.normalizeLexiconLookupKey(word) || word.toLowerCase();
-            const source = error.source || existing?.source || listSource || 'other';
+            const source = safeError.source || safeExisting?.source || listSource || 'other';
 
-            return {
-                ...(existing || {}),
-                ...error,
-                id: existing?.id || error.id || `spelling-${source}-${normalizedWord}`,
+            return this.normalizeStoredWordEntry({
+                ...(safeExisting || {}),
+                ...safeError,
+                id: safeExisting?.id || safeError.id || `spelling-${source}-${normalizedWord}`,
                 word,
                 meaning,
                 example,
@@ -5480,16 +5622,16 @@
                 source,
                 errorCount,
                 timestamp,
-                easeFactor: existing?.easeFactor ?? error.easeFactor ?? null,
-                interval: existing?.interval ?? error.interval ?? 1,
-                repetitions: existing?.repetitions ?? error.repetitions ?? 0,
-                intraCycles: existing?.intraCycles ?? error.intraCycles ?? 0,
-                correctCount: existing?.correctCount ?? error.correctCount ?? 0,
-                lastReviewed: existing?.lastReviewed ?? error.lastReviewed ?? null,
-                nextReview: existing?.nextReview ?? error.nextReview ?? null,
-                createdAt: existing?.createdAt || error.createdAt || new Date(timestamp).toISOString(),
+                easeFactor: safeExisting?.easeFactor ?? safeError.easeFactor ?? null,
+                interval: safeExisting?.interval ?? safeError.interval ?? 1,
+                repetitions: safeExisting?.repetitions ?? safeError.repetitions ?? 0,
+                intraCycles: safeExisting?.intraCycles ?? safeError.intraCycles ?? 0,
+                correctCount: safeExisting?.correctCount ?? safeError.correctCount ?? 0,
+                lastReviewed: safeExisting?.lastReviewed ?? safeError.lastReviewed ?? null,
+                nextReview: safeExisting?.nextReview ?? safeError.nextReview ?? null,
+                createdAt: safeExisting?.createdAt || safeError.createdAt || new Date(timestamp).toISOString(),
                 updatedAt: new Date().toISOString()
-            };
+            });
         }
 
         /**
@@ -6368,6 +6510,61 @@
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
+    let fallbackIdCounter = 0;
+
+    function randomIdSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackIdCounter += 1;
+        return `fallback_${fallbackIdCounter.toString(36)}`;
+    }
+
+    function createLocalId(prefix) {
+        return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
+    function getMessageTargetOrigin(options = {}) {
+        if (options && options.allowOpaqueOrigin) {
+            return '*';
+        }
+        const origin = global && global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function escapeHtml(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function escapeCssSelectorValue(value) {
+        if (global.CSS && typeof global.CSS.escape === 'function') {
+            try {
+                return global.CSS.escape(value);
+            } catch (_) {
+                // fallback below
+            }
+        }
+        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+    }
+
+    function toSafeCount(value, fallback = 0) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : fallback;
+    }
 
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
@@ -6810,6 +7007,9 @@
 
         _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
             let pdfWin = null;
+            if (!resolvedPdfUrl) {
+                throw new Error('PDF URL is invalid or untrusted');
+            }
 
             if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {
@@ -6824,11 +7024,21 @@
             if (!pdfWin) {
                 if (options.target === 'tab') {
                     try {
-                        pdfWin = window.open(resolvedPdfUrl, '_blank');
+                        pdfWin = window.open(resolvedPdfUrl, '_blank', 'noopener,noreferrer');
+                        if (pdfWin) {
+                            try { pdfWin.opener = null; } catch (_) { }
+                        }
                     } catch (_) { }
                 } else {
                     try {
-                        pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                        pdfWin = window.open(
+                            resolvedPdfUrl,
+                            this._sanitizeWindowName('pdf', exam && exam.id),
+                            'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes,noopener,noreferrer'
+                        );
+                        if (pdfWin) {
+                            try { pdfWin.opener = null; } catch (_) { }
+                        }
                     } catch (_) { }
                 }
             }
@@ -6879,6 +7089,9 @@
         openExamWindow(examUrl, exam, options = {}) {
             const reuseWindow = options.reuseWindow;
             const finalUrl = this._ensureAbsoluteUrl(examUrl);
+            if (!finalUrl) {
+                throw new Error('Exam URL is invalid or untrusted');
+            }
             if (reuseWindow && !reuseWindow.closed) {
                 try {
                     reuseWindow.location.href = finalUrl;
@@ -6892,7 +7105,7 @@
             if (options.target === 'tab') {
                 let tabWindow = null;
                 const requestedName = typeof options.windowName === 'string' && options.windowName.trim()
-                    ? options.windowName.trim()
+                    ? this._sanitizeWindowName('exam', options.windowName.trim())
                     : '_blank';
                 try {
                     tabWindow = window.open(finalUrl, requestedName);
@@ -6914,7 +7127,7 @@
             try {
                 examWindow = window.open(
                     finalUrl,
-                    `exam_${exam.id}`,
+                    this._sanitizeWindowName('exam', exam && exam.id),
                     windowFeatures
                 );
             } catch (_) { }
@@ -6938,19 +7151,29 @@
             }
 
             try {
-                if (typeof rawUrl === 'string' && /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawUrl)) {
-                    return rawUrl;
+                const baseHref = (typeof window !== 'undefined' && window.location && window.location.href)
+                    ? window.location.href
+                    : 'http://localhost/';
+                const resolved = new URL(String(rawUrl), baseHref);
+                const protocol = resolved.protocol.toLowerCase();
+
+                if (protocol === 'http:' || protocol === 'https:') {
+                    const currentOrigin = typeof window !== 'undefined' && window.location
+                        ? window.location.origin
+                        : '';
+                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                        ? resolved.href
+                        : '';
                 }
 
-                if (typeof window !== 'undefined' && window.location) {
-                    return new URL(rawUrl, window.location.href).href;
+                if (protocol === 'file:' && typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+                    return resolved.href;
                 }
 
-                return new URL(rawUrl, 'http://localhost/').href;
             } catch (error) {
                 console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
-                return rawUrl;
             }
+            return '';
         },
 
         _appendSuiteContextToExamUrl(rawUrl, options = {}) {
@@ -7354,6 +7577,15 @@
             ].join(',');
         },
 
+        _sanitizeWindowName(prefix, value) {
+            const safePrefix = String(prefix || 'window').replace(/[^\w-]/g, '_').slice(0, 32) || 'window';
+            const safeValue = String(value || Date.now())
+                .replace(/[^\w-]/g, '_')
+                .replace(/_+/g, '_')
+                .slice(0, 80) || 'target';
+            return `${safePrefix}_${safeValue}`;
+        },
+
         /**
          * 注入数据采集脚本到练习页面
          */
@@ -7535,7 +7767,7 @@
                                 return;
                             }
                             try {
-                                parentWindow.postMessage({ type: type, data: data || {} }, '*');
+                                parentWindow.postMessage({ type: type, data: data || {} }, ${JSON.stringify(getMessageTargetOrigin())});
                             } catch (error) {
                                 console.warn('[InlineEnhancer] 无法发送消息:', error);
                             }
@@ -7643,7 +7875,12 @@
                                 return;
                             }
                             try {
-                                window.location.href = data.url;
+                                var targetUrl = resolveTrustedSuiteNavigationUrl(data.url);
+                                if (!targetUrl) {
+                                    console.warn('[InlineEnhancer] Blocked untrusted suite navigation URL');
+                                    return;
+                                }
+                                window.location.href = targetUrl;
                             } catch (error) {
                                 console.warn('[InlineEnhancer] 套题导航失败:', error);
                             }
@@ -7671,7 +7908,42 @@
                             });
                         }
 
+                        function isAllowedIncomingMessage(event) {
+                            if (!event) {
+                                return false;
+                            }
+                            if (!event.origin || event.origin === 'null') {
+                                return !!(window.location && window.location.protocol === 'file:');
+                            }
+                            var origin = window.location && window.location.origin;
+                            return !!(origin && origin !== 'null' && event.origin === origin);
+                        }
+
+                        function resolveTrustedSuiteNavigationUrl(rawUrl) {
+                            if (rawUrl == null) {
+                                return '';
+                            }
+                            try {
+                                var resolved = new URL(String(rawUrl), window.location.href);
+                                if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                                    var currentOrigin = window.location && window.location.origin;
+                                    return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                                        ? resolved.href
+                                        : '';
+                                }
+                                if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                                    return resolved.href;
+                                }
+                            } catch (_) {
+                                // Invalid navigation payloads are ignored.
+                            }
+                            return '';
+                        }
+
                         window.addEventListener('message', function(event) {
+                            if (!isAllowedIncomingMessage(event)) {
+                                return;
+                            }
                             var message = event && event.data ? event.data : null;
                             if (!message || typeof message.type !== 'string') {
                                 return;
@@ -7824,7 +8096,7 @@
                 examWindow.postMessage({
                     type: 'INIT_SESSION',
                     data: initPayload
-                }, '*');
+                }, getMessageTargetOrigin(windowInfo));
 
                 // 存储会话信息
                 if (!this.examWindows) {
@@ -7902,6 +8174,10 @@
                 console.warn('[App] 守护题目窗口内容失败:', guardError);
             }
 
+            const allowOpaqueOrigin = typeof this._isListeningLibraryExam === 'function'
+                ? this._isListeningLibraryExam(exam)
+                : false;
+
             // 存储窗口引用
             if (!this.examWindows) {
                 this.examWindows = new Map();
@@ -7925,7 +8201,8 @@
                     : null,
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
-                    : Boolean(options && options.reviewMode)
+                    : Boolean(options && options.reviewMode),
+                allowOpaqueOrigin
             });
 
             // 监听窗口关闭事件
@@ -7964,8 +8241,8 @@
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 const initPayload = this._buildExamInitPayload(examId, windowInfo);
                 try {
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                 } catch (postError) {
                     console.warn('[App] 跨源初始化题目窗口失败:', postError);
                 }
@@ -7992,6 +8269,15 @@
          * 设置题目窗口通信
          */
         setupExamWindowCommunication(examWindow, examId, exam = null, options = {}) {
+            const allowOpaqueOrigin = typeof this._isListeningLibraryExam === 'function'
+                ? this._isListeningLibraryExam(exam)
+                : false;
+            if (allowOpaqueOrigin) {
+                const existingInfo = this.ensureExamWindowSession(examId, examWindow);
+                existingInfo.allowOpaqueOrigin = true;
+                this.examWindows.set(examId, existingInfo);
+            }
+
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
                 try {
@@ -8163,14 +8449,6 @@
                     return;
                 }
 
-                // 校验来源域，允许 file:// (origin 为 null) 与同源页面
-                if (event.origin && event.origin !== 'null') {
-                    const allowedOrigin = window.location && window.location.origin;
-                    if (allowedOrigin && event.origin !== allowedOrigin) {
-                        return;
-                    }
-                }
-
                 const normalized = normalizeMessage(event.data);
                 if (!normalized) {
                     return;
@@ -8204,6 +8482,7 @@
                     && Array.isArray(this.currentSuiteSession.sequence)
                     && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
                 );
+                const sourceIsExpectedWindow = sourceWindow === expectedWindow;
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
                 const isListeningBridgeSource = src === 'listening_record_bridge';
                 const isListeningBridgeProtocolMessage = Boolean(
@@ -8216,14 +8495,32 @@
                         || type === 'PROGRESS_UPDATE'
                     )
                 );
+                const isOpaqueOrigin = !event.origin || event.origin === 'null';
+                const allowSandboxedListeningOrigin = Boolean(
+                    isOpaqueOrigin
+                    && windowInfo.allowOpaqueOrigin
+                    && sourceIsExpectedWindow
+                    && isListeningBridgeProtocolMessage
+                );
+                // 校验来源域：常规页面必须同源；file:// 保留兼容；沙盒听力页只接受预期窗口的 bridge 协议消息。
+                if (isOpaqueOrigin) {
+                    if (!(window.location && window.location.protocol === 'file:') && !allowSandboxedListeningOrigin) {
+                        return;
+                    }
+                } else {
+                    const allowedOrigin = window.location && window.location.origin;
+                    if (!allowedOrigin || allowedOrigin === 'null' || event.origin !== allowedOrigin) {
+                        return;
+                    }
+                }
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
                     && payloadExamId === expectedExamId
-                    && (
-                        (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
-                        || isExamInActiveSuite
-                    )
+                    && payloadSuiteSessionId
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && isExamInActiveSuite
                 );
                 const allowListeningSourceFallback = Boolean(
                     !sourceMatched
@@ -8479,8 +8776,8 @@
                 try {
                     const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
                     const initPayload = this._buildExamInitPayload(examId, windowInfo);
-                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                 } catch (initError) {
                     console.warn('[App] 发送初始化消息失败:', initError);
                 }
@@ -8540,8 +8837,8 @@
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
                         // 直接发送两种事件名，确保增强器任何实现都能收到
-                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                     } catch (_) { /* 忽略 */ }
                 }
                 attempts++;
@@ -8677,7 +8974,7 @@
          */
         createSimplePracticeRecord(exam, realData) {
             const now = new Date();
-            const recordId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const recordId = createLocalId('fallback');
 
             // 提取分数信息
             const scoreInfo = realData.scoreInfo || {};
@@ -8741,7 +9038,7 @@
          * 生成会话ID
          */
         generateSessionId(examId) {
-            const suffix = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const suffix = `${Date.now()}_${randomIdSuffix()}`;
             const normalizedExamId = typeof examId === 'string'
                 ? examId.trim().replace(/\s+/g, '-')
                 : (examId != null ? String(examId).trim().replace(/\s+/g, '-') : '');
@@ -9164,7 +9461,7 @@
                 return null;
             }
             return {
-                sessionId: `review_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+                sessionId: createLocalId('review'),
                 entries: validEntries,
                 currentIndex: 0,
                 windowRef: null,
@@ -9219,8 +9516,9 @@
             };
             const contextPayload = this._buildReviewContextPayload(session, safeIndex);
             try {
-                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, '*');
-                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                const windowInfo = (this.examWindows && this.examWindows.get(examId)) || {};
+                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, getMessageTargetOrigin(windowInfo));
+                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin(windowInfo));
                 return true;
             } catch (error) {
                 console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
@@ -9402,8 +9700,8 @@
             try {
                 const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
-                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo));
+                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo));
                 return initPayload;
             } catch (initError) {
                 console.warn('[App] 发送初始化消息失败:', initError);
@@ -9446,7 +9744,8 @@
                     reviewMode: false,
                     reviewSessionId: null,
                     reviewEntryIndex: 0,
-                    readOnly: false
+                    readOnly: false,
+                    allowOpaqueOrigin: false
                 });
             }
 
@@ -9472,6 +9771,9 @@
             }
             if (!Object.prototype.hasOwnProperty.call(windowInfo, 'readOnly')) {
                 windowInfo.readOnly = Boolean(windowInfo.reviewMode);
+            }
+            if (typeof windowInfo.allowOpaqueOrigin !== 'boolean') {
+                windowInfo.allowOpaqueOrigin = false;
             }
 
             this.examWindows.set(examId, windowInfo);
@@ -9679,8 +9981,14 @@
             this.updateExamStatus(examId, 'in-progress');
 
             // 尝试打开练习页面
-            const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
-            window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
+            const params = new URLSearchParams();
+            params.set('examId', String(examId || ''));
+            const practiceUrl = this._ensureAbsoluteUrl(`templates/ielts-exam-template.html?${params.toString()}`);
+            if (!practiceUrl) {
+                throw new Error('Practice URL is invalid or untrusted');
+            }
+            const windowName = this._sanitizeWindowName('practice', sessionData.sessionId);
+            window.open(practiceUrl, windowName, 'width=1200,height=800');
         },
 
         /**
@@ -9779,8 +10087,8 @@
                     const targetWindow = (windowInfo && windowInfo.window) || null;
                     if (targetWindow && typeof targetWindow.postMessage === 'function') {
                         const initPayload = this._buildExamInitPayload(examId, windowInfo || {});
-                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin(windowInfo || {}));
+                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin(windowInfo || {}));
                     }
                 } catch (initError) {
                     console.warn('[App] 听力桥预初始化 ready 后补发 INIT_SESSION 失败:', initError);
@@ -10157,7 +10465,7 @@
          */
         updateRealTimeProgress(examId, progressData) {
             // 在UI中显示实时进度
-            const examCards = document.querySelectorAll(`[data-exam-id="${examId}"]`);
+            const examCards = document.querySelectorAll(`[data-exam-id="${escapeCssSelectorValue(examId)}"]`);
             examCards.forEach(card => {
                 let progressInfo = card.querySelector('.real-progress-info');
                 if (!progressInfo) {
@@ -10493,18 +10801,19 @@
          * 更新题目状态
          */
         updateExamStatus(examId, status) {
+            const safeStatus = ['in-progress', 'completed', 'interrupted', 'error'].includes(status) ? status : 'error';
             // 更新UI中的题目状态指示器
-            const examCards = document.querySelectorAll(`[data-exam-id="${examId}"]`);
+            const examCards = document.querySelectorAll(`[data-exam-id="${escapeCssSelectorValue(examId)}"]`);
             examCards.forEach(card => {
                 const statusIndicator = card.querySelector('.exam-status');
                 if (statusIndicator) {
-                    statusIndicator.className = `exam-status ${status}`;
+                    statusIndicator.className = `exam-status ${safeStatus}`;
                 }
             });
 
             // 触发状态更新事件
             document.dispatchEvent(new CustomEvent('examStatusChanged', {
-                detail: { examId, status }
+                detail: { examId, status: safeStatus }
             }));
         },
 
@@ -10516,7 +10825,7 @@
             const progressPercentage = Math.round((progressData.completed / progressData.total) * 100);
 
             // 更新进度显示
-            const examCards = document.querySelectorAll(`[data-exam-id="${examId}"]`);
+            const examCards = document.querySelectorAll(`[data-exam-id="${escapeCssSelectorValue(examId)}"]`);
             examCards.forEach(card => {
                 let progressBar = card.querySelector('.exam-progress-bar');
                 if (!progressBar) {
@@ -10577,6 +10886,11 @@
 
             const accuracy = Math.round((resultData.accuracy || 0) * 100);
             const duration = this.formatDuration(resultData.duration || 0);
+            const safeExamId = escapeHtml(examId);
+            const safeExamTitle = escapeHtml(exam.title || '');
+            const safeDuration = escapeHtml(duration);
+            const safeTotalQuestions = escapeHtml(toSafeCount(resultData.totalQuestions || exam.totalQuestions || 0));
+            const safeCorrectAnswers = escapeHtml(toSafeCount(resultData.correctAnswers || 0));
 
             const resultContent = `
                 <div class="exam-result-modal">
@@ -10587,7 +10901,7 @@
                         </div>
                     </div>
                     <div class="result-body">
-                        <h4>${exam.title}</h4>
+                        <h4>${safeExamTitle}</h4>
                         <div class="result-stats">
                             <div class="result-stat">
                                 <span class="stat-label">正确率</span>
@@ -10595,25 +10909,25 @@
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">用时</span>
-                                <span class="stat-value">${duration}</span>
+                                <span class="stat-value">${safeDuration}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">题目数</span>
-                                <span class="stat-value">${resultData.totalQuestions || exam.totalQuestions || 0}</span>
+                                <span class="stat-value">${safeTotalQuestions}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">正确数</span>
-                                <span class="stat-value">${resultData.correctAnswers || 0}</span>
+                                <span class="stat-value">${safeCorrectAnswers}</span>
                             </div>
                         </div>
                         <div class="result-actions">
-                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                            <button class="btn btn-primary" type="button" data-exam-modal-action="open-exam" data-exam-id="${safeExamId}">
                                 再次练习
                             </button>
-                            <button class="btn btn-secondary" onclick="window.app.navigateToView('analysis')">
+                            <button class="btn btn-secondary" type="button" data-exam-modal-action="navigate" data-target-view="analysis">
                                 查看分析
                             </button>
-                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
+                            <button class="btn btn-outline" type="button" data-exam-modal-action="close">
                                 关闭
                             </button>
                         </div>
@@ -10660,6 +10974,33 @@
             }
 
             this._practiceRecorderEventsBound = true;
+
+            if (!this._examModalActionsBound) {
+                this._examModalActionsBound = true;
+                document.addEventListener('click', (event) => {
+                    const trigger = event.target instanceof HTMLElement
+                        ? event.target.closest('[data-exam-modal-action]')
+                        : null;
+                    if (!trigger) {
+                        return;
+                    }
+                    const action = trigger.getAttribute('data-exam-modal-action');
+                    const targetExamId = trigger.getAttribute('data-exam-id') || '';
+                    if (action === 'close') {
+                        trigger.closest('.modal-overlay')?.remove();
+                    } else if (action === 'open-exam' && targetExamId) {
+                        this.openExam(targetExamId);
+                    } else if (action === 'navigate') {
+                        this.navigateToView(trigger.getAttribute('data-target-view') || 'practice');
+                    } else if (action === 'focus-session' && targetExamId) {
+                        this.focusExamWindow(targetExamId);
+                    } else if (action === 'close-session' && targetExamId) {
+                        this.closeExamSession(targetExamId);
+                    } else if (action === 'close-all-sessions') {
+                        this.closeAllExamSessions();
+                    }
+                });
+            }
 
             // 监听练习完成事件
             document.addEventListener('practiceSessionCompleted', (event) => {
@@ -10716,6 +11057,11 @@
 
             const accuracy = Math.round((practiceRecord.accuracy || 0) * 100);
             const duration = this.formatDuration(practiceRecord.duration || 0);
+            const safeExamId = escapeHtml(examId);
+            const safeExamTitle = escapeHtml(exam.title || '');
+            const safeDuration = escapeHtml(duration);
+            const safeTotalQuestions = escapeHtml(toSafeCount(practiceRecord.totalQuestions || 0));
+            const safeCorrectAnswers = escapeHtml(toSafeCount(practiceRecord.correctAnswers || 0));
 
             // 显示简单通知
             const message = `练习完成！\n${exam.title}\n正确率: ${accuracy}% | 用时: ${duration}`;
@@ -10748,7 +11094,7 @@
                         </div>
                     </div>
                     <div class="result-body">
-                        <h4>${exam.title}</h4>
+                        <h4>${safeExamTitle}</h4>
                         <div class="result-stats">
                             <div class="result-stat">
                                 <span class="stat-label">正确率</span>
@@ -10756,15 +11102,15 @@
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">用时</span>
-                                <span class="stat-value">${duration}</span>
+                                <span class="stat-value">${safeDuration}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">题目数</span>
-                                <span class="stat-value">${practiceRecord.totalQuestions || 0}</span>
+                                <span class="stat-value">${safeTotalQuestions}</span>
                             </div>
                             <div class="result-stat">
                                 <span class="stat-label">正确数</span>
-                                <span class="stat-value">${practiceRecord.correctAnswers || 0}</span>
+                                <span class="stat-value">${safeCorrectAnswers}</span>
                             </div>
                         </div>
                         ${practiceRecord.questionTypePerformance && Object.keys(practiceRecord.questionTypePerformance).length > 0 ? `
@@ -10773,22 +11119,22 @@
                                 <div class="type-performance-list">
                                     ${Object.entries(practiceRecord.questionTypePerformance).map(([type, perf]) => `
                                         <div class="type-performance-item">
-                                            <span class="type-name">${this.formatQuestionType(type)}</span>
-                                            <span class="type-accuracy">${Math.round((perf.accuracy || 0) * 100)}%</span>
-                                            <span class="type-count">(${perf.correct || 0}/${perf.total || 0})</span>
+                                            <span class="type-name">${escapeHtml(this.formatQuestionType(type))}</span>
+                                            <span class="type-accuracy">${escapeHtml(Math.round((Number(perf.accuracy) || 0) * 100))}%</span>
+                                            <span class="type-count">(${escapeHtml(toSafeCount(perf.correct || 0))}/${escapeHtml(toSafeCount(perf.total || 0))})</span>
                                         </div>
                                     `).join('')}
                                 </div>
                             </div>
                         ` : ''}
                         <div class="result-actions">
-                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                            <button class="btn btn-primary" type="button" data-exam-modal-action="open-exam" data-exam-id="${safeExamId}">
                                 再次练习
                             </button>
-                            <button class="btn btn-secondary" onclick="window.app.navigateToView('practice')">
+                            <button class="btn btn-secondary" type="button" data-exam-modal-action="navigate" data-target-view="practice">
                                 查看记录
                             </button>
-                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
+                            <button class="btn btn-outline" type="button" data-exam-modal-action="close">
                                 关闭
                             </button>
                         </div>
@@ -10838,31 +11184,37 @@
                 return;
             }
 
+            const safeActiveSessionCount = escapeHtml(activeSessions.length);
+
             const sessionsContent = `
                 <div class="active-sessions-modal">
                     <div class="sessions-header">
-                        <h3>活动练习会话 (${activeSessions.length})</h3>
-                        <button class="close-sessions" onclick="this.closest('.modal-overlay').remove()">×</button>
+                        <h3>活动练习会话 (${safeActiveSessionCount})</h3>
+                        <button class="close-sessions" type="button" data-exam-modal-action="close">×</button>
                     </div>
                     <div class="sessions-body">
                         ${activeSessions.map(session => {
                 const exam = examIndex.find(e => e.id === session.examId);
                 const duration = Date.now() - new Date(session.startTime).getTime();
+                const safeSessionExamId = escapeHtml(session.examId || '');
+                const safeSessionTitle = escapeHtml(exam ? exam.title : '未知题目');
+                const safeStartTime = escapeHtml(this.formatDate(session.startTime, 'HH:mm'));
+                const safeSessionDuration = escapeHtml(this.formatDuration(Math.floor(duration / 1000)));
 
                 return `
                                 <div class="session-item">
                                     <div class="session-info">
-                                        <h4>${exam ? exam.title : '未知题目'}</h4>
+                                        <h4>${safeSessionTitle}</h4>
                                         <div class="session-meta">
-                                            <span>开始时间: ${this.formatDate(session.startTime, 'HH:mm')}</span>
-                                            <span>已用时: ${this.formatDuration(Math.floor(duration / 1000))}</span>
+                                            <span>开始时间: ${safeStartTime}</span>
+                                            <span>已用时: ${safeSessionDuration}</span>
                                         </div>
                                     </div>
                                     <div class="session-actions">
-                                        <button class="btn btn-sm btn-primary" onclick="window.app.focusExamWindow('${session.examId}')">
+                                        <button class="btn btn-sm btn-primary" type="button" data-exam-modal-action="focus-session" data-exam-id="${safeSessionExamId}">
                                             切换到窗口
                                         </button>
-                                        <button class="btn btn-sm btn-secondary" onclick="window.app.closeExamSession('${session.examId}')">
+                                        <button class="btn btn-sm btn-secondary" type="button" data-exam-modal-action="close-session" data-exam-id="${safeSessionExamId}">
                                             结束会话
                                         </button>
                                     </div>
@@ -10871,10 +11223,10 @@
             }).join('')}
                     </div>
                     <div class="sessions-footer">
-                        <button class="btn btn-outline" onclick="window.app.closeAllExamSessions()">
+                        <button class="btn btn-outline" type="button" data-exam-modal-action="close-all-sessions">
                             结束所有会话
                         </button>
-                        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
+                        <button class="btn btn-secondary" type="button" data-exam-modal-action="close">
                             关闭
                         </button>
                     </div>
@@ -11629,7 +11981,8 @@ class PDFHandler {
             console.log('[PDFHandler] Opening PDF:', pdfPath);
 
             // Validate PDF path
-            if (!this.isValidPDFPath(pdfPath)) {
+            const safePdfPath = this.resolvePDFPath(pdfPath);
+            if (!safePdfPath) {
                 throw new Error('Invalid PDF path provided');
             }
 
@@ -11640,17 +11993,23 @@ class PDFHandler {
             const windowName = this.generateWindowName(examTitle);
 
             // Open PDF in new window
-            const pdfWindow = window.open(pdfPath, windowName, windowOptions);
+            const pdfWindow = window.open(safePdfPath, windowName, windowOptions);
 
             if (!pdfWindow) {
                 throw new Error('Failed to open PDF window. Please check popup blocker settings.');
             }
 
+            try {
+                pdfWindow.opener = null;
+            } catch (_) {
+                // Some browsers block access when noopener is enforced.
+            }
+
             // Track the opened window
-            this.trackPDFWindow(pdfPath, pdfWindow, examTitle);
+            this.trackPDFWindow(safePdfPath, pdfWindow, examTitle);
 
             // Set up window event handlers
-            this.setupWindowHandlers(pdfWindow, pdfPath);
+            this.setupWindowHandlers(pdfWindow, safePdfPath);
 
             console.log('[PDFHandler] PDF opened successfully:', examTitle);
             return pdfWindow;
@@ -11671,12 +12030,13 @@ class PDFHandler {
         try {
             console.log('[PDFHandler] Validating PDF:', pdfPath);
 
-            if (!this.isValidPDFPath(pdfPath)) {
+            const safePdfPath = this.resolvePDFPath(pdfPath);
+            if (!safePdfPath) {
                 return false;
             }
 
             // Use HEAD request to check if file exists
-            const response = await fetch(pdfPath, {
+            const response = await fetch(safePdfPath, {
                 method: 'HEAD',
                 cache: 'no-cache'
             });
@@ -11701,14 +12061,19 @@ class PDFHandler {
         try {
             console.log('[PDFHandler] Getting PDF info:', pdfPath);
 
-            const response = await fetch(pdfPath, { method: 'HEAD' });
+            const safePdfPath = this.resolvePDFPath(pdfPath);
+            if (!safePdfPath) {
+                return null;
+            }
+
+            const response = await fetch(safePdfPath, { method: 'HEAD' });
 
             if (!response.ok) {
                 return null;
             }
 
             const info = {
-                path: pdfPath,
+                path: safePdfPath,
                 size: response.headers.get('content-length'),
                 lastModified: response.headers.get('last-modified'),
                 contentType: response.headers.get('content-type'),
@@ -11736,21 +12101,57 @@ class PDFHandler {
      * @returns {boolean} - True if valid PDF path
      */
     isValidPDFPath(path) {
+        return Boolean(this.resolvePDFPath(path));
+    }
+
+    resolvePDFPath(path) {
         if (!path || typeof path !== 'string') {
-            return false;
+            return '';
         }
 
-        // Check file extension
-        const hasValidExtension = this.supportedFormats.some(ext =>
-            path.toLowerCase().endsWith(ext)
-        );
+        const rawPath = path.trim();
+        if (!rawPath || /[\u0000-\u001F\u007F]/.test(rawPath) || this.hasPathTraversal(rawPath)) {
+            return '';
+        }
 
-        // Basic path validation
-        const isValidPath = !path.includes('..') && // Prevent directory traversal
-                           !path.startsWith('javascript:') && // Prevent XSS
-                           !path.startsWith('data:'); // Prevent data URLs
+        try {
+            const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+            const resolved = new URL(rawPath, baseHref);
+            const hasValidExtension = this.supportedFormats.some(ext =>
+                resolved.pathname.toLowerCase().endsWith(ext)
+            );
+            if (!hasValidExtension) {
+                return '';
+            }
 
-        return hasValidExtension && isValidPath;
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+
+            if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+
+        return '';
+    }
+
+    hasPathTraversal(path) {
+        const text = String(path || '').replace(/\\/g, '/');
+        if (/(^|\/)\.\.(?:\/|$)/.test(text)) {
+            return true;
+        }
+        try {
+            const decoded = decodeURIComponent(text).replace(/\\/g, '/');
+            return /(^|\/)\.\.(?:\/|$)/.test(decoded);
+        } catch (_) {
+            return true;
+        }
     }
 
     /**
@@ -11785,11 +12186,37 @@ class PDFHandler {
             location: 'yes' // Show location bar for PDF URL
         };
 
-        const finalOptions = { ...defaultOptions, ...options };
+        const allowedFeatures = ['width', 'height', 'left', 'top', 'scrollbars', 'resizable', 'status', 'toolbar', 'menubar', 'location'];
+        const finalOptions = { ...defaultOptions };
+        allowedFeatures.forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(options || {}, key)) {
+                finalOptions[key] = this.normalizeWindowFeatureValue(key, options[key], defaultOptions[key]);
+            } else {
+                finalOptions[key] = this.normalizeWindowFeatureValue(key, defaultOptions[key], defaultOptions[key]);
+            }
+        });
+        finalOptions.noopener = 'yes';
+        finalOptions.noreferrer = 'yes';
 
         return Object.entries(finalOptions)
             .map(([key, value]) => `${key}=${value}`)
             .join(',');
+    }
+
+    normalizeWindowFeatureValue(key, value, fallback) {
+        if (['width', 'height', 'left', 'top'].includes(key)) {
+            const number = Number(value);
+            const safeNumber = Number.isFinite(number) ? Math.round(number) : Number(fallback);
+            return String(Math.max(0, Math.min(10000, safeNumber || 0)));
+        }
+        const text = String(value).trim().toLowerCase();
+        if (['yes', '1', 'true'].includes(text)) {
+            return 'yes';
+        }
+        if (['no', '0', 'false'].includes(text)) {
+            return 'no';
+        }
+        return String(fallback).trim().toLowerCase() === 'no' ? 'no' : 'yes';
     }
 
     /**
@@ -11798,7 +12225,10 @@ class PDFHandler {
      * @returns {string} - Unique window name
      */
     generateWindowName(examTitle) {
-        const cleanTitle = examTitle.replace(/[^a-zA-Z0-9]/g, '_');
+        const cleanTitle = String(examTitle || 'PDF Exam')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .replace(/_+/g, '_')
+            .slice(0, 80);
         const timestamp = Date.now();
         return `pdf_${cleanTitle}_${timestamp}`;
     }
@@ -12003,6 +12433,180 @@ if (typeof module !== 'undefined' && module.exports) {
  * 浏览状态管理器
  * 负责管理题库浏览的状态和过滤器，支持完整的状态持久化和回滚
  */
+const BROWSE_STATE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const BROWSE_STATE_MAX_TEXT_LENGTH = 120;
+const BROWSE_STATE_MAX_SEARCH_LENGTH = 300;
+const BROWSE_STATE_MAX_HISTORY_TEXT_LENGTH = 160;
+const BROWSE_STATE_MAX_PAGE_SIZE = 200;
+const BROWSE_STATE_VIEW_MODES = new Set(['grid', 'list']);
+const BROWSE_STATE_SORT_FIELDS = new Set(['title', 'category', 'frequency', 'difficulty', 'date', 'score']);
+const BROWSE_STATE_SORT_ORDERS = new Set(['asc', 'desc']);
+
+function createDefaultBrowseState() {
+    return {
+        currentCategory: null,
+        currentFrequency: null,
+        viewMode: 'grid',
+        sortBy: 'title',
+        sortOrder: 'asc',
+        filters: {
+            frequency: 'all',
+            status: 'all',
+            difficulty: 'all'
+        },
+        searchQuery: '',
+        pagination: {
+            page: 1,
+            pageSize: 20,
+            total: 0
+        }
+    };
+}
+
+function isPlainBrowseObject(value) {
+    return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function isUnsafeBrowseKey(key) {
+    return BROWSE_STATE_POLLUTION_KEYS.has(String(key));
+}
+
+function safeBrowseEntries(value) {
+    if (!isPlainBrowseObject(value)) {
+        return [];
+    }
+    return Object.entries(value).filter(([key]) => !isUnsafeBrowseKey(key));
+}
+
+function normalizeBrowseText(value, maxLength = BROWSE_STATE_MAX_TEXT_LENGTH) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    const text = String(value)
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .trim()
+        .slice(0, maxLength);
+    return text || null;
+}
+
+function normalizeBrowseEnum(value, allowed, fallback) {
+    const text = normalizeBrowseText(value, BROWSE_STATE_MAX_TEXT_LENGTH);
+    return text && allowed.has(text) ? text : fallback;
+}
+
+function normalizeBrowseInteger(value, fallback, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        return fallback;
+    }
+    return Math.min(Math.max(Math.trunc(number), min), max);
+}
+
+function cloneBrowseState(state) {
+    return {
+        currentCategory: state.currentCategory || null,
+        currentFrequency: state.currentFrequency || null,
+        viewMode: state.viewMode || 'grid',
+        sortBy: state.sortBy || 'title',
+        sortOrder: state.sortOrder || 'asc',
+        filters: {
+            frequency: state.filters?.frequency || 'all',
+            status: state.filters?.status || 'all',
+            difficulty: state.filters?.difficulty || 'all'
+        },
+        searchQuery: state.searchQuery || '',
+        pagination: {
+            page: state.pagination?.page || 1,
+            pageSize: state.pagination?.pageSize || 20,
+            total: state.pagination?.total || 0
+        }
+    };
+}
+
+function normalizeBrowseStatePatch(input) {
+    if (!isPlainBrowseObject(input)) {
+        return {};
+    }
+    const patch = {};
+    for (const [key, value] of safeBrowseEntries(input)) {
+        if (key === 'currentCategory') {
+            patch.currentCategory = normalizeBrowseText(value);
+        } else if (key === 'currentFrequency') {
+            patch.currentFrequency = normalizeBrowseText(value);
+        } else if (key === 'viewMode') {
+            patch.viewMode = normalizeBrowseEnum(value, BROWSE_STATE_VIEW_MODES, undefined);
+        } else if (key === 'sortBy') {
+            patch.sortBy = normalizeBrowseEnum(value, BROWSE_STATE_SORT_FIELDS, undefined);
+        } else if (key === 'sortOrder') {
+            patch.sortOrder = normalizeBrowseEnum(value, BROWSE_STATE_SORT_ORDERS, undefined);
+        } else if (key === 'searchQuery') {
+            patch.searchQuery = normalizeBrowseText(value, BROWSE_STATE_MAX_SEARCH_LENGTH) || '';
+        } else if (key === 'filters' && isPlainBrowseObject(value)) {
+            patch.filters = {};
+            for (const filterKey of ['frequency', 'status', 'difficulty']) {
+                if (Object.prototype.hasOwnProperty.call(value, filterKey) && !isUnsafeBrowseKey(filterKey)) {
+                    patch.filters[filterKey] = normalizeBrowseText(value[filterKey]) || 'all';
+                }
+            }
+        } else if (key === 'pagination' && isPlainBrowseObject(value)) {
+            patch.pagination = {};
+            if (Object.prototype.hasOwnProperty.call(value, 'page')) {
+                patch.pagination.page = normalizeBrowseInteger(value.page, 1, 1, Number.MAX_SAFE_INTEGER);
+            }
+            if (Object.prototype.hasOwnProperty.call(value, 'pageSize')) {
+                patch.pagination.pageSize = normalizeBrowseInteger(value.pageSize, 20, 1, BROWSE_STATE_MAX_PAGE_SIZE);
+            }
+            if (Object.prototype.hasOwnProperty.call(value, 'total')) {
+                patch.pagination.total = normalizeBrowseInteger(value.total, 0, 0, Number.MAX_SAFE_INTEGER);
+            }
+        }
+    }
+    return patch;
+}
+
+function mergeBrowseState(baseState, patchInput) {
+    const base = cloneBrowseState(baseState || createDefaultBrowseState());
+    const patch = normalizeBrowseStatePatch(patchInput);
+    if (Object.prototype.hasOwnProperty.call(patch, 'currentCategory')) base.currentCategory = patch.currentCategory;
+    if (Object.prototype.hasOwnProperty.call(patch, 'currentFrequency')) base.currentFrequency = patch.currentFrequency;
+    if (patch.viewMode) base.viewMode = patch.viewMode;
+    if (patch.sortBy) base.sortBy = patch.sortBy;
+    if (patch.sortOrder) base.sortOrder = patch.sortOrder;
+    if (Object.prototype.hasOwnProperty.call(patch, 'searchQuery')) base.searchQuery = patch.searchQuery;
+    if (patch.filters) base.filters = { ...base.filters, ...patch.filters };
+    if (patch.pagination) base.pagination = { ...base.pagination, ...patch.pagination };
+    return base;
+}
+
+function normalizeBrowseHistoryItem(item) {
+    if (!isPlainBrowseObject(item)) {
+        return null;
+    }
+    const normalized = {};
+    const allowedKeys = new Set(['action', 'filter', 'from', 'to', 'timestamp']);
+    for (const [key, value] of safeBrowseEntries(item)) {
+        if (!allowedKeys.has(key)) {
+            continue;
+        }
+        if (key === 'timestamp') {
+            normalized.timestamp = normalizeBrowseInteger(value, Date.now(), 0, Number.MAX_SAFE_INTEGER);
+        } else {
+            normalized[key] = normalizeBrowseText(value, BROWSE_STATE_MAX_HISTORY_TEXT_LENGTH);
+        }
+    }
+    return normalized.action ? normalized : null;
+}
+
+function normalizeBrowseHistory(history, maxHistorySize) {
+    if (!Array.isArray(history)) {
+        return [];
+    }
+    return history
+        .slice(-maxHistorySize)
+        .map(normalizeBrowseHistoryItem)
+        .filter(Boolean);
+}
+
 class BrowseStateManager {
     constructor() {
         this.currentFilter = 'all';
@@ -12010,24 +12614,7 @@ class BrowseStateManager {
         this.browseHistory = [];
         this.maxHistorySize = 10;
         this.subscribers = [];
-        this.state = {
-            currentCategory: null,
-            currentFrequency: null,
-            viewMode: 'grid',
-            sortBy: 'title',
-            sortOrder: 'asc',
-            filters: {
-                frequency: 'all',
-                status: 'all',
-                difficulty: 'all'
-            },
-            searchQuery: '',
-            pagination: {
-                page: 1,
-                pageSize: 20,
-                total: 0
-            }
-        };
+        this.state = createDefaultBrowseState();
 
         // 全局引用，供事件委托使用
         window.browseStateManager = this;
@@ -12114,32 +12701,33 @@ class BrowseStateManager {
      * 设置浏览过滤器
      */
     setBrowseFilter(filter) {
-        console.log(`[BrowseStateManager] 设置浏览过滤器: ${filter}`);
+        const safeFilter = normalizeBrowseText(filter) || 'all';
+        console.log(`[BrowseStateManager] 设置浏览过滤器: ${safeFilter}`);
 
         // 保存之前的过滤器
-        this.previousFilter = this.currentFilter;
+        this.previousFilter = normalizeBrowseText(this.currentFilter);
 
         // 设置新的过滤器
-        this.currentFilter = filter;
+        this.currentFilter = safeFilter;
 
         // 更新全局变量（保持向后兼容）
         if (window.currentCategory !== undefined) {
-            window.currentCategory = filter;
+            window.currentCategory = safeFilter;
         }
 
         // 更新状态
         this.setState({
-            currentCategory: filter === 'all' ? null : filter
+            currentCategory: safeFilter === 'all' ? null : safeFilter
         });
 
         // 更新浏览标题
-        this.updateBrowseTitle(filter);
+        this.updateBrowseTitle(safeFilter);
 
         // 记录状态变更
         this.addToHistory({
             action: 'filter_change',
             from: this.previousFilter,
-            to: filter,
+            to: safeFilter,
             timestamp: Date.now()
         });
 
@@ -12147,7 +12735,7 @@ class BrowseStateManager {
         this.saveBrowseState();
 
         // 触发过滤器变更事件
-        this.dispatchFilterChangeEvent(filter);
+        this.dispatchFilterChangeEvent(safeFilter);
     }
 
     /**
@@ -12157,8 +12745,8 @@ class BrowseStateManager {
         // 保存历史状态
         this.browseHistory.push({
             action: 'state_change',
-            previousState: JSON.parse(JSON.stringify(this.state)),
-            newState: JSON.parse(JSON.stringify(newState)),
+            previousState: cloneBrowseState(this.state),
+            newState: normalizeBrowseStatePatch(newState),
             timestamp: Date.now()
         });
 
@@ -12167,7 +12755,7 @@ class BrowseStateManager {
         }
 
         // 更新状态
-        this.state = { ...this.state, ...newState };
+        this.state = mergeBrowseState(this.state, newState);
 
         // 通知订阅者
         this.notifySubscribers();
@@ -12210,10 +12798,10 @@ class BrowseStateManager {
     persistState() {
         try {
             const dataToSave = {
-                currentFilter: this.currentFilter,
-                previousFilter: this.previousFilter,
-                state: this.state,
-                browseHistory: this.browseHistory.slice(-this.maxHistorySize),
+                currentFilter: normalizeBrowseText(this.currentFilter) || 'all',
+                previousFilter: normalizeBrowseText(this.previousFilter),
+                state: cloneBrowseState(this.state),
+                browseHistory: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize),
                 timestamp: Date.now()
             };
 
@@ -12232,14 +12820,17 @@ class BrowseStateManager {
             const savedData = localStorage.getItem('browse_state');
             if (savedData) {
                 const data = JSON.parse(savedData);
+                if (!isPlainBrowseObject(data)) {
+                    throw new Error('Invalid browse state payload');
+                }
 
                 // 恢复基本状态
-                this.previousFilter = data.previousFilter || null;
-                this.browseHistory = data.browseHistory || [];
+                this.previousFilter = normalizeBrowseText(data.previousFilter);
+                this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
 
                 // 恢复完整状态
                 if (data.state) {
-                    this.state = { ...this.state, ...data.state };
+                    this.state = mergeBrowseState(this.state, data.state);
                 }
 
                 // 默认重置为'all'，确保主界面浏览按钮总是显示所有考试
@@ -12261,31 +12852,14 @@ class BrowseStateManager {
         this.currentFilter = 'all';
         this.previousFilter = null;
         this.browseHistory = [];
-        this.state = {
-            currentCategory: null,
-            currentFrequency: null,
-            viewMode: 'grid',
-            sortBy: 'title',
-            sortOrder: 'asc',
-            filters: {
-                frequency: 'all',
-                status: 'all',
-                difficulty: 'all'
-            },
-            searchQuery: '',
-            pagination: {
-                page: 1,
-                pageSize: 20,
-                total: 0
-            }
-        };
+        this.state = createDefaultBrowseState();
     }
 
     /**
      * 获取当前状态
      */
     getState() {
-        return { ...this.state };
+        return cloneBrowseState(this.state);
     }
 
     /**
@@ -12345,9 +12919,10 @@ class BrowseStateManager {
      * 更新浏览标题
      */
     updateBrowseTitle(filter) {
-        const label = filter === 'all'
+        const safeFilter = normalizeBrowseText(filter) || 'all';
+        const label = safeFilter === 'all'
             ? '题库浏览'
-            : `${filter} 题库浏览`;
+            : `${safeFilter} 题库浏览`;
         if (typeof window.setBrowseTitle === 'function') {
             window.setBrowseTitle(label);
             return;
@@ -12386,7 +12961,11 @@ class BrowseStateManager {
      * 添加到历史记录
      */
     addToHistory(historyItem) {
-        this.browseHistory.push(historyItem);
+        const normalized = normalizeBrowseHistoryItem(historyItem);
+        if (!normalized) {
+            return;
+        }
+        this.browseHistory.push(normalized);
 
         // 限制历史记录大小
         if (this.browseHistory.length > this.maxHistorySize) {
@@ -12407,21 +12986,21 @@ class BrowseStateManager {
      * 获取当前过滤器
      */
     getCurrentFilter() {
-        return this.currentFilter;
+        return normalizeBrowseText(this.currentFilter) || 'all';
     }
 
     /**
      * 获取之前的过滤器
      */
     getPreviousFilter() {
-        return this.previousFilter;
+        return normalizeBrowseText(this.previousFilter);
     }
 
     /**
      * 获取浏览历史
      */
     getBrowseHistory() {
-        return [...this.browseHistory];
+        return normalizeBrowseHistory(this.browseHistory, this.maxHistorySize);
     }
 
     /**
@@ -12449,10 +13028,11 @@ class BrowseStateManager {
      * 触发过滤器变更事件
      */
     dispatchFilterChangeEvent(filter) {
+        const safeFilter = normalizeBrowseText(filter) || 'all';
         const event = new CustomEvent('browseFilterChanged', {
             detail: {
-                filter: filter,
-                previousFilter: this.previousFilter,
+                filter: safeFilter,
+                previousFilter: this.getPreviousFilter(),
                 timestamp: Date.now()
             }
         });
@@ -12465,7 +13045,7 @@ class BrowseStateManager {
     dispatchResetEvent() {
         const event = new CustomEvent('browseReset', {
             detail: {
-                previousFilter: this.previousFilter,
+                previousFilter: this.getPreviousFilter(),
                 timestamp: Date.now()
             }
         });
@@ -12479,17 +13059,18 @@ class BrowseStateManager {
         const filterCounts = {};
         this.browseHistory.forEach(item => {
             if (item.action === 'filter_change') {
-                filterCounts[item.to] = (filterCounts[item.to] || 0) + 1;
+                const key = normalizeBrowseText(item.to) || 'unknown';
+                filterCounts[key] = (filterCounts[key] || 0) + 1;
             }
         });
 
         return {
-            currentFilter: this.currentFilter,
-            previousFilter: this.previousFilter,
-            historySize: this.browseHistory.length,
+            currentFilter: this.getCurrentFilter(),
+            previousFilter: this.getPreviousFilter(),
+            historySize: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize).length,
             filterUsage: filterCounts,
             lastActivity: this.browseHistory.length > 0 ?
-                this.browseHistory[this.browseHistory.length - 1].timestamp : null
+                normalizeBrowseInteger(this.browseHistory[this.browseHistory.length - 1].timestamp, 0, 0, Number.MAX_SAFE_INTEGER) : null
         };
     }
 
@@ -12524,9 +13105,9 @@ class BrowseStateManager {
      */
     exportBrowseHistory() {
         const exportData = {
-            currentFilter: this.currentFilter,
-            previousFilter: this.previousFilter,
-            browseHistory: this.browseHistory,
+            currentFilter: this.getCurrentFilter(),
+            previousFilter: this.getPreviousFilter(),
+            browseHistory: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize),
             stats: this.getBrowseStats(),
             exportTime: new Date().toISOString()
         };
@@ -12541,8 +13122,8 @@ class BrowseStateManager {
         try {
             const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
 
-            if (data.browseHistory && Array.isArray(data.browseHistory)) {
-                this.browseHistory = data.browseHistory.slice(-this.maxHistorySize);
+            if (isPlainBrowseObject(data) && data.browseHistory && Array.isArray(data.browseHistory)) {
+                this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
                 this.saveBrowseState();
 
                 console.log('[BrowseStateManager] 浏览历史导入成功');
@@ -12564,6 +13145,22 @@ window.BrowseStateManager = BrowseStateManager;
 /* ===== js/utils/suiteBackGuard.js ===== */
 (function initSuiteBackGuard(global) {
     'use strict';
+
+    let fallbackTokenCounter = 0;
+
+    function randomTokenSuffix() {
+        const cryptoObj = global.crypto || global.msCrypto;
+        if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+            return cryptoObj.randomUUID();
+        }
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            cryptoObj.getRandomValues(bytes);
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+        fallbackTokenCounter += 1;
+        return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
 
     function createSuiteBackGuard(options = {}) {
         const context = options.context || global;
@@ -12635,7 +13232,7 @@ window.BrowseStateManager = BrowseStateManager;
             installed = true;
             pushed = false;
             bypass = false;
-            token = `${tokenPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            token = `${tokenPrefix}_${Date.now()}_${randomTokenSuffix()}`;
 
             popstateHandler = (event) => {
                 if (bypass || !installed) {
@@ -13771,6 +14368,11 @@ window.BrowseStateManager = BrowseStateManager;
     'use strict';
 
     const BROWSE_VIEW_PREFERENCE_KEY = 'browse_view_preferences_v2';
+    const BROWSE_PREFERENCE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_BROWSE_PREFERENCE_ENTRIES = 200;
+    const MAX_BROWSE_PREFERENCE_KEY_LENGTH = 160;
+    const MAX_BROWSE_PREFERENCE_TEXT_LENGTH = 300;
+    const MAX_BROWSE_SCROLL_TOP = 10000000;
     let browsePreferencesCache = null;
     let currentBrowseScrollElement = null;
     let removeBrowseScrollListener = null;
@@ -13850,29 +14452,120 @@ window.BrowseStateManager = BrowseStateManager;
         return `${normalizeCategoryKey(category)}|${normalizeExamType(type)}`;
     }
 
+    function createPreferenceMap() {
+        return Object.create(null);
+    }
+
+    function isUnsafePreferenceKey(key) {
+        return BROWSE_PREFERENCE_UNSAFE_KEYS.has(key);
+    }
+
+    function normalizePreferenceKey(key) {
+        if (typeof key !== 'string') {
+            return '';
+        }
+        const trimmed = key.trim();
+        if (!trimmed || trimmed.length > MAX_BROWSE_PREFERENCE_KEY_LENGTH) {
+            return '';
+        }
+        if (isUnsafePreferenceKey(trimmed) || /[\u0000-\u001F\u007F]/.test(trimmed)) {
+            return '';
+        }
+        return trimmed;
+    }
+
+    function normalizePreferenceText(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value
+            .replace(/[\u0000-\u001F\u007F]/g, ' ')
+            .trim()
+            .slice(0, MAX_BROWSE_PREFERENCE_TEXT_LENGTH);
+    }
+
+    function normalizeScrollTop(value) {
+        const scrollTop = Number(value);
+        if (!Number.isFinite(scrollTop) || scrollTop < 0) {
+            return null;
+        }
+        return Math.min(MAX_BROWSE_SCROLL_TOP, Math.round(scrollTop));
+    }
+
+    function normalizeBrowseScrollPositions(value) {
+        const next = createPreferenceMap();
+        if (!value || typeof value !== 'object') {
+            return next;
+        }
+
+        let copied = 0;
+        for (const [rawKey, rawValue] of Object.entries(value)) {
+            if (copied >= MAX_BROWSE_PREFERENCE_ENTRIES) {
+                break;
+            }
+            const key = normalizePreferenceKey(rawKey);
+            const scrollTop = normalizeScrollTop(rawValue);
+            if (!key || scrollTop === null) {
+                continue;
+            }
+            next[key] = scrollTop;
+            copied += 1;
+        }
+        return next;
+    }
+
+    function mergeBrowseScrollPositions(currentPositions, updates) {
+        const next = normalizeBrowseScrollPositions(currentPositions);
+        const normalizedUpdates = normalizeBrowseScrollPositions(updates);
+        let copied = Object.keys(next).length;
+        for (const [key, value] of Object.entries(normalizedUpdates)) {
+            if (!Object.prototype.hasOwnProperty.call(next, key) && copied >= MAX_BROWSE_PREFERENCE_ENTRIES) {
+                break;
+            }
+            if (!Object.prototype.hasOwnProperty.call(next, key)) {
+                copied += 1;
+            }
+            next[key] = value;
+        }
+        return next;
+    }
+
+    function normalizeBrowseLastFilter(value) {
+        if (!value || typeof value !== 'object') {
+            return null;
+        }
+        return {
+            category: normalizeCategoryKey(value.category),
+            type: normalizeExamType(value.type)
+        };
+    }
+
     // --- Preference Management ---
 
     function getDefaultBrowsePreferences() {
         return {
-            scrollPositions: {},
-            listAnchors: {},
+            scrollPositions: createPreferenceMap(),
+            listAnchors: createPreferenceMap(),
             autoScrollEnabled: true,
             lastFilter: null
         };
     }
 
-    function mergeBrowseAnchors(currentAnchors = {}, updates) {
-        const next = Object.assign({}, currentAnchors);
-        if (!updates || typeof updates !== 'object') {
-            return next;
+    function copyBrowseAnchorEntries(target, source, allowDelete) {
+        if (!source || typeof source !== 'object') {
+            return;
         }
 
-        for (const [key, value] of Object.entries(updates)) {
-            if (typeof key !== 'string' || !key) {
+        let copied = Object.keys(target).length;
+        for (const [rawKey, value] of Object.entries(source)) {
+            const key = normalizePreferenceKey(rawKey);
+            if (!key) {
                 continue;
             }
             if (value === null) {
-                delete next[key];
+                if (allowDelete) {
+                    delete target[key];
+                }
                 continue;
             }
             if (!value || typeof value !== 'object') {
@@ -13880,26 +14573,42 @@ window.BrowseStateManager = BrowseStateManager;
             }
 
             const normalized = {};
-            if (typeof value.examId === 'string' && value.examId.trim()) {
-                normalized.examId = value.examId.trim();
+            const examId = normalizePreferenceText(value.examId);
+            const title = normalizePreferenceText(value.title);
+            const scrollTop = normalizeScrollTop(value.scrollTop);
+            if (examId) {
+                normalized.examId = examId;
             }
-            if (typeof value.title === 'string' && value.title.trim()) {
-                normalized.title = value.title.trim();
+            if (title) {
+                normalized.title = title;
             }
-            if (Number.isFinite(value.scrollTop) && value.scrollTop >= 0) {
-                normalized.scrollTop = Math.round(value.scrollTop);
+            if (scrollTop !== null) {
+                normalized.scrollTop = scrollTop;
             }
             const ts = Number(value.timestamp);
             normalized.timestamp = Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now();
 
             if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
-                delete next[key];
+                if (allowDelete) {
+                    delete target[key];
+                }
                 continue;
             }
 
-            next[key] = normalized;
+            if (!Object.prototype.hasOwnProperty.call(target, key) && copied >= MAX_BROWSE_PREFERENCE_ENTRIES) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(target, key)) {
+                copied += 1;
+            }
+            target[key] = normalized;
         }
+    }
 
+    function mergeBrowseAnchors(currentAnchors = {}, updates) {
+        const next = createPreferenceMap();
+        copyBrowseAnchorEntries(next, currentAnchors, false);
+        copyBrowseAnchorEntries(next, updates, true);
         return next;
     }
 
@@ -13911,12 +14620,15 @@ window.BrowseStateManager = BrowseStateManager;
             }
             const parsed = JSON.parse(raw);
             const defaults = getDefaultBrowsePreferences();
-            const next = Object.assign({}, defaults, parsed || {});
-            if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
-                next.scrollPositions = {};
-            }
-            next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
-            return next;
+            const source = parsed && typeof parsed === 'object' ? parsed : {};
+            return {
+                scrollPositions: normalizeBrowseScrollPositions(source.scrollPositions),
+                listAnchors: mergeBrowseAnchors(createPreferenceMap(), source.listAnchors),
+                autoScrollEnabled: typeof source.autoScrollEnabled === 'boolean'
+                    ? source.autoScrollEnabled
+                    : defaults.autoScrollEnabled,
+                lastFilter: normalizeBrowseLastFilter(source.lastFilter)
+            };
         } catch (error) {
             console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
             return getDefaultBrowsePreferences();
@@ -13933,14 +14645,14 @@ window.BrowseStateManager = BrowseStateManager;
     function saveBrowseViewPreferences(partial = {}) {
         const current = getBrowseViewPreferences();
         const next = {
-            scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+            scrollPositions: mergeBrowseScrollPositions(current.scrollPositions, partial.scrollPositions),
             listAnchors: mergeBrowseAnchors(current.listAnchors, partial.listAnchors),
             autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
                 ? !!partial.autoScrollEnabled
                 : current.autoScrollEnabled,
             lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
-                ? (partial.lastFilter || null)
-                : current.lastFilter
+                ? normalizeBrowseLastFilter(partial.lastFilter)
+                : normalizeBrowseLastFilter(current.lastFilter)
         };
 
         try {
@@ -14589,6 +15301,11 @@ function normalizeRecordId(id) {
         return '';
     }
     return String(id);
+}
+
+function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
 }
 
 if (typeof window !== 'undefined') {
@@ -15338,6 +16055,21 @@ function setupMessageListener() {
         return null;
     };
 
+    const findFallbackSessionBySessionId = (sessionId, sourceWindow) => {
+        const safeSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+        if (!safeSessionId || !window.fallbackExamSessions || typeof fallbackExamSessions.get !== 'function') {
+            return null;
+        }
+        const rec = fallbackExamSessions.get(safeSessionId);
+        if (!rec) {
+            return null;
+        }
+        if (!sourceWindow || (rec.win && rec.win !== sourceWindow)) {
+            return null;
+        }
+        return { sid: safeSessionId, rec };
+    };
+
     const sendFallbackInit = (entry) => {
         if (!entry || !entry.rec || !entry.rec.win || entry.rec.win.closed) {
             return;
@@ -15348,18 +16080,24 @@ function setupMessageListener() {
             sessionId: entry.rec.sessionId || entry.sid
         };
         try {
-            entry.rec.win.postMessage({ type: 'INIT_SESSION', data: payload }, '*');
-            entry.rec.win.postMessage({ type: 'init_exam_session', data: payload }, '*');
+            entry.rec.win.postMessage({ type: 'INIT_SESSION', data: payload }, getMessageTargetOrigin());
+            entry.rec.win.postMessage({ type: 'init_exam_session', data: payload }, getMessageTargetOrigin());
         } catch (_) { }
     };
 
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
         try {
-            if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
+            if (!event.origin || event.origin === 'null') {
+                if (!(window.location && window.location.protocol === 'file:')) {
+                    return;
+                }
+            } else if (event.origin !== window.location.origin) {
                 return;
             }
-        } catch (_) { }
+        } catch (_) {
+            return;
+        }
 
         const data = event.data || {};
         const type = data.type;
@@ -15381,6 +16119,9 @@ function setupMessageListener() {
         } else if (type === 'REQUEST_INIT') {
             sendFallbackInit(findFallbackSessionByWindow(event.source));
         } else if (type === 'VOCAB_HIGHLIGHT_SAVE') {
+            if (!findFallbackSessionByWindow(event.source)) {
+                return;
+            }
             const payload = data.data && typeof data.data === 'object' ? data.data : data;
             saveReadingHighlightVocab(payload).catch((error) => {
                 console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
@@ -15389,31 +16130,27 @@ function setupMessageListener() {
             const payload = extractCompletionPayload(data) || {};
             const sessionId = extractCompletionSessionId(data);
             const matchedByWindow = findFallbackSessionByWindow(event.source);
-            const rec = sessionId ? (fallbackExamSessions.get(sessionId) || (matchedByWindow && matchedByWindow.rec)) : (matchedByWindow && matchedByWindow.rec);
-            const recSessionId = rec && (rec.sessionId || (matchedByWindow && matchedByWindow.sid) || sessionId);
+            const matchedBySession = findFallbackSessionBySessionId(sessionId, event.source);
+            const matched = matchedBySession || matchedByWindow;
+            const rec = matched && matched.rec;
+            if (!rec) {
+                return;
+            }
+            const recSessionId = rec && (rec.sessionId || matched.sid || sessionId);
             if (recSessionId && payload && typeof payload === 'object') {
                 payload.sessionId = recSessionId;
             }
             const shouldNotify = shouldAnnounceCompletion(recSessionId || sessionId);
-            if (rec) {
-                console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
-                savePracticeRecordFallback(rec.examId, payload).finally(() => {
-                    try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
-                    try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
-                    if (shouldNotify) {
-                        showMessage('练习已完成，正在更新记录...', 'success');
-                        showCompletionSummary(payload);
-                    }
-                    setTimeout(syncPracticeRecords, 300);
-                });
-            } else {
-                console.log('[System] 收到练习完成消息，正在同步记录...');
+            console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
+            savePracticeRecordFallback(rec.examId, payload).finally(() => {
+                try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
+                try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
                 if (shouldNotify) {
                     showMessage('练习已完成，正在更新记录...', 'success');
                     showCompletionSummary(payload);
                 }
                 setTimeout(syncPracticeRecords, 300);
-            }
+            });
         }
     });
 }
@@ -17364,10 +18101,25 @@ window.setActivePathMap = function (map) {
     return map || null;
 };
 
+function findExamInCurrentIndex(examId) {
+    const list = typeof getExamIndexState === 'function'
+        ? getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const hasIndex = Array.isArray(list) && list.length > 0;
+    const exam = hasIndex
+        ? list.find((item) => item && String(item.id) === String(examId))
+        : null;
+    return { exam, hasIndex };
+}
+
 function openExam(examId, options = {}) {
+    const lookup = findExamInCurrentIndex(examId);
+    if (lookup.hasIndex && !lookup.exam) {
+        return showMessage('题目不存在或已不可用', 'error');
+    }
     if (window.app && typeof window.app.openExam === 'function') {
         try {
-            return window.app.openExam(examId, options || {});
+            return window.app.openExam(lookup.exam ? lookup.exam.id : examId, options || {});
         } catch (error) {
             console.error('[Main] app.openExam 调用失败，已停止原始 HTML 兜底:', error);
             return showMessage('统一练习入口启动失败：app.openExam 抛出异常，已阻止打开原始题源 HTML。', 'error');
@@ -17379,9 +18131,7 @@ function openExam(examId, options = {}) {
 }
 
 function viewPDF(examId) {
-    // 增加数组化防御
-    const list = getExamIndexState();
-    const exam = list.find(e => e.id === examId);
+    const { exam } = findExamInCurrentIndex(examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
 
     const fullPath = window.buildResourcePath(exam, 'pdf');
@@ -17411,19 +18161,56 @@ function showRecordDetails(recordId) {
 }
 
 // Provide a local implementation to avoid dependency on legacy js/script.js
+function resolveSafePdfPath(pdfPath) {
+    if (!pdfPath || typeof pdfPath !== 'string') {
+        return '';
+    }
+    const rawPath = pdfPath.trim();
+    if (!rawPath || /(^|[\\/])\.\.([\\/]|$)/.test(rawPath)) {
+        return '';
+    }
+    try {
+        const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+        const resolved = new URL(rawPath, baseHref);
+        if (!resolved.pathname.toLowerCase().endsWith('.pdf')) {
+            return '';
+        }
+        if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+            const currentOrigin = window.location && window.location.origin;
+            return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                ? resolved.href
+                : '';
+        }
+        if (resolved.protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+            return resolved.href;
+        }
+    } catch (_) {
+        return '';
+    }
+    return '';
+}
+
 function openPDFSafely(pdfPath, examTitle = 'PDF') {
     try {
         if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
             return pdfHandler.openPDF(pdfPath, examTitle, { width: 1000, height: 800 });
         }
+        const safePdfPath = resolveSafePdfPath(pdfPath);
+        if (!safePdfPath) {
+            showMessage('PDF path is invalid or untrusted', 'error');
+            return null;
+        }
         let pdfWindow = null;
         try {
-            pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+            pdfWindow = window.open(safePdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes,noopener,noreferrer');
+            if (pdfWindow) {
+                try { pdfWindow.opener = null; } catch (_) { }
+            }
         } catch (_) { }
         if (!pdfWindow) {
             try {
                 // 降级：当前窗口打开
-                window.location.href = pdfPath;
+                window.location.href = safePdfPath;
                 return window;
             } catch (e) {
                 showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');

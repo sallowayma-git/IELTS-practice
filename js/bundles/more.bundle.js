@@ -21,8 +21,151 @@
         'application/vnd.ms-excel',
         'application/csv'
     ]);
+    const MAX_VOCAB_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+    const MAX_VOCAB_IMPORT_ENTRIES = 5000;
+    const MAX_WORD_TEXT_LENGTH = 160;
+    const MAX_MEANING_TEXT_LENGTH = 4000;
+    const MAX_EXAMPLE_TEXT_LENGTH = 4000;
+    const MAX_SOURCE_TEXT_LENGTH = 200;
+    const MAX_EXTRA_TEXT_LENGTH = 1000;
+    const MAX_PROGRESS_EXTRA_DEPTH = 8;
+    const MAX_PROGRESS_EXTRA_ARRAY_ITEMS = 100;
+    const MAX_PROGRESS_EXTRA_OBJECT_KEYS = 100;
+    const VOCAB_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const PROGRESS_EXTRA_FIELDS = Object.freeze([
+        'userInput',
+        'questionId',
+        'suiteId',
+        'examId',
+        'errorCount',
+        'timestamp',
+        'acceptedAnswers',
+        'canonicalAnswer',
+        'reasonCode',
+        'confidence',
+        'tokenIndex',
+        'metadata',
+        'spellingNote'
+    ]);
 
     const DEFAULT_EXPORT_VERSION = '1.0.0';
+
+    function normalizeTextField(value, maxLength) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().slice(0, maxLength);
+    }
+
+    function limitImportItems(items) {
+        return Array.isArray(items) ? items.slice(0, MAX_VOCAB_IMPORT_ENTRIES) : [];
+    }
+
+    function isUnsafeImportKey(key) {
+        return VOCAB_IMPORT_POLLUTION_KEYS.has(String(key));
+    }
+
+    function normalizeInteger(value, min, max) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return null;
+        }
+        const clamped = Math.min(max, Math.max(min, Math.floor(numeric)));
+        return clamped;
+    }
+
+    function normalizeNumber(value, min, max) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+            return null;
+        }
+        return Math.min(max, Math.max(min, numeric));
+    }
+
+    function normalizeDateString(value) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return null;
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return date.toISOString();
+    }
+
+    function sanitizeProgressExtraValue(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return normalizeTextField(value, MAX_EXTRA_TEXT_LENGTH);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth >= MAX_PROGRESS_EXTRA_DEPTH || seen.has(value)) {
+            return undefined;
+        }
+        seen.add(value);
+        if (Array.isArray(value)) {
+            return value
+                .slice(0, MAX_PROGRESS_EXTRA_ARRAY_ITEMS)
+                .map((item) => sanitizeProgressExtraValue(item, depth + 1, seen))
+                .filter((item) => item !== undefined);
+        }
+        const clone = {};
+        Object.keys(value)
+            .slice(0, MAX_PROGRESS_EXTRA_OBJECT_KEYS)
+            .forEach((key) => {
+                if (isUnsafeImportKey(key)) {
+                    return;
+                }
+                const safeKey = normalizeTextField(key, MAX_WORD_TEXT_LENGTH);
+                if (!safeKey || isUnsafeImportKey(safeKey)) {
+                    return;
+                }
+                const safeValue = sanitizeProgressExtraValue(value[key], depth + 1, seen);
+                if (safeValue !== undefined) {
+                    clone[safeKey] = safeValue;
+                }
+            });
+        return clone;
+    }
+
+    function normalizeProgressConfig(config) {
+        if (!config || typeof config !== 'object') {
+            return undefined;
+        }
+        const normalized = {};
+        const dailyNew = normalizeInteger(config.dailyNew, 0, 200);
+        const reviewLimit = normalizeInteger(config.reviewLimit, 1, 300);
+        const masteryCount = normalizeInteger(config.masteryCount, 1, 10);
+        if (dailyNew !== null) {
+            normalized.dailyNew = dailyNew;
+        }
+        if (reviewLimit !== null) {
+            normalized.reviewLimit = reviewLimit;
+        }
+        if (masteryCount !== null) {
+            normalized.masteryCount = masteryCount;
+        }
+        if (typeof config.notify === 'boolean') {
+            normalized.notify = config.notify;
+        }
+        if (typeof config.theme === 'string') {
+            const theme = config.theme.trim().toLowerCase();
+            if (theme === 'auto' || theme === 'light' || theme === 'dark') {
+                normalized.theme = theme;
+            }
+        }
+        return Object.keys(normalized).length ? normalized : undefined;
+    }
 
     function normalizeFrequency(value) {
         if (value == null || value === '') {
@@ -102,19 +245,120 @@
         if (!raw.word || !raw.meaning) {
             return null;
         }
-        const clone = {};
-        Object.keys(raw).forEach((key) => {
-            clone[key] = raw[key];
+        const clone = {
+            word: normalizeTextField(raw.word, MAX_WORD_TEXT_LENGTH),
+            meaning: normalizeTextField(raw.meaning, MAX_MEANING_TEXT_LENGTH),
+            example: normalizeTextField(raw.example, MAX_EXAMPLE_TEXT_LENGTH),
+            note: normalizeTextField(raw.note, MAX_EXAMPLE_TEXT_LENGTH)
+        };
+        const id = normalizeTextField(raw.id, MAX_SOURCE_TEXT_LENGTH);
+        const source = normalizeTextField(raw.source, MAX_SOURCE_TEXT_LENGTH);
+        if (id) {
+            clone.id = id;
+        }
+        if (source) {
+            clone.source = source;
+        }
+        const freq = normalizeFrequency(raw.freq);
+        if (freq !== null) {
+            clone.freq = freq;
+        }
+        const easeFactor = normalizeNumber(raw.easeFactor, 1.3, 3.0);
+        if (easeFactor !== null) {
+            clone.easeFactor = easeFactor;
+        }
+        [
+            ['interval', 0, 36500],
+            ['repetitions', 0, 100000],
+            ['intraCycles', 0, 100000],
+            ['correctCount', 0, 100000]
+        ].forEach(([key, min, max]) => {
+            const value = normalizeInteger(raw[key], min, max);
+            if (value !== null) {
+                clone[key] = value;
+            }
         });
+        ['lastReviewed', 'nextReview', 'createdAt', 'updatedAt'].forEach((key) => {
+            const value = normalizeDateString(raw[key]);
+            if (value) {
+                clone[key] = value;
+            }
+        });
+        PROGRESS_EXTRA_FIELDS.forEach((key) => {
+            if (raw[key] === undefined || isUnsafeImportKey(key)) {
+                return;
+            }
+            const value = sanitizeProgressExtraValue(raw[key]);
+            if (value !== undefined) {
+                clone[key] = value;
+            }
+        });
+        if (!clone.word || !clone.meaning) {
+            return null;
+        }
         return clone;
     }
 
+    function validateVocabImportFile(file) {
+        if (!file || typeof file.size !== 'number') {
+            throw new Error('Invalid import file.');
+        }
+        if (file.size > MAX_VOCAB_IMPORT_FILE_BYTES) {
+            throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+        }
+        const name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
+        const extension = name.split('.').pop();
+        const mimeType = typeof file.type === 'string' ? file.type.split(';')[0].trim().toLowerCase() : '';
+        const supportedExtension = extension === 'json' || extension === 'csv';
+        const supportedType = SUPPORTED_JSON_TYPES.has(mimeType) || SUPPORTED_CSV_TYPES.has(mimeType) || mimeType === '';
+        if (!supportedExtension || !supportedType) {
+            throw new Error('Only JSON and CSV import files are supported.');
+        }
+    }
+
     function buildImportResult(type, entries, meta = {}) {
-        const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
-        const normalizedMeta = { ...meta };
+        const safeEntries = limitImportItems(entries).filter(Boolean);
+        const normalizedMeta = {};
+        if (typeof meta.format === 'string') {
+            normalizedMeta.format = normalizeTextField(meta.format, 40);
+        }
+        if (Number.isFinite(Number(meta.originalLength))) {
+            normalizedMeta.originalLength = Math.max(0, Math.floor(Number(meta.originalLength)));
+        }
+        if (typeof meta.version === 'string') {
+            normalizedMeta.version = normalizeTextField(meta.version, 40);
+        }
+        if (typeof meta.name === 'string') {
+            normalizedMeta.name = normalizeTextField(meta.name, MAX_SOURCE_TEXT_LENGTH);
+        }
+        if (typeof meta.source === 'string') {
+            normalizedMeta.source = normalizeTextField(meta.source, MAX_SOURCE_TEXT_LENGTH);
+        }
+        if (typeof meta.exportedAt === 'string') {
+            const exportedAt = normalizeDateString(meta.exportedAt);
+            if (exportedAt) {
+                normalizedMeta.exportedAt = exportedAt;
+            }
+        }
+        const config = normalizeProgressConfig(meta.config);
+        if (config) {
+            normalizedMeta.config = config;
+        }
         normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
+        normalizedMeta.category = normalizeCategory(meta.category, normalizedMeta.category);
         if (Array.isArray(normalizedMeta.reviewQueue)) {
-            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
+            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue
+                .slice(0, MAX_VOCAB_IMPORT_ENTRIES)
+                .map((item) => normalizeTextField(String(item), MAX_WORD_TEXT_LENGTH))
+                .filter((item) => item && !isUnsafeImportKey(item))
+                .filter(Boolean);
+        }
+        if (Array.isArray(meta.reviewQueue)) {
+            normalizedMeta.reviewQueue = meta.reviewQueue
+                .slice(0, MAX_VOCAB_IMPORT_ENTRIES)
+                .map((item) => normalizeTextField(String(item), MAX_WORD_TEXT_LENGTH))
+                .filter((item) => item && !isUnsafeImportKey(item))
+                .filter(Boolean);
         }
         return {
             type,
@@ -127,12 +371,12 @@
         if (!raw || typeof raw !== 'object') {
             return null;
         }
-        const word = typeof raw.word === 'string' ? raw.word.trim() : '';
-        const meaning = typeof raw.meaning === 'string' ? raw.meaning.trim() : '';
+        const word = normalizeTextField(raw.word, MAX_WORD_TEXT_LENGTH);
+        const meaning = normalizeTextField(raw.meaning, MAX_MEANING_TEXT_LENGTH);
         if (!word || !meaning) {
             return null;
         }
-        const example = typeof raw.example === 'string' ? raw.example.trim() : '';
+        const example = normalizeTextField(raw.example, MAX_EXAMPLE_TEXT_LENGTH);
         const freq = normalizeFrequency(raw.freq);
         const normalized = {
             word,
@@ -151,6 +395,9 @@
         }
         const payload = Array.isArray(data) ? data : Array.isArray(data.words) ? data.words : null;
         if (!Array.isArray(payload) || !payload.length) {
+            return false;
+        }
+        if (payload.length > MAX_VOCAB_IMPORT_ENTRIES) {
             return false;
         }
         return payload.every((item) => !!normalizeEntry(item));
@@ -210,7 +457,8 @@
             freq: headerCells.indexOf('freq')
         };
         const entries = [];
-        for (let i = 1; i < lines.length; i += 1) {
+        const rowLimit = Math.min(lines.length, MAX_VOCAB_IMPORT_ENTRIES + 1);
+        for (let i = 1; i < rowLimit; i += 1) {
             const cells = splitCsvLine(lines[i], delimiter);
             const candidate = {
                 word: columnIndex.word >= 0 ? cells[columnIndex.word] : cells[0],
@@ -232,41 +480,44 @@
     function parseJson(text) {
         const payload = JSON.parse(text);
         if (Array.isArray(payload)) {
-            return buildImportResult('wordlist', payload.map(normalizeEntry).filter(Boolean), {
+            const items = limitImportItems(payload);
+            return buildImportResult('wordlist', items.map(normalizeEntry).filter(Boolean), {
                 format: 'json',
                 originalLength: payload.length
             });
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
+            const words = limitImportItems(payload.words);
             const metaCategory = extractCategory(payload.meta, null);
             const category = extractCategory(payload, metaCategory || 'external');
             const looksProgress = typeof payload.version === 'string'
                 || Array.isArray(payload.reviewQueue)
-                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+                || words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
             if (looksProgress) {
-                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                const entries = words.map(cloneProgressEntry).filter(Boolean);
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
-                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
+                    config: payload.config,
                     reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
                 });
             }
-            return buildImportResult('wordlist', payload.words.map(normalizeEntry).filter(Boolean), {
+            return buildImportResult('wordlist', words.map(normalizeEntry).filter(Boolean), {
                 format: 'json',
                 originalLength: payload.words.length,
                 category
             });
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.entries)) {
+            const entries = limitImportItems(payload.entries);
             const metaCategory = extractCategory(payload.meta, null);
             const category = extractCategory(payload, metaCategory || 'external');
-            return buildImportResult('wordlist', payload.entries.map(normalizeEntry).filter(Boolean), {
+            return buildImportResult('wordlist', entries.map(normalizeEntry).filter(Boolean), {
                 format: 'json',
                 originalLength: payload.entries.length,
                 category
@@ -294,6 +545,7 @@
         if (!(file instanceof Blob)) {
             throw new Error('仅支持通过文件导入词表');
         }
+        validateVocabImportFile(file);
         const name = typeof file.name === 'string' ? file.name.toLowerCase() : '';
         const extension = name.split('.').pop();
         const mimeType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
@@ -782,6 +1034,18 @@
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
+    const MAX_STORED_VOCAB_WORDS = 5000;
+    const MAX_WORD_TEXT_LENGTH = 160;
+    const MAX_MEANING_TEXT_LENGTH = 4000;
+    const MAX_EXAMPLE_TEXT_LENGTH = 4000;
+    const MAX_NOTE_TEXT_LENGTH = 4000;
+    const MAX_SOURCE_TEXT_LENGTH = 200;
+    const MAX_EXTRA_TEXT_LENGTH = 1000;
+    const MAX_METADATA_JSON_CHARS = 8000;
+    const MAX_EXTRA_DEPTH = 8;
+    const MAX_EXTRA_OBJECT_KEYS = 100;
+    const MAX_EXTRA_ARRAY_ITEMS = 100;
+    const EXTRA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     const state = {
         repositories: null,
@@ -830,35 +1094,101 @@
     }
 
     function generateId(seed) {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            var seedStr = seed ? String(seed).trim() : '';
-            if (seedStr) {
-                var hash = 0;
-                for (var i = 0; i < seedStr.length; i++) {
-                    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
-                    hash |= 0;
-                }
-                return 'word-' + Math.abs(hash).toString(36);
+        var seedStr = seed ? String(seed).trim() : '';
+        if (seedStr) {
+            var hash = 0;
+            for (var i = 0; i < seedStr.length; i++) {
+                hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+                hash |= 0;
             }
+            return 'word-' + Math.abs(hash).toString(36);
+        }
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
             return crypto.randomUUID();
         }
-        const base = seed ? String(seed).trim().toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'word';
-        return `${base}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+            var bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            return 'word-' + Array.prototype.map.call(bytes, function (byte) {
+                return byte.toString(16).padStart(2, '0');
+            }).join('');
+        }
+        return 'word-' + Date.now();
+    }
+
+    function normalizeTextField(value, maxLength) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().slice(0, maxLength);
+    }
+
+    function normalizeExtraValue(value, depth = 0, seen = new WeakSet()) {
+        if (typeof value === 'string') {
+            return normalizeTextField(value, MAX_EXTRA_TEXT_LENGTH);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (value == null || typeof value === 'boolean') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            if (depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
+                return null;
+            }
+            seen.add(value);
+            return value
+                .slice(0, MAX_EXTRA_ARRAY_ITEMS)
+                .map((item) => normalizeExtraValue(item, depth + 1, seen))
+                .filter((item) => item !== null && item !== undefined);
+        }
+        if (value && typeof value === 'object') {
+            if (depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
+                return null;
+            }
+            seen.add(value);
+            try {
+                if (JSON.stringify(value).length > MAX_METADATA_JSON_CHARS) {
+                    return null;
+                }
+                const clone = {};
+                Object.keys(value)
+                    .slice(0, MAX_EXTRA_OBJECT_KEYS)
+                    .forEach((key) => {
+                        if (EXTRA_POLLUTION_KEYS.has(String(key))) {
+                            return;
+                        }
+                        const safeKey = normalizeTextField(key, MAX_SOURCE_TEXT_LENGTH);
+                        if (!safeKey || EXTRA_POLLUTION_KEYS.has(safeKey)) {
+                            return;
+                        }
+                        const normalized = normalizeExtraValue(value[key], depth + 1, seen);
+                        if (normalized !== null && normalized !== undefined) {
+                            clone[safeKey] = normalized;
+                        }
+                    });
+                return JSON.stringify(clone).length <= MAX_METADATA_JSON_CHARS ? clone : null;
+            } catch (_) {
+                return null;
+            }
+        }
+        return null;
     }
 
     function normalizeWordRecord(entry) {
         if (!entry || typeof entry !== 'object') {
             return null;
         }
-        const baseWord = typeof entry.word === 'string' ? entry.word.trim() : '';
-        const baseMeaning = typeof entry.meaning === 'string' ? entry.meaning.trim() : '';
+        const baseWord = normalizeTextField(entry.word, MAX_WORD_TEXT_LENGTH);
+        const baseMeaning = normalizeTextField(entry.meaning, MAX_MEANING_TEXT_LENGTH);
         if (!baseWord || !baseMeaning) {
             return null;
         }
-        const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : generateId(baseWord);
-        const example = typeof entry.example === 'string' ? entry.example.trim() : '';
-        const note = typeof entry.note === 'string' ? entry.note.trim() : '';
-        const source = typeof entry.source === 'string' ? entry.source.trim() : '';
+        const id = normalizeTextField(entry.id, MAX_SOURCE_TEXT_LENGTH) || generateId(baseWord);
+        const example = normalizeTextField(entry.example, MAX_EXAMPLE_TEXT_LENGTH);
+        const note = normalizeTextField(entry.note, MAX_NOTE_TEXT_LENGTH);
+        const source = normalizeTextField(entry.source, MAX_SOURCE_TEXT_LENGTH);
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
 
         // SM-2 字段
@@ -936,7 +1266,10 @@
             'spellingNote'
         ].forEach((key) => {
             if (entry[key] !== undefined) {
-                record[key] = entry[key];
+                const normalizedExtra = normalizeExtraValue(entry[key]);
+                if (normalizedExtra !== null && normalizedExtra !== undefined) {
+                    record[key] = normalizedExtra;
+                }
             }
         });
         return record;
@@ -1067,7 +1400,7 @@
     }
 
     function setWordsInternal(words) {
-        state.words = words;
+        state.words = Array.isArray(words) ? words.slice(0, MAX_STORED_VOCAB_WORDS) : [];
         rebuildIndex();
     }
 
@@ -1098,11 +1431,44 @@
         if (!listWords) {
             return [];
         }
-        return listWords.map((entry) => normalizeListEntry(entry, listId)).filter(Boolean);
+        return listWords
+            .slice(0, MAX_STORED_VOCAB_WORDS)
+            .map((entry) => normalizeListEntry(entry, listId))
+            .filter(Boolean);
+    }
+
+    function resolveTrustedVocabJsonUrl(rawUrl) {
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+            const resolved = new URL(String(rawUrl), baseHref);
+            const protocol = (resolved.protocol || '').toLowerCase();
+            if (!resolved.pathname || !resolved.pathname.toLowerCase().endsWith('.json')) {
+                return '';
+            }
+            if (protocol === 'http:' || protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.href
+                    : '';
+            }
+            if (protocol === 'file:' && window.location && window.location.protocol === 'file:') {
+                return resolved.href;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
     }
 
     async function fetchJsonWithFileFallback(url) {
-        const primary = await fetch(url, { cache: 'no-store' });
+        const trustedUrl = resolveTrustedVocabJsonUrl(url);
+        if (!trustedUrl) {
+            throw new Error('untrusted_vocab_json_url');
+        }
+        const primary = await fetch(trustedUrl, { cache: 'no-store' });
         if (!primary.ok) {
             throw new Error(`HTTP ${primary.status}`);
         }
@@ -1116,8 +1482,13 @@
                 return;
             }
             try {
+                const trustedUrl = resolveTrustedVocabJsonUrl(url);
+                if (!trustedUrl) {
+                    reject(new Error('untrusted_vocab_json_url'));
+                    return;
+                }
                 const xhr = new XMLHttpRequest();
-                xhr.open('GET', url, true);
+                xhr.open('GET', trustedUrl, true);
                 xhr.overrideMimeType('application/json');
                 xhr.onreadystatechange = () => {
                     if (xhr.readyState !== 4) {
@@ -1184,6 +1555,7 @@
             ? (Array.isArray(payload) ? payload.map(validator.normalizeEntry).filter(Boolean) : [])
             : (Array.isArray(payload) ? payload : []);
         return entries
+            .slice(0, MAX_STORED_VOCAB_WORDS)
             .map((entry) => normalizeWordRecord({ ...entry, box: 1, correctCount: 0, lastReviewed: null, nextReview: null }))
             .filter(Boolean);
     }
@@ -1212,7 +1584,9 @@
             }
 
             state.config = mergeConfig(storedConfig);
-            state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
+            state.reviewQueue = Array.isArray(storedQueue)
+                ? storedQueue.slice(0, MAX_STORED_VOCAB_WORDS).map((id) => normalizeTextField(String(id), MAX_SOURCE_TEXT_LENGTH)).filter(Boolean)
+                : [];
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
@@ -1332,7 +1706,7 @@
 
     async function setWords(words) {
         const normalized = Array.isArray(words)
-            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            ? words.slice(0, MAX_STORED_VOCAB_WORDS).map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
         setWordsInternal(normalized);
         await persist(getActiveStorageKey(), normalized);
@@ -1377,7 +1751,9 @@
     }
 
     async function setReviewQueue(queue) {
-        state.reviewQueue = Array.isArray(queue) ? queue.map((id) => String(id)) : [];
+        state.reviewQueue = Array.isArray(queue)
+            ? queue.slice(0, MAX_STORED_VOCAB_WORDS).map((id) => normalizeTextField(String(id), MAX_SOURCE_TEXT_LENGTH)).filter(Boolean)
+            : [];
         await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
         return getReviewQueue();
     }
@@ -1723,10 +2099,11 @@
         } else {
             words.push(normalized);
         }
-        await persist(listConfig.storageKey, words.filter(Boolean));
+        const limitedWords = words.filter(Boolean).slice(0, MAX_STORED_VOCAB_WORDS);
+        await persist(listConfig.storageKey, limitedWords);
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
-            setWordsInternal(words.filter(Boolean));
+            setWordsInternal(limitedWords);
         }
         return normalized;
     }
@@ -1790,6 +2167,13 @@
 (function(window) {
     'use strict';
 
+    const SAFE_TOAST_TYPES = new Set(['info', 'success', 'warning', 'error']);
+
+    function normalizeToastType(type) {
+        const value = String(type || '').toLowerCase();
+        return SAFE_TOAST_TYPES.has(value) ? value : 'info';
+    }
+
     class VocabListSwitcher {
         constructor(vocabStore) {
             if (!vocabStore) {
@@ -1824,24 +2208,43 @@
             this.currentListId = this.vocabStore.getActiveListId();
             this.previousListId = this.currentListId;
 
-            // 创建切换器 HTML 结构
-            const switcherHTML = `
-                <div class="vocab-list-switcher">
-                    <button class="switcher-btn" id="vocab-list-menu-btn" type="button" aria-label="切换词表">
-                        <span class="current-list-icon"></span>
-                        <span class="current-list-name"></span>
-                        <span class="dropdown-icon">▼</span>
-                    </button>
-                    <div class="switcher-dropdown" id="vocab-list-dropdown" style="display: none;" role="menu">
-                        <div class="dropdown-content">
-                            ${this.renderListOptions()}
-                        </div>
-                    </div>
-                </div>
-            `;
+            // 创建切换器 DOM 结构，避免词表元数据被当作 HTML 执行
+            container.textContent = '';
 
-            // 插入到容器
-            container.innerHTML = switcherHTML;
+            const switcher = document.createElement('div');
+            switcher.className = 'vocab-list-switcher';
+
+            const menuButton = document.createElement('button');
+            menuButton.className = 'switcher-btn';
+            menuButton.id = 'vocab-list-menu-btn';
+            menuButton.type = 'button';
+            menuButton.setAttribute('aria-label', '切换词表');
+
+            const currentIcon = document.createElement('span');
+            currentIcon.className = 'current-list-icon';
+
+            const currentName = document.createElement('span');
+            currentName.className = 'current-list-name';
+
+            const dropdownIcon = document.createElement('span');
+            dropdownIcon.className = 'dropdown-icon';
+            dropdownIcon.textContent = '▼';
+
+            menuButton.append(currentIcon, currentName, dropdownIcon);
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'switcher-dropdown';
+            dropdown.id = 'vocab-list-dropdown';
+            dropdown.style.display = 'none';
+            dropdown.setAttribute('role', 'menu');
+
+            const dropdownContent = document.createElement('div');
+            dropdownContent.className = 'dropdown-content';
+            this.renderListOptions(dropdownContent);
+
+            dropdown.appendChild(dropdownContent);
+            switcher.append(menuButton, dropdown);
+            container.appendChild(switcher);
 
             // 更新当前词表显示
             this.updateCurrentListDisplay();
@@ -1855,34 +2258,97 @@
 
         /**
          * 渲染词表选项列表
-         * @returns {string} HTML 字符串
+         * @param {HTMLElement} dropdownContent - 下拉内容容器
          */
-        renderListOptions() {
-            const lists = this.vocabStore.VOCAB_LISTS;
+        renderListOptions(dropdownContent) {
+            if (!dropdownContent) return;
+
+            dropdownContent.textContent = '';
             const availableLists = this.vocabStore.getAvailableLists();
 
             if (!availableLists || availableLists.length === 0) {
-                return '<div class="list-option-empty">暂无可用词表</div>';
+                const empty = document.createElement('div');
+                empty.className = 'list-option-empty';
+                empty.textContent = '暂无可用词表';
+                dropdownContent.appendChild(empty);
+                return;
             }
 
-            return availableLists.map(list => {
-                const isActive = list.id === this.currentListId;
-                const activeClass = isActive ? 'active' : '';
+            availableLists.forEach(list => {
+                dropdownContent.appendChild(this.createListOption(list));
+            });
+        }
 
-                return `
-                    <div class="list-option ${activeClass}"
-                         data-list-id="${list.id}"
-                         role="menuitem"
-                         tabindex="0">
-                        <span class="list-icon">${list.icon}</span>
-                        <span class="list-name">${list.name}</span>
-                        <span class="list-count" data-list-id="${list.id}">
-                            <span class="count-loading">...</span>
-                        </span>
-                        ${isActive ? '<span class="active-indicator">✓</span>' : ''}
-                    </div>
-                `;
-            }).join('');
+        /**
+         * 创建单个词表选项
+         * @param {Object} list - 词表配置
+         * @returns {HTMLElement}
+         */
+        createListOption(list) {
+            const listId = String(list.id || '');
+            const isActive = listId === this.currentListId;
+
+            const option = document.createElement('div');
+            option.className = 'list-option';
+            if (isActive) {
+                option.classList.add('active');
+            }
+            option.dataset.listId = listId;
+            option.setAttribute('role', 'menuitem');
+            option.tabIndex = 0;
+
+            const icon = document.createElement('span');
+            icon.className = 'list-icon';
+            icon.textContent = list.icon || '';
+
+            const name = document.createElement('span');
+            name.className = 'list-name';
+            name.textContent = list.name || '';
+
+            const count = document.createElement('span');
+            count.className = 'list-count';
+            count.dataset.listId = listId;
+
+            const loading = document.createElement('span');
+            loading.className = 'count-loading';
+            loading.textContent = '...';
+            count.appendChild(loading);
+
+            option.append(icon, name, count);
+
+            if (isActive) {
+                const activeIndicator = document.createElement('span');
+                activeIndicator.className = 'active-indicator';
+                activeIndicator.textContent = '✓';
+                option.appendChild(activeIndicator);
+            }
+
+            return option;
+        }
+
+        /**
+         * 按数据属性查找词表选项，避免拼接 CSS 选择器
+         * @param {string} listId - 词表 ID
+         * @returns {HTMLElement|null}
+         */
+        findListOption(listId) {
+            if (!this.container) return null;
+            const targetId = String(listId);
+            const options = this.container.querySelectorAll('.list-option');
+            return Array.from(options).find(option => option.dataset.listId === targetId) || null;
+        }
+
+        /**
+         * 按数据属性查找词表计数元素，避免拼接 CSS 选择器
+         * @param {string} listId - 词表 ID
+         * @returns {HTMLElement|null}
+         */
+        findListCountLoading(listId) {
+            if (!this.container) return null;
+            const targetId = String(listId);
+            const counts = this.container.querySelectorAll('.list-count');
+            const count = Array.from(counts).find(element => element.dataset.listId === targetId);
+            return count ? count.querySelector('.count-loading') : null;
         }
 
         /**
@@ -2110,7 +2576,7 @@
         showLoadingState(listId) {
             if (!this.container) return;
 
-            const listOption = this.container.querySelector(`.list-option[data-list-id="${listId}"]`);
+            const listOption = this.findListOption(listId);
             if (listOption) {
                 listOption.classList.add('loading');
             }
@@ -2124,7 +2590,7 @@
 
             const dropdownContent = this.container.querySelector('.dropdown-content');
             if (dropdownContent) {
-                dropdownContent.innerHTML = this.renderListOptions();
+                this.renderListOptions(dropdownContent);
             }
 
             // 更新词表计数
@@ -2194,7 +2660,7 @@
 
             // 更新 UI 显示
             results.forEach(({ listId, count }) => {
-                const countEl = this.container.querySelector(`.list-count[data-list-id="${listId}"] .count-loading`);
+                const countEl = this.findListCountLoading(listId);
                 if (countEl) {
                     countEl.textContent = count;
                     countEl.classList.remove('count-loading');
@@ -2236,22 +2702,23 @@
          * @param {string} type - 消息类型 ('info' | 'error' | 'success')
          */
         showToast(message, type = 'info') {
+            const safeType = normalizeToastType(type);
             // 检查是否存在全局 Toast 组件
             if (window.Toast && typeof window.Toast.show === 'function') {
-                window.Toast.show(message, type);
+                window.Toast.show(message, safeType);
                 return;
             }
 
             // 降级方案：使用简单的 DOM 提示
             const toast = document.createElement('div');
-            toast.className = `vocab-switcher-toast toast-${type}`;
+            toast.className = `vocab-switcher-toast toast-${safeType}`;
             toast.textContent = message;
             toast.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
                 padding: 12px 20px;
-                background: ${type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : '#2196f3'};
+                background: ${safeType === 'error' ? '#f44336' : safeType === 'success' ? '#4caf50' : safeType === 'warning' ? '#f59e0b' : '#2196f3'};
                 color: white;
                 border-radius: 4px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.2);
@@ -2281,7 +2748,7 @@
         destroy() {
             this.detachEventListeners();
             if (this.container) {
-                this.container.innerHTML = '';
+                this.container.textContent = '';
                 this.container = null;
             }
         }
@@ -2389,6 +2856,7 @@
         reviewLimit: { min: 1, max: 300 },
         masteryCount: { min: 1, max: 10 }
     });
+    const MAX_SPELLING_ANSWER_LENGTH = 160;
 
     const state = {
         container: null,
@@ -2446,6 +2914,17 @@
             return document.querySelector(target);
         }
         return target;
+    }
+
+    function escapeCssSelectorValue(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            try {
+                return window.CSS.escape(String(value));
+            } catch (_) {
+                // Fall through to the conservative escape below.
+            }
+        }
+        return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
     }
 
     function showFeedbackMessage(message, type = 'info') {
@@ -2826,7 +3305,7 @@
         if (!state.elements.sessionCard || !action) {
             return false;
         }
-        const trigger = state.elements.sessionCard.querySelector(`[data-action="${action}"]`);
+        const trigger = state.elements.sessionCard.querySelector(`[data-action="${escapeCssSelectorValue(action)}"]`);
         if (!trigger || trigger.disabled) {
             return false;
         }
@@ -3513,6 +3992,29 @@
             .replace(/'/g, '&#039;');
     }
 
+    function toFiniteNumber(value, fallback = 0) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+    }
+
+    function toNonNegativeInteger(value, fallback = 0) {
+        return Math.max(0, Math.trunc(toFiniteNumber(value, fallback)));
+    }
+
+    function formatDecimal(value, fallback = 0, digits = 2) {
+        return toFiniteNumber(value, fallback).toFixed(digits);
+    }
+
+    function limitSpellingAnswer(value) {
+        return String(value == null ? '' : value)
+            .replace(/[\u0000-\u001F\u007F]/g, '')
+            .slice(0, MAX_SPELLING_ANSWER_LENGTH);
+    }
+
+    function normalizeSpellingAnswer(value) {
+        return limitSpellingAnswer(value).trim();
+    }
+
     function buildFeedbackSummary(status, word) {
         const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '稍后安排';
         if (status === 'correct') {
@@ -3627,8 +4129,8 @@
     }
 
     function levenshteinDistance(a, b) {
-        const s = (a || '').toLowerCase().trim();
-        const t = (b || '').toLowerCase().trim();
+        const s = normalizeSpellingAnswer(a).toLowerCase();
+        const t = normalizeSpellingAnswer(b).toLowerCase();
         if (!s.length) {
             return t.length;
         }
@@ -3656,8 +4158,8 @@
     }
 
     function evaluateAnswer(input, word) {
-        const normalizedAnswer = (input || '').trim();
-        const normalizedWord = (word.word || '').trim();
+        const normalizedAnswer = normalizeSpellingAnswer(input);
+        const normalizedWord = normalizeSpellingAnswer(word.word);
         if (!normalizedWord) {
             return { status: 'wrong', quality: 'wrong', distance: 0 };
         }
@@ -3698,7 +4200,10 @@
         if (!input) {
             return;
         }
-        const answer = input.value.trim();
+        const answer = normalizeSpellingAnswer(input.value);
+        if (input.value !== answer) {
+            input.value = answer;
+        }
         const word = state.session.currentWord;
 
         if (!answer) {
@@ -3839,7 +4344,7 @@
             recognitionQuality,
             spellingAttempts,
             spellingCorrect: spellingAttempts === 0 && !skipped,
-            typed: options.answer ?? session.typedAnswer,
+            typed: normalizeSpellingAnswer(options.answer ?? session.typedAnswer),
             skipped,
             finalQuality,
             isIntraReview,
@@ -4073,9 +4578,12 @@
             `;
             return;
         }
+        const safeWord = escapeHtml(word.word || '');
+        const safeMeaning = escapeHtml(word.meaning || '暂无释义');
+
         if (session.stage === 'recognition') {
             const meaningBlock = session.meaningVisible
-                ? `<div class="vocab-card__meaning" data-visible="true">${word.meaning || '暂无释义'}</div>`
+                ? `<div class="vocab-card__meaning" data-visible="true">${safeMeaning}</div>`
                 : '';
             const revealControl = session.meaningVisible
                 ? ''
@@ -4083,7 +4591,7 @@
             card.innerHTML = `
                 <div class="vocab-card vocab-card--recognition">
                     <div class="vocab-card__wordline">
-                        <div class="vocab-card__word">${word.word}</div>
+                        <div class="vocab-card__word">${safeWord}</div>
                     </div>
                     ${meaningBlock}
                     ${revealControl}
@@ -4113,12 +4621,12 @@
             card.innerHTML = `
                 <div class="vocab-card vocab-card--spelling">
                     <div class="vocab-card__meaning" data-visible="true" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">
-                        ${word.meaning || '暂无释义'}
+                        ${safeMeaning}
                     </div>
                     <p class="vocab-card__instruction">${instructionText}</p>
                     ${attemptsHint}
                     <div class="vocab-card__input-block">
-                        <input type="text" name="answer" autocomplete="off" placeholder="在此输入拼写" value="${escapeHtml(session.typedAnswer)}" autofocus>
+                        <input type="text" name="answer" autocomplete="off" maxlength="${MAX_SPELLING_ANSWER_LENGTH}" placeholder="在此输入拼写" value="${escapeHtml(limitSpellingAnswer(session.typedAnswer))}" autofocus>
                         <div class="vocab-card__input-actions">
                             <button class="btn btn-ghost" type="button" data-action="skip-spelling">跳过</button>
                             <button class="btn btn-primary" type="button" data-action="submit-spelling">提交 (Enter)</button>
@@ -4131,30 +4639,36 @@
                 input.focus();
                 input.setSelectionRange(input.value.length, input.value.length);
                 input.addEventListener('input', (event) => {
-                    state.session.typedAnswer = event.target.value;
+                    const limited = limitSpellingAnswer(event.target.value);
+                    if (event.target.value !== limited) {
+                        event.target.value = limited;
+                    }
+                    state.session.typedAnswer = limited;
                 });
             }
             return;
         }
         if (session.stage === 'feedback') {
             const recognitionQuality = session.lastAnswer?.recognitionQuality || 'good';
-            const spellingAttempts = session.lastAnswer?.spellingAttempts || 0;
+            const spellingAttempts = toNonNegativeInteger(session.lastAnswer?.spellingAttempts, 0);
             const spellingCorrect = session.lastAnswer?.spellingCorrect !== false;
             const skipped = session.lastAnswer?.skipped || false;
-            const baseEF = session.lastAnswer?.baseEF || word.easeFactor;
-            const finalEF = session.lastAnswer?.finalEF || word.easeFactor;
-            const penalty = session.lastAnswer?.penalty || 0;
+            const currentEaseFactor = toFiniteNumber(word.easeFactor, 2.5);
+            const baseEF = toFiniteNumber(session.lastAnswer?.baseEF, currentEaseFactor);
+            const finalEF = toFiniteNumber(session.lastAnswer?.finalEF, currentEaseFactor);
+            const penalty = toFiniteNumber(session.lastAnswer?.penalty, 0);
 
             const icon = spellingAttempts >= 3 ? '❌' : (spellingAttempts > 0 || skipped ? '🟡' : '✅');
             const title = spellingAttempts >= 3 ? '需要加强' : (spellingAttempts > 0 || skipped ? '接近了' : '太棒了！');
 
             const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '待安排';
+            const safeNextReview = escapeHtml(nextReview);
             const typedAnswer = session.lastAnswer?.typed ? escapeHtml(session.lastAnswer.typed) : '';
 
             // SM-2 信息展示
-            const intervalDays = word.interval || 1;
-            const easeFactor = finalEF.toFixed(2);
-            const repetitions = word.repetitions || 0;
+            const intervalDays = escapeHtml(toNonNegativeInteger(word.interval, 1) || 1);
+            const easeFactor = escapeHtml(finalEF.toFixed(2));
+            const repetitions = escapeHtml(toNonNegativeInteger(word.repetitions, 0));
 
             // 拼写结果提示
             let spellingFeedback = '';
@@ -4170,12 +4684,14 @@
 
             // 认识质量标签
             const recognitionLabel = recognitionQuality === 'easy' ? '简单' : recognitionQuality === 'good' ? '一般' : '困难';
-            const recognitionChange = baseEF > word.easeFactor ? `(EF +${(baseEF - (word.easeFactor || 2.5)).toFixed(2)})` : '';
+            const safeRecognitionLabel = escapeHtml(recognitionLabel);
+            const recognitionChange = baseEF > currentEaseFactor ? `(EF +${(baseEF - currentEaseFactor).toFixed(2)})` : '';
 
             // 质量分解
             const isIntraReview = session.lastAnswer?.isIntraReview || false;
             const cycleType = session.lastAnswer?.cycleType || 'normal';
-            const intraCycles = session.lastAnswer?.intraCycles || 0;
+            const intraCyclesValue = toNonNegativeInteger(session.lastAnswer?.intraCycles, 0);
+            const intraCycles = escapeHtml(intraCyclesValue);
             const needsContinueIntra = session.lastAnswer?.needsContinueIntra || false;
             const needsEasyVerification = session.lastAnswer?.needsEasyVerification || false;
             const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
@@ -4195,7 +4711,7 @@
             } else if (needsContinueIntra) {
                 // 继续轮内循环
                 const maxCycles = 12;
-                const remaining = maxCycles - intraCycles;
+                const remaining = maxCycles - intraCyclesValue;
                 qualityBreakdown = `
                     <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; border-radius: 8px; font-size: 0.875rem;">
                         <p style="margin: 0 0 0.5rem; font-weight: 600; color: #856404;">🔄 继续轮内学习</p>
@@ -4226,12 +4742,13 @@
                 // 轮内循环中的调整
                 const adjustment = session.lastAnswer?.finalQuality === 'easy' ? '+0.15' :
                                  session.lastAnswer?.finalQuality === 'good' ? '+0.05' : '-0.10';
+                const safeAdjustment = escapeHtml(adjustment);
                 qualityBreakdown = `
                     <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(0,0,0,0.02); border-radius: 8px; font-size: 0.875rem;">
                         <p style="margin: 0 0 0.5rem; font-weight: 600;">🔄 轮内循环调整：</p>
-                        <p style="margin: 0.25rem 0;">认识判断：${recognitionLabel}</p>
+                        <p style="margin: 0.25rem 0;">认识判断：${safeRecognitionLabel}</p>
                         ${spellingFeedback}
-                        <p style="margin: 0.25rem 0;">EF 调整：${adjustment}</p>
+                        <p style="margin: 0.25rem 0;">EF 调整：${safeAdjustment}</p>
                         <p style="margin: 0.5rem 0 0; font-weight: 600; color: #667eea;">当前 EF：${easeFactor} | 循环次数：${intraCycles}</p>
                     </div>
                 `;
@@ -4239,11 +4756,11 @@
                 // 正常流程或新词
                 const isNewWord = !word.lastReviewed;
                 if (isNewWord) {
-                    const initialEF = state.scheduler.INITIAL_EASE_FACTORS[finalQuality] || 2.5;
+                    const initialEF = escapeHtml(formatDecimal(state.scheduler.INITIAL_EASE_FACTORS[finalQuality], 2.5));
                     qualityBreakdown = `
                         <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(33, 150, 243, 0.1); border-left: 4px solid #2196f3; border-radius: 8px; font-size: 0.875rem;">
                             <p style="margin: 0 0 0.5rem; font-weight: 600; color: #1565c0;">🆕 新词学习</p>
-                            <p style="margin: 0.25rem 0; color: #1565c0;">认识判断：${recognitionLabel}</p>
+                            <p style="margin: 0.25rem 0; color: #1565c0;">认识判断：${safeRecognitionLabel}</p>
                             ${spellingFeedback}
                             <p style="margin: 0.5rem 0 0; font-weight: 600; color: #1565c0;">起始难度因子：${initialEF}</p>
                         </div>
@@ -4252,7 +4769,7 @@
                     qualityBreakdown = `
                         <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(0,0,0,0.02); border-radius: 8px; font-size: 0.875rem;">
                             <p style="margin: 0 0 0.5rem; font-weight: 600;">📈 复习完成：</p>
-                            <p style="margin: 0.25rem 0;">认识判断：${recognitionLabel}</p>
+                            <p style="margin: 0.25rem 0;">认识判断：${safeRecognitionLabel}</p>
                             ${spellingFeedback}
                             <p style="margin: 0.5rem 0 0; font-weight: 600; color: #667eea;">最终难度因子：${easeFactor}</p>
                         </div>
@@ -4266,12 +4783,12 @@
                         <span class="vocab-feedback__icon">${icon}</span>
                         <div>
                             <h3>${title}</h3>
-                            <p>将于 ${nextReview} 再次复习</p>
+                            <p>将于 ${safeNextReview} 再次复习</p>
                         </div>
                     </div>
                     <dl class="vocab-feedback__details">
-                        <div><dt>正确拼写</dt><dd>${word.word}</dd></div>
-                        <div><dt>释义</dt><dd>${word.meaning || '暂无释义'}</dd></div>
+                        <div><dt>正确拼写</dt><dd>${safeWord}</dd></div>
+                        <div><dt>释义</dt><dd>${safeMeaning}</dd></div>
                         <div><dt>间隔天数</dt><dd>${intervalDays} 天</dd></div>
                         <div><dt>难度因子</dt><dd>${easeFactor}</dd></div>
                         <div><dt>连续正确</dt><dd>${repetitions} 次</dd></div>
@@ -4372,7 +4889,7 @@
         } catch (error) {
             console.error('[VocabSessionView] 初始化失败:', error);
             if (state.elements.sessionCard) {
-                state.elements.sessionCard.innerHTML = `<div class="vocab-card-error">初始化失败：${error.message || error}</div>`;
+                state.elements.sessionCard.innerHTML = `<div class="vocab-card-error">初始化失败：${escapeHtml(error.message || error)}</div>`;
             }
             return;
         }
@@ -5080,8 +5597,23 @@
 
         state.lastRendered = timeString;
         var colonClass = state.renderOptions && state.renderOptions.colonClass ? state.renderOptions.colonClass : '';
-        var colonMarkup = colonClass ? '<span class=\"' + colonClass + '\">:</span>' : ':';
-        state.container.innerHTML = '' + hours + colonMarkup + minutes + colonMarkup + seconds;
+        state.container.textContent = '';
+        state.container.appendChild(document.createTextNode(hours));
+        state.container.appendChild(createClockColon(colonClass));
+        state.container.appendChild(document.createTextNode(minutes));
+        state.container.appendChild(createClockColon(colonClass));
+        state.container.appendChild(document.createTextNode(seconds));
+    }
+
+    function createClockColon(colonClass) {
+        var safeClass = String(colonClass || '').trim().replace(/[^a-z0-9_-]/gi, '');
+        if (!safeClass) {
+            return document.createTextNode(':');
+        }
+        var span = document.createElement('span');
+        span.className = safeClass;
+        span.textContent = ':';
+        return span;
     }
 
     function stopSimpleDigitalClock(state) {
@@ -6688,6 +7220,56 @@
         window.AchievementManager.init();
     }
 
+    function normalizeTierClass(value) {
+        return String(value || '').replace(/[^a-z0-9_-]/gi, '');
+    }
+
+    function clearElement(element) {
+        while (element && element.firstChild) {
+            element.removeChild(element.firstChild);
+        }
+    }
+
+    function createAchievementTextNode(tagName, className, text) {
+        const node = document.createElement(tagName);
+        if (className) {
+            node.className = className;
+        }
+        node.textContent = text == null ? '' : String(text);
+        return node;
+    }
+
+    function renderAchievementCard(achievement) {
+        const card = document.createElement('div');
+        const tierClass = achievement.tier ? `tier-${normalizeTierClass(achievement.tier)}` : '';
+        card.className = [
+            'achievement-card',
+            achievement.isUnlocked ? 'unlocked' : '',
+            tierClass
+        ].filter(Boolean).join(' ');
+
+        card.appendChild(createAchievementTextNode('span', 'achievement-icon', achievement.icon));
+        card.appendChild(createAchievementTextNode('div', 'achievement-title', achievement.title));
+        card.appendChild(createAchievementTextNode('div', 'achievement-desc', achievement.description));
+
+        if (achievement.isUnlocked) {
+            const status = createAchievementTextNode('div', '', '已解锁');
+            status.style.cssText = 'font-size:0.7em; margin-top:5px; color:#10b981; font-weight:bold;';
+            card.appendChild(status);
+        }
+
+        if (achievement.isUnlocked && achievement.unlockedAt) {
+            const unlockedAt = new Date(achievement.unlockedAt).toLocaleDateString();
+            if (unlockedAt) {
+                const date = createAchievementTextNode('div', '', unlockedAt);
+                date.style.cssText = 'font-size:0.65em; color:#9ca3af; margin-top:2px;';
+                card.appendChild(date);
+            }
+        }
+
+        return card;
+    }
+
     // UI Helpers
     window.showAchievements = async function () {
         const modal = document.getElementById('achievements-modal');
@@ -6704,15 +7286,12 @@
 
         await window.AchievementManager.syncFromScoreStorage({ includeRecords: true, notify: false });
         const all = window.AchievementManager.getAll();
-        list.innerHTML = all.map(a => `
-            <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''} ${a.tier ? 'tier-' + a.tier : ''}">
-                <span class="achievement-icon">${a.icon}</span>
-                <div class="achievement-title">${a.title}</div>
-                <div class="achievement-desc">${a.description}</div>
-                ${a.isUnlocked ? `<div style="font-size:0.7em; margin-top:5px; color:#10b981; font-weight:bold;">已解锁</div>` : ''}
-                ${a.isUnlocked && a.unlockedAt ? `<div style="font-size:0.65em; color:#9ca3af; margin-top:2px;">${new Date(a.unlockedAt).toLocaleDateString()}</div>` : ''}
-            </div>
-        `).join('');
+        const fragment = document.createDocumentFragment();
+        all.forEach((achievement) => {
+            fragment.appendChild(renderAchievementCard(achievement));
+        });
+        clearElement(list);
+        list.appendChild(fragment);
 
         modal.classList.add('show');
     };
