@@ -16,10 +16,16 @@
         var urlAttributes = {
             href: true,
             src: true,
+            srcset: true,
+            imagesrcset: true,
             'xlink:href': true,
             action: true,
             formaction: true,
-            poster: true
+            poster: true,
+            background: true,
+            cite: true,
+            longdesc: true,
+            ping: true
         };
         if (!urlAttributes[key]) {
             return false;
@@ -28,18 +34,33 @@
         if (!text) {
             return false;
         }
-        var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-        if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+        var compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compactAll.indexOf('javascript:') !== -1
+            || compactAll.indexOf('vbscript:') !== -1
+            || compactAll.indexOf('data:text/html') !== -1
+            || compactAll.indexOf('data:application/xhtml+xml') !== -1
+            || compactAll.indexOf('data:image/svg+xml') !== -1) {
             return true;
         }
-        if (compact.indexOf('data:') === 0) {
-            var tag = String(tagName || '').toLowerCase();
-            if (key !== 'src' || tag !== 'img') {
+        var candidates = (key === 'srcset' || key === 'imagesrcset')
+            ? text.split(',').map(function (part) { return part.trim().split(/\s+/, 1)[0]; }).filter(Boolean)
+            : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+        return candidates.some(function (candidate) {
+            var compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+            if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
                 return true;
             }
-            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-        }
-        return false;
+            if (compact.indexOf('data:') === 0) {
+                var tag = String(tagName || '').toLowerCase();
+                var imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+                var imageLikeTag = tag === 'img' || tag === 'source';
+                if (!imageLikeAttribute || !imageLikeTag) {
+                    return true;
+                }
+                return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+            }
+            return false;
+        });
     }
 
     function isLegacyUnsafeObjectKey(name) {
@@ -6558,7 +6579,12 @@
                 // fallback below
             }
         }
-        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F"\\]/g, (char) => {
+            if (char === '"' || char === '\\') {
+                return '\\' + char;
+            }
+            return '\\' + char.charCodeAt(0).toString(16) + ' ';
+        });
     }
 
     function toSafeCount(value, fallback = 0) {
@@ -16211,7 +16237,12 @@ function setupMessageListener() {
 
 function setupStorageSyncListener() {
     window.addEventListener('storage-sync', (event) => {
-        console.log('[System] 收到存储同步事件，正在更新练习记录...', event.detail);
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : null;
+        console.log('[System] 收到存储同步事件，正在更新练习记录...', {
+            key: detail && typeof detail.key === 'string' ? detail.key : null,
+            source: detail && typeof detail.source === 'string' ? detail.source : null,
+            recordCount: Array.isArray(detail && detail.records) ? detail.records.length : undefined
+        });
         //可以选择性地只更新受影响的key，但为了简单起见，我们直接同步所有记录
         // if (event.detail && event.detail.key === 'practice_records') {
         syncPracticeRecords();

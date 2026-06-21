@@ -1802,7 +1802,10 @@
   }
 
   function cssAttr(s) {
-    return String(s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return String(s == null ? '' : s).replace(/[\u0000-\u001F\u007F"\\]/g, function (char) {
+      if (char === '"' || char === '\\') return '\\' + char;
+      return '\\' + char.charCodeAt(0).toString(16) + ' ';
+    });
   }
 
   function getText(node) {

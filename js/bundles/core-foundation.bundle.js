@@ -438,6 +438,80 @@ const STORAGE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constr
 const STORAGE_BACKUP_MAX_PRACTICE_RECORDS = 5000;
 const STORAGE_BACKUP_MAX_NODES = 50000;
 const STORAGE_BACKUP_MAX_DEPTH = 40;
+const STORAGE_NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9:_-]{0,79}$/;
+const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+function normalizeStorageNamespace(namespace) {
+    if (typeof namespace !== 'string') {
+        return '';
+    }
+    const normalized = namespace.trim();
+    if (!normalized || !STORAGE_NAMESPACE_PATTERN.test(normalized)) {
+        return '';
+    }
+    const lower = normalized.toLowerCase();
+    if (STORAGE_BACKUP_POLLUTION_KEYS.has(lower) || lower === 'storage_backend') {
+        return '';
+    }
+    return normalized;
+}
+
+function sanitizeStoredValue(value, depth = 0, state = null) {
+    if (value === null || value === undefined) {
+        return value;
+    }
+    if (typeof value === 'string' || typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : undefined;
+    }
+    if (typeof value !== 'object') {
+        return undefined;
+    }
+    if (depth > STORAGE_BACKUP_MAX_DEPTH) {
+        return undefined;
+    }
+
+    const cloneState = state || {
+        seen: new WeakSet(),
+        nodes: 0
+    };
+    if (cloneState.seen.has(value)) {
+        return undefined;
+    }
+    cloneState.seen.add(value);
+    cloneState.nodes += 1;
+    if (cloneState.nodes > STORAGE_BACKUP_MAX_NODES) {
+        cloneState.seen.delete(value);
+        return undefined;
+    }
+
+    if (Array.isArray(value)) {
+        const list = [];
+        for (const item of value) {
+            const safeItem = sanitizeStoredValue(item, depth + 1, cloneState);
+            if (safeItem !== undefined) {
+                list.push(safeItem);
+            }
+        }
+        cloneState.seen.delete(value);
+        return list;
+    }
+
+    const output = {};
+    Object.keys(value).forEach((key) => {
+        if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
+            return;
+        }
+        const safeValue = sanitizeStoredValue(value[key], depth + 1, cloneState);
+        if (safeValue !== undefined) {
+            output[key] = safeValue;
+        }
+    });
+    cloneState.seen.delete(value);
+    return output;
+}
 
 class StorageManager {
     constructor() {
@@ -911,8 +985,9 @@ class StorageManager {
      * 设置存储命名空间
      */
     setNamespace(namespace) {
-        if (typeof namespace === 'string' && namespace.trim()) {
-            this.prefix = namespace.trim() + '_';
+        const safeNamespace = normalizeStorageNamespace(namespace);
+        if (safeNamespace) {
+            this.prefix = safeNamespace + '_';
             console.log('[Storage] 命名空间已设置为:', this.prefix);
         } else {
             console.warn('[Storage] 无效的命名空间:', namespace);
@@ -941,8 +1016,11 @@ class StorageManager {
             return defaultValue;
         }
         const parsed = JSON.parse(serializedValue);
-        return parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-            ? parsed.data
+        const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
+            ? sanitizeStoredValue(parsed.data)
+            : undefined;
+        return safeValue !== undefined
+            ? safeValue
             : defaultValue;
     }
 
@@ -3143,11 +3221,16 @@ class StorageManager {
             .replace(/\s+/g, ' ')
             .trim()
             .replace(/^\.+/, '')
+            .replace(/[. ]+$/g, '')
             .slice(0, 180);
         if (!normalized) {
             return safeFallback;
         }
-        return /\.json$/i.test(normalized) ? normalized : `${normalized}.json`;
+        const finalFilename = /\.json$/i.test(normalized) ? normalized : `${normalized}.json`;
+        const basename = finalFilename.split('.', 1)[0];
+        return WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN.test(basename)
+            ? `_${finalFilename}`
+            : finalFilename;
     }
 
     /**
@@ -3278,8 +3361,9 @@ class PreferenceStore {
     }
 
     setNamespace(namespace) {
-        if (typeof namespace === 'string' && namespace.trim()) {
-            this.prefix = namespace.trim() + '_';
+        const safeNamespace = normalizeStorageNamespace(namespace);
+        if (safeNamespace) {
+            this.prefix = safeNamespace + '_';
         }
     }
 
@@ -3301,8 +3385,11 @@ class PreferenceStore {
         }
         try {
             const parsed = JSON.parse(rawValue);
-            return parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-                ? parsed.data
+            const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
+                ? sanitizeStoredValue(parsed.data)
+                : undefined;
+            return safeValue !== undefined
+                ? safeValue
                 : defaultValue;
         } catch (_) {
             return defaultValue;
@@ -3688,6 +3775,14 @@ storageManager.ready
             this.pendingTotp = null;
         }
 
+        storeCsrfTokenFromPayload(payload) {
+            if (payload && typeof payload.csrfToken === 'string' && payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+                return true;
+            }
+            return false;
+        }
+
         async getAuthState() {
             if (!this.fetchImpl) {
                 return { available: false, authenticated: false, user: null };
@@ -3712,9 +3807,7 @@ storageManager.ready
                     return { available: false, authenticated: false, user: null };
                 }
                 this.user = payload.user || null;
-                if (payload.csrfToken) {
-                    this.csrfToken = payload.csrfToken;
-                }
+                this.storeCsrfTokenFromPayload(payload);
                 return { available: true, authenticated: this.isAuthenticated(), user: this.user };
             } catch (error) {
                 if (error instanceof RemoteApiError) {
@@ -3731,7 +3824,14 @@ storageManager.ready
                 return this.csrfToken;
             }
             const payload = await this.request('/api/auth/csrf', { method: 'GET', csrf: false });
-            this.csrfToken = payload.csrfToken;
+            if (!payload || typeof payload.csrfToken !== 'string' || !payload.csrfToken) {
+                this.csrfToken = null;
+                throw new RemoteApiError('CSRF token response is invalid', {
+                    status: 0,
+                    payload
+                });
+            }
+            this.storeCsrfTokenFromPayload(payload);
             return this.csrfToken;
         }
 
@@ -3742,9 +3842,7 @@ storageManager.ready
             });
             this.user = payload.user || null;
             this.pendingTotp = null;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -3764,9 +3862,7 @@ storageManager.ready
                 this.user = payload.user || null;
                 this.pendingTotp = null;
             }
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -3786,9 +3882,7 @@ storageManager.ready
             });
             this.user = payload.user || this.user;
             this.pendingTotp = null;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -3799,9 +3893,7 @@ storageManager.ready
             });
             this.user = payload.user || null;
             this.pendingTotp = null;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -3818,9 +3910,7 @@ storageManager.ready
                 body: { password, token }
             });
             this.user = payload.user || this.user;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
@@ -3830,9 +3920,7 @@ storageManager.ready
                 body: { username, password }
             });
             this.user = payload.user || this.user;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -3842,9 +3930,7 @@ storageManager.ready
                 body: { currentPassword, newPassword }
             });
             this.user = payload.user || this.user;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -4310,6 +4396,7 @@ storageManager.ready
         let importPromptedInSession = false;
         let pendingRecoveryUser = null;
         let setOverlayMode = null;
+        let clearOverlaySensitiveFields = null;
 
         function ensureUi() {
             if (overlay) {
@@ -4467,7 +4554,40 @@ storageManager.ready
                 error.hidden = !message;
             }
 
+            clearOverlaySensitiveFields = function (options = {}) {
+                if (!options.keepUsername) {
+                    usernameInput.value = '';
+                }
+                if (!options.keepPassword) {
+                    passwordInput.value = '';
+                }
+                if (!options.keepToken) {
+                    tokenInput.value = '';
+                }
+                if (!options.keepSetup) {
+                    setupQr.removeAttribute('src');
+                    setupSecret.textContent = '';
+                }
+                if (!options.keepRecovery) {
+                    recoveryList.textContent = '';
+                    pendingRecoveryUser = null;
+                }
+                usernameInput.setAttribute('aria-invalid', 'false');
+                passwordInput.setAttribute('aria-invalid', 'false');
+                tokenInput.setAttribute('aria-invalid', 'false');
+                setError('');
+            };
+
             function setMode(nextMode) {
+                if (nextMode === 'login' || nextMode === 'register') {
+                    clearOverlaySensitiveFields({ keepUsername: true });
+                } else if (nextMode === 'totp') {
+                    clearOverlaySensitiveFields({ keepUsername: true });
+                } else if (nextMode === 'setup') {
+                    clearOverlaySensitiveFields({ keepUsername: true, keepSetup: true });
+                } else if (nextMode === 'recovery') {
+                    clearOverlaySensitiveFields({ keepUsername: true, keepRecovery: true });
+                }
                 mode = nextMode;
                 const isPasswordMode = mode === 'login' || mode === 'register';
                 const isTokenMode = mode === 'totp' || mode === 'setup';
@@ -4498,10 +4618,6 @@ storageManager.ready
                 }[mode] || '继续';
                 passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
                 passwordInput.minLength = mode === 'login' ? 1 : 8;
-                setError('');
-                usernameInput.setAttribute('aria-invalid', 'false');
-                passwordInput.setAttribute('aria-invalid', 'false');
-                tokenInput.setAttribute('aria-invalid', 'false');
             }
             setOverlayMode = setMode;
 
@@ -4826,6 +4942,9 @@ storageManager.ready
 
         function show() {
             ensureUi();
+            if (typeof clearOverlaySensitiveFields === 'function') {
+                clearOverlaySensitiveFields();
+            }
             if (setOverlayMode) {
                 setOverlayMode('login');
             }
@@ -4842,6 +4961,9 @@ storageManager.ready
 
         function hide() {
             ensureUi();
+            if (typeof clearOverlaySensitiveFields === 'function') {
+                clearOverlaySensitiveFields();
+            }
             overlay.hidden = true;
             setRemoteAuthGate(false);
         }
@@ -4849,6 +4971,7 @@ storageManager.ready
         function hideTotpPanel() {
             if (totpPanel) {
                 totpPanel.hidden = true;
+                totpPanel.textContent = '';
             }
         }
 
@@ -5180,6 +5303,41 @@ storageManager.ready
 /* ===== js/data/repositories/baseRepository.js ===== */
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
+    const UNSAFE_REPOSITORY_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    function isPlainObject(value) {
+        return value && Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function sanitizeRepositoryValue(value, seen = new WeakMap()) {
+        if (!value || typeof value !== 'object') {
+            return value;
+        }
+        if (seen.has(value)) {
+            return seen.get(value);
+        }
+        if (Array.isArray(value)) {
+            const output = [];
+            seen.set(value, output);
+            value.forEach((item, index) => {
+                output[index] = sanitizeRepositoryValue(item, seen);
+            });
+            return output;
+        }
+        if (!isPlainObject(value)) {
+            return value;
+        }
+
+        const output = {};
+        seen.set(value, output);
+        Object.keys(value).forEach((key) => {
+            if (UNSAFE_REPOSITORY_KEYS.has(key)) {
+                return;
+            }
+            output[key] = sanitizeRepositoryValue(value[key], seen);
+        });
+        return output;
+    }
 
     function cloneValue(value) {
         if (value === null || value === undefined) {
@@ -5187,15 +5345,15 @@ storageManager.ready
         }
         if (typeof structuredClone === 'function') {
             try {
-                return structuredClone(value);
+                return sanitizeRepositoryValue(structuredClone(value));
             } catch (_) {
                 // Fallback to JSON serialization below
             }
         }
         try {
-            return JSON.parse(JSON.stringify(value));
+            return sanitizeRepositoryValue(JSON.parse(JSON.stringify(value)));
         } catch (_) {
-            return value;
+            return sanitizeRepositoryValue(value);
         }
     }
 
@@ -5241,6 +5399,7 @@ storageManager.ready
 
             let value = sourceValue === undefined ? resolvedDefault : sourceValue;
             value = await this.applyMigrations(value, { transaction });
+            value = sanitizeRepositoryValue(value);
 
             if (!skipValidation) {
                 this.validate(value);
@@ -5254,10 +5413,11 @@ storageManager.ready
 
         async write(value, options = {}) {
             const { transaction, skipValidation = false, clone = true } = options;
+            const preparedValue = sanitizeRepositoryValue(value);
             if (!skipValidation) {
-                this.validate(value);
+                this.validate(preparedValue);
             }
-            const dataToPersist = clone ? cloneValue(value) : value;
+            const dataToPersist = clone ? cloneValue(preparedValue) : preparedValue;
             if (transaction) {
                 transaction.set(this.key, dataToPersist);
                 return true;
@@ -5339,6 +5499,7 @@ storageManager.ready
     }
 
     ExamData.cloneValue = cloneValue;
+    ExamData.sanitizeRepositoryValue = sanitizeRepositoryValue;
     ExamData.BaseRepository = BaseRepository;
 })(window);
 
@@ -5647,9 +5808,12 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const BaseRepository = ExamData.BaseRepository;
+    const sanitizeRepositoryValue = ExamData.sanitizeRepositoryValue || ((value) => value);
 
     function ensureObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+        return value && typeof value === 'object' && !Array.isArray(value)
+            ? sanitizeRepositoryValue(value)
+            : {};
     }
 
     class SettingsRepository extends BaseRepository {
@@ -5697,9 +5861,10 @@ storageManager.ready
             if (!patch || typeof patch !== 'object') {
                 throw new Error('merge 需要对象参数');
             }
+            const safePatch = ensureObject(patch);
             return this.dataSource.runTransaction(async (tx) => {
                 const current = ensureObject(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                const next = { ...current, ...patch };
+                const next = sanitizeRepositoryValue({ ...current, ...safePatch });
                 await this.write(next, { transaction: tx, skipValidation: false, clone: false });
                 return next;
             }, { label: 'settings-merge' });
@@ -5731,6 +5896,7 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const BaseRepository = ExamData.BaseRepository;
+    const sanitizeRepositoryValue = ExamData.sanitizeRepositoryValue || ((value) => value);
 
     function ensureArray(value) {
         return Array.isArray(value) ? value : [];
@@ -5780,12 +5946,12 @@ storageManager.ready
             if (!backup || typeof backup !== 'object') {
                 throw new Error('备份数据必须是对象');
             }
-            const normalized = { ...backup };
+            const normalized = sanitizeRepositoryValue({ ...backup });
             normalized.id = normalized.id ? String(normalized.id) : createLocalId('backup');
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
             normalized.version = normalized.version || '1.0.0';
-            normalized.data = normalized.data || {};
+            normalized.data = sanitizeRepositoryValue(normalized.data || {});
             normalized.size = normalized.size || JSON.stringify(normalized.data).length;
             return normalized;
         }

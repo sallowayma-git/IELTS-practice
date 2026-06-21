@@ -49,6 +49,24 @@
     'text/plain': true
   };
 
+  function escapeFallbackCssSelectorValue(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+      try {
+        return window.CSS.escape(String(value == null ? '' : value));
+      } catch (_) { }
+    }
+    return String(value == null ? '' : value).replace(/[\0-\x1F\x7F"\\]/g, function (character) {
+      if (character === '"') {
+        return '\\"';
+      }
+      if (character === '\\') {
+        return '\\\\';
+      }
+      var code = character.charCodeAt(0).toString(16).toUpperCase();
+      return '\\' + code + ' ';
+    });
+  }
+
   function validateFallbackJsonFile(file) {
     if (!file || typeof file.size !== 'number') {
       throw new Error('Invalid import file.');
@@ -76,10 +94,16 @@
     var urlAttrs = {
       href: true,
       src: true,
+      srcset: true,
+      imagesrcset: true,
       'xlink:href': true,
       action: true,
       formaction: true,
-      poster: true
+      poster: true,
+      background: true,
+      cite: true,
+      longdesc: true,
+      ping: true
     };
     if (!urlAttrs[key]) {
       return false;
@@ -88,18 +112,33 @@
     if (!text) {
       return false;
     }
-    var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-    if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+    var compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (compactAll.indexOf('javascript:') !== -1
+      || compactAll.indexOf('vbscript:') !== -1
+      || compactAll.indexOf('data:text/html') !== -1
+      || compactAll.indexOf('data:application/xhtml+xml') !== -1
+      || compactAll.indexOf('data:image/svg+xml') !== -1) {
       return true;
     }
-    if (compact.indexOf('data:') === 0) {
-      var tag = String(tagName || '').toLowerCase();
-      if (key !== 'src' || tag !== 'img') {
+    var candidates = (key === 'srcset' || key === 'imagesrcset')
+      ? text.split(',').map(function (part) { return part.trim().split(/\s+/, 1)[0]; }).filter(Boolean)
+      : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+    return candidates.some(function (candidate) {
+      var compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+      if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
         return true;
       }
-      return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-    }
-    return false;
+      if (compact.indexOf('data:') === 0) {
+        var tag = String(tagName || '').toLowerCase();
+        var imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+        var imageLikeTag = tag === 'img' || tag === 'source';
+        if (!imageLikeAttribute || !imageLikeTag) {
+          return true;
+        }
+        return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+      }
+      return false;
+    });
   }
 
   function isFallbackUnsafeObjectKey(name) {
@@ -144,7 +183,7 @@
           Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
             btn.classList.remove('active');
           });
-          var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
+          var navButton = navContainer.querySelector('[data-view="' + escapeFallbackCssSelectorValue(normalized) + '"]');
           if (navButton) {
             navButton.classList.add('active');
           }
@@ -2066,7 +2105,7 @@ class ExamSystemApp {
 
     function isAppUnsafeUrlAttribute(name, value, tagName) {
         const key = String(name || '').toLowerCase();
-        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+        const urlAttributes = new Set(['href', 'src', 'srcset', 'imagesrcset', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'cite', 'longdesc', 'ping']);
         if (!urlAttributes.has(key)) {
             return false;
         }
@@ -2074,18 +2113,33 @@ class ExamSystemApp {
         if (!text) {
             return false;
         }
-        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+        const compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compactAll.includes('javascript:')
+            || compactAll.includes('vbscript:')
+            || compactAll.includes('data:text/html')
+            || compactAll.includes('data:application/xhtml+xml')
+            || compactAll.includes('data:image/svg+xml')) {
             return true;
         }
-        if (compact.startsWith('data:')) {
-            const tag = String(tagName || '').toLowerCase();
-            if (key !== 'src' || tag !== 'img') {
+        const candidates = (key === 'srcset' || key === 'imagesrcset')
+            ? text.split(',').map((part) => part.trim().split(/\s+/, 1)[0]).filter(Boolean)
+            : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+        return candidates.some((candidate) => {
+            const compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+            if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
                 return true;
             }
-            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-        }
-        return false;
+            if (compact.startsWith('data:')) {
+                const tag = String(tagName || '').toLowerCase();
+                const imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+                const imageLikeTag = tag === 'img' || tag === 'source';
+                if (!imageLikeAttribute || !imageLikeTag) {
+                    return true;
+                }
+                return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+            }
+            return false;
+        });
     }
 
     function isAppUnsafeObjectKey(name) {

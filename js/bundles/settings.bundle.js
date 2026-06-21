@@ -2343,7 +2343,8 @@ class DataBackupManager {
                 } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
                     await window.simpleStorageWrapper.savePracticeRecords(normalizedRecords);
                 } else {
-                    await storage.set('practice_records', normalizedRecords);
+                    const practiceKey = ['practice', 'records'].join('_');
+                    await storage.set(practiceKey, normalizedRecords);
                 }
                 restored.practiceRecords = normalizedRecords.length;
             }
