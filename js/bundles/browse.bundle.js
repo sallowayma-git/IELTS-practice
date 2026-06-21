@@ -22,6 +22,36 @@
         return key.indexOf('on') === 0 || key === 'srcdoc';
     }
 
+    function isLegacyUnsafeTagName(name) {
+        var key = String(name || '').trim().toLowerCase();
+        if (!/^[a-z][a-z0-9-]*$/.test(key)) {
+            return true;
+        }
+        return {
+            script: true,
+            iframe: true,
+            object: true,
+            embed: true,
+            applet: true,
+            frame: true,
+            frameset: true,
+            base: true,
+            link: true,
+            meta: true,
+            style: true,
+            template: true
+        }[key] === true;
+    }
+
+    function createLegacySafeElement(tag) {
+        var requestedTag = String(tag || '').trim().toLowerCase();
+        var safeTag = isLegacyUnsafeTagName(tag) ? 'div' : requestedTag;
+        if (safeTag !== requestedTag) {
+            console.warn('[LegacyView] Replaced unsafe tag');
+        }
+        return document.createElement(safeTag || 'div');
+    }
+
     function isLegacyUnsafeUrlAttribute(name, value, tagName) {
         var key = String(name || '').toLowerCase();
         var urlAttributes = {
@@ -2281,7 +2311,7 @@
         if (domAdapter && typeof domAdapter.create === 'function') {
             return domAdapter.create(tag, attributes, children);
         }
-        var element = document.createElement(tag);
+        var element = createLegacySafeElement(tag);
         applyLegacyElementAttributes(element, attributes);
 
         var list = Array.isArray(children) ? children : [children];
@@ -3060,7 +3090,7 @@
             return this.domAdapter.create(tag, attributes, children);
         }
 
-        var element = document.createElement(tag);
+        var element = createLegacySafeElement(tag);
         applyLegacyElementAttributes(element, attributes);
 
         if (children != null) {
@@ -3577,7 +3607,7 @@
             return this.domAdapter.create(tag, attributes, children);
         }
 
-        var element = document.createElement(tag);
+        var element = createLegacySafeElement(tag);
         applyLegacyElementAttributes(element, attributes);
 
         var nodes = Array.isArray(children) ? children : (children != null ? [children] : []);
@@ -13188,11 +13218,14 @@ class BrowseStateManager {
      * 获取浏览统计信息
      */
     getBrowseStats() {
-        const filterCounts = {};
+        const filterCounts = Object.create(null);
         this.browseHistory.forEach(item => {
             if (item.action === 'filter_change') {
                 const key = normalizeBrowseText(item.to) || 'unknown';
-                filterCounts[key] = (filterCounts[key] || 0) + 1;
+                const currentCount = Object.prototype.hasOwnProperty.call(filterCounts, key)
+                    ? filterCounts[key]
+                    : 0;
+                filterCounts[key] = currentCount + 1;
             }
         });
 
@@ -16293,10 +16326,25 @@ function setupMessageListener() {
     };
 
     window.addEventListener('message', (event) => {
+        const data = event.data || {};
+        const type = data.type;
+        const matchedWindow = findFallbackSessionByWindow(event.source);
+        const isOpaqueOrigin = !event.origin || event.origin === 'null';
+        const allowOpaqueFallbackMessage = Boolean(
+            isOpaqueOrigin
+            && matchedWindow
+            && (
+                type === 'SESSION_READY'
+                || type === 'REQUEST_INIT'
+                || type === 'VOCAB_HIGHLIGHT_SAVE'
+                || type === 'PRACTICE_COMPLETE'
+                || type === 'practice_completed'
+            )
+        );
         // 更兼容的安全检查：允许同源或file协议下的子窗口
         try {
             if (!event.origin || event.origin === 'null') {
-                if (!(window.location && window.location.protocol === 'file:')) {
+                if (!(window.location && window.location.protocol === 'file:') && !allowOpaqueFallbackMessage) {
                     return;
                 }
             } else if (event.origin !== window.location.origin) {
@@ -16306,11 +16354,9 @@ function setupMessageListener() {
             return;
         }
 
-        const data = event.data || {};
-        const type = data.type;
         if (type === 'SESSION_READY') {
             const payload = data && typeof data.data === 'object' ? data.data : data;
-            const matched = findFallbackSessionByWindow(event.source);
+            const matched = matchedWindow;
             if (payload && payload.initialized === false) {
                 sendFallbackInit(matched);
                 return;

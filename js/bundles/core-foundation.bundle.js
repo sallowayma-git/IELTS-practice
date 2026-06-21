@@ -665,6 +665,16 @@ function summarizeStorageErrorForLog(error) {
     return summary;
 }
 
+function summarizeStorageValidationForLog(validation) {
+    if (!validation || typeof validation !== 'object') {
+        return { valid: false };
+    }
+    return {
+        valid: Boolean(validation.valid),
+        errorType: validation.error == null ? undefined : typeof validation.error
+    };
+}
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
@@ -2440,7 +2450,7 @@ class StorageManager {
             // 验证数据
             const validation = this.validateVocabList(vocabList);
             if (!validation.valid) {
-                console.error('[Storage] 词表数据验证失败:', validation.error);
+                console.error('[Storage] 词表数据验证失败:', summarizeStorageValidationForLog(validation));
                 return false;
             }
 
@@ -2550,7 +2560,7 @@ class StorageManager {
             // 验证加载的数据
             const validation = this.validateVocabList(vocabList);
             if (!validation.valid) {
-                console.error('[Storage] 加载的词表数据无效:', validation.error);
+                console.error('[Storage] 加载的词表数据无效:', summarizeStorageValidationForLog(validation));
                 return null;
             }
 
@@ -8239,8 +8249,11 @@ storageManager.ready
         if (!value) {
             return '';
         }
-        const normalized = String(value).trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
-        return hasUnsafeRelativeResourcePath(normalized) ? '' : normalized;
+        const raw = String(value).trim().replace(/\\/g, '/');
+        if (hasUnsafeRelativeResourcePath(raw)) {
+            return '';
+        }
+        return raw.replace(/\/{2,}/g, '/');
     }
 
     function normalizeLibraryConfigKey(value) {
@@ -8278,11 +8291,15 @@ storageManager.ready
         if (!value) {
             return '';
         }
-        let root = String(value).replace(/\\/g, '/');
-        root = root.replace(/\/+$/, '') + '/';
+        let root = String(value).trim().replace(/\\/g, '/');
         if (root.startsWith('./')) {
             root = root.slice(2);
         }
+        root = normalizeResourceRelativePath(root);
+        if (!root) {
+            return '';
+        }
+        root = root.replace(/\/+$/, '') + '/';
         return root;
     }
 
