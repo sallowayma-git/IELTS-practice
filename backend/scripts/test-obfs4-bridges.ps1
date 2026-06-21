@@ -11,11 +11,31 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$MAX_BRIDGE_LINE_LENGTH = 1200
+$OBFS4_BRIDGE_PATTERN = '^obfs4\s+([^\s]+)\s+([A-Fa-f0-9]{40})\s+.*\bcert=[^\s]+'
 
 if (-not $BridgeFile) {
     $localBridgeFile = Join-Path $PSScriptRoot '..\tor\bridges.local.txt'
     $templateBridgeFile = Join-Path $PSScriptRoot '..\tor\bridges.txt'
     $BridgeFile = if (Test-Path $localBridgeFile) { $localBridgeFile } else { $templateBridgeFile }
+}
+
+function Test-BridgeEndpoint {
+    param([string]$Endpoint)
+    if (-not $Endpoint) {
+        return $false
+    }
+
+    $match = [regex]::Match($Endpoint, '^\[[0-9A-Fa-f:.]+\]:(?<port>\d{1,5})$')
+    if (-not $match.Success) {
+        $match = [regex]::Match($Endpoint, '^[A-Za-z0-9.-]+:(?<port>\d{1,5})$')
+    }
+    if (-not $match.Success) {
+        return $false
+    }
+
+    $port = [int]$match.Groups['port'].Value
+    return $port -ge 1 -and $port -le 65535
 }
 
 function Normalize-Bridge {
@@ -39,13 +59,21 @@ function Normalize-Bridge {
     if (-not $value.StartsWith('obfs4 ')) {
         return $null
     }
-    if ($value -notmatch '([A-Fa-f0-9]{40})') {
+    if ($value.Length -gt $MAX_BRIDGE_LINE_LENGTH -or $value -match "[`r`n`0]") {
+        return $null
+    }
+    if ($value -notmatch $OBFS4_BRIDGE_PATTERN) {
+        return $null
+    }
+    $endpoint = $Matches[1]
+    $fingerprint = $Matches[2].ToUpperInvariant()
+    if (-not (Test-BridgeEndpoint -Endpoint $endpoint)) {
         return $null
     }
     return [ordered]@{
         line = $value
-        fingerprint = $Matches[1].ToUpperInvariant()
-        endpoint = (($value -split '\s+')[1])
+        fingerprint = $fingerprint
+        endpoint = $endpoint
     }
 }
 

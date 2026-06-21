@@ -91,9 +91,88 @@ function isPathInside(parent, child) {
     return relative === '' || (relative && !relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
-function createStaticBoundaryMiddleware(root) {
+function normalizeStaticRequestPath(value) {
+    const raw = String(value || '/').split(/[?#]/, 1)[0].replace(/\\/g, '/');
+    const withLeadingSlash = raw.startsWith('/') ? raw : `/${raw}`;
+    const normalized = path.posix.normalize(withLeadingSlash).replace(/\/+$/g, '');
+    return (normalized || '/').toLowerCase();
+}
+
+function decodeStaticPathSegment(value) {
+    try {
+        return decodeURIComponent(value);
+    } catch (_) {
+        return value;
+    }
+}
+
+function getStaticRequestSegments(value) {
+    const rawPath = String(value || '/')
+        .split(/[?#]/, 1)[0]
+        .replace(/\\/g, '/');
+    const decodedPath = decodeStaticPathSegment(rawPath).replace(/\\/g, '/');
+    return Array.from(new Set([rawPath, decodedPath]))
+        .flatMap((candidate) => candidate
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => decodeStaticPathSegment(segment).toLowerCase()));
+}
+
+function normalizeBlockedStaticPrefix(value) {
+    const normalized = normalizeStaticRequestPath(value);
+    return normalized === '/' ? '' : normalized;
+}
+
+function getBlockedStaticPrefixSegments(value) {
+    return normalizeBlockedStaticPrefix(value)
+        .split('/')
+        .filter(Boolean);
+}
+
+function createStaticBoundaryMiddleware(root, options = {}) {
     const rootPath = path.resolve(root);
     let rootRealpathPromise = null;
+    const blockedPrefixEntries = Array.isArray(options.blockedPrefixes)
+        ? options.blockedPrefixes.map(normalizeBlockedStaticPrefix).filter(Boolean)
+            .map((prefix) => ({
+                prefix,
+                segments: getBlockedStaticPrefixSegments(prefix)
+            }))
+        : [];
+
+    function hasBlockedStaticSegments(segments, blockedSegments) {
+        if (!blockedSegments.length || segments.length < blockedSegments.length) {
+            return false;
+        }
+        for (let index = 0; index <= segments.length - blockedSegments.length; index += 1) {
+            let matches = true;
+            for (let offset = 0; offset < blockedSegments.length; offset += 1) {
+                if (segments[index + offset] !== blockedSegments[offset]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function isBlockedRequestPath(requestPath, requestUrl) {
+        if (!blockedPrefixEntries.length) {
+            return false;
+        }
+        return [requestPath, requestUrl].some((candidate) => {
+            const normalized = normalizeStaticRequestPath(candidate);
+            const segments = getStaticRequestSegments(candidate);
+            return blockedPrefixEntries.some(({ prefix, segments: blockedSegments }) => {
+                return normalized === prefix
+                    || normalized.startsWith(`${prefix}/`)
+                    || hasBlockedStaticSegments(segments, blockedSegments);
+            });
+        });
+    }
 
     function getRootRealpath() {
         if (!rootRealpathPromise) {
@@ -114,6 +193,9 @@ function createStaticBoundaryMiddleware(root) {
             }
             if (String(req.path || '').includes('\0')) {
                 return res.status(400).type('text/plain').send('Invalid path');
+            }
+            if (isBlockedRequestPath(req.path || '/', req.url || '/')) {
+                return res.status(404).type('text/plain').send('Not found');
             }
             const rootRealpath = await getRootRealpath();
             if (!rootRealpath) {
@@ -342,7 +424,10 @@ function createApp(options = {}) {
 
     for (const directory of ['assets', 'css', 'js', 'templates', 'ListeningPractice']) {
         const staticDirectory = path.join(repoRoot, directory);
-        app.use(`/${directory}`, createStaticBoundaryMiddleware(staticDirectory), express.static(staticDirectory, {
+        const staticBoundaryOptions = directory === 'templates'
+            ? { blockedPrefixes: ['/ci-practice-fixtures'] }
+            : {};
+        app.use(`/${directory}`, createStaticBoundaryMiddleware(staticDirectory, staticBoundaryOptions), express.static(staticDirectory, {
             dotfiles: 'deny',
             index: false
         }));

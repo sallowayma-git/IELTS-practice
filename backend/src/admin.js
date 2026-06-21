@@ -132,6 +132,12 @@ function normalizeRole(value) {
     return value === 'admin' ? 'admin' : 'user';
 }
 
+function adminMutationError(message) {
+    const error = new Error(message);
+    error.status = 400;
+    return error;
+}
+
 function serializeUser(row) {
     return {
         id: row.id,
@@ -567,25 +573,51 @@ class PostgresAdminStore {
     async updateUser(userId, changes = {}) {
         const updates = [];
         const params = [userId];
+        const nextRole = changes.role !== undefined ? normalizeRole(changes.role) : undefined;
+        const nextPasswordHash = changes.password !== undefined ? await hashPassword(changes.password) : undefined;
         if (changes.role !== undefined) {
-            params.push(normalizeRole(changes.role));
+            params.push(nextRole);
             updates.push(`role = $${params.length}`);
         }
         if (changes.password !== undefined) {
-            params.push(await hashPassword(changes.password));
+            params.push(nextPasswordHash);
             updates.push(`password_hash = $${params.length}`);
         }
         if (!updates.length) {
             return this.getUser(userId);
         }
-        const result = await this.db.query(
-            `UPDATE users
-             SET ${updates.join(', ')}
-             WHERE id = $1
-             RETURNING id, username, role, created_at, updated_at`,
-            params
-        );
-        return result.rows[0] ? serializeUser(result.rows[0]) : null;
+
+        const runUpdate = async (client) => {
+            if (nextRole === 'user') {
+                await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
+                const current = await client.query(
+                    'SELECT id, role FROM users WHERE id = $1 FOR UPDATE',
+                    [userId]
+                );
+                if (!current.rows[0]) {
+                    return null;
+                }
+                if (current.rows[0].role === 'admin') {
+                    const adminCount = await client.query('SELECT count(*)::int AS total FROM users WHERE role = $1', ['admin']);
+                    if (toInteger(adminCount.rows[0]?.total) <= 1) {
+                        throw adminMutationError('Cannot demote the last admin');
+                    }
+                }
+            }
+            const result = await client.query(
+                `UPDATE users
+                 SET ${updates.join(', ')}
+                 WHERE id = $1
+                 RETURNING id, username, role, created_at, updated_at`,
+                params
+            );
+            return result.rows[0] ? serializeUser(result.rows[0]) : null;
+        };
+
+        if (nextRole === 'user' && typeof this.db.withTransaction === 'function') {
+            return this.db.withTransaction(runUpdate);
+        }
+        return runUpdate(this.db);
     }
 
     async countAdmins() {
@@ -593,8 +625,8 @@ class PostgresAdminStore {
         return toInteger(result.rows[0]?.total);
     }
 
-    async deleteSessionsForUser(userId, exceptSid = null) {
-        await this.db.query(
+    async deleteSessionsForUser(userId, exceptSid = null, client = this.db) {
+        await client.query(
             `DELETE FROM "session"
              WHERE (
                     sess::jsonb #>> '{user,id}' = $1
@@ -607,12 +639,33 @@ class PostgresAdminStore {
     }
 
     async deleteUser(userId) {
-        await this.deleteSessionsForUser(userId);
-        const result = await this.db.query(
-            'DELETE FROM users WHERE id = $1 RETURNING id, username, role',
-            [userId]
-        );
-        return result.rows[0] ? serializeUser(result.rows[0]) : null;
+        const runDelete = async (client) => {
+            await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
+            const current = await client.query(
+                'SELECT id, username, role FROM users WHERE id = $1 FOR UPDATE',
+                [userId]
+            );
+            if (!current.rows[0]) {
+                return null;
+            }
+            if (current.rows[0].role === 'admin') {
+                const adminCount = await client.query('SELECT count(*)::int AS total FROM users WHERE role = $1', ['admin']);
+                if (toInteger(adminCount.rows[0]?.total) <= 1) {
+                    throw adminMutationError('Cannot delete the last admin');
+                }
+            }
+            await this.deleteSessionsForUser(userId, null, client);
+            const result = await client.query(
+                'DELETE FROM users WHERE id = $1 RETURNING id, username, role',
+                [userId]
+            );
+            return result.rows[0] ? serializeUser(result.rows[0]) : null;
+        };
+
+        if (typeof this.db.withTransaction === 'function') {
+            return this.db.withTransaction(runDelete);
+        }
+        return runDelete(this.db);
     }
 
     async listPracticeRecords(userId, options = {}) {
@@ -1384,6 +1437,9 @@ function createAdminRouter(options = {}) {
                 return res.status(400).json({ error: 'Cannot demote the last admin' });
             }
             const user = await store.updateUser(userId, parsed.data);
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(userId, req.sessionID);
             }

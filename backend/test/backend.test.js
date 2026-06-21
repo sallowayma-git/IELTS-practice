@@ -47,7 +47,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(compose.includes('target: /etc/tor/bridges.local.txt'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesTemplate));
     assert(torEntrypoint.includes('VALID_BRIDGES_FILE'));
-    assert(torEntrypoint.includes('grep -Eq'));
+    assert(torEntrypoint.includes('set -f'));
+    assert(torEntrypoint.includes('MAX_BRIDGE_LINE_LENGTH=1200'));
+    assert(torEntrypoint.includes('is_valid_bridge_endpoint()'));
+    assert(torEntrypoint.includes('is_valid_obfs4_bridge()'));
+    assert(torEntrypoint.includes('^[0-9A-Fa-f:.]+') || torEntrypoint.includes('\\[[0-9A-Fa-f:.]+\\]'));
+    assert(torEntrypoint.includes('[ "${#3}" -eq 40 ]'));
     assert(torEntrypoint.includes('cert='));
     assert(torEntrypoint.includes('if [ -s "$VALID_BRIDGES_FILE" ]'));
     assert(!/Bridge\\ \*\)\s*printf '%s\\n' "\$bridge"/.test(torEntrypoint));
@@ -67,6 +72,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(bridgeTester.includes('[ValidateRange(10, 600)]'));
     assert(bridgeTester.includes('[ValidateRange(1, 100)]'));
     assert(bridgeTester.includes('[int]$MaxCandidates = 20'));
+    assert(bridgeTester.includes('$MAX_BRIDGE_LINE_LENGTH = 1200'));
+    assert(bridgeTester.includes('$OBFS4_BRIDGE_PATTERN'));
+    assert(bridgeTester.includes('function Test-BridgeEndpoint'));
+    assert(bridgeTester.includes('cert='));
+    assert(bridgeTester.includes('$endpoint = $Matches[1]'));
+    assert(bridgeTester.includes('$fingerprint = $Matches[2].ToUpperInvariant()'));
     assert(bridgeTester.includes('Get-CandidateBridges | Select-Object -First $MaxCandidates'));
     assert.match(bridgeTester, /if \(\$RevealBridgeLines\) \{\s*\$result\.line = \$Candidate\.line\s*\}/);
     assert.match(bridgeTester, /\$seen\.Add\(\$item\.line\)/);
@@ -75,8 +86,9 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(smokePostgres.includes('process.env.POSTGRES_PASSWORD'));
     assert(smokePostgres.includes('Set DATABASE_URL or POSTGRES_PASSWORD'));
     assert(!smokePostgres.includes("|| 'postgres'"));
-    assert(appSource.includes('function createStaticBoundaryMiddleware(root)'));
-    assert(appSource.includes('createStaticBoundaryMiddleware(staticDirectory), express.static(staticDirectory'));
+    assert(appSource.includes('function createStaticBoundaryMiddleware(root, options = {})'));
+    assert(appSource.includes("blockedPrefixes: ['/ci-practice-fixtures']"));
+    assert(appSource.includes('createStaticBoundaryMiddleware(staticDirectory, staticBoundaryOptions), express.static(staticDirectory'));
     assert(appSource.includes('createStaticBoundaryMiddleware(adminRoot), express.static(adminRoot'));
 });
 
@@ -1966,6 +1978,15 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         assert.equal(invalidRecordId.response.status, 400);
         assert.equal(invalidRecordId.json.error, 'Invalid record id');
 
+        const realUpdateUser = client.adminStore.updateUser.bind(client.adminStore);
+        client.adminStore.updateUser = async () => null;
+        const stalePatch = await client.request('PATCH', `/api/admin/users/${added.json.user.id}`, {
+            password: 'StrongerPass3'
+        });
+        assert.equal(stalePatch.response.status, 404);
+        assert.equal(stalePatch.json.error, 'User not found');
+        client.adminStore.updateUser = realUpdateUser;
+
         const realDeleteUser = client.adminStore.deleteUser.bind(client.adminStore);
         client.adminStore.deleteUser = async () => null;
         const staleDelete = await client.request('DELETE', `/api/admin/users/${added.json.user.id}`);
@@ -1979,6 +2000,114 @@ test('admin can manage users and inspect learning and traffic stats', async () =
     } finally {
         await client.close();
     }
+});
+
+test('PostgresAdminStore refuses last-admin demotion inside a locked transaction', async () => {
+    const queries = [];
+    const client = {
+        async query(sql, params = []) {
+            const text = String(sql).replace(/\s+/g, ' ').trim();
+            queries.push({ text, params });
+            if (text === 'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE') {
+                return { rows: [], rowCount: 0 };
+            }
+            if (text === 'SELECT id, role FROM users WHERE id = $1 FOR UPDATE') {
+                return { rows: [{ id: 'admin-id', role: 'admin' }], rowCount: 1 };
+            }
+            if (text === 'SELECT count(*)::int AS total FROM users WHERE role = $1') {
+                return { rows: [{ total: 1 }], rowCount: 1 };
+            }
+            if (text.startsWith('UPDATE users')) {
+                throw new Error('unexpected update');
+            }
+            return { rows: [], rowCount: 0 };
+        }
+    };
+    const db = {
+        async withTransaction(handler) {
+            queries.push({ text: 'BEGIN', params: [] });
+            try {
+                const result = await handler(client);
+                queries.push({ text: 'COMMIT', params: [] });
+                return result;
+            } catch (error) {
+                queries.push({ text: 'ROLLBACK', params: [] });
+                throw error;
+            }
+        }
+    };
+    const store = new PostgresAdminStore(db);
+
+    await assert.rejects(
+        () => store.updateUser('admin-id', { role: 'user' }),
+        (error) => {
+            assert.equal(error.status, 400);
+            assert.equal(error.message, 'Cannot demote the last admin');
+            return true;
+        }
+    );
+
+    const texts = queries.map((item) => item.text);
+    assert.deepEqual(texts, [
+        'BEGIN',
+        'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE',
+        'SELECT id, role FROM users WHERE id = $1 FOR UPDATE',
+        'SELECT count(*)::int AS total FROM users WHERE role = $1',
+        'ROLLBACK'
+    ]);
+});
+
+test('PostgresAdminStore deletes sessions and users inside a locked transaction', async () => {
+    const queries = [];
+    const client = {
+        async query(sql, params = []) {
+            const text = String(sql).replace(/\s+/g, ' ').trim();
+            queries.push({ text, params });
+            if (text === 'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE') {
+                return { rows: [], rowCount: 0 };
+            }
+            if (text === 'SELECT id, username, role FROM users WHERE id = $1 FOR UPDATE') {
+                return { rows: [{ id: 'admin-id', username: 'admin_user', role: 'admin' }], rowCount: 1 };
+            }
+            if (text === 'SELECT count(*)::int AS total FROM users WHERE role = $1') {
+                return { rows: [{ total: 2 }], rowCount: 1 };
+            }
+            if (text.startsWith('DELETE FROM "session"')) {
+                assert.deepEqual(params, ['admin-id', null]);
+                return { rows: [], rowCount: 2 };
+            }
+            if (text === 'DELETE FROM users WHERE id = $1 RETURNING id, username, role') {
+                assert.deepEqual(params, ['admin-id']);
+                return { rows: [{ id: 'admin-id', username: 'admin_user', role: 'admin' }], rowCount: 1 };
+            }
+            throw new Error(`unexpected query: ${text}`);
+        }
+    };
+    const db = {
+        async withTransaction(handler) {
+            queries.push({ text: 'BEGIN', params: [] });
+            const result = await handler(client);
+            queries.push({ text: 'COMMIT', params: [] });
+            return result;
+        }
+    };
+    const store = new PostgresAdminStore(db);
+
+    const deleted = await store.deleteUser('admin-id');
+
+    assert.equal(deleted.id, 'admin-id');
+    assert.equal(deleted.username, 'admin_user');
+    assert.equal(deleted.role, 'admin');
+    const texts = queries.map((item) => item.text);
+    assert.deepEqual(texts, [
+        'BEGIN',
+        'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE',
+        'SELECT id, username, role FROM users WHERE id = $1 FOR UPDATE',
+        'SELECT count(*)::int AS total FROM users WHERE role = $1',
+        `DELETE FROM "session" WHERE ( sess::jsonb #>> '{user,id}' = $1 OR sess::jsonb #>> '{pendingTotpLogin,user,id}' = $1 OR sess::jsonb #>> '{pendingTotpSetup,user,id}' = $1 ) AND ($2::text IS NULL OR sid <> $2::text)`,
+        'DELETE FROM users WHERE id = $1 RETURNING id, username, role',
+        'COMMIT'
+    ]);
 });
 
 test('admin user deletion clears target TOTP state in memory store', async () => {
@@ -2439,6 +2568,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
     fs.mkdirSync(path.join(staticRoot, 'backend', 'src'), { recursive: true });
     fs.mkdirSync(path.join(staticRoot, 'js', 'bundles'), { recursive: true });
     fs.mkdirSync(path.join(staticRoot, 'templates'), { recursive: true });
+    fs.mkdirSync(path.join(staticRoot, 'templates', 'ci-practice-fixtures'), { recursive: true });
     fs.mkdirSync(path.join(staticRoot, 'ListeningPractice', 'P1'), { recursive: true });
     fs.writeFileSync(path.join(staticRoot, 'index.html'), '<!doctype html><title>IELTS Atlas</title>', 'utf8');
     fs.writeFileSync(path.join(staticRoot, '.git', 'config'), '[core]\nrepositoryformatversion = 0\n', 'utf8');
@@ -2446,6 +2576,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
     fs.writeFileSync(outsideSecretPath, 'outside secret\n', 'utf8');
     fs.writeFileSync(path.join(staticRoot, 'js', 'bundles', 'core-foundation.bundle.js'), 'Generated by scripts/build-bundles.mjs\n', 'utf8');
     fs.writeFileSync(path.join(staticRoot, 'templates', 'legacy.html'), '<!doctype html><script>window.ok=true</script>', 'utf8');
+    fs.writeFileSync(path.join(staticRoot, 'templates', 'ci-practice-fixtures', 'debug.html'), '<!doctype html><script>window.debugPracticeEnhancer=true</script>', 'utf8');
     fs.writeFileSync(path.join(staticRoot, 'ListeningPractice', 'P1', 'sample.html'), '<!doctype html><title>Listening Sample</title>', 'utf8');
 
     const client = await createClient({ staticRoot });
@@ -2470,6 +2601,14 @@ test('static hosting serves index and denies dotfiles with security headers', as
         const backendSource = await client.request('GET', '/backend/src/app.js');
         assert.notEqual(backendSource.response.status, 200);
         assert.doesNotMatch(backendSource.text, /createApp/);
+
+        const encodedTraversal = await client.request('GET', '/assets/%2e%2e/backend/src/app.js');
+        assert.notEqual(encodedTraversal.response.status, 200);
+        assert.doesNotMatch(encodedTraversal.text, /createApp/);
+
+        const encodedSlashTraversal = await client.request('GET', '/assets/%2e%2e%2fbackend/src/app.js');
+        assert.notEqual(encodedSlashTraversal.response.status, 200);
+        assert.doesNotMatch(encodedSlashTraversal.text, /createApp/);
 
         let symlinkCreated = false;
         try {
@@ -2507,6 +2646,18 @@ test('static hosting serves index and denies dotfiles with security headers', as
         assert.match(templateCsp, /script-src 'self' 'unsafe-inline'/);
         assert.match(templateCsp, /connect-src 'self'/);
         assert.doesNotMatch(templateCsp, /sandbox/);
+
+        const ciFixture = await client.request('GET', '/templates/ci-practice-fixtures/debug.html');
+        assert.equal(ciFixture.response.status, 404);
+        assert.doesNotMatch(ciFixture.text, /debugPracticeEnhancer/);
+
+        const encodedCiFixture = await client.request('GET', '/templates/%63i-practice-fixtures/debug.html');
+        assert.equal(encodedCiFixture.response.status, 404);
+        assert.doesNotMatch(encodedCiFixture.text, /debugPracticeEnhancer/);
+
+        const encodedSlashCiFixture = await client.request('GET', '/templates/%63i-practice-fixtures%2Fdebug.html');
+        assert.equal(encodedSlashCiFixture.response.status, 404);
+        assert.doesNotMatch(encodedSlashCiFixture.text, /debugPracticeEnhancer/);
     } finally {
         await client.close();
         fs.rmSync(staticRoot, { recursive: true, force: true });

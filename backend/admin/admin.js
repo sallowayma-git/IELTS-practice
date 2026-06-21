@@ -16,16 +16,19 @@
             offset: 0,
             total: 0,
             role: 'all',
-            loading: false
+            loading: false,
+            requestId: 0
         },
         records: {
             limit: 20,
             offset: 0,
             total: 0,
-            loading: false
+            loading: false,
+            requestId: 0
         },
         analyticsDays: 30,
         trafficDays: 14,
+        userStatsRequestId: 0,
         confirmResolver: null
     };
 
@@ -501,12 +504,24 @@
         nodes.recordsNext.disabled = state.records.loading || state.records.offset + state.records.limit >= state.records.total || !state.selectedUser;
     }
 
+    function storeCsrfTokenFromPayload(payload) {
+        if (payload && typeof payload.csrfToken === 'string' && payload.csrfToken) {
+            state.csrfToken = payload.csrfToken;
+            return true;
+        }
+        return false;
+    }
+
     async function request(path, options = {}) {
         const headers = Object.assign({}, options.headers || {});
+        const requiresCsrf = options.csrf !== false && options.method && options.method !== 'GET';
         if (options.body !== undefined) {
             headers['Content-Type'] = 'application/json';
         }
-        if (options.csrf !== false && options.method && options.method !== 'GET') {
+        if (requiresCsrf) {
+            if (typeof state.csrfToken !== 'string' || !state.csrfToken) {
+                throw new Error('CSRF token is unavailable');
+            }
             headers['X-CSRF-Token'] = state.csrfToken;
         }
         const response = await fetch(path, {
@@ -534,9 +549,7 @@
             const detail = payload && payload.details ? ` ${JSON.stringify(payload.details)}` : '';
             throw new Error(payload && payload.error ? `${payload.error}${detail}` : `Request failed with ${response.status}`);
         }
-        if (payload && payload.csrfToken) {
-            state.csrfToken = payload.csrfToken;
-        }
+        storeCsrfTokenFromPayload(payload);
         return payload;
     }
 
@@ -547,7 +560,7 @@
             return false;
         }
         state.currentUserId = payload.user.id;
-        state.csrfToken = payload.csrfToken || '';
+        storeCsrfTokenFromPayload(payload);
         return true;
     }
 
@@ -666,6 +679,8 @@
     }
 
     async function loadUsers() {
+        const requestId = state.users.requestId + 1;
+        state.users.requestId = requestId;
         state.users.loading = true;
         updatePagination();
         setRowMessage(nodes.usersBody, 5, 'Loading users...');
@@ -677,6 +692,9 @@
                 offset: String(state.users.offset)
             });
             const payload = await request(`/api/admin/users?${query}`, { csrf: false });
+            if (state.users.requestId !== requestId) {
+                return;
+            }
             renderUsers(payload);
             const selectedStillVisible = state.selectedUser && payload.users.some((user) => user.id === state.selectedUser.id);
             if ((!state.selectedUser || !selectedStillVisible) && payload.users[0]) {
@@ -686,8 +704,10 @@
                 clearUserSelection();
             }
         } finally {
-            state.users.loading = false;
-            updatePagination();
+            if (state.users.requestId === requestId) {
+                state.users.loading = false;
+                updatePagination();
+            }
         }
     }
 
@@ -709,9 +729,18 @@
         }
     }
 
+    function isSelectedUser(userId) {
+        return Boolean(state.selectedUser && state.selectedUser.id === userId);
+    }
+
     async function loadUserStats(userId) {
         if (!userId) return;
+        const requestId = state.userStatsRequestId + 1;
+        state.userStatsRequestId = requestId;
         const stats = await request(`/api/admin/users/${encodeURIComponent(userId)}/stats`, { csrf: false });
+        if (state.userStatsRequestId !== requestId || !isSelectedUser(userId)) {
+            return;
+        }
         nodes.userStatsTitle.textContent = stats.user.username;
         nodes.userStatRecords.textContent = formatNumber(stats.recordCount);
         nodes.userStatAverage.textContent = formatScoreValue(stats.averageScore);
@@ -838,15 +867,22 @@
 
     async function loadRecords(userId, username) {
         if (!userId) return;
+        const requestId = state.records.requestId + 1;
+        state.records.requestId = requestId;
         state.records.loading = true;
         updatePagination();
         setRowMessage(nodes.recordsBody, 5, 'Loading records...');
         try {
             const payload = await request(`/api/admin/users/${encodeURIComponent(userId)}/practice-records?limit=${state.records.limit}&offset=${state.records.offset}`, { csrf: false });
+            if (state.records.requestId !== requestId || !isSelectedUser(userId)) {
+                return;
+            }
             renderRecords(payload, username);
         } finally {
-            state.records.loading = false;
-            updatePagination();
+            if (state.records.requestId === requestId) {
+                state.records.loading = false;
+                updatePagination();
+            }
         }
     }
 
@@ -1002,12 +1038,16 @@
             loadUsers().catch((error) => setStatus(error.message, 'error'));
         });
         nodes.recordsPrev.addEventListener('click', () => {
+            if (!state.selectedUser) return;
+            const selectedUser = state.selectedUser;
             state.records.offset = Math.max(0, state.records.offset - state.records.limit);
-            loadRecords(state.selectedUser.id, state.selectedUser.username).catch((error) => setStatus(error.message, 'error'));
+            loadRecords(selectedUser.id, selectedUser.username).catch((error) => setStatus(error.message, 'error'));
         });
         nodes.recordsNext.addEventListener('click', () => {
+            if (!state.selectedUser) return;
+            const selectedUser = state.selectedUser;
             state.records.offset += state.records.limit;
-            loadRecords(state.selectedUser.id, state.selectedUser.username).catch((error) => setStatus(error.message, 'error'));
+            loadRecords(selectedUser.id, selectedUser.username).catch((error) => setStatus(error.message, 'error'));
         });
         nodes.createUserForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -1030,7 +1070,9 @@
         });
         nodes.editUserForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            if (!state.selectedUser) return;
+            const selectedUser = state.selectedUser;
+            if (!selectedUser) return;
+            const userId = selectedUser.id;
             const body = {
                 role: nodes.selectedUserRole.value
             };
@@ -1039,12 +1081,15 @@
             }
             try {
                 await withButtonBusy(nodes.saveUserButton, 'Saving...', async () => {
-                    const payload = await request(`/api/admin/users/${encodeURIComponent(state.selectedUser.id)}`, {
+                    const payload = await request(`/api/admin/users/${encodeURIComponent(userId)}`, {
                         method: 'PATCH',
                         body
                     });
-                    state.selectedUser = payload.user;
-                    nodes.selectedUserPassword.value = '';
+                    if (isSelectedUser(userId)) {
+                        state.selectedUser = payload.user;
+                        nodes.selectedUserPassword.value = '';
+                        updateSelectedUserPanel();
+                    }
                     setStatus(`Updated ${payload.user.username}`);
                     await refreshAll();
                 });
@@ -1116,6 +1161,9 @@
             formatScore,
             safeStringifyRecordPayload,
             request,
+            loadAuth,
+            loadRecords,
+            loadUserStats,
             confirmAction,
             closeConfirm,
             state
