@@ -10528,6 +10528,17 @@ const STATE_SERIALIZER_MAX_NODES = 50000;
 const STATE_SERIALIZER_MAX_ARRAY_ITEMS = 5000;
 const STATE_SERIALIZER_MAX_OBJECT_KEYS = 500;
 const STATE_SERIALIZER_MAX_COLLECTION_ITEMS = 5000;
+function summarizeStateSerializerErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 
 class StateSerializer {
     static serialize(value) {
@@ -10716,7 +10727,7 @@ class StateSerializer {
 
             return JSON.stringify(originalValue) === JSON.stringify(deserialized);
         } catch (error) {
-            console.error('[StateSerializer] Validation failed:', error);
+            console.error('[StateSerializer] Validation failed:', summarizeStateSerializerErrorForLog(error));
             return false;
         }
     }
@@ -10728,7 +10739,7 @@ class StateSerializer {
                     const value = await baseStorage.get(key, defaultValue);
                     return StateSerializer.deserialize(value);
                 } catch (error) {
-                    console.error('[StateSerializer] get failed:', error);
+                    console.error('[StateSerializer] get failed:', summarizeStateSerializerErrorForLog(error));
                     return defaultValue;
                 }
             },
@@ -10738,7 +10749,7 @@ class StateSerializer {
                     const serializedValue = StateSerializer.serialize(value);
                     return await baseStorage.set(key, serializedValue);
                 } catch (error) {
-                    console.error('[StateSerializer] set failed:', error);
+                    console.error('[StateSerializer] set failed:', summarizeStateSerializerErrorForLog(error));
                     throw error;
                 }
             },
@@ -10747,7 +10758,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.remove(key);
                 } catch (error) {
-                    console.error('[StateSerializer] remove failed:', error);
+                    console.error('[StateSerializer] remove failed:', summarizeStateSerializerErrorForLog(error));
                     throw error;
                 }
             },
@@ -10756,7 +10767,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.clear();
                 } catch (error) {
-                    console.error('[StateSerializer] clear failed:', error);
+                    console.error('[StateSerializer] clear failed:', summarizeStateSerializerErrorForLog(error));
                     throw error;
                 }
             }

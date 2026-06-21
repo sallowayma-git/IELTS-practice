@@ -26,6 +26,17 @@
     const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
     const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
     const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    function summarizeSpellingCollectorErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
 
     /**
      * 拼写错误记录数据结构
@@ -105,7 +116,7 @@
                 this.initialized = true;
                 console.log('[SpellingErrorCollector] 初始化完成');
             } catch (error) {
-                console.error('[SpellingErrorCollector] 初始化失败:', error);
+                console.error('[SpellingErrorCollector] 初始化失败:', summarizeSpellingCollectorErrorForLog(error));
                 this.initialized = false;
             }
         }
@@ -591,7 +602,7 @@
                 console.log('[SpellingErrorCollector] 词表不存在');
                 return null;
             } catch (error) {
-                console.error('[SpellingErrorCollector] 加载词表失败', error);
+                console.error('[SpellingErrorCollector] 加载词表失败', summarizeSpellingCollectorErrorForLog(error));
                 return null;
             }
         }
@@ -633,7 +644,7 @@
 
                 return true;
             } catch (error) {
-                console.error('[SpellingErrorCollector] 保存词表失败:', error);
+                console.error('[SpellingErrorCollector] 保存词表失败:', summarizeSpellingCollectorErrorForLog(error));
                 return false;
             }
         }
@@ -648,7 +659,7 @@
                 const list = await this.loadVocabList(listId);
                 return list ? list.words.length : 0;
             } catch (error) {
-                console.error('[SpellingErrorCollector] 获取词表单词数失败', error);
+                console.error('[SpellingErrorCollector] 获取词表单词数失败', summarizeSpellingCollectorErrorForLog(error));
                 return 0;
             }
         }
@@ -1234,7 +1245,7 @@
                 console.log(`[SpellingErrorCollector] 保存完成，共保存 ${errors.length} 个错误`);
                 return true;
             } catch (error) {
-                console.error('[SpellingErrorCollector] 保存错误失败:', error);
+                console.error('[SpellingErrorCollector] 保存错误失败:', summarizeSpellingCollectorErrorForLog(error));
                 return false;
             }
         }
@@ -1388,7 +1399,7 @@
                     return false;
                 }
             } catch (error) {
-                console.error('[SpellingErrorCollector] 移除单词失败:', error);
+                console.error('[SpellingErrorCollector] 移除单词失败:', summarizeSpellingCollectorErrorForLog(error));
                 return false;
             }
         }
@@ -1415,7 +1426,7 @@
 
                 return true;
             } catch (error) {
-                console.error('[SpellingErrorCollector] 清空词表失败:', error);
+                console.error('[SpellingErrorCollector] 清空词表失败:', summarizeSpellingCollectorErrorForLog(error));
                 return false;
             }
         }

@@ -2869,6 +2869,17 @@
     });
     const MAX_SPELLING_ANSWER_LENGTH = 160;
     const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+    function summarizeVocabSessionErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
 
     const state = {
         container: null,
@@ -3238,7 +3249,7 @@
                 state.ui.listSwitcher = new Switcher(state.store);
                 state.ui.listSwitcher.render(container);
             } catch (error) {
-                console.warn('[VocabSessionView] 词表切换器初始化失败:', error);
+                console.warn('[VocabSessionView] 词表切换器初始化失败:', summarizeVocabSessionErrorForLog(error));
                 state.ui.listSwitcher = null;
             }
         }
@@ -3256,7 +3267,7 @@
             try {
                 window.app.navigateToView('more');
             } catch (error) {
-                console.warn('[VocabSessionView] navigateToView("more") 失败:', error);
+                console.warn('[VocabSessionView] navigateToView("more") 失败:', summarizeVocabSessionErrorForLog(error));
             }
         }
         if (vocabView) {
@@ -3613,11 +3624,11 @@
             render();
             showFeedbackMessage('学习设置已更新', 'success');
         } catch (error) {
-            console.error('[VocabSessionView] 设置保存失败:', error);
+            console.error('[VocabSessionView] 设置保存失败:', summarizeVocabSessionErrorForLog(error));
             if (state.elements.settingsError) {
-                state.elements.settingsError.textContent = error.message || '保存失败，请稍后再试。';
+                state.elements.settingsError.textContent = '保存失败，请稍后再试。';
             }
-            showFeedbackMessage(`保存失败：${error.message || error}`, 'error');
+            showFeedbackMessage('保存失败，请稍后再试。', 'error');
         }
     }
 
@@ -3728,8 +3739,8 @@
                 render();
             }
         } catch (error) {
-            console.error('[VocabSessionView] 导入失败:', error);
-            showFeedbackMessage(`导入失败：${error.message || error}`, 'error');
+            console.error('[VocabSessionView] 导入失败:', summarizeVocabSessionErrorForLog(error));
+            showFeedbackMessage('导入失败，请稍后再试。', 'error');
         } finally {
             state.ui.importing = false;
         }
@@ -3765,8 +3776,8 @@
             triggerDownload(blob, filename);
             showFeedbackMessage('词汇进度已导出', 'success');
         } catch (error) {
-            console.error('[VocabSessionView] 导出失败:', error);
-            showFeedbackMessage(`导出失败：${error.message || error}`, 'error');
+            console.error('[VocabSessionView] 导出失败:', summarizeVocabSessionErrorForLog(error));
+            showFeedbackMessage('导出失败，请稍后再试。', 'error');
         } finally {
             state.ui.exporting = false;
         }
@@ -4914,9 +4925,9 @@
         try {
             await state.store.init();
         } catch (error) {
-            console.error('[VocabSessionView] 初始化失败:', error);
+            console.error('[VocabSessionView] 初始化失败:', summarizeVocabSessionErrorForLog(error));
             if (state.elements.sessionCard) {
-                state.elements.sessionCard.innerHTML = `<div class="vocab-card-error">初始化失败：${escapeHtml(error.message || error)}</div>`;
+                state.elements.sessionCard.innerHTML = '<div class="vocab-card-error">初始化失败，请稍后再试。</div>';
             }
             return;
         }
