@@ -107,6 +107,10 @@ function assertUnsafeAttributesSkipped(element) {
     assert.equal(element.getAttribute('srcdoc'), null);
     assert.equal(element.getAttribute('href'), null);
     assert.equal(element.getAttribute('formaction'), null);
+    assert.equal(element.getAttribute('srcset'), null);
+    assert.equal(element.getAttribute('imagesrcset'), null);
+    assert.equal(element.getAttribute('ping'), null);
+    assert.equal(element.getAttribute('background'), null);
     assert.equal(element.dataset.safeKey, 'ok');
     assert.equal(Object.prototype.hasOwnProperty.call(element.dataset, '__proto__'), false);
     assert.equal(Object.prototype.hasOwnProperty.call(element.dataset, 'constructor'), false);
@@ -123,6 +127,10 @@ function testCreateSkipsUnsafeAttributes() {
     const element = dom.create('a', {
         href: 'java\nscript:alert(1)',
         formaction: 'data:text/html,<script>alert(1)</script>',
+        srcset: '/safe.png 1x, java\nscript:alert(1) 2x',
+        imagesrcset: '/safe.png 1x, data:image/svg+xml,<svg onload=alert(1)> 2x',
+        ping: '/safe java\nscript:alert(1)',
+        background: 'vbscript:msgbox(1)',
         onclick: 'alert(1)',
         onerror() {},
         srcdoc: '<script>alert(1)</script>',
@@ -149,6 +157,10 @@ function testAdapterFallbackSkipsUnsafeAttributes() {
     const element = adapter.create('a', {
         href: 'vbscript:msgbox(1)',
         formaction: 'javascript:alert(1)',
+        srcset: '/safe.png 1x, javascript:alert(1) 2x',
+        imagesrcset: '/safe.png 1x, data:text/html,<script>alert(1)</script> 2x',
+        ping: '/safe vbscript:msgbox(1)',
+        background: 'javascript:alert(1)',
         onclick: 'alert(1)',
         srcdoc: '<script>alert(1)</script>',
         dataset: {
@@ -165,6 +177,34 @@ function testAdapterFallbackSkipsUnsafeAttributes() {
     }, 'safe');
 
     assertUnsafeAttributesSkipped(element);
+}
+
+function testBlankTargetRelIsEnforced() {
+    const dom = loadDomUtils();
+    const link = dom.create('a', {
+        href: 'https://example.test/',
+        target: '_blank',
+        rel: 'nofollow'
+    }, 'external');
+
+    const rel = String(link.getAttribute('rel') || '').split(/\s+/).filter(Boolean);
+    assert(rel.includes('nofollow'));
+    assert(rel.includes('noopener'));
+    assert(rel.includes('noreferrer'));
+}
+
+function testAdapterFallbackBlankTargetRelIsEnforced() {
+    const dom = loadDomUtils();
+    const adapter = dom.adapter;
+    dom.window.DOM = null;
+    const link = adapter.create('a', {
+        href: 'https://example.test/',
+        target: '_blank'
+    }, 'external');
+
+    const rel = String(link.getAttribute('rel') || '').split(/\s+/).filter(Boolean);
+    assert(rel.includes('noopener'));
+    assert(rel.includes('noreferrer'));
 }
 
 function testReplaceContentTreatsStringsAsText() {
@@ -199,6 +239,8 @@ function testStyleManagerSkipsUnsafeValues() {
 testReplaceContentTreatsStringsAsText();
 testCreateSkipsUnsafeAttributes();
 testAdapterFallbackSkipsUnsafeAttributes();
+testBlankTargetRelIsEnforced();
+testAdapterFallbackBlankTargetRelIsEnforced();
 testStyleManagerSkipsUnsafeValues();
 
 const domSource = fs.readFileSync(path.join(repoRoot, 'js/utils/dom.js'), 'utf8');
@@ -214,6 +256,9 @@ for (const [label, source, functionName] of [
     assert(source.includes('vbscript:'), `${label} must reject vbscript CSS URLs`);
     assert(source.includes('expression('), `${label} must reject legacy CSS expressions`);
     assert(source.includes('data:image/svg+xml'), `${label} must reject SVG data CSS URLs`);
+    for (const attr of ['srcset', 'imagesrcset', 'ping', 'background']) {
+        assert(source.includes(attr), `${label} must treat ${attr} as a guarded URL-bearing attribute`);
+    }
 }
 
 console.log(JSON.stringify({

@@ -12,6 +12,17 @@ function readSource(relativePath) {
     return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
+function assertExtendedUrlAttributes(source, label) {
+    for (const attr of ['srcset', 'imagesrcset', 'ping', 'background']) {
+        assert(source.includes(attr), `${label} must treat ${attr} as a guarded URL-bearing attribute`);
+    }
+    assert(
+        source.includes("key === 'srcset' || key === 'imagesrcset'") &&
+        source.includes("key === 'ping'"),
+        `${label} must split multi-URL attributes before checking unsafe URL values`
+    );
+}
+
 const messageCenterSource = readSource('js/presentation/message-center.js');
 assert(
     messageCenterSource.includes('function normalizeMessageType') &&
@@ -27,6 +38,7 @@ assert(
 );
 
 const bootFallbacksSource = readSource('js/boot-fallbacks.js');
+assertExtendedUrlAttributes(bootFallbacksSource, 'boot fallback DOM helper');
 assert(
     bootFallbacksSource.includes('normalizeFallbackMessageType') &&
     bootFallbacksSource.includes('var safeType = normalizeFallbackMessageType(type)') &&
@@ -59,6 +71,7 @@ assert(
 );
 
 const dataPanelSource = readSource('js/components/dataManagementPanel.js');
+assertExtendedUrlAttributes(dataPanelSource, 'data management panel DOM helper');
 assert(
     dataPanelSource.includes('function normalizeMessageType') &&
     dataPanelSource.includes("['info', 'success', 'warning', 'error'].includes(value)") &&
@@ -101,8 +114,21 @@ assert(
     !authOverlaySource.includes("qr.src = setup.qrCodeDataUrl || ''"),
     'auth overlay must not assign raw TOTP QR URLs to image src'
 );
+assert(
+    authOverlaySource.includes('let clearOverlaySensitiveFields = null') &&
+    authOverlaySource.includes('clearOverlaySensitiveFields = function (options = {})') &&
+    authOverlaySource.includes("setupQr.removeAttribute('src')") &&
+    authOverlaySource.includes("setupSecret.textContent = ''") &&
+    authOverlaySource.includes("recoveryList.textContent = ''") &&
+    authOverlaySource.includes('pendingRecoveryUser = null') &&
+    authOverlaySource.includes('clearOverlaySensitiveFields();\n            }\n            if (setOverlayMode)') &&
+    authOverlaySource.includes('clearOverlaySensitiveFields();\n            }\n            overlay.hidden = true') &&
+    authOverlaySource.includes("totpPanel.textContent = ''"),
+    'auth overlay must clear hidden password, TOTP setup secret, QR data, and recovery codes when leaving auth surfaces'
+);
 
 const appSource = readSource('js/app.js');
+assertExtendedUrlAttributes(appSource, 'app fallback DOM helper');
 assert(
     appSource.includes('function isAppUnsafeAttributeName') &&
     appSource.includes('function isAppUnsafeUrlAttribute') &&
@@ -121,6 +147,7 @@ assert(
 );
 
 const legacyViewSource = readSource('js/views/legacyViewBundle.js');
+assertExtendedUrlAttributes(legacyViewSource, 'legacy view DOM helper');
 assert(
     legacyViewSource.includes('function isLegacyUnsafeAttributeName') &&
     legacyViewSource.includes('function isLegacyUnsafeUrlAttribute') &&

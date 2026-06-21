@@ -27,6 +27,11 @@
   const throttleMap = new Map();
   const resourceProbeCache = new Map();
   const localFallbackSessions = new Map();
+  const PRACTICE_MESSAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+  const MAX_PRACTICE_MESSAGE_DEPTH = 16;
+  const MAX_PRACTICE_MESSAGE_ARRAY_ITEMS = 500;
+  const MAX_PRACTICE_MESSAGE_OBJECT_KEYS = 200;
+  const MAX_PRACTICE_MESSAGE_TEXT_LENGTH = 8000;
 
   function getMessageTargetOrigin() {
     const origin = window.location && window.location.origin;
@@ -100,6 +105,44 @@
 
   function asObject(value) {
     return value && typeof value === 'object' ? value : {};
+  }
+
+  function sanitizePracticeMessageValue(value, depth, state) {
+    const currentDepth = Number.isFinite(depth) ? depth : 0;
+    const currentState = state || { seen: new WeakSet() };
+    if (value == null) return value;
+    if (typeof value === 'string') return value.slice(0, MAX_PRACTICE_MESSAGE_TEXT_LENGTH);
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'boolean') return value;
+    if (typeof value !== 'object') return undefined;
+    if (currentDepth >= MAX_PRACTICE_MESSAGE_DEPTH || currentState.seen.has(value)) {
+      return undefined;
+    }
+    currentState.seen.add(value);
+    if (Array.isArray(value)) {
+      const clone = value
+        .slice(0, MAX_PRACTICE_MESSAGE_ARRAY_ITEMS)
+        .map((item) => sanitizePracticeMessageValue(item, currentDepth + 1, currentState))
+        .filter((item) => item !== undefined);
+      currentState.seen.delete(value);
+      return clone;
+    }
+    if (Object.prototype.toString.call(value) !== '[object Object]') {
+      currentState.seen.delete(value);
+      return undefined;
+    }
+    const clone = {};
+    Object.keys(value).slice(0, MAX_PRACTICE_MESSAGE_OBJECT_KEYS).forEach((key) => {
+      if (PRACTICE_MESSAGE_POLLUTION_KEYS.has(String(key))) {
+        return;
+      }
+      const safeValue = sanitizePracticeMessageValue(value[key], currentDepth + 1, currentState);
+      if (safeValue !== undefined) {
+        clone[key] = safeValue;
+      }
+    });
+    currentState.seen.delete(value);
+    return clone;
   }
 
   function toFiniteNumber(value) {
@@ -280,7 +323,7 @@
       completedAt,
       title,
       category,
-      raw: payload
+      raw: sanitizePracticeMessageValue(payload) || {}
     };
   }
 
@@ -480,7 +523,7 @@
         totalQuestions,
         duration,
         date: completedAt.toISOString(),
-        realData: normalized.raw || payload || {}
+        realData: normalized.raw || {}
       };
 
       records.unshift(record);

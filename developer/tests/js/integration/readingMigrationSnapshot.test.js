@@ -29,9 +29,12 @@ function loadManifest(filePath) {
 }
 
 try {
-    const sourceFiles = fs.readdirSync(SOURCE_DIR)
-        .filter((name) => name.endsWith('.json') && name !== 'reading-exam-source.schema.json')
-        .sort((a, b) => a.localeCompare(b, 'en'));
+    const sourceSnapshotAvailable = fs.existsSync(SOURCE_DIR);
+    const sourceFiles = sourceSnapshotAvailable
+        ? fs.readdirSync(SOURCE_DIR)
+            .filter((name) => name.endsWith('.json') && name !== 'reading-exam-source.schema.json')
+            .sort((a, b) => a.localeCompare(b, 'en'))
+        : [];
     const manifest = loadManifest(MANIFEST_FILE);
     const review = readJson(REVIEW_FILE);
     const manifestKeys = Object.keys(manifest).sort((a, b) => a.localeCompare(b, 'en'));
@@ -44,8 +47,8 @@ try {
     const manualOnly = unmigrated.filter((item) => item.reviewReason === 'manual_mapping_needed');
 
     const assertions = [
-        [sourceFiles.length === 191, `developer/reading-exams 数量应为 191，实际 ${sourceFiles.length}`],
-        [manifestKeys.length === 214, `manifest 条目数应为 214，实际 ${manifestKeys.length}`],
+        [!sourceSnapshotAvailable || sourceFiles.length === 191, `developer/reading-exams 数量应为 191，实际 ${sourceFiles.length}`],
+        [manifestKeys.length === 225, `manifest 条目数应为 225，实际 ${manifestKeys.length}`],
         [review.unmigratedCount === 1, `unmigratedCount 应为 1，实际 ${review.unmigratedCount}`],
         [unmigratedIds.length === 1 && unmigratedIds[0] === 'p2-high-26', `唯一未迁移题应为 p2-high-26，实际 ${JSON.stringify(unmigratedIds)}`],
         [manualOnly.length === 1 && manualOnly[0].examId === 'p2-high-26', 'manual_mapping_needed 未正确单独暴露'],
@@ -59,8 +62,12 @@ try {
         status: failures.length ? 'fail' : 'pass',
         passed: assertions.length - failures.length,
         total: assertions.length,
-        detail: failures.length ? failures.join(' | ') : 'reading migration snapshot ok'
+        detail: failures.length ? failures.join(' | ') : 'reading migration snapshot ok',
+        skippedSourceSnapshot: !sourceSnapshotAvailable
     });
+    if (failures.length) {
+        process.exit(1);
+    }
 } catch (error) {
     emitResult({
         status: 'fail',

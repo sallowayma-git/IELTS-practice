@@ -62,6 +62,21 @@ function limitPracticeRecorderCloneText(value) {
         : text;
 }
 
+function summarizeAnswerObjectForLog(value) {
+    if (Array.isArray(value)) {
+        return { type: 'array', length: value.length };
+    }
+    if (value && typeof value === 'object') {
+        const keys = Object.keys(value);
+        return {
+            type: 'object',
+            keys: keys.slice(0, 20),
+            truncatedKeys: Math.max(0, keys.length - 20)
+        };
+    }
+    return { type: typeof value };
+}
+
 function cloneRecorderData(value, depth = 0, state = null) {
     if (value === null || value === undefined) {
         return value ?? null;
@@ -788,7 +803,7 @@ class PracticeRecorder {
                 }
             }
             // 对于无法提取有效值的对象，返回空字符串而不是序列化
-            console.warn('[PracticeRecorder] 无法从对象中提取有效答案值:', value);
+            console.warn('[PracticeRecorder] 无法从对象中提取有效答案值:', summarizeAnswerObjectForLog(value));
             return '';
         }
         return String(value);

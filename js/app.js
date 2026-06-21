@@ -81,7 +81,7 @@ class ExamSystemApp {
 
     function isAppUnsafeUrlAttribute(name, value, tagName) {
         const key = String(name || '').toLowerCase();
-        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+        const urlAttributes = new Set(['href', 'src', 'srcset', 'imagesrcset', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'cite', 'longdesc', 'ping']);
         if (!urlAttributes.has(key)) {
             return false;
         }
@@ -89,18 +89,33 @@ class ExamSystemApp {
         if (!text) {
             return false;
         }
-        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+        const compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compactAll.includes('javascript:')
+            || compactAll.includes('vbscript:')
+            || compactAll.includes('data:text/html')
+            || compactAll.includes('data:application/xhtml+xml')
+            || compactAll.includes('data:image/svg+xml')) {
             return true;
         }
-        if (compact.startsWith('data:')) {
-            const tag = String(tagName || '').toLowerCase();
-            if (key !== 'src' || tag !== 'img') {
+        const candidates = (key === 'srcset' || key === 'imagesrcset')
+            ? text.split(',').map((part) => part.trim().split(/\s+/, 1)[0]).filter(Boolean)
+            : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+        return candidates.some((candidate) => {
+            const compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+            if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
                 return true;
             }
-            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-        }
-        return false;
+            if (compact.startsWith('data:')) {
+                const tag = String(tagName || '').toLowerCase();
+                const imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+                const imageLikeTag = tag === 'img' || tag === 'source';
+                if (!imageLikeAttribute || !imageLikeTag) {
+                    return true;
+                }
+                return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+            }
+            return false;
+        });
     }
 
     function isAppUnsafeObjectKey(name) {

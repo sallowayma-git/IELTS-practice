@@ -52,7 +52,12 @@
                 // fallback below
             }
         }
-        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F"\\]/g, (char) => {
+            if (char === '"' || char === '\\') {
+                return '\\' + char;
+            }
+            return '\\' + char.charCodeAt(0).toString(16) + ' ';
+        });
     }
 
     function toSafeCount(value, fallback = 0) {

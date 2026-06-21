@@ -84,14 +84,17 @@ const windowStub = {
     clearTimeout() {},
     document: documentStub
 };
+let fetchImpl = () => {
+    throw new Error('fetch should not be called in this test');
+};
 
 const context = vm.createContext({
     window: windowStub,
     document: documentStub,
     console: { log() {}, warn() {}, error() {} },
     URLSearchParams,
-    fetch() {
-        throw new Error('fetch should not be called in this test');
+    fetch(...args) {
+        return fetchImpl(...args);
     }
 });
 vm.runInContext(source, context, { filename: 'backend/admin/admin.js' });
@@ -131,6 +134,105 @@ assert(
     source.includes('confirmAction') &&
     source.includes('closeConfirm'),
     'admin confirm dialog must cancel any previous unresolved confirmation before opening a new one'
+);
+
+function jsonResponse(payload) {
+    return {
+        status: 200,
+        ok: true,
+        async text() {
+            return JSON.stringify(payload);
+        }
+    };
+}
+
+function createDeferredResponse(payload) {
+    let resolve;
+    const promise = new Promise((done) => {
+        resolve = () => done(jsonResponse(payload));
+    });
+    return { promise, resolve };
+}
+
+{
+    const stale = createDeferredResponse({
+        records: [{ id: 'record-a', title: 'Alice stale record', updatedAt: '2026-01-01T00:00:00Z' }],
+        total: 1
+    });
+    fetchImpl = async (url) => {
+        if (String(url).includes('/user-a/practice-records')) {
+            return stale.promise;
+        }
+        if (String(url).includes('/user-b/practice-records')) {
+            return jsonResponse({
+                records: [{ id: 'record-b', title: 'Bob current record', updatedAt: '2026-01-02T00:00:00Z' }],
+                total: 1
+            });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    hooks.state.selectedUser = { id: 'user-a', username: 'Alice' };
+    const firstLoad = hooks.loadRecords('user-a', 'Alice');
+    await Promise.resolve();
+    hooks.state.selectedUser = { id: 'user-b', username: 'Bob' };
+    await hooks.loadRecords('user-b', 'Bob');
+    assert.equal(elements.get('records-title').textContent, 'Bob Records');
+    assert.equal(hooks.state.records.loading, false);
+
+    stale.resolve();
+    await firstLoad;
+    assert.equal(elements.get('records-title').textContent, 'Bob Records');
+    assert.equal(hooks.state.records.loading, false);
+}
+
+{
+    const stale = createDeferredResponse({
+        user: { id: 'user-a', username: 'Alice' },
+        recordCount: 5,
+        averageScore: 90,
+        totalStudyMinutes: 120,
+        latestRecordAt: '2026-01-01T00:00:00Z',
+        byType: []
+    });
+    fetchImpl = async (url) => {
+        if (String(url).includes('/user-a/stats')) {
+            return stale.promise;
+        }
+        if (String(url).includes('/user-b/stats')) {
+            return jsonResponse({
+                user: { id: 'user-b', username: 'Bob' },
+                recordCount: 1,
+                averageScore: 80,
+                totalStudyMinutes: 30,
+                latestRecordAt: '2026-01-02T00:00:00Z',
+                byType: []
+            });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    hooks.state.selectedUser = { id: 'user-a', username: 'Alice' };
+    const firstLoad = hooks.loadUserStats('user-a');
+    await Promise.resolve();
+    hooks.state.selectedUser = { id: 'user-b', username: 'Bob' };
+    await hooks.loadUserStats('user-b');
+    assert.equal(elements.get('user-stats-title').textContent, 'Bob');
+    assert.equal(elements.get('user-stat-records').textContent, '1');
+
+    stale.resolve();
+    await firstLoad;
+    assert.equal(elements.get('user-stats-title').textContent, 'Bob');
+    assert.equal(elements.get('user-stat-records').textContent, '1');
+}
+
+assert(
+    source.includes('function isSelectedUser(userId)') &&
+    source.includes('state.records.requestId !== requestId || !isSelectedUser(userId)') &&
+    source.includes('state.userStatsRequestId !== requestId || !isSelectedUser(userId)') &&
+    source.includes('const selectedUser = state.selectedUser;') &&
+    source.includes('const userId = selectedUser.id;'),
+    'admin async user/record refreshes must ignore stale responses and snapshot selected users for mutations'
 );
 
 console.log('adminFrontendGuard.test.js passed');

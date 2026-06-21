@@ -705,10 +705,16 @@
 
     const READING_HTML_URL_ATTRIBUTES = new Set([
         'action',
+        'background',
+        'cite',
         'formaction',
         'href',
+        'imagesrcset',
+        'longdesc',
+        'ping',
         'poster',
         'src',
+        'srcset',
         'xlink:href'
     ]);
 
@@ -745,6 +751,23 @@
         }
     }
 
+    function getReadingHtmlUrlCandidates(key, value) {
+        const text = String(value == null ? '' : value).trim();
+        if (!text) {
+            return [];
+        }
+        if (key === 'srcset' || key === 'imagesrcset') {
+            return text
+                .split(',')
+                .map((part) => part.trim().split(/\s+/, 1)[0])
+                .filter(Boolean);
+        }
+        if (key === 'ping') {
+            return text.split(/\s+/).filter(Boolean);
+        }
+        return [text];
+    }
+
     function isUnsafeReadingHtmlAttribute(name, value, tagName) {
         const key = String(name || '').toLowerCase();
         if (key.startsWith('on') || key === 'srcdoc') {
@@ -756,22 +779,34 @@
         if (!READING_HTML_URL_ATTRIBUTES.has(key)) {
             return false;
         }
-        const text = String(value == null ? '' : value).trim();
-        if (!text) {
+        const candidates = getReadingHtmlUrlCandidates(key, value);
+        if (!candidates.length) {
             return false;
         }
-        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+        const compactAll = String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compactAll.includes('javascript:')
+            || compactAll.includes('vbscript:')
+            || compactAll.includes('data:text/html')
+            || compactAll.includes('data:application/xhtml+xml')
+            || compactAll.includes('data:image/svg+xml')) {
             return true;
         }
-        if (compact.startsWith('data:')) {
-            const tag = String(tagName || '').toLowerCase();
-            if (key !== 'src' || tag !== 'img') {
+        return candidates.some((candidate) => {
+            const compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+            if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
                 return true;
             }
-            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-        }
-        return !isTrustedReadingHtmlUrl(text);
+            if (compact.startsWith('data:')) {
+                const tag = String(tagName || '').toLowerCase();
+                const imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+                const imageLikeTag = tag === 'img' || tag === 'source';
+                if (!imageLikeAttribute || !imageLikeTag) {
+                    return true;
+                }
+                return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+            }
+            return !isTrustedReadingHtmlUrl(candidate);
+        });
     }
 
     function sanitizeReadingDatasetHtml(html) {
@@ -2689,7 +2724,12 @@
                 // ignore and use fallback
             }
         }
-        return String(value).replace(/["\\]/g, '\\$&');
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F"\\]/g, (char) => {
+            if (char === '"' || char === '\\') {
+                return '\\' + char;
+            }
+            return '\\' + char.charCodeAt(0).toString(16) + ' ';
+        });
     }
 
     function normalizeReplayQuestionId(rawValue) {

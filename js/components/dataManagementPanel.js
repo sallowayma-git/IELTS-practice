@@ -2,6 +2,8 @@
  * 数据管理面板组件
  * 提供数据导入导出、备份恢复的用户界面
  */
+const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 function isUnsafeElementAttributeName(name) {
     const key = String(name || '').toLowerCase();
     return key.startsWith('on') || key === 'srcdoc';
@@ -9,7 +11,7 @@ function isUnsafeElementAttributeName(name) {
 
 function isUnsafeElementUrlAttribute(name, value, tagName) {
     const key = String(name || '').toLowerCase();
-    const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+    const urlAttributes = new Set(['href', 'src', 'srcset', 'imagesrcset', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'cite', 'longdesc', 'ping']);
     if (!urlAttributes.has(key)) {
         return false;
     }
@@ -17,18 +19,33 @@ function isUnsafeElementUrlAttribute(name, value, tagName) {
     if (!text) {
         return false;
     }
-    const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-    if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+    const compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (compactAll.includes('javascript:')
+        || compactAll.includes('vbscript:')
+        || compactAll.includes('data:text/html')
+        || compactAll.includes('data:application/xhtml+xml')
+        || compactAll.includes('data:image/svg+xml')) {
         return true;
     }
-    if (compact.startsWith('data:')) {
-        const tag = String(tagName || '').toLowerCase();
-        if (key !== 'src' || tag !== 'img') {
+    const candidates = (key === 'srcset' || key === 'imagesrcset')
+        ? text.split(',').map((part) => part.trim().split(/\s+/, 1)[0]).filter(Boolean)
+        : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+    return candidates.some((candidate) => {
+        const compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
             return true;
         }
-        return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-    }
-    return false;
+        if (compact.startsWith('data:')) {
+            const tag = String(tagName || '').toLowerCase();
+            const imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+            const imageLikeTag = tag === 'img' || tag === 'source';
+            if (!imageLikeAttribute || !imageLikeTag) {
+                return true;
+            }
+            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+        }
+        return false;
+    });
 }
 
 function isUnsafeElementObjectKey(name) {
@@ -108,12 +125,17 @@ function validateImportFile(file) {
 }
 
 function sanitizeDownloadFilename(filename, fallback = 'ielts-export.json') {
-    const value = String(filename || '')
+    const value = String(filename || fallback)
         .replace(/[\x00-\x1f\x7f\\/:"*?<>|]+/g, '_')
         .replace(/\s+/g, '_')
         .replace(/^\.+/, '')
+        .replace(/[. ]+$/g, '')
         .slice(0, 120);
-    return value || fallback;
+    if (!value) {
+        return fallback;
+    }
+    const basename = value.split('.', 1)[0];
+    return WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN.test(basename) ? `_${value}` : value;
 }
 
 function normalizeDownloadMimeType(mimeType) {
@@ -807,7 +829,13 @@ class DataManagementPanel {
             this.updateProgress('导入数据...');
 
             const result = await this.backupManager.importPracticeData(fileContent, options);
-            console.log('[DataManagementPanel] importPracticeData returned:', result);
+            console.log('[DataManagementPanel] importPracticeData returned:', {
+                success: Boolean(result && result.success),
+                importedCount: Number(result && result.importedCount) || 0,
+                updatedCount: Number(result && result.updatedCount) || 0,
+                skippedCount: Number(result && result.skippedCount) || 0,
+                recordCount: Number(result && (result.recordCount || result.finalCount)) || 0
+            });
 
             this.hideProgress();
 

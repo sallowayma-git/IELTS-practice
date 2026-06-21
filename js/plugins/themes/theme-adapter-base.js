@@ -28,6 +28,11 @@
 
   // 路径解析备用策略顺序
   const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
+  const PRACTICE_MESSAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+  const MAX_PRACTICE_MESSAGE_DEPTH = 16;
+  const MAX_PRACTICE_MESSAGE_ARRAY_ITEMS = 500;
+  const MAX_PRACTICE_MESSAGE_OBJECT_KEYS = 200;
+  const MAX_PRACTICE_MESSAGE_TEXT_LENGTH = 8000;
 
   function getMessageTargetOrigin() {
     const origin = window.location && window.location.origin;
@@ -192,6 +197,24 @@
     return Array.from(recordMap.values());
   }
 
+  function normalizePracticeRecordForStorage(record, options = {}) {
+    if (!record || typeof record !== 'object') {
+      return null;
+    }
+    const safeRecord = sanitizePracticeMessageValue(record);
+    if (!safeRecord || typeof safeRecord !== 'object' || Array.isArray(safeRecord)) {
+      return null;
+    }
+    const normalizedRecord = {
+      ...safeRecord,
+      type: normalizeType(safeRecord.type)
+    };
+    if (options.ensureTimestamp && !normalizedRecord.timestamp) {
+      normalizedRecord.timestamp = Date.now();
+    }
+    return normalizedRecord;
+  }
+
   /**
    * 获取记录的时间戳
    */
@@ -234,6 +257,44 @@
    */
   function asObject(value) {
     return value && typeof value === 'object' ? value : {};
+  }
+
+  function sanitizePracticeMessageValue(value, depth, state) {
+    const currentDepth = Number.isFinite(depth) ? depth : 0;
+    const currentState = state || { seen: new WeakSet() };
+    if (value == null) return value;
+    if (typeof value === 'string') return value.slice(0, MAX_PRACTICE_MESSAGE_TEXT_LENGTH);
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'boolean') return value;
+    if (typeof value !== 'object') return undefined;
+    if (currentDepth >= MAX_PRACTICE_MESSAGE_DEPTH || currentState.seen.has(value)) {
+      return undefined;
+    }
+    currentState.seen.add(value);
+    if (Array.isArray(value)) {
+      const clone = value
+        .slice(0, MAX_PRACTICE_MESSAGE_ARRAY_ITEMS)
+        .map((item) => sanitizePracticeMessageValue(item, currentDepth + 1, currentState))
+        .filter((item) => item !== undefined);
+      currentState.seen.delete(value);
+      return clone;
+    }
+    if (Object.prototype.toString.call(value) !== '[object Object]') {
+      currentState.seen.delete(value);
+      return undefined;
+    }
+    const clone = {};
+    Object.keys(value).slice(0, MAX_PRACTICE_MESSAGE_OBJECT_KEYS).forEach((key) => {
+      if (PRACTICE_MESSAGE_POLLUTION_KEYS.has(String(key))) {
+        return;
+      }
+      const safeValue = sanitizePracticeMessageValue(value[key], currentDepth + 1, currentState);
+      if (safeValue !== undefined) {
+        clone[key] = safeValue;
+      }
+    });
+    currentState.seen.delete(value);
+    return clone;
   }
 
   /**
@@ -452,7 +513,7 @@
       title,
       category,
       type: examType,
-      raw: payload
+      raw: sanitizePracticeMessageValue(payload) || {}
     };
   }
 
@@ -548,11 +609,11 @@
 
       try {
         // 规范化 type 字段
-        const normalizedRecord = {
-          ...record,
-          type: normalizeType(record.type),
-          timestamp: record.timestamp || Date.now()
-        };
+        const normalizedRecord = normalizePracticeRecordForStorage(record, { ensureTimestamp: true });
+        if (!normalizedRecord) {
+          console.warn('[ThemeAdapterBase] 无效的练习记录');
+          return;
+        }
 
         if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
           await window.PracticeCore.store.savePracticeRecord(normalizedRecord, { maxRecords: 1000 });
@@ -1137,7 +1198,7 @@
         totalQuestions,
         duration,
         date: completedAt.toISOString(),
-        realData: rawPayload
+        realData: sanitizePracticeMessageValue(rawPayload) || {}
       };
 
       // 保存记录
@@ -1239,10 +1300,10 @@
         }
 
         // 去重并规范化
-        this._practiceRecords = deduplicateRecords(data).map(record => ({
-          ...record,
-          type: normalizeType(record.type)
-        }));
+        const normalizedRecords = data
+          .map(record => normalizePracticeRecordForStorage(record))
+          .filter(record => record && Object.keys(record).length > 0);
+        this._practiceRecords = deduplicateRecords(normalizedRecords);
         
         this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
       } catch (error) {
@@ -1339,6 +1400,7 @@
     normalizeType,
     normalizeExamTypes,
     deduplicateRecords,
+    normalizePracticeRecordForStorage,
     getRecordTimestamp,
     normalizeMessageType,
     isPracticeCompleteType: (type) => ThemeAdapterBase.isPracticeCompleteType(type),

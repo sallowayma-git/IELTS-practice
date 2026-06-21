@@ -130,6 +130,33 @@ async function testAdminRequestStoresRotatedCsrfToken() {
     assert.equal(fetchCalls[0].options.headers['X-CSRF-Token'], 'csrf-old');
 }
 
+async function testAdminAuthIgnoresMalformedCsrfToken() {
+    const fetchCalls = [];
+    const hooks = loadAdminHooks({
+        async fetch(path, options = {}) {
+            fetchCalls.push({ path, options });
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        user: { id: 'admin-1', username: 'root', role: 'admin' },
+                        csrfToken: { bad: 'token' }
+                    });
+                }
+            };
+        }
+    });
+    hooks.state.csrfToken = 'csrf-existing';
+
+    const ok = await hooks.loadAuth();
+
+    assert.equal(ok, true);
+    assert.equal(hooks.state.currentUserId, 'admin-1');
+    assert.equal(hooks.state.csrfToken, 'csrf-existing');
+    assert.equal(fetchCalls[0].path, '/api/auth/me');
+}
+
 async function testAdminRequestClearsInvalidCsrfToken() {
     const hooks = loadAdminHooks({
         async fetch() {
@@ -153,13 +180,41 @@ async function testAdminRequestClearsInvalidCsrfToken() {
     assert.equal(hooks.state.csrfToken, '');
 }
 
+async function testAdminRequestRejectsWriteWithoutCsrfToken() {
+    let fetchCount = 0;
+    const hooks = loadAdminHooks({
+        async fetch() {
+            fetchCount += 1;
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ ok: true });
+                }
+            };
+        }
+    });
+    hooks.state.csrfToken = '';
+
+    await assert.rejects(
+        () => hooks.request('/api/admin/users/user-1', {
+            method: 'PATCH',
+            body: { password: 'StrongerPass2' }
+        }),
+        /CSRF token is unavailable/
+    );
+    assert.equal(fetchCount, 0);
+}
+
 async function main() {
     testAdminScoreFormattingRejectsInvalidNumbers();
     testAdminRecordScoreFormattingRejectsInvalidNumbers();
     testAdminRecordPayloadFormattingIsSafeAndBounded();
     testAdminRecordDeleteUsesSelectionSnapshot();
     await testAdminRequestStoresRotatedCsrfToken();
+    await testAdminAuthIgnoresMalformedCsrfToken();
     await testAdminRequestClearsInvalidCsrfToken();
+    await testAdminRequestRejectsWriteWithoutCsrfToken();
     console.log(JSON.stringify({
         status: 'pass',
         detail: 'admin UI formatting tests passed'

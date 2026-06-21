@@ -67,6 +67,15 @@ assert(
     vocabSource.includes('const normalizedAnswer = normalizeSpellingAnswer(input)'),
     'vocab spelling submit, feedback, and comparison paths must use bounded answers'
 );
+assert(
+    vocabSource.includes('function sanitizeDownloadFilename') &&
+    vocabSource.includes('anchor.download = sanitizeDownloadFilename(filename)') &&
+    vocabSource.includes('WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN') &&
+    vocabSource.includes(".replace(/[. ]+$/g, '')") &&
+    vocabSource.includes('`_${text}`') &&
+    !vocabSource.includes('anchor.download = filename;'),
+    'vocab progress exports must sanitize generated filenames and Windows reserved basenames before assigning anchor.download'
+);
 
 const achievementsSource = fs.readFileSync(path.join(repoRoot, 'js/services/achievementManager.js'), 'utf8');
 assert(
@@ -152,8 +161,11 @@ assert(
     dataManagementPanelSource.includes('function sanitizeDownloadFilename') &&
     dataManagementPanelSource.includes('function normalizeDownloadMimeType') &&
     dataManagementPanelSource.includes('const safeFilename = sanitizeDownloadFilename(filename);') &&
-    dataManagementPanelSource.includes('const safeMimeType = normalizeDownloadMimeType(mimeType);'),
-    'data management downloads must sanitize filenames and normalize MIME types'
+    dataManagementPanelSource.includes('const safeMimeType = normalizeDownloadMimeType(mimeType);') &&
+    dataManagementPanelSource.includes('WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN') &&
+    dataManagementPanelSource.includes(".replace(/[. ]+$/g, '')") &&
+    dataManagementPanelSource.includes('`_${value}`'),
+    'data management downloads must sanitize filenames, Windows reserved basenames, and MIME types'
 );
 assert(
     dataManagementPanelSource.includes('setTimeout(() => URL.revokeObjectURL(url), 0)') &&
@@ -170,6 +182,12 @@ assert(
     !dataManagementPanelSource.includes('el.setAttribute(key, options.attrs[key]);') &&
     !dataManagementPanelSource.includes('el.dataset[key] = options.dataset[key];'),
     'data management element helper must skip unsafe attributes, URLs, and dataset keys'
+);
+assert(
+    dataManagementPanelSource.includes("console.log('[DataManagementPanel] importPracticeData returned:', {") &&
+    dataManagementPanelSource.includes('importedCount: Number(result && result.importedCount) || 0') &&
+    !dataManagementPanelSource.includes("console.log('[DataManagementPanel] importPracticeData returned:', result)"),
+    'data import diagnostics must log whitelisted result counters only'
 );
 
 const dataIntegrityManagerSource = fs.readFileSync(path.join(repoRoot, 'js/components/DataIntegrityManager.js'), 'utf8');
@@ -285,6 +303,33 @@ assert(
     'HP portal backup import/export must validate files, sanitize imported arrays, and delay object URL revocation'
 );
 
+const hpCoreBridgeSource = fs.readFileSync(path.join(repoRoot, 'js/plugins/hp/hp-core-bridge.js'), 'utf8');
+assert(
+    hpCoreBridgeSource.includes("PRACTICE_MESSAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    hpCoreBridgeSource.includes('MAX_PRACTICE_MESSAGE_DEPTH = 16') &&
+    hpCoreBridgeSource.includes('function sanitizePracticeMessageValue(value, depth, state)') &&
+    hpCoreBridgeSource.includes('raw: sanitizePracticeMessageValue(payload) || {}') &&
+    hpCoreBridgeSource.includes('realData: normalized.raw || {}') &&
+    !hpCoreBridgeSource.includes('realData: normalized.raw || payload || {}'),
+    'HP practice record fallback must sanitize postMessage payloads before persisting realData'
+);
+
+const themeAdapterBaseSource = fs.readFileSync(path.join(repoRoot, 'js/plugins/themes/theme-adapter-base.js'), 'utf8');
+assert(
+    themeAdapterBaseSource.includes("PRACTICE_MESSAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    themeAdapterBaseSource.includes('MAX_PRACTICE_MESSAGE_DEPTH = 16') &&
+    themeAdapterBaseSource.includes('function sanitizePracticeMessageValue(value, depth, state)') &&
+    themeAdapterBaseSource.includes('function normalizePracticeRecordForStorage(record, options = {})') &&
+    themeAdapterBaseSource.includes('raw: sanitizePracticeMessageValue(payload) || {}') &&
+    themeAdapterBaseSource.includes('const normalizedRecord = normalizePracticeRecordForStorage(record, { ensureTimestamp: true });') &&
+    themeAdapterBaseSource.includes('.map(record => normalizePracticeRecordForStorage(record))') &&
+    themeAdapterBaseSource.includes('this._practiceRecords = deduplicateRecords(normalizedRecords);') &&
+    themeAdapterBaseSource.includes('realData: sanitizePracticeMessageValue(rawPayload) || {}') &&
+    !themeAdapterBaseSource.includes('realData: rawPayload') &&
+    !themeAdapterBaseSource.includes('normalizedRecord.realData = sanitizePracticeMessageValue(normalizedRecord.realData) || {};'),
+    'theme adapter practice record fallback must sanitize postMessage payloads and locally loaded records before use'
+);
+
 const vocabDataIoSource = fs.readFileSync(path.join(repoRoot, 'js/utils/vocabDataIO.js'), 'utf8');
 assert(
     vocabDataIoSource.includes('MAX_VOCAB_IMPORT_FILE_BYTES') &&
@@ -363,14 +408,47 @@ assert(
     'exam actions fallback exports must delay object URL revocation until after the click dispatch'
 );
 
+assert(
+    practicePageEnhancerSource.includes('function summarizeAnswerValueForLog') &&
+    practicePageEnhancerSource.includes('function summarizeAnswerMapForLog') &&
+    practicePageEnhancerSource.includes('function summarizeAnswerComparisonForLog') &&
+    !practicePageEnhancerSource.includes("derived_questionId='${questionId}', value='${value}'") &&
+    !practicePageEnhancerSource.includes('value=${value}, questionId=') &&
+    !practicePageEnhancerSource.includes('= ${answer}`') &&
+    practicePageEnhancerSource.includes("console.log('[PracticeEnhancer] 生成答案比较:', summarizeAnswerComparisonForLog(comparison))") &&
+    !practicePageEnhancerSource.includes("console.log('[PracticeEnhancer] 生成答案比较:', comparison)") &&
+    !practicePageEnhancerSource.includes("console.log('用户答案:', window.practicePageEnhancer.answers)") &&
+    !practicePageEnhancerSource.includes("console.log('正确答案:', window.practicePageEnhancer.correctAnswers)") &&
+    !practicePageEnhancerSource.includes("console.log('答案比较:', window.practicePageEnhancer.generateAnswerComparison())"),
+    'practice page enhancer console diagnostics must summarize answers instead of logging answer text'
+);
+
+const mainSource = fs.readFileSync(path.join(repoRoot, 'js/main.js'), 'utf8');
+assert(
+    mainSource.includes('recordCount: Array.isArray(detail && detail.records) ? detail.records.length : undefined') &&
+    !mainSource.includes("console.log('[System] 收到存储同步事件，正在更新练习记录...', event.detail)"),
+    'storage sync diagnostics must not dump raw event details'
+);
+
+const practiceRecorderSource = fs.readFileSync(path.join(repoRoot, 'js/core/practiceRecorder.js'), 'utf8');
+assert(
+    practiceRecorderSource.includes('function summarizeAnswerObjectForLog') &&
+    practiceRecorderSource.includes("console.warn('[PracticeRecorder] 无法从对象中提取有效答案值:', summarizeAnswerObjectForLog(value))") &&
+    !practiceRecorderSource.includes("console.warn('[PracticeRecorder] 无法从对象中提取有效答案值:', value)"),
+    'practice recorder warnings must not log raw answer objects'
+);
+
 const storageSource = fs.readFileSync(path.join(repoRoot, 'js/utils/storage.js'), 'utf8');
 assert(
     storageSource.includes('sanitizeDownloadFilename(filename, fallback)') &&
     storageSource.includes('const finalFilename = this.sanitizeDownloadFilename(filename || defaultFilename, defaultFilename)') &&
+    storageSource.includes('WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN') &&
+    storageSource.includes(".replace(/[. ]+$/g, '')") &&
+    storageSource.includes('`_${finalFilename}`') &&
     storageSource.includes('setTimeout(() => URL.revokeObjectURL(url), 0)') &&
     !storageSource.includes('link.download = filename;') &&
     !storageSource.includes('URL.revokeObjectURL(url);\n\n            console.log'),
-    'storage exports must sanitize download filenames and delay object URL revocation'
+    'storage exports must sanitize download filenames, Windows reserved basenames, and delay object URL revocation'
 );
 
 const examSessionMixinSource = fs.readFileSync(path.join(repoRoot, 'js/app/examSessionMixin.js'), 'utf8');
@@ -398,6 +476,15 @@ assert(
     templateBaseSource.includes('${escapeResultHtml(userAnswer || \'None\')}') &&
     !templateBaseSource.includes('${userAnswer || \'None\'} ${isCorrect'),
     'base exam template must escape free-text answers before rendering score output with innerHTML'
+);
+assert(
+    templateBaseSource.includes('function copySafeHighlightAttributes(sourceNode, targetNode)') &&
+    templateBaseSource.includes('isSafeHighlightAttributeName(attr.name)') &&
+    templateBaseSource.includes("normalized === 'srcdoc'") &&
+    templateBaseSource.includes("normalized.indexOf('on') === 0") &&
+    templateBaseSource.includes('copySafeHighlightAttributes(node, wrapper)') &&
+    !templateBaseSource.includes('wrapper.setAttribute(attr.name, attr.value)'),
+    'base exam template highlight cloning must whitelist copied attributes instead of preserving arbitrary event or URL attributes'
 );
 
 const analysisOfFearFixtureSource = fs.readFileSync(path.join(repoRoot, 'templates/ci-practice-fixtures/analysis-of-fear.html'), 'utf8');

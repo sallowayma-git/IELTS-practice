@@ -914,6 +914,31 @@
     var lastRange = null;
     var currentHlNode = null;
     var keepToolbar = false;
+    var SAFE_HIGHLIGHT_LITERAL_ATTRS = new Set(['id', 'title', 'role']);
+    var SAFE_HIGHLIGHT_DATA_ATTR_RE = /^data-[A-Za-z0-9_.:-]{1,64}$/;
+    var SAFE_HIGHLIGHT_ARIA_ATTR_RE = /^aria-[A-Za-z0-9_.:-]{1,64}$/;
+
+    function isSafeHighlightAttributeName(name) {
+      var normalized = String(name || '').toLowerCase();
+      if (!normalized || normalized === 'style' || normalized === 'srcdoc' || normalized.indexOf('on') === 0) {
+        return false;
+      }
+      if (normalized === '__proto__' || normalized === 'prototype' || normalized === 'constructor') {
+        return false;
+      }
+      return SAFE_HIGHLIGHT_LITERAL_ATTRS.has(normalized)
+        || SAFE_HIGHLIGHT_DATA_ATTR_RE.test(normalized)
+        || SAFE_HIGHLIGHT_ARIA_ATTR_RE.test(normalized);
+    }
+
+    function copySafeHighlightAttributes(sourceNode, targetNode) {
+      Array.from(sourceNode.attributes || []).slice(0, 12).forEach(function (attr) {
+        if (!attr || !isSafeHighlightAttributeName(attr.name)) {
+          return;
+        }
+        targetNode.setAttribute(attr.name, String(attr.value || '').slice(0, 256));
+      });
+    }
 
     function positionSelbarForRect(rect) {
       selbar.style.display = 'flex';
@@ -1013,9 +1038,7 @@
           const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
           wrapper.className = isBlock ? node.className + ' hl' : 'hl';
 
-          Array.from(node.attributes).forEach(attr => {
-            wrapper.setAttribute(attr.name, attr.value);
-          });
+          copySafeHighlightAttributes(node, wrapper);
 
           while (node.firstChild) {
             const processedChild = processNode(node.firstChild);

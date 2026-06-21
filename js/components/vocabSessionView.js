@@ -18,6 +18,7 @@
         masteryCount: { min: 1, max: 10 }
     });
     const MAX_SPELLING_ANSWER_LENGTH = 160;
+    const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
     const state = {
         container: null,
@@ -125,6 +126,20 @@
         return `${parts.join('')}-${time.join('')}`;
     }
 
+    function sanitizeDownloadFilename(filename, fallback = 'vocab-progress.json') {
+        const text = String(filename || fallback)
+            .replace(/[\x00-\x1f\x7f\\/:"*?<>|]+/g, '_')
+            .replace(/\s+/g, '_')
+            .replace(/^\.+/, '')
+            .replace(/[. ]+$/g, '')
+            .slice(0, 120);
+        if (!text) {
+            return fallback;
+        }
+        const basename = text.split('.', 1)[0];
+        return WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN.test(basename) ? `_${text}` : text;
+    }
+
     function triggerDownload(blob, filename) {
         if (!(blob instanceof Blob)) {
             throw new Error('导出内容为空');
@@ -132,7 +147,7 @@
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = filename;
+        anchor.download = sanitizeDownloadFilename(filename);
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);

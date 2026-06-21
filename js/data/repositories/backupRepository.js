@@ -1,6 +1,7 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const BaseRepository = ExamData.BaseRepository;
+    const sanitizeRepositoryValue = ExamData.sanitizeRepositoryValue || ((value) => value);
 
     function ensureArray(value) {
         return Array.isArray(value) ? value : [];
@@ -50,12 +51,12 @@
             if (!backup || typeof backup !== 'object') {
                 throw new Error('备份数据必须是对象');
             }
-            const normalized = { ...backup };
+            const normalized = sanitizeRepositoryValue({ ...backup });
             normalized.id = normalized.id ? String(normalized.id) : createLocalId('backup');
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
             normalized.version = normalized.version || '1.0.0';
-            normalized.data = normalized.data || {};
+            normalized.data = sanitizeRepositoryValue(normalized.data || {});
             normalized.size = normalized.size || JSON.stringify(normalized.data).length;
             return normalized;
         }

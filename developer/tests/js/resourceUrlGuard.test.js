@@ -242,9 +242,16 @@ assert(
     unifiedReadingPage.includes("'style'") &&
     unifiedReadingPage.includes("key.startsWith('on') || key === 'srcdoc'") &&
     unifiedReadingPage.includes('READING_HTML_URL_ATTRIBUTES') &&
+    unifiedReadingPage.includes("'srcset'") &&
+    unifiedReadingPage.includes("'imagesrcset'") &&
+    unifiedReadingPage.includes("'ping'") &&
+    unifiedReadingPage.includes("'background'") &&
+    unifiedReadingPage.includes('function getReadingHtmlUrlCandidates') &&
+    unifiedReadingPage.includes("key === 'srcset' || key === 'imagesrcset'") &&
+    unifiedReadingPage.includes("key === 'ping'") &&
     unifiedReadingPage.includes('function isTrustedReadingHtmlUrl') &&
     unifiedReadingPage.includes('resolved.origin === currentOrigin') &&
-    unifiedReadingPage.includes('return !isTrustedReadingHtmlUrl(text);') &&
+    unifiedReadingPage.includes('return !isTrustedReadingHtmlUrl(candidate);') &&
     unifiedReadingPage.includes('compact.startsWith(\'javascript:\')') &&
     unifiedReadingPage.includes('sanitizeReadingDatasetHtml(group.bodyHtml || \'\')') &&
     unifiedReadingPage.includes("sanitizeReadingDatasetHtml(block?.bodyHtml || block?.html || '')"),

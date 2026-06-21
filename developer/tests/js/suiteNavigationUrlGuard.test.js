@@ -43,6 +43,11 @@ assert(
     'exam session UI updates must escape dynamic exam IDs before using them in selectors'
 );
 assert(
+    examSessionMixinSource.includes('replace(/[\\u0000-\\u001F\\u007F"\\\\]/g') &&
+    examSessionMixinSource.includes("return '\\\\' + char.charCodeAt(0).toString(16) + ' ';"),
+    'exam session CSS selector fallback must escape control characters as CSS code points'
+);
+assert(
     examSessionMixinSource.includes("const safeStatus = ['in-progress', 'completed', 'interrupted', 'error'].includes(status) ? status : 'error'") &&
     examSessionMixinSource.includes('statusIndicator.className = `exam-status ${safeStatus}`') &&
     examSessionMixinSource.includes('detail: { examId, status: safeStatus }') &&
@@ -56,6 +61,11 @@ assert(
     practicePageEnhancerSource.includes('document.querySelector(`[data-suite-id="${cssEscape(normalizedSuiteId)}"]`)') &&
     !practicePageEnhancerSource.includes('document.querySelector(`[data-suite-id="${suiteId}"]`)'),
     'practice page enhancer must escape dynamic suite IDs before using them in selectors'
+);
+assert(
+    practicePageEnhancerSource.includes('replace(/[\\u0000-\\u001F\\u007F"\\\\]/g') &&
+    practicePageEnhancerSource.includes("return '\\\\' + char.charCodeAt(0).toString(16) + ' ';"),
+    'practice page enhancer CSS selector fallback must escape control characters as CSS code points'
 );
 assert(
     practicePageEnhancerSource.includes('document.querySelector(`label[for="${cssEscape(input.id)}"]`)') &&
@@ -87,7 +97,20 @@ assert(
     'app category progress updates must escape dynamic category values before using them in selectors'
 );
 
+const bootFallbacksSource = fs.readFileSync(path.join(repoRoot, 'js/boot-fallbacks.js'), 'utf8');
+assert(
+    bootFallbacksSource.includes('function escapeFallbackCssSelectorValue') &&
+    bootFallbacksSource.includes('navContainer.querySelector(\'[data-view="\' + escapeFallbackCssSelectorValue(normalized) + \'"]\')') &&
+    !bootFallbacksSource.includes('navContainer.querySelector(\'[data-view="\' + normalized + \'"]\')'),
+    'boot fallback navigation must escape dynamic view names before using them in selectors'
+);
+
 const unifiedReadingPageSource = fs.readFileSync(path.join(repoRoot, 'js/runtime/unifiedReadingPage.js'), 'utf8');
+assert(
+    unifiedReadingPageSource.includes('replace(/[\\u0000-\\u001F\\u007F"\\\\]/g') &&
+    unifiedReadingPageSource.includes("return '\\\\' + char.charCodeAt(0).toString(16) + ' ';"),
+    'unified reading CSS selector fallback must escape control characters as CSS code points'
+);
 assert(
     unifiedReadingPageSource.includes('const escapedSourceDropzoneId = payload.sourceDropzoneId ? escapeSelector(payload.sourceDropzoneId) : \'\'') &&
     unifiedReadingPageSource.includes('document.querySelector(`[data-dropzone-id="${escapedSourceDropzoneId}"]`)') &&
@@ -124,6 +147,14 @@ assert(
     examPlaceholderSource.includes('const nextUrl = resolveTrustedSuiteNavigationUrl(data.url || \'\')') &&
     !examPlaceholderSource.includes('const nextUrl = data.url || \'\''),
     'exam placeholder suite navigation must resolve postMessage URLs before assigning location.href'
+);
+
+const listeningRecordBridgeSource = fs.readFileSync(path.join(repoRoot, 'js/listeningRecordBridge.js'), 'utf8');
+assert(
+    listeningRecordBridgeSource.includes('function cssAttr') &&
+    listeningRecordBridgeSource.includes('replace(/[\\u0000-\\u001F\\u007F"\\\\]/g') &&
+    listeningRecordBridgeSource.includes("return '\\\\' + char.charCodeAt(0).toString(16) + ' ';"),
+    'listening record bridge selector fallback must escape control characters as CSS code points'
 );
 
 console.log(JSON.stringify({

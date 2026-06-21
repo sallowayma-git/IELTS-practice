@@ -6,6 +6,80 @@ const STORAGE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constr
 const STORAGE_BACKUP_MAX_PRACTICE_RECORDS = 5000;
 const STORAGE_BACKUP_MAX_NODES = 50000;
 const STORAGE_BACKUP_MAX_DEPTH = 40;
+const STORAGE_NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9:_-]{0,79}$/;
+const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+function normalizeStorageNamespace(namespace) {
+    if (typeof namespace !== 'string') {
+        return '';
+    }
+    const normalized = namespace.trim();
+    if (!normalized || !STORAGE_NAMESPACE_PATTERN.test(normalized)) {
+        return '';
+    }
+    const lower = normalized.toLowerCase();
+    if (STORAGE_BACKUP_POLLUTION_KEYS.has(lower) || lower === 'storage_backend') {
+        return '';
+    }
+    return normalized;
+}
+
+function sanitizeStoredValue(value, depth = 0, state = null) {
+    if (value === null || value === undefined) {
+        return value;
+    }
+    if (typeof value === 'string' || typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : undefined;
+    }
+    if (typeof value !== 'object') {
+        return undefined;
+    }
+    if (depth > STORAGE_BACKUP_MAX_DEPTH) {
+        return undefined;
+    }
+
+    const cloneState = state || {
+        seen: new WeakSet(),
+        nodes: 0
+    };
+    if (cloneState.seen.has(value)) {
+        return undefined;
+    }
+    cloneState.seen.add(value);
+    cloneState.nodes += 1;
+    if (cloneState.nodes > STORAGE_BACKUP_MAX_NODES) {
+        cloneState.seen.delete(value);
+        return undefined;
+    }
+
+    if (Array.isArray(value)) {
+        const list = [];
+        for (const item of value) {
+            const safeItem = sanitizeStoredValue(item, depth + 1, cloneState);
+            if (safeItem !== undefined) {
+                list.push(safeItem);
+            }
+        }
+        cloneState.seen.delete(value);
+        return list;
+    }
+
+    const output = {};
+    Object.keys(value).forEach((key) => {
+        if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
+            return;
+        }
+        const safeValue = sanitizeStoredValue(value[key], depth + 1, cloneState);
+        if (safeValue !== undefined) {
+            output[key] = safeValue;
+        }
+    });
+    cloneState.seen.delete(value);
+    return output;
+}
 
 class StorageManager {
     constructor() {
@@ -479,8 +553,9 @@ class StorageManager {
      * 设置存储命名空间
      */
     setNamespace(namespace) {
-        if (typeof namespace === 'string' && namespace.trim()) {
-            this.prefix = namespace.trim() + '_';
+        const safeNamespace = normalizeStorageNamespace(namespace);
+        if (safeNamespace) {
+            this.prefix = safeNamespace + '_';
             console.log('[Storage] 命名空间已设置为:', this.prefix);
         } else {
             console.warn('[Storage] 无效的命名空间:', namespace);
@@ -509,8 +584,11 @@ class StorageManager {
             return defaultValue;
         }
         const parsed = JSON.parse(serializedValue);
-        return parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-            ? parsed.data
+        const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
+            ? sanitizeStoredValue(parsed.data)
+            : undefined;
+        return safeValue !== undefined
+            ? safeValue
             : defaultValue;
     }
 
@@ -2711,11 +2789,16 @@ class StorageManager {
             .replace(/\s+/g, ' ')
             .trim()
             .replace(/^\.+/, '')
+            .replace(/[. ]+$/g, '')
             .slice(0, 180);
         if (!normalized) {
             return safeFallback;
         }
-        return /\.json$/i.test(normalized) ? normalized : `${normalized}.json`;
+        const finalFilename = /\.json$/i.test(normalized) ? normalized : `${normalized}.json`;
+        const basename = finalFilename.split('.', 1)[0];
+        return WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN.test(basename)
+            ? `_${finalFilename}`
+            : finalFilename;
     }
 
     /**
@@ -2846,8 +2929,9 @@ class PreferenceStore {
     }
 
     setNamespace(namespace) {
-        if (typeof namespace === 'string' && namespace.trim()) {
-            this.prefix = namespace.trim() + '_';
+        const safeNamespace = normalizeStorageNamespace(namespace);
+        if (safeNamespace) {
+            this.prefix = safeNamespace + '_';
         }
     }
 
@@ -2869,8 +2953,11 @@ class PreferenceStore {
         }
         try {
             const parsed = JSON.parse(rawValue);
-            return parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-                ? parsed.data
+            const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
+                ? sanitizeStoredValue(parsed.data)
+                : undefined;
+            return safeValue !== undefined
+                ? safeValue
                 : defaultValue;
         } catch (_) {
             return defaultValue;

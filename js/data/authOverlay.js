@@ -165,6 +165,7 @@
         let importPromptedInSession = false;
         let pendingRecoveryUser = null;
         let setOverlayMode = null;
+        let clearOverlaySensitiveFields = null;
 
         function ensureUi() {
             if (overlay) {
@@ -322,7 +323,40 @@
                 error.hidden = !message;
             }
 
+            clearOverlaySensitiveFields = function (options = {}) {
+                if (!options.keepUsername) {
+                    usernameInput.value = '';
+                }
+                if (!options.keepPassword) {
+                    passwordInput.value = '';
+                }
+                if (!options.keepToken) {
+                    tokenInput.value = '';
+                }
+                if (!options.keepSetup) {
+                    setupQr.removeAttribute('src');
+                    setupSecret.textContent = '';
+                }
+                if (!options.keepRecovery) {
+                    recoveryList.textContent = '';
+                    pendingRecoveryUser = null;
+                }
+                usernameInput.setAttribute('aria-invalid', 'false');
+                passwordInput.setAttribute('aria-invalid', 'false');
+                tokenInput.setAttribute('aria-invalid', 'false');
+                setError('');
+            };
+
             function setMode(nextMode) {
+                if (nextMode === 'login' || nextMode === 'register') {
+                    clearOverlaySensitiveFields({ keepUsername: true });
+                } else if (nextMode === 'totp') {
+                    clearOverlaySensitiveFields({ keepUsername: true });
+                } else if (nextMode === 'setup') {
+                    clearOverlaySensitiveFields({ keepUsername: true, keepSetup: true });
+                } else if (nextMode === 'recovery') {
+                    clearOverlaySensitiveFields({ keepUsername: true, keepRecovery: true });
+                }
                 mode = nextMode;
                 const isPasswordMode = mode === 'login' || mode === 'register';
                 const isTokenMode = mode === 'totp' || mode === 'setup';
@@ -353,10 +387,6 @@
                 }[mode] || '继续';
                 passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
                 passwordInput.minLength = mode === 'login' ? 1 : 8;
-                setError('');
-                usernameInput.setAttribute('aria-invalid', 'false');
-                passwordInput.setAttribute('aria-invalid', 'false');
-                tokenInput.setAttribute('aria-invalid', 'false');
             }
             setOverlayMode = setMode;
 
@@ -681,6 +711,9 @@
 
         function show() {
             ensureUi();
+            if (typeof clearOverlaySensitiveFields === 'function') {
+                clearOverlaySensitiveFields();
+            }
             if (setOverlayMode) {
                 setOverlayMode('login');
             }
@@ -697,6 +730,9 @@
 
         function hide() {
             ensureUi();
+            if (typeof clearOverlaySensitiveFields === 'function') {
+                clearOverlaySensitiveFields();
+            }
             overlay.hidden = true;
             setRemoteAuthGate(false);
         }
@@ -704,6 +740,7 @@
         function hideTotpPanel() {
             if (totpPanel) {
                 totpPanel.hidden = true;
+                totpPanel.textContent = '';
             }
         }
 

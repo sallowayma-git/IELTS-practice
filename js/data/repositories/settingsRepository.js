@@ -1,9 +1,12 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const BaseRepository = ExamData.BaseRepository;
+    const sanitizeRepositoryValue = ExamData.sanitizeRepositoryValue || ((value) => value);
 
     function ensureObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+        return value && typeof value === 'object' && !Array.isArray(value)
+            ? sanitizeRepositoryValue(value)
+            : {};
     }
 
     class SettingsRepository extends BaseRepository {
@@ -51,9 +54,10 @@
             if (!patch || typeof patch !== 'object') {
                 throw new Error('merge 需要对象参数');
             }
+            const safePatch = ensureObject(patch);
             return this.dataSource.runTransaction(async (tx) => {
                 const current = ensureObject(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                const next = { ...current, ...patch };
+                const next = sanitizeRepositoryValue({ ...current, ...safePatch });
                 await this.write(next, { transaction: tx, skipValidation: false, clone: false });
                 return next;
             }, { label: 'settings-merge' });

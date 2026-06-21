@@ -17,6 +17,40 @@
 
     let fallbackTokenCounter = 0;
 
+    function summarizeAnswerValueForLog(value) {
+        if (Array.isArray(value)) {
+            return `[array:${value.length}]`;
+        }
+        if (value === null || value === undefined || value === '') {
+            return '[empty]';
+        }
+        return `[${typeof value}:${String(value).length} chars]`;
+    }
+
+    function summarizeAnswerMapForLog(map) {
+        const keys = map && typeof map === 'object' ? Object.keys(map) : [];
+        return {
+            count: keys.length,
+            keys: keys.slice(0, 20),
+            truncatedKeys: Math.max(0, keys.length - 20)
+        };
+    }
+
+    function summarizeAnswerComparisonForLog(comparison) {
+        const items = Array.isArray(comparison) ? comparison : [];
+        return {
+            count: items.length,
+            correct: items.filter((item) => item && item.isCorrect === true).length,
+            incorrect: items.filter((item) => item && item.isCorrect === false).length,
+            unknown: items.filter((item) => !item || typeof item.isCorrect !== 'boolean').length,
+            questionIds: items
+                .map((item) => item && (item.questionId || item.id || item.key))
+                .filter(Boolean)
+                .slice(0, 20),
+            truncatedQuestionIds: Math.max(0, items.length - 20)
+        };
+    }
+
     function randomTokenSuffix() {
         const cryptoObj = window.crypto || window.msCrypto;
         if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
@@ -375,7 +409,12 @@
                 // ignore and fallback
             }
         }
-        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F"\\]/g, (char) => {
+            if (char === '"' || char === '\\') {
+                return '\\' + char;
+            }
+            return '\\' + char.charCodeAt(0).toString(16) + ' ';
+        });
     };
 
     const initialConfig = mergeConfig(
@@ -586,7 +625,7 @@
                     try {
                         const answers = strategy(document);
                         if (answers && Object.keys(answers).length > 0) {
-                            console.log('[CorrectAnswerExtractor] 提取成功:', strategy.name, answers);
+                            console.log('[CorrectAnswerExtractor] 提取成功:', strategy.name, summarizeAnswerMapForLog(answers));
                             return this.normalizeAnswers(answers);
                         }
                     } catch (error) {
@@ -634,7 +673,7 @@
                             try {
                                 const answers = this.parseAnswersObject(literal);
                                 if (answers && Object.keys(answers).length > 0) {
-                                    console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
+                                    console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', summarizeAnswerMapForLog(answers));
                                     return answers;
                                 }
                             } catch (error) {
@@ -2412,7 +2451,7 @@
 
                     if (extractedAnswers && Object.keys(extractedAnswers).length > 0) {
                         this.normalizeAnswerMap(extractedAnswers);
-                        console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', this.correctAnswers);
+            console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', summarizeAnswerMapForLog(this.correctAnswers));
                     } else {
                         console.warn('[PracticeEnhancer] 提取器未找到答案，使用备用方法');
                         this.extractCorrectAnswersBackup();
@@ -2464,7 +2503,7 @@
                 }
             });
 
-            console.log('[PracticeEnhancer] 多套题正确答案提取完成:', this.correctAnswers);
+            console.log('[PracticeEnhancer] 多套题正确答案提取完成:', summarizeAnswerMapForLog(this.correctAnswers));
         },
 
         /**
@@ -2573,7 +2612,7 @@
             for (const [key, value] of Object.entries(testAnswers)) {
                 const prefixedKey = `${suiteId}::${key}`;
                 this.addCorrectAnswer(prefixedKey, value);
-                console.log(`[PracticeEnhancer] 添加正确答案: ${prefixedKey} = ${value}`);
+                console.log(`[PracticeEnhancer] 添加正确答案: ${prefixedKey} ${summarizeAnswerValueForLog(value)}`);
             }
         },
 
@@ -2664,7 +2703,7 @@
             // 尝试从DOM中提取
             this.extractFromDOM();
 
-            console.log('[PracticeEnhancer] 备用方法提取正确答案:', this.correctAnswers);
+            console.log('[PracticeEnhancer] 备用方法提取正确答案:', summarizeAnswerMapForLog(this.correctAnswers));
         },
 
         extractFromDOM: function () {
@@ -2733,7 +2772,10 @@
                         const userAnswer = userAnswerCell.textContent.trim();
                         const correctAnswer = correctAnswerCell.textContent.trim();
 
-                        console.log('[PracticeEnhancer] 处理行:', questionText, userAnswer, correctAnswer);
+                        console.log('[PracticeEnhancer] 处理行:', questionText, {
+                            userAnswer: summarizeAnswerValueForLog(userAnswer),
+                            correctAnswer: summarizeAnswerValueForLog(correctAnswer)
+                        });
 
                         // 提取问题编号
                         const questionMatch = questionText.match(/(\d+)/);
@@ -2747,14 +2789,17 @@
                                 this.addAnswer(normalizedKey, userAnswer);
                             }
 
-                            console.log('[PracticeEnhancer] 从表格提取:', normalizedKey, '用户答案:', userAnswer, '正确答案:', correctAnswer);
+                            console.log('[PracticeEnhancer] 从表格提取:', normalizedKey, {
+                                userAnswer: summarizeAnswerValueForLog(userAnswer),
+                                correctAnswer: summarizeAnswerValueForLog(correctAnswer)
+                            });
                         }
                     }
                 }
             }
 
-            console.log('[PracticeEnhancer] 表格提取完成，正确答案:', this.correctAnswers);
-            console.log('[PracticeEnhancer] 表格提取完成，用户答案:', this.answers);
+            console.log('[PracticeEnhancer] 表格提取完成，正确答案:', summarizeAnswerMapForLog(this.correctAnswers));
+            console.log('[PracticeEnhancer] 表格提取完成，用户答案:', summarizeAnswerMapForLog(this.answers));
             const afterCount = Object.keys(this.correctAnswers).length;
             if (afterCount > beforeCount) {
                 this.broadcastResultsUpdate();
@@ -2893,7 +2938,7 @@
 
             const normalizedId = this.addAnswer(scopedQuestionId, value);
             if (!normalizedId) return;
-            console.log('[PracticeEnhancer] 记录答案:', normalizedId, '=', value);
+            console.log('[PracticeEnhancer] 记录答案:', normalizedId, summarizeAnswerValueForLog(value));
 
             this.interactions.push({
                 type: 'answer',
@@ -3536,16 +3581,16 @@
                 const value = this.getInputValue(input);
 
                 if (input.type === 'text') {
-                    console.log(`[DEBUG] Text Input Found: id='${input.id}', name='${input.name}', derived_questionId='${questionId}', value='${value}'`);
+                    console.log(`[DEBUG] Text Input Found: id='${input.id}', name='${input.name}', derived_questionId='${questionId}', value=${summarizeAnswerValueForLog(value)}`);
                 }
 
-                console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, name=${input.name}, id=${input.id}, value=${value}, questionId=${questionId}`);
+                console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, name=${input.name}, id=${input.id}, value=${summarizeAnswerValueForLog(value)}, questionId=${questionId}`);
 
                 const hasValue = Array.isArray(value) ? value.length > 0 : (value !== null && value !== undefined && value !== '');
                 if (hasValue) {
                     const normalizedId = this.addAnswer(questionId, value);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录答案: ${normalizedId} = ${value}`);
+                        console.log(`[PracticeEnhancer] 记录答案: ${normalizedId} ${summarizeAnswerValueForLog(value)}`);
                     }
                 }
             });
@@ -3563,7 +3608,7 @@
                 if (questionId && answer) {
                     const normalizedId = this.addAnswer(questionId, answer);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录data答案: ${normalizedId} = ${answer}`);
+                        console.log(`[PracticeEnhancer] 记录data答案: ${normalizedId} ${summarizeAnswerValueForLog(answer)}`);
                     }
                 }
             });
@@ -3582,7 +3627,7 @@
 
             const afterCount = Object.keys(this.answers).length;
             console.log(`[PracticeEnhancer] 全面收集完成，答案数量从 ${beforeCount} 增加到 ${afterCount}`);
-            console.log('[PracticeEnhancer] 收集到的所有答案:', this.answers);
+            console.log('[PracticeEnhancer] 收集到的所有答案:', summarizeAnswerMapForLog(this.answers));
         },
 
         /**
@@ -3622,7 +3667,7 @@
                 }
             });
 
-            console.log('[PracticeEnhancer] 多套题答案收集完成:', this.answers);
+            console.log('[PracticeEnhancer] 多套题答案收集完成:', summarizeAnswerMapForLog(this.answers));
         },
 
         /**
@@ -3663,7 +3708,7 @@
                     const prefixedId = `${suiteId}::${questionId}`;
                     const normalizedId = this.addAnswer(prefixedId, value);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录套题答案: ${normalizedId} = ${value}`);
+                        console.log(`[PracticeEnhancer] 记录套题答案: ${normalizedId} ${summarizeAnswerValueForLog(value)}`);
                     }
                 }
             });
@@ -3680,7 +3725,7 @@
                     const prefixedId = `${suiteId}::${questionId}`;
                     const normalizedId = this.addAnswer(prefixedId, answer);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录套题data答案: ${normalizedId} = ${answer}`);
+                        console.log(`[PracticeEnhancer] 记录套题data答案: ${normalizedId} ${summarizeAnswerValueForLog(answer)}`);
                     }
                 }
             });
@@ -3894,7 +3939,7 @@
                     if (value !== null && value !== '') {
                         const normalizedId = this.addAnswer(questionId, value);
                         if (normalizedId) {
-                            console.log(`[PracticeEnhancer] 从容器收集答案: ${normalizedId} = ${value}`);
+                            console.log(`[PracticeEnhancer] 从容器收集答案: ${normalizedId} ${summarizeAnswerValueForLog(value)}`);
                         }
                     }
                 });
@@ -4259,7 +4304,7 @@
                 };
             }
 
-            console.log('[PracticeEnhancer] 生成答案比较:', comparison);
+            console.log('[PracticeEnhancer] 生成答案比较:', summarizeAnswerComparisonForLog(comparison));
             return comparison;
         },
 
@@ -4610,9 +4655,9 @@
     window.debugPracticeEnhancer = () => {
         console.log('=== 练习页面增强器调试信息 ===');
         console.log('状态:', window.practicePageEnhancer.getStatus());
-        console.log('用户答案:', window.practicePageEnhancer.answers);
-        console.log('正确答案:', window.practicePageEnhancer.correctAnswers); // 新增
-        console.log('答案比较:', window.practicePageEnhancer.generateAnswerComparison()); // 新增
+        console.log('用户答案:', summarizeAnswerMapForLog(window.practicePageEnhancer.answers));
+        console.log('正确答案:', summarizeAnswerMapForLog(window.practicePageEnhancer.correctAnswers)); // 新增
+        console.log('答案比较:', summarizeAnswerComparisonForLog(window.practicePageEnhancer.generateAnswerComparison())); // 新增
         console.log('交互记录:', window.practicePageEnhancer.interactions);
 
         // 测试成绩提取

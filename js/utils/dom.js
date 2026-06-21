@@ -96,7 +96,7 @@ class DOMBuilder {
 
     isUnsafeUrlAttribute(name, value, tagName) {
         const key = String(name || '').toLowerCase();
-        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+        const urlAttributes = new Set(['href', 'src', 'srcset', 'imagesrcset', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'cite', 'longdesc', 'ping']);
         if (!urlAttributes.has(key)) {
             return false;
         }
@@ -104,18 +104,33 @@ class DOMBuilder {
         if (!text) {
             return false;
         }
-        const compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-        if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
+        const compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compactAll.includes('javascript:')
+            || compactAll.includes('vbscript:')
+            || compactAll.includes('data:text/html')
+            || compactAll.includes('data:application/xhtml+xml')
+            || compactAll.includes('data:image/svg+xml')) {
             return true;
         }
-        if (compact.startsWith('data:')) {
-            const tag = String(tagName || '').toLowerCase();
-            if (key !== 'src' || tag !== 'img') {
+        const candidates = (key === 'srcset' || key === 'imagesrcset')
+            ? text.split(',').map((part) => part.trim().split(/\s+/, 1)[0]).filter(Boolean)
+            : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+        return candidates.some((candidate) => {
+            const compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+            if (compact.startsWith('javascript:') || compact.startsWith('vbscript:')) {
                 return true;
             }
-            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-        }
-        return false;
+            if (compact.startsWith('data:')) {
+                const tag = String(tagName || '').toLowerCase();
+                const imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+                const imageLikeTag = tag === 'img' || tag === 'source';
+                if (!imageLikeAttribute || !imageLikeTag) {
+                    return true;
+                }
+                return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+            }
+            return false;
+        });
     }
 
     isUnsafeStyleValue(name, value) {
@@ -136,6 +151,27 @@ class DOMBuilder {
     isUnsafeObjectKey(name) {
         const key = String(name || '').toLowerCase();
         return key === '__proto__' || key === 'prototype' || key === 'constructor';
+    }
+
+    ensureBlankTargetRel(element) {
+        if (!element || typeof element.getAttribute !== 'function' || typeof element.setAttribute !== 'function') {
+            return;
+        }
+        const target = String(element.getAttribute('target') || '').toLowerCase();
+        if (target !== '_blank') {
+            return;
+        }
+        const rel = String(element.getAttribute('rel') || '')
+            .split(/\s+/)
+            .filter(Boolean);
+        const relSet = new Set(rel.map((value) => value.toLowerCase()));
+        if (!relSet.has('noopener')) {
+            rel.push('noopener');
+        }
+        if (!relSet.has('noreferrer')) {
+            rel.push('noreferrer');
+        }
+        element.setAttribute('rel', rel.join(' '));
     }
 
     /**
@@ -188,6 +224,7 @@ class DOMBuilder {
         // 添加子元素
         this.appendChildren(element, children);
 
+        this.ensureBlankTargetRel(element);
         return element;
     }
 
@@ -432,6 +469,30 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return [children];
     }
 
+    function ensureBlankTargetRel(element) {
+        if (!element || typeof element.getAttribute !== 'function' || typeof element.setAttribute !== 'function') {
+            return;
+        }
+        var target = String(element.getAttribute('target') || '').toLowerCase();
+        if (target !== '_blank') {
+            return;
+        }
+        var rel = String(element.getAttribute('rel') || '')
+            .split(/\s+/)
+            .filter(Boolean);
+        var relMap = Object.create(null);
+        rel.forEach(function(value) {
+            relMap[String(value).toLowerCase()] = true;
+        });
+        if (!relMap.noopener) {
+            rel.push('noopener');
+        }
+        if (!relMap.noreferrer) {
+            rel.push('noreferrer');
+        }
+        element.setAttribute('rel', rel.join(' '));
+    }
+
     function applyAttributes(element, attributes) {
         if (!attributes) return;
         Object.keys(attributes).forEach(function(key) {
@@ -497,6 +558,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     function fallbackCreate(tag, attributes, children) {
         var element = document.createElement(tag);
         applyAttributes(element, attributes);
+        ensureBlankTargetRel(element);
         appendChildren(element, children);
         return element;
     }

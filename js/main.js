@@ -926,7 +926,12 @@ function setupMessageListener() {
 
 function setupStorageSyncListener() {
     window.addEventListener('storage-sync', (event) => {
-        console.log('[System] 收到存储同步事件，正在更新练习记录...', event.detail);
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : null;
+        console.log('[System] 收到存储同步事件，正在更新练习记录...', {
+            key: detail && typeof detail.key === 'string' ? detail.key : null,
+            source: detail && typeof detail.source === 'string' ? detail.source : null,
+            recordCount: Array.isArray(detail && detail.records) ? detail.records.length : undefined
+        });
         //可以选择性地只更新受影响的key，但为了简单起见，我们直接同步所有记录
         // if (event.detail && event.detail.key === 'practice_records') {
         syncPracticeRecords();

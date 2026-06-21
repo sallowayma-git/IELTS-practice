@@ -1,5 +1,40 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
+    const UNSAFE_REPOSITORY_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    function isPlainObject(value) {
+        return value && Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function sanitizeRepositoryValue(value, seen = new WeakMap()) {
+        if (!value || typeof value !== 'object') {
+            return value;
+        }
+        if (seen.has(value)) {
+            return seen.get(value);
+        }
+        if (Array.isArray(value)) {
+            const output = [];
+            seen.set(value, output);
+            value.forEach((item, index) => {
+                output[index] = sanitizeRepositoryValue(item, seen);
+            });
+            return output;
+        }
+        if (!isPlainObject(value)) {
+            return value;
+        }
+
+        const output = {};
+        seen.set(value, output);
+        Object.keys(value).forEach((key) => {
+            if (UNSAFE_REPOSITORY_KEYS.has(key)) {
+                return;
+            }
+            output[key] = sanitizeRepositoryValue(value[key], seen);
+        });
+        return output;
+    }
 
     function cloneValue(value) {
         if (value === null || value === undefined) {
@@ -7,15 +42,15 @@
         }
         if (typeof structuredClone === 'function') {
             try {
-                return structuredClone(value);
+                return sanitizeRepositoryValue(structuredClone(value));
             } catch (_) {
                 // Fallback to JSON serialization below
             }
         }
         try {
-            return JSON.parse(JSON.stringify(value));
+            return sanitizeRepositoryValue(JSON.parse(JSON.stringify(value)));
         } catch (_) {
-            return value;
+            return sanitizeRepositoryValue(value);
         }
     }
 
@@ -61,6 +96,7 @@
 
             let value = sourceValue === undefined ? resolvedDefault : sourceValue;
             value = await this.applyMigrations(value, { transaction });
+            value = sanitizeRepositoryValue(value);
 
             if (!skipValidation) {
                 this.validate(value);
@@ -74,10 +110,11 @@
 
         async write(value, options = {}) {
             const { transaction, skipValidation = false, clone = true } = options;
+            const preparedValue = sanitizeRepositoryValue(value);
             if (!skipValidation) {
-                this.validate(value);
+                this.validate(preparedValue);
             }
-            const dataToPersist = clone ? cloneValue(value) : value;
+            const dataToPersist = clone ? cloneValue(preparedValue) : preparedValue;
             if (transaction) {
                 transaction.set(this.key, dataToPersist);
                 return true;
@@ -159,5 +196,6 @@
     }
 
     ExamData.cloneValue = cloneValue;
+    ExamData.sanitizeRepositoryValue = sanitizeRepositoryValue;
     ExamData.BaseRepository = BaseRepository;
 })(window);

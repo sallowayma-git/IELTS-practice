@@ -30,6 +30,14 @@
             this.pendingTotp = null;
         }
 
+        storeCsrfTokenFromPayload(payload) {
+            if (payload && typeof payload.csrfToken === 'string' && payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+                return true;
+            }
+            return false;
+        }
+
         async getAuthState() {
             if (!this.fetchImpl) {
                 return { available: false, authenticated: false, user: null };
@@ -54,9 +62,7 @@
                     return { available: false, authenticated: false, user: null };
                 }
                 this.user = payload.user || null;
-                if (payload.csrfToken) {
-                    this.csrfToken = payload.csrfToken;
-                }
+                this.storeCsrfTokenFromPayload(payload);
                 return { available: true, authenticated: this.isAuthenticated(), user: this.user };
             } catch (error) {
                 if (error instanceof RemoteApiError) {
@@ -73,7 +79,14 @@
                 return this.csrfToken;
             }
             const payload = await this.request('/api/auth/csrf', { method: 'GET', csrf: false });
-            this.csrfToken = payload.csrfToken;
+            if (!payload || typeof payload.csrfToken !== 'string' || !payload.csrfToken) {
+                this.csrfToken = null;
+                throw new RemoteApiError('CSRF token response is invalid', {
+                    status: 0,
+                    payload
+                });
+            }
+            this.storeCsrfTokenFromPayload(payload);
             return this.csrfToken;
         }
 
@@ -84,9 +97,7 @@
             });
             this.user = payload.user || null;
             this.pendingTotp = null;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -106,9 +117,7 @@
                 this.user = payload.user || null;
                 this.pendingTotp = null;
             }
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -128,9 +137,7 @@
             });
             this.user = payload.user || this.user;
             this.pendingTotp = null;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -141,9 +148,7 @@
             });
             this.user = payload.user || null;
             this.pendingTotp = null;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -160,9 +165,7 @@
                 body: { password, token }
             });
             this.user = payload.user || this.user;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
@@ -172,9 +175,7 @@
                 body: { username, password }
             });
             this.user = payload.user || this.user;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 
@@ -184,9 +185,7 @@
                 body: { currentPassword, newPassword }
             });
             this.user = payload.user || this.user;
-            if (payload.csrfToken) {
-                this.csrfToken = payload.csrfToken;
-            }
+            this.storeCsrfTokenFromPayload(payload);
             return payload;
         }
 

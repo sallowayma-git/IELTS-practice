@@ -13,10 +13,16 @@
         var urlAttributes = {
             href: true,
             src: true,
+            srcset: true,
+            imagesrcset: true,
             'xlink:href': true,
             action: true,
             formaction: true,
-            poster: true
+            poster: true,
+            background: true,
+            cite: true,
+            longdesc: true,
+            ping: true
         };
         if (!urlAttributes[key]) {
             return false;
@@ -25,18 +31,33 @@
         if (!text) {
             return false;
         }
-        var compact = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
-        if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
+        var compactAll = text.replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        if (compactAll.indexOf('javascript:') !== -1
+            || compactAll.indexOf('vbscript:') !== -1
+            || compactAll.indexOf('data:text/html') !== -1
+            || compactAll.indexOf('data:application/xhtml+xml') !== -1
+            || compactAll.indexOf('data:image/svg+xml') !== -1) {
             return true;
         }
-        if (compact.indexOf('data:') === 0) {
-            var tag = String(tagName || '').toLowerCase();
-            if (key !== 'src' || tag !== 'img') {
+        var candidates = (key === 'srcset' || key === 'imagesrcset')
+            ? text.split(',').map(function (part) { return part.trim().split(/\s+/, 1)[0]; }).filter(Boolean)
+            : (key === 'ping' ? text.split(/\s+/).filter(Boolean) : [text]);
+        return candidates.some(function (candidate) {
+            var compact = String(candidate).replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+            if (compact.indexOf('javascript:') === 0 || compact.indexOf('vbscript:') === 0) {
                 return true;
             }
-            return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
-        }
-        return false;
+            if (compact.indexOf('data:') === 0) {
+                var tag = String(tagName || '').toLowerCase();
+                var imageLikeAttribute = key === 'src' || key === 'srcset' || key === 'imagesrcset';
+                var imageLikeTag = tag === 'img' || tag === 'source';
+                if (!imageLikeAttribute || !imageLikeTag) {
+                    return true;
+                }
+                return /^data:(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)/i.test(compact);
+            }
+            return false;
+        });
     }
 
     function isLegacyUnsafeObjectKey(name) {

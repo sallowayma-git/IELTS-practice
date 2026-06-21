@@ -327,6 +327,85 @@ async function testRemoteApiClientAddsCsrfToWrites() {
     assert.strictEqual(fetchCalls[1][1].credentials, 'same-origin');
 }
 
+async function testRemoteApiClientRejectsMalformedCsrfResponse() {
+    const fetchCalls = [];
+    const { window } = createRemoteApiContext(async (url, options = {}) => {
+        fetchCalls.push([url, options]);
+        return {
+            status: 200,
+            ok: true,
+            async text() {
+                return JSON.stringify({});
+            }
+        };
+    });
+    const client = new window.ExamData.RemoteApiClient();
+
+    await assert.rejects(
+        () => client.replacePracticeRecords([{ id: 'record-1' }]),
+        (error) => error && error.name === 'RemoteApiError' && /CSRF token response is invalid/.test(error.message)
+    );
+    assert.deepStrictEqual(fetchCalls.map(([url]) => url), ['/api/auth/csrf']);
+    assert.strictEqual(client.csrfToken, null);
+}
+
+async function testRemoteApiClientIgnoresMalformedCsrfFieldsOnAuthResponses() {
+    const fetchCalls = [];
+    const { window } = createRemoteApiContext(async (url, options = {}) => {
+        fetchCalls.push([url, options]);
+        if (url === '/api/auth/login') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ requiresTotp: true, csrfToken: { bad: 'token' } });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/login') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        user: { id: 'user-1', username: 'alice' },
+                        csrfToken: ['bad-token']
+                    });
+                }
+            };
+        }
+        if (url === '/api/auth/me') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        user: { id: 'user-1', username: 'alice' },
+                        csrfToken: 12345
+                    });
+                }
+            };
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+    });
+    const client = new window.ExamData.RemoteApiClient();
+    client.csrfToken = 'csrf-existing';
+
+    await client.login('alice', 'StrongPass1');
+    assert.strictEqual(client.csrfToken, 'csrf-existing');
+    assert.strictEqual(client.pendingTotp.requiresTotp, true);
+    assert.strictEqual(fetchCalls[0][1].headers['X-CSRF-Token'], 'csrf-existing');
+
+    await client.completeTotpLogin('123456');
+    assert.strictEqual(client.csrfToken, 'csrf-existing');
+    assert.strictEqual(client.user.username, 'alice');
+    assert.strictEqual(fetchCalls[1][1].headers['X-CSRF-Token'], 'csrf-existing');
+
+    const state = await client.getAuthState();
+    assert.strictEqual(state.authenticated, true);
+    assert.strictEqual(client.csrfToken, 'csrf-existing');
+}
+
 async function testRemoteApiClientClearsInvalidCsrfTokenOnly() {
     const fetchCalls = [];
     const { window } = createRemoteApiContext(async (url, options = {}) => {
@@ -591,6 +670,8 @@ async function main() {
     await testRemoteApiClientClearsAuthStateOnMalformedAuthCheck();
     await testRemoteApiClientTreatsUnauthorizedLogoutAsLocalLogout();
     await testRemoteApiClientAddsCsrfToWrites();
+    await testRemoteApiClientRejectsMalformedCsrfResponse();
+    await testRemoteApiClientIgnoresMalformedCsrfFieldsOnAuthResponses();
     await testRemoteApiClientClearsInvalidCsrfTokenOnly();
     await testRemoteApiClientHandlesTotpFlow();
     await testAuthGateLocksAndRestoresBackgroundElements();

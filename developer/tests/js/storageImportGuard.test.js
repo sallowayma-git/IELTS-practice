@@ -91,6 +91,8 @@ async function createStorageHarness(options = {}) {
     await context.window.persistentStore.ready;
     return {
         manager: context.window.persistentStore,
+        storageFacade: context.window.storage,
+        preferenceStore: context.window.preferenceStore,
         localStorage
     };
 }
@@ -302,6 +304,82 @@ async function createStorageHarness(options = {}) {
     const restored = await manager.restoreFromBackup({ skipReady: true });
     assert.equal(restored, false);
     assert.deepEqual(await manager.get('practice_records', [], { skipReady: true }), [{ id: 'existing', examId: 'reading-existing' }]);
+}
+
+{
+    const { manager, storageFacade, preferenceStore } = await createStorageHarness();
+    const originalPersistentPrefix = manager.prefix;
+    const originalPreferencePrefix = preferenceStore.prefix;
+    const invalidNamespaces = [
+        '__proto__',
+        'constructor',
+        'prototype',
+        'storage_backend',
+        '../evil',
+        'bad namespace',
+        '1bad',
+        'a'.repeat(81)
+    ];
+
+    for (const namespace of invalidNamespaces) {
+        storageFacade.setNamespace(namespace);
+        assert.equal(manager.prefix, originalPersistentPrefix);
+        assert.equal(preferenceStore.prefix, originalPreferencePrefix);
+    }
+
+    storageFacade.setNamespace('exam_system_test-1');
+    assert.equal(manager.prefix, 'exam_system_test-1_');
+    assert.equal(preferenceStore.prefix, 'exam_system_test-1_');
+}
+
+{
+    const { manager, storageFacade, localStorage } = await createStorageHarness();
+    localStorage.setItem('exam_system_user_stats', JSON.stringify({
+        data: JSON.parse(`{
+            "totalPractices": 2,
+            "__proto__": { "pollutedStoredValue": true },
+            "nested": {
+                "ok": true,
+                "constructor": { "prototype": { "pollutedStoredValue": true } }
+            },
+            "items": [{
+                "id": "safe-item",
+                "prototype": { "pollutedStoredValue": true }
+            }]
+        }`)
+    }));
+    localStorage.setItem('exam_system_theme_settings', JSON.stringify({
+        data: JSON.parse(`{
+            "mode": "light",
+            "__proto__": { "pollutedStoredValue": true },
+            "nested": {
+                "constructor": { "prototype": { "pollutedStoredValue": true } },
+                "safe": "keep"
+            }
+        }`)
+    }));
+
+    const stats = await manager.get('user_stats', {}, { skipReady: true });
+    assert.equal(stats.totalPractices, 2);
+    assert.equal(Object.prototype.hasOwnProperty.call(stats, '__proto__'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(stats.nested, 'constructor'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(stats.items[0], 'prototype'), false);
+    assert.equal(stats.nested.ok, true);
+    assert.equal(stats.items[0].id, 'safe-item');
+
+    const themeSettings = await storageFacade.get('theme_settings', {});
+    assert.equal(themeSettings.mode, 'light');
+    assert.equal(Object.prototype.hasOwnProperty.call(themeSettings, '__proto__'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(themeSettings.nested, 'constructor'), false);
+    assert.equal(themeSettings.nested.safe, 'keep');
+    assert.equal(Object.prototype.pollutedStoredValue, undefined);
+}
+
+{
+    const { manager } = await createStorageHarness();
+    assert.equal(manager.sanitizeDownloadFilename('CON.json', 'fallback.json'), '_CON.json');
+    assert.equal(manager.sanitizeDownloadFilename('NUL.', 'fallback.json'), '_NUL.json');
+    assert.equal(manager.sanitizeDownloadFilename('report...   ', 'fallback.json'), 'report.json');
 }
 
 console.log(JSON.stringify({
