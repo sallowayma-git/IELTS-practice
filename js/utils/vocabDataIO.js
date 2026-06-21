@@ -37,6 +37,17 @@
 
     const DEFAULT_EXPORT_VERSION = '1.0.0';
 
+    function summarizeVocabDataIoErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizeTextField(value, maxLength) {
         if (typeof value !== 'string') {
             return '';
@@ -548,7 +559,7 @@
                 result = parseJson(text);
             }
         } catch (error) {
-            console.warn('[VocabDataIO] 词表解析失败:', error);
+            console.warn('[VocabDataIO] parse failed:', summarizeVocabDataIoErrorForLog(error));
             throw error;
         }
         const normalizedResult = Array.isArray(result)

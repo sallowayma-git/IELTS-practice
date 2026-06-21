@@ -2,6 +2,17 @@
     const listeners = new Set();
     let providers = null;
 
+    function summarizeStorageRegistryErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizeProviders(input) {
         if (!input || typeof input !== 'object') {
             return null;
@@ -24,7 +35,7 @@
             try {
                 listener(payload);
             } catch (error) {
-                console.error('[StorageProviderRegistry] listener failed:', error);
+                console.error('[StorageProviderRegistry] callback failed:', summarizeStorageRegistryErrorForLog(error));
             }
         });
     }
@@ -65,7 +76,7 @@
             try {
                 callback(Object.assign({}, providers));
             } catch (error) {
-                console.error('[StorageProviderRegistry] immediate callback failed:', error);
+                console.error('[StorageProviderRegistry] callback failed:', summarizeStorageRegistryErrorForLog(error));
             }
         }
         return () => listeners.delete(callback);

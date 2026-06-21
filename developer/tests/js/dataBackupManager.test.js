@@ -58,12 +58,20 @@ const manager = new context.window.DataBackupManager();
 
 await assert.rejects(
     () => manager.importPracticeData(null, { createBackup: false }),
-    /Failed to read import source: Import source is empty\./
+    (error) => {
+        assert.equal(error.message, 'Failed to read import source.');
+        assert.deepEqual(error.cause, { name: 'Error' });
+        return true;
+    }
 );
 
 await assert.rejects(
     () => manager.importPracticeData(undefined, { createBackup: false }),
-    /Failed to read import source: Import source is empty\./
+    (error) => {
+        assert.equal(error.message, 'Failed to read import source.');
+        assert.deepEqual(error.cause, { name: 'Error' });
+        return true;
+    }
 );
 
 await assert.rejects(

@@ -184,9 +184,10 @@ assert(
     'data management element helper must skip unsafe attributes, URLs, and dataset keys'
 );
 assert(
-    dataManagementPanelSource.includes("console.log('[DataManagementPanel] importPracticeData returned:', {") &&
+    dataManagementPanelSource.includes("dataManagementDebugLog('[DataManagementPanel] importPracticeData returned:', {") &&
     dataManagementPanelSource.includes('importedCount: Number(result && result.importedCount) || 0') &&
-    !dataManagementPanelSource.includes("console.log('[DataManagementPanel] importPracticeData returned:', result)"),
+    !dataManagementPanelSource.includes("console.log('[DataManagementPanel] importPracticeData returned:', result)") &&
+    !dataManagementPanelSource.includes("dataManagementDebugLog('[DataManagementPanel] importPracticeData returned:', result)"),
     'data import diagnostics must log whitelisted result counters only'
 );
 

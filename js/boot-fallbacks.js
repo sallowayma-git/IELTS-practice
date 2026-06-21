@@ -425,7 +425,7 @@
     try {
       manager = await _ensureFallbackDataIntegrityManagerAsync();
     } catch (error) {
-      window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+      window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
       return;
     }
 
@@ -448,7 +448,7 @@
       }, 1000);
     } catch (error) {
       console.error('[Fallback] 恢复备份失败:', summarizeBootFallbackErrorForLog(error));
-      window.showMessage && window.showMessage('备份恢复失败: ' + (error && error.message ? error.message : error), 'error');
+      window.showMessage && window.showMessage('Backup restore failed. Please retry.', 'error');
     }
   }
 
@@ -721,7 +721,7 @@
     try {
       validateFallbackJsonFile(inputFile);
     } catch (error) {
-      window.showMessage && window.showMessage(error.message || 'Import file is invalid.', 'error');
+      window.showMessage && window.showMessage('Import file is invalid.', 'error');
       return;
     }
     const reader = new FileReader();
@@ -744,7 +744,7 @@
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
         console.error('[importData] failed', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
+        window.showMessage && window.showMessage('Import failed. Please retry.', 'error');
       }
     };
     reader.readAsText(inputFile, 'utf-8');
@@ -757,7 +757,7 @@
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
         console.error('[Fallback] 数据导出模块加载失败:', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
         return;
       }
 
@@ -766,7 +766,7 @@
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
         console.error('[Fallback] 数据导出失败:', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
+        window.showMessage && window.showMessage('Data export failed. Please retry.', 'error');
       }
     };
   }
@@ -801,7 +801,7 @@
       try {
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
         return;
       }
       try {
@@ -818,10 +818,10 @@
             await manager.exportData();
             window.showMessage && window.showMessage('存储不足：已将数据导出为文件', 'warning');
           } catch (exportErr) {
-            window.showMessage && window.showMessage('备份失败且导出失败: ' + (exportErr && exportErr.message ? exportErr.message : exportErr), 'error');
+            window.showMessage && window.showMessage('Backup failed and export failed. Please retry.', 'error');
           }
         } else {
-          window.showMessage && window.showMessage('备份创建失败: ' + (error && error.message ? error.message : error), 'error');
+          window.showMessage && window.showMessage('Backup creation failed. Please retry.', 'error');
         }
       }
     };
@@ -833,7 +833,7 @@
       try {
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
         return;
       }
 
@@ -1454,7 +1454,7 @@
               rejected: 0,
               html: 0,
               audio: 0,
-              message: error && error.message ? error.message : '题库上传失败'
+              message: 'Library upload failed. Please retry.'
             }, overlay.querySelector('#library-loader-report'));
             input.value = '';
             return;
@@ -1722,10 +1722,10 @@
         discoveryResult = await _fallbackDiscoverLibraryEntries(files, type, label);
       } catch (error) {
         console.error('[Fallback] 题库内容识别失败:', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage('题库识别失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+        window.showMessage && window.showMessage('Library discovery failed. Please retry.', 'error');
         return _fallbackBuildUploadReport(null, {
           status: 'error',
-          message: error && error.message ? error.message : '题库识别失败'
+          message: 'Library discovery failed. Please retry.'
         });
       }
 

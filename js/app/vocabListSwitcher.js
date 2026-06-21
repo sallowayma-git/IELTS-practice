@@ -1,6 +1,6 @@
 /**
  * VocabListSwitcher - 词表切换器组件
- * 
+ *
  * 功能：
  * - 在单词背诵界面右上角显示词表切换菜单
  * - 支持切换不同来源的词表（P1、P4、综合、自定义）
@@ -17,18 +17,29 @@
         return SAFE_TOAST_TYPES.has(value) ? value : 'info';
     }
 
+    function summarizeVocabListSwitcherErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     class VocabListSwitcher {
         constructor(vocabStore) {
             if (!vocabStore) {
                 throw new Error('[VocabListSwitcher] vocabStore is required');
             }
-            
+
             this.vocabStore = vocabStore;
             this.container = null;
             this.dropdownVisible = false;
             this.currentListId = null;
             this.previousListId = null; // 用于错误回退
-            
+
             // 绑定事件处理器
             this.handleMenuButtonClick = this.handleMenuButtonClick.bind(this);
             this.handleListOptionClick = this.handleListOptionClick.bind(this);
@@ -46,7 +57,7 @@
             }
 
             this.container = container;
-            
+
             // 获取当前激活的词表 ID
             this.currentListId = this.vocabStore.getActiveListId();
             this.previousListId = this.currentListId;
@@ -108,7 +119,7 @@
 
             dropdownContent.textContent = '';
             const availableLists = this.vocabStore.getAvailableLists();
-            
+
             if (!availableLists || availableLists.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'list-option-empty';
@@ -202,7 +213,7 @@
 
             const lists = this.vocabStore.VOCAB_LISTS;
             const currentList = lists[this.currentListId];
-            
+
             if (!currentList) {
                 console.warn('[VocabListSwitcher] Current list not found');
                 return;
@@ -295,7 +306,7 @@
          */
         handleDocumentClick(event) {
             if (!this.container) return;
-            
+
             // 如果点击的是切换器内部元素，不关闭
             if (this.container.contains(event.target)) {
                 return;
@@ -402,11 +413,11 @@
                 console.log('[VocabListSwitcher] 切换词表成功');
 
             } catch (error) {
-                console.error('[VocabListSwitcher] 切换词表失败:', error);
-                
+                console.error('[VocabListSwitcher] operation failed:', summarizeVocabListSwitcherErrorForLog(error));
+
                 // 回退到上一个词表
                 await this.rollbackToPreviousList();
-                
+
                 // 显示错误提示
                 this.showErrorMessage('词表加载失败，请重试');
             }
@@ -455,7 +466,7 @@
                     this.refreshListOptions();
                 }
             } catch (error) {
-                console.error('[VocabListSwitcher] 回退失败:', error);
+                console.error('[VocabListSwitcher] operation failed:', summarizeVocabListSwitcherErrorForLog(error));
             }
         }
 
@@ -494,7 +505,7 @@
                     const count = await this.vocabStore.getListWordCount(listId);
                     return { listId, count };
                 } catch (error) {
-                    console.error('[VocabListSwitcher] 获取词表计数失败', error);
+                    console.error('[VocabListSwitcher] operation failed:', summarizeVocabListSwitcherErrorForLog(error));
                     return { listId, count: 0 };
                 }
             });
@@ -519,11 +530,11 @@
         showEmptyListMessage(listId) {
             const lists = this.vocabStore.VOCAB_LISTS;
             const list = lists[listId];
-            
+
             if (!list) return;
 
             const message = `词表「${list.name}」暂无单词`;
-            
+
             // 显示提示消息
             this.showToast(message, 'info');
 

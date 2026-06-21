@@ -1,6 +1,6 @@
 /**
  * Browse Controller - 题库浏览控制器
- * 
+ *
  * 职责：
  * 1. 管理浏览模式（默认模式、P1频率模式、P4频率模式）
  * 2. 动态渲染筛选按钮
@@ -11,13 +11,24 @@
 (function (global) {
     'use strict';
 
+    function summarizeBrowseControllerErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     // ============================================================================
     // 数据结构定义
     // ============================================================================
 
     /**
      * 浏览模式配置
-     * 
+     *
      * 设计原则：
      * - 消除特殊情况：P4的"全部"按钮通过配置统一处理
      * - 数据驱动：所有按钮和筛选逻辑由配置决定
@@ -400,7 +411,7 @@
             try {
                 global.__browseFilterMode = this.currentMode;
             } catch (error) {
-                console.warn('[BrowseController] 保存模式失败:', error);
+                console.warn('[BrowseController] operation failed:', summarizeBrowseControllerErrorForLog(error));
             }
         }
 
@@ -416,7 +427,7 @@
                         : savedMode;
                 }
             } catch (error) {
-                console.warn('[BrowseController] 恢复模式失败:', error);
+                console.warn('[BrowseController] operation failed:', summarizeBrowseControllerErrorForLog(error));
             }
         }
 
@@ -509,15 +520,15 @@
                     global.clearPendingBrowseAutoScroll();
                     return;
                 } catch (error) {
-                    console.warn('[BrowseController] 清理自动滚动请求失败:', error);
+                    console.warn('[BrowseController] operation failed:', summarizeBrowseControllerErrorForLog(error));
                 }
             }
         }
 
         /**
          * 应用筛选（统一入口）
-         * @param {string} category 
-         * @param {string} type 
+         * @param {string} category
+         * @param {string} type
          * @param {Object} options - 可选参数 { path, filterMode }
          */
         applyBrowseFilter(category, type, options = {}) {

@@ -2,6 +2,17 @@
  * PDF Handler Component
  * Handles PDF viewing, validation, and management for the IELTS practice system
  */
+function summarizePdfHandlerErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 class PDFHandler {
     constructor() {
         this.pdfViewerUrl = null;
@@ -33,13 +44,13 @@ class PDFHandler {
 
             // Prepare window options
             const windowOptions = this.prepareWindowOptions(options);
-            
+
             // Generate unique window name
             const windowName = this.generateWindowName(examTitle);
-            
+
             // Open PDF in new window
             const pdfWindow = window.open(safePdfPath, windowName, windowOptions);
-            
+
             if (!pdfWindow) {
                 throw new Error('Failed to open PDF window. Please check popup blocker settings.');
             }
@@ -52,13 +63,13 @@ class PDFHandler {
 
             // Track the opened window
             this.trackPDFWindow(safePdfPath, pdfWindow, examTitle);
-            
+
             // Set up window event handlers
             this.setupWindowHandlers(pdfWindow, safePdfPath);
-            
+
             console.log('[PDFHandler] PDF opened successfully');
             return pdfWindow;
-            
+
         } catch (error) {
             console.error('[PDFHandler] Failed to open PDF:', this.summarizeErrorForLog(error));
             this.handlePDFError(error, pdfPath, examTitle);
@@ -85,12 +96,12 @@ class PDFHandler {
                 method: 'HEAD',
                 cache: 'no-cache'
             });
-            
+
             const isValid = response.ok && this.isPDFContentType(response);
-            
+
             console.log('[PDFHandler] PDF validation result:', isValid ? 'Valid' : 'Invalid');
             return isValid;
-            
+
         } catch (error) {
             console.error('[PDFHandler] PDF validation failed:', this.summarizeErrorForLog(error));
             return false;
@@ -112,7 +123,7 @@ class PDFHandler {
             }
 
             const response = await fetch(safePdfPath, { method: 'HEAD' });
-            
+
             if (!response.ok) {
                 return null;
             }
@@ -128,7 +139,7 @@ class PDFHandler {
 
             console.log('[PDFHandler] PDF info retrieved:', this.summarizePDFInfoForLog(info));
             return info;
-            
+
         } catch (error) {
             console.error('[PDFHandler] Failed to get PDF info:', this.summarizeErrorForLog(error));
             return {
@@ -317,7 +328,7 @@ class PDFHandler {
         };
 
         this.openWindows.set(pdfPath, windowInfo);
-        
+
         // Clean up when window is closed
         const checkClosed = () => {
             if (pdfWindow.closed) {
@@ -327,7 +338,7 @@ class PDFHandler {
                 setTimeout(checkClosed, 1000);
             }
         };
-        
+
         setTimeout(checkClosed, 1000);
     }
 
@@ -430,7 +441,7 @@ class PDFHandler {
      */
     getOpenWindows() {
         const openWindows = [];
-        
+
         for (const [path, info] of this.openWindows.entries()) {
             if (!info.window.closed) {
                 openWindows.push({
@@ -441,7 +452,7 @@ class PDFHandler {
                 });
             }
         }
-        
+
         return openWindows;
     }
 
@@ -450,21 +461,21 @@ class PDFHandler {
      */
     closeAllWindows() {
         let closedCount = 0;
-        
+
         for (const [path, info] of this.openWindows.entries()) {
             if (!info.window.closed) {
                 try {
                     info.window.close();
                     closedCount++;
                 } catch (error) {
-                    console.warn('[PDFHandler] Could not close window:', error);
+                    console.warn('[PDFHandler] Could not close window:', summarizePdfHandlerErrorForLog(error));
                 }
             }
         }
-        
+
         this.openWindows.clear();
         console.log(`[PDFHandler] Closed ${closedCount} PDF windows`);
-        
+
         return closedCount;
     }
 

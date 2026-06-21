@@ -540,7 +540,7 @@ class PracticeHistoryEnhancer {
             if (window.showMessage) {
                 window.showMessage('Unable to show this practice record.', 'error');
             } else {
-                alert('无法显示记录详情: ' + error.message);
+                alert('Unable to show this practice record.');
             }
         }
     }

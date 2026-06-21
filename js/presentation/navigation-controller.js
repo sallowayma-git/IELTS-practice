@@ -1,6 +1,17 @@
 (function (global) {
     'use strict';
 
+    function summarizeNavigationControllerErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function ensureNavigation(options) {
         if (typeof global.ensureLegacyNavigationController !== 'function') {
             return null;
@@ -24,7 +35,7 @@
         try {
             return global.ensureLegacyNavigationController(mergedOptions);
         } catch (error) {
-            console.warn('[NavigationController] 初始化失败:', error);
+            console.warn('[NavigationController] initialization failed:', summarizeNavigationControllerErrorForLog(error));
             return null;
         }
     }

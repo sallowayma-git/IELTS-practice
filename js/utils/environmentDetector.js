@@ -6,13 +6,24 @@
     const FLAG_KEY = '__ielts_test_env__';
     const LOCATION_HINTS = ['test_env=1', 'suite_test=1', 'ci=1'];
 
+    const summarizeEnvironmentDetectorErrorForLog = (error) => {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    };
+
     const readStorageFlag = () => {
         try {
             if (global.localStorage) {
                 return global.localStorage.getItem(FLAG_KEY) === 'true';
             }
         } catch (error) {
-            console.warn('[EnvDetector] 无法读取测试标记:', error);
+            console.warn('[EnvDetector] storage operation failed:', summarizeEnvironmentDetectorErrorForLog(error));
         }
         return false;
     };
@@ -27,7 +38,7 @@
                 }
             }
         } catch (error) {
-            console.warn('[EnvDetector] 无法写入测试标记:', error);
+            console.warn('[EnvDetector] storage operation failed:', summarizeEnvironmentDetectorErrorForLog(error));
         }
     };
 

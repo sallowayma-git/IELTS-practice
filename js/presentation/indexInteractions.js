@@ -11,6 +11,17 @@
     var licenseModalInitialized = false;
     var LICENSE_STORAGE_KEY = 'hasSeenGplLicense';
 
+    function summarizeIndexInteractionsErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function ensureBrowse() {
         if (browsePrefetched) {
             return browsePrefetchPromise || Promise.resolve();
@@ -22,7 +33,7 @@
         browsePrefetchPromise = loader().catch(function swallow(error) {
             browsePrefetched = false;
             browsePrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 browse-view 失败:', error);
+            console.warn('[IndexInteractions] prefetch failed:', summarizeIndexInteractionsErrorForLog(error));
         });
         return browsePrefetchPromise;
     }
@@ -38,7 +49,7 @@
         morePrefetchPromise = loader().catch(function swallow(error) {
             morePrefetched = false;
             morePrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 more-tools 失败:', error);
+            console.warn('[IndexInteractions] prefetch failed:', summarizeIndexInteractionsErrorForLog(error));
         });
         return morePrefetchPromise;
     }
@@ -54,7 +65,7 @@
         settingsPrefetchPromise = loader().catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 settings-tools 失败:', error);
+            console.warn('[IndexInteractions] prefetch failed:', summarizeIndexInteractionsErrorForLog(error));
         });
         return settingsPrefetchPromise;
     }
@@ -452,7 +463,7 @@
         }
 
         var indicator = state.indicator;
-        
+
         // 如果需要瞬间完成（例如窗口 Resize），则临时关闭过渡动画
         var shouldReduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (immediate || shouldReduceMotion) {
@@ -462,7 +473,7 @@
         }
 
         applyHeroNavIndicatorRect(indicator, targetRect);
-        
+
         // 强制浏览器重排以便 none 立即生效后再恢复
         if (immediate || shouldReduceMotion) {
             void indicator.offsetWidth;
@@ -561,7 +572,7 @@
 
     function setupSegmentedControls() {
         if (global.__segmentedControlsInitialized) return;
-        
+
         function syncIndicator(control) {
             // indicator 可能在 innerHTML='' 后被销毁，必须每次检查重建
             var indicator = control.querySelector('.shui-segmented-indicator');
@@ -570,7 +581,7 @@
                 indicator.className = 'shui-segmented-indicator';
                 control.insertBefore(indicator, control.firstChild);
             }
-            
+
             var activeBtn = control.querySelector('.shui-segmented-btn.active') || control.querySelector('.shui-segmented-btn[aria-pressed="true"]');
             if (activeBtn && activeBtn.offsetWidth > 0) {
                 indicator.style.width = activeBtn.offsetWidth + 'px';
@@ -622,10 +633,10 @@
                 setTimeout(syncAll, 15);
             }
         });
-        
+
         observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
         global.addEventListener('resize', syncAll);
-        
+
         // 视图切换时重新同步（view 从 display:none 变为可见后 offsetLeft 才有效）
         document.addEventListener('click', function(e) {
             var navBtn = e.target && e.target.closest && e.target.closest('.hero-nav__btn');
@@ -636,11 +647,11 @@
                 setTimeout(syncAll, 500);
             }
         });
-        
+
         if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
             document.fonts.ready.then(syncAll);
         }
-        
+
         setTimeout(syncAll, 50);
         setTimeout(syncAll, 300);
         global.__segmentedControlsInitialized = true;
@@ -684,7 +695,7 @@
                 global.localStorage.setItem(LICENSE_STORAGE_KEY, 'true');
             }
         } catch (error) {
-            console.warn('LocalStorage error:', error);
+            console.warn('[IndexInteractions] localStorage operation failed:', summarizeIndexInteractionsErrorForLog(error));
         }
         hideLicenseModal();
     }

@@ -3,6 +3,17 @@ const THEME_PORTAL_SESSION_SKIP_KEY = 'preferred_theme_skip_session';
 const INTERNAL_THEME_DEFAULT = 'default';
 const INTERNAL_THEME_IDS = Object.freeze(['blue']);
 
+function summarizeThemeSwitcherErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 function isPlainRecord(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return false;
@@ -27,7 +38,7 @@ function safeParse(json) {
         const value = JSON.parse(json);
         return isPlainRecord(value) ? value : null;
     } catch (error) {
-        console.warn('[Theme] 无法解析主题首选项:', error);
+        console.warn('[Theme] preference operation failed:', summarizeThemeSwitcherErrorForLog(error));
         return null;
     }
 }
@@ -40,7 +51,7 @@ const themePreferenceController = {
         try {
             return safeParse(localStorage.getItem(this.STORAGE_KEY));
         } catch (error) {
-            console.warn('[Theme] 读取主题首选项失败:', error);
+            console.warn('[Theme] preference operation failed:', summarizeThemeSwitcherErrorForLog(error));
             return null;
         }
     },
@@ -53,7 +64,7 @@ const themePreferenceController = {
         try {
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
         } catch (error) {
-            console.warn('[Theme] 保存主题首选项失败:', error);
+            console.warn('[Theme] preference operation failed:', summarizeThemeSwitcherErrorForLog(error));
         }
     },
 

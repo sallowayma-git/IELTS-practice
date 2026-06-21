@@ -15,6 +15,7 @@ test('frontend console logs do not expose practice session identifiers or payloa
     const sources = [
         'js/app/examSessionMixin.js',
         'js/app/examActions.js',
+        'js/app/browseController.js',
         'js/app/main-entry.js',
         'js/app/spellingErrorCollector.js',
         'js/app/state-service.js',
@@ -23,16 +24,21 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'js/app.js',
         'js/boot-fallbacks.js',
         'js/components/dataManagementPanel.js',
+        'js/components/BrowseStateManager.js',
         'js/components/DataIntegrityManager.js',
         'js/components/PerformanceOptimizer.js',
         'js/components/SystemDiagnostics.js',
         'js/components/PDFHandler.js',
+        'js/components/onboardingTour.js',
         'js/components/practiceHistoryEnhancer.js',
         'js/components/practiceRecordModal.js',
         'js/components/vocabSessionView.js',
+        'js/core/goalManager.js',
+        'js/core/practiceCore.js',
         'js/core/practiceRecorder.js',
         'js/core/resourceCore.js',
         'js/core/scoreStorage.js',
+        'js/core/storageProviderRegistry.js',
         'js/core/vocabStore.js',
         'js/data/dataSources/remotePracticeDataSource.js',
         'js/data/dataSources/storageDataSource.js',
@@ -44,17 +50,29 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'js/plugins/themes/academic/academic-adapter.js',
         'js/plugins/themes/melody/melody-adapter.js',
         'js/plugins/themes/theme-adapter-base.js',
+        'js/presentation/app-actions.js',
+        'js/presentation/indexInteractions.js',
+        'js/presentation/miniGames.js',
+        'js/presentation/navigation-controller.js',
+        'js/presentation/threeBackground.js',
         'js/practice-page-enhancer.js',
         'js/runtime/lazyLoader.js',
+        'js/runtime/reviewHighlightDictionary.js',
         'js/runtime/unifiedReadingPage.js',
+        'js/services/achievementManager.js',
+        'js/services/libraryDiscovery.js',
         'js/services/libraryManager.js',
+        'js/theme-switcher.js',
+        'js/utils/BrowsePreferencesUtils.js',
         'js/utils/answerComparisonUtils.js',
         'js/utils/dataBackupManager.js',
         'js/utils/dataConsistencyManager.js',
         'js/utils/dom.js',
+        'js/utils/environmentDetector.js',
         'js/utils/markdownExporter.js',
         'js/utils/stateSerializer.js',
         'js/utils/storage.js',
+        'js/utils/vocabDataIO.js',
         'js/views/legacyViewBundle.js'
     ];
 
@@ -124,6 +142,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(bootFallbacks),
         'boot fallbacks must summarize raw errors before logging them'
     );
+    assert(
+        !/(?:showMessage\([^;\n]*|message:\s*)(?:error && error\.message|error\.message|exportErr && exportErr\.message|exportErr\.message)/.test(bootFallbacks),
+        'boot fallbacks must not expose raw exception messages to users or reports'
+    );
 
     const mainEntry = readSource('js/app/main-entry.js');
     assert(
@@ -139,6 +161,12 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/showMessage\([^;\n]*(?:error\.message|e\.message)/.test(examActions),
         'exam actions must not expose raw exception messages to users'
+    );
+
+    const browseController = readSource('js/app/browseController.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(browseController),
+        'browse controller must summarize raw errors before logging them'
     );
 
     const practiceRecordModal = readSource('js/components/practiceRecordModal.js');
@@ -159,6 +187,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/showMessage\([^;\n]*(?:error\.message|err\.message)/.test(practiceHistoryEnhancer),
         'practice history enhancer must not expose raw exception messages to users'
+    );
+    assert(
+        !/alert\([^;\n]*error\.message/.test(practiceHistoryEnhancer),
+        'practice history enhancer must not alert raw exception messages'
     );
 
     const vocabStore = readSource('js/core/vocabStore.js');
@@ -181,6 +213,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(spellingErrorCollector),
         'spelling error collector must summarize raw errors before logging them'
+    );
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*(?:fetchError\.message|xhrError\.message|error\.message)/.test(spellingErrorCollector),
+        'spelling error collector must not log raw exception messages'
     );
 
     const hpPortal = readSource('js/plugins/hp/hp-portal.js');
@@ -247,8 +283,48 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'main app flow must summarize errors before logging them'
     );
     assert(
+        !/showMessage\([^;\n]*(?:error && error\.message|error\.message|err\.message|e\.message)/.test(mainSource),
+        'main app flow must not expose raw exception messages to users'
+    );
+    assert(
         !/console\.(?:log|warn|error|info)\([^;\n]*(?:\$\{\s*trigger\s*\}|,\s*trigger\b)/.test(mainSource),
         'main app flow must not log practice sync triggers'
+    );
+
+    const appActions = readSource('js/presentation/app-actions.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(appActions),
+        'app actions must summarize raw errors before logging them'
+    );
+
+    const indexInteractions = readSource('js/presentation/indexInteractions.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(indexInteractions),
+        'index interactions must summarize raw errors before logging them'
+    );
+
+    const miniGames = readSource('js/presentation/miniGames.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(miniGames),
+        'mini games must summarize raw errors before logging them'
+    );
+
+    const navigationController = readSource('js/presentation/navigation-controller.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(navigationController),
+        'navigation controller must summarize raw errors before logging them'
+    );
+
+    const threeBackground = readSource('js/presentation/threeBackground.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(threeBackground),
+        'three background must summarize raw errors before logging them'
+    );
+
+    const themeSwitcher = readSource('js/theme-switcher.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(themeSwitcher),
+        'theme switcher must summarize raw errors before logging them'
     );
 
     const dataIntegrity = readSource('js/components/DataIntegrityManager.js');
@@ -270,6 +346,43 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*,\s*error\s*\)/.test(dataManagementPanel),
         'data management panel must summarize errors before logging them'
     );
+    assert(
+        !/showMessage\([^;\n]*(?:error\.message|err\.message|e\.message)/.test(dataManagementPanel),
+        'data management panel must not expose raw exception messages to users'
+    );
+
+    const performanceOptimizer = readSource('js/components/PerformanceOptimizer.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(performanceOptimizer),
+        'performance optimizer must summarize raw errors before logging them'
+    );
+
+    const pdfHandler = readSource('js/components/PDFHandler.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(pdfHandler),
+        'PDF handler must summarize raw errors before logging them'
+    );
+
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(systemDiagnostics),
+        'system diagnostics must summarize raw errors before logging them'
+    );
+    assert(
+        !/(?:error:\s*error\.message|message:\s*`[^`]*error\.message)/.test(systemDiagnostics),
+        'system diagnostics must not place raw exception messages into diagnostic reports'
+    );
+
+    const browseStateManager = readSource('js/components/BrowseStateManager.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(browseStateManager),
+        'browse state manager must summarize raw errors before logging them'
+    );
+
+    const onboardingTour = readSource('js/components/onboardingTour.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(onboardingTour),
+        'onboarding tour must summarize raw errors before logging them'
+    );
 
     const scoreStorage = readSource('js/core/scoreStorage.js');
     assert(
@@ -287,10 +400,32 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'storage manager must not log dynamic storage keys or paths'
     );
 
+    const environmentDetector = readSource('js/utils/environmentDetector.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(environmentDetector),
+        'environment detector must summarize raw errors before logging them'
+    );
+
+    const browsePreferences = readSource('js/utils/BrowsePreferencesUtils.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(browsePreferences),
+        'browse preferences must summarize raw errors before logging them'
+    );
+
+    const vocabDataIo = readSource('js/utils/vocabDataIO.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(vocabDataIo),
+        'vocab data IO must summarize raw errors before logging them'
+    );
+
     const dataBackupManager = readSource('js/utils/dataBackupManager.js');
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|restoreError)\s*\)/.test(dataBackupManager),
         'data backup manager must summarize errors before logging them'
+    );
+    assert(
+        !/throw new Error\([^;\n]*error\.message/.test(dataBackupManager),
+        'data backup manager must not wrap raw exception messages into thrown errors'
     );
 
     const markdownExporter = readSource('js/utils/markdownExporter.js');
@@ -305,10 +440,54 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'app state service must not log topics, property keys, or raw errors'
     );
 
+    const runtimeFixes = readSource('js/patches/runtime-fixes.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(runtimeFixes),
+        'runtime fixes must summarize raw errors before logging them'
+    );
+
+    const practiceCore = readSource('js/core/practiceCore.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(practiceCore),
+        'practice core must summarize raw errors before logging them'
+    );
+
+    const storageProviderRegistry = readSource('js/core/storageProviderRegistry.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(storageProviderRegistry),
+        'storage provider registry must summarize raw errors before logging them'
+    );
+
+    const goalManager = readSource('js/core/goalManager.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(goalManager),
+        'goal manager must summarize raw errors before logging them'
+    );
+
+    const libraryDiscovery = readSource('js/services/libraryDiscovery.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(libraryDiscovery),
+        'library discovery must summarize raw errors before logging them'
+    );
+
+    const achievementManager = readSource('js/services/achievementManager.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(achievementManager),
+        'achievement manager must summarize raw errors before logging them'
+    );
+    assert(
+        !/console\.(?:error|warn)\(`\[AchievementManager\][^`]*\$\{\s*achievement\.id\s*\}/.test(achievementManager),
+        'achievement manager must not log achievement identifiers from failed checks'
+    );
+
     const libraryManager = readSource('js/services/libraryManager.js');
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:key|configKey|error|loadError)\s*\)/.test(libraryManager),
         'library manager must not log config keys or raw errors'
+    );
+    assert(
+        !/showMessage\([^;\n]*(?:error && error\.message|error\.message)/.test(libraryManager),
+        'library manager must not expose raw exception messages to users'
     );
 
     const remotePracticeDataSource = readSource('js/data/dataSources/remotePracticeDataSource.js');
@@ -349,6 +528,12 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'lazy loader must not log script labels, group names, or raw errors'
     );
 
+    const reviewHighlightDictionary = readSource('js/runtime/reviewHighlightDictionary.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(reviewHighlightDictionary),
+        'review highlight dictionary must summarize raw errors before logging them'
+    );
+
     const hpBridge = readSource('js/plugins/hp/hp-core-bridge.js');
     assert(
         !hpBridge.includes("console.log('[hpCore] 发送 INIT_SESSION 到练习页', payload)")
@@ -376,6 +561,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*,\s*error\s*\)/.test(practiceRecorder),
         'practice recorder must summarize errors before logging them'
     );
+    assert(
+        !/throw new Error\([^;\n]*error\.message/.test(practiceRecorder),
+        'practice recorder must not wrap raw exception messages into thrown errors'
+    );
 
     const practiceEnhancer = readSource('js/practice-page-enhancer.js');
     assert(
@@ -394,5 +583,11 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/console\.(?:log|warn|error|info)\([^;\n]*(?:\$\{\s*(?:suiteId|hookName|strategy\.name|mixin\.name|event|message)\s*\}|,\s*(?:suiteId|hookName|strategy\.name|mixin|mixinError|eventError|message)\b)/.test(practiceEnhancer),
         'practice enhancer must not log suite ids, hook names, strategy names, or raw messages'
+    );
+
+    const legacyViewBundle = readSource('js/views/legacyViewBundle.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(legacyViewBundle),
+        'legacy view bundle must summarize raw errors before logging them'
     );
 });

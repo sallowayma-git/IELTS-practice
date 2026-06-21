@@ -11,6 +11,17 @@ const BROWSE_STATE_VIEW_MODES = new Set(['grid', 'list']);
 const BROWSE_STATE_SORT_FIELDS = new Set(['title', 'category', 'frequency', 'difficulty', 'date', 'score']);
 const BROWSE_STATE_SORT_ORDERS = new Set(['asc', 'desc']);
 
+function summarizeBrowseStateErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 function createDefaultBrowseState() {
     return {
         currentCategory: null,
@@ -187,10 +198,10 @@ class BrowseStateManager {
 
         // 全局引用，供事件委托使用
         window.browseStateManager = this;
-        
+
         // 绑定方法上下文
         this.handleBrowseNavigation = this.handleBrowseNavigation.bind(this);
-        
+
         // 初始化
         this.initialize();
     }
@@ -200,13 +211,13 @@ class BrowseStateManager {
      */
     initialize() {
         console.log('[BrowseStateManager] 初始化浏览状态管理器');
-        
+
         // 恢复保存的状态
         this.restorePersistentState();
-        
+
         // 设置事件监听器
         this.setupEventListeners();
-        
+
         // 初始化完成后通知订阅者
         this.notifySubscribers();
     }
@@ -272,26 +283,26 @@ class BrowseStateManager {
     setBrowseFilter(filter) {
         const safeFilter = normalizeBrowseText(filter) || 'all';
         console.log(`[BrowseStateManager] 设置浏览过滤器: ${safeFilter}`);
-        
+
         // 保存之前的过滤器
         this.previousFilter = normalizeBrowseText(this.currentFilter);
-        
+
         // 设置新的过滤器
         this.currentFilter = safeFilter;
-        
+
         // 更新全局变量（保持向后兼容）
         if (window.currentCategory !== undefined) {
             window.currentCategory = safeFilter;
         }
-        
+
         // 更新状态
         this.setState({
             currentCategory: safeFilter === 'all' ? null : safeFilter
         });
-        
+
         // 更新浏览标题
         this.updateBrowseTitle(safeFilter);
-        
+
         // 记录状态变更
         this.addToHistory({
             action: 'filter_change',
@@ -299,10 +310,10 @@ class BrowseStateManager {
             to: safeFilter,
             timestamp: Date.now()
         });
-        
+
         // 保存状态
         this.saveBrowseState();
-        
+
         // 触发过滤器变更事件
         this.dispatchFilterChangeEvent(safeFilter);
     }
@@ -318,17 +329,17 @@ class BrowseStateManager {
             newState: normalizeBrowseStatePatch(newState),
             timestamp: Date.now()
         });
-        
+
         if (this.browseHistory.length > this.maxHistorySize) {
             this.browseHistory.shift();
         }
-        
+
         // 更新状态
         this.state = mergeBrowseState(this.state, newState);
-        
+
         // 通知订阅者
         this.notifySubscribers();
-        
+
         // 持久化状态
         this.persistState();
     }
@@ -338,7 +349,7 @@ class BrowseStateManager {
      */
     subscribe(callback) {
         this.subscribers.push(callback);
-        
+
         // 返回取消订阅的方法
         return () => {
             const index = this.subscribers.indexOf(callback);
@@ -356,7 +367,7 @@ class BrowseStateManager {
             try {
                 callback(this.state);
             } catch (error) {
-                console.error('[BrowseStateManager] 订阅者回调错误:', error);
+                console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
             }
         });
     }
@@ -373,11 +384,11 @@ class BrowseStateManager {
                 browseHistory: normalizeBrowseHistory(this.browseHistory, this.maxHistorySize),
                 timestamp: Date.now()
             };
-            
+
             localStorage.setItem('browse_state', JSON.stringify(dataToSave));
             console.log('[BrowseStateManager] 状态已持久化');
         } catch (error) {
-            console.error('[BrowseStateManager] 持久化状态失败:', error);
+            console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
         }
     }
 
@@ -392,24 +403,24 @@ class BrowseStateManager {
                 if (!isPlainBrowseObject(data)) {
                     throw new Error('Invalid browse state payload');
                 }
-                
+
                 // 恢复基本状态
                 this.previousFilter = normalizeBrowseText(data.previousFilter);
                 this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
-                
+
                 // 恢复完整状态
                 if (data.state) {
                     this.state = mergeBrowseState(this.state, data.state);
                 }
-                
+
                 // 默认重置为'all'，确保主界面浏览按钮总是显示所有考试
                 this.currentFilter = 'all';
                 this.state.currentCategory = null;
-                
+
                 console.log('[BrowseStateManager] 持久化状态已恢复');
             }
         } catch (error) {
-            console.error('[BrowseStateManager] 恢复持久化状态失败:', error);
+            console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
             this.resetToDefaults();
         }
     }
@@ -436,10 +447,10 @@ class BrowseStateManager {
      */
     resetToAllExams() {
         console.log('[BrowseStateManager] 重置到全部考试视图');
-        
+
         // 保存之前的状态
         this.previousFilter = this.currentFilter;
-        
+
         // 重置过滤器
         this.currentFilter = 'all';
 
@@ -463,23 +474,23 @@ class BrowseStateManager {
                 total: 0
             }
         });
-        
+
         // 更新浏览标题
         this.updateBrowseTitle('all');
-        
+
         // 清除搜索状态
         this.clearSearchState();
-        
+
         // 记录重置操作
         this.addToHistory({
             action: 'reset_to_all',
             from: this.previousFilter,
             timestamp: Date.now()
         });
-        
+
         // 保存状态
         this.persistState();
-        
+
         // 触发重置事件
         this.dispatchResetEvent();
     }
@@ -535,7 +546,7 @@ class BrowseStateManager {
             return;
         }
         this.browseHistory.push(normalized);
-        
+
         // 限制历史记录大小
         if (this.browseHistory.length > this.maxHistorySize) {
             this.browseHistory.shift();
@@ -586,7 +597,7 @@ class BrowseStateManager {
         if (this.canGoBack()) {
             const backToFilter = this.previousFilter;
             this.setBrowseFilter(backToFilter);
-            
+
             console.log(`[BrowseStateManager] 返回到上一个状态: ${backToFilter}`);
             return true;
         }
@@ -648,23 +659,23 @@ class BrowseStateManager {
      */
     reset() {
         console.log('[BrowseStateManager] 重置浏览状态管理器');
-        
+
         this.currentFilter = 'all';
         this.previousFilter = null;
         this.browseHistory = [];
-        
+
         // 更新UI
         this.updateBrowseTitle('all');
         this.clearSearchState();
-        
+
         // 更新全局变量
         if (window.currentCategory !== undefined) {
             window.currentCategory = 'all';
         }
-        
+
         // 保存重置后的状态
         this.saveBrowseState();
-        
+
         // 触发重置事件
         this.dispatchResetEvent();
     }
@@ -680,7 +691,7 @@ class BrowseStateManager {
             stats: this.getBrowseStats(),
             exportTime: new Date().toISOString()
         };
-        
+
         return JSON.stringify(exportData, null, 2);
     }
 
@@ -690,18 +701,18 @@ class BrowseStateManager {
     importBrowseHistory(importData) {
         try {
             const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
-            
+
             if (isPlainBrowseObject(data) && data.browseHistory && Array.isArray(data.browseHistory)) {
                 this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
                 this.saveBrowseState();
-                
+
                 console.log('[BrowseStateManager] 浏览历史导入成功');
                 return true;
             } else {
                 throw new Error('无效的导入数据格式');
             }
         } catch (error) {
-            console.error('[BrowseStateManager] 导入浏览历史失败:', error);
+            console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
             return false;
         }
     }

@@ -3,6 +3,17 @@
 
     var domAdapter = global.DOMAdapter || null;
 
+    function summarizeLegacyViewErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        var status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function isLegacyUnsafeAttributeName(name) {
         var key = String(name || '').toLowerCase();
         return key.indexOf('on') === 0 || key === 'srcdoc';
@@ -1141,7 +1152,7 @@
 
             ctx.textAlign = Math.abs(cosVal) < 0.1 ? 'center' : (cosVal > 0 ? 'left' : 'right');
             ctx.textBaseline = Math.abs(sinVal) < 0.1 ? 'middle' : (sinVal > 0 ? 'top' : 'bottom');
-            
+
             ctx.fillText(dataPoints[j].label, lx, ly);
         }
 
@@ -1248,7 +1259,7 @@
                 ? '阅读错题雷达'
                 : (this.activeWidget === 'priority' ? '中高频余量' : '练习热力图');
         }
-        
+
         var contents = card.querySelectorAll('.practice-custom-widget-content');
         for (var i = 0; i < contents.length; i++) {
             if (contents[i].dataset.widgetType === this.activeWidget) {
@@ -1257,7 +1268,7 @@
                 contents[i].setAttribute('hidden', 'hidden');
             }
         }
-        
+
         if (this.activeWidget === 'heatmap') {
             this._renderHeatmap();
         } else if (this.activeWidget === 'priority') {
@@ -1267,12 +1278,12 @@
         } else if (this.activeWidget === 'radar') {
             this._renderRadarChart();
         }
-        
+
         this._syncOptionState();
         this._syncHeatmapControls();
         this._syncFlipButtonState(card.classList.contains('is-flipped'));
     };
-    
+
     PracticePriorityRenderer.prototype.setWidget = function setWidget(widget) {
         if (!widget) return;
         this.activeWidget = widget;
@@ -1340,7 +1351,7 @@
                 : formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 暂无练习记录'
         );
     };
-    
+
     PracticePriorityRenderer.prototype._renderRadarChart = function _renderRadarChart() {
         var canvas = document.getElementById('practice-radar-canvas');
         var empty = document.getElementById('practice-radar-empty');
@@ -1362,7 +1373,7 @@
                 ? '最近' + radarData.recordCount + '次阅读共 ' + radarData.totalErrors + ' 道错题'
                 : '最近10次阅读暂无可分类错题'
         );
-        
+
         drawRadarChart(canvas, dataPoints);
     };
 
@@ -1428,11 +1439,11 @@
                 self.flipToFront();
                 return;
             }
-            
+
             var flipBtn = event.target && event.target.closest
                 ? event.target.closest('.practice-custom-card__flip-btn')
                 : null;
-            
+
             if (flipBtn) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -1488,7 +1499,7 @@
             }
             event.stopPropagation();
         });
-        
+
         this.resizeHandler = function onPriorityResize() {
             self.render();
         };
@@ -2615,7 +2626,7 @@
             try {
                 scroller.destroy();
             } catch (error) {
-                console.warn('[PracticeHistoryRenderer] 销毁虚拟滚动器失败', error);
+                console.warn('[PracticeHistoryRenderer] operation failed', summarizeLegacyViewErrorForLog(error));
             }
         }
     };
@@ -2871,7 +2882,7 @@
                 var override = options.configureStartButton(exam, config) || {};
                 config = Object.assign({}, config, override);
             } catch (error) {
-                console.warn('[LegacyExamListView] 自定义开始按钮配置失败', error);
+                console.warn('[LegacyExamListView] callback failed', summarizeLegacyViewErrorForLog(error));
             }
         }
 
@@ -2896,7 +2907,7 @@
             try {
                 return !!options.canGenerate(exam);
             } catch (error) {
-                console.warn('[LegacyExamListView] canGenerate 回调执行失败', error);
+                console.warn('[LegacyExamListView] callback failed', summarizeLegacyViewErrorForLog(error));
                 return false;
             }
         }

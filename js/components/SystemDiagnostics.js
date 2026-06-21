@@ -24,6 +24,17 @@ function isTrustedWindowMessage(event, expectedWindow) {
     return true;
 }
 
+function summarizeSystemDiagnosticsErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 function resolveTrustedDiagnosticUrl(rawUrl) {
     if (!rawUrl) {
         return '';
@@ -191,7 +202,7 @@ class SystemDiagnostics {
                 title: exam.title,
                 path: trustedPath,
                 status: 'error',
-                message: `网络错误: ${error.message}`
+                message: 'Index validation failed.'
             };
         }
     }
@@ -356,7 +367,7 @@ class SystemDiagnostics {
                 examId,
                 examTitle: exam.title,
                 success: false,
-                error: error.message,
+                error: 'operation_failed',
                 timestamp: Date.now()
             };
             this.testResults.push(result);
@@ -631,11 +642,11 @@ class SystemDiagnostics {
                     const result = await strategy(issue.exam, issue.details);
                     results.push(result);
                 } catch (error) {
-                    console.error(`[SystemDiagnostics] 修复失败:`, error);
+                    console.error('[SystemDiagnostics] repair failed:', summarizeSystemDiagnosticsErrorForLog(error));
                     results.push({
                         examId: issue.exam.id,
                         fixed: false,
-                        error: error.message
+                        error: 'operation_failed'
                     });
                 }
             } else {
@@ -680,10 +691,10 @@ class SystemDiagnostics {
                     diagnosticReport.communicationTest = await this.testMultipleExams(failedExamIds.slice(0, 5)); // 限制测试数量
                 }
             } catch (error) {
-                console.error('[SystemDiagnostics] 索引验证失败:', error);
+                console.error('[SystemDiagnostics] validation failed:', summarizeSystemDiagnosticsErrorForLog(error));
                 diagnosticReport.issues.push({
                     type: 'validation_error',
-                    message: `索引验证失败: ${error.message}`
+                    message: 'Index validation failed.'
                 });
             }
         }

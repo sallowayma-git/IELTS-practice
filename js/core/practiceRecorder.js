@@ -1801,13 +1801,14 @@ class PracticeRecorder {
             await this.updateUserStatsManually(standardizedRecord);
             return standardizedRecord;
         } catch (error) {
-            console.error('[PracticeRecorder] 降级保存失败:', {
-                error: error?.message,
-                validationErrors: error?.validationErrors || null,
+            console.error('[PracticeRecorder] fallback save failed:', {
+                error: summarizePracticeRecorderErrorForLog(error),
                 recordSummary: this.buildRecordLogSummary(record)
-            }, error);
+            });
             await this.saveToTemporaryStorage(record);
-            throw new Error(`All save methods failed: ${error.message}`);
+            const saveError = new Error('All save methods failed.');
+            saveError.cause = summarizePracticeRecorderErrorForLog(error);
+            throw saveError;
         }
     }
 

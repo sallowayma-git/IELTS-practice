@@ -5,6 +5,17 @@
     const DEFAULT_BACKGROUND_THEME = 'misty-mountain';
     const BACKGROUND_THEME_IDS = Object.freeze(['misty-mountain', 'teal-ocean', 'floral-bloom']);
 
+    function summarizeThreeBackgroundErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizeBackgroundThemeName(themeName) {
         const value = String(themeName || '').trim().toLowerCase();
         return BACKGROUND_THEME_IDS.includes(value) ? value : DEFAULT_BACKGROUND_THEME;
@@ -47,13 +58,13 @@
                 q.x += sin(q.y * 5.2 - totalTime * 0.8) * warpScale * 0.5;
                 q.y += cos(q.x * 4.7 + totalTime * 0.9) * warpScale * 0.5;
 
-                vec3 bgColor   = vec3(0.92, 0.90, 0.88); 
-                vec3 sunColor  = vec3(0.98, 0.45, 0.35); 
-                vec3 mountColor= vec3(0.15, 0.25, 0.60); 
-                vec3 fogColor  = vec3(0.60, 0.55, 0.80); 
+                vec3 bgColor   = vec3(0.92, 0.90, 0.88);
+                vec3 sunColor  = vec3(0.98, 0.45, 0.35);
+                vec3 mountColor= vec3(0.15, 0.25, 0.60);
+                vec3 fogColor  = vec3(0.60, 0.55, 0.80);
                 vec3 color = bgColor;
 
-                vec2 sunCenter = vec2(0.0, 0.15); 
+                vec2 sunCenter = vec2(0.0, 0.15);
                 float sunDist = length(q - sunCenter);
                 float sunAlpha = 1.0 - smoothstep(0.12, 0.35 + dispersion * 0.25, sunDist);
                 color = mix(color, sunColor, sunAlpha * 0.9);
@@ -126,7 +137,7 @@
                 vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
                 float totalTime = uTime * 0.5;
                 float horizon = 0.15;
-                
+
                 vec3 skyBase = vec3(0.55, 0.60, 0.62);
                 float cloudTime = totalTime * 0.1;
                 vec2 qt = p * vec2(2.5, 3.5) + vec2(cloudTime, 0.0);
@@ -138,36 +149,36 @@
                 vec3 colLight = vec3(0.95, 0.98, 1.00);
                 vec3 cloudVolColor = mix(colDark, colLight, volLight);
                 vec3 skyColor = mix(skyBase, cloudVolColor, skyMask);
-                
+
                 vec3 waterDeep = vec3(0.01, 0.18, 0.22); vec3 waterMid = vec3(0.02, 0.35, 0.38); vec3 waterLight = vec3(0.05, 0.45, 0.45);
                 float wave1 = sin(p.x * 25.0 + totalTime * 2.0) * 0.5 + 0.5;
                 float wave2 = sin(p.x * 50.0 - totalTime * 2.5 + p.y * 150.0) * 0.5 + 0.5;
                 float waveNoise = fbm(p * vec2(12.0, 60.0) + vec2(totalTime * 0.15, totalTime * 0.3));
                 float waveBlend = wave1 * 0.2 + wave2 * 0.15 + waveNoise * 0.65;
                 float depthMts = smoothstep(horizon - 0.15, horizon, p.y);
-                
+
                 vec3 oceanColor = mix(waterDeep, waterMid, (p.y + 0.5) / 0.65);
                 oceanColor = mix(oceanColor, waterLight, waveBlend * (1.0 - depthMts*0.8) * 0.6);
                 float spec = smoothstep(0.7, 1.0, waveNoise) * smoothstep(0.0, 0.15, horizon - p.y);
                 oceanColor += spec * 0.15 * vec3(0.8,0.9,0.9);
 
                 vec2 bp = p - vec2(0.0, -0.12);
-                float tilt = sin(totalTime * 1.5) * 0.03; 
-                bp = mat2(cos(tilt), -sin(tilt), sin(tilt), cos(tilt)) * bp; 
+                float tilt = sin(totalTime * 1.5) * 0.03;
+                bp = mat2(cos(tilt), -sin(tilt), sin(tilt), cos(tilt)) * bp;
                 bp.y += sin(totalTime * 2.1) * 0.005;
-                
+
                 float scale = 1.6;
                 bp /= scale;
 
                 vec3 finalColor = p.y > horizon ? skyColor : oceanColor;
-                
+
                 float hullD, sailD;
                 boatSDF(bp, hullD, sailD);
-                
+
                 float px = (1.5 / max(uResolution.x, uResolution.y)) / scale;
                 float hullMask = 1.0 - smoothstep(0.0, px, hullD);
                 float sailMask = 1.0 - smoothstep(0.0, px, sailD);
-                
+
                 finalColor = mix(finalColor, vec3(0.08, 0.12, 0.15), hullMask);
                 finalColor = mix(finalColor, vec3(0.92, 0.95, 0.98), sailMask);
 
@@ -196,13 +207,13 @@
             void main() {
                 float aspect = uResolution.x / max(uResolution.y, 1.0);
                 vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
-                
+
                 // 1. Precise Background Gradient
                 vec3 cBot = vec3(0.40, 0.60, 0.90);
-                vec3 cTop = vec3(0.98, 0.86, 0.76); 
-                float bgMix = smoothstep(-0.4, 0.4, p.y + p.x * 0.1); 
+                vec3 cTop = vec3(0.98, 0.86, 0.76);
+                float bgMix = smoothstep(-0.4, 0.4, p.y + p.x * 0.1);
                 vec3 color = mix(cBot, cTop, bgMix);
-                
+
                 // Pinkish haze in upper left & warmth on right
                 float hazeL = soft(length(p - vec2(-0.3, 0.2)), 0.4, 0.4);
                 color = mix(color, vec3(0.98, 0.65, 0.75), hazeL * 0.4);
@@ -257,15 +268,15 @@
                 color = mix(color, vec3(0.15, 0.5, 0.45), bulb * 0.95);
 
                 vec2 pF2 = p - vec2(-0.03, 0.25);
-                pF2 *= rot(-0.1); 
+                pF2 *= rot(-0.1);
                 float a2 = atan(pF2.y, pF2.x); float r2 = length(pF2);
-                float inner2 = smoothstep(-0.05, 0.1, pF2.y); 
+                float inner2 = smoothstep(-0.05, 0.1, pF2.y);
                 vec3 cF2 = mix(vec3(0.2, 0.35, 0.75), vec3(0.65, 0.8, 0.98), inner2);
-                
+
                 float lobe2 = 0.16 * (0.65 + 0.35 * pow(abs(sin(a2 * 2.5)), 1.2)); // 5 distinct petals
                 float f2 = soft(r2, lobe2 - 0.02, 0.04);
                 color = mix(color, cF2, f2 * 0.92);
-                // Center shadow core 
+                // Center shadow core
                 float core2 = soft(length(pF2 - vec2(0.01, -0.06)), 0.02, 0.05);
                 color = mix(color, vec3(0.1, 0.25, 0.45), core2 * 0.85);
 
@@ -274,12 +285,12 @@
                 vec2 pF1 = p - vec2(-0.35, -0.16);
                 pF1 *= rot(0.25);
                 float a1 = atan(pF1.y, pF1.x); float r1 = length(pF1);
-                float lobe1 = 0.18 * (0.8 + 0.2 * abs(sin(a1 * 3.5))); 
+                float lobe1 = 0.18 * (0.8 + 0.2 * abs(sin(a1 * 3.5)));
                 float f1 = soft(r1, lobe1 - 0.03, 0.07);
-                
+
                 vec3 cF1 = mix(vec3(0.98, 0.35, 0.1), vec3(0.98, 0.65, 0.4), r1 * 4.0);
                 color = mix(color, cF1, f1 * 0.95);
-                
+
                 // Hot red core
                 float core1 = soft(length(pF1 - vec2(0.005, 0.0)), 0.01, 0.07);
                 color = mix(color, vec3(0.98, 0.12, 0.02), core1 * 0.9);
@@ -287,20 +298,20 @@
                 // 6. Flower 4: Right Orange Flower (Clone of Flower 1)
                 // Moved Right by +0.2 -> New Pos: (0.45, -0.20)
                 vec2 pF4 = p - vec2(0.45, -0.20);
-                pF4 *= rot(-0.6); 
+                pF4 *= rot(-0.6);
                 float a4 = atan(pF4.y, pF4.x); float r4 = length(pF4);
-                float lobe4 = 0.16 * (0.8 + 0.2 * abs(sin(a4 * 3.5))); 
+                float lobe4 = 0.16 * (0.8 + 0.2 * abs(sin(a4 * 3.5)));
                 float f4 = soft(r4, lobe4 - 0.03, 0.07);
                 vec3 cF4 = mix(vec3(0.98, 0.35, 0.1), vec3(0.98, 0.65, 0.4), r4 * 4.0);
                 color = mix(color, cF4, f4 * 0.9);
                 float core4 = soft(length(pF4 - vec2(-0.005, 0.0)), 0.01, 0.07);
                 color = mix(color, vec3(0.98, 0.12, 0.02), core4 * 0.85);
-                
+
                 // 7. Photographic Texture & Vignette
                 float n1 = random(vUv * 123.456 + fract(random(vUv)));
                 float n2 = random(vUv * 345.678 - fract(random(vUv*2.0)));
-                float noise = (n1 + n2 - 1.0) * 0.04; 
-                
+                float noise = (n1 + n2 - 1.0) * 0.04;
+
                 float vig = length(p);
                 color *= 1.0 - vig * 0.18;
                 color += noise;
@@ -330,7 +341,7 @@
         renderer.domElement.id = 'shui-three-bg';
         renderer.domElement.setAttribute('aria-hidden', 'true');
         renderer.setClearColor(0xf5f6f8, 1);
-        
+
         // Remove existing canvas if any
         const existing = document.getElementById('shui-three-bg');
         if (existing) existing.remove();
@@ -342,7 +353,7 @@
             uTime: { value: 0 },
             uResolution: { value: new THREE.Vector2(1, 1) }
         };
-        
+
         const fragmentShader = shaders[theme] || shaders[DEFAULT_BACKGROUND_THEME];
 
         const material = new THREE.ShaderMaterial({
@@ -437,14 +448,14 @@
         } else {
             themeName = normalizeBackgroundThemeName(themeName);
         }
-        
+
         try {
             if (global.SHUIThreeBackground) {
                 global.SHUIThreeBackground.destroy();
             }
             global.SHUIThreeBackground = createBackground(themeName);
         } catch (error) {
-            console.warn('[SHUI Three Background] fallback applied:', error);
+            console.warn('[SHUI Three Background] fallback applied:', summarizeThreeBackgroundErrorForLog(error));
             document.body.classList.add('three-bg-fallback');
         }
     }

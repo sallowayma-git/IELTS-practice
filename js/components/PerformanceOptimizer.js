@@ -42,6 +42,17 @@ function resolveTrustedImagePreloadUrl(rawUrl) {
     return '';
 }
 
+function summarizePerformanceOptimizerErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 class VirtualScroller {
     constructor(container, items, renderer, options = {}) {
         this.container = container;
@@ -66,7 +77,7 @@ class VirtualScroller {
 
         this.initialize();
     }
-    
+
     /**
      * 初始化虚拟滚动器
      */
@@ -76,13 +87,13 @@ class VirtualScroller {
             itemHeight: this.itemHeight,
             containerHeight: this.containerHeight
         });
-        
+
         this.setupScrollContainer();
         this.calculateVisibleRange();
         this.renderVisible();
         this.setupScrollListener();
     }
-    
+
     /**
      * 设置滚动容器
      */
@@ -111,7 +122,7 @@ class VirtualScroller {
         this.container.innerHTML = '';
         this.container.appendChild(this.viewport);
     }
-    
+
     /**
      * 计算可见范围
      */
@@ -132,7 +143,7 @@ class VirtualScroller {
 
         this.scrollTop = scrollTop;
     }
-    
+
     /**
      * 渲染可见元素
      */
@@ -171,7 +182,7 @@ class VirtualScroller {
                 this.renderedItems.delete(index);
             }
         });
-        
+
         // 渲染可见的元素
         for (let i = this.visibleStart; i <= this.visibleEnd; i++) {
             let element = this.renderedItems.get(i);
@@ -185,7 +196,7 @@ class VirtualScroller {
             }
         }
     }
-    
+
     /**
      * 设置滚动监听器
      */
@@ -247,7 +258,7 @@ class VirtualScroller {
     recalculate() {
         this.recalculateLayout();
     }
-    
+
     /**
      * 滚动到指定索引
      */
@@ -255,7 +266,7 @@ class VirtualScroller {
         const targetScrollTop = index * this.itemHeight;
         this.container.scrollTop = targetScrollTop;
     }
-    
+
     /**
      * 获取容器高度
      */
@@ -264,7 +275,7 @@ class VirtualScroller {
         const height = parseFloat(computedStyle.height);
         return height > 0 ? height : 600; // 默认600px
     }
-    
+
     /**
      * 销毁虚拟滚动器
      */
@@ -336,7 +347,7 @@ class VirtualScroller {
                 return;
             }
         } catch (error) {
-            console.warn('[VirtualScroller] layoutCalculator 计算失败，回退至单列布局', error);
+            console.warn('[VirtualScroller] layout calculator failed:', summarizePerformanceOptimizerErrorForLog(error));
         }
 
         this.layoutMetrics = null;
@@ -360,7 +371,7 @@ class PerformanceOptimizer {
         this.cache = new Map();
         this.cacheTTL = new Map();
         this.observers = new Map();
-        
+
         // 性能监控
         this.performanceMetrics = {
             renderTime: [],
@@ -368,44 +379,44 @@ class PerformanceOptimizer {
             cacheHits: 0,
             cacheMisses: 0
         };
-        
+
         this.initialize();
     }
-    
+
     /**
      * 初始化性能优化器
      */
     initialize() {
         console.log('[PerformanceOptimizer] 初始化性能优化器');
-        
+
         // 设置缓存清理定时器
         setInterval(() => {
             this.cleanExpiredCache();
         }, 60000); // 每分钟清理一次过期缓存
-        
+
         // 监控性能指标
         this.setupPerformanceMonitoring();
     }
-    
+
     /**
      * 设置缓存
      */
     setCache(key, value, options = {}) {
         const ttl = options.ttl || 300000; // 默认5分钟
-        
+
         this.cache.set(key, value);
         this.cacheTTL.set(key, Date.now() + ttl);
-        
+
         console.log('[PerformanceOptimizer] Cache entry set');
     }
-    
+
     /**
      * 获取缓存
      */
     getCache(key) {
         const now = Date.now();
         const expiry = this.cacheTTL.get(key);
-        
+
         if (expiry && now > expiry) {
             // 缓存已过期
             this.cache.delete(key);
@@ -413,23 +424,23 @@ class PerformanceOptimizer {
             this.performanceMetrics.cacheMisses++;
             return null;
         }
-        
+
         if (this.cache.has(key)) {
             this.performanceMetrics.cacheHits++;
             return this.cache.get(key);
         }
-        
+
         this.performanceMetrics.cacheMisses++;
         return null;
     }
-    
+
     /**
      * 清理过期缓存
      */
     cleanExpiredCache() {
         const now = Date.now();
         let cleanedCount = 0;
-        
+
         this.cacheTTL.forEach((expiry, key) => {
             if (now > expiry) {
                 this.cache.delete(key);
@@ -437,12 +448,12 @@ class PerformanceOptimizer {
                 cleanedCount++;
             }
         });
-        
+
         if (cleanedCount > 0) {
             console.log(`[PerformanceOptimizer] 清理了 ${cleanedCount} 个过期缓存项`);
         }
     }
-    
+
     /**
      * 批量处理大数据
      */
@@ -450,28 +461,28 @@ class PerformanceOptimizer {
         return new Promise((resolve) => {
             let index = 0;
             const results = [];
-            
+
             const processBatch = () => {
                 const endIndex = Math.min(index + batchSize, items.length);
-                
+
                 for (let i = index; i < endIndex; i++) {
                     const result = processor(items[i], i);
                     results.push(result);
                 }
-                
+
                 index = endIndex;
-                
+
                 if (index < items.length) {
                     setTimeout(processBatch, delay);
                 } else {
                     resolve(results);
                 }
             };
-            
+
             processBatch();
         });
     }
-    
+
     /**
      * 防抖函数
      */
@@ -486,7 +497,7 @@ class PerformanceOptimizer {
             timeout = setTimeout(later, wait);
         };
     }
-    
+
     /**
      * 节流函数
      */
@@ -500,7 +511,7 @@ class PerformanceOptimizer {
             }
         };
     }
-    
+
     /**
      * 预加载图片
      */
@@ -516,33 +527,33 @@ class PerformanceOptimizer {
                 img.src = url;
             });
         });
-        
+
         return Promise.allSettled(promises);
     }
-    
+
     /**
      * 创建虚拟滚动器
      */
     createVirtualScroller(container, items, renderer, options) {
         return new VirtualScroller(container, items, renderer, options);
     }
-    
+
     /**
      * 优化渲染性能
      */
     optimizeRender(renderFunc) {
         return (...args) => {
             const startTime = performance.now();
-            
+
             // 使用requestAnimationFrame优化渲染
             requestAnimationFrame(() => {
                 renderFunc(...args);
-                
+
                 const endTime = performance.now();
                 const renderTime = endTime - startTime;
-                
+
                 this.performanceMetrics.renderTime.push(renderTime);
-                
+
                 // 只保留最近100次的性能数据
                 if (this.performanceMetrics.renderTime.length > 100) {
                     this.performanceMetrics.renderTime.shift();
@@ -550,7 +561,7 @@ class PerformanceOptimizer {
             });
         };
     }
-    
+
     /**
      * 设置性能监控
      */
@@ -564,25 +575,25 @@ class PerformanceOptimizer {
                     }
                 }
             });
-            
+
             observer.observe({ entryTypes: ['measure'] });
             this.observers.set('performance', observer);
         }
     }
-    
+
     /**
      * 获取性能统计
      */
     getPerformanceStats() {
         const renderTimes = this.performanceMetrics.renderTime;
-        const avgRenderTime = renderTimes.length > 0 
-            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length 
+        const avgRenderTime = renderTimes.length > 0
+            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length
             : 0;
-            
+
         const cacheHitRate = this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses > 0
             ? (this.performanceMetrics.cacheHits / (this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses)) * 100
             : 0;
-            
+
         return {
             averageRenderTime: avgRenderTime.toFixed(2),
             cacheHitRate: cacheHitRate.toFixed(2),
@@ -591,7 +602,7 @@ class PerformanceOptimizer {
             totalCacheMisses: this.performanceMetrics.cacheMisses
         };
     }
-    
+
     /**
      * 记录加载时间 - 向后兼容API修复
      */

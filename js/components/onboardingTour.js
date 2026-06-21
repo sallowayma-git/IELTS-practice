@@ -6,6 +6,17 @@
 (function (global) {
   'use strict';
 
+  function summarizeOnboardingErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+      return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+      name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+      status: Number.isFinite(status) ? status : undefined
+    };
+  }
+
   // 存储键名
   const STORAGE_KEYS = {
     COMPLETED: 'onboardingCompleted',
@@ -943,7 +954,7 @@
             window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding' } }));
           }
         }).catch(err => {
-          console.error('[Onboarding] 注入示例记录失败:', err);
+          console.error('[Onboarding] demo record operation failed:', summarizeOnboardingErrorForLog(err));
         });
       } else {
         console.warn('[Onboarding] window.dataRepositories.practice 不可用，无法注入示例记录');
@@ -962,7 +973,7 @@
             window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding-cleanup' } }));
           }
         }).catch(err => {
-          console.warn('[Onboarding] 清理示例记录失败:', err);
+          console.warn('[Onboarding] demo record operation failed:', summarizeOnboardingErrorForLog(err));
         });
       }
     }

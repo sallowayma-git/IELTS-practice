@@ -7,6 +7,17 @@
 
     let fallbackIdCounter = 0;
 
+    function summarizePracticeCoreErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function randomIdSuffix() {
         const cryptoObj = global.crypto || global.msCrypto;
         if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
@@ -1192,7 +1203,7 @@
                 } catch (_) {}
                 return;
             } catch (error) {
-                console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
+                console.warn('[PracticeCore] sync failed:', summarizePracticeCoreErrorForLog(error));
             }
         }
         syncAppState(records);

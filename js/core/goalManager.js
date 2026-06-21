@@ -5,6 +5,17 @@
     var PROGRESS_KEY = 'goal_progress';
     var fallbackIdCounter = 0;
 
+    function summarizeGoalManagerErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        var status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     var GOAL_TYPES = Object.freeze({
         PRACTICE_COUNT: 'practice_count',
         STUDY_TIME: 'study_time',
@@ -268,7 +279,7 @@
             this.ready = true;
             this._bindEvents();
         } catch (e) {
-            console.error('[GoalManager] Init failed:', e);
+            console.error('[GoalManager] init failed:', summarizeGoalManagerErrorForLog(e));
             this.ready = true;
         }
     };
@@ -415,7 +426,7 @@
                 localStorage.setItem(PROGRESS_KEY, JSON.stringify({ progress: this.progress, streak: this.streak }));
             }
         } catch (e) {
-            console.error('[GoalManager] Save failed:', e);
+            console.error('[GoalManager] save failed:', summarizeGoalManagerErrorForLog(e));
         }
     };
 

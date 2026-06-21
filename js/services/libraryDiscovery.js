@@ -12,6 +12,17 @@
     const runtimeResources = new Map();
     const runtimeObjectUrls = [];
 
+    function summarizeLibraryDiscoveryErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizePath(value) {
         return String(value || '')
             .replace(/\\/g, '/')
@@ -388,7 +399,7 @@
                 }
                 return text;
             } catch (error) {
-                console.warn('[LibraryDiscovery] file.text failed:', error);
+                console.warn('[LibraryDiscovery] file.text failed:', summarizeLibraryDiscoveryErrorForLog(error));
             }
         }
         if (typeof file.content === 'string') {
@@ -520,7 +531,7 @@
             runtimeObjectUrls.push(url);
             return url;
         } catch (error) {
-            console.warn('[LibraryDiscovery] createObjectURL failed:', error);
+            console.warn('[LibraryDiscovery] createObjectURL failed:', summarizeLibraryDiscoveryErrorForLog(error));
             return '';
         }
     }

@@ -4,6 +4,17 @@
     const MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200;
     const UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+    function summarizeAchievementErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function isPlainRecord(value) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
             return false;
@@ -31,7 +42,7 @@
                 console.log('[AchievementManager] Initialized. Unlocked:', Object.keys(this.unlocked).length);
                 this.initialized = true;
             } catch (e) {
-                console.error('[AchievementManager] Init failed', e);
+                console.error('[AchievementManager] init failed', summarizeAchievementErrorForLog(e));
                 this.unlocked = {};
             }
         }
@@ -657,7 +668,7 @@
                         newUnlocks.push(achievement);
                     }
                 } catch (err) {
-                    console.error(`[AchievementManager] Error checking ${achievement.id}`, err);
+                    console.error('[AchievementManager] achievement check failed', summarizeAchievementErrorForLog(err));
                 }
             }
 
@@ -780,7 +791,7 @@
             try {
                 await window.AchievementManager.init();
             } catch (err) {
-                console.warn('[AchievementManager] Init failed before showing modal', err);
+                console.warn('[AchievementManager] init failed before showing modal', summarizeAchievementErrorForLog(err));
             }
         }
 

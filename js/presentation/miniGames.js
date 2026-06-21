@@ -31,6 +31,17 @@
     var vocabSparkInputBound = false;
     var vocabSparkDeck = [];
 
+    function summarizeMiniGamesErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function shuffleArray(list) {
         var array = Array.isArray(list) ? list.slice() : [];
         for (var i = array.length - 1; i > 0; i -= 1) {
@@ -125,7 +136,7 @@
                 resetVocabSparkDeck();
                 return vocabSparkLexicon.slice();
             } catch (error) {
-                console.warn('[VocabSpark] 词汇表加载失败，使用内置词库:', error);
+                console.warn('[VocabSpark] lexicon load failed:', summarizeMiniGamesErrorForLog(error));
                 vocabSparkLexicon = DEFAULT_VOCAB_SPARK_WORDS.map(normalizeVocabEntry).filter(Boolean);
                 if (!vocabSparkLexicon.length) {
                     throw error;
@@ -258,7 +269,7 @@
 
             renderVocabSparkQuestion(true);
         } catch (error) {
-            console.error('[VocabSpark] 初始化失败:', error);
+            console.error('[VocabSpark] initialization failed:', summarizeMiniGamesErrorForLog(error));
             if (typeof global.showMessage === 'function') {
                 global.showMessage('词汇挑战初始化失败，请稍后重试', 'error');
             }

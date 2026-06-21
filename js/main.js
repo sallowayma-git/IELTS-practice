@@ -197,7 +197,7 @@ function ensureExamListView() {
     if (window.browseController && typeof window.browseController.getExamListView === 'function') {
         instance = window.browseController.getExamListView();
     }
-    
+
     if (!instance && window.LegacyExamListView) {
         instance = new window.LegacyExamListView({
             domAdapter: window.DOMAdapter,
@@ -2806,7 +2806,7 @@ function loadExamListFallback() {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
         }
-        
+
         const list = document.createElement('div');
         list.className = 'exam-list';
         filtered.forEach(function (exam) {
@@ -2858,18 +2858,18 @@ function displayExams(exams) {
         return window.ExamActions.displayExams(exams);
     }
     console.warn('[main.js] ExamActions.displayExams 未就绪，使用降级渲染');
-    
+
     // 立即降级渲染（displayExams 需要同步执行）
     try {
         const container = document.getElementById('exam-list-container');
         if (!container) return;
-        
+
         // 清除 loading 指示器（修复 P2 bug）
         const loadingEl = document.querySelector('#browse-view .loading');
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
-        
+
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
         const normalizedExams = memorizeSelectionActive
             ? filterReadingMemorizeExamsFallback(exams)
@@ -2881,7 +2881,7 @@ function displayExams(exams) {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
         }
-        
+
         const list = document.createElement('div');
         list.className = 'exam-list';
         normalizedExams.forEach(function (exam) {
@@ -3372,7 +3372,7 @@ async function toggleBulkDelete() {
                 await bulkDeleteRecords(selected);
             } catch (error) {
                 console.error('[System] 批量删除失败:', summarizeMainErrorForLog(error));
-                showMessage('批量删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+                showMessage('Bulk delete failed. Please retry.', 'error');
             }
         }
     }
@@ -4122,7 +4122,7 @@ async function deleteLibraryConfig(configKey) {
         }
     } catch (error) {
         console.warn('[LibraryConfig] 删除题库配置失败', summarizeMainErrorForLog(error));
-        showMessage('题库配置删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+        showMessage('Library configuration delete failed. Please retry.', 'error');
     }
 }
 

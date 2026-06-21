@@ -551,7 +551,7 @@
             } catch (error) {
                 console.error('[LibraryManager] 加载默认题库失败:', summarizeLibraryManagerErrorForLog(error));
                 if (typeof global.showMessage === 'function') {
-                    global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
+                    global.showMessage('Library refresh failed. Please retry.', 'error');
                 }
                 if (global.setExamIndexState) {
                     global.setExamIndexState([]);

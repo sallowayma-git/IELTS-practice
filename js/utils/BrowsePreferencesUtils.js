@@ -17,6 +17,17 @@
     let browsePreferenceUiInitialized = false;
     let pendingBrowseScrollSnapshot = null;
 
+    function summarizeBrowsePreferencesErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     // --- Helper Functions ---
 
     function debounce(fn, wait) {
@@ -267,7 +278,7 @@
                 lastFilter: normalizeBrowseLastFilter(source.lastFilter)
             };
         } catch (error) {
-            console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
+            console.warn('[BrowsePreferences] preference operation failed:', summarizeBrowsePreferencesErrorForLog(error));
             return getDefaultBrowsePreferences();
         }
     }
@@ -296,7 +307,7 @@
             localStorage.setItem(BROWSE_VIEW_PREFERENCE_KEY, JSON.stringify(next));
             browsePreferencesCache = next;
         } catch (error) {
-            console.warn('[BrowsePreferences] 保存浏览偏好失败', error);
+            console.warn('[BrowsePreferences] preference operation failed:', summarizeBrowsePreferencesErrorForLog(error));
             browsePreferencesCache = next;
         }
         return browsePreferencesCache;

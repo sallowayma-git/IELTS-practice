@@ -2,6 +2,17 @@
 (function () {
   'use strict';
 
+  function summarizeRuntimeFixErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+      return { name: typeof error };
+    }
+    var status = Number(error.status);
+    return {
+      name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+      status: Number.isFinite(status) ? status : undefined
+    };
+  }
+
   function ensureCompatPatch(global) {
     if (!global || (global.CompatPatch && typeof global.CompatPatch.register === 'function')) {
       return global && global.CompatPatch ? global.CompatPatch : null;
@@ -80,7 +91,7 @@
               recoveredCount++;
               console.log('[PracticeRecorder] 恢复记录成功');
             } catch (e) {
-              console.error('[PracticeRecorder] 恢复记录失败:', e);
+              console.error('[PracticeRecorder] recovery failed:', summarizeRuntimeFixErrorForLog(e));
               failed.push(tempRecord);
             }
           }
@@ -93,7 +104,7 @@
             console.log(`[PracticeRecorder] 恢复了 ${recoveredCount} 条记录，${failed.length} 条失败`);
           }
         } catch (error) {
-          console.error('[PracticeRecorder] 恢复临时记录时出错:', error);
+          console.error('[PracticeRecorder] recovery failed:', summarizeRuntimeFixErrorForLog(error));
         }
       };
 

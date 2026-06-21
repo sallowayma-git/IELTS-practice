@@ -24,6 +24,17 @@
     let activeLookup = null;
     let outsideHandlerAttached = false;
 
+    function summarizeReviewDictionaryErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function cleanText(value, maxLength = MAX_EXTRA_TEXT_LENGTH) {
         return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
     }
@@ -353,7 +364,7 @@
             }
             return service.lookup(term);
         } catch (error) {
-            console.warn('[ReviewHighlightDictionary] lookup failed:', error);
+            console.warn('[ReviewHighlightDictionary] lookup failed:', summarizeReviewDictionaryErrorForLog(error));
             return {
                 found: false,
                 requested: cleanText(term),
