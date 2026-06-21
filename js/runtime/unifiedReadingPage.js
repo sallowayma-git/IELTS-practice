@@ -25,6 +25,17 @@
     const navStatus = new Map();
     const scriptCache = new Map();
     const LOCATOR_HIGHLIGHT_SELECTOR = '.reading-locator-highlight, .reading-locator-block';
+    function summarizeUnifiedReadingErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function getAnswerMatchCore() {
         const core = global.AnswerMatchCore;
         if (!core || typeof core !== 'object') {
@@ -4212,9 +4223,9 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         bootstrap().catch((error) => {
-            console.error('[UnifiedReadingPage] 初始化失败:', error);
+            console.error('[UnifiedReadingPage] 初始化失败:', summarizeUnifiedReadingErrorForLog(error));
             if (dom.groups) {
-                dom.groups.innerHTML = `<div class="group"><h4>加载失败</h4><p>${escapeHtml(error.message)}</p></div>`;
+                dom.groups.innerHTML = '<div class="group"><h4>Loading failed</h4><p>Please reload this page.</p></div>';
             }
         });
     });

@@ -40,9 +40,13 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'js/main.js',
         'js/patches/runtime-fixes.js',
         'js/plugins/hp/hp-core-bridge.js',
+        'js/plugins/hp/hp-portal.js',
+        'js/plugins/themes/academic/academic-adapter.js',
+        'js/plugins/themes/melody/melody-adapter.js',
         'js/plugins/themes/theme-adapter-base.js',
         'js/practice-page-enhancer.js',
         'js/runtime/lazyLoader.js',
+        'js/runtime/unifiedReadingPage.js',
         'js/services/libraryManager.js',
         'js/utils/answerComparisonUtils.js',
         'js/utils/dataBackupManager.js',
@@ -161,6 +165,60 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(vocabStore),
         'vocab store must summarize raw errors before logging them'
+    );
+
+    const vocabSessionView = readSource('js/components/vocabSessionView.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(vocabSessionView),
+        'vocab session view must summarize raw errors before logging them'
+    );
+    assert(
+        !/(?:showFeedbackMessage|textContent|innerHTML)[^;\n]*(?:error\.message|err\.message|e\.message)/.test(vocabSessionView),
+        'vocab session view must not expose raw exception messages to users'
+    );
+
+    const spellingErrorCollector = readSource('js/app/spellingErrorCollector.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(spellingErrorCollector),
+        'spelling error collector must summarize raw errors before logging them'
+    );
+
+    const hpPortal = readSource('js/plugins/hp/hp-portal.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(hpPortal),
+        'HP portal must summarize raw errors before logging them'
+    );
+    assert(
+        !/showMessage\([^;\n]*(?:error\.message|err\.message|e\.message)/.test(hpPortal),
+        'HP portal must not expose raw exception messages to users'
+    );
+
+    const academicAdapter = readSource('js/plugins/themes/academic/academic-adapter.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(academicAdapter),
+        'academic adapter must summarize raw errors before logging them'
+    );
+
+    const melodyAdapter = readSource('js/plugins/themes/melody/melody-adapter.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(melodyAdapter),
+        'melody adapter must summarize raw errors before logging them'
+    );
+
+    const stateSerializer = readSource('js/utils/stateSerializer.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(stateSerializer),
+        'state serializer must summarize raw errors before logging them'
+    );
+
+    const unifiedReadingPage = readSource('js/runtime/unifiedReadingPage.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*error\s*\)/.test(unifiedReadingPage),
+        'unified reading page must summarize raw errors before logging them'
+    );
+    assert(
+        !/(?:innerHTML\s*=|escapeHtml\()([^;\n]*error\.message)/.test(unifiedReadingPage),
+        'unified reading page must not render raw exception messages'
     );
 
     const examSessionMixin = readSource('js/app/examSessionMixin.js');

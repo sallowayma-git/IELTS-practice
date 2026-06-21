@@ -17,6 +17,17 @@
   const MAX_HP_IMPORT_DEPTH = 24;
   const HP_JSON_MIME_TYPES = new Set(['', 'application/json', 'text/json', 'text/plain']);
   const HP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+  function summarizeHpPortalErrorForLog(error) {
+      if (!error || typeof error !== 'object') {
+          return { name: typeof error };
+      }
+      const status = Number(error.status);
+      return {
+          name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+          status: Number.isFinite(status) ? status : undefined
+      };
+  }
+
 
   function resolveTrustedPortalTarget(rawTarget) {
     if (!rawTarget) return '';
@@ -49,7 +60,7 @@
       sessionStorage.removeItem('hp.portal.pendingView');
       return value.trim().toLowerCase();
     } catch (error) {
-      console.warn('[hp-portal] 无法读取待激活视图', error);
+      console.warn('[hp-portal] 无法读取待激活视图', summarizeHpPortalErrorForLog(error));
       return '';
     }
   }
@@ -370,7 +381,7 @@
           this.state.activeView = queryView;
         }
       } catch (error) {
-        console.warn('[hp-portal] 解析视图参数失败', error);
+        console.warn('[hp-portal] 解析视图参数失败', summarizeHpPortalErrorForLog(error));
       }
     },
 
@@ -556,14 +567,14 @@
       if (next === 'practice' && this.practiceVirtualizer && typeof this.practiceVirtualizer.recalculate === 'function') {
         window.requestAnimationFrame(() => {
           try { this.practiceVirtualizer.recalculate(); }
-          catch (error) { console.warn('[hp-portal] practice recalc failed', error); }
+          catch (error) { console.warn('[hp-portal] practice recalc failed', summarizeHpPortalErrorForLog(error)); }
         });
       }
 
       if (next === 'history') {
         window.requestAnimationFrame(() => {
           try { this.renderHistory(); }
-          catch (error) { console.warn('[hp-portal] history rerender failed', error); }
+          catch (error) { console.warn('[hp-portal] history rerender failed', summarizeHpPortalErrorForLog(error)); }
         });
       }
     },
@@ -638,7 +649,7 @@
       try {
         localStorage.setItem(this.storageKeys.backups, JSON.stringify(normalizeHpBackupList(list)));
       } catch (error) {
-        console.warn('[hp-portal] write backups failed', error);
+        console.warn('[hp-portal] write backups failed', summarizeHpPortalErrorForLog(error));
       }
     },
 
@@ -808,7 +819,7 @@
       try {
         validateHpJsonFile(file);
       } catch (error) {
-        hpCore.showMessage(error.message || 'Import file is invalid.', 'error');
+        hpCore.showMessage('Import file is invalid.', 'error');
         this.dom.importInput.value = '';
         return;
       }
@@ -818,7 +829,7 @@
           const parsed = JSON.parse(String(reader.result || '{}'));
           this.applyImportedData(parsed);
         } catch (error) {
-          hpCore.showMessage('导入失败：' + error.message, 'error');
+          hpCore.showMessage('Import failed. Please retry.', 'error');
         } finally {
           this.dom.importInput.value = '';
         }
@@ -860,14 +871,14 @@
       hpCore.showMessage(message, 'info');
       Promise.resolve(hpCore._loadExamIndex()).then(() => {
         if (typeof hpCore._loadRecords === 'function') {
-          try { hpCore._loadRecords(); } catch (error) { console.warn('[hp-portal] reload records failed', error); }
+          try { hpCore._loadRecords(); } catch (error) { console.warn('[hp-portal] reload records failed', summarizeHpPortalErrorForLog(error)); }
         }
         this.renderAll();
         this.updateSettingsMeta();
         hpCore.showMessage('题库索引已刷新', 'success');
       }).catch((error) => {
-        console.warn('[hp-portal] reload library failed', error);
-        hpCore.showMessage('题库加载失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+        console.warn('[hp-portal] reload library failed', summarizeHpPortalErrorForLog(error));
+        hpCore.showMessage('Library load failed. Please retry.', 'error');
       });
     },
 
@@ -1048,7 +1059,7 @@
     destroyPracticeVirtualizer() {
       if (this.practiceVirtualizer && typeof this.practiceVirtualizer.destroy === 'function') {
         try { this.practiceVirtualizer.destroy(); }
-        catch (error) { console.warn('[hp-portal] destroy virtualizer failed', error); }
+        catch (error) { console.warn('[hp-portal] destroy virtualizer failed', summarizeHpPortalErrorForLog(error)); }
       }
       this.practiceVirtualizer = null;
       if (this.dom.practiceList) {
@@ -1438,7 +1449,7 @@
             statusEl.textContent = '题库 ' + status.examCount + ' 套 · 练习记录 ' + status.recordCount + ' 条 · 最近更新 ' + this.formatRelative(status.lastUpdateTime);
           }
         } catch (e) {
-          console.warn('[hp-portal] update settings status failed', e);
+          console.warn('[hp-portal] update settings status failed', summarizeHpPortalErrorForLog(e));
         }
       }
 
@@ -1460,7 +1471,7 @@
             hpCore.showMessage('缓存已清理，页面即将刷新', 'success');
             setTimeout(() => window.location.reload(), 400);
           } catch (e) {
-            hpCore.showMessage('清理缓存失败: ' + e.message, 'error');
+            hpCore.showMessage('Cache cleanup failed. Please retry.', 'error');
           }
           break;
         case 'load-library':

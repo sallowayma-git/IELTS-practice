@@ -19,6 +19,17 @@
     });
     const MAX_SPELLING_ANSWER_LENGTH = 160;
     const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+    function summarizeVocabSessionErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
 
     const state = {
         container: null,
@@ -388,7 +399,7 @@
                 state.ui.listSwitcher = new Switcher(state.store);
                 state.ui.listSwitcher.render(container);
             } catch (error) {
-                console.warn('[VocabSessionView] 词表切换器初始化失败:', error);
+                console.warn('[VocabSessionView] 词表切换器初始化失败:', summarizeVocabSessionErrorForLog(error));
                 state.ui.listSwitcher = null;
             }
         }
@@ -406,7 +417,7 @@
             try {
                 window.app.navigateToView('more');
             } catch (error) {
-                console.warn('[VocabSessionView] navigateToView("more") 失败:', error);
+                console.warn('[VocabSessionView] navigateToView("more") 失败:', summarizeVocabSessionErrorForLog(error));
             }
         }
         if (vocabView) {
@@ -763,11 +774,11 @@
             render();
             showFeedbackMessage('学习设置已更新', 'success');
         } catch (error) {
-            console.error('[VocabSessionView] 设置保存失败:', error);
+            console.error('[VocabSessionView] 设置保存失败:', summarizeVocabSessionErrorForLog(error));
             if (state.elements.settingsError) {
-                state.elements.settingsError.textContent = error.message || '保存失败，请稍后再试。';
+                state.elements.settingsError.textContent = '保存失败，请稍后再试。';
             }
-            showFeedbackMessage(`保存失败：${error.message || error}`, 'error');
+            showFeedbackMessage('保存失败，请稍后再试。', 'error');
         }
     }
 
@@ -878,8 +889,8 @@
                 render();
             }
         } catch (error) {
-            console.error('[VocabSessionView] 导入失败:', error);
-            showFeedbackMessage(`导入失败：${error.message || error}`, 'error');
+            console.error('[VocabSessionView] 导入失败:', summarizeVocabSessionErrorForLog(error));
+            showFeedbackMessage('导入失败，请稍后再试。', 'error');
         } finally {
             state.ui.importing = false;
         }
@@ -915,8 +926,8 @@
             triggerDownload(blob, filename);
             showFeedbackMessage('词汇进度已导出', 'success');
         } catch (error) {
-            console.error('[VocabSessionView] 导出失败:', error);
-            showFeedbackMessage(`导出失败：${error.message || error}`, 'error');
+            console.error('[VocabSessionView] 导出失败:', summarizeVocabSessionErrorForLog(error));
+            showFeedbackMessage('导出失败，请稍后再试。', 'error');
         } finally {
             state.ui.exporting = false;
         }
@@ -1382,37 +1393,37 @@
             input.value = answer;
         }
         const word = state.session.currentWord;
-        
+
         if (!answer) {
             return;
         }
-        
+
         state.session.typedAnswer = answer;
-        
+
         // 检查拼写是否正确
         const isCorrect = answer.toLowerCase() === word.word.toLowerCase();
-        
+
         if (isCorrect) {
             // 拼写正确，使用认识质量
             const recognitionQuality = state.session.recognitionQuality || 'good';
             applyResult(recognitionQuality, { answer, spellingCorrect: true });
             return;
         }
-        
+
         // 拼写错误，增加尝试次数
         state.session.spellingAttempts = (state.session.spellingAttempts || 0) + 1;
         const maxAttempts = 3;
-        
+
         if (state.session.spellingAttempts >= maxAttempts) {
             // 达到最大尝试次数，标记为错误
             applyResult('wrong', { answer, spellingCorrect: false, attemptsExhausted: true });
             return;
         }
-        
+
         // 还有机会，重新渲染
         state.session.typedAnswer = '';
         render();
-        
+
         // 显示错误提示
         if (typeof window.showToast === 'function') {
             window.showToast(`拼写错误，还有 ${maxAttempts - state.session.spellingAttempts} 次机会`, 'warning');
@@ -1429,14 +1440,14 @@
             return;
         }
         const now = new Date();
-        
+
         // 基础质量评分（来自认识判断）
         const recognitionQuality = session.recognitionQuality || 'good';
         const spellingAttempts = session.spellingAttempts || 0;
         const skipped = options.skipped || false;
         const isIntraReview = word.__intraReview === true;
         const cycleType = word.__cycleType || 'normal';
-        
+
         // 确定最终质量（考虑拼写错误）
         let finalQuality = recognitionQuality;
         if (skipped) {
@@ -1446,7 +1457,7 @@
         } else if (spellingAttempts === 1 && recognitionQuality === 'easy') {
             finalQuality = 'good'; // 简单但拼写错误降为一般
         }
-        
+
         // 处理新词或轮内循环
         let patch;
         if (!word.easeFactor) {
@@ -1459,14 +1470,14 @@
             // 正常复习：使用标准SM-2算法
             patch = state.scheduler.scheduleAfterResult(word, finalQuality, now);
         }
-        
+
         // 判断是否需要继续轮内循环或安排验证
         const intraCycles = patch.intraCycles || 0;
         const maxCycles = state.scheduler.SM2_CONSTANTS.MAX_INTRA_CYCLES;
-        
+
         let needsContinueIntra = false;
         let needsEasyVerification = false;
-        
+
         if (cycleType === 'easy_verification') {
             // easy验证阶段
             if (finalQuality === 'easy') {
@@ -1500,22 +1511,22 @@
                 patch = state.scheduler.scheduleAfterResult(patch, finalQuality, now);
             }
         }
-        
+
         // 安排后续复习
         if (needsEasyVerification) {
             scheduleIntraReview(patch, 'easy_verification');
         } else if (needsContinueIntra) {
             scheduleIntraReview(patch, 'normal');
         }
-        
+
         // 保存到数据库（除非是临时的轮内状态）
         const shouldSave = !needsContinueIntra && !needsEasyVerification;
         let updated = patch;
-        
+
         if (shouldSave) {
             updated = await state.store.updateWord(word.id, patch) || patch;
         }
-        
+
         session.currentWord = updated;
         session.lastAnswer = {
             recognitionQuality,
@@ -1535,7 +1546,7 @@
         session.meaningVisible = true;
         state.ui.sidePanelManual = null;
         session.typedAnswer = '';
-        
+
         // 更新统计（只有正式完成的才计入）
         if (shouldSave) {
             if (finalQuality === 'hard' && spellingAttempts >= 2) {
@@ -1547,13 +1558,13 @@
             }
             session.progress.completed += 1;
         }
-        
+
         render();
     }
 
     function scheduleIntraReview(word, cycleType = 'normal') {
         let insertPosition;
-        
+
         if (cycleType === 'easy_verification') {
             // easy验证：插入到第 20-30 个位置
             insertPosition = Math.min(
@@ -1567,14 +1578,14 @@
                 Math.floor(Math.random() * 6) + 3  // 3-8 随机
             );
         }
-        
+
         const clone = {
             ...word,
             __intraReview: true,
             __cycleType: cycleType,
             __insertedAt: Date.now()
         };
-        
+
         state.session.activeQueue.splice(insertPosition, 0, clone);
     }
 
@@ -1591,7 +1602,7 @@
         if (!word || session.stage !== 'feedback') {
             return;
         }
-        
+
         // 如果用户重新评分，更新调度
         if (session.lastAnswer && session.lastAnswer.quality !== quality) {
             const now = new Date();
@@ -1600,7 +1611,7 @@
             session.currentWord = { ...word, ...patch };
             session.lastAnswer.quality = quality;
         }
-        
+
         moveToNextWord();
     }
 
@@ -1786,15 +1797,15 @@
             const attempts = session.spellingAttempts || 0;
             const maxAttempts = 3;
             const remainingAttempts = maxAttempts - attempts;
-            
-            const attemptsHint = attempts > 0 
+
+            const attemptsHint = attempts > 0
                 ? `<p class="vocab-card__attempts" style="color: #ed8936; font-size: 0.875rem;">已尝试 ${attempts} 次，剩余 ${remainingAttempts} 次机会</p>`
                 : '';
-            
+
             const instructionText = attempts === 0
                 ? '根据释义，拼写出这个单词'
                 : '再试一次，注意拼写细节';
-            
+
             card.innerHTML = `
                 <div class="vocab-card vocab-card--spelling">
                     <div class="vocab-card__meaning" data-visible="true" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">
@@ -1834,19 +1845,19 @@
             const baseEF = toFiniteNumber(session.lastAnswer?.baseEF, currentEaseFactor);
             const finalEF = toFiniteNumber(session.lastAnswer?.finalEF, currentEaseFactor);
             const penalty = toFiniteNumber(session.lastAnswer?.penalty, 0);
-            
+
             const icon = spellingAttempts >= 3 ? '❌' : (spellingAttempts > 0 || skipped ? '🟡' : '✅');
             const title = spellingAttempts >= 3 ? '需要加强' : (spellingAttempts > 0 || skipped ? '接近了' : '太棒了！');
-            
+
             const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '待安排';
             const safeNextReview = escapeHtml(nextReview);
             const typedAnswer = session.lastAnswer?.typed ? escapeHtml(session.lastAnswer.typed) : '';
-            
+
             // SM-2 信息展示
             const intervalDays = escapeHtml(toNonNegativeInteger(word.interval, 1) || 1);
             const easeFactor = escapeHtml(finalEF.toFixed(2));
             const repetitions = escapeHtml(toNonNegativeInteger(word.repetitions, 0));
-            
+
             // 拼写结果提示
             let spellingFeedback = '';
             if (!skipped) {
@@ -1858,12 +1869,12 @@
             } else {
                 spellingFeedback = `<p style="color: #718096; font-size: 0.875rem; margin: 0.25rem 0;">已跳过拼写 (EF -${(penalty).toFixed(2)})</p>`;
             }
-            
+
             // 认识质量标签
             const recognitionLabel = recognitionQuality === 'easy' ? '简单' : recognitionQuality === 'good' ? '一般' : '困难';
             const safeRecognitionLabel = escapeHtml(recognitionLabel);
             const recognitionChange = baseEF > currentEaseFactor ? `(EF +${(baseEF - currentEaseFactor).toFixed(2)})` : '';
-            
+
             // 质量分解
             const isIntraReview = session.lastAnswer?.isIntraReview || false;
             const cycleType = session.lastAnswer?.cycleType || 'normal';
@@ -1873,9 +1884,9 @@
             const needsEasyVerification = session.lastAnswer?.needsEasyVerification || false;
             const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
             const saved = session.lastAnswer?.saved || false;
-            
+
             let qualityBreakdown = '';
-            
+
             if (needsEasyVerification) {
                 // 安排easy验证
                 qualityBreakdown = `
@@ -1917,7 +1928,7 @@
                 }
             } else if (isIntraReview) {
                 // 轮内循环中的调整
-                const adjustment = session.lastAnswer?.finalQuality === 'easy' ? '+0.15' : 
+                const adjustment = session.lastAnswer?.finalQuality === 'easy' ? '+0.15' :
                                  session.lastAnswer?.finalQuality === 'good' ? '+0.05' : '-0.10';
                 const safeAdjustment = escapeHtml(adjustment);
                 qualityBreakdown = `
@@ -1953,7 +1964,7 @@
                     `;
                 }
             }
-            
+
             card.innerHTML = `
                 <div class="vocab-card vocab-card--feedback vocab-card--${spellingAttempts >= 3 ? 'wrong' : spellingAttempts > 0 ? 'near' : 'correct'}">
                     <div class="vocab-feedback__head">
@@ -2064,9 +2075,9 @@
         try {
             await state.store.init();
         } catch (error) {
-            console.error('[VocabSessionView] 初始化失败:', error);
+            console.error('[VocabSessionView] 初始化失败:', summarizeVocabSessionErrorForLog(error));
             if (state.elements.sessionCard) {
-                state.elements.sessionCard.innerHTML = `<div class="vocab-card-error">初始化失败：${escapeHtml(error.message || error)}</div>`;
+                state.elements.sessionCard.innerHTML = '<div class="vocab-card-error">初始化失败，请稍后再试。</div>';
             }
             return;
         }

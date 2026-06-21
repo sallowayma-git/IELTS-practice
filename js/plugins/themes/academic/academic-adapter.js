@@ -1,16 +1,27 @@
 /**
  * Academic Theme Adapter (学术主题适配器)
- * 
+ *
  * 继承 ThemeAdapterBase，提供 Academic 主题特定的功能：
  * - 主题特定的 UI 集成
  * - 视图状态管理
  * - 与主系统的数据同步
- * 
+ *
  * @version 1.0.0
  * @requires ThemeAdapterBase
  */
 (function () {
   'use strict';
+  function summarizeAcademicAdapterErrorForLog(error) {
+      if (!error || typeof error !== 'object') {
+          return { name: typeof error };
+      }
+      const status = Number(error.status);
+      return {
+          name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+          status: Number.isFinite(status) ? status : undefined
+      };
+  }
+
 
   // 等待 ThemeAdapterBase 加载
   if (!window.ThemeAdapterBase) {
@@ -68,7 +79,7 @@
       });
 
     } catch (error) {
-      console.error('[AcademicAdapter] 初始化失败:', error);
+      console.error('[AcademicAdapter] 初始化失败:', summarizeAcademicAdapterErrorForLog(error));
       throw error;
     }
   };
@@ -156,7 +167,7 @@
         window.academicApp.showNotification(message, type, duration || 3000);
         return;
       } catch (error) {
-        console.warn('[AcademicAdapter] academicApp.showNotification 失败:', error);
+        console.warn('[AcademicAdapter] academicApp.showNotification 失败:', summarizeAcademicAdapterErrorForLog(error));
       }
     }
 
@@ -166,7 +177,7 @@
         window._originalShowMessage(message, type, duration);
         return;
       } catch (error) {
-        console.warn('[AcademicAdapter] _originalShowMessage 失败:', error);
+        console.warn('[AcademicAdapter] _originalShowMessage 失败:', summarizeAcademicAdapterErrorForLog(error));
       }
     }
 
@@ -180,7 +191,7 @@
    */
   AcademicAdapter.getExamIndex = function () {
     const exams = window.ThemeAdapterBase.getExamIndex.call(this);
-    
+
     // 如果基类没有数据，尝试从全局变量获取
     if (exams.length === 0) {
       // Academic 页面可能使用 examIndex 全局变量
@@ -191,7 +202,7 @@
       const listening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
       return [...reading, ...listening];
     }
-    
+
     return exams;
   };
 
@@ -201,7 +212,7 @@
    */
   AcademicAdapter.getPracticeRecords = function () {
     const records = window.ThemeAdapterBase.getPracticeRecords.call(this);
-    
+
     // 如果基类没有数据，尝试从全局变量获取
     if (records.length === 0) {
       // Academic 页面可能使用 practiceRecords 全局变量
@@ -223,17 +234,17 @@
                 try { window.updatePracticeView(); } catch (_) {}
               }
             }).catch((error) => {
-              console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', error);
+              console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', summarizeAcademicAdapterErrorForLog(error));
             });
           } else if (Array.isArray(stored) && stored.length > 0) {
             return stored;
           }
         } catch (error) {
-          console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', error);
+          console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', summarizeAcademicAdapterErrorForLog(error));
         }
       }
     }
-    
+
     return records;
   };
 
@@ -339,10 +350,10 @@
     categories.forEach(category => {
       const typeExams = exams.filter(e => e.type === category.type);
       const typeRecords = records.filter(r => r.type === category.type);
-      
+
       category.total = typeExams.length;
       category.completed = new Set(typeRecords.map(r => r.examId).filter(Boolean)).size;
-      
+
       if (typeRecords.length > 0) {
         let totalScore = 0;
         let validCount = 0;

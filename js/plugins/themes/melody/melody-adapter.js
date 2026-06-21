@@ -1,16 +1,27 @@
 /**
  * Melody Theme Adapter (美乐蒂主题适配器)
- * 
+ *
  * 继承 ThemeAdapterBase，提供 My Melody 主题特定的功能：
  * - 主题特定的 UI 集成
  * - 导航状态管理
  * - 与主系统的数据同步
- * 
+ *
  * @version 1.0.0
  * @requires ThemeAdapterBase
  */
 (function () {
   'use strict';
+  function summarizeMelodyAdapterErrorForLog(error) {
+      if (!error || typeof error !== 'object') {
+          return { name: typeof error };
+      }
+      const status = Number(error.status);
+      return {
+          name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+          status: Number.isFinite(status) ? status : undefined
+      };
+  }
+
 
   // 等待 ThemeAdapterBase 加载
   if (!window.ThemeAdapterBase) {
@@ -67,7 +78,7 @@
       });
 
     } catch (error) {
-      console.error('[MelodyAdapter] 初始化失败:', error);
+      console.error('[MelodyAdapter] 初始化失败:', summarizeMelodyAdapterErrorForLog(error));
       throw error;
     }
   };
@@ -160,7 +171,7 @@
         window.melodyApp.showNotification(message, duration || 3000);
         return;
       } catch (error) {
-        console.warn('[MelodyAdapter] melodyApp.showNotification 失败:', error);
+        console.warn('[MelodyAdapter] melodyApp.showNotification 失败:', summarizeMelodyAdapterErrorForLog(error));
       }
     }
 
@@ -171,7 +182,7 @@
         window.melodyApp.showBouncingNotification(message, emoji, duration || 3000);
         return;
       } catch (error) {
-        console.warn('[MelodyAdapter] melodyApp.showBouncingNotification 失败:', error);
+        console.warn('[MelodyAdapter] melodyApp.showBouncingNotification 失败:', summarizeMelodyAdapterErrorForLog(error));
       }
     }
 
@@ -185,14 +196,14 @@
    */
   MelodyAdapter.getExamIndex = function () {
     const exams = window.ThemeAdapterBase.getExamIndex.call(this);
-    
+
     // 如果基类没有数据，尝试从全局变量获取
     if (exams.length === 0) {
       const reading = Array.isArray(window.completeExamIndex) ? window.completeExamIndex : [];
       const listening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
       return [...reading, ...listening];
     }
-    
+
     return exams;
   };
 
@@ -202,7 +213,7 @@
    */
   MelodyAdapter.getPracticeRecords = function () {
     const records = window.ThemeAdapterBase.getPracticeRecords.call(this);
-    
+
     // 如果基类没有数据，尝试从 window.storage 获取
     if (records.length === 0 && window.storage && typeof window.storage.get === 'function') {
       try {
@@ -218,16 +229,16 @@
               try { window.updatePracticeView(); } catch (_) {}
             }
           }).catch((error) => {
-            console.warn('[MelodyAdapter] 从 storage 获取练习记录失败:', error);
+            console.warn('[MelodyAdapter] 从 storage 获取练习记录失败:', summarizeMelodyAdapterErrorForLog(error));
           });
         } else if (Array.isArray(stored) && stored.length > 0) {
           return stored;
         }
       } catch (error) {
-        console.warn('[MelodyAdapter] 从 storage 获取练习记录失败:', error);
+        console.warn('[MelodyAdapter] 从 storage 获取练习记录失败:', summarizeMelodyAdapterErrorForLog(error));
       }
     }
-    
+
     return records;
   };
 
@@ -320,7 +331,7 @@
 
     // 排序日期
     const dates = Array.from(dateSet).sort().reverse();
-    
+
     // 检查今天是否有练习
     const today = new Date().toISOString().split('T')[0];
     if (dates[0] !== today) {
@@ -339,7 +350,7 @@
       const current = new Date(dates[i - 1]);
       const prev = new Date(dates[i]);
       const diffDays = Math.round((current - prev) / (1000 * 60 * 60 * 24));
-      
+
       if (diffDays === 1) {
         streak++;
       } else {
