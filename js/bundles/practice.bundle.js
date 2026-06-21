@@ -455,7 +455,10 @@
                         const payload = await this.readJsonViaXHR(url);
                         this.lexiconCache = Array.isArray(payload) ? payload : [];
                     } catch (xhrError) {
-                        console.warn('[SpellingErrorCollector] 核心词库加载失败，使用错词占位释义:', xhrError.message || fetchError.message || xhrError);
+                        console.warn('[SpellingErrorCollector] Core lexicon load failed, using placeholder definitions:', {
+                            fetch: summarizeSpellingCollectorErrorForLog(fetchError),
+                            xhr: summarizeSpellingCollectorErrorForLog(xhrError)
+                        });
                         this.lexiconCache = [];
                     }
                 } finally {
@@ -4279,7 +4282,7 @@ class PracticeHistoryEnhancer {
             if (window.showMessage) {
                 window.showMessage('Unable to show this practice record.', 'error');
             } else {
-                alert('无法显示记录详情: ' + error.message);
+                alert('Unable to show this practice record.');
             }
         }
     }
@@ -8401,13 +8404,14 @@ class PracticeRecorder {
             await this.updateUserStatsManually(standardizedRecord);
             return standardizedRecord;
         } catch (error) {
-            console.error('[PracticeRecorder] 降级保存失败:', {
-                error: error?.message,
-                validationErrors: error?.validationErrors || null,
+            console.error('[PracticeRecorder] fallback save failed:', {
+                error: summarizePracticeRecorderErrorForLog(error),
                 recordSummary: this.buildRecordLogSummary(record)
-            }, error);
+            });
             await this.saveToTemporaryStorage(record);
-            throw new Error(`All save methods failed: ${error.message}`);
+            const saveError = new Error('All save methods failed.');
+            saveError.cause = summarizePracticeRecorderErrorForLog(error);
+            throw saveError;
         }
     }
 

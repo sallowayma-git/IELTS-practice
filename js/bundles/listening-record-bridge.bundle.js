@@ -660,7 +660,10 @@
                         const payload = await this.readJsonViaXHR(url);
                         this.lexiconCache = Array.isArray(payload) ? payload : [];
                     } catch (xhrError) {
-                        console.warn('[SpellingErrorCollector] 核心词库加载失败，使用错词占位释义:', xhrError.message || fetchError.message || xhrError);
+                        console.warn('[SpellingErrorCollector] Core lexicon load failed, using placeholder definitions:', {
+                            fetch: summarizeSpellingCollectorErrorForLog(fetchError),
+                            xhr: summarizeSpellingCollectorErrorForLog(xhrError)
+                        });
                         this.lexiconCache = [];
                     }
                 } finally {

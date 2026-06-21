@@ -8,6 +8,17 @@
     const DEFAULT_BACKGROUND_THEME = 'misty-mountain';
     const BACKGROUND_THEME_IDS = Object.freeze(['misty-mountain', 'teal-ocean', 'floral-bloom']);
 
+    function summarizeThreeBackgroundErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizeBackgroundThemeName(themeName) {
         const value = String(themeName || '').trim().toLowerCase();
         return BACKGROUND_THEME_IDS.includes(value) ? value : DEFAULT_BACKGROUND_THEME;
@@ -447,7 +458,7 @@
             }
             global.SHUIThreeBackground = createBackground(themeName);
         } catch (error) {
-            console.warn('[SHUI Three Background] fallback applied:', error);
+            console.warn('[SHUI Three Background] fallback applied:', summarizeThreeBackgroundErrorForLog(error));
             document.body.classList.add('three-bg-fallback');
         }
     }
@@ -1208,6 +1219,17 @@
     var browsePrefetchTriggered = false;
     var morePrefetchTriggered = false;
 
+    function summarizeAppActionsErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        var status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function getMessageTargetOrigin() {
         var origin = global.location && global.location.origin;
         return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
@@ -1264,7 +1286,7 @@
                     try {
                         global.markdownExporter = new global.MarkdownExporter();
                     } catch (error) {
-                        console.error('[AppActions] 初始化 MarkdownExporter 失败:', error);
+                        console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
                     }
                 }
             }
@@ -1278,7 +1300,7 @@
                 global.showMessage('Markdown 导出模块未就绪', 'warning');
             }
         }).catch(function handleExportError(error) {
-            console.error('[AppActions] 导出失败:', error);
+            console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
             if (typeof global.showMessage === 'function') {
                 global.showMessage('导出失败，请稍后重试', 'error');
             }
@@ -1291,7 +1313,7 @@
         }
         prefetchTriggered = true;
         ensurePracticeSuite().catch(function swallow(error) {
-            console.warn('[AppActions] 练习模块预加载失败:', error);
+            console.warn('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
         });
     }
 
@@ -1302,7 +1324,7 @@
         browsePrefetchTriggered = true;
         if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
             global.AppLazyLoader.ensureGroup('browse-runtime').catch(function swallow(error) {
-                console.warn('[AppActions] 浏览模块预加载失败:', error);
+                console.warn('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
             });
         }
     }
@@ -1314,7 +1336,7 @@
         morePrefetchTriggered = true;
         if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
             global.AppLazyLoader.ensureGroup('more-tools').catch(function swallow(error) {
-                console.warn('[AppActions] 更多工具预加载失败:', error);
+                console.warn('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
             });
         }
     }
@@ -1536,7 +1558,7 @@
                             frequencyScope: selection.frequencyScope
                         });
                     } catch (error) {
-                        console.error('[AppActions] 套题模式启动失败', error);
+                        console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
                         if (typeof global.showMessage === 'function') {
                             global.showMessage('套题模式启动失败，请稍后重试', 'error');
                         }
@@ -1553,7 +1575,7 @@
                 return undefined;
             });
         }).catch(function handleSuiteError(error) {
-            console.error('[AppActions] 套题模块加载失败:', error);
+            console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
             if (typeof global.showMessage === 'function') {
                 global.showMessage('套题模块加载失败，请稍后重试', 'error');
             }
@@ -1576,7 +1598,7 @@
             }
             return false;
         }).catch(function handleSuiteError(error) {
-            console.error('[AppActions] 套题继续失败:', error);
+            console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
             if (typeof global.showMessage === 'function') {
                 global.showMessage('套题继续失败，请稍后重试', 'error');
             }
@@ -1607,7 +1629,7 @@
                     console.warn('[AppActions] openExam/viewPDF 未定义');
                 }
             } catch (error) {
-                console.error('[AppActions] 启动题目失败:', error);
+                console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('无法打开题目，请检查题库路径', 'error');
                 }
@@ -1747,7 +1769,7 @@
             navigateToReadingMemorizeBrowse();
             return null;
         }).catch(function handleMemorizeError(error) {
-            console.error('[AppActions] 阅读背题启动失败:', error);
+            console.error('[AppActions] operation failed:', summarizeAppActionsErrorForLog(error));
             if (typeof global.showMessage === 'function') {
                 global.showMessage('阅读背题启动失败，请稍后重试。', 'error');
             }

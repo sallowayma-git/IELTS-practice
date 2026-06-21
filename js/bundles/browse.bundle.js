@@ -6,6 +6,17 @@
 
     var domAdapter = global.DOMAdapter || null;
 
+    function summarizeLegacyViewErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        var status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function isLegacyUnsafeAttributeName(name) {
         var key = String(name || '').toLowerCase();
         return key.indexOf('on') === 0 || key === 'srcdoc';
@@ -2618,7 +2629,7 @@
             try {
                 scroller.destroy();
             } catch (error) {
-                console.warn('[PracticeHistoryRenderer] 销毁虚拟滚动器失败', error);
+                console.warn('[PracticeHistoryRenderer] operation failed', summarizeLegacyViewErrorForLog(error));
             }
         }
     };
@@ -2874,7 +2885,7 @@
                 var override = options.configureStartButton(exam, config) || {};
                 config = Object.assign({}, config, override);
             } catch (error) {
-                console.warn('[LegacyExamListView] 自定义开始按钮配置失败', error);
+                console.warn('[LegacyExamListView] callback failed', summarizeLegacyViewErrorForLog(error));
             }
         }
 
@@ -2899,7 +2910,7 @@
             try {
                 return !!options.canGenerate(exam);
             } catch (error) {
-                console.warn('[LegacyExamListView] canGenerate 回调执行失败', error);
+                console.warn('[LegacyExamListView] callback failed', summarizeLegacyViewErrorForLog(error));
                 return false;
             }
         }
@@ -5557,7 +5568,10 @@
                         const payload = await this.readJsonViaXHR(url);
                         this.lexiconCache = Array.isArray(payload) ? payload : [];
                     } catch (xhrError) {
-                        console.warn('[SpellingErrorCollector] 核心词库加载失败，使用错词占位释义:', xhrError.message || fetchError.message || xhrError);
+                        console.warn('[SpellingErrorCollector] Core lexicon load failed, using placeholder definitions:', {
+                            fetch: summarizeSpellingCollectorErrorForLog(fetchError),
+                            xhr: summarizeSpellingCollectorErrorForLog(xhrError)
+                        });
                         this.lexiconCache = [];
                     }
                 } finally {
@@ -11407,6 +11421,17 @@
 (function (global) {
     'use strict';
 
+    function summarizeBrowseControllerErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     // ============================================================================
     // 数据结构定义
     // ============================================================================
@@ -11796,7 +11821,7 @@
             try {
                 global.__browseFilterMode = this.currentMode;
             } catch (error) {
-                console.warn('[BrowseController] 保存模式失败:', error);
+                console.warn('[BrowseController] operation failed:', summarizeBrowseControllerErrorForLog(error));
             }
         }
 
@@ -11812,7 +11837,7 @@
                         : savedMode;
                 }
             } catch (error) {
-                console.warn('[BrowseController] 恢复模式失败:', error);
+                console.warn('[BrowseController] operation failed:', summarizeBrowseControllerErrorForLog(error));
             }
         }
 
@@ -11905,7 +11930,7 @@
                     global.clearPendingBrowseAutoScroll();
                     return;
                 } catch (error) {
-                    console.warn('[BrowseController] 清理自动滚动请求失败:', error);
+                    console.warn('[BrowseController] operation failed:', summarizeBrowseControllerErrorForLog(error));
                 }
             }
         }
@@ -12021,6 +12046,17 @@
  * PDF Handler Component
  * Handles PDF viewing, validation, and management for the IELTS practice system
  */
+function summarizePdfHandlerErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 class PDFHandler {
     constructor() {
         this.pdfViewerUrl = null;
@@ -12476,7 +12512,7 @@ class PDFHandler {
                     info.window.close();
                     closedCount++;
                 } catch (error) {
-                    console.warn('[PDFHandler] Could not close window:', error);
+                    console.warn('[PDFHandler] Could not close window:', summarizePdfHandlerErrorForLog(error));
                 }
             }
         }
@@ -12526,6 +12562,17 @@ const BROWSE_STATE_MAX_PAGE_SIZE = 200;
 const BROWSE_STATE_VIEW_MODES = new Set(['grid', 'list']);
 const BROWSE_STATE_SORT_FIELDS = new Set(['title', 'category', 'frequency', 'difficulty', 'date', 'score']);
 const BROWSE_STATE_SORT_ORDERS = new Set(['asc', 'desc']);
+
+function summarizeBrowseStateErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
 
 function createDefaultBrowseState() {
     return {
@@ -12872,7 +12919,7 @@ class BrowseStateManager {
             try {
                 callback(this.state);
             } catch (error) {
-                console.error('[BrowseStateManager] 订阅者回调错误:', error);
+                console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
             }
         });
     }
@@ -12893,7 +12940,7 @@ class BrowseStateManager {
             localStorage.setItem('browse_state', JSON.stringify(dataToSave));
             console.log('[BrowseStateManager] 状态已持久化');
         } catch (error) {
-            console.error('[BrowseStateManager] 持久化状态失败:', error);
+            console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
         }
     }
 
@@ -12925,7 +12972,7 @@ class BrowseStateManager {
                 console.log('[BrowseStateManager] 持久化状态已恢复');
             }
         } catch (error) {
-            console.error('[BrowseStateManager] 恢复持久化状态失败:', error);
+            console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
             this.resetToDefaults();
         }
     }
@@ -13217,7 +13264,7 @@ class BrowseStateManager {
                 throw new Error('无效的导入数据格式');
             }
         } catch (error) {
-            console.error('[BrowseStateManager] 导入浏览历史失败:', error);
+            console.error('[BrowseStateManager] operation failed:', summarizeBrowseStateErrorForLog(error));
             return false;
         }
     }
@@ -14465,6 +14512,17 @@ window.BrowseStateManager = BrowseStateManager;
     let browsePreferenceUiInitialized = false;
     let pendingBrowseScrollSnapshot = null;
 
+    function summarizeBrowsePreferencesErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     // --- Helper Functions ---
 
     function debounce(fn, wait) {
@@ -14715,7 +14773,7 @@ window.BrowseStateManager = BrowseStateManager;
                 lastFilter: normalizeBrowseLastFilter(source.lastFilter)
             };
         } catch (error) {
-            console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
+            console.warn('[BrowsePreferences] preference operation failed:', summarizeBrowsePreferencesErrorForLog(error));
             return getDefaultBrowsePreferences();
         }
     }
@@ -14744,7 +14802,7 @@ window.BrowseStateManager = BrowseStateManager;
             localStorage.setItem(BROWSE_VIEW_PREFERENCE_KEY, JSON.stringify(next));
             browsePreferencesCache = next;
         } catch (error) {
-            console.warn('[BrowsePreferences] 保存浏览偏好失败', error);
+            console.warn('[BrowsePreferences] preference operation failed:', summarizeBrowsePreferencesErrorForLog(error));
             browsePreferencesCache = next;
         }
         return browsePreferencesCache;
@@ -18742,7 +18800,7 @@ async function toggleBulkDelete() {
                 await bulkDeleteRecords(selected);
             } catch (error) {
                 console.error('[System] 批量删除失败:', summarizeMainErrorForLog(error));
-                showMessage('批量删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+                showMessage('Bulk delete failed. Please retry.', 'error');
             }
         }
     }
@@ -19492,7 +19550,7 @@ async function deleteLibraryConfig(configKey) {
         }
     } catch (error) {
         console.warn('[LibraryConfig] 删除题库配置失败', summarizeMainErrorForLog(error));
-        showMessage('题库配置删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+        showMessage('Library configuration delete failed. Please retry.', 'error');
     }
 }
 

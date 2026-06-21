@@ -9,13 +9,24 @@
     const FLAG_KEY = '__ielts_test_env__';
     const LOCATION_HINTS = ['test_env=1', 'suite_test=1', 'ci=1'];
 
+    const summarizeEnvironmentDetectorErrorForLog = (error) => {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    };
+
     const readStorageFlag = () => {
         try {
             if (global.localStorage) {
                 return global.localStorage.getItem(FLAG_KEY) === 'true';
             }
         } catch (error) {
-            console.warn('[EnvDetector] 无法读取测试标记:', error);
+            console.warn('[EnvDetector] storage operation failed:', summarizeEnvironmentDetectorErrorForLog(error));
         }
         return false;
     };
@@ -30,7 +41,7 @@
                 }
             }
         } catch (error) {
-            console.warn('[EnvDetector] 无法写入测试标记:', error);
+            console.warn('[EnvDetector] storage operation failed:', summarizeEnvironmentDetectorErrorForLog(error));
         }
     };
 
@@ -3703,6 +3714,17 @@ storageManager.ready
     const listeners = new Set();
     let providers = null;
 
+    function summarizeStorageRegistryErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizeProviders(input) {
         if (!input || typeof input !== 'object') {
             return null;
@@ -3725,7 +3747,7 @@ storageManager.ready
             try {
                 listener(payload);
             } catch (error) {
-                console.error('[StorageProviderRegistry] listener failed:', error);
+                console.error('[StorageProviderRegistry] callback failed:', summarizeStorageRegistryErrorForLog(error));
             }
         });
     }
@@ -3766,7 +3788,7 @@ storageManager.ready
             try {
                 callback(Object.assign({}, providers));
             } catch (error) {
-                console.error('[StorageProviderRegistry] immediate callback failed:', error);
+                console.error('[StorageProviderRegistry] callback failed:', summarizeStorageRegistryErrorForLog(error));
             }
         }
         return () => listeners.delete(callback);
@@ -6610,6 +6632,17 @@ storageManager.ready
 
     let fallbackIdCounter = 0;
 
+    function summarizePracticeCoreErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function randomIdSuffix() {
         const cryptoObj = global.crypto || global.msCrypto;
         if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
@@ -7795,7 +7828,7 @@ storageManager.ready
                 } catch (_) {}
                 return;
             } catch (error) {
-                console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
+                console.warn('[PracticeCore] sync failed:', summarizePracticeCoreErrorForLog(error));
             }
         }
         syncAppState(records);
@@ -11631,6 +11664,17 @@ if (typeof module !== 'undefined' && module.exports) {
     const runtimeResources = new Map();
     const runtimeObjectUrls = [];
 
+    function summarizeLibraryDiscoveryErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizePath(value) {
         return String(value || '')
             .replace(/\\/g, '/')
@@ -12007,7 +12051,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 }
                 return text;
             } catch (error) {
-                console.warn('[LibraryDiscovery] file.text failed:', error);
+                console.warn('[LibraryDiscovery] file.text failed:', summarizeLibraryDiscoveryErrorForLog(error));
             }
         }
         if (typeof file.content === 'string') {
@@ -12139,7 +12183,7 @@ if (typeof module !== 'undefined' && module.exports) {
             runtimeObjectUrls.push(url);
             return url;
         } catch (error) {
-            console.warn('[LibraryDiscovery] createObjectURL failed:', error);
+            console.warn('[LibraryDiscovery] createObjectURL failed:', summarizeLibraryDiscoveryErrorForLog(error));
             return '';
         }
     }
@@ -13052,7 +13096,7 @@ if (typeof module !== 'undefined' && module.exports) {
             } catch (error) {
                 console.error('[LibraryManager] 加载默认题库失败:', summarizeLibraryManagerErrorForLog(error));
                 if (typeof global.showMessage === 'function') {
-                    global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
+                    global.showMessage('Library refresh failed. Please retry.', 'error');
                 }
                 if (global.setExamIndexState) {
                     global.setExamIndexState([]);

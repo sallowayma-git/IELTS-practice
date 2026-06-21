@@ -1064,6 +1064,17 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 (function (global) {
     'use strict';
 
+    function summarizeNavigationControllerErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function ensureNavigation(options) {
         if (typeof global.ensureLegacyNavigationController !== 'function') {
             return null;
@@ -1087,7 +1098,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         try {
             return global.ensureLegacyNavigationController(mergedOptions);
         } catch (error) {
-            console.warn('[NavigationController] 初始化失败:', error);
+            console.warn('[NavigationController] initialization failed:', summarizeNavigationControllerErrorForLog(error));
             return null;
         }
     }
@@ -1755,6 +1766,17 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var licenseModalInitialized = false;
     var LICENSE_STORAGE_KEY = 'hasSeenGplLicense';
 
+    function summarizeIndexInteractionsErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function ensureBrowse() {
         if (browsePrefetched) {
             return browsePrefetchPromise || Promise.resolve();
@@ -1766,7 +1788,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         browsePrefetchPromise = loader().catch(function swallow(error) {
             browsePrefetched = false;
             browsePrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 browse-view 失败:', error);
+            console.warn('[IndexInteractions] prefetch failed:', summarizeIndexInteractionsErrorForLog(error));
         });
         return browsePrefetchPromise;
     }
@@ -1782,7 +1804,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         morePrefetchPromise = loader().catch(function swallow(error) {
             morePrefetched = false;
             morePrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 more-tools 失败:', error);
+            console.warn('[IndexInteractions] prefetch failed:', summarizeIndexInteractionsErrorForLog(error));
         });
         return morePrefetchPromise;
     }
@@ -1798,7 +1820,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         settingsPrefetchPromise = loader().catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 settings-tools 失败:', error);
+            console.warn('[IndexInteractions] prefetch failed:', summarizeIndexInteractionsErrorForLog(error));
         });
         return settingsPrefetchPromise;
     }
@@ -2428,7 +2450,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 global.localStorage.setItem(LICENSE_STORAGE_KEY, 'true');
             }
         } catch (error) {
-            console.warn('LocalStorage error:', error);
+            console.warn('[IndexInteractions] localStorage operation failed:', summarizeIndexInteractionsErrorForLog(error));
         }
         hideLicenseModal();
     }

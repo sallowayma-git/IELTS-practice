@@ -428,7 +428,7 @@
     try {
       manager = await _ensureFallbackDataIntegrityManagerAsync();
     } catch (error) {
-      window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+      window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
       return;
     }
 
@@ -451,7 +451,7 @@
       }, 1000);
     } catch (error) {
       console.error('[Fallback] 恢复备份失败:', summarizeBootFallbackErrorForLog(error));
-      window.showMessage && window.showMessage('备份恢复失败: ' + (error && error.message ? error.message : error), 'error');
+      window.showMessage && window.showMessage('Backup restore failed. Please retry.', 'error');
     }
   }
 
@@ -724,7 +724,7 @@
     try {
       validateFallbackJsonFile(inputFile);
     } catch (error) {
-      window.showMessage && window.showMessage(error.message || 'Import file is invalid.', 'error');
+      window.showMessage && window.showMessage('Import file is invalid.', 'error');
       return;
     }
     const reader = new FileReader();
@@ -747,7 +747,7 @@
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
         console.error('[importData] failed', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
+        window.showMessage && window.showMessage('Import failed. Please retry.', 'error');
       }
     };
     reader.readAsText(inputFile, 'utf-8');
@@ -760,7 +760,7 @@
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
         console.error('[Fallback] 数据导出模块加载失败:', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
         return;
       }
 
@@ -769,7 +769,7 @@
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
         console.error('[Fallback] 数据导出失败:', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
+        window.showMessage && window.showMessage('Data export failed. Please retry.', 'error');
       }
     };
   }
@@ -804,7 +804,7 @@
       try {
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
         return;
       }
       try {
@@ -821,10 +821,10 @@
             await manager.exportData();
             window.showMessage && window.showMessage('存储不足：已将数据导出为文件', 'warning');
           } catch (exportErr) {
-            window.showMessage && window.showMessage('备份失败且导出失败: ' + (exportErr && exportErr.message ? exportErr.message : exportErr), 'error');
+            window.showMessage && window.showMessage('Backup failed and export failed. Please retry.', 'error');
           }
         } else {
-          window.showMessage && window.showMessage('备份创建失败: ' + (error && error.message ? error.message : error), 'error');
+          window.showMessage && window.showMessage('Backup creation failed. Please retry.', 'error');
         }
       }
     };
@@ -836,7 +836,7 @@
       try {
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        window.showMessage && window.showMessage('Data management module is unavailable.', 'error');
         return;
       }
 
@@ -1457,7 +1457,7 @@
               rejected: 0,
               html: 0,
               audio: 0,
-              message: error && error.message ? error.message : '题库上传失败'
+              message: 'Library upload failed. Please retry.'
             }, overlay.querySelector('#library-loader-report'));
             input.value = '';
             return;
@@ -1725,10 +1725,10 @@
         discoveryResult = await _fallbackDiscoverLibraryEntries(files, type, label);
       } catch (error) {
         console.error('[Fallback] 题库内容识别失败:', summarizeBootFallbackErrorForLog(error));
-        window.showMessage && window.showMessage('题库识别失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+        window.showMessage && window.showMessage('Library discovery failed. Please retry.', 'error');
         return _fallbackBuildUploadReport(null, {
           status: 'error',
-          message: error && error.message ? error.message : '题库识别失败'
+          message: 'Library discovery failed. Please retry.'
         });
       }
 
@@ -1925,6 +1925,17 @@
 (function () {
   'use strict';
 
+  function summarizeRuntimeFixErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+      return { name: typeof error };
+    }
+    var status = Number(error.status);
+    return {
+      name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+      status: Number.isFinite(status) ? status : undefined
+    };
+  }
+
   function ensureCompatPatch(global) {
     if (!global || (global.CompatPatch && typeof global.CompatPatch.register === 'function')) {
       return global && global.CompatPatch ? global.CompatPatch : null;
@@ -2003,7 +2014,7 @@
               recoveredCount++;
               console.log('[PracticeRecorder] 恢复记录成功');
             } catch (e) {
-              console.error('[PracticeRecorder] 恢复记录失败:', e);
+              console.error('[PracticeRecorder] recovery failed:', summarizeRuntimeFixErrorForLog(e));
               failed.push(tempRecord);
             }
           }
@@ -2016,7 +2027,7 @@
             console.log(`[PracticeRecorder] 恢复了 ${recoveredCount} 条记录，${failed.length} 条失败`);
           }
         } catch (error) {
-          console.error('[PracticeRecorder] 恢复临时记录时出错:', error);
+          console.error('[PracticeRecorder] recovery failed:', summarizeRuntimeFixErrorForLog(error));
         }
       };
 
@@ -3430,6 +3441,17 @@ window.addEventListener('beforeunload', () => {
 (function (global) {
   'use strict';
 
+  function summarizeOnboardingErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+      return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+      name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+      status: Number.isFinite(status) ? status : undefined
+    };
+  }
+
   // 存储键名
   const STORAGE_KEYS = {
     COMPLETED: 'onboardingCompleted',
@@ -4367,7 +4389,7 @@ window.addEventListener('beforeunload', () => {
             window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding' } }));
           }
         }).catch(err => {
-          console.error('[Onboarding] 注入示例记录失败:', err);
+          console.error('[Onboarding] demo record operation failed:', summarizeOnboardingErrorForLog(err));
         });
       } else {
         console.warn('[Onboarding] window.dataRepositories.practice 不可用，无法注入示例记录');
@@ -4386,7 +4408,7 @@ window.addEventListener('beforeunload', () => {
             window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding-cleanup' } }));
           }
         }).catch(err => {
-          console.warn('[Onboarding] 清理示例记录失败:', err);
+          console.warn('[Onboarding] demo record operation failed:', summarizeOnboardingErrorForLog(err));
         });
       }
     }

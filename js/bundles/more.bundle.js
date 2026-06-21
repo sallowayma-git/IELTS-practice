@@ -50,6 +50,17 @@
 
     const DEFAULT_EXPORT_VERSION = '1.0.0';
 
+    function summarizeVocabDataIoErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function normalizeTextField(value, maxLength) {
         if (typeof value !== 'string') {
             return '';
@@ -561,7 +572,7 @@
                 result = parseJson(text);
             }
         } catch (error) {
-            console.warn('[VocabDataIO] 词表解析失败:', error);
+            console.warn('[VocabDataIO] parse failed:', summarizeVocabDataIoErrorForLog(error));
             throw error;
         }
         const normalizedResult = Array.isArray(result)
@@ -2185,6 +2196,17 @@
         return SAFE_TOAST_TYPES.has(value) ? value : 'info';
     }
 
+    function summarizeVocabListSwitcherErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     class VocabListSwitcher {
         constructor(vocabStore) {
             if (!vocabStore) {
@@ -2570,7 +2592,7 @@
                 console.log('[VocabListSwitcher] 切换词表成功');
 
             } catch (error) {
-                console.error('[VocabListSwitcher] 切换词表失败:', error);
+                console.error('[VocabListSwitcher] operation failed:', summarizeVocabListSwitcherErrorForLog(error));
 
                 // 回退到上一个词表
                 await this.rollbackToPreviousList();
@@ -2623,7 +2645,7 @@
                     this.refreshListOptions();
                 }
             } catch (error) {
-                console.error('[VocabListSwitcher] 回退失败:', error);
+                console.error('[VocabListSwitcher] operation failed:', summarizeVocabListSwitcherErrorForLog(error));
             }
         }
 
@@ -2662,7 +2684,7 @@
                     const count = await this.vocabStore.getListWordCount(listId);
                     return { listId, count };
                 } catch (error) {
-                    console.error('[VocabListSwitcher] 获取词表计数失败', error);
+                    console.error('[VocabListSwitcher] operation failed:', summarizeVocabListSwitcherErrorForLog(error));
                     return { listId, count: 0 };
                 }
             });
@@ -6083,6 +6105,17 @@
     var vocabSparkInputBound = false;
     var vocabSparkDeck = [];
 
+    function summarizeMiniGamesErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function shuffleArray(list) {
         var array = Array.isArray(list) ? list.slice() : [];
         for (var i = array.length - 1; i > 0; i -= 1) {
@@ -6177,7 +6210,7 @@
                 resetVocabSparkDeck();
                 return vocabSparkLexicon.slice();
             } catch (error) {
-                console.warn('[VocabSpark] 词汇表加载失败，使用内置词库:', error);
+                console.warn('[VocabSpark] lexicon load failed:', summarizeMiniGamesErrorForLog(error));
                 vocabSparkLexicon = DEFAULT_VOCAB_SPARK_WORDS.map(normalizeVocabEntry).filter(Boolean);
                 if (!vocabSparkLexicon.length) {
                     throw error;
@@ -6310,7 +6343,7 @@
 
             renderVocabSparkQuestion(true);
         } catch (error) {
-            console.error('[VocabSpark] 初始化失败:', error);
+            console.error('[VocabSpark] initialization failed:', summarizeMiniGamesErrorForLog(error));
             if (typeof global.showMessage === 'function') {
                 global.showMessage('词汇挑战初始化失败，请稍后重试', 'error');
             }
@@ -6584,6 +6617,17 @@
     const MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200;
     const UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+    function summarizeAchievementErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function isPlainRecord(value) {
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
             return false;
@@ -6611,7 +6655,7 @@
                 console.log('[AchievementManager] Initialized. Unlocked:', Object.keys(this.unlocked).length);
                 this.initialized = true;
             } catch (e) {
-                console.error('[AchievementManager] Init failed', e);
+                console.error('[AchievementManager] init failed', summarizeAchievementErrorForLog(e));
                 this.unlocked = {};
             }
         }
@@ -7237,7 +7281,7 @@
                         newUnlocks.push(achievement);
                     }
                 } catch (err) {
-                    console.error(`[AchievementManager] Error checking ${achievement.id}`, err);
+                    console.error('[AchievementManager] achievement check failed', summarizeAchievementErrorForLog(err));
                 }
             }
 
@@ -7360,7 +7404,7 @@
             try {
                 await window.AchievementManager.init();
             } catch (err) {
-                console.warn('[AchievementManager] Init failed before showing modal', err);
+                console.warn('[AchievementManager] init failed before showing modal', summarizeAchievementErrorForLog(err));
             }
         }
 

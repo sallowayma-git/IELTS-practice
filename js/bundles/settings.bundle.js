@@ -1282,7 +1282,9 @@ class DataBackupManager {
         try {
             payload = await this.parseImportSource(source, { allowFetch: Boolean(allowFetch) });
         } catch (error) {
-            throw new Error(`Failed to read import source: ${error.message}`);
+            const importError = new Error('Failed to read import source.');
+            importError.cause = summarizeDataBackupErrorForLog(error);
+            throw importError;
         }
 
         const normalized = this.normalizeImportPayload(payload, { preserveIds });
