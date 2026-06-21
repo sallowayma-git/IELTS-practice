@@ -12,7 +12,11 @@ const {
     validatePasswordStrength,
     verifyCsrfToken
 } = require('./auth');
-const { hasSessionTotpVerification, markSessionTotpVerified } = require('./totp');
+const {
+    hasSessionTotpVerification,
+    markSessionTotpVerified,
+    resolveTotpVerificationMaxAgeMs
+} = require('./totp');
 
 const ADMIN_SEARCH_QUERY_MAX_LENGTH = 80;
 
@@ -174,6 +178,22 @@ function adminMutationError(message) {
     const error = new Error(message);
     error.status = 400;
     return error;
+}
+
+function summarizeAdminErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const summary = {
+        name: typeof error.name === 'string' && error.name ? error.name : 'Error'
+    };
+    if (error.code !== undefined) {
+        summary.code = String(error.code);
+    }
+    if (error.status !== undefined || error.statusCode !== undefined) {
+        summary.status = Number(error.status || error.statusCode);
+    }
+    return summary;
 }
 
 function serializeUser(row) {
@@ -1358,6 +1378,9 @@ function createAdminRouter(options = {}) {
     const router = express.Router();
     const store = options.store || new PostgresAdminStore(options.db);
     const requireAdminTotp = options.requireAdminTotp || ((req, res, next) => next());
+    const totpVerificationMaxAgeMs = resolveTotpVerificationMaxAgeMs({
+        verificationMaxAgeMs: options.totpVerificationMaxAgeMs
+    });
 
     router.use(requireAuth);
     router.use(async (req, res, next) => {
@@ -1482,7 +1505,7 @@ function createAdminRouter(options = {}) {
                 await store.deleteSessionsForUser(userId, req.sessionID);
             }
             if (current.id === req.session.user.id && parsed.data.password !== undefined) {
-                const preserveTotpVerification = hasSessionTotpVerification(req, req.session.user);
+                const preserveTotpVerification = hasSessionTotpVerification(req, req.session.user, totpVerificationMaxAgeMs);
                 await regenerateSession(req);
                 req.session.user = publicUser(user);
                 if (preserveTotpVerification) {
@@ -1618,7 +1641,7 @@ function createTrafficMiddleware(options = {}) {
                 referrer: req.get('referer') || ''
             });
             Promise.resolve(store.recordTraffic(event)).catch((error) => {
-                console.error('[backend] traffic record failed:', error);
+                console.error('[backend] traffic record failed:', summarizeAdminErrorForLog(error));
             });
         });
         return next();

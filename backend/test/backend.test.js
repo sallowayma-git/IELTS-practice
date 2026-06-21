@@ -134,6 +134,7 @@ async function createClient(options = {}) {
         totpRateLimit: options.totpRateLimit,
         totpEnabled: options.totpEnabled,
         totpEncryptionKey: options.totpEncryptionKey || 'test-totp-key',
+        totpVerificationMaxAgeMs: options.totpVerificationMaxAgeMs,
         totpRecoveryHashRounds: 4
     });
     const server = await new Promise((resolve, reject) => {
@@ -1916,6 +1917,48 @@ test('admin routes require TOTP verification in the current session', async () =
     }
 });
 
+test('admin TOTP verification expires and can be renewed in-session', async () => {
+    const client = await createClient({ totpVerificationMaxAgeMs: 1000 });
+    try {
+        await seedAdmin(client, 'expiring_admin', 'StrongPass1');
+        await client.csrf();
+        const passwordLogin = await client.request('POST', '/api/auth/login', {
+            username: 'expiring_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordLogin.response.status, 200);
+        assert.equal(passwordLogin.json.requiresTotpSetup, true);
+
+        const { secret } = await enableTotpForCurrentSession(client);
+        const initialSummary = await client.request('GET', '/api/admin/summary');
+        assert.equal(initialSummary.response.status, 200);
+        const initialAdminPage = await client.request('GET', '/admin');
+        assert.equal(initialAdminPage.response.status, 200);
+
+        const expiredSummary = await withDateNowOffset(2000, () => client.request('GET', '/api/admin/summary'));
+        assert.equal(expiredSummary.response.status, 403);
+        assert.equal(expiredSummary.json.error, 'Admin TOTP verification required');
+        const expiredAdminPage = await withDateNowOffset(2000, () => client.request('GET', '/admin'));
+        assert.equal(expiredAdminPage.response.status, 403);
+        assert.match(expiredAdminPage.text, /Admin TOTP verification required/);
+
+        await withDateNowOffset(31_000, async () => {
+            const renewed = await client.request('POST', '/api/auth/totp/verify', {
+                token: generateTotpToken(secret)
+            });
+            assert.equal(renewed.response.status, 200);
+            assert.equal(renewed.json.status.enabled, true);
+
+            const renewedSummary = await client.request('GET', '/api/admin/summary');
+            assert.equal(renewedSummary.response.status, 200);
+            const renewedAdminPage = await client.request('GET', '/admin');
+            assert.equal(renewedAdminPage.response.status, 200);
+        });
+    } finally {
+        await client.close();
+    }
+});
+
 test('admin can manage users and inspect learning and traffic stats', async () => {
     const client = await createClient();
     try {
@@ -2756,6 +2799,40 @@ test('static hosting serves index and denies dotfiles with security headers', as
         const encodedSlashCiFixture = await client.request('GET', '/templates/%63i-practice-fixtures%2Fdebug.html');
         assert.equal(encodedSlashCiFixture.response.status, 404);
         assert.doesNotMatch(encodedSlashCiFixture.text, /debugPracticeEnhancer/);
+    } finally {
+        await client.close();
+        fs.rmSync(staticRoot, { recursive: true, force: true });
+        fs.rmSync(outsideSecretPath, { force: true });
+    }
+});
+
+test('static boundary rechecks optional roots created after an initial miss', async (t) => {
+    const staticRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ielts-late-static-'));
+    const outsideSecretPath = path.join(os.tmpdir(), `ielts-late-secret-${path.basename(staticRoot)}.txt`);
+    fs.writeFileSync(path.join(staticRoot, 'index.html'), '<!doctype html><title>Late Static</title>', 'utf8');
+    fs.writeFileSync(outsideSecretPath, 'late outside secret\n', 'utf8');
+
+    const client = await createClient({ staticRoot });
+    try {
+        const beforeRootExists = await client.request('GET', '/ListeningPractice/linked-secret.txt');
+        assert.notEqual(beforeRootExists.response.status, 200);
+        assert.doesNotMatch(beforeRootExists.text, /late outside secret/);
+
+        const listeningRoot = path.join(staticRoot, 'ListeningPractice');
+        fs.mkdirSync(listeningRoot, { recursive: true });
+        let symlinkCreated = false;
+        try {
+            fs.symlinkSync(outsideSecretPath, path.join(listeningRoot, 'linked-secret.txt'));
+            symlinkCreated = true;
+        } catch (error) {
+            t.diagnostic(`skipping late symlink boundary assertion: ${error.message}`);
+        }
+
+        if (symlinkCreated) {
+            const linkedSecret = await client.request('GET', '/ListeningPractice/linked-secret.txt');
+            assert.equal(linkedSecret.response.status, 403);
+            assert.doesNotMatch(linkedSecret.text, /late outside secret/);
+        }
     } finally {
         await client.close();
         fs.rmSync(staticRoot, { recursive: true, force: true });

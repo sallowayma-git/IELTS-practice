@@ -32,6 +32,22 @@ function assert(condition, message) {
     }
 }
 
+function summarizeSmokeError(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const summary = {
+        name: typeof error.name === 'string' && error.name ? error.name : 'Error'
+    };
+    if (error.code !== undefined) {
+        summary.code = String(error.code);
+    }
+    if (error.status !== undefined || error.statusCode !== undefined) {
+        summary.status = Number(error.status || error.statusCode);
+    }
+    return summary;
+}
+
 async function applyMigration() {
     await runMigrations(db, {
         migrationsDir: path.join(backendRoot, 'migrations')
@@ -163,7 +179,7 @@ runSmoke().catch(async (error) => {
     }
     console.error(JSON.stringify({
         status: 'fail',
-        detail: error.message
+        detail: summarizeSmokeError(error)
     }, null, 2));
     process.exit(1);
 });

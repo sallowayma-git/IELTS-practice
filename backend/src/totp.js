@@ -15,6 +15,7 @@ const DEFAULT_ISSUER = 'IELTS Atlas';
 const RECOVERY_CODE_COUNT = 10;
 const RECOVERY_CODE_BYTES = 8;
 const DEFAULT_PENDING_TOTP_MAX_AGE_MS = 10 * 60 * 1000;
+const DEFAULT_TOTP_VERIFICATION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_SESSION_SECRET = 'development-session-secret-change-me';
 const PLACEHOLDER_SESSION_SECRET = 'replace-with-a-long-random-session-secret';
 const TOTP_SESSION_MARKER_KEY = 'totpVerified';
@@ -31,6 +32,14 @@ const disableSchema = z.object({
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
     return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+function parsePositiveInteger(value, fallback) {
+    if (value === undefined || value === null || value === '') {
+        return fallback;
+    }
+    const number = Number(value);
+    return Number.isSafeInteger(number) && number > 0 ? number : fallback;
 }
 
 function resolveEncryptionKeySource(options = {}) {
@@ -61,8 +70,16 @@ function getTotpConfig(options = {}) {
         epochTolerance: options.epochTolerance ?? 30,
         recoveryCodeCount: options.recoveryCodeCount || RECOVERY_CODE_COUNT,
         recoveryHashRounds: options.recoveryHashRounds || 10,
-        pendingMaxAgeMs: options.pendingMaxAgeMs || DEFAULT_PENDING_TOTP_MAX_AGE_MS
+        pendingMaxAgeMs: options.pendingMaxAgeMs || DEFAULT_PENDING_TOTP_MAX_AGE_MS,
+        verificationMaxAgeMs: resolveTotpVerificationMaxAgeMs(options)
     };
+}
+
+function resolveTotpVerificationMaxAgeMs(options = {}) {
+    return parsePositiveInteger(
+        options.verificationMaxAgeMs || process.env.TOTP_VERIFICATION_MAX_AGE_MS,
+        DEFAULT_TOTP_VERIFICATION_MAX_AGE_MS
+    );
 }
 
 function encryptionKey(source) {
@@ -435,19 +452,23 @@ function markSessionTotpVerified(req, user) {
     };
 }
 
-function hasSessionTotpVerification(req, user) {
+function hasSessionTotpVerification(req, user, maxAgeMs = DEFAULT_TOTP_VERIFICATION_MAX_AGE_MS) {
     const safeUser = publicUser(user);
     const marker = req.session && req.session[TOTP_SESSION_MARKER_KEY];
     const verifiedAt = Number(marker?.verifiedAt);
+    const markerAge = Date.now() - verifiedAt;
     return Boolean(
         safeUser?.id
         && marker?.userId === safeUser.id
         && Number.isFinite(verifiedAt)
         && verifiedAt > 0
+        && markerAge >= 0
+        && markerAge <= maxAgeMs
     );
 }
 
-function createRequireAdminTotp(store) {
+function createRequireAdminTotp(store, options = {}) {
+    const verificationMaxAgeMs = resolveTotpVerificationMaxAgeMs(options);
     return async function requireAdminTotp(req, res, next) {
         try {
             if (!req.session?.user || publicUser(req.session.user).role !== 'admin') {
@@ -457,7 +478,7 @@ function createRequireAdminTotp(store) {
             if (!status.enabled) {
                 return res.status(403).json({ error: 'Admin TOTP setup required' });
             }
-            if (!hasSessionTotpVerification(req, req.session.user)) {
+            if (!hasSessionTotpVerification(req, req.session.user, verificationMaxAgeMs)) {
                 return res.status(403).json({ error: 'Admin TOTP verification required' });
             }
             return next();
@@ -648,6 +669,30 @@ function createTotpRouter(options = {}) {
         }
     });
 
+    router.post('/verify', requireAuth, verifyCsrfToken, async (req, res, next) => {
+        try {
+            assertEnabled();
+            const user = publicUser(req.session.user);
+            const status = await store.getStatus(user.id);
+            if (!status.enabled) {
+                return res.status(400).json({ error: 'TOTP is not enabled' });
+            }
+            checkRateLimit(`totp-verify:${req.ip}:${user.id}`);
+            const parsed = tokenSchema.safeParse(req.body || {});
+            if (!parsed.success || !(await verifyStoredToken(user.id, parsed.data.token))) {
+                return res.status(401).json({ error: 'TOTP code is invalid' });
+            }
+            markSessionTotpVerified(req, user);
+            return res.json({
+                user,
+                status: await store.getStatus(user.id),
+                csrfToken: ensureCsrfToken(req)
+            });
+        } catch (error) {
+            return next(error);
+        }
+    });
+
     router.post('/recovery-codes', requireAuth, verifyCsrfToken, async (req, res, next) => {
         try {
             assertEnabled();
@@ -729,6 +774,7 @@ module.exports = {
     markSessionTotpVerified,
     normalizeRecoveryCode,
     normalizeToken,
+    resolveTotpVerificationMaxAgeMs,
     serializeStatus,
     verifyTotpToken,
     verifyTotpTokenWithReplayWindow

@@ -9,7 +9,13 @@ const db = require('./db');
 const { PostgresAuthStore, createAuthRouter, publicUser, requireAdmin } = require('./auth');
 const { PostgresAdminStore, createAdminRouter, createTrafficMiddleware } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
-const { PostgresTotpStore, createRequireAdminTotp, createTotpRouter, hasSessionTotpVerification } = require('./totp');
+const {
+    PostgresTotpStore,
+    createRequireAdminTotp,
+    createTotpRouter,
+    hasSessionTotpVerification,
+    resolveTotpVerificationMaxAgeMs
+} = require('./totp');
 
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
@@ -82,6 +88,22 @@ function noStoreSensitiveApiMiddleware(req, res, next) {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     next();
+}
+
+function summarizeErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const summary = {
+        name: typeof error.name === 'string' && error.name ? error.name : 'Error'
+    };
+    if (error.code !== undefined) {
+        summary.code = String(error.code);
+    }
+    if (error.status !== undefined || error.statusCode !== undefined) {
+        summary.status = Number(error.status || error.statusCode);
+    }
+    return summary;
 }
 
 function isPathInside(parent, child) {
@@ -178,8 +200,10 @@ function createStaticBoundaryMiddleware(root, options = {}) {
         if (!rootRealpathPromise) {
             rootRealpathPromise = fs.promises.realpath(rootPath).catch((error) => {
                 if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+                    rootRealpathPromise = null;
                     return null;
                 }
+                rootRealpathPromise = null;
                 throw error;
             });
         }
@@ -259,6 +283,9 @@ function createApp(options = {}) {
     const totpEnabled = options.totpEnabled !== undefined
         ? Boolean(options.totpEnabled)
         : parseBoolean(process.env.TOTP_ENABLED, true);
+    const totpVerificationMaxAgeMs = resolveTotpVerificationMaxAgeMs({
+        verificationMaxAgeMs: options.totpVerificationMaxAgeMs
+    });
     const sessionCookieOptions = {
         httpOnly: true,
         sameSite: 'lax',
@@ -295,7 +322,11 @@ function createApp(options = {}) {
     const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
     const trafficStore = options.trafficStore || adminStore;
     const requireAdminTotp = options.requireAdminTotp || (
-        totpEnabled ? createRequireAdminTotp(totpStore) : ((req, res, next) => next())
+        totpEnabled
+            ? createRequireAdminTotp(totpStore, {
+                verificationMaxAgeMs: totpVerificationMaxAgeMs
+            })
+            : ((req, res, next) => next())
     );
     const trafficEnabled = options.trafficEnabled !== undefined
         ? Boolean(options.trafficEnabled)
@@ -375,6 +406,7 @@ function createApp(options = {}) {
         enabled: totpEnabled,
         issuer: options.totpIssuer,
         encryptionKey: options.totpEncryptionKey,
+        verificationMaxAgeMs: totpVerificationMaxAgeMs,
         nodeEnv: options.nodeEnv,
         recoveryHashRounds: options.totpRecoveryHashRounds
     }));
@@ -383,7 +415,8 @@ function createApp(options = {}) {
     }));
     app.use('/api/admin', createAdminRouter({
         store: adminStore,
-        requireAdminTotp
+        requireAdminTotp,
+        totpVerificationMaxAgeMs
     }));
 
     app.use('/api', (req, res) => {
@@ -404,7 +437,7 @@ function createApp(options = {}) {
                 if (!totpStatus.enabled) {
                     return res.status(403).type('text/plain').send('Admin TOTP setup required');
                 }
-                if (!hasSessionTotpVerification(req, req.session.user)) {
+                if (!hasSessionTotpVerification(req, req.session.user, totpVerificationMaxAgeMs)) {
                     return res.status(403).type('text/plain').send('Admin TOTP verification required');
                 }
             }
@@ -443,7 +476,7 @@ function createApp(options = {}) {
         const isZodError = error && (error.name === 'ZodError' || Array.isArray(error.issues));
         const status = isZodError ? 400 : (error.status || error.statusCode || 500);
         if (status >= 500) {
-            console.error('[backend] request failed:', error);
+            console.error('[backend] request failed:', summarizeErrorForLog(error));
         }
         const payload = {
             error: status >= 500 ? 'Internal server error' : (error.message || 'Request failed')
