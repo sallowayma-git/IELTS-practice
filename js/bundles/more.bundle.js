@@ -1047,6 +1047,17 @@
     const MAX_EXTRA_ARRAY_ITEMS = 100;
     const EXTRA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+    function summarizeVocabStoreErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     const state = {
         repositories: null,
         metaRepo: null,
@@ -1075,7 +1086,7 @@
             try {
                 resolve(value);
             } catch (error) {
-                console.error('[VocabStore] ready resolve failed:', error);
+                console.error('[VocabStore] ready resolve failed:', summarizeVocabStoreErrorForLog(error));
             }
         }
     }
@@ -1347,7 +1358,7 @@
                 return true;
             }
         } catch (error) {
-            console.error('[VocabStore] persist error:', error);
+            console.error('[VocabStore] persist error:', summarizeVocabStoreErrorForLog(error));
         }
         return false;
     }
@@ -1360,7 +1371,7 @@
                     return value;
                 }
             } catch (error) {
-                console.warn('[VocabStore] metaRepo读取失败:', error);
+                console.warn('[VocabStore] metaRepo读取失败:', summarizeVocabStoreErrorForLog(error));
             }
         }
         if (state.storageManager && typeof state.storageManager.get === 'function') {
@@ -1370,7 +1381,7 @@
                     return value;
                 }
             } catch (error) {
-                console.warn('[VocabStore] storageManager读取失败:', error);
+                console.warn('[VocabStore] storageManager读取失败:', summarizeVocabStoreErrorForLog(error));
             }
         }
         if (typeof localStorage !== 'undefined') {
@@ -1381,7 +1392,7 @@
                 }
                 return JSON.parse(raw);
             } catch (error) {
-                console.warn('[VocabStore] localStorage解析失败:', error);
+                console.warn('[VocabStore] localStorage解析失败:', summarizeVocabStoreErrorForLog(error));
             }
         }
         return defaultValue;
@@ -1589,7 +1600,7 @@
                 : [];
         })()
             .catch((error) => {
-                console.error('[VocabStore] 初始化加载失败:', error);
+                console.error('[VocabStore] 初始化加载失败:', summarizeVocabStoreErrorForLog(error));
             })
             .finally(() => {
                 state.loadingPromise = null;
@@ -1640,7 +1651,7 @@
             });
             return normalized;
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
+            console.warn('[VocabStore] 默认词库加载失败:', summarizeVocabStoreErrorForLog(error));
             return [];
         }
     }
@@ -1929,7 +1940,7 @@
             console.log(`[VocabStore] 加载词表成功，单词数: ${normalizedWords.length}`);
             return listData;
         } catch (error) {
-            console.error('[VocabStore] loadList 失败:', error);
+            console.error('[VocabStore] loadList 失败:', summarizeVocabStoreErrorForLog(error));
             return null;
         }
     }
@@ -1977,7 +1988,7 @@
 
             return true;
         } catch (error) {
-            console.error('[VocabStore] setActiveList 失败:', error);
+            console.error('[VocabStore] setActiveList 失败:', summarizeVocabStoreErrorForLog(error));
             return false;
         }
     }
@@ -2013,7 +2024,7 @@
 
             return 0;
         } catch (error) {
-            console.error('[VocabStore] getListWordCount 失败:', error);
+            console.error('[VocabStore] getListWordCount 失败:', summarizeVocabStoreErrorForLog(error));
             return 0;
         }
     }

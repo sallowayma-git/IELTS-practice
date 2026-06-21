@@ -2450,6 +2450,17 @@ const MAX_MODAL_ANSWER_TEXT_LENGTH = 200;
 const MAX_MODAL_QUESTION_LABEL_LENGTH = 80;
 const MAX_MODAL_JSON_TEXT_LENGTH = 1000;
 const MAX_MODAL_ANSWER_DEPTH = 6;
+function summarizePracticeRecordModalErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 
 class PracticeRecordModal {
     constructor() {
@@ -2494,7 +2505,7 @@ class PracticeRecordModal {
                 }
             }, 10);
         } catch (error) {
-            console.error('[PracticeRecordModal] \u663e\u793a\u5931\u8d25:', error);
+            console.error('[PracticeRecordModal] \u663e\u793a\u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
             if (typeof window.showMessage === 'function') {
                 window.showMessage('\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55', 'error');
             }
@@ -2583,9 +2594,9 @@ class PracticeRecordModal {
                 try {
                     await window.app.openPracticeRecordReplay(replayRecord);
                 } catch (error) {
-                    console.error('[PracticeRecordModal] 启动回放失败:', error);
+                    console.error('[PracticeRecordModal] 启动回放失败:', summarizePracticeRecordModalErrorForLog(error));
                     if (typeof window.showMessage === 'function') {
-                        window.showMessage(`无法回放该记录：${error.message || '未知错误'}`, 'error');
+                        window.showMessage('Unable to replay this record.', 'error');
                     }
                 }
             };
@@ -2776,7 +2787,7 @@ class PracticeRecordModal {
                 return parsed.toLocaleString();
             }
         } catch (error) {
-            console.warn('[PracticeRecordModal] \u65e5\u671f\u683c\u5f0f\u5316\u5931\u8d25:', error);
+            console.warn('[PracticeRecordModal] \u65e5\u671f\u683c\u5f0f\u5316\u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
         }
         return '\u672a\u77e5';
     }
@@ -3679,9 +3690,9 @@ class PracticeRecordModal {
                 window.showMessage('\u7ec3\u4e60\u8bb0\u5f55\u5df2\u5bfc\u51fa', 'success');
             }
         } catch (error) {
-            console.error('[PracticeRecordModal] \u5bfc\u51fa\u5931\u8d25:', error);
+            console.error('[PracticeRecordModal] \u5bfc\u51fa\u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
             if (typeof window.showMessage === 'function') {
-                window.showMessage(`\u5bfc\u51fa\u5931\u8d25\uff1a${error.message}`, 'error');
+                window.showMessage('Unable to show this practice record.', 'error');
             }
         }
     }
@@ -3705,9 +3716,9 @@ if (!window.practiceRecordModal.showById) {
 
             this.show(record);
         } catch (error) {
-            console.error('[PracticeRecordModal] showById \u5931\u8d25:', error);
+            console.error('[PracticeRecordModal] showById \u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
             if (typeof window.showMessage === 'function') {
-                window.showMessage(`\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55\uff1a${error.message}`, 'error');
+                window.showMessage('Unable to show this practice record.', 'error');
             }
         }
     };
@@ -3727,6 +3738,17 @@ const MAX_JSON_EXPORT_STRING_LENGTH = 20000;
 const MAX_JSON_EXPORT_DEPTH = 8;
 const MAX_JSON_EXPORT_NODES = 50000;
 const JSON_EXPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+function summarizePracticeHistoryErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 
 class PracticeHistoryEnhancer {
     constructor() {
@@ -3873,12 +3895,12 @@ class PracticeHistoryEnhancer {
                 this.enhancePracticeHistory();
                 console.log('[PracticeHistoryEnhancer] 练习历史增强功能已初始化');
             }).catch(error => {
-                console.error('[PracticeHistoryEnhancer] 初始化失败:', error);
+                console.error('[PracticeHistoryEnhancer] 初始化失败:', summarizePracticeHistoryErrorForLog(error));
                 // 提供降级功能
                 this.initializeFallback();
             });
         } catch (error) {
-            console.error('[PracticeHistoryEnhancer] 初始化过程出错:', error);
+            console.error('[PracticeHistoryEnhancer] 初始化过程出错:', summarizePracticeHistoryErrorForLog(error));
             this.initializeFallback();
         }
     }
@@ -4008,7 +4030,7 @@ class PracticeHistoryEnhancer {
                 console.log('[PracticeHistoryEnhancer] 全局函数已增强');
             }
         } catch (error) {
-            console.error('[PracticeHistoryEnhancer] 增强过程出错:', error);
+            console.error('[PracticeHistoryEnhancer] 增强过程出错:', summarizePracticeHistoryErrorForLog(error));
             // 确保基本功能可用
             if (!window.showRecordDetails) {
                 window.showRecordDetails = (recordId) => {
@@ -4104,8 +4126,8 @@ class PracticeHistoryEnhancer {
             document.getElementById('export-dialog')?.remove();
 
         } catch (error) {
-            console.error('导出失败:', error);
-            window.showMessage('导出失败: ' + error.message, 'error');
+            console.error('导出失败:', summarizePracticeHistoryErrorForLog(error));
+            window.showMessage('Unable to show this practice record.', 'error');
         }
     }
 
@@ -4185,7 +4207,7 @@ class PracticeHistoryEnhancer {
             }
 
         } catch (error) {
-            console.error('JSON导出失败:', error);
+            console.error('JSON导出失败:', summarizePracticeHistoryErrorForLog(error));
             throw error;
         }
     }
@@ -4209,7 +4231,7 @@ class PracticeHistoryEnhancer {
                 const hit = records.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
                 if (hit) return hit;
             } catch (err) {
-                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecorder 获取记录失败，继续降级:', err);
+                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecorder 获取记录失败，继续降级:', summarizePracticeHistoryErrorForLog(err));
             }
         }
 
@@ -4242,9 +4264,9 @@ class PracticeHistoryEnhancer {
             }
 
         } catch (error) {
-            console.error('显示记录详情失败:', error);
+            console.error('显示记录详情失败:', summarizePracticeHistoryErrorForLog(error));
             if (window.showMessage) {
-                window.showMessage('无法显示记录详情: ' + error.message, 'error');
+                window.showMessage('Unable to show this practice record.', 'error');
             } else {
                 alert('无法显示记录详情: ' + error.message);
             }

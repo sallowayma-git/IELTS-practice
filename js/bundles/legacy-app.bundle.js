@@ -49,6 +49,17 @@
     'text/plain': true
   };
 
+    function summarizeBootFallbackErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
   function escapeFallbackCssSelectorValue(value) {
     if (window.CSS && typeof window.CSS.escape === 'function') {
       try {
@@ -171,7 +182,7 @@
             syncOnNavigate: false
           });
         } catch (err) {
-          console.warn('[Fallback] 初始化导航控制器失败:', err);
+          console.warn('[Fallback] 初始化导航控制器失败:', summarizeBootFallbackErrorForLog(err));
         }
       }
 
@@ -240,7 +251,7 @@
       }
     }
   } catch (error) {
-    console.warn('[Fallback] 注册导航事件失败:', error);
+    console.warn('[Fallback] 注册导航事件失败:', summarizeBootFallbackErrorForLog(error));
   }
 
   var _fallbackBackupDelegatesConfigured = false;
@@ -255,7 +266,7 @@
       try {
         window.dataIntegrityManager = new window.DataIntegrityManager();
       } catch (error) {
-        console.warn('[Fallback] 初始化 DataIntegrityManager 失败:', error);
+        console.warn('[Fallback] 初始化 DataIntegrityManager 失败:', summarizeBootFallbackErrorForLog(error));
       }
     }
     return window.dataIntegrityManager || null;
@@ -435,11 +446,11 @@
             window.showBackupList();
           }
         } catch (error) {
-          console.warn('[Fallback] 刷新备份列表失败:', error);
+          console.warn('[Fallback] 刷新备份列表失败:', summarizeBootFallbackErrorForLog(error));
         }
       }, 1000);
     } catch (error) {
-      console.error('[Fallback] 恢复备份失败:', error);
+      console.error('[Fallback] 恢复备份失败:', summarizeBootFallbackErrorForLog(error));
       window.showMessage && window.showMessage('备份恢复失败: ' + (error && error.message ? error.message : error), 'error');
     }
   }
@@ -735,7 +746,7 @@
         });
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
-        console.error('[importData] failed', error);
+        console.error('[importData] failed', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
       }
     };
@@ -748,7 +759,7 @@
       try {
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
-        console.error('[Fallback] 数据导出模块加载失败:', error);
+        console.error('[Fallback] 数据导出模块加载失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
         return;
       }
@@ -757,7 +768,7 @@
         await manager.exportData();
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
-        console.error('[Fallback] 数据导出失败:', error);
+        console.error('[Fallback] 数据导出失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
       }
     };
@@ -834,7 +845,7 @@
       try {
         backups = await manager.getBackupList();
       } catch (error) {
-        console.warn('[Fallback] 获取备份列表失败:', error);
+        console.warn('[Fallback] 获取备份列表失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('无法获取备份列表', 'error');
         return;
       }
@@ -985,7 +996,7 @@
             var maybeSetConfigs = storage.set('exam_index_configurations', configs);
             if (maybeSetConfigs && typeof maybeSetConfigs.then === 'function') await maybeSetConfigs;
           } catch (err) {
-            console.warn('[Fallback] 无法保存 exam_index_configurations:', err);
+            console.warn('[Fallback] 无法保存 exam_index_configurations:', summarizeBootFallbackErrorForLog(err));
           }
         }
         if (window.storage && storage.get) {
@@ -1004,7 +1015,7 @@
       }
       return configs;
     } catch (e) {
-      console.warn('[Fallback] ensureDefaultConfig 失败:', e);
+      console.warn('[Fallback] ensureDefaultConfig 失败:', summarizeBootFallbackErrorForLog(e));
       return [];
     }
   }
@@ -1426,7 +1437,7 @@
             upload = window.handleLibraryUpload({ type: type, mode: mode }, files);
           }
         } catch (error) {
-          console.error('[Fallback] 处理题库上传失败:', error);
+          console.error('[Fallback] 处理题库上传失败:', summarizeBootFallbackErrorForLog(error));
           upload = Promise.reject(error);
         }
 
@@ -1438,7 +1449,7 @@
           }
           cleanup();
         }).catch(function (error) {
-          console.error('[Fallback] 题库上传流程出错:', error);
+          console.error('[Fallback] 题库上传流程出错:', summarizeBootFallbackErrorForLog(error));
           if (typeof window.renderLibraryUploadReport === 'function') {
             window.renderLibraryUploadReport({
               status: 'error',
@@ -1497,7 +1508,7 @@
           var maybe = storage.set('active_exam_index_key', key);
           if (maybe && typeof maybe.then === 'function') await maybe;
         } catch (err) {
-          console.warn('[Fallback] 无法写入 active_exam_index_key:', err);
+          console.warn('[Fallback] 无法写入 active_exam_index_key:', summarizeBootFallbackErrorForLog(err));
         }
       }
     }
@@ -1519,7 +1530,7 @@
           var maybeSave = storage.set('exam_index_configurations', existing);
           if (maybeSave && typeof maybeSave.then === 'function') await maybeSave;
         } catch (err) {
-          console.warn('[Fallback] 保存题库配置失败:', err);
+          console.warn('[Fallback] 保存题库配置失败:', summarizeBootFallbackErrorForLog(err));
         }
       }
     }
@@ -1713,7 +1724,7 @@
       try {
         discoveryResult = await _fallbackDiscoverLibraryEntries(files, type, label);
       } catch (error) {
-        console.error('[Fallback] 题库内容识别失败:', error);
+        console.error('[Fallback] 题库内容识别失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('题库识别失败：' + (error && error.message ? error.message : '未知错误'), 'error');
         return _fallbackBuildUploadReport(null, {
           status: 'error',
@@ -2087,6 +2098,17 @@ class ExamSystemApp {
 }
 
 (function(global) {
+    function summarizeAppErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function escapeCssSelectorValue(value) {
         if (global.CSS && typeof global.CSS.escape === 'function') {
             try {
@@ -2227,7 +2249,7 @@ class ExamSystemApp {
                 const serializedValue = StateSerializer.serialize(value);
                 await storage.set(key, serializedValue);
             } catch (error) {
-                console.error('[App] 持久化状态失败:', error);
+                console.error('[App] 持久化状态失败:', summarizeAppErrorForLog(error));
             }
         },
         async persistMultipleState(mapping) {
@@ -2237,7 +2259,7 @@ class ExamSystemApp {
             try {
                 await Promise.all(promises);
             } catch (error) {
-                console.error('[App] 批量持久化状态失败:', error);
+                console.error('[App] 批量持久化状态失败:', summarizeAppErrorForLog(error));
             }
         },
         async loadState(path, storageKey = null) {
@@ -2250,7 +2272,7 @@ class ExamSystemApp {
                     return deserializedValue;
                 }
             } catch (error) {
-                console.error('[App] 加载状态失败:', error);
+                console.error('[App] 加载状态失败:', summarizeAppErrorForLog(error));
             }
             return null;
         },
@@ -2285,7 +2307,7 @@ class ExamSystemApp {
                     await window.AppLazyLoader.ensureGroup('practice-suite');
                 }
             } catch (error) {
-                console.warn('[App] 练习组件预加载失败:', error);
+                console.warn('[App] 练习组件预加载失败:', summarizeAppErrorForLog(error));
             }
             const components = {
                 SystemDiagnostics: window.SystemDiagnostics,
@@ -2343,7 +2365,7 @@ class ExamSystemApp {
                     window.appStateService.installGlobalBindings(window);
                     window.appStateService.connectApp(this);
                 } catch (error) {
-                    console.warn('[App] AppStateService connect failed:', error);
+                    console.warn('[App] AppStateService connect failed:', summarizeAppErrorForLog(error));
                 }
             }
             Object.defineProperty(window, 'dataIntegrityManager', {
@@ -2388,7 +2410,7 @@ class ExamSystemApp {
                     await this.initializeOptionalComponents();
                 }
             } catch (error) {
-                console.error('[App] 核心组件加载失败:', error);
+                console.error('[App] 核心组件加载失败:', summarizeAppErrorForLog(error));
                 throw error;
             }
         },
@@ -2410,7 +2432,7 @@ class ExamSystemApp {
                 this.ensurePracticeRecorderEvents();
                 return true;
             } catch (error) {
-                console.error('[App] PracticeRecorder初始化失败:', error);
+                console.error('[App] PracticeRecorder初始化失败:', summarizeAppErrorForLog(error));
                 return false;
             }
         },
@@ -2448,7 +2470,7 @@ class ExamSystemApp {
                             await window.storage.set(['practice', 'records'].join('_'), list);
                         }
                     } catch (error) {
-                        console.warn('[App] 降级记录器保存失败:', error);
+                        console.warn('[App] 降级记录器保存失败:', summarizeAppErrorForLog(error));
                     }
                     return record || null;
                 },
@@ -2459,7 +2481,7 @@ class ExamSystemApp {
                     try {
                         return normalizeRecords(await window.storage.get('practice_records', []));
                     } catch (error) {
-                        console.warn('[App] 降级记录器读取失败:', error);
+                        console.warn('[App] 降级记录器读取失败:', summarizeAppErrorForLog(error));
                         return [];
                     }
                 }
@@ -2768,7 +2790,7 @@ class ExamSystemApp {
                             return null;
                         })
                         .catch((error) => {
-                            console.error('[App] 激活练习视图失败:', error);
+                            console.error('[App] 激活练习视图失败:', summarizeAppErrorForLog(error));
                         });
                     break;
                 default:
@@ -2865,7 +2887,7 @@ class ExamSystemApp {
             }
         },
         handleInitializationError(error) {
-            console.error('[App] 系统初始化失败:', error);
+            console.error('[App] 系统初始化失败:', summarizeAppErrorForLog(error));
             let userMessage = '系统初始化失败';
             let canRecover = false;
             if (error.message.includes('组件加载超时')) {
@@ -2887,12 +2909,12 @@ class ExamSystemApp {
         },
         setupGlobalErrorHandling() {
             window.addEventListener('unhandledrejection', (event) => {
-                console.error('[App] 未处理的Promise拒绝:', event.reason);
+                console.error('[App] 未处理的Promise拒绝:', summarizeAppErrorForLog(event && event.reason));
                 this.handleGlobalError(event.reason, 'Promise拒绝');
                 event.preventDefault();
             });
             window.addEventListener('error', (event) => {
-                console.error('[App] JavaScript错误:', event.error);
+                console.error('[App] JavaScript错误:', summarizeAppErrorForLog(event && event.error));
                 this.handleGlobalError(event.error, 'JavaScript错误');
             });
         },
@@ -3048,7 +3070,7 @@ class ExamSystemApp {
                 await this.loadUserStats();
                 this.updateOverviewStats();
             } catch (error) {
-                console.error('Failed to load initial data:', error);
+                console.error('Failed to load initial data:', summarizeAppErrorForLog(error));
             }
         },
         async loadUserStats() {
@@ -3209,7 +3231,7 @@ class ExamSystemApp {
                                 window.showMessage('套题模块未就绪', 'warning');
                             }
                         }).catch((error) => {
-                            console.error('[App] 套题模块加载失败:', error);
+                            console.error('[App] 套题模块加载失败:', summarizeAppErrorForLog(error));
                             if (typeof window.showMessage === 'function') {
                                 window.showMessage('套题模块加载失败，请稍后重试', 'error');
                             }
@@ -3249,7 +3271,7 @@ class ExamSystemApp {
                 await this.loadInitialData();
                 this.onViewActivated(this.currentView);
             } catch (error) {
-                console.error('Failed to refresh data:', error);
+                console.error('Failed to refresh data:', summarizeAppErrorForLog(error));
             }
         },
         destroy() {
@@ -3356,18 +3378,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.app = new ExamSystemApp();
                     Promise.resolve(window.app.initialize())
                         .catch((error) => {
-                            console.error('[App] 初始化失败:', error);
+                            console.error('[App] 初始化失败:', summarizeAppErrorForLog(error));
                         })
                         .finally(() => {
                             signalAppCoreReady();
                         });
                 } catch (e) {
-                    console.error('[App] 初始化失败:', e);
+                    console.error('[App] 初始化失败:', summarizeAppErrorForLog(e));
                     signalAppCoreReady();
                 }
             })();
         } catch (error) {
-            console.error('Failed to start application:', error);
+            console.error('Failed to start application:', summarizeAppErrorForLog(error));
             if (window.handleError) {
                 window.handleError(error, 'Application Startup');
             } else {

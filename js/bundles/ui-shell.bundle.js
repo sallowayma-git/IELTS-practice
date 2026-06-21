@@ -1248,6 +1248,17 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var STATE_CORE_GROUP = 'state-core';
     var SETTINGS_GROUP = 'settings-tools';
 
+    function summarizeMainEntryErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function ensureLazyGroup(name) {
         if (!name || !global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
@@ -1265,7 +1276,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             try {
                 global.ExamSystemAppMixins.__applyToApp();
             } catch (error) {
-                console.warn('[MainEntry] 重新应用 mixins 失败:', error);
+                console.warn('[MainEntry] 重新应用 mixins 失败:', summarizeMainEntryErrorForLog(error));
             }
         }
     }
@@ -1278,7 +1289,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     try {
                         global.setupBrowsePreferenceUI();
                     } catch (error) {
-                        console.warn('[MainEntry] 初始化题库偏好 UI 失败:', error);
+                        console.warn('[MainEntry] 初始化题库偏好 UI 失败:', summarizeMainEntryErrorForLog(error));
                     }
                 }
                 return true;
@@ -1354,7 +1365,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 console.log('[MainEntry] 已设置存储命名空间: exam_system');
             } catch (_) { }
         }).catch(function handleNamespaceError(error) {
-            console.error('[MainEntry] 设置命名空间失败', error);
+            console.error('[MainEntry] 设置命名空间失败', summarizeMainEntryErrorForLog(error));
         });
     }
 
@@ -1383,7 +1394,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 });
             }
         } catch (error) {
-            console.warn('[MainEntry] 初始化导航失败:', error);
+            console.warn('[MainEntry] 初始化导航失败:', summarizeMainEntryErrorForLog(error));
         }
     }
 
@@ -1416,7 +1427,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 try {
                     global.AppBootScreen.setStage(message, progress);
                 } catch (error) {
-                    console.warn('[BootStage] 更新失败:', error);
+                    console.warn('[BootStage] 更新失败:', summarizeMainEntryErrorForLog(error));
                 }
             }
         };
@@ -1612,7 +1623,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 global.app.refreshOverviewData();
             }
         } catch (error) {
-            console.warn('[MainEntry] 同步总览数据失败:', error);
+            console.warn('[MainEntry] 同步总览数据失败:', summarizeMainEntryErrorForLog(error));
         }
     }
 
@@ -1630,7 +1641,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     loading.style.display = 'none';
                 }
             }).catch(function handleBrowseLoadError(error) {
-                console.error('[MainEntry] browse-runtime 组加载失败:', error);
+                console.error('[MainEntry] browse-runtime 组加载失败:', summarizeMainEntryErrorForLog(error));
             });
             return;
         }
@@ -1641,7 +1652,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     try { global.updatePracticeView(); } catch (_) { }
                 }
             }).catch(function handlePracticeLoadError(error) {
-                console.error('[MainEntry] practice 视图模块加载失败:', error);
+                console.error('[MainEntry] practice 视图模块加载失败:', summarizeMainEntryErrorForLog(error));
             });
         }
     }
@@ -1673,7 +1684,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return ensureExamData();
             })
             .catch(function onBackgroundBootstrapError(error) {
-                console.warn('[MainEntry] 后台题库引导失败:', error);
+                console.warn('[MainEntry] 后台题库引导失败:', summarizeMainEntryErrorForLog(error));
             });
     }
 
@@ -1690,15 +1701,15 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
         bootstrapCoreDataInBackground();
         ensurePracticeSuiteGroup().catch(function preloadPracticeSuiteError(err) {
-            console.warn('[MainEntry] 预加载 practice-suite 失败:', err);
+            console.warn('[MainEntry] 预加载 practice-suite 失败:', summarizeMainEntryErrorForLog(err));
         });
         ensureBrowseGroup().catch(function preloadError(error) {
-            console.warn('[MainEntry] 预加载 browse-runtime 失败:', error);
+            console.warn('[MainEntry] 预加载 browse-runtime 失败:', summarizeMainEntryErrorForLog(error));
         });
         if (typeof global.requestIdleCallback === 'function') {
             global.requestIdleCallback(function () {
                 ensureMoreToolsGroup().catch(function swallow(err) {
-                    console.warn('[MainEntry] 预加载 more-tools 失败:', err);
+                    console.warn('[MainEntry] 预加载 more-tools 失败:', summarizeMainEntryErrorForLog(err));
                 });
             }, { timeout: 5000 });
         }
