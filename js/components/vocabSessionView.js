@@ -98,7 +98,8 @@
             window.showMessage(message, type, 4000);
             return;
         }
-        console.info('[VocabSessionView]', message);
+        const safeType = ['info', 'success', 'warning', 'error'].includes(type) ? type : 'info';
+        console.info('[VocabSessionView] Feedback message shown:', safeType);
     }
 
     function isSettingsModalOpen() {

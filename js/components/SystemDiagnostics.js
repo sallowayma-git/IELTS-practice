@@ -253,7 +253,7 @@ class SystemDiagnostics {
             };
         }
 
-        console.log(`[SystemDiagnostics] 开始测试题目通信: ${exam.title}`);
+        console.log('[SystemDiagnostics] Starting exam communication test');
 
         try {
             const fullPath = typeof window.buildResourcePath === 'function'
@@ -444,7 +444,7 @@ class SystemDiagnostics {
      * 处理连接丢失
      */
     handleConnectionLost(examId, reason) {
-        console.warn(`[SystemDiagnostics] 连接丢失: ${examId}, 原因: ${reason}`);
+        console.warn('[SystemDiagnostics] 连接丢失:', { reason });
 
         this.failedConnections.add(examId);
         const connection = this.activeConnections.get(examId);
@@ -463,7 +463,7 @@ class SystemDiagnostics {
         const attempts = this.recoveryAttempts.get(examId) || 0;
 
         if (attempts >= this.maxRecoveryAttempts) {
-            console.error(`[SystemDiagnostics] 恢复失败，已达到最大尝试次数: ${examId}`);
+            console.error('[SystemDiagnostics] 恢复失败，已达到最大尝试次数');
             return;
         }
 
@@ -481,7 +481,7 @@ class SystemDiagnostics {
      * 恢复策略：连接丢失
      */
     async recoverConnectionLost(examId) {
-        console.log(`[SystemDiagnostics] 尝试恢复连接: ${examId}`);
+        console.log('[SystemDiagnostics] 尝试恢复连接');
         // 重新建立连接的逻辑
     }
 
@@ -489,7 +489,7 @@ class SystemDiagnostics {
      * 恢复策略：消息超时
      */
     async recoverMessageTimeout(examId) {
-        console.log(`[SystemDiagnostics] 恢复消息超时: ${examId}`);
+        console.log('[SystemDiagnostics] 恢复消息超时');
         // 重新发送消息的逻辑
     }
 
@@ -497,7 +497,7 @@ class SystemDiagnostics {
      * 恢复策略：窗口关闭
      */
     async recoverWindowClosed(examId) {
-        console.log(`[SystemDiagnostics] 恢复关闭窗口: ${examId}`);
+        console.log('[SystemDiagnostics] 恢复关闭窗口');
         // 重新打开窗口的逻辑
     }
 
@@ -505,7 +505,7 @@ class SystemDiagnostics {
      * 恢复策略：权限拒绝
      */
     async recoverPermissionDenied(examId) {
-        console.log(`[SystemDiagnostics] 恢复权限拒绝: ${examId}`);
+        console.log('[SystemDiagnostics] 恢复权限拒绝');
         // 请求权限或使用替代方案
     }
 
@@ -538,7 +538,7 @@ class SystemDiagnostics {
      * 修复文件不存在错误
      */
     async fixFileNotFound(exam) {
-        console.log(`[SystemDiagnostics] 修复文件不存在: ${exam.title}`);
+        console.log('[SystemDiagnostics] Applying file-not-found fix');
         // 实现文件路径修复逻辑
         return {
             examId: exam.id,
@@ -552,7 +552,7 @@ class SystemDiagnostics {
      * 修复路径格式错误
      */
     async fixPathFormat(exam) {
-        console.log(`[SystemDiagnostics] 修复路径格式: ${exam.title}`);
+        console.log('[SystemDiagnostics] Applying path-format fix');
         // 实现路径格式修复逻辑
         return {
             examId: exam.id,
@@ -565,7 +565,7 @@ class SystemDiagnostics {
      * 修复文件名不匹配
      */
     async fixFilenameMismatch(exam) {
-        console.log(`[SystemDiagnostics] 修复文件名不匹配: ${exam.title}`);
+        console.log('[SystemDiagnostics] Applying filename-mismatch fix');
         // 实现文件名修复逻辑
         return {
             examId: exam.id,
@@ -578,7 +578,7 @@ class SystemDiagnostics {
      * 修复缺失字段
      */
     async fixMissingField(exam, field) {
-        console.log(`[SystemDiagnostics] 修复缺失字段: ${exam.title}, 字段: ${field}`);
+        console.log('[SystemDiagnostics] Applying missing-property fix');
         // 实现字段补充逻辑
         return {
             examId: exam.id,
@@ -592,7 +592,7 @@ class SystemDiagnostics {
      * 修复连接丢失
      */
     async fixConnectionLost(examId) {
-        console.log(`[SystemDiagnostics] 修复连接丢失: ${examId}`);
+        console.log('[SystemDiagnostics] 修复连接丢失');
         return await this.recoverConnectionLost(examId);
     }
 
@@ -600,7 +600,7 @@ class SystemDiagnostics {
      * 修复消息超时
      */
     async fixMessageTimeout(examId) {
-        console.log(`[SystemDiagnostics] 修复消息超时: ${examId}`);
+        console.log('[SystemDiagnostics] 修复消息超时');
         return await this.recoverMessageTimeout(examId);
     }
 
@@ -608,7 +608,7 @@ class SystemDiagnostics {
      * 修复窗口被阻止
      */
     async fixWindowBlocked(examId) {
-        console.log(`[SystemDiagnostics] 修复窗口被阻止: ${examId}`);
+        console.log('[SystemDiagnostics] 修复窗口被阻止');
         // 实现替代方案
         return {
             examId: examId,

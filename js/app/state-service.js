@@ -1,6 +1,16 @@
 (function (global) {
     'use strict';
 
+    function summarizeAppStateErrorForLog(error) {
+        const summary = {
+            name: error && typeof error.name === 'string' ? error.name : 'Error'
+        };
+        if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+            summary.code = error.code;
+        }
+        return summary;
+    }
+
     function cloneArray(value) {
         return Array.isArray(value) ? value.slice() : [];
     }
@@ -106,7 +116,7 @@
             try {
                 handler(payload);
             } catch (error) {
-                console.error('[AppStateService] listener error for %s:', topic, error);
+                console.error('[AppStateService] listener error:', summarizeAppStateErrorForLog(error));
             }
         });
     }
@@ -118,7 +128,7 @@
                 enumerable: true
             }, descriptor || {}));
         } catch (error) {
-            console.warn('[AppStateService] defineProperty failed:', key, error);
+            console.warn('[AppStateService] defineProperty failed:', summarizeAppStateErrorForLog(error));
         }
     }
 
@@ -131,7 +141,7 @@
                 const manager = new global.DataConsistencyManager();
                 return manager.enrichRecordData(record);
             } catch (error) {
-                console.warn('[AppStateService] enrichPracticeRecordForUI failed:', error);
+                console.warn('[AppStateService] enrichPracticeRecordForUI failed:', summarizeAppStateErrorForLog(error));
             }
         }
         return record;
@@ -249,7 +259,7 @@
                     app.state.system.fallbackExamSessions = this.state.fallbackExamSessions;
                 }
             } catch (error) {
-                console.warn('[AppStateService] applyToApp failed:', error);
+                console.warn('[AppStateService] applyToApp failed:', summarizeAppStateErrorForLog(error));
             }
         }
 
@@ -329,7 +339,7 @@
                 try {
                     global.updateBrowseAnchorsFromRecords(this.state.practiceRecords);
                 } catch (error) {
-                    console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', error);
+                    console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', summarizeAppStateErrorForLog(error));
                 }
             }
             return this.state.practiceRecords;
@@ -362,14 +372,14 @@
                 try {
                     global.persistBrowseFilter(this.state.browseFilter.category, this.state.browseFilter.type);
                 } catch (error) {
-                    console.warn('[AppStateService] persistBrowseFilter failed:', error);
+                    console.warn('[AppStateService] persistBrowseFilter failed:', summarizeAppStateErrorForLog(error));
                 }
             }
             if (typeof this.options.onBrowseFilterChange === 'function') {
                 try {
                     this.options.onBrowseFilterChange(this.state.browseFilter.category, this.state.browseFilter.type);
                 } catch (error) {
-                    console.warn('[AppStateService] onBrowseFilterChange failed:', error);
+                    console.warn('[AppStateService] onBrowseFilterChange failed:', summarizeAppStateErrorForLog(error));
                 }
             }
             return this.state.browseFilter;

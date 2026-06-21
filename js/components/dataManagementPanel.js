@@ -4,6 +4,29 @@
  */
 const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
+function isDataManagementDebugEnabled() {
+    return Boolean(
+        typeof window !== 'undefined'
+        && (window.__IELTS_DEBUG_IMPORTS__ === true || window.__IELTS_DEBUG_BACKUP__ === true)
+    );
+}
+
+function dataManagementDebugLog(...args) {
+    if (isDataManagementDebugEnabled()) {
+        console.log(...args);
+    }
+}
+
+function summarizeDataManagementErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 function isUnsafeElementAttributeName(name) {
     const key = String(name || '').toLowerCase();
     return key.startsWith('on') || key === 'srcdoc';
@@ -68,7 +91,7 @@ function createElement(tagName, options = {}) {
                 return;
             }
             if (isUnsafeElementAttributeName(key) || isUnsafeElementUrlAttribute(key, value, el.tagName)) {
-                console.warn(`[DataManagementPanel] Skipped unsafe attribute: ${key}`);
+                console.warn('[DataManagementPanel] Skipped unsafe attribute');
                 return;
             }
             el.setAttribute(key, value === true ? '' : String(value));
@@ -122,6 +145,27 @@ function validateImportFile(file) {
     if (!ALLOWED_IMPORT_MIME_TYPES.has(mimeType)) {
         throw new Error('Unsupported import file type.');
     }
+}
+
+function describeImportPayloadLength(payload) {
+    if (Array.isArray(payload)) {
+        return payload.length;
+    }
+    if (typeof payload === 'string' || payload instanceof String) {
+        return payload.length;
+    }
+    if (payload && typeof payload === 'object') {
+        const candidates = [
+            payload.practiceRecords,
+            payload.practice_records,
+            payload.records,
+            payload.data && payload.data.practiceRecords,
+            payload.data && payload.data.practice_records
+        ];
+        const match = candidates.find(Array.isArray);
+        return match ? match.length : undefined;
+    }
+    return undefined;
 }
 
 function sanitizeDownloadFilename(filename, fallback = 'ielts-export.json') {
@@ -194,7 +238,7 @@ class DataManagementPanel {
         this.loadDataStats();
         await this.loadHistory();
         
-        console.log('DataManagementPanel initialized');
+        dataManagementDebugLog('DataManagementPanel initialized');
     }
 
     /**
@@ -525,7 +569,7 @@ class DataManagementPanel {
         panel.querySelector('#importFile').addEventListener('change', (e) => {
             this.handleFileSelect(e);
         });
-        console.log('[DataManagementPanel] 使用统一事件委托处理按钮');
+        dataManagementDebugLog('[DataManagementPanel] 使用统一事件委托处理按钮');
 
         // 历史标签切换 - 使用事件委托
         panel.addEventListener('click', (e) => {
@@ -684,7 +728,7 @@ class DataManagementPanel {
                 }
             }
         } catch (error) {
-            console.error('Failed to load data stats:', error);
+            console.error('Failed to load data stats:', summarizeDataManagementErrorForLog(error));
         }
     }
 
@@ -731,7 +775,7 @@ class DataManagementPanel {
      * 处理文件选择
      */
     handleFileSelect(event) {
-        console.log('[DataManagementPanel] handleFileSelect called');
+        dataManagementDebugLog('[DataManagementPanel] handleFileSelect called');
         const target = event && event.target ? event.target : {};
         const file = getFileFromInput(target);
         const readToken = this.fileReadToken + 1;
@@ -764,12 +808,12 @@ class DataManagementPanel {
                 } catch (_) {
                     this.selectedFileContent = content;
                 }
-                console.log('[DataManagementPanel] File content loaded');
+                dataManagementDebugLog('[DataManagementPanel] File content loaded');
             }).catch(error => {
                 if (readToken !== this.fileReadToken) {
                     return;
                 }
-                console.error('[DataManagementPanel] Failed to read file:', error);
+                console.error('[DataManagementPanel] Failed to read file:', summarizeDataManagementErrorForLog(error));
                 setElementText(fileNameSpan, '未选择文件');
                 setElementDisabled(importBtn, true);
                 this.selectedFileContent = null;
@@ -787,21 +831,21 @@ class DataManagementPanel {
      * 处理数据导入
      */
     async handleImport(selectedMode = null) {
-        console.log('[DataManagementPanel] handleImport called');
+        dataManagementDebugLog('[DataManagementPanel] handleImport called');
         try {
             let fileContent;
             const fileInput = document.getElementById('importFile');
             const file = getFileFromInput(fileInput);
 
             if (this.selectedFileContent) {
-                console.log('[DataManagementPanel] using cached file content');
+                dataManagementDebugLog('[DataManagementPanel] using cached file content');
                 fileContent = this.selectedFileContent;
             } else if (file) {
                 validateImportFile(file);
                 this.showProgress('读取文件...');
                 const rawContent = await this.readFile(file);
                 fileContent = JSON.parse(rawContent);
-                console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(fileContent) ? 'array' : typeof fileContent, 'length:', fileContent.length || fileContent.practiceRecords?.length || fileContent.practice_records?.length || fileContent.data?.practice_records?.length);
+                dataManagementDebugLog('[DataManagementPanel] JSON parsed, type:', Array.isArray(fileContent) ? 'array' : typeof fileContent, 'length:', describeImportPayloadLength(fileContent));
             } else {
                 this.showMessage('请先选择要导入的文件', 'warning');
                 return;
@@ -829,7 +873,7 @@ class DataManagementPanel {
             this.updateProgress('导入数据...');
 
             const result = await this.backupManager.importPracticeData(fileContent, options);
-            console.log('[DataManagementPanel] importPracticeData returned:', {
+            dataManagementDebugLog('[DataManagementPanel] importPracticeData returned:', {
                 success: Boolean(result && result.success),
                 importedCount: Number(result && result.importedCount) || 0,
                 updatedCount: Number(result && result.updatedCount) || 0,
@@ -840,8 +884,8 @@ class DataManagementPanel {
             this.hideProgress();
 
             if (result.success) {
-                console.log('[DataManagementPanel] Import successful');
-                console.log(
+                dataManagementDebugLog('[DataManagementPanel] Import successful');
+                dataManagementDebugLog(
                     'Import completed: importedCount=',
                     result.importedCount,
                     'total=',
@@ -866,7 +910,7 @@ class DataManagementPanel {
 
         } catch (error) {
             this.hideProgress();
-            console.error('[DataManagementPanel] Import failed:', error);
+            console.error('[DataManagementPanel] Import failed:', summarizeDataManagementErrorForLog(error));
             this.showMessage(`导入失败: ${error.message}`, 'error');
         }
     }
@@ -992,7 +1036,7 @@ class DataManagementPanel {
 
             container.replaceChildren(fragment);
         } catch (error) {
-            console.error('[DataManagementPanel] Failed to load export history:', error);
+            console.error('[DataManagementPanel] Failed to load export history:', summarizeDataManagementErrorForLog(error));
             this.renderNoHistory(container, '导出历史加载失败');
         }
     }
@@ -1030,7 +1074,7 @@ class DataManagementPanel {
 
             container.replaceChildren(fragment);
         } catch (error) {
-            console.error('[DataManagementPanel] Failed to load import history:', error);
+            console.error('[DataManagementPanel] Failed to load import history:', summarizeDataManagementErrorForLog(error));
             this.renderNoHistory(container, '导入历史加载失败');
         }
     }

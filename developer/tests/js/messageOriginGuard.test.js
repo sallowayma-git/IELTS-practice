@@ -18,7 +18,8 @@ const files = [
     'js/app/examSessionMixin.js',
     'js/main.js',
     'js/plugins/hp/hp-core-bridge.js',
-    'js/components/SystemDiagnostics.js'
+    'js/components/SystemDiagnostics.js',
+    'js/services/libraryDiscovery.js'
 ];
 
 for (const relativePath of files) {
@@ -56,6 +57,20 @@ for (const relativePath of files) {
                 && source.includes('document.referrer')
                 && source.includes('event.source !== expected'),
             `${relativePath} must validate sandboxed parent messages against the parent window and referrer origin`
+        );
+    }
+    if (relativePath === 'js/services/libraryDiscovery.js') {
+        assert(
+            source.includes("var targetOrigin = (location.origin && location.origin !== 'null' && /^https?:\\\\/\\\\//i.test(location.origin)) ? location.origin : '*'")
+                && source.includes('var allowedFromFrame = {')
+                && source.includes('var allowedFromParent = {')
+                && source.includes('if (frame && event.source === frame.contentWindow)')
+                && source.includes('if (!allowedFromFrame[type]) return;')
+                && source.includes('if (sameOriginParent(event) && allowedFromParent[type] && frame && frame.contentWindow)')
+                && source.includes("return location.protocol === 'file:';")
+                && source.includes('window.opener.postMessage(event.data, targetOrigin)')
+                && source.includes("frame.contentWindow.postMessage(event.data, '*')"),
+            `${relativePath} sandbox runtime must allowlist message types, validate parent origin, and only use wildcard for opaque sandbox targets`
         );
     }
     if (relativePath === 'js/main.js') {

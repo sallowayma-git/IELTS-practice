@@ -7909,6 +7909,7 @@ body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):no
 .remote-auth-form,
 .remote-auth-setup,
 .remote-auth-recovery,
+.remote-auth-totp__form,
 .remote-auth-totp__body {
     display: grid;
     gap: 14px;
@@ -7962,12 +7963,28 @@ body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):no
 
 .remote-auth-submit,
 .remote-auth-recovery__confirm,
-.remote-auth-totp__primary {
+.remote-auth-totp__primary,
+.remote-auth-totp__secondary {
     min-height: 42px;
     border-radius: 6px;
+    font-weight: 700;
+}
+
+.remote-auth-totp__primary {
     background: #1f2937;
     color: #ffffff;
-    font-weight: 700;
+}
+
+.remote-auth-totp__secondary {
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+}
+
+.remote-auth-totp__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .remote-auth-submit:disabled,

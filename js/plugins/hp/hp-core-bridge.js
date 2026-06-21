@@ -345,7 +345,7 @@
     } catch (_) {}
     record.status = reason;
     if (reason === 'timeout') {
-      try { console.warn('[hpCore] 握手超时，练习页可能未加载增强器', { sessionId, examId: record.examId }); } catch (_) {}
+      try { console.warn('[hpCore] Practice page handshake timed out'); } catch (_) {}
     }
     try {
       if (typeof record.onStatus === 'function') {
@@ -359,7 +359,7 @@
         record.onClosed(record);
       }
     } catch (callbackError) {
-      try { console.warn('[hpCore] handshake callback error', callbackError); } catch (_) {}
+      try { console.warn('[hpCore] handshake callback error', summarizeHpCoreErrorForLog(callbackError)); } catch (_) {}
     }
   }
 
@@ -378,7 +378,7 @@
       }
       try {
         if (attempts === 0) {
-          console.log('[hpCore] 发送 INIT_SESSION 到练习页', payload);
+          console.log('[hpCore] Sending INIT_SESSION to practice page');
         }
         examWindow.postMessage({ type: 'INIT_SESSION', data: payload }, getMessageTargetOrigin());
         examWindow.postMessage({ type: 'init_exam_session', data: payload }, getMessageTargetOrigin());
@@ -407,7 +407,7 @@
     const timer = setInterval(tick, 300);
     record.timer = timer;
     localFallbackSessions.set(sessionId, record);
-    try { console.log('[hpCore] 启动本地握手', payload); } catch (_) {}
+    try { console.log('[hpCore] Starting local handshake'); } catch (_) {}
     tick();
 
     if (window.hpCore) {
@@ -461,7 +461,7 @@
                 window.hpCore._loadRecords().catch(() => {});
               }
             })
-            .catch((error) => { try { console.warn('[hpCore] PracticeCore 保存失败', error); } catch (_) {} });
+            .catch((error) => { try { console.warn('[hpCore] PracticeCore 保存失败', summarizeHpCoreErrorForLog(error)); } catch (_) {} });
           try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
           return;
         }
@@ -548,7 +548,7 @@
 
       try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
     } catch (error) {
-      try { console.warn('[hpCore] 本地保存练习记录失败', error); } catch (_) {}
+      try { console.warn('[hpCore] 本地保存练习记录失败', summarizeHpCoreErrorForLog(error)); } catch (_) {}
     }
   }
 
@@ -674,7 +674,7 @@
           return { url: safeUrl, attempts };
         }
       } catch (error) {
-        console.warn('[hpCore] 资源探测失败', entry, error);
+        console.warn('[hpCore] 资源探测失败', summarizeHpCoreErrorForLog(error));
       }
     }
     return { url: '', attempts };
@@ -703,17 +703,12 @@
       try {
         window.alert(message);
       } catch (_) {
-        console.error('[hpCore] 资源缺失：' + message);
+        console.error('[hpCore] Resource missing');
       }
     }
 
-    console.warn('[hpCore] 资源缺失', {
-      exam,
-      kind,
-      attempts
-    });
-
-    return null;
+    console.warn('[hpCore] Resource missing', { kind, attempts: attemptList.length });
+return null;
   }
 
   const hpCore = {
@@ -745,7 +740,7 @@
     emit(event, payload) {
       const list = events[event];
       if (list && list.length) {
-        list.slice().forEach(fn => { try { fn(payload); } catch (e) { console.error('[hpCore emit error]', event, e); } });
+        list.slice().forEach(fn => { try { fn(payload); } catch (e) { console.error('[hpCore emit error]', summarizeHpCoreErrorForLog(e)); } });
       }
       if (event === 'dataUpdated') {
         this._broadcastDataUpdated(payload || {});
@@ -781,12 +776,12 @@
       try {
         if (typeof window.openExam === 'function') return window.openExam(examId);
         if (window.app && typeof window.app.openExam === 'function') return window.app.openExam(examId);
-      } catch (e) { console.error('[hpCore.startExam] failed', e); }
+      } catch (e) { console.error('[hpCore.startExam] failed', summarizeHpCoreErrorForLog(e)); }
       this.showMessage('无法启动练习：openExam 未就绪', 'error');
     },
     viewExamPDF(examId) {
       try { if (typeof window.viewPDF === 'function') return window.viewPDF(examId); }
-      catch (e) { console.error('[hpCore.viewExamPDF] failed', e); }
+      catch (e) { console.error('[hpCore.viewExamPDF] failed', summarizeHpCoreErrorForLog(e)); }
       this.showMessage('未找到查看 PDF 的方法', 'warning');
     },
 
@@ -813,7 +808,7 @@
       this.isReady = true;
       const q = this._readyQ.slice();
       this._readyQ.length = 0;
-      q.forEach(fn => { try { fn(); } catch (e) { console.error('[hpCore ready cb error]', e); } });
+      q.forEach(fn => { try { fn(); } catch (e) { console.error('[hpCore ready cb error]', summarizeHpCoreErrorForLog(e)); } });
     },
     _broadcastDataUpdated(data) {
       const payload = data || {};
@@ -865,10 +860,10 @@
               await maybeSet;
             }
           } catch (setError) {
-            console.warn('[hpCore] 写入 exam_index 失败:', setError);
+            console.warn('[hpCore] 写入 exam_index 失败:', summarizeHpCoreErrorForLog(setError));
           }
         }
-      } catch (e) { console.warn('[hpCore] _loadExamIndex failed', e); }
+      } catch (e) { console.warn('[hpCore] _loadExamIndex failed', summarizeHpCoreErrorForLog(e)); }
     },
     _setExamIndex(list) {
       const normalized = cloneArray(list);
@@ -893,7 +888,7 @@
         if (window.storage && storage.get) rec = await storage.get('practice_records', null);
         if (!rec) rec = window.practiceRecords || [];
         this._setRecords(coerceArray(rec));
-      } catch (e) { console.warn('[hpCore] _loadRecords failed', e); }
+      } catch (e) { console.warn('[hpCore] _loadRecords failed', summarizeHpCoreErrorForLog(e)); }
     },
     _setRecords(list) {
       const normalized = cloneArray(list);
@@ -940,7 +935,7 @@
             if (derivedExamId) {
               if (typeof window.savePracticeRecordFallback === 'function') {
                 Promise.resolve(window.savePracticeRecordFallback(derivedExamId, payload))
-                  .catch((error) => { try { console.warn('[hpCore] 保存练习记录失败', error); } catch (_) {} })
+                  .catch((error) => { try { console.warn('[hpCore] 保存练习记录失败', summarizeHpCoreErrorForLog(error)); } catch (_) {} })
                   .finally(() => { setTimeout(() => this._loadRecords(), 400); });
               } else {
                 const recordContext = sessionEntry || { exam: this.lastOpenedExam || null };
@@ -1137,11 +1132,11 @@
             tryOpen(0);
           })
           .catch((error) => {
-            try { console.error('[hpCore.startExam] 资源解析失败', error); } catch (_) {}
+            try { console.error('[hpCore.startExam] 资源解析失败', summarizeHpCoreErrorForLog(error)); } catch (_) {}
             self.showMessage('无法启动练习', 'error');
           });
       } catch (e) {
-        try { console.error('[hpCore.startExam fallback] failed', e); } catch (_) {}
+        try { console.error('[hpCore.startExam fallback] failed', summarizeHpCoreErrorForLog(e)); } catch (_) {}
         this.showMessage('无法启动练习', 'error');
       }
     };
@@ -1176,11 +1171,11 @@
             }
           })
           .catch((error) => {
-            try { console.error('[hpCore.viewExamPDF] 资源解析失败', error); } catch (_) {}
+            try { console.error('[hpCore.viewExamPDF] 资源解析失败', summarizeHpCoreErrorForLog(error)); } catch (_) {}
             self.showMessage('无法打开PDF', 'error');
           });
       } catch (e) {
-        try { console.error('[hpCore.viewExamPDF fallback] failed', e); } catch (_) {}
+        try { console.error('[hpCore.viewExamPDF fallback] failed', summarizeHpCoreErrorForLog(e)); } catch (_) {}
         this.showMessage('无法打开PDF', 'error');
       }
     };

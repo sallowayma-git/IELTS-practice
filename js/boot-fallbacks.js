@@ -152,7 +152,7 @@
       var normalized = (typeof viewName === 'string' && viewName) ? viewName : 'overview';
       var target = document.getElementById(normalized + '-view');
       if (!target) {
-        console.warn('[Fallback] 未找到视图节点:', normalized);
+        console.warn('[Fallback] 未找到视图节点');
         return;
       }
       Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function (v) {
@@ -311,7 +311,7 @@
       }
 
       if (isFallbackUnsafeAttributeName(key) || isFallbackUnsafeUrlAttribute(key, value, element.tagName)) {
-        console.warn('[FallbackDOM] Skipped unsafe attribute: ' + key);
+        console.warn('[FallbackDOM] Skipped unsafe attribute');
         return;
       }
 
@@ -504,7 +504,7 @@
           }, 480);
         }, timeout);
         window.__messageFallbackTimer = hideTimer;
-      } catch (_) { console.log('[Toast]', type || 'info', message); }
+      } catch (_) { console.log('[Toast] Message rendering failed'); }
     };
   }
 

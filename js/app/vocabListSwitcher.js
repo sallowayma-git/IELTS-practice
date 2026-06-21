@@ -204,7 +204,7 @@
             const currentList = lists[this.currentListId];
             
             if (!currentList) {
-                console.warn('[VocabListSwitcher] Current list not found:', this.currentListId);
+                console.warn('[VocabListSwitcher] Current list not found');
                 return;
             }
 
@@ -353,13 +353,13 @@
          */
         async switchList(listId) {
             if (!listId || typeof listId !== 'string') {
-                console.error('[VocabListSwitcher] Invalid list ID:', listId);
+                console.error('[VocabListSwitcher] Invalid list ID');
                 return;
             }
 
             const lists = this.vocabStore.VOCAB_LISTS;
             if (!lists[listId]) {
-                console.error('[VocabListSwitcher] Unknown list ID:', listId);
+                console.error('[VocabListSwitcher] Unknown list ID');
                 return;
             }
 
@@ -399,7 +399,7 @@
                 // 触发词表切换事件（供外部监听）
                 this.dispatchSwitchEvent(listId, list);
 
-                console.log('[VocabListSwitcher] 切换词表成功:', listId);
+                console.log('[VocabListSwitcher] 切换词表成功');
 
             } catch (error) {
                 console.error('[VocabListSwitcher] 切换词表失败:', error);
@@ -494,7 +494,7 @@
                     const count = await this.vocabStore.getListWordCount(listId);
                     return { listId, count };
                 } catch (error) {
-                    console.error(`[VocabListSwitcher] 获取词表计数失败: ${listId}`, error);
+                    console.error('[VocabListSwitcher] 获取词表计数失败', error);
                     return { listId, count: 0 };
                 }
             });

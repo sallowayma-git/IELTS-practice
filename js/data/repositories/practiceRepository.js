@@ -209,12 +209,12 @@
             }
             const errors = [];
             const records = ensureArray(report.data);
-            for (const record of records) {
+            records.forEach((record, index) => {
                 const validation = this.validatePracticeRecord(record);
                 if (!validation.isValid) {
-                    errors.push(`记录 ${record && record.id ? record.id : 'unknown'}: ${validation.errors.join(', ')}`);
+                    errors.push(`record #${index + 1}: ${validation.errors.join(', ')}`);
                 }
-            }
+            });
             if (errors.length > 0) {
                 return { valid: false, errors };
             }

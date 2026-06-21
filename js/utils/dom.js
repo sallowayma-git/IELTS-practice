@@ -197,7 +197,7 @@ class DOMBuilder {
         // 设置属性
         for (const [key, value] of Object.entries(normalizedAttributes)) {
             if (this.isUnsafeAttributeName(key) || this.isUnsafeUrlAttribute(key, value, tag)) {
-                console.warn(`[DOMBuilder] Skipped unsafe attribute: ${key}`);
+                console.warn('[DOMBuilder] Skipped unsafe attribute');
                 continue;
             }
             if (key === 'className') {
@@ -501,13 +501,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             if (global.DOMBuilder
                 && typeof global.DOMBuilder.isUnsafeAttributeName === 'function'
                 && global.DOMBuilder.isUnsafeAttributeName(key)) {
-                console.warn('[DOMAdapter] Skipped unsafe attribute: ' + key);
+                console.warn('[DOMAdapter] Skipped unsafe attribute');
                 return;
             }
             if (global.DOMBuilder
                 && typeof global.DOMBuilder.isUnsafeUrlAttribute === 'function'
                 && global.DOMBuilder.isUnsafeUrlAttribute(key, value, element.tagName)) {
-                console.warn('[DOMAdapter] Skipped unsafe URL attribute: ' + key);
+                console.warn('[DOMAdapter] Skipped unsafe URL attribute');
                 return;
             }
             if (key === 'className') {

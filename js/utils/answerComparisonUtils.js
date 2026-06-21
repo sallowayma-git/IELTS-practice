@@ -643,7 +643,7 @@
                 return false;
             });
             if (match) {
-                console.log('[AnswerComparisonUtils] 通过 URL 路径匹配到题目:', match.id, match.title);
+                console.log('[AnswerComparisonUtils] 通过 URL 路径匹配到题目');
                 return match;
             }
         }
@@ -690,7 +690,7 @@
                            (cleanItem.length > 5 && cleanCandidate.includes(cleanItem));
                 });
                 if (match) {
-                    console.log('[AnswerComparisonUtils] 通过模糊标题匹配到题目:', match.id, match.title);
+                    console.log('[AnswerComparisonUtils] 通过模糊标题匹配到题目');
                     return match;
                 }
             }

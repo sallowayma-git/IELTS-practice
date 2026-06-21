@@ -24,6 +24,17 @@
         return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
     }
 
+    function summarizeExamSessionErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function getMessageTargetOrigin(options = {}) {
         if (options && options.allowOpaqueOrigin) {
             return '*';
@@ -499,7 +510,7 @@
                 return examWindow;
 
             } catch (error) {
-                console.error('Failed to open exam:', error);
+                console.error('Failed to open exam:', summarizeExamSessionErrorForLog(error));
                 window.showMessage('打开题目失败，请重试', 'error');
             }
         },
@@ -597,7 +608,7 @@
                     reuseWindow.focus();
                     return reuseWindow;
                 } catch (error) {
-                    console.warn('[App] 复用窗口失败，尝试重新打开:', error);
+                    console.warn('[App] 复用窗口失败，尝试重新打开:', summarizeExamSessionErrorForLog(error));
                 }
             }
 
@@ -670,7 +681,7 @@
                 }
 
             } catch (error) {
-                console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
+                console.warn('[App] 无法解析题目URL为绝对路径:', summarizeExamSessionErrorForLog(error));
             }
             return '';
         },
@@ -887,7 +898,7 @@
                     if (message && message.toLowerCase().includes('cross-origin')) {
                         console.debug('[App] 题目窗口跨域，使用占位页回退。');
                     } else {
-                        console.warn('[App] 无法读取题目窗口地址，准备降级到占位页:', error);
+                        console.warn('[App] 无法读取题目窗口地址，准备降级到占位页:', summarizeExamSessionErrorForLog(error));
                     }
                     return '';
                 }
@@ -1042,7 +1053,7 @@
                     return window.EnvironmentDetector.isInTestEnvironment();
                 }
             } catch (error) {
-                console.warn('[App] 无法访问 EnvironmentDetector:', error);
+                console.warn('[App] 无法访问 EnvironmentDetector:', summarizeExamSessionErrorForLog(error));
             }
             return false;
         },
@@ -1182,13 +1193,13 @@
                                 try {
                                     this.initializePracticeSession(examWindow, examId);
                                 } catch (sessionError) {
-                                    console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                                    console.warn('[DataInjection] 初始化练习会话失败:', summarizeExamSessionErrorForLog(sessionError));
                                 }
                             }, 80);
                         };
 
                         scriptEl.onerror = (loadError) => {
-                            console.warn('[DataInjection] 加载增强器失败:', loadError);
+                            console.warn('[DataInjection] 加载增强器失败:', summarizeExamSessionErrorForLog(loadError));
                             scriptEl.remove();
                             if (!isListeningExam) {
                                 this.injectInlineScript(examWindow, examId);
@@ -1200,7 +1211,7 @@
 
                     appendEnhancer();
                 } catch (error) {
-                    console.error('[DataInjection] 注入增强器脚本时出错:', error);
+                    console.error('[DataInjection] 注入增强器脚本时出错:', summarizeExamSessionErrorForLog(error));
                     if (!isListeningExam) {
                         this.injectInlineScript(examWindow, examId);
                     }
@@ -1220,7 +1231,7 @@
                         setTimeout(checkAndInject, 200);
                     }
                 } catch (error) {
-                    console.warn('[DataInjection] 检测题目页面就绪状态失败:', error);
+                    console.warn('[DataInjection] 检测题目页面就绪状态失败:', summarizeExamSessionErrorForLog(error));
                 }
             };
 
@@ -1268,7 +1279,7 @@
                             try {
                                 parentWindow.postMessage({ type: type, data: data || {} }, ${JSON.stringify(getMessageTargetOrigin())});
                             } catch (error) {
-                                console.warn('[InlineEnhancer] 无法发送消息:', error);
+                                console.warn('[InlineEnhancer] 无法发送消息:');
                             }
                         }
 
@@ -1381,7 +1392,7 @@
                                 }
                                 window.location.href = targetUrl;
                             } catch (error) {
-                                console.warn('[InlineEnhancer] 套题导航失败:', error);
+                                console.warn('[InlineEnhancer] 套题导航失败:');
                             }
                         }
 
@@ -1538,7 +1549,7 @@
                 }, 300);
 
             } catch (error) {
-                console.error('[DataInjection] 内联脚本注入失败:', error);
+                console.error('[DataInjection] 内联脚本注入失败:', summarizeExamSessionErrorForLog(error));
                 this.handleInjectionError(examId, error);
             }
         },
@@ -1625,7 +1636,7 @@
                 }
 
             } catch (error) {
-                console.error('[DataInjection] 会话初始化失败:', error);
+                console.error('[DataInjection] 会话初始化失败:', summarizeExamSessionErrorForLog(error));
             }
         },
 
@@ -1633,7 +1644,7 @@
          * 处理注入错误
          */
         async handleInjectionError(examId, error) {
-            console.error('[DataInjection] 注入错误:', error);
+            console.error('[DataInjection] 注入错误:', summarizeExamSessionErrorForLog(error));
 
             // 记录错误信息
             const errorInfo = {
@@ -1715,25 +1726,25 @@
                         }
                     } catch (monitorError) {
                         clearInterval(checkClosed);
-                        console.warn('[App] 无法检测题目窗口状态:', monitorError);
+                        console.warn('[App] 无法检测题目窗口状态:', summarizeExamSessionErrorForLog(monitorError));
                     }
                 }, 1000);
             } catch (error) {
-                console.warn('[App] 启动窗口关闭监控失败:', error);
+                console.warn('[App] 启动窗口关闭监控失败:', summarizeExamSessionErrorForLog(error));
             }
 
             // 设置窗口通信
             try {
                 this.setupExamWindowCommunication(examWindow, examId, exam, options);
             } catch (error) {
-                console.warn('[App] 初始化题目窗口通信失败:', error);
+                console.warn('[App] 初始化题目窗口通信失败:', summarizeExamSessionErrorForLog(error));
             }
 
             // 启动与练习页的会话握手（file:// 下更可靠）
             try {
                 this.startExamHandshake(examWindow, examId);
             } catch (e) {
-                console.warn('[App] 启动握手失败:', e);
+                console.warn('[App] 启动握手失败:', summarizeExamSessionErrorForLog(e));
             }
 
             const emitInitEnvelope = () => {
@@ -1751,7 +1762,7 @@
                 try {
                     examWindow.addEventListener('load', emitInitEnvelope);
                 } catch (error) {
-                    console.warn('[App] 监听题目窗口 load 事件失败:', error);
+                    console.warn('[App] 监听题目窗口 load 事件失败:', summarizeExamSessionErrorForLog(error));
                     emitInitEnvelope();
                 }
             } else {
@@ -2124,7 +2135,7 @@
                         this.handleSessionReady(examId, data);
                         if (typeof this._maybeRestoreSuiteReviewState === 'function') {
                             this._maybeRestoreSuiteReviewState(examId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
-                                console.warn('[SuitePractice] 恢复回看态失败:', restoreError);
+                                console.warn('[SuitePractice] 恢复回看态失败:', summarizeExamSessionErrorForLog(restoreError));
                             });
                         }
                         break;
@@ -2134,14 +2145,14 @@
                     case 'PRACTICE_COMPLETE':
                     case 'PRACTICE_RESULT':
                         if (windowInfo && windowInfo.reviewMode) {
-                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE');
                             break;
                         }
                         if (
                             (windowInfo && windowInfo.practiceMode === 'memorize')
                             || String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize'
                         ) {
-                            console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录:', examId);
+                            console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录');
                             break;
                         }
                         if (data && data.suiteSessionId && windowInfo) {
@@ -2160,7 +2171,7 @@
                         await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
-                        console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
+                        console.warn('[SuitePractice] 练习页尝试关闭套题窗口');
                         break;
                     case 'SUITE_CONFIG_UPDATE': {
                         const autoAdvance = typeof data.autoAdvanceAfterSubmit === 'boolean'
@@ -2364,7 +2375,7 @@
                         const exam = await findExamDefinition(examId);
 
                         if (!exam) {
-                            console.error('[FallbackRecorder] 无法找到题目信息:', examId);
+                            console.error('[FallbackRecorder] 无法找到题目信息');
                             return null;
                         }
 
@@ -2385,12 +2396,12 @@
 
                         // 检查成就
                         if (window.AchievementManager) {
-                            window.AchievementManager.check(practiceRecord).catch(console.warn);
+                            window.AchievementManager.check(practiceRecord).catch((error) => { console.warn('[FallbackRecorder] achievement check failed:', summarizeExamSessionErrorForLog(error)); });
                         }
 
                         return practiceRecord;
                     } catch (error) {
-                        console.error('[FallbackRecorder] 保存失败:', error);
+                        console.error('[FallbackRecorder] 保存失败:', summarizeExamSessionErrorForLog(error));
                         return null;
                     }
                 },
@@ -2424,7 +2435,7 @@
                             return true;
                         });
                     } catch (error) {
-                        console.error('[FallbackRecorder] 获取记录失败:', error);
+                        console.error('[FallbackRecorder] 获取记录失败:', summarizeExamSessionErrorForLog(error));
                         return [];
                     }
                 }
@@ -3020,7 +3031,7 @@
                 targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin(windowInfo));
                 return true;
             } catch (error) {
-                console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
+                console.warn('[ReviewReplay] 向题目页发送回放数据失败:', summarizeExamSessionErrorForLog(error));
                 return false;
             }
         },
@@ -3109,7 +3120,7 @@
             try {
                 await this.cleanupExamSession(examId);
             } catch (error) {
-                console.warn('[ReviewReplay] 清理旧题目会话失败:', error);
+                console.warn('[ReviewReplay] 清理旧题目会话失败:', summarizeExamSessionErrorForLog(error));
             }
 
             await this.openExam(nextEntry.examId, {
@@ -3292,7 +3303,7 @@
                     metadata
                 });
             } catch (recorderError) {
-                console.warn('[PracticeRecorder] 重置后同步会话状态失败:', recorderError);
+                console.warn('[PracticeRecorder] 重置后同步会话状态失败:', summarizeExamSessionErrorForLog(recorderError));
             }
         },
 
@@ -3304,7 +3315,7 @@
                     : [];
                 await storage.set('active_sessions', updatedSessions);
             } catch (error) {
-                console.warn('[App] 清理活动会话元数据失败:', error);
+                console.warn('[App] 清理活动会话元数据失败:', summarizeExamSessionErrorForLog(error));
             }
         },
 
@@ -3409,7 +3420,7 @@
         async startPracticeSession(examId) {
             const exam = await findExamDefinition(examId);
             if (!exam) {
-                console.error('Exam not found:', examId);
+                console.error('Exam not found');
                 window.showMessage && window.showMessage('题目索引未加载，请重试或重新导入题库。', 'error');
                 return;
             }
@@ -3453,7 +3464,7 @@
                 this.updateExamStatus(examId, 'in-progress');
 
             } catch (error) {
-                console.error('[App] 启动练习会话失败:', error);
+                console.error('[App] 启动练习会话失败:', summarizeExamSessionErrorForLog(error));
 
                 // 最终降级方案
                 this.startPracticeSessionFallback(examId, exam);
@@ -3519,7 +3530,12 @@
          * 处理题目错误
          */
         handleExamError(examId, errorData) {
-            console.error('Exam error:', examId, errorData);
+            console.error(
+                'Exam error:',
+                errorData && typeof errorData === 'object'
+                    ? (errorData.message || 'object')
+                    : typeof errorData
+            );
 
             window.showMessage(`题目出现错误: ${errorData.message || '未知错误'}`, 'error');
 
@@ -3620,7 +3636,7 @@
                         }
                     });
                 } catch (recorderError) {
-                    console.warn('[PracticeRecorder] 无法同步会话状态:', recorderError);
+                    console.warn('[PracticeRecorder] 无法同步会话状态:', summarizeExamSessionErrorForLog(recorderError));
                 }
             }
 
@@ -3779,7 +3795,7 @@
                 data.sessionId = `${examId}_${Date.now()}`;
             }
             if (String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize') {
-                console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
+                console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录');
                 return;
             }
 
@@ -3820,7 +3836,7 @@
                     }
                 }
             } catch (error) {
-                console.warn('[DataCollection] 拼写错误检测失败，已忽略:', error);
+                console.warn('[DataCollection] 拼写错误检测失败，已忽略:', summarizeExamSessionErrorForLog(error));
             }
             this._normalizeListeningSpellingErrors(examId, data);
 
@@ -3909,7 +3925,7 @@
 
                 // 检查成就
                 if (window.AchievementManager) {
-                    window.AchievementManager.check(data?.realData).catch(console.warn);
+                    window.AchievementManager.check(data?.realData).catch((error) => { console.warn('[DataCollection] achievement check failed:', summarizeExamSessionErrorForLog(error)); });
                 }
 
                 // 刷新练习记录显示
@@ -3918,7 +3934,7 @@
                 }
 
             } catch (error) {
-                console.error('[DataCollection] 处理练习完成数据失败:', error);
+                console.error('[DataCollection] 处理练习完成数据失败:', summarizeExamSessionErrorForLog(error));
                 // 即使出错也要显示通知
                 window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
             } finally {
@@ -3934,7 +3950,7 @@
          * 处理数据采集错误
          */
         async handleDataCollectionError(examId, data) {
-            console.error('[DataCollection] 数据采集错误:', examId, data);
+            console.error('[DataCollection] 数据采集错误');
 
             // 记录错误但不中断用户体验
             const errorInfo = {
@@ -4094,7 +4110,7 @@
                 const exam = await findExamDefinition(examId);
 
                 if (!exam) {
-                    console.error('[DataCollection] 无法找到题目信息:', examId);
+                    console.error('[DataCollection] 无法找到题目信息');
                     return;
                 }
 
@@ -4234,7 +4250,7 @@
                 }
 
             } catch (error) {
-                console.error('[DataCollection] 保存真实数据失败:', error);
+                console.error('[DataCollection] 保存真实数据失败:', summarizeExamSessionErrorForLog(error));
             }
         },
 
@@ -4284,7 +4300,7 @@
                 window.showMessage && window.showMessage('套题练习窗口已关闭，套题模式将被中断并回退到普通模式。', 'warning');
                 if (typeof this._abortSuiteSession === 'function') {
                     this._abortSuiteSession(this.currentSuiteSession, {}).catch(error => {
-                        console.error('[SuitePractice] 中断套题失败:', error);
+                        console.error('[SuitePractice] 中断套题失败:', summarizeExamSessionErrorForLog(error));
                     });
                 }
             }
@@ -4529,10 +4545,10 @@
             // 监听练习错误事件
             document.addEventListener('practiceSessionError', (event) => {
                 const { examId, error } = event.detail;
-                console.error('Practice session error:', examId, error);
+                console.error('Practice session error:', summarizeExamSessionErrorForLog(error));
 
                 this.updateExamStatus(examId, 'error');
-                window.showMessage(`练习出现错误: ${error.message || '未知错误'}`, 'error');
+                window.showMessage('Practice session failed. Please retry.', 'error');
             });
 
             // 监听练习结束事件

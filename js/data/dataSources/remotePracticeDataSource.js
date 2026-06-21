@@ -16,6 +16,17 @@
         return error && error.status === 401;
     }
 
+    function summarizeRemotePracticeErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function clearApiAuthState(apiClient) {
         if (!apiClient) {
             return;
@@ -101,7 +112,7 @@
                 if (isUnauthorized(error)) {
                     clearApiAuthState(this.apiClient);
                 }
-                console.warn('[RemotePracticeDataSource] 读取远端练习记录失败，回退本地:', error);
+                console.warn('[RemotePracticeDataSource] 读取远端练习记录失败，回退本地:', summarizeRemotePracticeErrorForLog(error));
                 return this.localDataSource.read(key, defaultValue);
             }
         }
@@ -119,7 +130,7 @@
                     if (isUnauthorized(error)) {
                         clearApiAuthState(this.apiClient);
                     }
-                    console.warn('[RemotePracticeDataSource] 写入远端练习记录失败，回退本地:', error);
+                    console.warn('[RemotePracticeDataSource] 写入远端练习记录失败，回退本地:', summarizeRemotePracticeErrorForLog(error));
                     return this.localDataSource.write(key, value);
                 }
             });
@@ -138,17 +149,16 @@
                     if (isUnauthorized(error)) {
                         clearApiAuthState(this.apiClient);
                     }
-                    console.warn('[RemotePracticeDataSource] 清空远端练习记录失败，回退本地:', error);
+                    console.warn('[RemotePracticeDataSource] 清空远端练习记录失败，回退本地:', summarizeRemotePracticeErrorForLog(error));
                     return this.localDataSource.remove(key);
                 }
             });
         }
 
-        async runTransaction(handler, options = {}) {
+        async runTransaction(handler) {
             if (typeof handler !== 'function') {
                 throw new Error('RemotePracticeDataSource.runTransaction requires a handler function');
             }
-            const label = options.label || 'remote-practice-transaction';
             return this._enqueue(async () => {
                 const context = new RemotePracticeTransactionContext(this);
                 try {
@@ -157,7 +167,7 @@
                     return result;
                 } catch (error) {
                     await context.rollback();
-                    console.error(`[RemotePracticeDataSource] Transaction failed (${label}):`, error);
+                    console.error('[RemotePracticeDataSource] Transaction failed:', summarizeRemotePracticeErrorForLog(error));
                     throw error;
                 }
             });

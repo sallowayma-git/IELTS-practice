@@ -57,6 +57,16 @@ const context = createContext();
 const manager = new context.window.DataBackupManager();
 
 await assert.rejects(
+    () => manager.importPracticeData(null, { createBackup: false }),
+    /Failed to read import source: Import source is empty\./
+);
+
+await assert.rejects(
+    () => manager.importPracticeData(undefined, { createBackup: false }),
+    /Failed to read import source: Import source is empty\./
+);
+
+await assert.rejects(
     () => manager.parseImportSource('https://example.com/records.json', { allowFetch: true }),
     /invalid or untrusted/
 );
@@ -430,6 +440,16 @@ await assert.rejects(
         }))
     }, { createBackup: false }),
     /too many practice records/
+);
+
+assert(
+    source.includes('function dataBackupDebugLog') &&
+    source.includes('window.__IELTS_DEBUG_IMPORTS__ === true') &&
+    !source.includes("console.log('[DataBackupManager] importPracticeData called") &&
+    !source.includes("console.log('[DataBackupManager] Normalized records:") &&
+    !source.includes('Skipped record: missing fields') &&
+    !source.includes("console.log('[DataBackupManager] ScoreStorage import finished"),
+    'data backup manager must gate import diagnostics behind an explicit debug flag'
 );
 
 console.log(JSON.stringify({

@@ -47,7 +47,6 @@
             }
 
             if (shouldActivateFromLocation()) {
-                this.enableTestEnvironment({ persist: true });
                 return true;
             }
 

@@ -71,16 +71,16 @@
                 ? this.sanitizeRecoveredRecord(cleanRecord)
                 : cleanRecord;
               if (!sanitized || !sanitized.examId) {
-                console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord && cleanRecord.id);
+                console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）');
                 continue;
               }
               if (this && typeof this.savePracticeRecord === 'function') {
                 await this.savePracticeRecord(sanitized);
               }
               recoveredCount++;
-              console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized && sanitized.id}`);
+              console.log('[PracticeRecorder] 恢复记录成功');
             } catch (e) {
-              console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord && tempRecord.id}`, e);
+              console.error('[PracticeRecorder] 恢复记录失败:', e);
               failed.push(tempRecord);
             }
           }

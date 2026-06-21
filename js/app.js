@@ -148,7 +148,7 @@ class ExamSystemApp {
                 return;
             }
             if (isAppUnsafeAttributeName(key) || isAppUnsafeUrlAttribute(key, value, element.tagName)) {
-                console.warn(`[App] Skipped unsafe fallback attribute: ${key}`);
+                console.warn('[App] Skipped unsafe fallback attribute');
                 return;
             }
             if (key === 'className') {
@@ -203,7 +203,7 @@ class ExamSystemApp {
                 const serializedValue = StateSerializer.serialize(value);
                 await storage.set(key, serializedValue);
             } catch (error) {
-                console.error(`[App] 持久化状态失败 ${path}:`, error);
+                console.error('[App] 持久化状态失败:', error);
             }
         },
         async persistMultipleState(mapping) {
@@ -226,7 +226,7 @@ class ExamSystemApp {
                     return deserializedValue;
                 }
             } catch (error) {
-                console.error(`[App] 加载状态失败 ${path}:`, error);
+                console.error('[App] 加载状态失败:', error);
             }
             return null;
         },

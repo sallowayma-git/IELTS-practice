@@ -28,12 +28,18 @@ function createLocalStorage(seed = {}) {
 
 function createHarness(seed = {}, externalConfig = {}) {
     const localStorage = createLocalStorage(seed);
+    const capturedLogs = [];
+    function capture(method) {
+        return (...args) => {
+            capturedLogs.push({ method, args });
+        };
+    }
     const nativeConsole = {
-        log() {},
-        info() {},
-        warn() {},
-        error() {},
-        debug() {}
+        log: capture('log'),
+        info: capture('info'),
+        warn: capture('warn'),
+        error: capture('error'),
+        debug: capture('debug')
     };
     const window = {
         localStorage,
@@ -46,7 +52,7 @@ function createHarness(seed = {}, externalConfig = {}) {
         console: window.console
     });
     vm.runInContext(source, context, { filename: 'js/utils/logger.js' });
-    return { window, localStorage };
+    return { window, localStorage, capturedLogs };
 }
 
 const maliciousStoredConfig = JSON.stringify({
@@ -106,12 +112,39 @@ const arrayConfig = arrayHarness.window.AppLogger.getConfig();
 assert.equal(arrayConfig.level, 'info');
 assert.equal(arrayConfig.categories.System, 'info');
 
+const redactionHarness = createHarness({}, { level: 'debug', categories: { PracticeRecorder: 'debug' } });
+redactionHarness.window.console.log('[PracticeRecorder] sensitive event', {
+    sessionId: 'session-123',
+    csrfToken: 'csrf-123',
+    password: 'StrongPass1',
+    nested: {
+        userInput: 'private answer',
+        url: 'https://example.test/path?token=secret-token&ok=1',
+        localPath: 'D:\\Users\\Alice\\IELTS\\private.html'
+    },
+    rows: [{ recordId: 'record-123', visible: 'count-only' }]
+});
+const sensitiveLog = redactionHarness.capturedLogs.find((entry) => entry.args[0] && String(entry.args[0]).includes('[PracticeRecorder]'));
+assert(sensitiveLog, 'categorized logs should be captured through AppLogger');
+const serializedLog = JSON.stringify(sensitiveLog.args);
+assert(!serializedLog.includes('session-123'), 'logger must redact session identifiers');
+assert(!serializedLog.includes('csrf-123'), 'logger must redact CSRF tokens');
+assert(!serializedLog.includes('StrongPass1'), 'logger must redact passwords');
+assert(!serializedLog.includes('private answer'), 'logger must redact answer text');
+assert(!serializedLog.includes('secret-token'), 'logger must redact sensitive URL parameters');
+assert(!serializedLog.includes('D:\\Users\\Alice'), 'logger must redact local filesystem paths');
+assert(!serializedLog.includes('record-123'), 'logger must redact record identifiers');
+assert(serializedLog.includes('[redacted]'), 'logger should preserve structure with redacted markers');
+assert(serializedLog.includes('[local-path]'), 'logger should mark redacted local paths');
+
 assert(
     source.includes('function normalizeLogLevel') &&
     source.includes('function normalizeCategoryLevels') &&
+    source.includes('function sanitizeLogArg') &&
+    source.includes('SENSITIVE_LOG_KEYS') &&
     source.includes("UNSAFE_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
     !source.includes('...(storedConfig.categories || {})'),
-    'logger config must validate stored category levels before merging persisted data'
+    'logger config must validate stored category levels and sanitize categorized log output'
 );
 
 console.log('loggerConfig.test.js passed');

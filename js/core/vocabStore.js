@@ -912,14 +912,14 @@
 
         const listConfig = VOCAB_LISTS[listId];
         if (!listConfig) {
-            console.warn('[VocabStore] loadList: 未知的词表 ID:', listId);
+            console.warn('[VocabStore] loadList: 未知的词表 ID');
             return null;
         }
 
         // 检查缓存（带TTL）
         const cached = state.listCache.get(listId);
         if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
-            console.log(`[VocabStore] 从缓存加载词表: ${listId}`);
+            console.log('[VocabStore] 从缓存加载词表');
             return cached.data;
         }
 
@@ -935,7 +935,7 @@
                 normalizedWords = await ensureDefaultLexicon();
             }
             if (!normalizedWords.length) {
-                console.log(`[VocabStore] 词表为空或格式未知: ${listId}`);
+                console.log('[VocabStore] 词表为空或格式未知');
             }
 
             const listData = {
@@ -956,7 +956,7 @@
                 data: listData,
                 timestamp: Date.now()
             });
-            console.log(`[VocabStore] 加载词表成功: ${listId}, 单词数: ${normalizedWords.length}`);
+            console.log(`[VocabStore] 加载词表成功，单词数: ${normalizedWords.length}`);
             return listData;
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', error);
@@ -980,7 +980,7 @@
         }
 
         if (!listData || !VOCAB_LISTS[listId]) {
-            console.warn('[VocabStore] setActiveList: 词表不存在:', listId);
+            console.warn('[VocabStore] setActiveList: 词表不存在');
             return false;
         }
 

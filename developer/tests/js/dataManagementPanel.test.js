@@ -8,16 +8,26 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const panelSource = fs.readFileSync(path.join(repoRoot, 'js/components/dataManagementPanel.js'), 'utf8');
 
-function createPanelHarness({ missingControls = false } = {}) {
+function createPanelHarness({ missingControls = false, importFile = null } = {}) {
     const selectedFileName = { textContent: '' };
     const importButton = { disabled: true };
+    const importInput = importFile
+        ? { files: [importFile], value: importFile.name }
+        : null;
     const documentStub = {
         getElementById(id) {
             if (missingControls) {
                 return null;
             }
-            return id === 'selectedFileName' ? selectedFileName : null;
+            if (id === 'selectedFileName') {
+                return selectedFileName;
+            }
+            if (id === 'importFile') {
+                return importInput;
+            }
+            return null;
         },
         querySelector(selector) {
             if (missingControls) {
@@ -44,8 +54,7 @@ function createPanelHarness({ missingControls = false } = {}) {
         Set,
         JSON
     });
-    const source = fs.readFileSync(path.join(repoRoot, 'js/components/dataManagementPanel.js'), 'utf8');
-    vm.runInContext(source, context, { filename: 'js/components/dataManagementPanel.js' });
+    vm.runInContext(panelSource, context, { filename: 'js/components/dataManagementPanel.js' });
 
     const pendingReads = new Map();
     const panel = Object.create(context.window.DataManagementPanel.prototype);
@@ -143,6 +152,31 @@ async function flushPromises() {
     await harness.panel.handleImport('merge');
     assert.equal(harness.panel.selectedFileContent, null);
 }
+
+{
+    const file = { name: 'null.json', size: 4, type: 'application/json' };
+    const harness = createPanelHarness({ importFile: file });
+    let importedPayload = Symbol('unset');
+    harness.panel.backupManager = {
+        async importPracticeData(payload) {
+            importedPayload = payload;
+            return { success: true, importedCount: 0, skippedCount: 0 };
+        }
+    };
+    harness.panel.readFile = async () => 'null';
+
+    await harness.panel.handleImport('merge');
+    assert.equal(importedPayload, null);
+}
+
+assert(
+    panelSource.includes('function dataManagementDebugLog') &&
+    panelSource.includes('window.__IELTS_DEBUG_IMPORTS__ === true') &&
+    !panelSource.includes("console.log('[DataManagementPanel] handleFileSelect called") &&
+    !panelSource.includes("console.log('[DataManagementPanel] JSON parsed") &&
+    !panelSource.includes("console.log('[DataManagementPanel] importPracticeData returned"),
+    'data management panel must gate import diagnostics behind an explicit debug flag'
+);
 
 console.log(JSON.stringify({
     status: 'pass',

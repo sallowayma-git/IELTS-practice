@@ -17,6 +17,17 @@
         return `fallback_${fallbackIdCounter.toString(36)}`;
     }
 
+    function summarizeSuitePracticeErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function getMessageTargetOrigin() {
         const origin = global && global.location && global.location.origin;
         return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
@@ -184,7 +195,7 @@
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
                 }
             } catch (error) {
-                console.error('[SuitePractice] 启动失败:', error);
+                console.error('[SuitePractice] 启动失败:', summarizeSuitePracticeErrorForLog(error));
                 window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
                 if (this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
@@ -568,7 +579,7 @@
                 resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin());
                 return true;
             } catch (error) {
-                console.warn('[SuitePractice] 发送套题回看上下文失败:', error);
+                console.warn('[SuitePractice] 发送套题回看上下文失败:', summarizeSuitePracticeErrorForLog(error));
                 return false;
             }
         },
@@ -742,7 +753,7 @@
                     }
                 } catch (error) {
                     openError = error;
-                    console.warn('[SuitePractice] 套题下一篇打开失败:', error);
+                    console.warn('[SuitePractice] 套题下一篇打开失败:', summarizeSuitePracticeErrorForLog(error));
                 }
 
                 return null;
@@ -928,7 +939,7 @@
                 targetWindow.postMessage(payload, getMessageTargetOrigin());
                 return true;
             } catch (e) {
-                console.warn('[SuitePractice] 发送模拟上下文失败:', e);
+                console.warn('[SuitePractice] 发送模拟上下文失败:', summarizeSuitePracticeErrorForLog(e));
                 return false;
             }
         },
@@ -1130,7 +1141,7 @@
                 return false;
             }
 
-            console.log('[MultiSuite] 处理套题完成:', examId, '套题ID:', suiteData.suiteId);
+            console.log('[MultiSuite] 处理套题完成');
 
             // 获取或创建多套题会话
             const session = this.getOrCreateMultiSuiteSession(examId);
@@ -1141,7 +1152,7 @@
             );
 
             if (alreadyRecorded) {
-                console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
+                console.warn('[MultiSuite] 套题已记录，跳过重复结果');
                 return true;
             }
 
@@ -1173,7 +1184,7 @@
             session.lastUpdate = Date.now();
 
 
-            console.log('[MultiSuite] added suite result', suiteData.suiteId, 'current progress:', session.suiteResults.length + ' suite(s)');
+            console.log('[MultiSuite] added suite result; current progress:', session.suiteResults.length + ' suite(s)');
 
             // 如果这是第一个套题，尝试从数据中确定预期套题数量
             if (session.suiteResults.length === 1 && !session.expectedSuiteCount) {
@@ -1236,7 +1247,7 @@
             }
 
             session.status = 'finalizing';
-            console.log('[MultiSuite] 开始聚合多套题记录:', session.id);
+            console.log('[MultiSuite] Starting consolidated suite record');
 
             try {
                 const completionTime = Date.now();
@@ -1339,7 +1350,7 @@
                         await window.spellingErrorCollector.saveErrors(aggregatedSpellingErrors);
                         console.log('[MultiSuite] 已保存拼写错误到词表:', aggregatedSpellingErrors.length);
                     } catch (error) {
-                        console.warn('[MultiSuite] 保存拼写错误失败:', error);
+                        console.warn('[MultiSuite] 保存拼写错误失败:', summarizeSuitePracticeErrorForLog(error));
                     }
                 }
 
@@ -1356,10 +1367,10 @@
 
 
 
-                console.log('[MultiSuite] consolidated record saved:', record.id);
+                console.log('[MultiSuite] consolidated record saved');
 
             } catch (error) {
-                console.error('[MultiSuite] 聚合记录失败:', error);
+                console.error('[MultiSuite] 聚合记录失败:', summarizeSuitePracticeErrorForLog(error));
                 session.status = 'error';
                 window.showMessage && window.showMessage('多套题记录保存失败，请稍后重试。', 'error');
             }
@@ -1660,7 +1671,7 @@
                 window.showMessage && window.showMessage('套题练习已完成，记录已保存。', 'success');
                 session.status = 'completed';
             } catch (error) {
-                console.error('[SuitePractice] 保存套题记录失败:', error);
+                console.error('[SuitePractice] 保存套题记录失败:', summarizeSuitePracticeErrorForLog(error));
                 window.showMessage && window.showMessage('套题记录保存失败，系统将尝试恢复到普通模式。', 'error');
                 await this._savePartialSuiteAsIndividual(session);
                 session.status = 'error';
@@ -1679,7 +1690,7 @@
                         list = await storage.get('exam_index', []);
                     }
                 } catch (error) {
-                    console.warn('[SuitePractice] Failed to load exam index, falling back to the default bank.', error);
+                    console.warn('[SuitePractice] Failed to load exam index, falling back to the default bank.', summarizeSuitePracticeErrorForLog(error));
                     list = await storage.get('exam_index', []);
                 }
             }
@@ -1700,7 +1711,7 @@
                 try {
                     return normalizeList(await this.components.practiceRecorder.getPracticeRecords());
                 } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
+                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', summarizeSuitePracticeErrorForLog(error));
                 }
             }
 
@@ -1708,7 +1719,7 @@
                 try {
                     return normalizeList(await window.PracticeCore.store.listPracticeRecords());
                 } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
+                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', summarizeSuitePracticeErrorForLog(error));
                 }
             }
 
@@ -1716,7 +1727,7 @@
                 try {
                     return normalizeList(await window.PracticeStore.list());
                 } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeStore 记录失败，尝试存储回退:', error);
+                    console.warn('[SuitePractice] 读取 PracticeStore 记录失败，尝试存储回退:', summarizeSuitePracticeErrorForLog(error));
                 }
             }
 
@@ -1724,7 +1735,7 @@
                 try {
                     return normalizeList(await storage.get('practice_records', []));
                 } catch (error) {
-                    console.warn('[SuitePractice] 读取 practice_records 失败:', error);
+                    console.warn('[SuitePractice] 读取 practice_records 失败:', summarizeSuitePracticeErrorForLog(error));
                 }
             }
 
@@ -2122,7 +2133,7 @@
                 this._focusSuiteWindow(session.windowRef);
                 return true;
             } catch (error) {
-                console.error('[SuitePractice] 启动失败:', error);
+                console.error('[SuitePractice] 启动失败:', summarizeSuitePracticeErrorForLog(error));
                 window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
                 if (this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
@@ -2226,11 +2237,11 @@
                 try {
                     await this.components.practiceRecorder.savePracticeRecord(record);
                     await this._cleanupSuiteEntryRecords(record).catch(error => {
-                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
+                        console.warn('[SuitePractice] 清理套题子记录失败:', summarizeSuitePracticeErrorForLog(error));
                     });
                     return;
                 } catch (error) {
-                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
+                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', summarizeSuitePracticeErrorForLog(error));
                 }
             }
 
@@ -2240,7 +2251,7 @@
         async _saveSuitePracticeRecordFallback(record) {
             await this._saveSinglePracticeRecordWithFallback(record);
             await this._cleanupSuiteEntryRecords(record).catch(error => {
-                console.warn('[SuitePractice] 清理套题子记录失败:', error);
+                console.warn('[SuitePractice] 清理套题子记录失败:', summarizeSuitePracticeErrorForLog(error));
             });
         },
 
@@ -2336,7 +2347,7 @@
                     }
                 }
             } catch (error) {
-                console.warn('[SuitePractice] 同步练习记录失败:', error);
+                console.warn('[SuitePractice] 同步练习记录失败:', summarizeSuitePracticeErrorForLog(error));
             }
 
             try {
@@ -2344,7 +2355,7 @@
                     window.updatePracticeView();
                 }
             } catch (error) {
-                console.warn('[SuitePractice] 刷新练习视图失败:', error);
+                console.warn('[SuitePractice] 刷新练习视图失败:', summarizeSuitePracticeErrorForLog(error));
             }
         },
 
@@ -2422,7 +2433,7 @@
                     await this.saveRealPracticeData(entry.examId, this._buildSuiteEntryIndividualPayload(session, entry), { forceIndividualSave: true });
                     this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                 } catch (error) {
-                    console.error('[SuitePractice] 保存单篇记录失败:', error);
+                    console.error('[SuitePractice] 保存单篇记录失败:', summarizeSuitePracticeErrorForLog(error));
                 }
             }
 
@@ -2458,7 +2469,7 @@
             try {
                 targetWindow.close();
             } catch (error) {
-                console.warn('[SuitePractice] 关闭套题窗口被拦截:', error);
+                console.warn('[SuitePractice] 关闭套题窗口被拦截:', summarizeSuitePracticeErrorForLog(error));
             }
         },
 
@@ -2524,7 +2535,7 @@
                         await this.saveRealPracticeData(entry.examId, this._buildSuiteEntryIndividualPayload(session, entry), { forceIndividualSave: true });
                         this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                     } catch (error) {
-                        console.error('[SuitePractice] 套题中断时保存记录失败:', error);
+                        console.error('[SuitePractice] 套题中断时保存记录失败:', summarizeSuitePracticeErrorForLog(error));
                     }
                 }
                 await this._updatePracticeRecordsState();
@@ -2543,7 +2554,7 @@
             try {
                 reopened = window.open('about:blank', normalizedName);
             } catch (error) {
-                console.warn('[SuitePractice] 无法重建套题标签:', error);
+                console.warn('[SuitePractice] 无法重建套题标签:', summarizeSuitePracticeErrorForLog(error));
                 reopened = null;
             }
 
@@ -2656,7 +2667,7 @@
 
                 targetWindow.__IELTS_SUITE_PARENT_GUARD__ = guardInfo;
             } catch (error) {
-                console.warn('[SuitePractice] 安装套题窗口防护失败:', error);
+                console.warn('[SuitePractice] 安装套题窗口防护失败:', summarizeSuitePracticeErrorForLog(error));
             }
         },
 
@@ -2671,7 +2682,7 @@
             } catch (error) {
                 const message = String(error && error.message ? error.message : error);
                 if (!message || !message.toLowerCase().includes('cross-origin')) {
-                    console.warn('[SuitePractice] Unable to read suite window guard data:', error);
+                    console.warn('[SuitePractice] Unable to read suite window guard data:', summarizeSuitePracticeErrorForLog(error));
                 } else {
                     console.debug('[SuitePractice] Suite window guard is cross-origin; skipping guard release.');
                 }
@@ -2762,7 +2773,7 @@
             };
 
             this.multiSuiteSessionsMap.set(baseExamId, session);
-            console.log('[MultiSuite] 创建新会话:', session.id, '基础ID:', baseExamId);
+            console.log('[MultiSuite] Created new suite session');
 
             return session;
         },
@@ -2788,7 +2799,7 @@
 
             if (isComplete) {
 
-                console.log('[MultiSuite] session completed:', session.id, 'completed ' + completedCount + '/' + session.expectedSuiteCount + ' suite(s)');
+                console.log('[MultiSuite] suite completed: ' + completedCount + '/' + session.expectedSuiteCount + ' suite(s)');
             }
 
             return isComplete;

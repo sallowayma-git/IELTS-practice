@@ -902,6 +902,86 @@
             );
         }
 
+        function renderTotpActionForm(statusNode, body, options = {}) {
+            body.textContent = '';
+            const form = createElement('form', 'remote-auth-totp__form');
+            const note = createElement('p', 'remote-auth-totp__note', options.note || '');
+            const error = createElement('div', 'remote-auth-error');
+            error.hidden = true;
+
+            form.append(note);
+            let passwordInput = null;
+            if (options.requirePassword) {
+                const passwordLabel = createElement('label', 'remote-auth-field');
+                passwordInput = createElement('input');
+                passwordInput.type = 'password';
+                passwordInput.autocomplete = 'current-password';
+                passwordInput.required = true;
+                passwordLabel.append(createElement('span', null, '当前密码'), passwordInput);
+                form.append(passwordLabel);
+            }
+
+            const tokenLabel = createElement('label', 'remote-auth-field');
+            const tokenInput = createElement('input');
+            tokenInput.type = 'text';
+            tokenInput.inputMode = 'numeric';
+            tokenInput.autocomplete = 'one-time-code';
+            tokenInput.maxLength = 64;
+            tokenInput.required = true;
+            tokenLabel.append(createElement('span', null, 'TOTP 验证码或恢复码'), tokenInput);
+
+            const actions = createElement('div', 'remote-auth-totp__actions');
+            const submit = createElement('button', 'remote-auth-totp__primary', options.submitLabel || '确认');
+            submit.type = 'submit';
+            const cancel = createElement('button', 'remote-auth-totp__secondary', '取消');
+            cancel.type = 'button';
+            cancel.addEventListener('click', () => {
+                if (typeof options.onCancel === 'function') {
+                    options.onCancel();
+                }
+            });
+            actions.append(submit, cancel);
+
+            form.append(tokenLabel, error, actions);
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const token = normalizeCode(tokenInput.value);
+                const password = passwordInput ? passwordInput.value : '';
+                if (options.requirePassword && !password) {
+                    error.textContent = '请输入当前密码。';
+                    error.hidden = false;
+                    passwordInput.focus();
+                    return;
+                }
+                if (!token) {
+                    error.textContent = '请输入 TOTP 验证码或恢复码。';
+                    error.hidden = false;
+                    tokenInput.focus();
+                    return;
+                }
+                error.hidden = true;
+                submit.disabled = true;
+                cancel.disabled = true;
+                try {
+                    await options.onSubmit({ password, token });
+                } catch (requestError) {
+                    const message = formatRemoteAuthError(requestError);
+                    error.textContent = message;
+                    error.hidden = false;
+                    statusNode.textContent = message;
+                } finally {
+                    submit.disabled = false;
+                    cancel.disabled = false;
+                }
+            });
+
+            body.append(form);
+            window.setTimeout(() => {
+                const firstInput = passwordInput || tokenInput;
+                firstInput.focus({ preventScroll: true });
+            }, 0);
+        }
+
         async function loadTotpPanel() {
             if (!totpPanel) {
                 return;
@@ -933,40 +1013,35 @@
                 const disable = createElement('button', 'remote-auth-totp__danger', '关闭 TOTP');
                 regenerate.type = 'button';
                 disable.type = 'button';
-                regenerate.addEventListener('click', async () => {
-                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
-                    if (token === null) return;
-                    regenerate.disabled = true;
-                    body.textContent = '';
-                    try {
-                        const result = await apiClient.regenerateTotpRecoveryCodes(token);
-                        renderRecoveryCodes(body, result.recoveryCodes || []);
-                        statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
-                    } catch (requestError) {
-                        statusNode.textContent = formatRemoteAuthError(requestError);
-                    } finally {
-                        regenerate.disabled = false;
-                    }
+                regenerate.addEventListener('click', () => {
+                    renderTotpActionForm(statusNode, body, {
+                        note: '输入验证器验证码或恢复码后，将生成一组新的恢复码。旧恢复码会立即失效。',
+                        submitLabel: '重新生成恢复码',
+                        onCancel: () => renderTotpStatus(status, statusNode, body),
+                        onSubmit: async ({ token }) => {
+                            const result = await apiClient.regenerateTotpRecoveryCodes(token);
+                            body.textContent = '';
+                            renderRecoveryCodes(body, result.recoveryCodes || []);
+                            statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
+                        }
+                    });
                 });
-                disable.addEventListener('click', async () => {
+                disable.addEventListener('click', () => {
                     if (apiClient.user?.role === 'admin') {
                         statusNode.textContent = '管理员不能在这里关闭 TOTP。';
                         return;
                     }
-                    const password = window.prompt('请输入当前密码');
-                    if (password === null) return;
-                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
-                    if (token === null) return;
-                    disable.disabled = true;
-                    try {
-                        const result = await apiClient.disableTotp(password, token);
-                        renderTotpStatus(result, statusNode, body);
-                        showMessage('TOTP 已关闭', 'success');
-                    } catch (requestError) {
-                        statusNode.textContent = formatRemoteAuthError(requestError);
-                    } finally {
-                        disable.disabled = false;
-                    }
+                    renderTotpActionForm(statusNode, body, {
+                        requirePassword: true,
+                        note: '关闭 TOTP 需要同时确认当前密码和验证码。',
+                        submitLabel: '关闭 TOTP',
+                        onCancel: () => renderTotpStatus(status, statusNode, body),
+                        onSubmit: async ({ password, token }) => {
+                            const result = await apiClient.disableTotp(password, token);
+                            renderTotpStatus(result, statusNode, body);
+                            showMessage('TOTP 已关闭', 'success');
+                        }
+                    });
                 });
                 body.append(regenerate, disable);
                 return;

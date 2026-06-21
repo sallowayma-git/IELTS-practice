@@ -126,6 +126,13 @@ assert(
     authOverlaySource.includes("totpPanel.textContent = ''"),
     'auth overlay must clear hidden password, TOTP setup secret, QR data, and recovery codes when leaving auth surfaces'
 );
+assert(
+    !authOverlaySource.includes('window.prompt(') &&
+    authOverlaySource.includes("passwordInput.type = 'password'") &&
+    authOverlaySource.includes('function renderTotpActionForm') &&
+    authOverlaySource.includes('apiClient.disableTotp(password, token)'),
+    'auth overlay must collect TOTP management credentials through masked inline fields, not window.prompt'
+);
 
 const appSource = readSource('js/app.js');
 assertExtendedUrlAttributes(appSource, 'app fallback DOM helper');

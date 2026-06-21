@@ -396,7 +396,7 @@ class PerformanceOptimizer {
         this.cache.set(key, value);
         this.cacheTTL.set(key, Date.now() + ttl);
         
-        console.log(`[PerformanceOptimizer] 缓存已设置: ${key}`);
+        console.log('[PerformanceOptimizer] Cache entry set');
     }
     
     /**

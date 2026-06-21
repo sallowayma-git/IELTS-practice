@@ -88,7 +88,7 @@
                 return;
             }
             if (isLegacyUnsafeAttributeName(key) || isLegacyUnsafeUrlAttribute(key, value, element.tagName)) {
-                console.warn('[LegacyView] Skipped unsafe attribute: ' + key);
+                console.warn('[LegacyView] Skipped unsafe attribute');
                 return;
             }
             if (key === 'className') {

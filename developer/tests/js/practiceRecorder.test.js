@@ -208,6 +208,62 @@ async function testFallbackStandardizeStripsPollutionKeys(PracticeRecorder) {
     });
 }
 
+async function testRejectedCompletionPayloadStoresOnlySummary(PracticeRecorder) {
+    const recorder = Object.create(PracticeRecorder.prototype);
+    let storedValue = null;
+    recorder.metaRepo = {
+        async get() {
+            return [];
+        },
+        async set(key, value) {
+            assert.strictEqual(key, 'rejected_completion_payloads');
+            storedValue = JSON.parse(JSON.stringify(value));
+            return true;
+        }
+    };
+
+    await recorder.recordRejectedCompletionPayload(
+        {
+            examId: 'reading-private-exam',
+            sessionId: 'session-private-id',
+            originalExamId: 'original-private-exam',
+            suiteSessionId: 'suite-private-id',
+            metadata: { examTitle: 'Private Exam Title' },
+            results: { metadata: { anotherTitle: 'Nested Private Title' } }
+        },
+        {
+            reason: 'missing_active_session',
+            resolvedExamId: 'resolved-private-exam',
+            candidateExamIds: ['candidate-a', 'candidate-b']
+        }
+    );
+
+    assert(Array.isArray(storedValue), 'rejected payload audit entry should be stored');
+    assert.strictEqual(storedValue.length, 1);
+    assert.deepStrictEqual(storedValue[0].context, {
+        reason: 'missing_active_session',
+        hasResolvedExam: true,
+        candidateExamCount: 2
+    });
+    assert.deepStrictEqual(storedValue[0].payload, {
+        type: 'object',
+        keyCount: 6,
+        hasExamId: true,
+        hasSessionId: true,
+        hasMetadata: true
+    });
+    const serialized = JSON.stringify(storedValue);
+    assert(!serialized.includes('reading-private-exam'), 'rejected payload audit must not store exam ids');
+    assert(!serialized.includes('session-private-id'), 'rejected payload audit must not store session ids');
+    assert(!serialized.includes('Private Exam Title'), 'rejected payload audit must not store metadata content');
+    assert(!serialized.includes('candidate-a'), 'rejected payload audit must not store candidate exam ids');
+
+    recordResult('Rejected completion payload audit stores only summaries', {
+        payload: storedValue[0].payload,
+        context: storedValue[0].context
+    });
+}
+
 async function main() {
     const quietConsole = {
         log() {},
@@ -244,6 +300,7 @@ async function main() {
         await testNormalizeCompletionPayloadKeepsHighlights(PracticeRecorder);
         await testNormalizeCompletionPayloadStripsPollutionKeys(PracticeRecorder);
         await testFallbackStandardizeStripsPollutionKeys(PracticeRecorder);
+        await testRejectedCompletionPayloadStoresOnlySummary(PracticeRecorder);
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

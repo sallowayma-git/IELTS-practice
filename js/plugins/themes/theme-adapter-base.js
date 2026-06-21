@@ -34,6 +34,16 @@
   const MAX_PRACTICE_MESSAGE_OBJECT_KEYS = 200;
   const MAX_PRACTICE_MESSAGE_TEXT_LENGTH = 8000;
 
+  function summarizeThemeAdapterErrorForLog(error) {
+    const summary = {
+      name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+      summary.code = error.code;
+    }
+    return summary;
+  }
+
   function getMessageTargetOrigin() {
     const origin = window.location && window.location.origin;
     return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
@@ -566,7 +576,7 @@
           recordCount: this._practiceRecords.length
         });
       } catch (error) {
-        console.error('[ThemeAdapterBase] 初始化失败:', error);
+        console.error('[ThemeAdapterBase] 初始化失败:', summarizeThemeAdapterErrorForLog(error));
         throw error;
       }
     },
@@ -618,7 +628,7 @@
         if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
           await window.PracticeCore.store.savePracticeRecord(normalizedRecord, { maxRecords: 1000 });
           await this._loadPracticeRecords();
-          console.log('[ThemeAdapterBase] 练习记录已通过 PracticeCore 保存', normalizedRecord.id || normalizedRecord.sessionId);
+          console.log('[ThemeAdapterBase] Practice record saved through PracticeCore');
           return;
         }
 
@@ -634,9 +644,9 @@
         // 触发更新回调
         this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
         
-        console.log('[ThemeAdapterBase] 练习记录已保存', normalizedRecord.id || normalizedRecord.sessionId);
+        console.log('[ThemeAdapterBase] Practice record saved');
       } catch (error) {
-        console.error('[ThemeAdapterBase] 保存练习记录失败:', error);
+        console.error('[ThemeAdapterBase] 保存练习记录失败:', summarizeThemeAdapterErrorForLog(error));
         throw error;
       }
     },
@@ -674,7 +684,7 @@
           window.app.openExam(examId, options);
           return null; // app.openExam 内部管理窗口
         } catch (error) {
-          console.warn('[ThemeAdapterBase] app.openExam 失败，使用本地逻辑:', error);
+          console.warn('[ThemeAdapterBase] app.openExam 失败，使用本地逻辑:', summarizeThemeAdapterErrorForLog(error));
         }
       }
 
@@ -683,7 +693,7 @@
           window.openExam(examId, options);
           return null;
         } catch (error) {
-          console.warn('[ThemeAdapterBase] window.openExam 失败，使用本地逻辑:', error);
+          console.warn('[ThemeAdapterBase] window.openExam 失败，使用本地逻辑:', summarizeThemeAdapterErrorForLog(error));
         }
       }
 
@@ -727,7 +737,7 @@
       try {
         examWindow = window.open(trustedPath, windowName, windowFeatures);
       } catch (error) {
-        console.error('[ThemeAdapterBase] window.open 失败:', error);
+        console.error('[ThemeAdapterBase] window.open 失败:', summarizeThemeAdapterErrorForLog(error));
       }
 
       if (!examWindow) {
@@ -773,7 +783,7 @@
           window.openPDFSafely(trustedPath, exam.title);
           return null;
         } catch (error) {
-          console.warn('[ThemeAdapterBase] openPDFSafely 失败:', error);
+          console.warn('[ThemeAdapterBase] openPDFSafely 失败:', summarizeThemeAdapterErrorForLog(error));
         }
       }
 
@@ -842,7 +852,7 @@
           examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
           examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
         } catch (error) {
-          console.warn('[ThemeAdapterBase] postMessage 失败:', error);
+          console.warn('[ThemeAdapterBase] postMessage 失败:', summarizeThemeAdapterErrorForLog(error));
         }
 
         attempts++;
@@ -889,7 +899,7 @@
         try {
           return window.showMessage(message, type, duration);
         } catch (error) {
-          console.warn('[ThemeAdapterBase] window.showMessage 失败:', error);
+          console.warn('[ThemeAdapterBase] window.showMessage 失败:', summarizeThemeAdapterErrorForLog(error));
         }
       }
 
@@ -898,7 +908,8 @@
         const prefix = type ? `[${type.toUpperCase()}] ` : '';
         window.alert(prefix + (message || ''));
       } catch (_) {
-        console.log(`[ThemeAdapterBase] ${type || 'info'}: ${message}`);
+        const safeType = ['success', 'error', 'info', 'warning'].includes(type) ? type : 'info';
+        console.log(`[ThemeAdapterBase] Message shown: ${safeType}`);
       }
     },
 
@@ -1058,7 +1069,7 @@
 
       // 处理练习完成消息
       if (this.isPracticeCompleteType(normalizedType)) {
-        console.log('[ThemeAdapterBase] 收到练习完成消息:', normalizedType, payload);
+        console.log('[ThemeAdapterBase] Received practice completion message:', normalizedType);
         this._handlePracticeComplete(payload);
         this._notifyMessageCallbacks('PRACTICE_COMPLETE', payload);
         return;
@@ -1072,7 +1083,7 @@
 
       // 处理错误消息
       if (normalizedType === 'ERROR_OCCURRED') {
-        console.warn('[ThemeAdapterBase] 收到错误消息:', payload);
+        console.warn('[ThemeAdapterBase] Received practice page error message');
         this._notifyMessageCallbacks('ERROR_OCCURRED', payload);
         return;
       }
@@ -1090,7 +1101,7 @@
      * @param {Object} payload - 消息数据
      */
     _handleSessionReady(sessionId, payload) {
-      console.log('[ThemeAdapterBase] 会话就绪:', sessionId);
+      console.log('[ThemeAdapterBase] Session ready');
       
       // 清理握手定时器
       if (this._activeSessions && this._activeSessions.has(sessionId)) {
@@ -1131,7 +1142,7 @@
                 console.log('[ThemeAdapterBase] 通过主系统保存练习记录成功');
               })
               .catch((error) => {
-                console.warn('[ThemeAdapterBase] 主系统保存失败，使用本地保存:', error);
+                console.warn('[ThemeAdapterBase] 主系统保存失败，使用本地保存:', summarizeThemeAdapterErrorForLog(error));
                 this._saveLocalPracticeRecord(normalized, payload);
               })
               .finally(() => {
@@ -1144,7 +1155,7 @@
         // 本地保存
         this._saveLocalPracticeRecord(normalized, payload);
       } catch (error) {
-        console.error('[ThemeAdapterBase] 处理练习完成消息失败:', error);
+        console.error('[ThemeAdapterBase] 处理练习完成消息失败:', summarizeThemeAdapterErrorForLog(error));
       }
     },
 
@@ -1204,10 +1215,10 @@
       // 保存记录
       this.savePracticeRecord(record)
         .then(() => {
-          console.log('[ThemeAdapterBase] 本地保存练习记录成功:', record.id);
+          console.log('[ThemeAdapterBase] 本地保存练习记录成功');
         })
         .catch((error) => {
-          console.error('[ThemeAdapterBase] 本地保存练习记录失败:', error);
+          console.error('[ThemeAdapterBase] 本地保存练习记录失败:', summarizeThemeAdapterErrorForLog(error));
         });
     },
 
@@ -1249,7 +1260,7 @@
           try {
             item.callback(payload, type);
           } catch (error) {
-            console.error('[ThemeAdapterBase] 消息回调执行失败:', error);
+            console.error('[ThemeAdapterBase] 消息回调执行失败:', summarizeThemeAdapterErrorForLog(error));
           }
         }
       });
@@ -1283,7 +1294,7 @@
         
         this._notifyDataUpdated({ examIndex: this._examIndex });
       } catch (error) {
-        console.error('[ThemeAdapterBase] 加载题库索引失败:', error);
+        console.error('[ThemeAdapterBase] 加载题库索引失败:', summarizeThemeAdapterErrorForLog(error));
         this._examIndex = [];
       }
     },
@@ -1307,7 +1318,7 @@
         
         this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
       } catch (error) {
-        console.error('[ThemeAdapterBase] 加载练习记录失败:', error);
+        console.error('[ThemeAdapterBase] 加载练习记录失败:', summarizeThemeAdapterErrorForLog(error));
         this._practiceRecords = [];
       }
     },
@@ -1325,7 +1336,7 @@
           }
           return result;
         } catch (error) {
-          console.warn('[ThemeAdapterBase] storage.get 失败:', error);
+          console.warn('[ThemeAdapterBase] storage.get 失败:', summarizeThemeAdapterErrorForLog(error));
         }
       }
 
@@ -1338,7 +1349,7 @@
           return parsed ? parsed.data : null;
         }
       } catch (error) {
-        console.warn('[ThemeAdapterBase] localStorage 读取失败:', error);
+        console.warn('[ThemeAdapterBase] localStorage 读取失败:', summarizeThemeAdapterErrorForLog(error));
       }
 
       return null;
@@ -1357,7 +1368,7 @@
           }
           return;
         } catch (error) {
-          console.warn('[ThemeAdapterBase] storage.set 失败:', error);
+          console.warn('[ThemeAdapterBase] storage.set 失败:', summarizeThemeAdapterErrorForLog(error));
         }
       }
 
@@ -1371,7 +1382,7 @@
         });
         localStorage.setItem(prefixedKey, serialized);
       } catch (error) {
-        console.error('[ThemeAdapterBase] localStorage 写入失败:', error);
+        console.error('[ThemeAdapterBase] localStorage 写入失败:', summarizeThemeAdapterErrorForLog(error));
         throw error;
       }
     },
@@ -1389,7 +1400,7 @@
         try {
           callback(payload);
         } catch (error) {
-          console.error('[ThemeAdapterBase] 回调执行失败:', error);
+          console.error('[ThemeAdapterBase] 回调执行失败:', summarizeThemeAdapterErrorForLog(error));
         }
       });
     }

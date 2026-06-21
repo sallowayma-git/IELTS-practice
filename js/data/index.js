@@ -27,6 +27,17 @@
         };
     }
 
+    function summarizeDataIndexErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     async function bootstrap() {
         if (!window.persistentStore) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
@@ -57,7 +68,7 @@
                     window.remoteApiClient = remoteApiClient;
                 }
             } catch (error) {
-                console.warn('[data/index] 远端 API 检测失败，继续使用本地存储:', error);
+                console.warn('[data/index] 远端 API 检测失败，继续使用本地存储:', summarizeDataIndexErrorForLog(error));
                 remoteAuthState = { available: false, authenticated: false, user: null };
                 remoteApiClient = null;
                 dataSource = localDataSource;
@@ -196,7 +207,7 @@
             window.remoteAuthController = authController;
             if (remoteAuthState.authenticated) {
                 authController.handleAuthenticated(remoteAuthState.user).catch((error) => {
-                    console.warn('[data/index] 登录后导入本地记录失败:', error);
+                    console.warn('[data/index] 登录后导入本地记录失败:', summarizeDataIndexErrorForLog(error));
                 });
             } else {
                 authController.show();

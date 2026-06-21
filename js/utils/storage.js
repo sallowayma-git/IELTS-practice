@@ -81,6 +81,16 @@ function sanitizeStoredValue(value, depth = 0, state = null) {
     return output;
 }
 
+function summarizeStorageErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
@@ -115,7 +125,7 @@ class StorageManager {
             'vocab_list_reading_highlights'
         ]);
         this.ready = this.initializeStorage().catch(error => {
-            console.error('[Storage] 初始化失败:', error);
+            console.error('[Storage] 初始化失败:', summarizeStorageErrorForLog(error));
             throw error;
         });
     }
@@ -223,7 +233,7 @@ class StorageManager {
 
             // 添加恢复逻辑
         } catch (error) {
-            console.warn('[Storage] 初始化基本存储能力失败，尝试继续:', error);
+            console.warn('[Storage] 初始化基本存储能力失败，尝试继续:', summarizeStorageErrorForLog(error));
             await this.initializeIndexedDBStorage();
         }
     }
@@ -279,7 +289,7 @@ class StorageManager {
                 });
 
                 request.onerror = (event) => {
-                    console.error('[Storage] IndexedDB 打开失败:', event.target.error);
+                    console.error('[Storage] IndexedDB 打开失败:', summarizeStorageErrorForLog(event.target.error));
                     this.indexedDBBlocked = true;
                     if (this.localStorageAvailable || this.sessionStorageAvailable) {
                         console.warn('[Storage] 使用 local/sessionStorage 作为回退存储');
@@ -309,7 +319,7 @@ class StorageManager {
                 request.onsuccess = (event) => {
                     this.indexedDB = event.target.result;
                     this.indexedDBBlocked = false;
-                    console.log('[Storage] IndexedDB 初始化成功，数据库:', this.indexedDB.name, '版本:', this.indexedDB.version);
+                    console.log('[Storage] IndexedDB 初始化成功，版本:', this.indexedDB.version);
 
                     // 迁移localStorage数据到IndexedDB
                     console.log('[Storage] 开始从 localStorage 迁移数据');
@@ -317,13 +327,13 @@ class StorageManager {
                         .then(() => this.migrateFromLocalStorage())
                         .then(() => resolve())
                         .catch((migrationError) => {
-                            console.warn('[Storage] 迁移过程中出现问题，但继续初始化:', migrationError);
+                            console.warn('[Storage] 迁移过程中出现问题，但继续初始化:', summarizeStorageErrorForLog(migrationError));
                             resolve();
                         });
                 };
 
             } catch (error) {
-                console.error('[Storage] IndexedDB 初始化失败:', error);
+                console.error('[Storage] IndexedDB 初始化失败:', summarizeStorageErrorForLog(error));
                 this.indexedDBBlocked = true;
                 if (this.localStorageAvailable || this.sessionStorageAvailable) {
                     console.warn('[Storage] IndexedDB 初始化失败，将使用 local/sessionStorage');
@@ -366,7 +376,7 @@ class StorageManager {
                 return true;
             }
         } catch (e) {
-            console.warn('[Storage] 提升到 IndexedDB 失败，继续使用退路:', e);
+            console.warn('[Storage] 提升到 IndexedDB 失败，继续使用退路:', summarizeStorageErrorForLog(e));
         }
         return false;
     }
@@ -401,17 +411,17 @@ class StorageManager {
                         await this.setToIndexedDB(key, value);
                         localStorage.removeItem(key);
                         migratedCount++;
-                        console.log(`[Storage] 成功迁移键: ${key}`);
+                        console.log('[Storage] 成功迁移一项数据');
                     }
                 } catch (error) {
-                    console.warn(`[Storage] 迁移数据失败: ${key}`, error);
+                    console.warn('[Storage] 迁移一项数据失败', summarizeStorageErrorForLog(error));
                     failedCount++;
                 }
             }
 
             console.log(`[Storage] 数据迁移完成: ${migratedCount} 成功, ${failedCount} 失败`);
         } catch (error) {
-            console.error('[Storage] 数据迁移失败:', error);
+            console.error('[Storage] 数据迁移失败:', summarizeStorageErrorForLog(error));
         }
     }
 
@@ -541,10 +551,11 @@ class StorageManager {
         for (const [key, value] of Object.entries(defaultData)) {
             const existingValue = await this.get(key, null, { skipReady });
             if (existingValue === null || existingValue === undefined) {
-                console.log(`[Storage] 初始化默认数据: ${key}`);
+                console.log('[Storage] 初始化一项默认数据');
                 await this.set(key, value, { skipReady });
             } else {
-                console.log(`[Storage] 保留现有数据: ${key} (${Array.isArray(existingValue) ? existingValue.length + ' 项' : typeof existingValue})`);
+                const existingValueSummary = Array.isArray(existingValue) ? `${existingValue.length} 项` : typeof existingValue;
+                console.log(`[Storage] 保留一项现有数据 (${existingValueSummary})`);
             }
         }
     }
@@ -556,9 +567,9 @@ class StorageManager {
         const safeNamespace = normalizeStorageNamespace(namespace);
         if (safeNamespace) {
             this.prefix = safeNamespace + '_';
-            console.log('[Storage] 命名空间已设置为:', this.prefix);
+            console.log('[Storage] 命名空间已设置');
         } else {
-            console.warn('[Storage] 无效的命名空间:', namespace);
+            console.warn('[Storage] 无效的命名空间');
         }
     }
 
@@ -742,7 +753,7 @@ class StorageManager {
             }
             return data;
         } catch (error) {
-            console.warn('[Storage] 数据压缩失败，使用原始数据:', error);
+            console.warn('[Storage] 数据压缩失败，使用原始数据:', summarizeStorageErrorForLog(error));
             return data;
         }
     }
@@ -865,7 +876,7 @@ class StorageManager {
             }
             return await this.writePersistentValue(key, value);
         } catch (error) {
-            console.error('[Storage] set 操作错误:', error);
+            console.error('[Storage] set 操作错误:', summarizeStorageErrorForLog(error));
             this.handleStorageError(key, value, error);
             return false;
         }
@@ -889,7 +900,7 @@ class StorageManager {
             currentList.push(value);
             return await this.writePersistentValue(key, currentList);
         } catch (error) {
-            console.error('[Storage] Append error:', error);
+            console.error('[Storage] Append error:', summarizeStorageErrorForLog(error));
             this.handleStorageError(key, value, error);
             return false;
         }
@@ -902,7 +913,7 @@ class StorageManager {
             await this.ensureIndexedDBReady();
             return await this.readPersistentValue(key, defaultValue);
         } catch (error) {
-            console.error('Storage get error:', error);
+            console.error('Storage get error:', summarizeStorageErrorForLog(error));
             return defaultValue;
         }
     }
@@ -924,7 +935,7 @@ class StorageManager {
             }
             return await this.removePersistentValue(key);
         } catch (error) {
-            console.error('Storage remove error:', error);
+            console.error('Storage remove error:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -939,7 +950,7 @@ class StorageManager {
             await this.ensureIndexedDBReady();
             return await this.clearPersistentStorage();
         } catch (error) {
-            console.error('Storage clear error:', error);
+            console.error('Storage clear error:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -989,7 +1000,7 @@ class StorageManager {
             }
             return hasSpace;
         } catch (error) {
-            console.error('[Storage] 配额检查错误:', error);
+            console.error('[Storage] 配额检查错误:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1050,7 +1061,7 @@ class StorageManager {
                         }
                     };
                 } catch (error) {
-                    console.warn('[Storage] 获取混合存储使用情况失败:', error);
+                    console.warn('[Storage] 获取混合存储使用情况失败:', summarizeStorageErrorForLog(error));
                     // 降级到localStorage
                 }
             }
@@ -1069,7 +1080,7 @@ class StorageManager {
                 available: 5 * 1024 * 1024 - used // 假设5MB限制
             };
         } catch (error) {
-            console.error('Storage info error:', error);
+            console.error('Storage info error:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -1088,7 +1099,7 @@ class StorageManager {
             });
             return used;
         } catch (error) {
-            console.error('Get localStorage usage error:', error);
+            console.error('Get localStorage usage error:', summarizeStorageErrorForLog(error));
             return 0;
         }
     }
@@ -1168,7 +1179,7 @@ class StorageManager {
             }
 
         } catch (error) {
-            console.error('[Storage] 清理旧数据失败:', error);
+            console.error('[Storage] 清理旧数据失败:', summarizeStorageErrorForLog(error));
         }
     }
 
@@ -1202,12 +1213,12 @@ class StorageManager {
                         try {
                             legacyData = JSON.parse(legacyDataStr);
                         } catch (parseError) {
-                            console.warn(`[Storage] 解析遗留数据失败: ${oldKey}`, parseError);
+                            console.warn('[Storage] 解析遗留数据失败', summarizeStorageErrorForLog(parseError));
                             continue;
                         }
 
                         if (!Array.isArray(legacyData)) {
-                            console.warn(`[Storage] 遗留数据非数组，跳过: ${oldKey}`);
+                            console.warn('[Storage] 遗留数据非数组，跳过');
                             continue;
                         }
 
@@ -1233,9 +1244,9 @@ class StorageManager {
                         // 删除旧键
                         localStorage.removeItem(oldKey);
                         migratedCount++;
-                        console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
+                        console.log(`[Storage] 成功迁移并合并数据: ${legacyData.length} 项`);
                     } catch (migrateError) {
-                        console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
+                        console.error('[Storage] 迁移失败', summarizeStorageErrorForLog(migrateError));
                     }
                 }
 
@@ -1255,7 +1266,7 @@ class StorageManager {
                             const parsed = JSON.parse(legacyMyMelodyData);
                             legacyData = parsed.data || parsed;
                         } catch (parseError) {
-                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
+                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', summarizeStorageErrorForLog(parseError));
                             await this.set('my_melody_migration_completed', true, { skipReady });
                             return;
                         }
@@ -1284,7 +1295,7 @@ class StorageManager {
                     }
                     await this.set('my_melody_migration_completed', true, { skipReady });
                 } catch (migrateError) {
-                    console.error('[Storage] MyMelody 迁移失败:', migrateError);
+                    console.error('[Storage] MyMelody 迁移失败:', summarizeStorageErrorForLog(migrateError));
                     await this.set('my_melody_migration_completed', true, { skipReady }); // 避免无限重试
                 }
             } else {
@@ -1292,7 +1303,7 @@ class StorageManager {
             }
 
         } catch (error) {
-            console.error('[Storage] 迁移遗留数据失败:', error);
+            console.error('[Storage] 迁移遗留数据失败:', summarizeStorageErrorForLog(error));
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true, { skipReady });
             await this.set('my_melody_migration_completed', true, { skipReady });
@@ -1345,7 +1356,7 @@ class StorageManager {
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
-            console.warn('[Storage] 备份恢复失败，已跳过:', error);
+            console.warn('[Storage] 备份恢复失败，已跳过:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1398,7 +1409,7 @@ class StorageManager {
     }
 
     handleStorageQuotaExceeded(key, value) {
-        console.error('[Storage] 存储配额超限，无法保存数据:', key);
+        console.error('[Storage] 存储配额超限，无法保存数据');
 
         // 显示用户警告
         if (window.showMessage) {
@@ -1415,7 +1426,7 @@ class StorageManager {
      * 处理存储错误
      */
     handleStorageError(key, value, error) {
-        console.error('[Storage] 存储错误:', error);
+        console.error('[Storage] 存储错误:', summarizeStorageErrorForLog(error));
 
         // 如果是配额错误，尝试切换到备用存储
         if (error.name === 'QuotaExceededError') {
@@ -1480,7 +1491,7 @@ class StorageManager {
                     Object.assign(data, indexedDBData);
                     console.log(`[Storage] 已导出IndexedDB数据 ${Object.keys(indexedDBData).length} 条`);
                 } catch (error) {
-                    console.warn('[Storage] IndexedDB导出失败:', error);
+                    console.warn('[Storage] IndexedDB导出失败:', summarizeStorageErrorForLog(error));
                 }
             }
 
@@ -1501,7 +1512,7 @@ class StorageManager {
                         }
                     }
                 } catch (error) {
-                    console.warn(`[Storage] 解析localStorage数据失败: ${cleanKey}`, error);
+                    console.warn('[Storage] 解析一项 localStorage 数据失败', summarizeStorageErrorForLog(error));
                 }
             });
             console.log(`[Storage] 已导出localStorage数据 ${appKeys.length} 条`);
@@ -1522,7 +1533,7 @@ class StorageManager {
                 }
             };
         } catch (error) {
-            console.error('Export data error:', error);
+            console.error('Export data error:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -1586,7 +1597,7 @@ class StorageManager {
                 };
             } catch (importError) {
                 // 恢复备份
-                console.error('Import failed, restoring backup:', importError);
+                console.error('Import failed, restoring backup:', summarizeStorageErrorForLog(importError));
                 await this.clear({ skipReady });
 
                 if (backup && backup.data) {
@@ -1602,7 +1613,7 @@ class StorageManager {
                 throw importError;
             }
         } catch (error) {
-            console.error('Import data error:', error);
+            console.error('Import data error:', summarizeStorageErrorForLog(error));
             return { success: false, message: error.message };
         }
     }
@@ -1704,7 +1715,7 @@ class StorageManager {
             }
             return parsed;
         } catch (error) {
-            console.warn(`[Storage] Skipping invalid ${source} export data: ${cleanKey}`, error);
+            console.warn('[Storage] Skipping invalid export data item', summarizeStorageErrorForLog(error));
             return undefined;
         }
     }
@@ -1758,7 +1769,7 @@ class StorageManager {
                     }
                 }
             } catch (error) {
-                console.error('[Storage] 存储监控错误:', error);
+                console.error('[Storage] 存储监控错误:', summarizeStorageErrorForLog(error));
             }
         }, 300000); // 每5分钟检查一次
 
@@ -1886,18 +1897,18 @@ class StorageManager {
                     storageKey = cleanedList.id;
             }
 
-            console.log(`[Storage] 保存词表: ${storageKey}, 单词数: ${cleanedList.words.length}`);
+            console.log(`[Storage] 保存词表，单词数: ${cleanedList.words.length}`);
 
             // 保存到存储
             const success = await this.set(storageKey, cleanedList, { skipReady });
 
             if (success) {
-                console.log(`[Storage] 词表保存成功: ${storageKey}`);
+                console.log('[Storage] 词表保存成功');
             }
 
             return success;
         } catch (error) {
-            console.error('[Storage] 保存词表失败:', error);
+            console.error('[Storage] 保存词表失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1927,12 +1938,12 @@ class StorageManager {
                 storageKey = listId;
             }
 
-            console.log(`[Storage] 加载词表: ${storageKey}`);
+            console.log('[Storage] 加载词表');
 
             const vocabList = await this.get(storageKey, null, { skipReady });
 
             if (!vocabList) {
-                console.log(`[Storage] 词表不存在: ${storageKey}`);
+                console.log('[Storage] 词表不存在');
                 return null;
             }
 
@@ -1969,10 +1980,10 @@ class StorageManager {
                 return null;
             }
 
-            console.log(`[Storage] 词表加载成功: ${storageKey}, 单词数: ${vocabList.words.length}`);
+            console.log(`[Storage] 词表加载成功，单词数: ${vocabList.words.length}`);
             return vocabList;
         } catch (error) {
-            console.error('[Storage] 加载词表失败:', error);
+            console.error('[Storage] 加载词表失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -1987,7 +1998,7 @@ class StorageManager {
             const vocabList = await this.loadVocabList(listId, { skipReady });
             return vocabList ? vocabList.words.length : 0;
         } catch (error) {
-            console.error('[Storage] 获取词表单词数量失败:', error);
+            console.error('[Storage] 获取词表单词数量失败:', summarizeStorageErrorForLog(error));
             return 0;
         }
     }
@@ -2039,7 +2050,7 @@ class StorageManager {
 
             return await this.saveVocabList(vocabList, { skipReady });
         } catch (error) {
-            console.error('[Storage] 添加单词到词表失败:', error);
+            console.error('[Storage] 添加单词到词表失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2066,7 +2077,7 @@ class StorageManager {
 
             return await this.saveVocabList(vocabList, { skipReady });
         } catch (error) {
-            console.error('[Storage] 从词表移除单词失败:', error);
+            console.error('[Storage] 从词表移除单词失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2133,7 +2144,7 @@ class StorageManager {
         const { skipReady = false } = options;
         
         try {
-            console.log(`[Storage] 开始同步词表: ${listId}`);
+            console.log('[Storage] 开始同步词表');
 
             // 加载现有数据
             const existingList = await this.loadVocabList(listId, { skipReady });
@@ -2152,7 +2163,7 @@ class StorageManager {
             // 保存合并后的数据
             return await this.saveVocabList(mergedList, { skipReady });
         } catch (error) {
-            console.error('[Storage] 同步词表失败:', error);
+            console.error('[Storage] 同步词表失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2227,10 +2238,12 @@ class StorageManager {
                 }
             }
 
-            console.log('[Storage] 批量同步完成:', results);
+            const successCount = results.filter((result) => result && result.success).length;
+            const failedSyncCount = results.length - successCount;
+            console.log(`[Storage] 批量同步完成: ${successCount} 成功, ${failedSyncCount} 失败`);
             return results;
         } catch (error) {
-            console.error('[Storage] 批量同步失败:', error);
+            console.error('[Storage] 批量同步失败:', summarizeStorageErrorForLog(error));
             return [];
         }
     }
@@ -2256,7 +2269,7 @@ class StorageManager {
             console.log('[Storage] 数据持久化完成');
             return true;
         } catch (error) {
-            console.error('[Storage] 数据持久化失败:', error);
+            console.error('[Storage] 数据持久化失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2275,7 +2288,7 @@ class StorageManager {
                 
                 console.log('[Storage] 数据持久化完成');
             } catch (error) {
-                console.error('[Storage] beforeunload 数据持久化失败:', error);
+                console.error('[Storage] beforeunload 数据持久化失败:', summarizeStorageErrorForLog(error));
             }
         });
 
@@ -2346,7 +2359,7 @@ class StorageManager {
             console.log('[Storage] IndexedDB 未初始化');
             return false;
         } catch (error) {
-            console.error('[Storage] IndexedDB 可用性检测失败:', error);
+            console.error('[Storage] IndexedDB 可用性检测失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2362,7 +2375,7 @@ class StorageManager {
             console.log('[Storage] localStorage 可用');
             return true;
         } catch (error) {
-            console.error('[Storage] localStorage 不可用:', error);
+            console.error('[Storage] localStorage 不可用:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2416,7 +2429,7 @@ class StorageManager {
                     console.log('[Storage] localStorage 保存成功');
                     return true;
                 } catch (localStorageError) {
-                    console.error('[Storage] localStorage 保存失败:', localStorageError);
+                    console.error('[Storage] localStorage 保存失败:', summarizeStorageErrorForLog(localStorageError));
                 }
             }
 
@@ -2439,7 +2452,7 @@ class StorageManager {
 
             return true;
         } catch (error) {
-            console.error('[Storage] 处理存储空间不足失败:', error);
+            console.error('[Storage] 处理存储空间不足失败:', summarizeStorageErrorForLog(error));
             
             // 最终失败，提示用户
             if (window.showMessage) {
@@ -2484,7 +2497,7 @@ class StorageManager {
                 compressedList
             );
         } catch (error) {
-            console.error('[Storage] 词表降级保存失败:', error);
+            console.error('[Storage] 词表降级保存失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2556,10 +2569,16 @@ class StorageManager {
                 health.used = storageInfo.used;
             }
 
-            console.log('[Storage] 存储健康状态:', health);
+            console.log('[Storage] 存储健康状态:', {
+                indexedDB: Boolean(health.indexedDB),
+                localStorage: Boolean(health.localStorage),
+                currentType: health.currentType,
+                quotaStatus: health.quotaStatus,
+                usagePercent: Number.isFinite(health.usagePercent) ? Number(health.usagePercent.toFixed(2)) : undefined
+            });
             return health;
         } catch (error) {
-            console.error('[Storage] 检查存储健康状态失败:', error);
+            console.error('[Storage] 检查存储健康状态失败:', summarizeStorageErrorForLog(error));
             return {
                 indexedDB: false,
                 localStorage: false,
@@ -2599,7 +2618,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出练习记录失败:', error);
+            console.error('[Storage] 导出练习记录失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -2645,7 +2664,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出词表数据失败:', error);
+            console.error('[Storage] 导出词表数据失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -2657,12 +2676,12 @@ class StorageManager {
         const { skipReady = false, format = 'json' } = options;
         
         try {
-            console.log(`[Storage] 开始导出词表: ${listId}`);
+            console.log('[Storage] 开始导出词表');
 
             const list = await this.loadVocabList(listId, { skipReady });
 
             if (!list) {
-                console.warn(`[Storage] 词表不存在: ${listId}`);
+                console.warn('[Storage] 词表不存在');
                 return null;
             }
 
@@ -2673,7 +2692,7 @@ class StorageManager {
                 list: list
             };
 
-            console.log(`[Storage] 词表导出完成: ${listId}, ${list.words.length} 个单词`);
+            console.log(`[Storage] 词表导出完成，单词数: ${list.words.length}`);
 
             if (format === 'json') {
                 return JSON.stringify(exportData, null, 2);
@@ -2681,7 +2700,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出词表失败:', error);
+            console.error('[Storage] 导出词表失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -2735,7 +2754,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出完整数据失败:', error);
+            console.error('[Storage] 导出完整数据失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -2774,10 +2793,10 @@ class StorageManager {
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 0);
 
-            console.log(`[Storage] 数据已下载: ${finalFilename}`);
+            console.log('[Storage] 数据已下载');
             return true;
         } catch (error) {
-            console.error('[Storage] 下载导出数据失败:', error);
+            console.error('[Storage] 下载导出数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2813,7 +2832,7 @@ class StorageManager {
             }
             return false;
         } catch (error) {
-            console.error('[Storage] 导出并下载练习记录失败:', error);
+            console.error('[Storage] 导出并下载练习记录失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2830,7 +2849,7 @@ class StorageManager {
             }
             return false;
         } catch (error) {
-            console.error('[Storage] 导出并下载词表数据失败:', error);
+            console.error('[Storage] 导出并下载词表数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2847,7 +2866,7 @@ class StorageManager {
             }
             return false;
         } catch (error) {
-            console.error('[Storage] 导出并下载完整数据失败:', error);
+            console.error('[Storage] 导出并下载完整数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2889,7 +2908,7 @@ class StorageManager {
                         }
                     }
                 } catch (error) {
-                    console.error(`[Storage] 导入词表失败: ${list.id}`, error);
+                    console.error('[Storage] 导入词表失败:', summarizeStorageErrorForLog(error));
                     failCount++;
                 }
             }
@@ -2897,7 +2916,7 @@ class StorageManager {
             console.log(`[Storage] 词表导入完成: ${successCount} 成功, ${failCount} 失败`);
             return { successCount, failCount };
         } catch (error) {
-            console.error('[Storage] 导入词表数据失败:', error);
+            console.error('[Storage] 导入词表数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -3112,5 +3131,5 @@ storageManager.ready
         storageManager.setupBeforeUnloadHandler();
     })
     .catch(error => {
-        console.error('[Storage] 存储初始化失败，监控未启动:', error);
+        console.error('[Storage] 存储初始化失败，监控未启动:', summarizeStorageErrorForLog(error));
     });

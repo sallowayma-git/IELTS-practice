@@ -115,6 +115,30 @@ async function testInvalidDatesDoNotBreakGrouping() {
     assert(markdown.includes('## unknown\\-date'), 'invalid record dates should export under a stable fallback heading');
 }
 
+async function testMalformedRecordsDoNotBreakExportGrouping() {
+    const MarkdownExporter = loadMarkdownExporter();
+    const exporter = new MarkdownExporter();
+    const grouped = await exporter.groupRecordsByDateAsync([
+        null,
+        'not-a-record',
+        {
+            id: 'good-record',
+            examId: 'exam-1',
+            title: 'Good record',
+            answers: {}
+        }
+    ], null);
+
+    assert.equal(grouped['unknown-date'].length, 3);
+    const asyncMarkdown = await exporter.generateMarkdownContentAsync(grouped);
+    const syncMarkdown = exporter.generateMarkdownContent(exporter.groupRecordsByDate([null], null));
+    const directMarkdown = exporter.generateRecordMarkdown(null);
+
+    assert(asyncMarkdown.includes('Invalid practice record'), 'malformed async records should use a safe placeholder title');
+    assert(syncMarkdown.includes('Invalid practice record'), 'malformed sync records should use a safe placeholder title');
+    assert(directMarkdown.includes('Invalid practice record'), 'direct malformed records should not throw');
+}
+
 function testDateHeadingsAreEscaped() {
     const MarkdownExporter = loadMarkdownExporter();
     const exporter = new MarkdownExporter();
@@ -136,6 +160,7 @@ function testDateHeadingsAreEscaped() {
 testRecordMarkdownEscapesUserControlledText();
 testComparisonKeysAreEscaped();
 await testInvalidDatesDoNotBreakGrouping();
+await testMalformedRecordsDoNotBreakExportGrouping();
 testDateHeadingsAreEscaped();
 
 console.log(JSON.stringify({

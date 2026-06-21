@@ -1,6 +1,15 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
 
+    function summarizeStorageDataSourceErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error'
+        };
+    }
+
     class StorageTransactionContext {
         constructor(storageManager) {
             this.storage = storageManager;
@@ -74,11 +83,10 @@
             });
         }
 
-        async runTransaction(handler, options = {}) {
+        async runTransaction(handler) {
             if (typeof handler !== 'function') {
                 throw new Error('StorageDataSource.runTransaction requires a handler function');
             }
-            const label = options.label || 'storage-transaction';
             return this._enqueue(async () => {
                 const context = new StorageTransactionContext(this.storage);
                 try {
@@ -87,7 +95,7 @@
                     return result;
                 } catch (error) {
                     await context.rollback();
-                    console.error(`[StorageDataSource] Transaction failed (${label}):`, error);
+                    console.error('[StorageDataSource] Transaction failed:', summarizeStorageDataSourceErrorForLog(error));
                     throw error;
                 }
             });

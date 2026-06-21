@@ -23,7 +23,7 @@ class PDFHandler {
      */
     openPDF(pdfPath, examTitle = 'PDF Exam', options = {}) {
         try {
-            console.log('[PDFHandler] Opening PDF:', pdfPath);
+            console.log('[PDFHandler] Opening PDF');
 
             // Validate PDF path
             const safePdfPath = this.resolvePDFPath(pdfPath);
@@ -56,11 +56,11 @@ class PDFHandler {
             // Set up window event handlers
             this.setupWindowHandlers(pdfWindow, safePdfPath);
             
-            console.log('[PDFHandler] PDF opened successfully:', examTitle);
+            console.log('[PDFHandler] PDF opened successfully');
             return pdfWindow;
             
         } catch (error) {
-            console.error('[PDFHandler] Failed to open PDF:', error);
+            console.error('[PDFHandler] Failed to open PDF:', this.summarizeErrorForLog(error));
             this.handlePDFError(error, pdfPath, examTitle);
             return null;
         }
@@ -73,7 +73,7 @@ class PDFHandler {
      */
     async validatePDF(pdfPath) {
         try {
-            console.log('[PDFHandler] Validating PDF:', pdfPath);
+            console.log('[PDFHandler] Validating PDF');
 
             const safePdfPath = this.resolvePDFPath(pdfPath);
             if (!safePdfPath) {
@@ -92,7 +92,7 @@ class PDFHandler {
             return isValid;
             
         } catch (error) {
-            console.error('[PDFHandler] PDF validation failed:', error);
+            console.error('[PDFHandler] PDF validation failed:', this.summarizeErrorForLog(error));
             return false;
         }
     }
@@ -104,7 +104,7 @@ class PDFHandler {
      */
     async getPDFInfo(pdfPath) {
         try {
-            console.log('[PDFHandler] Getting PDF info:', pdfPath);
+            console.log('[PDFHandler] Getting PDF info');
 
             const safePdfPath = this.resolvePDFPath(pdfPath);
             if (!safePdfPath) {
@@ -126,11 +126,11 @@ class PDFHandler {
                 timestamp: new Date().toISOString()
             };
 
-            console.log('[PDFHandler] PDF info retrieved:', info);
+            console.log('[PDFHandler] PDF info retrieved:', this.summarizePDFInfoForLog(info));
             return info;
             
         } catch (error) {
-            console.error('[PDFHandler] Failed to get PDF info:', error);
+            console.error('[PDFHandler] Failed to get PDF info:', this.summarizeErrorForLog(error));
             return {
                 path: pdfPath,
                 isAccessible: false,
@@ -210,6 +210,29 @@ class PDFHandler {
             contentType.includes('application/pdf') ||
             contentType.includes('application/x-pdf')
         );
+    }
+
+    redactLogText(value) {
+        return String(value || '')
+            .replace(/\b[A-Za-z]:[\\/][^\s"'<>]+/g, '[local-path]')
+            .replace(/\bfile:\/\/[^\s"'<>]+/gi, '[local-path]')
+            .replace(/\bhttps?:\/\/[^\s"'<>]+/gi, '[url]')
+            .slice(0, 200);
+    }
+
+    summarizeErrorForLog(error) {
+        return {
+            name: error && error.name ? this.redactLogText(error.name) : 'Error',
+            message: error && error.message ? this.redactLogText(error.message) : 'Unknown error'
+        };
+    }
+
+    summarizePDFInfoForLog(info) {
+        return {
+            sizeKnown: Boolean(info && info.size),
+            contentType: info && info.contentType ? this.redactLogText(info.contentType) : null,
+            isAccessible: Boolean(info && info.isAccessible)
+        };
     }
 
     /**
@@ -299,7 +322,7 @@ class PDFHandler {
         const checkClosed = () => {
             if (pdfWindow.closed) {
                 this.openWindows.delete(pdfPath);
-                console.log('[PDFHandler] PDF window closed:', examTitle);
+                console.log('[PDFHandler] PDF window closed');
             } else {
                 setTimeout(checkClosed, 1000);
             }
@@ -323,13 +346,13 @@ class PDFHandler {
 
             // Handle window error event
             pdfWindow.addEventListener('error', (error) => {
-                console.error('[PDFHandler] PDF window error:', error);
+                console.error('[PDFHandler] PDF window error:', this.summarizeErrorForLog(error));
                 this.onPDFError(pdfPath, error);
             });
 
         } catch (error) {
             // Cross-origin restrictions may prevent event listener setup
-            console.warn('[PDFHandler] Could not set up window event handlers:', error.message);
+            console.warn('[PDFHandler] Could not set up window event handlers:', this.redactLogText(error.message));
         }
     }
 
@@ -396,9 +419,7 @@ class PDFHandler {
 
         // Log detailed error for debugging
         console.error('[PDFHandler] Detailed error:', {
-            error: error.message,
-            path: pdfPath,
-            title: examTitle,
+            error: this.redactLogText(error.message),
             timestamp: new Date().toISOString()
         });
     }

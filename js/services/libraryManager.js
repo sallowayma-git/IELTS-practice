@@ -11,6 +11,16 @@
     const MAX_LIBRARY_CONFIG_TEXT_LENGTH = 1000;
     const MAX_LIBRARY_CONFIG_NAME_LENGTH = 160;
 
+    function summarizeLibraryManagerErrorForLog(error) {
+        const summary = {
+            name: error && typeof error.name === 'string' ? error.name : 'Error'
+        };
+        if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+            summary.code = error.code;
+        }
+        return summary;
+    }
+
     function randomIdSuffix() {
         const cryptoObj = global.crypto || global.msCrypto;
         if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
@@ -217,7 +227,7 @@
                 global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
                 return;
             } catch (error) {
-                console.warn('[LibraryManager] 刷新听力入口状态失败:', error);
+                console.warn('[LibraryManager] 刷新听力入口状态失败:', summarizeLibraryManagerErrorForLog(error));
             }
         }
         const listeningAvailable = hasActiveListeningLibrary(index);
@@ -314,14 +324,14 @@
         async setActiveLibraryConfiguration(key) {
             const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
-                console.warn('[LibraryManager] 拒绝写入无效题库配置 key:', key);
+                console.warn('[LibraryManager] 拒绝写入无效题库配置 key');
                 return false;
             }
             try {
                 await global.storage.set('active_exam_index_key', configKey);
                 return true;
             } catch (error) {
-                console.error('[LibraryManager] 设置活动题库配置失败:', error);
+                console.error('[LibraryManager] 设置活动题库配置失败:', summarizeLibraryManagerErrorForLog(error));
                 return false;
             }
         }
@@ -333,7 +343,7 @@
         async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
             const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
-                console.warn('[LibraryManager] 拒绝保存无效题库配置 key:', key);
+                console.warn('[LibraryManager] 拒绝保存无效题库配置 key');
                 return false;
             }
             try {
@@ -363,7 +373,7 @@
                 await global.storage.set('exam_index_configurations', configs);
                 return true;
             } catch (error) {
-                console.error('[LibraryManager] 保存题库配置失败:', error);
+                console.error('[LibraryManager] 保存题库配置失败:', summarizeLibraryManagerErrorForLog(error));
                 return false;
             }
         }
@@ -460,7 +470,7 @@
                     await global.storage.set('active_exam_index_key', 'exam_index');
                 }
             } catch (error) {
-                console.warn('[LibraryManager] 读取题库缓存失败:', error);
+                console.warn('[LibraryManager] 读取题库缓存失败:', summarizeLibraryManagerErrorForLog(error));
             }
 
             if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
@@ -487,7 +497,7 @@
                     try {
                         await global.ensureExamDataScripts();
                     } catch (loadError) {
-                        console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', loadError);
+                        console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', summarizeLibraryManagerErrorForLog(loadError));
                     }
                 }
                 if (typeof global.reportBootStage === 'function') {
@@ -539,7 +549,7 @@
                 this.finishLibraryLoading(startTime);
                 return updatedIndex;
             } catch (error) {
-                console.error('[LibraryManager] 加载默认题库失败:', error);
+                console.error('[LibraryManager] 加载默认题库失败:', summarizeLibraryManagerErrorForLog(error));
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
@@ -591,21 +601,21 @@
                     await global.storage.set('exam_index_configurations', updated);
                 }
             } catch (error) {
-                console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
+                console.warn('[LibraryManager] 无法刷新题库配置元数据', summarizeLibraryManagerErrorForLog(error));
             }
         }
 
         async fetchLibraryDataset(key) {
             const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
-                console.warn('[LibraryManager] 拒绝读取无效题库配置 key:', key);
+                console.warn('[LibraryManager] 拒绝读取无效题库配置 key');
                 return [];
             }
             try {
                 const dataset = await global.storage.get(configKey);
                 return Array.isArray(dataset) ? dataset : [];
             } catch (error) {
-                console.warn('[LibraryManager] 无法读取题库数据:', configKey, error);
+                console.warn('[LibraryManager] 无法读取题库数据:', summarizeLibraryManagerErrorForLog(error));
                 return [];
             }
         }
@@ -853,7 +863,7 @@
             try {
                 await this.setActiveLibraryConfiguration(configKey);
             } catch (error) {
-                console.warn('[LibraryManager] 无法写入当前题库配置:', error);
+                console.warn('[LibraryManager] 无法写入当前题库配置:', summarizeLibraryManagerErrorForLog(error));
             }
 
             await this.updateLibraryConfigurationMetadata(configKey, exams.length);
@@ -869,7 +879,7 @@
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: configKey } }));
             } catch (error) {
-                console.warn('[LibraryManager] 题库切换事件派发失败', error);
+                console.warn('[LibraryManager] 题库切换事件派发失败', summarizeLibraryManagerErrorForLog(error));
             }
 
             if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {
@@ -880,7 +890,7 @@
                             activeKey: configKey
                         });
                     } catch (error) {
-                        console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
+                        console.warn('[LibraryManager] 重渲染题库配置列表失败', summarizeLibraryManagerErrorForLog(error));
                     }
                 }, 0);
             }

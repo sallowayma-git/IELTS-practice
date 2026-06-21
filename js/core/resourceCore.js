@@ -20,6 +20,17 @@
         }
     };
 
+    function summarizeResourceCoreErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function isAbsolutePath(value) {
         return PATH_PROTOCOL_RE.test(value || '') || WINDOWS_DRIVE_RE.test(value || '');
     }
@@ -264,7 +275,7 @@
                 return normalizePathMap(stored, DEFAULT_PATH_MAP);
             }
         } catch (error) {
-            console.warn('[ResourceCore] 读取路径映射失败:', error);
+            console.warn('[ResourceCore] 读取路径映射失败:', summarizeResourceCoreErrorForLog(error));
         }
         return clonePathMap(DEFAULT_PATH_MAP);
     }
@@ -284,7 +295,7 @@
             try {
                 await global.storage.set(getPathMapStorageKey(configKey), derived);
             } catch (error) {
-                console.warn('[ResourceCore] 写入路径映射失败:', error);
+                console.warn('[ResourceCore] 写入路径映射失败:', summarizeResourceCoreErrorForLog(error));
             }
         }
 
@@ -303,7 +314,7 @@
             await global.storage.remove(getPathMapStorageKey(configKey));
             return true;
         } catch (error) {
-            console.warn('[ResourceCore] 删除路径映射失败:', error);
+            console.warn('[ResourceCore] 删除路径映射失败:', summarizeResourceCoreErrorForLog(error));
             return false;
         }
     }
@@ -317,7 +328,7 @@
             const next = await loadPathMapForConfiguration(normalizeLibraryConfigKey(key) || 'exam_index');
             return setActivePathMap(next);
         } catch (error) {
-            console.warn('[ResourceCore] 刷新路径映射失败:', error);
+            console.warn('[ResourceCore] 刷新路径映射失败:', summarizeResourceCoreErrorForLog(error));
             return setActivePathMap(getPathMap());
         }
     }
@@ -449,7 +460,7 @@
                 }
             }
         } catch (error) {
-            console.warn('[ResourceCore] detectScriptBasePrefix failed:', error);
+            console.warn('[ResourceCore] detectScriptBasePrefix failed:', summarizeResourceCoreErrorForLog(error));
         }
         return null;
     }
@@ -751,7 +762,7 @@
                     return { url: entry.path, attempts };
                 }
             } catch (error) {
-                console.warn('[ResourceCore] 资源探测失败:', entry, error);
+                console.warn('[ResourceCore] 资源探测失败:', summarizeResourceCoreErrorForLog(error));
             }
         }
         return { url: '', attempts };

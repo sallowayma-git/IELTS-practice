@@ -209,7 +209,7 @@ class StateSerializer {
                     const value = await baseStorage.get(key, defaultValue);
                     return StateSerializer.deserialize(value);
                 } catch (error) {
-                    console.error(`[StateSerializer] get failed ${key}:`, error);
+                    console.error('[StateSerializer] get failed:', error);
                     return defaultValue;
                 }
             },
@@ -219,7 +219,7 @@ class StateSerializer {
                     const serializedValue = StateSerializer.serialize(value);
                     return await baseStorage.set(key, serializedValue);
                 } catch (error) {
-                    console.error(`[StateSerializer] set failed ${key}:`, error);
+                    console.error('[StateSerializer] set failed:', error);
                     throw error;
                 }
             },
@@ -228,7 +228,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.remove(key);
                 } catch (error) {
-                    console.error(`[StateSerializer] remove failed ${key}:`, error);
+                    console.error('[StateSerializer] remove failed:', error);
                     throw error;
                 }
             },

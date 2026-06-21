@@ -34,7 +34,42 @@
     const UNSAFE_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const MAX_CATEGORY_CONFIG_ENTRIES = 80;
     const MAX_CATEGORY_NAME_LENGTH = 80;
+    const MAX_LOG_ARG_DEPTH = 6;
+    const MAX_LOG_ARRAY_ITEMS = 50;
+    const MAX_LOG_OBJECT_KEYS = 80;
+    const MAX_LOG_STRING_LENGTH = 1000;
     const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/;
+    const SENSITIVE_LOG_KEYS = new Set([
+        'access_token',
+        'answer',
+        'answercomparison',
+        'answers',
+        'authorization',
+        'correctanswer',
+        'correctanswers',
+        'csrftoken',
+        'examid',
+        'interactions',
+        'newpassword',
+        'oldpassword',
+        'password',
+        'payload',
+        'realdata',
+        'recordid',
+        'recoverycode',
+        'recoverycodes',
+        'raw',
+        'secret',
+        'session',
+        'sessionid',
+        'sid',
+        'suiteid',
+        'suitesessionid',
+        'token',
+        'totp',
+        'useranswer',
+        'userinput'
+    ]);
 
     function isPlainRecord(value) {
         return Object.prototype.toString.call(value) === '[object Object]';
@@ -78,6 +113,102 @@
             }
         }
         return normalized;
+    }
+
+    function normalizeLogKey(key) {
+        return String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    }
+
+    function isSensitiveLogKey(key) {
+        const normalized = normalizeLogKey(key);
+        if (!normalized) {
+            return false;
+        }
+        return SENSITIVE_LOG_KEYS.has(normalized)
+            || normalized.endsWith('token')
+            || normalized.endsWith('secret')
+            || normalized.endsWith('password')
+            || normalized.endsWith('sessionid')
+            || normalized.endsWith('recordid');
+    }
+
+    function sanitizeLogString(value) {
+        let text = String(value);
+        text = text.replace(/[A-Za-z]:[\\/][^\s"'<>]+/g, '[local-path]');
+        text = text.replace(/\\\\[^\\/\s"'<>]+\\[^\s"'<>]+/g, '[local-path]');
+        text = text.replace(/[a-z2-7]{16,56}\.onion\b/gi, '[onion-host]');
+        text = text.replace(
+            /([?&](?:access_token|code|csrf|csrfToken|password|secret|session|sessionId|sid|token)=)[^&#\s]+/gi,
+            '$1[redacted]'
+        );
+        text = text.replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '[redacted-auth]');
+        if (text.length > MAX_LOG_STRING_LENGTH) {
+            return `${text.slice(0, MAX_LOG_STRING_LENGTH)}...[truncated]`;
+        }
+        return text;
+    }
+
+    function sanitizeLogArg(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return sanitizeLogString(value);
+        }
+        if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+            return value;
+        }
+        if (typeof value === 'symbol' || typeof value === 'function') {
+            return `[${typeof value}]`;
+        }
+        if (depth > MAX_LOG_ARG_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (typeof value !== 'object') {
+            return sanitizeLogString(value);
+        }
+        if (seen.has(value)) {
+            return '[Circular]';
+        }
+        seen.add(value);
+        if (value instanceof Error) {
+            return {
+                name: sanitizeLogString(value.name || 'Error'),
+                message: sanitizeLogString(value.message || ''),
+                stack: value.stack ? sanitizeLogString(value.stack) : undefined
+            };
+        }
+        if (Array.isArray(value)) {
+            const output = value
+                .slice(0, MAX_LOG_ARRAY_ITEMS)
+                .map((item) => sanitizeLogArg(item, depth + 1, seen));
+            if (value.length > MAX_LOG_ARRAY_ITEMS) {
+                output.push(`[${value.length - MAX_LOG_ARRAY_ITEMS} more items]`);
+            }
+            return output;
+        }
+        if (!isPlainRecord(value)) {
+            return sanitizeLogString(Object.prototype.toString.call(value));
+        }
+        const output = {};
+        const entries = Object.entries(value).slice(0, MAX_LOG_OBJECT_KEYS);
+        for (const [key, item] of entries) {
+            if (UNSAFE_CONFIG_KEYS.has(key)) {
+                continue;
+            }
+            output[key] = isSensitiveLogKey(key)
+                ? '[redacted]'
+                : sanitizeLogArg(item, depth + 1, seen);
+        }
+        const totalKeys = Object.keys(value).length;
+        if (totalKeys > MAX_LOG_OBJECT_KEYS) {
+            output.__truncatedKeys = totalKeys - MAX_LOG_OBJECT_KEYS;
+        }
+        return output;
+    }
+
+    function sanitizeLogArgs(args) {
+        return Array.isArray(args) ? args.map((arg) => sanitizeLogArg(arg)) : [];
     }
 
     class AppLogger {
@@ -231,13 +362,14 @@
             }
 
             const timestamp = new Date().toLocaleTimeString();
-            const prefix = `[${timestamp}] [${category}]`;
+            const prefix = `[${timestamp}] [${sanitizeLogString(category)}]`;
+            const safeArgs = sanitizeLogArgs(args);
 
             // Map our levels to console methods
             const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
 
-            // Use native console to print, preserving object inspection capabilities
-            consoleMethod.call(global.console, prefix, ...args);
+            // Use native console to print sanitized values while preserving useful object structure.
+            consoleMethod.call(global.console, prefix, ...safeArgs);
         }
 
         /**

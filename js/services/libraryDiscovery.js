@@ -21,6 +21,28 @@
             .trim();
     }
 
+    function normalizeSafeRelativePath(value) {
+        const raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        if (/^[a-zA-Z]:[\\/]/.test(raw) || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+            return '';
+        }
+        const normalized = normalizePath(raw);
+        if (!normalized) {
+            return '';
+        }
+        const segments = normalized.split('/').filter(Boolean);
+        if (!segments.length) {
+            return '';
+        }
+        if (segments.some((segment) => segment === '.' || segment === '..' || segment.includes(':'))) {
+            return '';
+        }
+        return segments.join('/');
+    }
+
     function stripTrailingSlash(value) {
         return normalizePath(value).replace(/\/+$/g, '');
     }
@@ -31,15 +53,21 @@
     }
 
     function getFilePath(file) {
-        return normalizePath(
-            file && (
-                file.webkitRelativePath
-                || file.relativePath
-                || file.fullPath
-                || file.path
-                || file.name
-            )
-        );
+        if (!file) {
+            return '';
+        }
+        const relativeCandidates = [
+            file.webkitRelativePath,
+            file.relativePath,
+            file.fullPath
+        ];
+        for (const candidate of relativeCandidates) {
+            const normalized = normalizeSafeRelativePath(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return normalizeSafeRelativePath(file.name);
     }
 
     function getBaseName(path) {
@@ -348,14 +376,14 @@
             return '';
         }
         if (isHtmlTooLarge(file)) {
-            console.warn('[LibraryDiscovery] HTML file skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+            console.warn('[LibraryDiscovery] HTML file skipped because it is too large');
             return '';
         }
         if (typeof file.text === 'function') {
             try {
                 const text = await file.text();
                 if (isHtmlTooLarge(file, text)) {
-                    console.warn('[LibraryDiscovery] HTML file skipped because decoded text is too large:', getFilePath(file) || getBaseName(file && file.name));
+                    console.warn('[LibraryDiscovery] HTML file skipped because decoded text is too large');
                     return '';
                 }
                 return text;
@@ -365,14 +393,14 @@
         }
         if (typeof file.content === 'string') {
             if (isHtmlTooLarge(file, file.content)) {
-                console.warn('[LibraryDiscovery] HTML content skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                console.warn('[LibraryDiscovery] HTML content skipped because it is too large');
                 return '';
             }
             return file.content;
         }
         if (typeof file.__text === 'string') {
             if (isHtmlTooLarge(file, file.__text)) {
-                console.warn('[LibraryDiscovery] HTML text skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                console.warn('[LibraryDiscovery] HTML text skipped because it is too large');
                 return '';
             }
             return file.__text;

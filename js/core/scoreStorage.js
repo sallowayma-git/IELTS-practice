@@ -52,6 +52,16 @@ function assertScoreImportStringSize(value) {
     }
 }
 
+function summarizeScoreStorageErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 function isUnsafeScoreRecordCloneKey(key) {
     return SCORE_BACKUP_POLLUTION_KEYS.has(String(key));
 }
@@ -452,7 +462,7 @@ class ScoreStorage {
             // await this.cleanupExpiredData();
         } catch (error) {
             this.initializationError = error;
-            console.error('[ScoreStorage] 初始化失败', error);
+            console.error('[ScoreStorage] 初始化失败', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -493,7 +503,7 @@ class ScoreStorage {
 
             await this.storage.set(migrationFlagKey, true);
         } catch (error) {
-            console.warn('[ScoreStorage] 迁移 legacy practice_records 失败，跳过:', error);
+            console.warn('[ScoreStorage] 迁移 legacy practice_records 失败，跳过:', summarizeScoreStorageErrorForLog(error));
         }
     }
 
@@ -577,12 +587,12 @@ class ScoreStorage {
             console.log('Data migration completed successfully');
 
         } catch (error) {
-            console.error('Data migration failed:', error);
+            console.error('Data migration failed:', summarizeScoreStorageErrorForLog(error));
             // 恢复备份数据
             try {
                 await this.restoreBackup('migration_backup', { allowDuringInit: true });
             } catch (restoreError) {
-                console.error('Failed to restore backup:', restoreError);
+                console.error('Failed to restore backup:', summarizeScoreStorageErrorForLog(restoreError));
             }
         }
     }
@@ -664,7 +674,7 @@ class ScoreStorage {
                     maxRecords: this.maxRecords
                 });
                 await this.updateUserStats(savedRecord);
-                console.log('Practice record saved:', savedRecord.id);
+                console.log('Practice record saved');
                 return savedRecord;
             }
             
@@ -698,7 +708,7 @@ class ScoreStorage {
                     }
                     if (seen.has(sessionId)) {
                         try {
-                            console.warn(`[ScoreStorage] 移除了重复的练习记录 (sessionId=${sessionId}, id=${item?.id || 'unknown'})${contextLabel ? ' during ' + contextLabel : ''}`);
+                            console.warn(`[ScoreStorage] Removed duplicate practice record${contextLabel ? ' during ' + contextLabel : ''}`);
                         } catch (_) {}
                         return;
                     }
@@ -726,7 +736,7 @@ class ScoreStorage {
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
-                console.log('更新现有记录:', standardizedRecord.id);
+                console.log('[ScoreStorage] Updated existing practice record');
                 records[existingIndex] = standardizedRecord;
             } else {
                 // 添加新记录到开头（保持最新记录在前）
@@ -742,7 +752,7 @@ class ScoreStorage {
                     const sessionId = extractSessionId(record);
                     if (sessionId && sessionId === newSessionId && record.id !== standardizedRecord.id) {
                         try {
-                            console.warn(`[ScoreStorage] 移除了旧的 session 记录 (sessionId=${sessionId}, id=${record?.id || 'unknown'}) 以保留最新结果`);
+                            console.warn('[ScoreStorage] Removed older session record to keep the latest result');
                         } catch (_) {}
                         return false;
                     }
@@ -766,11 +776,11 @@ class ScoreStorage {
             // 更新用户统计
             await this.updateUserStats(standardizedRecord);
             
-            console.log('Practice record saved:', standardizedRecord.id);
+            console.log('Practice record saved');
             return standardizedRecord;
             
         } catch (error) {
-            console.error('Failed to save practice record:', error);
+            console.error('Failed to save practice record:', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -1750,7 +1760,7 @@ class ScoreStorage {
 
             return r;
         } catch (e) {
-            try { console.warn('[ScoreStorage] normalizeRecordFields failed:', e); } catch(_) {}
+            try { console.warn('[ScoreStorage] normalizeRecordFields failed:', summarizeScoreStorageErrorForLog(e)); } catch(_) {}
             return record;
         }
     }
@@ -1788,7 +1798,7 @@ class ScoreStorage {
             }
 
             await this.storage.set('manual_backups', backups);
-            console.log('[ScoreStorage] Backup created:', backup.id);
+            console.log('[ScoreStorage] Backup created');
             return backup.id;
         } else {
             // 降级：不创建备份
@@ -1822,10 +1832,10 @@ class ScoreStorage {
                 }
             }
 
-            console.log('[ScoreStorage] Backup restored:', backupId);
+            console.log('[ScoreStorage] Backup restored');
             return backup;
         } catch (error) {
-            console.error('[ScoreStorage] Failed to restore backup:', error);
+            console.error('[ScoreStorage] Failed to restore backup:', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -1844,7 +1854,7 @@ class ScoreStorage {
             try {
                 return this.standardizeRecord(record);
             } catch (error) {
-                console.warn('[ScoreStorage] Failed to normalize backup record, skipping:', record && record.id, error);
+                console.warn('[ScoreStorage] Failed to normalize backup record, skipping one record:', summarizeScoreStorageErrorForLog(error));
                 return null;
             }
         }).filter(Boolean);
@@ -1899,7 +1909,7 @@ class ScoreStorage {
                 .filter(b => b.type === 'score_storage')
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         } catch (error) {
-            console.error('[ScoreStorage] Failed to get backups:', error);
+            console.error('[ScoreStorage] Failed to get backups:', summarizeScoreStorageErrorForLog(error));
             return [];
         }
     }
@@ -1995,7 +2005,7 @@ class ScoreStorage {
                 try {
                     return this.standardizeRecord(r);
                 } catch (e) {
-                    console.warn('[ScoreStorage] 标准化导入记录失败，跳过:', r && r.id, e);
+                    console.warn('[ScoreStorage] 标准化导入记录失败，跳过一条记录:', summarizeScoreStorageErrorForLog(e));
                     return null;
                 }
             }).filter(Boolean);
@@ -2051,7 +2061,7 @@ class ScoreStorage {
             return true;
 
         } catch (error) {
-            console.error('Failed to import data:', error);
+            console.error('Failed to import data:', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }

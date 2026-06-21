@@ -74,7 +74,7 @@ class DataConsistencyManager {
      * 补充缺失的数据
      */
     enrichRecordData(record) {
-        console.log('[DataConsistencyManager] 开始数据补充:', record.id);
+        console.log('[DataConsistencyManager] 开始数据补充');
         
         const enriched = { ...record };
 
@@ -334,7 +334,7 @@ class DataConsistencyManager {
             const validation = this.validateRecordData(record);
             
             if (!validation.isValid || validation.dataQuality === 'poor') {
-                console.log(`[DataConsistencyManager] 修复记录: ${record.id}`);
+                console.log('[DataConsistencyManager] 修复记录');
                 return this.enrichRecordData(record);
             }
             

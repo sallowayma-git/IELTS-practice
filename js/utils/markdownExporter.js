@@ -2,6 +2,16 @@
  * Markdown 导出器
  * 用于将练习数据导出为 Markdown 格式
  */
+function summarizeMarkdownExporterErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 class MarkdownExporter {
     escapeMarkdownText(value, maxLength = 200) {
         const text = String(value ?? '')
@@ -58,6 +68,19 @@ class MarkdownExporter {
             }
         }
         return 'unknown-date';
+    }
+
+    normalizeExportRecord(record) {
+        if (record && typeof record === 'object' && !Array.isArray(record)) {
+            return record;
+        }
+        return {
+            id: 'invalid-record',
+            title: 'Invalid practice record',
+            answers: {},
+            correctAnswers: {},
+            metadata: {}
+        };
     }
 
     hasAnswerDetails(record) {
@@ -207,7 +230,7 @@ class MarkdownExporter {
                 }, 100);
                 
             } catch (error) {
-                console.error('Markdown导出失败:', error);
+                console.error('Markdown导出失败:', summarizeMarkdownExporterErrorForLog(error));
                 this.hideProgressIndicator();
                 reject(error);
             }
@@ -293,7 +316,7 @@ class MarkdownExporter {
             return markdownContent;
             
         } catch (error) {
-            console.error('Markdown导出失败:', error);
+            console.error('Markdown导出失败:', summarizeMarkdownExporterErrorForLog(error));
             this.hideProgressIndicator();
             throw error;
         }
@@ -315,7 +338,7 @@ class MarkdownExporter {
                     const processed = manager.ensureConsistency ? manager.ensureConsistency(record) : record;
                     processedRecords.push(processed);
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 处理记录失败:', error);
+                    console.warn('[MarkdownExporter] 处理记录失败:', summarizeMarkdownExporterErrorForLog(error));
                     processedRecords.push(record); // 使用原始记录
                 }
             }
@@ -335,9 +358,10 @@ class MarkdownExporter {
      */
     async groupRecordsByDateAsync(practiceRecords, examIndex) {
         const grouped = {};
+        const exams = Array.isArray(examIndex) ? examIndex : [];
         
         for (let i = 0; i < practiceRecords.length; i++) {
-            const record = practiceRecords[i];
+            const record = this.normalizeExportRecord(practiceRecords[i]);
             
             // 获取日期字符串 (YYYY-MM-DD)
             const date = this.resolveRecordDateKey(record);
@@ -347,7 +371,7 @@ class MarkdownExporter {
             }
             
             // 获取考试信息
-            const exam = examIndex.find(e => e.id === record.examId);
+            const exam = exams.find(e => e && e.id === record.examId);
             const enhancedRecord = {
                 ...record,
                 examInfo: exam || {},
@@ -372,8 +396,10 @@ class MarkdownExporter {
      */
     groupRecordsByDate(practiceRecords, examIndex) {
         const grouped = {};
+        const exams = Array.isArray(examIndex) ? examIndex : [];
         
         practiceRecords.forEach(record => {
+            record = this.normalizeExportRecord(record);
             // 获取日期字符串 (YYYY-MM-DD)
             const date = this.resolveRecordDateKey(record);
             
@@ -382,7 +408,7 @@ class MarkdownExporter {
             }
             
             // 获取考试信息
-            const exam = examIndex.find(e => e.id === record.examId);
+            const exam = exams.find(e => e && e.id === record.examId);
             const enhancedRecord = {
                 ...record,
                 examInfo: exam || {},
@@ -430,7 +456,7 @@ class MarkdownExporter {
                     markdown += recordMarkdown;
                     markdown += '\n\n'; // 记录之间空两行
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 生成记录Markdown失败:', error);
+                    console.warn('[MarkdownExporter] 生成记录Markdown失败:', summarizeMarkdownExporterErrorForLog(error));
                     markdown += `### 记录处理失败: ${this.escapeMarkdownText(record?.id || 'unknown', 80)}\n\n`;
                 }
                 
@@ -478,6 +504,7 @@ class MarkdownExporter {
      * 生成单个记录的 Markdown
      */
     generateRecordMarkdown(record) {
+        record = this.normalizeExportRecord(record);
         const { title, category, frequency } = record;
         const metadata = record.metadata || {};
         const displayTitle = this.escapeMarkdownText(this.normalizeTitle(
@@ -628,14 +655,14 @@ class MarkdownExporter {
                     
                     table += `| ${this.escapeMarkdownText(qNum, 20)} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 处理题目失败:', qNum, error);
+                    console.warn('[MarkdownExporter] 处理题目失败:', summarizeMarkdownExporterErrorForLog(error));
                     table += `| ${this.escapeMarkdownText(qNum, 20)} | Error | Error | ✗ |\n`;
                 }
             }
             
             return table;
         } catch (error) {
-            console.error('[MarkdownExporter] 生成答题表格失败:', error);
+            console.error('[MarkdownExporter] 生成答题表格失败:', summarizeMarkdownExporterErrorForLog(error));
             return '答题详情生成失败\n';
         }
     }
@@ -689,13 +716,13 @@ class MarkdownExporter {
                     
                     table += `| ${this.escapeMarkdownText(questionNum, 20)} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 处理比较数据失败:', key, error);
+                    console.warn('[MarkdownExporter] 处理比较数据失败:', summarizeMarkdownExporterErrorForLog(error));
                 }
             }
             
             return table;
         } catch (error) {
-            console.error('[MarkdownExporter] 从比较数据生成表格失败:', error);
+            console.error('[MarkdownExporter] 从比较数据生成表格失败:', summarizeMarkdownExporterErrorForLog(error));
             return '答题详情生成失败\n';
         }
     }
@@ -777,7 +804,7 @@ class MarkdownExporter {
             return stub;
         }
         
-        console.warn('[MarkdownExporter] 未找到正确答案数据，记录ID:', record.id);
+        console.warn('[MarkdownExporter] 未找到正确答案数据');
         return {};
     }
 
@@ -961,7 +988,7 @@ class MarkdownExporter {
             
             console.log('[MarkdownExporter] 文件下载完成');
         } catch (error) {
-            console.error('[MarkdownExporter] 文件下载失败:', error);
+            console.error('[MarkdownExporter] 文件下载失败:', summarizeMarkdownExporterErrorForLog(error));
             throw error;
         }
     }

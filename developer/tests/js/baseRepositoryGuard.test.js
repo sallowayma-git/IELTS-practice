@@ -23,7 +23,8 @@ function loadRepositories() {
     for (const file of [
         'js/data/repositories/baseRepository.js',
         'js/data/repositories/settingsRepository.js',
-        'js/data/repositories/backupRepository.js'
+        'js/data/repositories/backupRepository.js',
+        'js/data/repositories/practiceRepository.js'
     ]) {
         vm.runInContext(read(file), context, { filename: file });
     }
@@ -136,6 +137,24 @@ assertClean(addedBackup.data, 'backup add return');
 const savedBackup = backupDataSource.data.get('manual_backups')[0];
 assert.equal(Object.prototype.hasOwnProperty.call(savedBackup, 'constructor'), false, 'backup add should not persist top-level constructor');
 assertClean(savedBackup.data, 'backup add');
+
+const practiceDataSource = createDataSource({
+    practice_records: [{
+        id: 'secret-practice-record-id',
+        type: 'reading',
+        score: 'not-a-number',
+        date: '2026-01-01T00:00:00.000Z'
+    }]
+});
+const practiceRepo = new ExamData.PracticeRepository(practiceDataSource);
+const consistencyReport = await practiceRepo.runConsistencyCheck();
+assert.equal(consistencyReport.valid, false, 'invalid practice records should fail consistency check');
+assert.ok(consistencyReport.errors.some((error) => error.includes('record #1')), 'practice consistency errors should use record position');
+assert.equal(
+    consistencyReport.errors.some((error) => error.includes('secret-practice-record-id')),
+    false,
+    'practice consistency errors should not expose record ids'
+);
 
 console.log(JSON.stringify({
     status: 'pass',

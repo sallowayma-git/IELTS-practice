@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const libraryDiscoverySource = fs.readFileSync(path.join(repoRoot, 'js/services/libraryDiscovery.js'), 'utf8');
 
 function loadScript(relativePath, context) {
     const fullPath = path.join(repoRoot, relativePath);
@@ -135,6 +136,15 @@ async function testDiscoversListeningHtmlAtAnyDepth() {
     assert(runtimeHtml.includes("worker-src 'none'"), 'runtime wrapper CSP should block imported content workers');
     assert(runtimeHtml.includes("navigate-to 'none'"), 'runtime wrapper CSP should block imported content navigation');
     assert(runtimeHtml.includes('&lt;script&gt;'), 'original imported scripts should be encoded into srcdoc instead of top-level HTML');
+    assert(runtimeHtml.includes('function sameOriginParent(event)'), 'runtime bridge must validate parent message origin before forwarding into the sandbox');
+    assert(
+        runtimeHtml.includes('sameOriginParent(event) && allowedFromParent[type] && frame && frame.contentWindow'),
+        'runtime bridge must only forward allowlisted parent messages after the same-origin check'
+    );
+    assert(
+        runtimeHtml.includes("frame.contentWindow.postMessage(event.data, '*');"),
+        'wildcard postMessage should be limited to the opaque-origin sandbox iframe target'
+    );
     for (const blockedType of [
         'VOCAB_HIGHLIGHT_SAVE',
         'SIMULATION_DRAFT_SYNC',
@@ -251,6 +261,49 @@ async function testIncrementalMergeDedupesByImportKey() {
     });
 }
 
+async function testDoesNotPersistLocalFileSystemPaths() {
+    const { discovery } = createHarness();
+    const privateHtmlPath = 'D:\\Users\\Alice\\Secret IELTS\\private-listening.html';
+    const privateAudioPath = 'D:\\Users\\Alice\\Secret IELTS\\audio.mp3';
+    const files = [
+        {
+            name: 'private-listening.html',
+            path: privateHtmlPath,
+            size: 1000,
+            async text() {
+                return listeningHtml('Private Path Exam');
+            }
+        },
+        {
+            name: 'audio.mp3',
+            path: privateAudioPath,
+            type: 'audio/mpeg',
+            size: 1000,
+            async text() {
+                return '';
+            }
+        }
+    ];
+
+    const result = await discovery.discover(files, { type: 'listening', registerRuntime: false });
+
+    assert.strictEqual(result.entries.length, 1, 'file.path fallback should still allow same-selection resource matching by filename');
+    const entry = result.entries[0];
+    assert.strictEqual(entry.sourcePath, 'private-listening.html');
+    assert.strictEqual(entry.filename, 'private-listening.html');
+    assert.strictEqual(entry.audioFilename, 'audio.mp3');
+    const serialized = JSON.stringify(result);
+    assert(!serialized.includes('Users'), 'local directory names must not be persisted in imported metadata');
+    assert(!serialized.includes('Alice'), 'local user names must not be persisted in imported metadata');
+    assert(!serialized.includes('Secret IELTS'), 'local folder names must not be persisted in imported metadata');
+    assert(!serialized.includes('D:'), 'drive letters must not be persisted in imported metadata');
+
+    recordResult('file.path 本机路径不进入导入元数据', true, {
+        sourcePath: entry.sourcePath,
+        path: entry.path
+    });
+}
+
 async function testCapsImportedFileCountAndHtmlSize() {
     const oversized = createHarness();
     const oversizedResult = await oversized.discovery.discover([
@@ -279,6 +332,16 @@ async function testCapsImportedFileCountAndHtmlSize() {
     });
 }
 
+function testDiscoveryLogsDoNotExposeFilePaths() {
+    assert(
+        !/console\.warn\([^)]*(?:getFilePath|getBaseName\(file)/.test(libraryDiscoverySource) &&
+        !libraryDiscoverySource.includes('HTML file skipped because it is too large:\'') &&
+        !libraryDiscoverySource.includes('HTML content skipped because it is too large:\''),
+        'LibraryDiscovery size warnings must not log imported file paths or filenames'
+    );
+    recordResult('LibraryDiscovery warning logs hide imported file paths', true);
+}
+
 async function main() {
     try {
         await testDiscoversListeningHtmlAtAnyDepth();
@@ -286,7 +349,9 @@ async function main() {
         await testRejectsAudioPageWithoutAnswerPath();
         await testReadingImportRejectsListeningHtml();
         await testIncrementalMergeDedupesByImportKey();
+        await testDoesNotPersistLocalFileSystemPaths();
         await testCapsImportedFileCountAndHtmlSize();
+        testDiscoveryLogsDoNotExposeFilePaths();
 
         console.log(JSON.stringify({
             status: 'pass',
