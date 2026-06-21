@@ -50,7 +50,6 @@
             }
 
             if (shouldActivateFromLocation()) {
-                this.enableTestEnvironment({ persist: true });
                 return true;
             }
 
@@ -121,7 +120,42 @@
     const UNSAFE_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const MAX_CATEGORY_CONFIG_ENTRIES = 80;
     const MAX_CATEGORY_NAME_LENGTH = 80;
+    const MAX_LOG_ARG_DEPTH = 6;
+    const MAX_LOG_ARRAY_ITEMS = 50;
+    const MAX_LOG_OBJECT_KEYS = 80;
+    const MAX_LOG_STRING_LENGTH = 1000;
     const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/;
+    const SENSITIVE_LOG_KEYS = new Set([
+        'access_token',
+        'answer',
+        'answercomparison',
+        'answers',
+        'authorization',
+        'correctanswer',
+        'correctanswers',
+        'csrftoken',
+        'examid',
+        'interactions',
+        'newpassword',
+        'oldpassword',
+        'password',
+        'payload',
+        'realdata',
+        'recordid',
+        'recoverycode',
+        'recoverycodes',
+        'raw',
+        'secret',
+        'session',
+        'sessionid',
+        'sid',
+        'suiteid',
+        'suitesessionid',
+        'token',
+        'totp',
+        'useranswer',
+        'userinput'
+    ]);
 
     function isPlainRecord(value) {
         return Object.prototype.toString.call(value) === '[object Object]';
@@ -165,6 +199,102 @@
             }
         }
         return normalized;
+    }
+
+    function normalizeLogKey(key) {
+        return String(key || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    }
+
+    function isSensitiveLogKey(key) {
+        const normalized = normalizeLogKey(key);
+        if (!normalized) {
+            return false;
+        }
+        return SENSITIVE_LOG_KEYS.has(normalized)
+            || normalized.endsWith('token')
+            || normalized.endsWith('secret')
+            || normalized.endsWith('password')
+            || normalized.endsWith('sessionid')
+            || normalized.endsWith('recordid');
+    }
+
+    function sanitizeLogString(value) {
+        let text = String(value);
+        text = text.replace(/[A-Za-z]:[\\/][^\s"'<>]+/g, '[local-path]');
+        text = text.replace(/\\\\[^\\/\s"'<>]+\\[^\s"'<>]+/g, '[local-path]');
+        text = text.replace(/[a-z2-7]{16,56}\.onion\b/gi, '[onion-host]');
+        text = text.replace(
+            /([?&](?:access_token|code|csrf|csrfToken|password|secret|session|sessionId|sid|token)=)[^&#\s]+/gi,
+            '$1[redacted]'
+        );
+        text = text.replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '[redacted-auth]');
+        if (text.length > MAX_LOG_STRING_LENGTH) {
+            return `${text.slice(0, MAX_LOG_STRING_LENGTH)}...[truncated]`;
+        }
+        return text;
+    }
+
+    function sanitizeLogArg(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return sanitizeLogString(value);
+        }
+        if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+            return value;
+        }
+        if (typeof value === 'symbol' || typeof value === 'function') {
+            return `[${typeof value}]`;
+        }
+        if (depth > MAX_LOG_ARG_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (typeof value !== 'object') {
+            return sanitizeLogString(value);
+        }
+        if (seen.has(value)) {
+            return '[Circular]';
+        }
+        seen.add(value);
+        if (value instanceof Error) {
+            return {
+                name: sanitizeLogString(value.name || 'Error'),
+                message: sanitizeLogString(value.message || ''),
+                stack: value.stack ? sanitizeLogString(value.stack) : undefined
+            };
+        }
+        if (Array.isArray(value)) {
+            const output = value
+                .slice(0, MAX_LOG_ARRAY_ITEMS)
+                .map((item) => sanitizeLogArg(item, depth + 1, seen));
+            if (value.length > MAX_LOG_ARRAY_ITEMS) {
+                output.push(`[${value.length - MAX_LOG_ARRAY_ITEMS} more items]`);
+            }
+            return output;
+        }
+        if (!isPlainRecord(value)) {
+            return sanitizeLogString(Object.prototype.toString.call(value));
+        }
+        const output = {};
+        const entries = Object.entries(value).slice(0, MAX_LOG_OBJECT_KEYS);
+        for (const [key, item] of entries) {
+            if (UNSAFE_CONFIG_KEYS.has(key)) {
+                continue;
+            }
+            output[key] = isSensitiveLogKey(key)
+                ? '[redacted]'
+                : sanitizeLogArg(item, depth + 1, seen);
+        }
+        const totalKeys = Object.keys(value).length;
+        if (totalKeys > MAX_LOG_OBJECT_KEYS) {
+            output.__truncatedKeys = totalKeys - MAX_LOG_OBJECT_KEYS;
+        }
+        return output;
+    }
+
+    function sanitizeLogArgs(args) {
+        return Array.isArray(args) ? args.map((arg) => sanitizeLogArg(arg)) : [];
     }
 
     class AppLogger {
@@ -318,13 +448,14 @@
             }
 
             const timestamp = new Date().toLocaleTimeString();
-            const prefix = `[${timestamp}] [${category}]`;
+            const prefix = `[${timestamp}] [${sanitizeLogString(category)}]`;
+            const safeArgs = sanitizeLogArgs(args);
 
             // Map our levels to console methods
             const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
 
-            // Use native console to print, preserving object inspection capabilities
-            consoleMethod.call(global.console, prefix, ...args);
+            // Use native console to print sanitized values while preserving useful object structure.
+            consoleMethod.call(global.console, prefix, ...safeArgs);
         }
 
         /**
@@ -513,6 +644,16 @@ function sanitizeStoredValue(value, depth = 0, state = null) {
     return output;
 }
 
+function summarizeStorageErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
@@ -547,7 +688,7 @@ class StorageManager {
             'vocab_list_reading_highlights'
         ]);
         this.ready = this.initializeStorage().catch(error => {
-            console.error('[Storage] 初始化失败:', error);
+            console.error('[Storage] 初始化失败:', summarizeStorageErrorForLog(error));
             throw error;
         });
     }
@@ -655,7 +796,7 @@ class StorageManager {
 
             // 添加恢复逻辑
         } catch (error) {
-            console.warn('[Storage] 初始化基本存储能力失败，尝试继续:', error);
+            console.warn('[Storage] 初始化基本存储能力失败，尝试继续:', summarizeStorageErrorForLog(error));
             await this.initializeIndexedDBStorage();
         }
     }
@@ -711,7 +852,7 @@ class StorageManager {
                 });
 
                 request.onerror = (event) => {
-                    console.error('[Storage] IndexedDB 打开失败:', event.target.error);
+                    console.error('[Storage] IndexedDB 打开失败:', summarizeStorageErrorForLog(event.target.error));
                     this.indexedDBBlocked = true;
                     if (this.localStorageAvailable || this.sessionStorageAvailable) {
                         console.warn('[Storage] 使用 local/sessionStorage 作为回退存储');
@@ -741,7 +882,7 @@ class StorageManager {
                 request.onsuccess = (event) => {
                     this.indexedDB = event.target.result;
                     this.indexedDBBlocked = false;
-                    console.log('[Storage] IndexedDB 初始化成功，数据库:', this.indexedDB.name, '版本:', this.indexedDB.version);
+                    console.log('[Storage] IndexedDB 初始化成功，版本:', this.indexedDB.version);
 
                     // 迁移localStorage数据到IndexedDB
                     console.log('[Storage] 开始从 localStorage 迁移数据');
@@ -749,13 +890,13 @@ class StorageManager {
                         .then(() => this.migrateFromLocalStorage())
                         .then(() => resolve())
                         .catch((migrationError) => {
-                            console.warn('[Storage] 迁移过程中出现问题，但继续初始化:', migrationError);
+                            console.warn('[Storage] 迁移过程中出现问题，但继续初始化:', summarizeStorageErrorForLog(migrationError));
                             resolve();
                         });
                 };
 
             } catch (error) {
-                console.error('[Storage] IndexedDB 初始化失败:', error);
+                console.error('[Storage] IndexedDB 初始化失败:', summarizeStorageErrorForLog(error));
                 this.indexedDBBlocked = true;
                 if (this.localStorageAvailable || this.sessionStorageAvailable) {
                     console.warn('[Storage] IndexedDB 初始化失败，将使用 local/sessionStorage');
@@ -798,7 +939,7 @@ class StorageManager {
                 return true;
             }
         } catch (e) {
-            console.warn('[Storage] 提升到 IndexedDB 失败，继续使用退路:', e);
+            console.warn('[Storage] 提升到 IndexedDB 失败，继续使用退路:', summarizeStorageErrorForLog(e));
         }
         return false;
     }
@@ -833,17 +974,17 @@ class StorageManager {
                         await this.setToIndexedDB(key, value);
                         localStorage.removeItem(key);
                         migratedCount++;
-                        console.log(`[Storage] 成功迁移键: ${key}`);
+                        console.log('[Storage] 成功迁移一项数据');
                     }
                 } catch (error) {
-                    console.warn(`[Storage] 迁移数据失败: ${key}`, error);
+                    console.warn('[Storage] 迁移一项数据失败', summarizeStorageErrorForLog(error));
                     failedCount++;
                 }
             }
 
             console.log(`[Storage] 数据迁移完成: ${migratedCount} 成功, ${failedCount} 失败`);
         } catch (error) {
-            console.error('[Storage] 数据迁移失败:', error);
+            console.error('[Storage] 数据迁移失败:', summarizeStorageErrorForLog(error));
         }
     }
 
@@ -973,10 +1114,11 @@ class StorageManager {
         for (const [key, value] of Object.entries(defaultData)) {
             const existingValue = await this.get(key, null, { skipReady });
             if (existingValue === null || existingValue === undefined) {
-                console.log(`[Storage] 初始化默认数据: ${key}`);
+                console.log('[Storage] 初始化一项默认数据');
                 await this.set(key, value, { skipReady });
             } else {
-                console.log(`[Storage] 保留现有数据: ${key} (${Array.isArray(existingValue) ? existingValue.length + ' 项' : typeof existingValue})`);
+                const existingValueSummary = Array.isArray(existingValue) ? `${existingValue.length} 项` : typeof existingValue;
+                console.log(`[Storage] 保留一项现有数据 (${existingValueSummary})`);
             }
         }
     }
@@ -988,9 +1130,9 @@ class StorageManager {
         const safeNamespace = normalizeStorageNamespace(namespace);
         if (safeNamespace) {
             this.prefix = safeNamespace + '_';
-            console.log('[Storage] 命名空间已设置为:', this.prefix);
+            console.log('[Storage] 命名空间已设置');
         } else {
-            console.warn('[Storage] 无效的命名空间:', namespace);
+            console.warn('[Storage] 无效的命名空间');
         }
     }
 
@@ -1174,7 +1316,7 @@ class StorageManager {
             }
             return data;
         } catch (error) {
-            console.warn('[Storage] 数据压缩失败，使用原始数据:', error);
+            console.warn('[Storage] 数据压缩失败，使用原始数据:', summarizeStorageErrorForLog(error));
             return data;
         }
     }
@@ -1297,7 +1439,7 @@ class StorageManager {
             }
             return await this.writePersistentValue(key, value);
         } catch (error) {
-            console.error('[Storage] set 操作错误:', error);
+            console.error('[Storage] set 操作错误:', summarizeStorageErrorForLog(error));
             this.handleStorageError(key, value, error);
             return false;
         }
@@ -1321,7 +1463,7 @@ class StorageManager {
             currentList.push(value);
             return await this.writePersistentValue(key, currentList);
         } catch (error) {
-            console.error('[Storage] Append error:', error);
+            console.error('[Storage] Append error:', summarizeStorageErrorForLog(error));
             this.handleStorageError(key, value, error);
             return false;
         }
@@ -1334,7 +1476,7 @@ class StorageManager {
             await this.ensureIndexedDBReady();
             return await this.readPersistentValue(key, defaultValue);
         } catch (error) {
-            console.error('Storage get error:', error);
+            console.error('Storage get error:', summarizeStorageErrorForLog(error));
             return defaultValue;
         }
     }
@@ -1356,7 +1498,7 @@ class StorageManager {
             }
             return await this.removePersistentValue(key);
         } catch (error) {
-            console.error('Storage remove error:', error);
+            console.error('Storage remove error:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1371,7 +1513,7 @@ class StorageManager {
             await this.ensureIndexedDBReady();
             return await this.clearPersistentStorage();
         } catch (error) {
-            console.error('Storage clear error:', error);
+            console.error('Storage clear error:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1421,7 +1563,7 @@ class StorageManager {
             }
             return hasSpace;
         } catch (error) {
-            console.error('[Storage] 配额检查错误:', error);
+            console.error('[Storage] 配额检查错误:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1482,7 +1624,7 @@ class StorageManager {
                         }
                     };
                 } catch (error) {
-                    console.warn('[Storage] 获取混合存储使用情况失败:', error);
+                    console.warn('[Storage] 获取混合存储使用情况失败:', summarizeStorageErrorForLog(error));
                     // 降级到localStorage
                 }
             }
@@ -1501,7 +1643,7 @@ class StorageManager {
                 available: 5 * 1024 * 1024 - used // 假设5MB限制
             };
         } catch (error) {
-            console.error('Storage info error:', error);
+            console.error('Storage info error:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -1520,7 +1662,7 @@ class StorageManager {
             });
             return used;
         } catch (error) {
-            console.error('Get localStorage usage error:', error);
+            console.error('Get localStorage usage error:', summarizeStorageErrorForLog(error));
             return 0;
         }
     }
@@ -1600,7 +1742,7 @@ class StorageManager {
             }
 
         } catch (error) {
-            console.error('[Storage] 清理旧数据失败:', error);
+            console.error('[Storage] 清理旧数据失败:', summarizeStorageErrorForLog(error));
         }
     }
 
@@ -1634,12 +1776,12 @@ class StorageManager {
                         try {
                             legacyData = JSON.parse(legacyDataStr);
                         } catch (parseError) {
-                            console.warn(`[Storage] 解析遗留数据失败: ${oldKey}`, parseError);
+                            console.warn('[Storage] 解析遗留数据失败', summarizeStorageErrorForLog(parseError));
                             continue;
                         }
 
                         if (!Array.isArray(legacyData)) {
-                            console.warn(`[Storage] 遗留数据非数组，跳过: ${oldKey}`);
+                            console.warn('[Storage] 遗留数据非数组，跳过');
                             continue;
                         }
 
@@ -1665,9 +1807,9 @@ class StorageManager {
                         // 删除旧键
                         localStorage.removeItem(oldKey);
                         migratedCount++;
-                        console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
+                        console.log(`[Storage] 成功迁移并合并数据: ${legacyData.length} 项`);
                     } catch (migrateError) {
-                        console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
+                        console.error('[Storage] 迁移失败', summarizeStorageErrorForLog(migrateError));
                     }
                 }
 
@@ -1687,7 +1829,7 @@ class StorageManager {
                             const parsed = JSON.parse(legacyMyMelodyData);
                             legacyData = parsed.data || parsed;
                         } catch (parseError) {
-                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
+                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', summarizeStorageErrorForLog(parseError));
                             await this.set('my_melody_migration_completed', true, { skipReady });
                             return;
                         }
@@ -1716,7 +1858,7 @@ class StorageManager {
                     }
                     await this.set('my_melody_migration_completed', true, { skipReady });
                 } catch (migrateError) {
-                    console.error('[Storage] MyMelody 迁移失败:', migrateError);
+                    console.error('[Storage] MyMelody 迁移失败:', summarizeStorageErrorForLog(migrateError));
                     await this.set('my_melody_migration_completed', true, { skipReady }); // 避免无限重试
                 }
             } else {
@@ -1724,7 +1866,7 @@ class StorageManager {
             }
 
         } catch (error) {
-            console.error('[Storage] 迁移遗留数据失败:', error);
+            console.error('[Storage] 迁移遗留数据失败:', summarizeStorageErrorForLog(error));
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true, { skipReady });
             await this.set('my_melody_migration_completed', true, { skipReady });
@@ -1777,7 +1919,7 @@ class StorageManager {
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
-            console.warn('[Storage] 备份恢复失败，已跳过:', error);
+            console.warn('[Storage] 备份恢复失败，已跳过:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -1830,7 +1972,7 @@ class StorageManager {
     }
 
     handleStorageQuotaExceeded(key, value) {
-        console.error('[Storage] 存储配额超限，无法保存数据:', key);
+        console.error('[Storage] 存储配额超限，无法保存数据');
 
         // 显示用户警告
         if (window.showMessage) {
@@ -1847,7 +1989,7 @@ class StorageManager {
      * 处理存储错误
      */
     handleStorageError(key, value, error) {
-        console.error('[Storage] 存储错误:', error);
+        console.error('[Storage] 存储错误:', summarizeStorageErrorForLog(error));
 
         // 如果是配额错误，尝试切换到备用存储
         if (error.name === 'QuotaExceededError') {
@@ -1912,7 +2054,7 @@ class StorageManager {
                     Object.assign(data, indexedDBData);
                     console.log(`[Storage] 已导出IndexedDB数据 ${Object.keys(indexedDBData).length} 条`);
                 } catch (error) {
-                    console.warn('[Storage] IndexedDB导出失败:', error);
+                    console.warn('[Storage] IndexedDB导出失败:', summarizeStorageErrorForLog(error));
                 }
             }
 
@@ -1933,7 +2075,7 @@ class StorageManager {
                         }
                     }
                 } catch (error) {
-                    console.warn(`[Storage] 解析localStorage数据失败: ${cleanKey}`, error);
+                    console.warn('[Storage] 解析一项 localStorage 数据失败', summarizeStorageErrorForLog(error));
                 }
             });
             console.log(`[Storage] 已导出localStorage数据 ${appKeys.length} 条`);
@@ -1954,7 +2096,7 @@ class StorageManager {
                 }
             };
         } catch (error) {
-            console.error('Export data error:', error);
+            console.error('Export data error:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -2018,7 +2160,7 @@ class StorageManager {
                 };
             } catch (importError) {
                 // 恢复备份
-                console.error('Import failed, restoring backup:', importError);
+                console.error('Import failed, restoring backup:', summarizeStorageErrorForLog(importError));
                 await this.clear({ skipReady });
 
                 if (backup && backup.data) {
@@ -2034,7 +2176,7 @@ class StorageManager {
                 throw importError;
             }
         } catch (error) {
-            console.error('Import data error:', error);
+            console.error('Import data error:', summarizeStorageErrorForLog(error));
             return { success: false, message: error.message };
         }
     }
@@ -2136,7 +2278,7 @@ class StorageManager {
             }
             return parsed;
         } catch (error) {
-            console.warn(`[Storage] Skipping invalid ${source} export data: ${cleanKey}`, error);
+            console.warn('[Storage] Skipping invalid export data item', summarizeStorageErrorForLog(error));
             return undefined;
         }
     }
@@ -2190,7 +2332,7 @@ class StorageManager {
                     }
                 }
             } catch (error) {
-                console.error('[Storage] 存储监控错误:', error);
+                console.error('[Storage] 存储监控错误:', summarizeStorageErrorForLog(error));
             }
         }, 300000); // 每5分钟检查一次
 
@@ -2318,18 +2460,18 @@ class StorageManager {
                     storageKey = cleanedList.id;
             }
 
-            console.log(`[Storage] 保存词表: ${storageKey}, 单词数: ${cleanedList.words.length}`);
+            console.log(`[Storage] 保存词表，单词数: ${cleanedList.words.length}`);
 
             // 保存到存储
             const success = await this.set(storageKey, cleanedList, { skipReady });
 
             if (success) {
-                console.log(`[Storage] 词表保存成功: ${storageKey}`);
+                console.log('[Storage] 词表保存成功');
             }
 
             return success;
         } catch (error) {
-            console.error('[Storage] 保存词表失败:', error);
+            console.error('[Storage] 保存词表失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2359,12 +2501,12 @@ class StorageManager {
                 storageKey = listId;
             }
 
-            console.log(`[Storage] 加载词表: ${storageKey}`);
+            console.log('[Storage] 加载词表');
 
             const vocabList = await this.get(storageKey, null, { skipReady });
 
             if (!vocabList) {
-                console.log(`[Storage] 词表不存在: ${storageKey}`);
+                console.log('[Storage] 词表不存在');
                 return null;
             }
 
@@ -2401,10 +2543,10 @@ class StorageManager {
                 return null;
             }
 
-            console.log(`[Storage] 词表加载成功: ${storageKey}, 单词数: ${vocabList.words.length}`);
+            console.log(`[Storage] 词表加载成功，单词数: ${vocabList.words.length}`);
             return vocabList;
         } catch (error) {
-            console.error('[Storage] 加载词表失败:', error);
+            console.error('[Storage] 加载词表失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -2419,7 +2561,7 @@ class StorageManager {
             const vocabList = await this.loadVocabList(listId, { skipReady });
             return vocabList ? vocabList.words.length : 0;
         } catch (error) {
-            console.error('[Storage] 获取词表单词数量失败:', error);
+            console.error('[Storage] 获取词表单词数量失败:', summarizeStorageErrorForLog(error));
             return 0;
         }
     }
@@ -2471,7 +2613,7 @@ class StorageManager {
 
             return await this.saveVocabList(vocabList, { skipReady });
         } catch (error) {
-            console.error('[Storage] 添加单词到词表失败:', error);
+            console.error('[Storage] 添加单词到词表失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2498,7 +2640,7 @@ class StorageManager {
 
             return await this.saveVocabList(vocabList, { skipReady });
         } catch (error) {
-            console.error('[Storage] 从词表移除单词失败:', error);
+            console.error('[Storage] 从词表移除单词失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2565,7 +2707,7 @@ class StorageManager {
         const { skipReady = false } = options;
 
         try {
-            console.log(`[Storage] 开始同步词表: ${listId}`);
+            console.log('[Storage] 开始同步词表');
 
             // 加载现有数据
             const existingList = await this.loadVocabList(listId, { skipReady });
@@ -2584,7 +2726,7 @@ class StorageManager {
             // 保存合并后的数据
             return await this.saveVocabList(mergedList, { skipReady });
         } catch (error) {
-            console.error('[Storage] 同步词表失败:', error);
+            console.error('[Storage] 同步词表失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2659,10 +2801,12 @@ class StorageManager {
                 }
             }
 
-            console.log('[Storage] 批量同步完成:', results);
+            const successCount = results.filter((result) => result && result.success).length;
+            const failedSyncCount = results.length - successCount;
+            console.log(`[Storage] 批量同步完成: ${successCount} 成功, ${failedSyncCount} 失败`);
             return results;
         } catch (error) {
-            console.error('[Storage] 批量同步失败:', error);
+            console.error('[Storage] 批量同步失败:', summarizeStorageErrorForLog(error));
             return [];
         }
     }
@@ -2688,7 +2832,7 @@ class StorageManager {
             console.log('[Storage] 数据持久化完成');
             return true;
         } catch (error) {
-            console.error('[Storage] 数据持久化失败:', error);
+            console.error('[Storage] 数据持久化失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2707,7 +2851,7 @@ class StorageManager {
 
                 console.log('[Storage] 数据持久化完成');
             } catch (error) {
-                console.error('[Storage] beforeunload 数据持久化失败:', error);
+                console.error('[Storage] beforeunload 数据持久化失败:', summarizeStorageErrorForLog(error));
             }
         });
 
@@ -2778,7 +2922,7 @@ class StorageManager {
             console.log('[Storage] IndexedDB 未初始化');
             return false;
         } catch (error) {
-            console.error('[Storage] IndexedDB 可用性检测失败:', error);
+            console.error('[Storage] IndexedDB 可用性检测失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2794,7 +2938,7 @@ class StorageManager {
             console.log('[Storage] localStorage 可用');
             return true;
         } catch (error) {
-            console.error('[Storage] localStorage 不可用:', error);
+            console.error('[Storage] localStorage 不可用:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2848,7 +2992,7 @@ class StorageManager {
                     console.log('[Storage] localStorage 保存成功');
                     return true;
                 } catch (localStorageError) {
-                    console.error('[Storage] localStorage 保存失败:', localStorageError);
+                    console.error('[Storage] localStorage 保存失败:', summarizeStorageErrorForLog(localStorageError));
                 }
             }
 
@@ -2871,7 +3015,7 @@ class StorageManager {
 
             return true;
         } catch (error) {
-            console.error('[Storage] 处理存储空间不足失败:', error);
+            console.error('[Storage] 处理存储空间不足失败:', summarizeStorageErrorForLog(error));
 
             // 最终失败，提示用户
             if (window.showMessage) {
@@ -2916,7 +3060,7 @@ class StorageManager {
                 compressedList
             );
         } catch (error) {
-            console.error('[Storage] 词表降级保存失败:', error);
+            console.error('[Storage] 词表降级保存失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -2988,10 +3132,16 @@ class StorageManager {
                 health.used = storageInfo.used;
             }
 
-            console.log('[Storage] 存储健康状态:', health);
+            console.log('[Storage] 存储健康状态:', {
+                indexedDB: Boolean(health.indexedDB),
+                localStorage: Boolean(health.localStorage),
+                currentType: health.currentType,
+                quotaStatus: health.quotaStatus,
+                usagePercent: Number.isFinite(health.usagePercent) ? Number(health.usagePercent.toFixed(2)) : undefined
+            });
             return health;
         } catch (error) {
-            console.error('[Storage] 检查存储健康状态失败:', error);
+            console.error('[Storage] 检查存储健康状态失败:', summarizeStorageErrorForLog(error));
             return {
                 indexedDB: false,
                 localStorage: false,
@@ -3031,7 +3181,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出练习记录失败:', error);
+            console.error('[Storage] 导出练习记录失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -3077,7 +3227,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出词表数据失败:', error);
+            console.error('[Storage] 导出词表数据失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -3089,12 +3239,12 @@ class StorageManager {
         const { skipReady = false, format = 'json' } = options;
 
         try {
-            console.log(`[Storage] 开始导出词表: ${listId}`);
+            console.log('[Storage] 开始导出词表');
 
             const list = await this.loadVocabList(listId, { skipReady });
 
             if (!list) {
-                console.warn(`[Storage] 词表不存在: ${listId}`);
+                console.warn('[Storage] 词表不存在');
                 return null;
             }
 
@@ -3105,7 +3255,7 @@ class StorageManager {
                 list: list
             };
 
-            console.log(`[Storage] 词表导出完成: ${listId}, ${list.words.length} 个单词`);
+            console.log(`[Storage] 词表导出完成，单词数: ${list.words.length}`);
 
             if (format === 'json') {
                 return JSON.stringify(exportData, null, 2);
@@ -3113,7 +3263,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出词表失败:', error);
+            console.error('[Storage] 导出词表失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -3167,7 +3317,7 @@ class StorageManager {
 
             return exportData;
         } catch (error) {
-            console.error('[Storage] 导出完整数据失败:', error);
+            console.error('[Storage] 导出完整数据失败:', summarizeStorageErrorForLog(error));
             return null;
         }
     }
@@ -3206,10 +3356,10 @@ class StorageManager {
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(url), 0);
 
-            console.log(`[Storage] 数据已下载: ${finalFilename}`);
+            console.log('[Storage] 数据已下载');
             return true;
         } catch (error) {
-            console.error('[Storage] 下载导出数据失败:', error);
+            console.error('[Storage] 下载导出数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -3245,7 +3395,7 @@ class StorageManager {
             }
             return false;
         } catch (error) {
-            console.error('[Storage] 导出并下载练习记录失败:', error);
+            console.error('[Storage] 导出并下载练习记录失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -3262,7 +3412,7 @@ class StorageManager {
             }
             return false;
         } catch (error) {
-            console.error('[Storage] 导出并下载词表数据失败:', error);
+            console.error('[Storage] 导出并下载词表数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -3279,7 +3429,7 @@ class StorageManager {
             }
             return false;
         } catch (error) {
-            console.error('[Storage] 导出并下载完整数据失败:', error);
+            console.error('[Storage] 导出并下载完整数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -3321,7 +3471,7 @@ class StorageManager {
                         }
                     }
                 } catch (error) {
-                    console.error(`[Storage] 导入词表失败: ${list.id}`, error);
+                    console.error('[Storage] 导入词表失败:', summarizeStorageErrorForLog(error));
                     failCount++;
                 }
             }
@@ -3329,7 +3479,7 @@ class StorageManager {
             console.log(`[Storage] 词表导入完成: ${successCount} 成功, ${failCount} 失败`);
             return { successCount, failCount };
         } catch (error) {
-            console.error('[Storage] 导入词表数据失败:', error);
+            console.error('[Storage] 导入词表数据失败:', summarizeStorageErrorForLog(error));
             return false;
         }
     }
@@ -3544,7 +3694,7 @@ storageManager.ready
         storageManager.setupBeforeUnloadHandler();
     })
     .catch(error => {
-        console.error('[Storage] 存储初始化失败，监控未启动:', error);
+        console.error('[Storage] 存储初始化失败，监控未启动:', summarizeStorageErrorForLog(error));
     });
 
 
@@ -3638,6 +3788,15 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
 
+    function summarizeStorageDataSourceErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error'
+        };
+    }
+
     class StorageTransactionContext {
         constructor(storageManager) {
             this.storage = storageManager;
@@ -3711,11 +3870,10 @@ storageManager.ready
             });
         }
 
-        async runTransaction(handler, options = {}) {
+        async runTransaction(handler) {
             if (typeof handler !== 'function') {
                 throw new Error('StorageDataSource.runTransaction requires a handler function');
             }
-            const label = options.label || 'storage-transaction';
             return this._enqueue(async () => {
                 const context = new StorageTransactionContext(this.storage);
                 try {
@@ -3724,7 +3882,7 @@ storageManager.ready
                     return result;
                 } catch (error) {
                     await context.rollback();
-                    console.error(`[StorageDataSource] Transaction failed (${label}):`, error);
+                    console.error('[StorageDataSource] Transaction failed:', summarizeStorageDataSourceErrorForLog(error));
                     throw error;
                 }
             });
@@ -4069,6 +4227,17 @@ storageManager.ready
         return error && error.status === 401;
     }
 
+    function summarizeRemotePracticeErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function clearApiAuthState(apiClient) {
         if (!apiClient) {
             return;
@@ -4154,7 +4323,7 @@ storageManager.ready
                 if (isUnauthorized(error)) {
                     clearApiAuthState(this.apiClient);
                 }
-                console.warn('[RemotePracticeDataSource] 读取远端练习记录失败，回退本地:', error);
+                console.warn('[RemotePracticeDataSource] 读取远端练习记录失败，回退本地:', summarizeRemotePracticeErrorForLog(error));
                 return this.localDataSource.read(key, defaultValue);
             }
         }
@@ -4172,7 +4341,7 @@ storageManager.ready
                     if (isUnauthorized(error)) {
                         clearApiAuthState(this.apiClient);
                     }
-                    console.warn('[RemotePracticeDataSource] 写入远端练习记录失败，回退本地:', error);
+                    console.warn('[RemotePracticeDataSource] 写入远端练习记录失败，回退本地:', summarizeRemotePracticeErrorForLog(error));
                     return this.localDataSource.write(key, value);
                 }
             });
@@ -4191,17 +4360,16 @@ storageManager.ready
                     if (isUnauthorized(error)) {
                         clearApiAuthState(this.apiClient);
                     }
-                    console.warn('[RemotePracticeDataSource] 清空远端练习记录失败，回退本地:', error);
+                    console.warn('[RemotePracticeDataSource] 清空远端练习记录失败，回退本地:', summarizeRemotePracticeErrorForLog(error));
                     return this.localDataSource.remove(key);
                 }
             });
         }
 
-        async runTransaction(handler, options = {}) {
+        async runTransaction(handler) {
             if (typeof handler !== 'function') {
                 throw new Error('RemotePracticeDataSource.runTransaction requires a handler function');
             }
-            const label = options.label || 'remote-practice-transaction';
             return this._enqueue(async () => {
                 const context = new RemotePracticeTransactionContext(this);
                 try {
@@ -4210,7 +4378,7 @@ storageManager.ready
                     return result;
                 } catch (error) {
                     await context.rollback();
-                    console.error(`[RemotePracticeDataSource] Transaction failed (${label}):`, error);
+                    console.error('[RemotePracticeDataSource] Transaction failed:', summarizeRemotePracticeErrorForLog(error));
                     throw error;
                 }
             });
@@ -5133,6 +5301,86 @@ storageManager.ready
             );
         }
 
+        function renderTotpActionForm(statusNode, body, options = {}) {
+            body.textContent = '';
+            const form = createElement('form', 'remote-auth-totp__form');
+            const note = createElement('p', 'remote-auth-totp__note', options.note || '');
+            const error = createElement('div', 'remote-auth-error');
+            error.hidden = true;
+
+            form.append(note);
+            let passwordInput = null;
+            if (options.requirePassword) {
+                const passwordLabel = createElement('label', 'remote-auth-field');
+                passwordInput = createElement('input');
+                passwordInput.type = 'password';
+                passwordInput.autocomplete = 'current-password';
+                passwordInput.required = true;
+                passwordLabel.append(createElement('span', null, '当前密码'), passwordInput);
+                form.append(passwordLabel);
+            }
+
+            const tokenLabel = createElement('label', 'remote-auth-field');
+            const tokenInput = createElement('input');
+            tokenInput.type = 'text';
+            tokenInput.inputMode = 'numeric';
+            tokenInput.autocomplete = 'one-time-code';
+            tokenInput.maxLength = 64;
+            tokenInput.required = true;
+            tokenLabel.append(createElement('span', null, 'TOTP 验证码或恢复码'), tokenInput);
+
+            const actions = createElement('div', 'remote-auth-totp__actions');
+            const submit = createElement('button', 'remote-auth-totp__primary', options.submitLabel || '确认');
+            submit.type = 'submit';
+            const cancel = createElement('button', 'remote-auth-totp__secondary', '取消');
+            cancel.type = 'button';
+            cancel.addEventListener('click', () => {
+                if (typeof options.onCancel === 'function') {
+                    options.onCancel();
+                }
+            });
+            actions.append(submit, cancel);
+
+            form.append(tokenLabel, error, actions);
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const token = normalizeCode(tokenInput.value);
+                const password = passwordInput ? passwordInput.value : '';
+                if (options.requirePassword && !password) {
+                    error.textContent = '请输入当前密码。';
+                    error.hidden = false;
+                    passwordInput.focus();
+                    return;
+                }
+                if (!token) {
+                    error.textContent = '请输入 TOTP 验证码或恢复码。';
+                    error.hidden = false;
+                    tokenInput.focus();
+                    return;
+                }
+                error.hidden = true;
+                submit.disabled = true;
+                cancel.disabled = true;
+                try {
+                    await options.onSubmit({ password, token });
+                } catch (requestError) {
+                    const message = formatRemoteAuthError(requestError);
+                    error.textContent = message;
+                    error.hidden = false;
+                    statusNode.textContent = message;
+                } finally {
+                    submit.disabled = false;
+                    cancel.disabled = false;
+                }
+            });
+
+            body.append(form);
+            window.setTimeout(() => {
+                const firstInput = passwordInput || tokenInput;
+                firstInput.focus({ preventScroll: true });
+            }, 0);
+        }
+
         async function loadTotpPanel() {
             if (!totpPanel) {
                 return;
@@ -5164,40 +5412,35 @@ storageManager.ready
                 const disable = createElement('button', 'remote-auth-totp__danger', '关闭 TOTP');
                 regenerate.type = 'button';
                 disable.type = 'button';
-                regenerate.addEventListener('click', async () => {
-                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
-                    if (token === null) return;
-                    regenerate.disabled = true;
-                    body.textContent = '';
-                    try {
-                        const result = await apiClient.regenerateTotpRecoveryCodes(token);
-                        renderRecoveryCodes(body, result.recoveryCodes || []);
-                        statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
-                    } catch (requestError) {
-                        statusNode.textContent = formatRemoteAuthError(requestError);
-                    } finally {
-                        regenerate.disabled = false;
-                    }
+                regenerate.addEventListener('click', () => {
+                    renderTotpActionForm(statusNode, body, {
+                        note: '输入验证器验证码或恢复码后，将生成一组新的恢复码。旧恢复码会立即失效。',
+                        submitLabel: '重新生成恢复码',
+                        onCancel: () => renderTotpStatus(status, statusNode, body),
+                        onSubmit: async ({ token }) => {
+                            const result = await apiClient.regenerateTotpRecoveryCodes(token);
+                            body.textContent = '';
+                            renderRecoveryCodes(body, result.recoveryCodes || []);
+                            statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
+                        }
+                    });
                 });
-                disable.addEventListener('click', async () => {
+                disable.addEventListener('click', () => {
                     if (apiClient.user?.role === 'admin') {
                         statusNode.textContent = '管理员不能在这里关闭 TOTP。';
                         return;
                     }
-                    const password = window.prompt('请输入当前密码');
-                    if (password === null) return;
-                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
-                    if (token === null) return;
-                    disable.disabled = true;
-                    try {
-                        const result = await apiClient.disableTotp(password, token);
-                        renderTotpStatus(result, statusNode, body);
-                        showMessage('TOTP 已关闭', 'success');
-                    } catch (requestError) {
-                        statusNode.textContent = formatRemoteAuthError(requestError);
-                    } finally {
-                        disable.disabled = false;
-                    }
+                    renderTotpActionForm(statusNode, body, {
+                        requirePassword: true,
+                        note: '关闭 TOTP 需要同时确认当前密码和验证码。',
+                        submitLabel: '关闭 TOTP',
+                        onCancel: () => renderTotpStatus(status, statusNode, body),
+                        onSubmit: async ({ password, token }) => {
+                            const result = await apiClient.disableTotp(password, token);
+                            renderTotpStatus(result, statusNode, body);
+                            showMessage('TOTP 已关闭', 'success');
+                        }
+                    });
                 });
                 body.append(regenerate, disable);
                 return;
@@ -5787,12 +6030,12 @@ storageManager.ready
             }
             const errors = [];
             const records = ensureArray(report.data);
-            for (const record of records) {
+            records.forEach((record, index) => {
                 const validation = this.validatePracticeRecord(record);
                 if (!validation.isValid) {
-                    errors.push(`记录 ${record && record.id ? record.id : 'unknown'}: ${validation.errors.join(', ')}`);
+                    errors.push(`record #${index + 1}: ${validation.errors.join(', ')}`);
                 }
-            }
+            });
             if (errors.length > 0) {
                 return { valid: false, errors };
             }
@@ -6161,6 +6404,17 @@ storageManager.ready
         };
     }
 
+    function summarizeDataIndexErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     async function bootstrap() {
         if (!window.persistentStore) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
@@ -6191,7 +6445,7 @@ storageManager.ready
                     window.remoteApiClient = remoteApiClient;
                 }
             } catch (error) {
-                console.warn('[data/index] 远端 API 检测失败，继续使用本地存储:', error);
+                console.warn('[data/index] 远端 API 检测失败，继续使用本地存储:', summarizeDataIndexErrorForLog(error));
                 remoteAuthState = { available: false, authenticated: false, user: null };
                 remoteApiClient = null;
                 dataSource = localDataSource;
@@ -6330,7 +6584,7 @@ storageManager.ready
             window.remoteAuthController = authController;
             if (remoteAuthState.authenticated) {
                 authController.handleAuthenticated(remoteAuthState.user).catch((error) => {
-                    console.warn('[data/index] 登录后导入本地记录失败:', error);
+                    console.warn('[data/index] 登录后导入本地记录失败:', summarizeDataIndexErrorForLog(error));
                 });
             } else {
                 authController.show();
@@ -7898,6 +8152,17 @@ storageManager.ready
         }
     };
 
+    function summarizeResourceCoreErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function isAbsolutePath(value) {
         return PATH_PROTOCOL_RE.test(value || '') || WINDOWS_DRIVE_RE.test(value || '');
     }
@@ -8142,7 +8407,7 @@ storageManager.ready
                 return normalizePathMap(stored, DEFAULT_PATH_MAP);
             }
         } catch (error) {
-            console.warn('[ResourceCore] 读取路径映射失败:', error);
+            console.warn('[ResourceCore] 读取路径映射失败:', summarizeResourceCoreErrorForLog(error));
         }
         return clonePathMap(DEFAULT_PATH_MAP);
     }
@@ -8162,7 +8427,7 @@ storageManager.ready
             try {
                 await global.storage.set(getPathMapStorageKey(configKey), derived);
             } catch (error) {
-                console.warn('[ResourceCore] 写入路径映射失败:', error);
+                console.warn('[ResourceCore] 写入路径映射失败:', summarizeResourceCoreErrorForLog(error));
             }
         }
 
@@ -8181,7 +8446,7 @@ storageManager.ready
             await global.storage.remove(getPathMapStorageKey(configKey));
             return true;
         } catch (error) {
-            console.warn('[ResourceCore] 删除路径映射失败:', error);
+            console.warn('[ResourceCore] 删除路径映射失败:', summarizeResourceCoreErrorForLog(error));
             return false;
         }
     }
@@ -8195,7 +8460,7 @@ storageManager.ready
             const next = await loadPathMapForConfiguration(normalizeLibraryConfigKey(key) || 'exam_index');
             return setActivePathMap(next);
         } catch (error) {
-            console.warn('[ResourceCore] 刷新路径映射失败:', error);
+            console.warn('[ResourceCore] 刷新路径映射失败:', summarizeResourceCoreErrorForLog(error));
             return setActivePathMap(getPathMap());
         }
     }
@@ -8327,7 +8592,7 @@ storageManager.ready
                 }
             }
         } catch (error) {
-            console.warn('[ResourceCore] detectScriptBasePrefix failed:', error);
+            console.warn('[ResourceCore] detectScriptBasePrefix failed:', summarizeResourceCoreErrorForLog(error));
         }
         return null;
     }
@@ -8629,7 +8894,7 @@ storageManager.ready
                     return { url: entry.path, attempts };
                 }
             } catch (error) {
-                console.warn('[ResourceCore] 资源探测失败:', entry, error);
+                console.warn('[ResourceCore] 资源探测失败:', summarizeResourceCoreErrorForLog(error));
             }
         }
         return { url: '', attempts };
@@ -10463,7 +10728,7 @@ class StateSerializer {
                     const value = await baseStorage.get(key, defaultValue);
                     return StateSerializer.deserialize(value);
                 } catch (error) {
-                    console.error(`[StateSerializer] get failed ${key}:`, error);
+                    console.error('[StateSerializer] get failed:', error);
                     return defaultValue;
                 }
             },
@@ -10473,7 +10738,7 @@ class StateSerializer {
                     const serializedValue = StateSerializer.serialize(value);
                     return await baseStorage.set(key, serializedValue);
                 } catch (error) {
-                    console.error(`[StateSerializer] set failed ${key}:`, error);
+                    console.error('[StateSerializer] set failed:', error);
                     throw error;
                 }
             },
@@ -10482,7 +10747,7 @@ class StateSerializer {
                 try {
                     return await baseStorage.remove(key);
                 } catch (error) {
-                    console.error(`[StateSerializer] remove failed ${key}:`, error);
+                    console.error('[StateSerializer] remove failed:', error);
                     throw error;
                 }
             },
@@ -10593,6 +10858,16 @@ if (typeof module !== 'undefined' && module.exports) {
 (function (global) {
     'use strict';
 
+    function summarizeAppStateErrorForLog(error) {
+        const summary = {
+            name: error && typeof error.name === 'string' ? error.name : 'Error'
+        };
+        if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+            summary.code = error.code;
+        }
+        return summary;
+    }
+
     function cloneArray(value) {
         return Array.isArray(value) ? value.slice() : [];
     }
@@ -10698,7 +10973,7 @@ if (typeof module !== 'undefined' && module.exports) {
             try {
                 handler(payload);
             } catch (error) {
-                console.error('[AppStateService] listener error for %s:', topic, error);
+                console.error('[AppStateService] listener error:', summarizeAppStateErrorForLog(error));
             }
         });
     }
@@ -10710,7 +10985,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 enumerable: true
             }, descriptor || {}));
         } catch (error) {
-            console.warn('[AppStateService] defineProperty failed:', key, error);
+            console.warn('[AppStateService] defineProperty failed:', summarizeAppStateErrorForLog(error));
         }
     }
 
@@ -10723,7 +10998,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 const manager = new global.DataConsistencyManager();
                 return manager.enrichRecordData(record);
             } catch (error) {
-                console.warn('[AppStateService] enrichPracticeRecordForUI failed:', error);
+                console.warn('[AppStateService] enrichPracticeRecordForUI failed:', summarizeAppStateErrorForLog(error));
             }
         }
         return record;
@@ -10841,7 +11116,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     app.state.system.fallbackExamSessions = this.state.fallbackExamSessions;
                 }
             } catch (error) {
-                console.warn('[AppStateService] applyToApp failed:', error);
+                console.warn('[AppStateService] applyToApp failed:', summarizeAppStateErrorForLog(error));
             }
         }
 
@@ -10921,7 +11196,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 try {
                     global.updateBrowseAnchorsFromRecords(this.state.practiceRecords);
                 } catch (error) {
-                    console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', error);
+                    console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', summarizeAppStateErrorForLog(error));
                 }
             }
             return this.state.practiceRecords;
@@ -10954,14 +11229,14 @@ if (typeof module !== 'undefined' && module.exports) {
                 try {
                     global.persistBrowseFilter(this.state.browseFilter.category, this.state.browseFilter.type);
                 } catch (error) {
-                    console.warn('[AppStateService] persistBrowseFilter failed:', error);
+                    console.warn('[AppStateService] persistBrowseFilter failed:', summarizeAppStateErrorForLog(error));
                 }
             }
             if (typeof this.options.onBrowseFilterChange === 'function') {
                 try {
                     this.options.onBrowseFilterChange(this.state.browseFilter.category, this.state.browseFilter.type);
                 } catch (error) {
-                    console.warn('[AppStateService] onBrowseFilterChange failed:', error);
+                    console.warn('[AppStateService] onBrowseFilterChange failed:', summarizeAppStateErrorForLog(error));
                 }
             }
             return this.state.browseFilter;
@@ -11354,6 +11629,28 @@ if (typeof module !== 'undefined' && module.exports) {
             .trim();
     }
 
+    function normalizeSafeRelativePath(value) {
+        const raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        if (/^[a-zA-Z]:[\\/]/.test(raw) || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+            return '';
+        }
+        const normalized = normalizePath(raw);
+        if (!normalized) {
+            return '';
+        }
+        const segments = normalized.split('/').filter(Boolean);
+        if (!segments.length) {
+            return '';
+        }
+        if (segments.some((segment) => segment === '.' || segment === '..' || segment.includes(':'))) {
+            return '';
+        }
+        return segments.join('/');
+    }
+
     function stripTrailingSlash(value) {
         return normalizePath(value).replace(/\/+$/g, '');
     }
@@ -11364,15 +11661,21 @@ if (typeof module !== 'undefined' && module.exports) {
     }
 
     function getFilePath(file) {
-        return normalizePath(
-            file && (
-                file.webkitRelativePath
-                || file.relativePath
-                || file.fullPath
-                || file.path
-                || file.name
-            )
-        );
+        if (!file) {
+            return '';
+        }
+        const relativeCandidates = [
+            file.webkitRelativePath,
+            file.relativePath,
+            file.fullPath
+        ];
+        for (const candidate of relativeCandidates) {
+            const normalized = normalizeSafeRelativePath(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return normalizeSafeRelativePath(file.name);
     }
 
     function getBaseName(path) {
@@ -11681,14 +11984,14 @@ if (typeof module !== 'undefined' && module.exports) {
             return '';
         }
         if (isHtmlTooLarge(file)) {
-            console.warn('[LibraryDiscovery] HTML file skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+            console.warn('[LibraryDiscovery] HTML file skipped because it is too large');
             return '';
         }
         if (typeof file.text === 'function') {
             try {
                 const text = await file.text();
                 if (isHtmlTooLarge(file, text)) {
-                    console.warn('[LibraryDiscovery] HTML file skipped because decoded text is too large:', getFilePath(file) || getBaseName(file && file.name));
+                    console.warn('[LibraryDiscovery] HTML file skipped because decoded text is too large');
                     return '';
                 }
                 return text;
@@ -11698,14 +12001,14 @@ if (typeof module !== 'undefined' && module.exports) {
         }
         if (typeof file.content === 'string') {
             if (isHtmlTooLarge(file, file.content)) {
-                console.warn('[LibraryDiscovery] HTML content skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                console.warn('[LibraryDiscovery] HTML content skipped because it is too large');
                 return '';
             }
             return file.content;
         }
         if (typeof file.__text === 'string') {
             if (isHtmlTooLarge(file, file.__text)) {
-                console.warn('[LibraryDiscovery] HTML text skipped because it is too large:', getFilePath(file) || getBaseName(file && file.name));
+                console.warn('[LibraryDiscovery] HTML text skipped because it is too large');
                 return '';
             }
             return file.__text;
@@ -12198,6 +12501,16 @@ if (typeof module !== 'undefined' && module.exports) {
     const MAX_LIBRARY_CONFIG_TEXT_LENGTH = 1000;
     const MAX_LIBRARY_CONFIG_NAME_LENGTH = 160;
 
+    function summarizeLibraryManagerErrorForLog(error) {
+        const summary = {
+            name: error && typeof error.name === 'string' ? error.name : 'Error'
+        };
+        if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+            summary.code = error.code;
+        }
+        return summary;
+    }
+
     function randomIdSuffix() {
         const cryptoObj = global.crypto || global.msCrypto;
         if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
@@ -12404,7 +12717,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
                 return;
             } catch (error) {
-                console.warn('[LibraryManager] 刷新听力入口状态失败:', error);
+                console.warn('[LibraryManager] 刷新听力入口状态失败:', summarizeLibraryManagerErrorForLog(error));
             }
         }
         const listeningAvailable = hasActiveListeningLibrary(index);
@@ -12501,14 +12814,14 @@ if (typeof module !== 'undefined' && module.exports) {
         async setActiveLibraryConfiguration(key) {
             const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
-                console.warn('[LibraryManager] 拒绝写入无效题库配置 key:', key);
+                console.warn('[LibraryManager] 拒绝写入无效题库配置 key');
                 return false;
             }
             try {
                 await global.storage.set('active_exam_index_key', configKey);
                 return true;
             } catch (error) {
-                console.error('[LibraryManager] 设置活动题库配置失败:', error);
+                console.error('[LibraryManager] 设置活动题库配置失败:', summarizeLibraryManagerErrorForLog(error));
                 return false;
             }
         }
@@ -12520,7 +12833,7 @@ if (typeof module !== 'undefined' && module.exports) {
         async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
             const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
-                console.warn('[LibraryManager] 拒绝保存无效题库配置 key:', key);
+                console.warn('[LibraryManager] 拒绝保存无效题库配置 key');
                 return false;
             }
             try {
@@ -12550,7 +12863,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 await global.storage.set('exam_index_configurations', configs);
                 return true;
             } catch (error) {
-                console.error('[LibraryManager] 保存题库配置失败:', error);
+                console.error('[LibraryManager] 保存题库配置失败:', summarizeLibraryManagerErrorForLog(error));
                 return false;
             }
         }
@@ -12647,7 +12960,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     await global.storage.set('active_exam_index_key', 'exam_index');
                 }
             } catch (error) {
-                console.warn('[LibraryManager] 读取题库缓存失败:', error);
+                console.warn('[LibraryManager] 读取题库缓存失败:', summarizeLibraryManagerErrorForLog(error));
             }
 
             if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
@@ -12674,7 +12987,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     try {
                         await global.ensureExamDataScripts();
                     } catch (loadError) {
-                        console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', loadError);
+                        console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', summarizeLibraryManagerErrorForLog(loadError));
                     }
                 }
                 if (typeof global.reportBootStage === 'function') {
@@ -12726,7 +13039,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 this.finishLibraryLoading(startTime);
                 return updatedIndex;
             } catch (error) {
-                console.error('[LibraryManager] 加载默认题库失败:', error);
+                console.error('[LibraryManager] 加载默认题库失败:', summarizeLibraryManagerErrorForLog(error));
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
@@ -12778,21 +13091,21 @@ if (typeof module !== 'undefined' && module.exports) {
                     await global.storage.set('exam_index_configurations', updated);
                 }
             } catch (error) {
-                console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
+                console.warn('[LibraryManager] 无法刷新题库配置元数据', summarizeLibraryManagerErrorForLog(error));
             }
         }
 
         async fetchLibraryDataset(key) {
             const configKey = normalizeLibraryConfigKey(key);
             if (!configKey) {
-                console.warn('[LibraryManager] 拒绝读取无效题库配置 key:', key);
+                console.warn('[LibraryManager] 拒绝读取无效题库配置 key');
                 return [];
             }
             try {
                 const dataset = await global.storage.get(configKey);
                 return Array.isArray(dataset) ? dataset : [];
             } catch (error) {
-                console.warn('[LibraryManager] 无法读取题库数据:', configKey, error);
+                console.warn('[LibraryManager] 无法读取题库数据:', summarizeLibraryManagerErrorForLog(error));
                 return [];
             }
         }
@@ -13040,7 +13353,7 @@ if (typeof module !== 'undefined' && module.exports) {
             try {
                 await this.setActiveLibraryConfiguration(configKey);
             } catch (error) {
-                console.warn('[LibraryManager] 无法写入当前题库配置:', error);
+                console.warn('[LibraryManager] 无法写入当前题库配置:', summarizeLibraryManagerErrorForLog(error));
             }
 
             await this.updateLibraryConfigurationMetadata(configKey, exams.length);
@@ -13056,7 +13369,7 @@ if (typeof module !== 'undefined' && module.exports) {
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: configKey } }));
             } catch (error) {
-                console.warn('[LibraryManager] 题库切换事件派发失败', error);
+                console.warn('[LibraryManager] 题库切换事件派发失败', summarizeLibraryManagerErrorForLog(error));
             }
 
             if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {
@@ -13067,7 +13380,7 @@ if (typeof module !== 'undefined' && module.exports) {
                             activeKey: configKey
                         });
                     } catch (error) {
-                        console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
+                        console.warn('[LibraryManager] 重渲染题库配置列表失败', summarizeLibraryManagerErrorForLog(error));
                     }
                 }, 0);
             }

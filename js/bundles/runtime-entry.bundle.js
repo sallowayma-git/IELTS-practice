@@ -589,6 +589,15 @@
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
+    function summarizeLazyLoaderErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error'
+        };
+    }
+
     function registerDefaultManifest() {
         manifest['exam-data'] = [
             READING_EXAM_DATA_SCRIPT
@@ -768,7 +777,7 @@
                         script.parentNode.removeChild(script);
                     }
                 } catch (_) { }
-                reject(new Error('加载脚本失败: ' + url + ' => ' + (error?.message || error)));
+                reject(new Error('加载脚本失败: ' + (error?.message || error)));
             };
             document.head.appendChild(script);
         });
@@ -782,7 +791,7 @@
         }).catch(function onOptionalFailed(error) {
             scriptStatus[url] = null;
             try {
-                console.warn('[LazyLoader] 可选脚本未加载，已跳过:', label || url, error && error.message ? error.message : error);
+                console.warn('[LazyLoader] 可选脚本未加载，已跳过:', summarizeLazyLoaderErrorForLog(error));
             } catch (_) { }
             return false;
         });
@@ -900,7 +909,7 @@
                 global.ExamSystemAppMixins.__applyToApp();
             }
         } catch (error) {
-            console.warn('[LazyLoader] 重新挂载 mixins 失败:', groupName, error);
+            console.warn('[LazyLoader] 重新挂载 mixins 失败:', summarizeLazyLoaderErrorForLog(error));
         }
     }
 
@@ -928,7 +937,7 @@
                 groupStatus[groupName] = 'loaded';
                 mirrorAliasStatus(groupName, 'loaded');
             }).catch(function onGroupFailed(error) {
-                console.error('[LazyLoader] 组加载失败:', groupName, error);
+                console.error('[LazyLoader] 组加载失败:', summarizeLazyLoaderErrorForLog(error));
                 groupStatus[groupName] = null;
                 mirrorAliasStatus(groupName, null);
                 throw error;

@@ -1882,14 +1882,14 @@
 
         const listConfig = VOCAB_LISTS[listId];
         if (!listConfig) {
-            console.warn('[VocabStore] loadList: 未知的词表 ID:', listId);
+            console.warn('[VocabStore] loadList: 未知的词表 ID');
             return null;
         }
 
         // 检查缓存（带TTL）
         const cached = state.listCache.get(listId);
         if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
-            console.log(`[VocabStore] 从缓存加载词表: ${listId}`);
+            console.log('[VocabStore] 从缓存加载词表');
             return cached.data;
         }
 
@@ -1905,7 +1905,7 @@
                 normalizedWords = await ensureDefaultLexicon();
             }
             if (!normalizedWords.length) {
-                console.log(`[VocabStore] 词表为空或格式未知: ${listId}`);
+                console.log('[VocabStore] 词表为空或格式未知');
             }
 
             const listData = {
@@ -1926,7 +1926,7 @@
                 data: listData,
                 timestamp: Date.now()
             });
-            console.log(`[VocabStore] 加载词表成功: ${listId}, 单词数: ${normalizedWords.length}`);
+            console.log(`[VocabStore] 加载词表成功，单词数: ${normalizedWords.length}`);
             return listData;
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', error);
@@ -1950,7 +1950,7 @@
         }
 
         if (!listData || !VOCAB_LISTS[listId]) {
-            console.warn('[VocabStore] setActiveList: 词表不存在:', listId);
+            console.warn('[VocabStore] setActiveList: 词表不存在');
             return false;
         }
 
@@ -2361,7 +2361,7 @@
             const currentList = lists[this.currentListId];
 
             if (!currentList) {
-                console.warn('[VocabListSwitcher] Current list not found:', this.currentListId);
+                console.warn('[VocabListSwitcher] Current list not found');
                 return;
             }
 
@@ -2510,13 +2510,13 @@
          */
         async switchList(listId) {
             if (!listId || typeof listId !== 'string') {
-                console.error('[VocabListSwitcher] Invalid list ID:', listId);
+                console.error('[VocabListSwitcher] Invalid list ID');
                 return;
             }
 
             const lists = this.vocabStore.VOCAB_LISTS;
             if (!lists[listId]) {
-                console.error('[VocabListSwitcher] Unknown list ID:', listId);
+                console.error('[VocabListSwitcher] Unknown list ID');
                 return;
             }
 
@@ -2556,7 +2556,7 @@
                 // 触发词表切换事件（供外部监听）
                 this.dispatchSwitchEvent(listId, list);
 
-                console.log('[VocabListSwitcher] 切换词表成功:', listId);
+                console.log('[VocabListSwitcher] 切换词表成功');
 
             } catch (error) {
                 console.error('[VocabListSwitcher] 切换词表失败:', error);
@@ -2651,7 +2651,7 @@
                     const count = await this.vocabStore.getListWordCount(listId);
                     return { listId, count };
                 } catch (error) {
-                    console.error(`[VocabListSwitcher] 获取词表计数失败: ${listId}`, error);
+                    console.error('[VocabListSwitcher] 获取词表计数失败', error);
                     return { listId, count: 0 };
                 }
             });
@@ -2937,7 +2937,8 @@
             window.showMessage(message, type, 4000);
             return;
         }
-        console.info('[VocabSessionView]', message);
+        const safeType = ['info', 'success', 'warning', 'error'].includes(type) ? type : 'info';
+        console.info('[VocabSessionView] Feedback message shown:', safeType);
     }
 
     function isSettingsModalOpen() {

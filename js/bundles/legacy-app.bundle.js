@@ -155,7 +155,7 @@
       var normalized = (typeof viewName === 'string' && viewName) ? viewName : 'overview';
       var target = document.getElementById(normalized + '-view');
       if (!target) {
-        console.warn('[Fallback] 未找到视图节点:', normalized);
+        console.warn('[Fallback] 未找到视图节点');
         return;
       }
       Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function (v) {
@@ -314,7 +314,7 @@
       }
 
       if (isFallbackUnsafeAttributeName(key) || isFallbackUnsafeUrlAttribute(key, value, element.tagName)) {
-        console.warn('[FallbackDOM] Skipped unsafe attribute: ' + key);
+        console.warn('[FallbackDOM] Skipped unsafe attribute');
         return;
       }
 
@@ -507,7 +507,7 @@
           }, 480);
         }, timeout);
         window.__messageFallbackTimer = hideTimer;
-      } catch (_) { console.log('[Toast]', type || 'info', message); }
+      } catch (_) { console.log('[Toast] Message rendering failed'); }
     };
   }
 
@@ -1983,16 +1983,16 @@
                 ? this.sanitizeRecoveredRecord(cleanRecord)
                 : cleanRecord;
               if (!sanitized || !sanitized.examId) {
-                console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord && cleanRecord.id);
+                console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）');
                 continue;
               }
               if (this && typeof this.savePracticeRecord === 'function') {
                 await this.savePracticeRecord(sanitized);
               }
               recoveredCount++;
-              console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized && sanitized.id}`);
+              console.log('[PracticeRecorder] 恢复记录成功');
             } catch (e) {
-              console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord && tempRecord.id}`, e);
+              console.error('[PracticeRecorder] 恢复记录失败:', e);
               failed.push(tempRecord);
             }
           }
@@ -2172,7 +2172,7 @@ class ExamSystemApp {
                 return;
             }
             if (isAppUnsafeAttributeName(key) || isAppUnsafeUrlAttribute(key, value, element.tagName)) {
-                console.warn(`[App] Skipped unsafe fallback attribute: ${key}`);
+                console.warn('[App] Skipped unsafe fallback attribute');
                 return;
             }
             if (key === 'className') {
@@ -2227,7 +2227,7 @@ class ExamSystemApp {
                 const serializedValue = StateSerializer.serialize(value);
                 await storage.set(key, serializedValue);
             } catch (error) {
-                console.error(`[App] 持久化状态失败 ${path}:`, error);
+                console.error('[App] 持久化状态失败:', error);
             }
         },
         async persistMultipleState(mapping) {
@@ -2250,7 +2250,7 @@ class ExamSystemApp {
                     return deserializedValue;
                 }
             } catch (error) {
-                console.error(`[App] 加载状态失败 ${path}:`, error);
+                console.error('[App] 加载状态失败:', error);
             }
             return null;
         },

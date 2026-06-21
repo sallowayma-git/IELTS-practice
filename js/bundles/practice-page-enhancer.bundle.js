@@ -978,14 +978,14 @@
                 const normalizedList = this.normalizeVocabListShape(list, listId, listId);
 
                 if (normalizedList) {
-                    console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${normalizedList.words.length}`);
+                    console.log(`[SpellingErrorCollector] 加载词表成功，单词数: ${normalizedList.words.length}`);
                     return normalizedList;
                 }
 
-                console.log(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                console.log('[SpellingErrorCollector] 词表不存在');
                 return null;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 加载词表失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 加载词表失败', error);
                 return null;
             }
         }
@@ -1023,7 +1023,7 @@
                 }
 
                 await window.storage.set(storageKey, vocabList);
-                console.log(`[SpellingErrorCollector] 保存词表成功: ${vocabList.id}, 单词数: ${vocabList.words.length}`);
+                console.log(`[SpellingErrorCollector] 保存词表成功，单词数: ${vocabList.words.length}`);
 
                 return true;
             } catch (error) {
@@ -1042,7 +1042,7 @@
                 const list = await this.loadVocabList(listId);
                 return list ? list.words.length : 0;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 获取词表单词数失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 获取词表单词数失败', error);
                 return 0;
             }
         }
@@ -1095,7 +1095,7 @@
                     };
 
                     errors.push(error);
-                    console.log(`[SpellingErrorCollector] 检测到拼写错误: ${questionId} - "${detected.userInput}" → "${detected.word}"`);
+                    console.log('[SpellingErrorCollector] 检测到拼写错误');
                 }
             }
 
@@ -1671,7 +1671,7 @@
             // 如果词表不存在，创建新词表
             if (!vocabList) {
                 vocabList = this.createEmptyList(listId, source);
-                console.log(`[SpellingErrorCollector] 创建新词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 创建新词表');
             }
 
             // 合并错误到词表
@@ -1705,7 +1705,7 @@
                     const existing = vocabList.words[existingIndex];
                     vocabList.words[existingIndex] = this.buildVocabEntryFromError(error, existing, vocabList.source);
 
-                    console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${vocabList.words[existingIndex].errorCount}`);
+                    console.log(`[SpellingErrorCollector] 更新已存在单词，错误次数: ${vocabList.words[existingIndex].errorCount}`);
                 } else {
                     // 新单词，添加到词表
                     const entry = this.buildVocabEntryFromError(error, null, vocabList.source);
@@ -1714,7 +1714,7 @@
                     }
                     vocabList.words.push(entry);
 
-                    console.log(`[SpellingErrorCollector] 添加新单词: ${error.word}`);
+                    console.log('[SpellingErrorCollector] 添加新单词');
                 }
             }
         }
@@ -1761,7 +1761,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -1775,10 +1775,10 @@
 
                 if (vocabList.words.length < originalLength) {
                     await this.saveVocabList(vocabList);
-                    console.log(`[SpellingErrorCollector] 从词表 ${listId} 移除单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 从词表移除单词');
                     return true;
                 } else {
-                    console.log(`[SpellingErrorCollector] 词表 ${listId} 中未找到单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 词表中未找到单词');
                     return false;
                 }
             } catch (error) {
@@ -1797,7 +1797,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -1805,7 +1805,7 @@
                 vocabList.updatedAt = Date.now();
 
                 await this.saveVocabList(vocabList);
-                console.log(`[SpellingErrorCollector] 清空词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 清空词表');
 
                 return true;
             } catch (error) {
@@ -1839,13 +1839,23 @@
         try {
             previousEnhancer.cleanup();
         } catch (error) {
-            console.warn('[PracticeEnhancer] 旧版本清理失败:', error);
+            console.warn('[PracticeEnhancer] 旧版本清理失败:', summarizePracticeEnhancerErrorForLog(error));
         }
     }
 
     console.log('[PracticeEnhancer] 初始化增强器');
 
     let fallbackTokenCounter = 0;
+
+    function summarizePracticeEnhancerErrorForLog(error) {
+        const summary = {
+            name: error && typeof error.name === 'string' ? error.name : 'Error'
+        };
+        if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+            summary.code = error.code;
+        }
+        return summary;
+    }
 
     function summarizeAnswerValueForLog(value) {
         if (Array.isArray(value)) {
@@ -1861,7 +1871,6 @@
         const keys = map && typeof map === 'object' ? Object.keys(map) : [];
         return {
             count: keys.length,
-            keys: keys.slice(0, 20),
             truncatedKeys: Math.max(0, keys.length - 20)
         };
     }
@@ -1873,11 +1882,20 @@
             correct: items.filter((item) => item && item.isCorrect === true).length,
             incorrect: items.filter((item) => item && item.isCorrect === false).length,
             unknown: items.filter((item) => !item || typeof item.isCorrect !== 'boolean').length,
-            questionIds: items
-                .map((item) => item && (item.questionId || item.id || item.key))
-                .filter(Boolean)
-                .slice(0, 20),
             truncatedQuestionIds: Math.max(0, items.length - 20)
+        };
+    }
+
+    function summarizeInteractionsForLog(interactions) {
+        const items = Array.isArray(interactions) ? interactions : [];
+        const byType = {};
+        items.forEach((item) => {
+            const type = item && item.type ? String(item.type) : 'unknown';
+            byType[type] = (byType[type] || 0) + 1;
+        });
+        return {
+            count: items.length,
+            types: byType
         };
     }
 
@@ -2141,7 +2159,7 @@
                     applied.push(mixin.name || 'anonymous-mixin');
                 }
             } catch (mixinError) {
-                console.warn('[PracticeEnhancer] mixin apply failed:', mixin && mixin.name, mixinError);
+                console.warn('[PracticeEnhancer] mixin apply failed:', summarizePracticeEnhancerErrorForLog(mixinError));
             }
         });
 
@@ -2455,11 +2473,11 @@
                     try {
                         const answers = strategy(document);
                         if (answers && Object.keys(answers).length > 0) {
-                            console.log('[CorrectAnswerExtractor] 提取成功:', strategy.name, summarizeAnswerMapForLog(answers));
+                            console.log('[CorrectAnswerExtractor] 提取成功:', summarizeAnswerMapForLog(answers));
                             return this.normalizeAnswers(answers);
                         }
                     } catch (error) {
-                        console.warn(`[CorrectAnswerExtractor] 策略 ${strategy.name} 失败:`, error);
+                        console.warn('[CorrectAnswerExtractor] 策略失败:', summarizePracticeEnhancerErrorForLog(error));
                     }
                 }
 
@@ -2507,7 +2525,7 @@
                                     return answers;
                                 }
                             } catch (error) {
-                                console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', error);
+                                console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', summarizePracticeEnhancerErrorForLog(error));
                             }
                         }
                     }
@@ -2528,7 +2546,7 @@
                         return JSON.parse(cleanStr);
                     }
                 } catch (error) {
-                    console.warn('[CorrectAnswerExtractor] JSON解析失败，尝试其他方法:', error);
+                    console.warn('[CorrectAnswerExtractor] JSON解析失败，尝试其他方法:', summarizePracticeEnhancerErrorForLog(error));
                 }
 
                 return this.manualParseAnswers(objectStr);
@@ -2775,7 +2793,7 @@
                 try {
                     handler.apply(this, args);
                 } catch (hookError) {
-                    console.warn(`[PracticeEnhancer] hook ${hookName} 执行失败:`, hookError);
+                    console.warn('[PracticeEnhancer] hook 执行失败:', summarizePracticeEnhancerErrorForLog(hookError));
                 }
             });
         },
@@ -2930,7 +2948,7 @@
             try {
                 detected = this.detectMultiSuiteStructure();
             } catch (error) {
-                console.warn('[PracticeEnhancer] 多套题检测失败，保持单套题模式:', error);
+                console.warn('[PracticeEnhancer] 多套题检测失败，保持单套题模式:', summarizePracticeEnhancerErrorForLog(error));
                 detected = false;
             }
 
@@ -3056,7 +3074,7 @@
                     for (const url of urls) {
                         if (!url) continue;
                         try {
-                            console.log('[PracticeEnhancer] 尝试加载存储管理器:', url);
+                            console.log('[PracticeEnhancer] 尝试加载存储管理器');
                             await dependencyLoader.loadScript(url);
                             if (window.storage && typeof window.storage.setNamespace === 'function') {
                                 if (window.storage.ready && typeof window.storage.ready.then === 'function') {
@@ -3065,7 +3083,7 @@
                                 return true;
                             }
                         } catch (error) {
-                            console.warn('[PracticeEnhancer] 存储管理器加载失败:', error);
+                            console.warn('[PracticeEnhancer] 存储管理器加载失败:', summarizePracticeEnhancerErrorForLog(error));
                         }
                     }
                     return false;
@@ -3084,7 +3102,7 @@
                 const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
                 if (loaded) return true;
             } catch (error) {
-                console.warn('[PracticeEnhancer] 加载存储管理器失败:', error);
+                console.warn('[PracticeEnhancer] 加载存储管理器失败:', summarizePracticeEnhancerErrorForLog(error));
             }
 
             // 创建简易回退存储，确保流程不中断
@@ -3146,14 +3164,14 @@
                 for (const url of urls) {
                     if (!url) continue;
                     try {
-                        console.log('[PracticeEnhancer] 尝试加载SpellingErrorCollector:', url);
+                        console.log('[PracticeEnhancer] 尝试加载SpellingErrorCollector');
                         await dependencyLoader.loadScript(url);
                         if (!window.spellingErrorCollector && window.SpellingErrorCollector) {
                             window.spellingErrorCollector = new window.SpellingErrorCollector();
                         }
                         if (window.spellingErrorCollector) return true;
                     } catch (error) {
-                        console.warn('[PracticeEnhancer] 加载SpellingErrorCollector失败:', error);
+                        console.warn('[PracticeEnhancer] 加载SpellingErrorCollector失败:', summarizePracticeEnhancerErrorForLog(error));
                     }
                 }
                 return false;
@@ -3198,14 +3216,14 @@
                             }
                             await window.storage.remove(testKey);
                         } catch (error) {
-                            console.error('❌ 增强器命名空间设置验证失败', error);
+                            console.error('[PracticeEnhancer] 增强器命名空间设置验证失败', summarizePracticeEnhancerErrorForLog(error));
                         }
                     }, 1000);
                 } else {
                     console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
                 }
             } catch (error) {
-                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', error);
+                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', summarizePracticeEnhancerErrorForLog(error));
             }
         },
 
@@ -3247,7 +3265,7 @@
                         enhancer: this
                     });
                 } catch (error) {
-                    console.error('[PracticeEnhancer] 自定义收集器执行失败:', error);
+                    console.error('[PracticeEnhancer] 自定义收集器执行失败:', summarizePracticeEnhancerErrorForLog(error));
                 }
             }
         },
@@ -3261,7 +3279,7 @@
                         enhancer: this
                     });
                 } catch (error) {
-                    console.error('[PracticeEnhancer] 自定义收集器执行失败:', error);
+                    console.error('[PracticeEnhancer] 自定义收集器执行失败:', summarizePracticeEnhancerErrorForLog(error));
                 }
             });
         },
@@ -3756,7 +3774,7 @@
                         this.enableSuiteMode(initData);
                     }
                     this.stopInitRequestLoop();
-                    console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId, 'Exam ID:', this.examId);
+                    console.log('[PracticeEnhancer] Received session initialization');
                     this.sendMessage('SESSION_READY', {
                         pageType: this.detectPageType(),
                         sessionId: this.sessionId,
@@ -4067,7 +4085,7 @@
                 }
                 window.location.href = targetUrl;
             } catch (error) {
-                console.warn('[PracticeEnhancer] 套题导航失败:', error);
+                console.warn('[PracticeEnhancer] 套题导航失败:', summarizePracticeEnhancerErrorForLog(error));
             }
         },
 
@@ -4287,7 +4305,7 @@
                         this.extractCorrectAnswersBackup();
                     }
                 } catch (error) {
-                    console.warn('[PracticeEnhancer] 提取器失败，使用备用方法:', error);
+                    console.warn('[PracticeEnhancer] 提取器失败，使用备用方法:', summarizePracticeEnhancerErrorForLog(error));
                     this.extractCorrectAnswersBackup();
                 }
             } else {
@@ -4326,7 +4344,7 @@
             // 为每个套题提取正确答案
             suiteContainers.forEach((container, index) => {
                 const suiteId = this.extractSuiteId(container);
-                console.log(`[PracticeEnhancer] 提取套题 ${index + 1}/${suiteContainers.length} 正确答案, ID: ${suiteId}`);
+                console.log(`[PracticeEnhancer] 提取套题 ${index + 1}/${suiteContainers.length} 正确答案`);
 
                 if (suiteId) {
                     this.extractSuiteCorrectAnswers(suiteId, container);
@@ -4353,11 +4371,11 @@
             }
 
             if (!suiteContainer) {
-                console.warn(`[PracticeEnhancer] extractSuiteCorrectAnswers: 未找到套题容器 ${suiteId}`);
+                console.warn('[PracticeEnhancer] extractSuiteCorrectAnswers: 未找到套题容器');
                 return;
             }
 
-            console.log(`[PracticeEnhancer] 提取套题 ${suiteId} 的正确答案`);
+            console.log('[PracticeEnhancer] 提取套题正确答案');
 
             // 方法1: 从套题容器内的全局变量提取（如果页面使用了独立的答案对象）
             // 注意：100 P1/P4的HTML可能在App对象中存储答案
@@ -4395,7 +4413,7 @@
             }
 
             if (!testNum) {
-                console.warn('[PracticeEnhancer] 无法从suiteId提取测试编号:', suiteId);
+                console.warn('[PracticeEnhancer] 无法从suiteId提取测试编号');
                 return;
             }
 
@@ -4442,7 +4460,7 @@
             for (const [key, value] of Object.entries(testAnswers)) {
                 const prefixedKey = `${suiteId}::${key}`;
                 this.addCorrectAnswer(prefixedKey, value);
-                console.log(`[PracticeEnhancer] 添加正确答案: ${prefixedKey} ${summarizeAnswerValueForLog(value)}`);
+                console.log('[PracticeEnhancer] 添加正确答案:', summarizeAnswerValueForLog(value));
             }
         },
 
@@ -4735,7 +4753,7 @@
                     }
                 }
             } catch (error) {
-                console.warn('[PracticeEnhancer] 判断是否排除控件失败:', error);
+                console.warn('[PracticeEnhancer] 判断是否排除控件失败:', summarizePracticeEnhancerErrorForLog(error));
             }
 
             return false;
@@ -4768,7 +4786,7 @@
 
             const normalizedId = this.addAnswer(scopedQuestionId, value);
             if (!normalizedId) return;
-            console.log('[PracticeEnhancer] 记录答案:', normalizedId, summarizeAnswerValueForLog(value));
+            console.log('[PracticeEnhancer] 记录答案:', summarizeAnswerValueForLog(value));
 
             this.interactions.push({
                 type: 'answer',
@@ -4937,7 +4955,7 @@
                     }
 
                     if (suiteId) {
-                        console.log('[PracticeEnhancer] 提交套题:', suiteId);
+                        console.log('[PracticeEnhancer] 提交套题');
                         self.handleSuiteSubmit(suiteId);
                         return;
                     }
@@ -4985,7 +5003,7 @@
                     try {
                         enhancer.handleSuiteSubmit(suiteId);
                     } catch (error) {
-                        console.warn('[PracticeEnhancer] App.finishSuite 钩子执行失败:', error);
+                        console.warn('[PracticeEnhancer] App.finishSuite 钩子执行失败:', summarizePracticeEnhancerErrorForLog(error));
                     }
                     return result;
                 };
@@ -5036,11 +5054,11 @@
 
             // 检查该套题是否已提交
             if (this.submittedSuites.has(suiteId)) {
-                console.warn(`[PracticeEnhancer] 套题 ${suiteId} 已经提交过，阻止重复提交`);
+                console.warn('[PracticeEnhancer] 套题已经提交过，阻止重复提交');
                 return;
             }
 
-            console.log(`[PracticeEnhancer] 开始处理套题提交: ${suiteId}`);
+            console.log('[PracticeEnhancer] 开始处理套题提交');
 
             // 设置提交状态
             this.isSubmitting = true;
@@ -5050,7 +5068,7 @@
                 // 1. 收集该套题的答案
                 const suiteContainer = this.getSuiteContainer(suiteId);
                 if (!suiteContainer) {
-                    console.error(`[PracticeEnhancer] 未找到套题容器: ${suiteId}`);
+                    console.error('[PracticeEnhancer] 未找到套题容器');
                     return;
                 }
 
@@ -5074,10 +5092,10 @@
                 // 7. 标记该套题已提交
                 this.submittedSuites.add(suiteId);
 
-                console.log(`[PracticeEnhancer] 套题 ${suiteId} 提交完成`);
+                console.log('[PracticeEnhancer] 套题提交完成');
 
             } catch (error) {
-                console.error(`[PracticeEnhancer] 套题 ${suiteId} 提交失败:`, error);
+                console.error('[PracticeEnhancer] 套题提交失败:', summarizePracticeEnhancerErrorForLog(error));
             } finally {
                 // 重置提交状态
                 this.isSubmitting = false;
@@ -5197,7 +5215,7 @@
          * @returns {Array} 拼写错误数组
          */
         detectSuiteSpellingErrors: function (comparison, suiteId) {
-            console.log('[PracticeEnhancer] 开始检测套题拼写错误:', suiteId);
+            console.log('[PracticeEnhancer] 开始检测套题拼写错误');
 
             // 检查SpellingErrorCollector是否可用
             if (!window.spellingErrorCollector) {
@@ -5227,7 +5245,7 @@
                 return errors || [];
 
             } catch (error) {
-                console.error('[PracticeEnhancer] 拼写错误检测失败:', error);
+                console.error('[PracticeEnhancer] 拼写错误检测失败:', summarizePracticeEnhancerErrorForLog(error));
                 // 发生错误时返回空数组，不影响主流程
                 return [];
             }
@@ -5303,7 +5321,7 @@
             };
 
             this.runHooks('afterSuiteMessageBuilt', message, suiteId);
-            console.log('[PracticeEnhancer] 发送套题完成消息（标准格式）:', message);
+            console.log('[PracticeEnhancer] Suite completion message prepared');
             this.sendMessage('PRACTICE_COMPLETE', message);
         },
 
@@ -5411,16 +5429,16 @@
                 const value = this.getInputValue(input);
 
                 if (input.type === 'text') {
-                    console.log(`[DEBUG] Text Input Found: id='${input.id}', name='${input.name}', derived_questionId='${questionId}', value=${summarizeAnswerValueForLog(value)}`);
+                    console.log('[DEBUG] Text Input Found:', summarizeAnswerValueForLog(value));
                 }
 
-                console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, name=${input.name}, id=${input.id}, value=${summarizeAnswerValueForLog(value)}, questionId=${questionId}`);
+                console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, value=${summarizeAnswerValueForLog(value)}`);
 
                 const hasValue = Array.isArray(value) ? value.length > 0 : (value !== null && value !== undefined && value !== '');
                 if (hasValue) {
                     const normalizedId = this.addAnswer(questionId, value);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录答案: ${normalizedId} ${summarizeAnswerValueForLog(value)}`);
+                        console.log('[PracticeEnhancer] 记录答案:', summarizeAnswerValueForLog(value));
                     }
                 }
             });
@@ -5438,7 +5456,7 @@
                 if (questionId && answer) {
                     const normalizedId = this.addAnswer(questionId, answer);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录data答案: ${normalizedId} ${summarizeAnswerValueForLog(answer)}`);
+                        console.log('[PracticeEnhancer] 记录data答案:', summarizeAnswerValueForLog(answer));
                     }
                 }
             });
@@ -5490,7 +5508,7 @@
             // 为每个套题收集答案
             suiteContainers.forEach((container, index) => {
                 const suiteId = this.extractSuiteId(container);
-                console.log(`[PracticeEnhancer] 收集套题 ${index + 1}/${suiteContainers.length}, ID: ${suiteId}`);
+                console.log(`[PracticeEnhancer] 收集套题 ${index + 1}/${suiteContainers.length}`);
 
                 if (suiteId) {
                     this.collectSuiteAnswers(container, suiteId);
@@ -5521,13 +5539,13 @@
                 return;
             }
 
-            console.log(`[PracticeEnhancer] 收集套题答案: ${suiteId}`);
+            console.log('[PracticeEnhancer] 收集套题答案');
 
             // 1. 收集该套题内的所有输入元素
             const inputs = Array.from(suiteContainer.querySelectorAll('input, textarea, select'))
                 .filter(el => !this.isExcludedControl(el));
 
-            console.log(`[PracticeEnhancer] 套题 ${suiteId} 找到输入元素:`, inputs.length);
+            console.log('[PracticeEnhancer] 套题找到输入元素:', inputs.length);
 
             inputs.forEach((input) => {
                 const questionId = this.getQuestionId(input);
@@ -5538,7 +5556,7 @@
                     const prefixedId = `${suiteId}::${questionId}`;
                     const normalizedId = this.addAnswer(prefixedId, value);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录套题答案: ${normalizedId} ${summarizeAnswerValueForLog(value)}`);
+                        console.log('[PracticeEnhancer] 记录套题答案:', summarizeAnswerValueForLog(value));
                     }
                 }
             });
@@ -5555,7 +5573,7 @@
                     const prefixedId = `${suiteId}::${questionId}`;
                     const normalizedId = this.addAnswer(prefixedId, answer);
                     if (normalizedId) {
-                        console.log(`[PracticeEnhancer] 记录套题data答案: ${normalizedId} ${summarizeAnswerValueForLog(answer)}`);
+                        console.log('[PracticeEnhancer] 记录套题data答案:', summarizeAnswerValueForLog(answer));
                     }
                 }
             });
@@ -5715,7 +5733,7 @@
             try {
                 return Array.from(scope.querySelectorAll(selector));
             } catch (error) {
-                console.warn('[PracticeEnhancer] 查询分组元素失败:', error);
+                console.warn('[PracticeEnhancer] 查询分组元素失败:', summarizePracticeEnhancerErrorForLog(error));
                 return [input];
             }
         },
@@ -5757,7 +5775,7 @@
             console.log('[PracticeEnhancer] 找到问题容器:', questionContainers.length);
 
             questionContainers.forEach((container, index) => {
-                console.log(`[PracticeEnhancer] 处理问题容器 ${index}:`, container.className, container.id);
+                console.log(`[PracticeEnhancer] 处理问题容器 ${index}`);
 
                 // 在容器内查找输入元素
                 const inputs = Array.from(container.querySelectorAll('input, textarea, select'))
@@ -5769,7 +5787,7 @@
                     if (value !== null && value !== '') {
                         const normalizedId = this.addAnswer(questionId, value);
                         if (normalizedId) {
-                            console.log(`[PracticeEnhancer] 从容器收集答案: ${normalizedId} ${summarizeAnswerValueForLog(value)}`);
+                            console.log('[PracticeEnhancer] 从容器收集答案:', summarizeAnswerValueForLog(value));
                         }
                     }
                 });
@@ -5858,7 +5876,7 @@
             if (!this.sessionId) {
                 this.examId = this.examId || derivedExamId;
                 this.sessionId = this.generateFallbackSessionId(this.examId || derivedExamId);
-                console.warn('[PracticeEnhancer] 无会话ID，使用本地生成的回退ID:', this.sessionId);
+                console.warn('[PracticeEnhancer] Missing session id; generated local fallback id');
             }
             this.examId = this.examId || derivedExamId;
 
@@ -5902,7 +5920,7 @@
             this.waitForResultsRender(5000)
                 .then(finalizeSubmission)
                 .catch(function (error) {
-                    console.warn('[PracticeEnhancer] 等待结果渲染时出错，直接完成提交流程:', error);
+                    console.warn('[PracticeEnhancer] 等待结果渲染时出错，直接完成提交流程:', summarizePracticeEnhancerErrorForLog(error));
                     finalizeSubmission();
                 });
         },
@@ -5975,7 +5993,7 @@
                     }, 120);
                 }
             } catch (eventError) {
-                console.warn('[PracticeEnhancer] 触发practiceResultsReady事件失败:', eventError);
+                console.warn('[PracticeEnhancer] 触发practiceResultsReady事件失败:', summarizePracticeEnhancerErrorForLog(eventError));
             }
         },
 
@@ -6433,7 +6451,7 @@
                 this.parentWindow.postMessage(message, getMessageTargetOrigin());
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
-                console.error('[PracticeEnhancer] 发送消息失败:', error);
+                console.error('[PracticeEnhancer] 发送消息失败:', summarizePracticeEnhancerErrorForLog(error));
             }
         },
 
@@ -6467,7 +6485,7 @@
     const shouldAutoInitialize = window.practicePageEnhancer.config.autoInitialize !== false;
     const kickOffInitialization = () => {
         window.practicePageEnhancer.initialize().catch((error) => {
-            console.error('[PracticeEnhancer] 初始化失败', error);
+            console.error('[PracticeEnhancer] 初始化失败', summarizePracticeEnhancerErrorForLog(error));
         });
     };
 
@@ -6483,15 +6501,17 @@
 
     // 调试函数
     window.debugPracticeEnhancer = () => {
+        const enhancer = window.practicePageEnhancer;
+        const answerComparisonSummary = summarizeAnswerComparisonForLog(enhancer.generateAnswerComparison());
         console.log('=== 练习页面增强器调试信息 ===');
-        console.log('状态:', window.practicePageEnhancer.getStatus());
-        console.log('用户答案:', summarizeAnswerMapForLog(window.practicePageEnhancer.answers));
-        console.log('正确答案:', summarizeAnswerMapForLog(window.practicePageEnhancer.correctAnswers)); // 新增
-        console.log('答案比较:', summarizeAnswerComparisonForLog(window.practicePageEnhancer.generateAnswerComparison())); // 新增
-        console.log('交互记录:', window.practicePageEnhancer.interactions);
+        console.log('状态:', enhancer.getStatus());
+        console.log('用户答案摘要:', summarizeAnswerMapForLog(enhancer.answers));
+        console.log('正确答案摘要:', summarizeAnswerMapForLog(enhancer.correctAnswers)); // 新增
+        console.log('答案比较摘要:', answerComparisonSummary); // 新增
+        console.log('交互记录摘要:', summarizeInteractionsForLog(enhancer.interactions));
 
         // 测试成绩提取
-        const scoreInfo = window.practicePageEnhancer.extractScore();
+        const scoreInfo = enhancer.extractScore();
         console.log('成绩提取测试:', scoreInfo);
     };
 })();

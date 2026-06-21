@@ -91,7 +91,7 @@
                 return;
             }
             if (isLegacyUnsafeAttributeName(key) || isLegacyUnsafeUrlAttribute(key, value, element.tagName)) {
-                console.warn('[LegacyView] Skipped unsafe attribute: ' + key);
+                console.warn('[LegacyView] Skipped unsafe attribute');
                 return;
             }
             if (key === 'className') {
@@ -5675,14 +5675,14 @@
                 const normalizedList = this.normalizeVocabListShape(list, listId, listId);
 
                 if (normalizedList) {
-                    console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${normalizedList.words.length}`);
+                    console.log(`[SpellingErrorCollector] 加载词表成功，单词数: ${normalizedList.words.length}`);
                     return normalizedList;
                 }
 
-                console.log(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                console.log('[SpellingErrorCollector] 词表不存在');
                 return null;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 加载词表失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 加载词表失败', error);
                 return null;
             }
         }
@@ -5720,7 +5720,7 @@
                 }
 
                 await window.storage.set(storageKey, vocabList);
-                console.log(`[SpellingErrorCollector] 保存词表成功: ${vocabList.id}, 单词数: ${vocabList.words.length}`);
+                console.log(`[SpellingErrorCollector] 保存词表成功，单词数: ${vocabList.words.length}`);
 
                 return true;
             } catch (error) {
@@ -5739,7 +5739,7 @@
                 const list = await this.loadVocabList(listId);
                 return list ? list.words.length : 0;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 获取词表单词数失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 获取词表单词数失败', error);
                 return 0;
             }
         }
@@ -5792,7 +5792,7 @@
                     };
 
                     errors.push(error);
-                    console.log(`[SpellingErrorCollector] 检测到拼写错误: ${questionId} - "${detected.userInput}" → "${detected.word}"`);
+                    console.log('[SpellingErrorCollector] 检测到拼写错误');
                 }
             }
 
@@ -6368,7 +6368,7 @@
             // 如果词表不存在，创建新词表
             if (!vocabList) {
                 vocabList = this.createEmptyList(listId, source);
-                console.log(`[SpellingErrorCollector] 创建新词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 创建新词表');
             }
 
             // 合并错误到词表
@@ -6402,7 +6402,7 @@
                     const existing = vocabList.words[existingIndex];
                     vocabList.words[existingIndex] = this.buildVocabEntryFromError(error, existing, vocabList.source);
 
-                    console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${vocabList.words[existingIndex].errorCount}`);
+                    console.log(`[SpellingErrorCollector] 更新已存在单词，错误次数: ${vocabList.words[existingIndex].errorCount}`);
                 } else {
                     // 新单词，添加到词表
                     const entry = this.buildVocabEntryFromError(error, null, vocabList.source);
@@ -6411,7 +6411,7 @@
                     }
                     vocabList.words.push(entry);
 
-                    console.log(`[SpellingErrorCollector] 添加新单词: ${error.word}`);
+                    console.log('[SpellingErrorCollector] 添加新单词');
                 }
             }
         }
@@ -6458,7 +6458,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -6472,10 +6472,10 @@
 
                 if (vocabList.words.length < originalLength) {
                     await this.saveVocabList(vocabList);
-                    console.log(`[SpellingErrorCollector] 从词表 ${listId} 移除单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 从词表移除单词');
                     return true;
                 } else {
-                    console.log(`[SpellingErrorCollector] 词表 ${listId} 中未找到单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 词表中未找到单词');
                     return false;
                 }
             } catch (error) {
@@ -6494,7 +6494,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -6502,7 +6502,7 @@
                 vocabList.updatedAt = Date.now();
 
                 await this.saveVocabList(vocabList);
-                console.log(`[SpellingErrorCollector] 清空词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 清空词表');
 
                 return true;
             } catch (error) {
@@ -6549,6 +6549,17 @@
 
     function createLocalId(prefix) {
         return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
+    }
+
+    function summarizeExamSessionErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
     }
 
     function getMessageTargetOrigin(options = {}) {
@@ -7026,7 +7037,7 @@
                 return examWindow;
 
             } catch (error) {
-                console.error('Failed to open exam:', error);
+                console.error('Failed to open exam:', summarizeExamSessionErrorForLog(error));
                 window.showMessage('打开题目失败，请重试', 'error');
             }
         },
@@ -7124,7 +7135,7 @@
                     reuseWindow.focus();
                     return reuseWindow;
                 } catch (error) {
-                    console.warn('[App] 复用窗口失败，尝试重新打开:', error);
+                    console.warn('[App] 复用窗口失败，尝试重新打开:', summarizeExamSessionErrorForLog(error));
                 }
             }
 
@@ -7197,7 +7208,7 @@
                 }
 
             } catch (error) {
-                console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
+                console.warn('[App] 无法解析题目URL为绝对路径:', summarizeExamSessionErrorForLog(error));
             }
             return '';
         },
@@ -7414,7 +7425,7 @@
                     if (message && message.toLowerCase().includes('cross-origin')) {
                         console.debug('[App] 题目窗口跨域，使用占位页回退。');
                     } else {
-                        console.warn('[App] 无法读取题目窗口地址，准备降级到占位页:', error);
+                        console.warn('[App] 无法读取题目窗口地址，准备降级到占位页:', summarizeExamSessionErrorForLog(error));
                     }
                     return '';
                 }
@@ -7569,7 +7580,7 @@
                     return window.EnvironmentDetector.isInTestEnvironment();
                 }
             } catch (error) {
-                console.warn('[App] 无法访问 EnvironmentDetector:', error);
+                console.warn('[App] 无法访问 EnvironmentDetector:', summarizeExamSessionErrorForLog(error));
             }
             return false;
         },
@@ -7709,13 +7720,13 @@
                                 try {
                                     this.initializePracticeSession(examWindow, examId);
                                 } catch (sessionError) {
-                                    console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                                    console.warn('[DataInjection] 初始化练习会话失败:', summarizeExamSessionErrorForLog(sessionError));
                                 }
                             }, 80);
                         };
 
                         scriptEl.onerror = (loadError) => {
-                            console.warn('[DataInjection] 加载增强器失败:', loadError);
+                            console.warn('[DataInjection] 加载增强器失败:', summarizeExamSessionErrorForLog(loadError));
                             scriptEl.remove();
                             if (!isListeningExam) {
                                 this.injectInlineScript(examWindow, examId);
@@ -7727,7 +7738,7 @@
 
                     appendEnhancer();
                 } catch (error) {
-                    console.error('[DataInjection] 注入增强器脚本时出错:', error);
+                    console.error('[DataInjection] 注入增强器脚本时出错:', summarizeExamSessionErrorForLog(error));
                     if (!isListeningExam) {
                         this.injectInlineScript(examWindow, examId);
                     }
@@ -7747,7 +7758,7 @@
                         setTimeout(checkAndInject, 200);
                     }
                 } catch (error) {
-                    console.warn('[DataInjection] 检测题目页面就绪状态失败:', error);
+                    console.warn('[DataInjection] 检测题目页面就绪状态失败:', summarizeExamSessionErrorForLog(error));
                 }
             };
 
@@ -7795,7 +7806,7 @@
                             try {
                                 parentWindow.postMessage({ type: type, data: data || {} }, ${JSON.stringify(getMessageTargetOrigin())});
                             } catch (error) {
-                                console.warn('[InlineEnhancer] 无法发送消息:', error);
+                                console.warn('[InlineEnhancer] 无法发送消息:');
                             }
                         }
 
@@ -7908,7 +7919,7 @@
                                 }
                                 window.location.href = targetUrl;
                             } catch (error) {
-                                console.warn('[InlineEnhancer] 套题导航失败:', error);
+                                console.warn('[InlineEnhancer] 套题导航失败:');
                             }
                         }
 
@@ -8065,7 +8076,7 @@
                 }, 300);
 
             } catch (error) {
-                console.error('[DataInjection] 内联脚本注入失败:', error);
+                console.error('[DataInjection] 内联脚本注入失败:', summarizeExamSessionErrorForLog(error));
                 this.handleInjectionError(examId, error);
             }
         },
@@ -8152,7 +8163,7 @@
                 }
 
             } catch (error) {
-                console.error('[DataInjection] 会话初始化失败:', error);
+                console.error('[DataInjection] 会话初始化失败:', summarizeExamSessionErrorForLog(error));
             }
         },
 
@@ -8160,7 +8171,7 @@
          * 处理注入错误
          */
         async handleInjectionError(examId, error) {
-            console.error('[DataInjection] 注入错误:', error);
+            console.error('[DataInjection] 注入错误:', summarizeExamSessionErrorForLog(error));
 
             // 记录错误信息
             const errorInfo = {
@@ -8242,25 +8253,25 @@
                         }
                     } catch (monitorError) {
                         clearInterval(checkClosed);
-                        console.warn('[App] 无法检测题目窗口状态:', monitorError);
+                        console.warn('[App] 无法检测题目窗口状态:', summarizeExamSessionErrorForLog(monitorError));
                     }
                 }, 1000);
             } catch (error) {
-                console.warn('[App] 启动窗口关闭监控失败:', error);
+                console.warn('[App] 启动窗口关闭监控失败:', summarizeExamSessionErrorForLog(error));
             }
 
             // 设置窗口通信
             try {
                 this.setupExamWindowCommunication(examWindow, examId, exam, options);
             } catch (error) {
-                console.warn('[App] 初始化题目窗口通信失败:', error);
+                console.warn('[App] 初始化题目窗口通信失败:', summarizeExamSessionErrorForLog(error));
             }
 
             // 启动与练习页的会话握手（file:// 下更可靠）
             try {
                 this.startExamHandshake(examWindow, examId);
             } catch (e) {
-                console.warn('[App] 启动握手失败:', e);
+                console.warn('[App] 启动握手失败:', summarizeExamSessionErrorForLog(e));
             }
 
             const emitInitEnvelope = () => {
@@ -8278,7 +8289,7 @@
                 try {
                     examWindow.addEventListener('load', emitInitEnvelope);
                 } catch (error) {
-                    console.warn('[App] 监听题目窗口 load 事件失败:', error);
+                    console.warn('[App] 监听题目窗口 load 事件失败:', summarizeExamSessionErrorForLog(error));
                     emitInitEnvelope();
                 }
             } else {
@@ -8651,7 +8662,7 @@
                         this.handleSessionReady(examId, data);
                         if (typeof this._maybeRestoreSuiteReviewState === 'function') {
                             this._maybeRestoreSuiteReviewState(examId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
-                                console.warn('[SuitePractice] 恢复回看态失败:', restoreError);
+                                console.warn('[SuitePractice] 恢复回看态失败:', summarizeExamSessionErrorForLog(restoreError));
                             });
                         }
                         break;
@@ -8661,14 +8672,14 @@
                     case 'PRACTICE_COMPLETE':
                     case 'PRACTICE_RESULT':
                         if (windowInfo && windowInfo.reviewMode) {
-                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE');
                             break;
                         }
                         if (
                             (windowInfo && windowInfo.practiceMode === 'memorize')
                             || String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize'
                         ) {
-                            console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录:', examId);
+                            console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录');
                             break;
                         }
                         if (data && data.suiteSessionId && windowInfo) {
@@ -8687,7 +8698,7 @@
                         await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
-                        console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
+                        console.warn('[SuitePractice] 练习页尝试关闭套题窗口');
                         break;
                     case 'SUITE_CONFIG_UPDATE': {
                         const autoAdvance = typeof data.autoAdvanceAfterSubmit === 'boolean'
@@ -8891,7 +8902,7 @@
                         const exam = await findExamDefinition(examId);
 
                         if (!exam) {
-                            console.error('[FallbackRecorder] 无法找到题目信息:', examId);
+                            console.error('[FallbackRecorder] 无法找到题目信息');
                             return null;
                         }
 
@@ -8912,12 +8923,12 @@
 
                         // 检查成就
                         if (window.AchievementManager) {
-                            window.AchievementManager.check(practiceRecord).catch(console.warn);
+                            window.AchievementManager.check(practiceRecord).catch((error) => { console.warn('[FallbackRecorder] achievement check failed:', summarizeExamSessionErrorForLog(error)); });
                         }
 
                         return practiceRecord;
                     } catch (error) {
-                        console.error('[FallbackRecorder] 保存失败:', error);
+                        console.error('[FallbackRecorder] 保存失败:', summarizeExamSessionErrorForLog(error));
                         return null;
                     }
                 },
@@ -8951,7 +8962,7 @@
                             return true;
                         });
                     } catch (error) {
-                        console.error('[FallbackRecorder] 获取记录失败:', error);
+                        console.error('[FallbackRecorder] 获取记录失败:', summarizeExamSessionErrorForLog(error));
                         return [];
                     }
                 }
@@ -9547,7 +9558,7 @@
                 targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin(windowInfo));
                 return true;
             } catch (error) {
-                console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
+                console.warn('[ReviewReplay] 向题目页发送回放数据失败:', summarizeExamSessionErrorForLog(error));
                 return false;
             }
         },
@@ -9636,7 +9647,7 @@
             try {
                 await this.cleanupExamSession(examId);
             } catch (error) {
-                console.warn('[ReviewReplay] 清理旧题目会话失败:', error);
+                console.warn('[ReviewReplay] 清理旧题目会话失败:', summarizeExamSessionErrorForLog(error));
             }
 
             await this.openExam(nextEntry.examId, {
@@ -9819,7 +9830,7 @@
                     metadata
                 });
             } catch (recorderError) {
-                console.warn('[PracticeRecorder] 重置后同步会话状态失败:', recorderError);
+                console.warn('[PracticeRecorder] 重置后同步会话状态失败:', summarizeExamSessionErrorForLog(recorderError));
             }
         },
 
@@ -9831,7 +9842,7 @@
                     : [];
                 await storage.set('active_sessions', updatedSessions);
             } catch (error) {
-                console.warn('[App] 清理活动会话元数据失败:', error);
+                console.warn('[App] 清理活动会话元数据失败:', summarizeExamSessionErrorForLog(error));
             }
         },
 
@@ -9936,7 +9947,7 @@
         async startPracticeSession(examId) {
             const exam = await findExamDefinition(examId);
             if (!exam) {
-                console.error('Exam not found:', examId);
+                console.error('Exam not found');
                 window.showMessage && window.showMessage('题目索引未加载，请重试或重新导入题库。', 'error');
                 return;
             }
@@ -9980,7 +9991,7 @@
                 this.updateExamStatus(examId, 'in-progress');
 
             } catch (error) {
-                console.error('[App] 启动练习会话失败:', error);
+                console.error('[App] 启动练习会话失败:', summarizeExamSessionErrorForLog(error));
 
                 // 最终降级方案
                 this.startPracticeSessionFallback(examId, exam);
@@ -10046,7 +10057,12 @@
          * 处理题目错误
          */
         handleExamError(examId, errorData) {
-            console.error('Exam error:', examId, errorData);
+            console.error(
+                'Exam error:',
+                errorData && typeof errorData === 'object'
+                    ? (errorData.message || 'object')
+                    : typeof errorData
+            );
 
             window.showMessage(`题目出现错误: ${errorData.message || '未知错误'}`, 'error');
 
@@ -10147,7 +10163,7 @@
                         }
                     });
                 } catch (recorderError) {
-                    console.warn('[PracticeRecorder] 无法同步会话状态:', recorderError);
+                    console.warn('[PracticeRecorder] 无法同步会话状态:', summarizeExamSessionErrorForLog(recorderError));
                 }
             }
 
@@ -10306,7 +10322,7 @@
                 data.sessionId = `${examId}_${Date.now()}`;
             }
             if (String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize') {
-                console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
+                console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录');
                 return;
             }
 
@@ -10347,7 +10363,7 @@
                     }
                 }
             } catch (error) {
-                console.warn('[DataCollection] 拼写错误检测失败，已忽略:', error);
+                console.warn('[DataCollection] 拼写错误检测失败，已忽略:', summarizeExamSessionErrorForLog(error));
             }
             this._normalizeListeningSpellingErrors(examId, data);
 
@@ -10436,7 +10452,7 @@
 
                 // 检查成就
                 if (window.AchievementManager) {
-                    window.AchievementManager.check(data?.realData).catch(console.warn);
+                    window.AchievementManager.check(data?.realData).catch((error) => { console.warn('[DataCollection] achievement check failed:', summarizeExamSessionErrorForLog(error)); });
                 }
 
                 // 刷新练习记录显示
@@ -10445,7 +10461,7 @@
                 }
 
             } catch (error) {
-                console.error('[DataCollection] 处理练习完成数据失败:', error);
+                console.error('[DataCollection] 处理练习完成数据失败:', summarizeExamSessionErrorForLog(error));
                 // 即使出错也要显示通知
                 window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
             } finally {
@@ -10461,7 +10477,7 @@
          * 处理数据采集错误
          */
         async handleDataCollectionError(examId, data) {
-            console.error('[DataCollection] 数据采集错误:', examId, data);
+            console.error('[DataCollection] 数据采集错误');
 
             // 记录错误但不中断用户体验
             const errorInfo = {
@@ -10621,7 +10637,7 @@
                 const exam = await findExamDefinition(examId);
 
                 if (!exam) {
-                    console.error('[DataCollection] 无法找到题目信息:', examId);
+                    console.error('[DataCollection] 无法找到题目信息');
                     return;
                 }
 
@@ -10761,7 +10777,7 @@
                 }
 
             } catch (error) {
-                console.error('[DataCollection] 保存真实数据失败:', error);
+                console.error('[DataCollection] 保存真实数据失败:', summarizeExamSessionErrorForLog(error));
             }
         },
 
@@ -10811,7 +10827,7 @@
                 window.showMessage && window.showMessage('套题练习窗口已关闭，套题模式将被中断并回退到普通模式。', 'warning');
                 if (typeof this._abortSuiteSession === 'function') {
                     this._abortSuiteSession(this.currentSuiteSession, {}).catch(error => {
-                        console.error('[SuitePractice] 中断套题失败:', error);
+                        console.error('[SuitePractice] 中断套题失败:', summarizeExamSessionErrorForLog(error));
                     });
                 }
             }
@@ -11056,10 +11072,10 @@
             // 监听练习错误事件
             document.addEventListener('practiceSessionError', (event) => {
                 const { examId, error } = event.detail;
-                console.error('Practice session error:', examId, error);
+                console.error('Practice session error:', summarizeExamSessionErrorForLog(error));
 
                 this.updateExamStatus(examId, 'error');
-                window.showMessage(`练习出现错误: ${error.message || '未知错误'}`, 'error');
+                window.showMessage('Practice session failed. Please retry.', 'error');
             });
 
             // 监听练习结束事件
@@ -12004,7 +12020,7 @@ class PDFHandler {
      */
     openPDF(pdfPath, examTitle = 'PDF Exam', options = {}) {
         try {
-            console.log('[PDFHandler] Opening PDF:', pdfPath);
+            console.log('[PDFHandler] Opening PDF');
 
             // Validate PDF path
             const safePdfPath = this.resolvePDFPath(pdfPath);
@@ -12037,11 +12053,11 @@ class PDFHandler {
             // Set up window event handlers
             this.setupWindowHandlers(pdfWindow, safePdfPath);
 
-            console.log('[PDFHandler] PDF opened successfully:', examTitle);
+            console.log('[PDFHandler] PDF opened successfully');
             return pdfWindow;
 
         } catch (error) {
-            console.error('[PDFHandler] Failed to open PDF:', error);
+            console.error('[PDFHandler] Failed to open PDF:', this.summarizeErrorForLog(error));
             this.handlePDFError(error, pdfPath, examTitle);
             return null;
         }
@@ -12054,7 +12070,7 @@ class PDFHandler {
      */
     async validatePDF(pdfPath) {
         try {
-            console.log('[PDFHandler] Validating PDF:', pdfPath);
+            console.log('[PDFHandler] Validating PDF');
 
             const safePdfPath = this.resolvePDFPath(pdfPath);
             if (!safePdfPath) {
@@ -12073,7 +12089,7 @@ class PDFHandler {
             return isValid;
 
         } catch (error) {
-            console.error('[PDFHandler] PDF validation failed:', error);
+            console.error('[PDFHandler] PDF validation failed:', this.summarizeErrorForLog(error));
             return false;
         }
     }
@@ -12085,7 +12101,7 @@ class PDFHandler {
      */
     async getPDFInfo(pdfPath) {
         try {
-            console.log('[PDFHandler] Getting PDF info:', pdfPath);
+            console.log('[PDFHandler] Getting PDF info');
 
             const safePdfPath = this.resolvePDFPath(pdfPath);
             if (!safePdfPath) {
@@ -12107,11 +12123,11 @@ class PDFHandler {
                 timestamp: new Date().toISOString()
             };
 
-            console.log('[PDFHandler] PDF info retrieved:', info);
+            console.log('[PDFHandler] PDF info retrieved:', this.summarizePDFInfoForLog(info));
             return info;
 
         } catch (error) {
-            console.error('[PDFHandler] Failed to get PDF info:', error);
+            console.error('[PDFHandler] Failed to get PDF info:', this.summarizeErrorForLog(error));
             return {
                 path: pdfPath,
                 isAccessible: false,
@@ -12191,6 +12207,29 @@ class PDFHandler {
             contentType.includes('application/pdf') ||
             contentType.includes('application/x-pdf')
         );
+    }
+
+    redactLogText(value) {
+        return String(value || '')
+            .replace(/\b[A-Za-z]:[\\/][^\s"'<>]+/g, '[local-path]')
+            .replace(/\bfile:\/\/[^\s"'<>]+/gi, '[local-path]')
+            .replace(/\bhttps?:\/\/[^\s"'<>]+/gi, '[url]')
+            .slice(0, 200);
+    }
+
+    summarizeErrorForLog(error) {
+        return {
+            name: error && error.name ? this.redactLogText(error.name) : 'Error',
+            message: error && error.message ? this.redactLogText(error.message) : 'Unknown error'
+        };
+    }
+
+    summarizePDFInfoForLog(info) {
+        return {
+            sizeKnown: Boolean(info && info.size),
+            contentType: info && info.contentType ? this.redactLogText(info.contentType) : null,
+            isAccessible: Boolean(info && info.isAccessible)
+        };
     }
 
     /**
@@ -12280,7 +12319,7 @@ class PDFHandler {
         const checkClosed = () => {
             if (pdfWindow.closed) {
                 this.openWindows.delete(pdfPath);
-                console.log('[PDFHandler] PDF window closed:', examTitle);
+                console.log('[PDFHandler] PDF window closed');
             } else {
                 setTimeout(checkClosed, 1000);
             }
@@ -12304,13 +12343,13 @@ class PDFHandler {
 
             // Handle window error event
             pdfWindow.addEventListener('error', (error) => {
-                console.error('[PDFHandler] PDF window error:', error);
+                console.error('[PDFHandler] PDF window error:', this.summarizeErrorForLog(error));
                 this.onPDFError(pdfPath, error);
             });
 
         } catch (error) {
             // Cross-origin restrictions may prevent event listener setup
-            console.warn('[PDFHandler] Could not set up window event handlers:', error.message);
+            console.warn('[PDFHandler] Could not set up window event handlers:', this.redactLogText(error.message));
         }
     }
 
@@ -12377,9 +12416,7 @@ class PDFHandler {
 
         // Log detailed error for debugging
         console.error('[PDFHandler] Detailed error:', {
-            error: error.message,
-            path: pdfPath,
-            title: examTitle,
+            error: this.redactLogText(error.message),
             timestamp: new Date().toISOString()
         });
     }
@@ -14208,7 +14245,7 @@ window.BrowseStateManager = BrowseStateManager;
                 return false;
             });
             if (match) {
-                console.log('[AnswerComparisonUtils] 通过 URL 路径匹配到题目:', match.id, match.title);
+                console.log('[AnswerComparisonUtils] 通过 URL 路径匹配到题目');
                 return match;
             }
         }
@@ -14255,7 +14292,7 @@ window.BrowseStateManager = BrowseStateManager;
                            (cleanItem.length > 5 && cleanCandidate.includes(cleanItem));
                 });
                 if (match) {
-                    console.log('[AnswerComparisonUtils] 通过模糊标题匹配到题目:', match.id, match.title);
+                    console.log('[AnswerComparisonUtils] 通过模糊标题匹配到题目');
                     return match;
                 }
             }
@@ -15334,6 +15371,16 @@ function getMessageTargetOrigin() {
     return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
 }
 
+function summarizeMainErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 if (typeof window !== 'undefined') {
     window.normalizeRecordId = normalizeRecordId;
 }
@@ -15576,7 +15623,7 @@ async function initializeLegacyComponents() {
     try {
         ensureLegacyNavigation({ initialView: 'overview' });
     } catch (error) {
-        console.warn('[Navigation] 初始化导航控制器失败:', error);
+        console.warn('[Navigation] 初始化导航控制器失败:', summarizeMainErrorForLog(error));
     }
 
     setupBrowsePreferenceUI();
@@ -15616,7 +15663,7 @@ async function initializeLegacyComponents() {
     try {
         needsCleanup = !localStorage.getItem('upgrade_v1_1_0_cleanup_done');
     } catch (error) {
-        console.warn('[System] 检查升级标记失败，将继续执行清理流程', error);
+        console.warn('[System] 检查升级标记失败，将继续执行清理流程', summarizeMainErrorForLog(error));
         needsCleanup = true;
     }
 
@@ -15647,7 +15694,7 @@ async function cleanupOldCache() {
         await storage.set('exam_index_configurations', []);
         console.log('[System] 旧缓存清理完成');
     } catch (error) {
-        console.warn('[System] 清理旧缓存时出错:', error);
+        console.warn('[System] 清理旧缓存时出错:', summarizeMainErrorForLog(error));
     }
 }
 
@@ -15662,7 +15709,7 @@ async function syncPracticeRecords(options = {}) {
     try {
         records = await listCanonicalPracticeRecords();
     } catch (e) {
-        console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
+        console.warn('[System] 同步记录时发生错误，使用存储原始数据:', summarizeMainErrorForLog(e));
         const practiceKey = ['practice', 'records'].join('_');
         const raw = await storage.get(practiceKey, []);
         records = Array.isArray(raw) ? raw : [];
@@ -15718,7 +15765,7 @@ async function syncPracticeRecords(options = {}) {
 
             return { ...r, duration, accuracy: (accuracy ?? r.accuracy), percentage: (percentage ?? r.percentage) };
         });
-    } catch (e) { console.warn('[System] normalize durations failed:', e); }
+    } catch (e) { console.warn('[System] normalize durations failed:', summarizeMainErrorForLog(e)); }
 
     // 若数据未变则跳过 UI 刷新，避免无意义的列表重置
     try {
@@ -15746,7 +15793,7 @@ async function syncPracticeRecords(options = {}) {
             window.app.state.practice.records = Array.isArray(nextRecords) ? nextRecords.slice() : [];
         }
     } catch (error) {
-        console.warn('[System] 同步练习记录到 App state 失败:', error);
+        console.warn('[System] 同步练习记录到 App state 失败:', summarizeMainErrorForLog(error));
     }
     refreshBrowseProgressFromRecords(records);
 
@@ -15763,7 +15810,7 @@ function ensurePracticeRecordsSync(trigger = 'default') {
         await syncPracticeRecords();
         return true;
     })().catch((error) => {
-        console.warn(`[System] 练习记录同步失败(${trigger}):`, error);
+        console.warn('[System] 练习记录同步失败:', summarizeMainErrorForLog(error));
         return false;
     });
     practiceRecordsLoadPromise = loadTask.finally(() => {
@@ -15776,7 +15823,7 @@ function startPracticeRecordsSyncInBackground(trigger = 'default') {
     try {
         ensurePracticeRecordsSync(trigger);
     } catch (error) {
-        console.warn(`[System] 后台同步练习记录失败(${trigger}):`, error);
+        console.warn('[System] 后台同步练习记录失败:', summarizeMainErrorForLog(error));
     }
 }
 
@@ -15859,7 +15906,7 @@ function syncLegacyPracticeRecordArtifacts(records) {
             try { sessionStorage.removeItem('old_prefix_practice_records'); } catch (_) { }
         }
     } catch (error) {
-        console.warn('[System] 同步 legacy 练习记录影子键失败:', error);
+        console.warn('[System] 同步 legacy 练习记录影子键失败:', summarizeMainErrorForLog(error));
     }
 
     if (shadowKey && window.storage && window.storage.mode === 'indexeddb') {
@@ -16108,7 +16155,7 @@ async function saveReadingHighlightVocab(payload) {
         }
         return saved;
     } catch (error) {
-        console.warn('[VocabStore] 阅读高亮生词保存失败:', error);
+        console.warn('[VocabStore] 阅读高亮生词保存失败:', summarizeMainErrorForLog(error));
         if (typeof showMessage === 'function') {
             showMessage('高亮生词已在阅读页本地缓存，主词表稍后同步', 'warning');
         }
@@ -16193,7 +16240,7 @@ function setupMessageListener() {
             try {
                 if (matched && matched.rec) {
                     if (matched.rec.timer) clearInterval(matched.rec.timer);
-                    console.log('[Fallback] 会话就绪(匹配到窗口):', matched.sid);
+                    console.log('[Fallback] Session ready for matched window');
                 }
             } catch (_) { }
         } else if (type === 'REQUEST_INIT') {
@@ -16204,7 +16251,7 @@ function setupMessageListener() {
             }
             const payload = data.data && typeof data.data === 'object' ? data.data : data;
             saveReadingHighlightVocab(payload).catch((error) => {
-                console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
+                console.warn('[VocabStore] 阅读高亮生词保存异常:', summarizeMainErrorForLog(error));
             });
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};
@@ -16498,7 +16545,7 @@ async function saveFallbackSpellingErrors(examId, realData, exam = {}) {
     try {
         await collector.saveErrors(spellingErrors);
     } catch (error) {
-        console.warn('[Fallback] 保存拼写错误词表失败（不影响主流程）:', error);
+        console.warn('[Fallback] 保存拼写错误词表失败（不影响主流程）:', summarizeMainErrorForLog(error));
     }
 }
 
@@ -16552,7 +16599,7 @@ async function savePracticeRecordFallback(examId, realData) {
                 });
                 if (urlMatch) {
                     exam = urlMatch;
-                    console.log('[Fallback] 通过 URL 匹配到题目:', exam.id, exam.title);
+                    console.log('[Fallback] 通过 URL 匹配到题目');
                 }
             }
 
@@ -16575,7 +16622,7 @@ async function savePracticeRecordFallback(examId, realData) {
                 });
                 if (titleMatch) {
                     exam = titleMatch;
-                    console.log('[Fallback] 通过标题匹配到题目:', exam.id, exam.title);
+                    console.log('[Fallback] 通过标题匹配到题目');
                 }
             }
         }
@@ -16708,7 +16755,7 @@ async function savePracticeRecordFallback(examId, realData) {
         await saveFallbackSpellingErrors(examId, realData, exam);
         console.log('[Fallback] 真实数据已保存到 practice_records');
     } catch (e) {
-        console.error('[Fallback] 保存练习记录失败:', e);
+        console.error('[Fallback] 保存练习记录失败:', summarizeMainErrorForLog(e));
     }
 }
 
@@ -17336,7 +17383,7 @@ function refreshBrowseProgressFromRecords(recordsOverride = null) {
             loadExamList();
         }
     } catch (error) {
-        console.warn('[Browse] 刷新浏览进度失败:', error);
+        console.warn('[Browse] 刷新浏览进度失败:', summarizeMainErrorForLog(error));
     }
 }
 
@@ -17361,7 +17408,7 @@ function ensurePracticeSessionSyncListener() {
                 refreshBrowseProgressFromRecords([record, ...filtered]);
             }
         } catch (syncError) {
-            console.warn('[PracticeView] practiceSessionCompleted 事件处理失败:', syncError);
+            console.warn('[PracticeView] practiceSessionCompleted 事件处理失败:', summarizeMainErrorForLog(syncError));
         } finally {
             // 仍然执行一次全面同步，确保 ScoreStorage/StorageRepo 状态一致
             setTimeout(() => {
@@ -17476,7 +17523,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
             // 如果全局变量设置失败，继续执行
         }
     } catch (error) {
-        console.warn('[browseCategory] 设置筛选器失败:', error);
+        console.warn('[browseCategory] 设置筛选器失败:', summarizeMainErrorForLog(error));
     }
 
     // 优先调用 window.app.browseCategory(category, type, filterMode, path)
@@ -17490,7 +17537,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
             }
             return;
         } catch (error) {
-            console.warn('[browseCategory] window.app.browseCategory 调用失败，使用降级路径:', error);
+            console.warn('[browseCategory] window.app.browseCategory 调用失败，使用降级路径:', summarizeMainErrorForLog(error));
         }
     }
 
@@ -17520,7 +17567,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
         }
 
     } catch (error) {
-        console.error('[browseCategory] 处理浏览类别时出错:', error);
+        console.error('[browseCategory] 处理浏览类别时出错:', summarizeMainErrorForLog(error));
         showMessage('浏览类别时出现错误', 'error');
     }
 }
@@ -17639,7 +17686,7 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
                     }
                     window.browseController.setMode(effectiveFilterMode);
                 } catch (error) {
-                    console.warn('[Browse] 切换浏览模式失败:', error);
+                    console.warn('[Browse] 切换浏览模式失败:', summarizeMainErrorForLog(error));
                 }
             }
         } else {
@@ -17671,7 +17718,7 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
             window.showView('browse', false);
         }
     } catch (e) {
-        console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
+        console.warn('[Browse] 应用筛选失败，回退到默认列表:', summarizeMainErrorForLog(e));
         setBrowseFilterState('all', 'all');
         if (window.browseController && typeof window.browseController.resetToDefault === 'function') {
             window.browseController.resetToDefault();
@@ -17873,7 +17920,7 @@ function loadExamList() {
                 loadExamListFallback();
             }
         }).catch(function (err) {
-            console.error('[main.js] browse-view 组加载失败:', err);
+            console.error('[main.js] browse-view 组加载失败:', summarizeMainErrorForLog(err));
             loadExamListFallback();
         });
     } else {
@@ -18120,7 +18167,7 @@ function loadExamListFallback() {
         container.innerHTML = '';
         container.appendChild(list);
     } catch (err) {
-        console.error('[main.js] 降级渲染失败:', err);
+        console.error('[main.js] 降级渲染失败:', summarizeMainErrorForLog(err));
     }
 }
 
@@ -18195,7 +18242,7 @@ function displayExams(exams) {
         container.innerHTML = '';
         container.appendChild(list);
     } catch (err) {
-        console.error('[main.js] displayExams 降级渲染失败:', err);
+        console.error('[main.js] displayExams 降级渲染失败:', summarizeMainErrorForLog(err));
     }
 }
 
@@ -18279,12 +18326,12 @@ function openExam(examId, options = {}) {
         try {
             return window.app.openExam(lookup.exam ? lookup.exam.id : examId, options || {});
         } catch (error) {
-            console.error('[Main] app.openExam 调用失败，已停止原始 HTML 兜底:', error);
+            console.error('[Main] app.openExam 调用失败，已停止原始 HTML 兜底:', summarizeMainErrorForLog(error));
             return showMessage('统一练习入口启动失败：app.openExam 抛出异常，已阻止打开原始题源 HTML。', 'error');
         }
     }
 
-    console.error('[Main] 统一练习入口未就绪，已阻止打开原始题源 HTML:', { examId });
+    console.error('[Main] 统一练习入口未就绪，已阻止打开原始题源 HTML');
     return showMessage('统一练习入口未就绪：app.openExam 不可用，已阻止打开原始题源 HTML。', 'error');
 }
 
@@ -18309,7 +18356,7 @@ function showRecordDetails(recordId) {
         }
         alert('无法显示记录详情：组件未加载');
     }).catch((error) => {
-        console.error('[Practice] 记录详情组件加载失败:', error);
+        console.error('[Practice] 记录详情组件加载失败:', summarizeMainErrorForLog(error));
         if (typeof showMessage === 'function') {
             showMessage('记录详情模块加载失败', 'error');
         } else {
@@ -18378,7 +18425,7 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
         showMessage('正在打开PDF...', 'info');
         return pdfWindow;
     } catch (error) {
-        console.error('[PDF] 打开失败:', error);
+        console.error('[PDF] 打开失败:', summarizeMainErrorForLog(error));
         showMessage('打开PDF失败', 'error');
         return null;
     }
@@ -18634,7 +18681,8 @@ function performSearch(query) {
     }
 
     // 调试日志
-    console.log('[Search] 执行搜索，查询词:', normalizedQuery);
+    const queryLength = normalizedQuery.length;
+    console.log('[Search] 执行搜索，查询长度:', queryLength);
     const searchBase = getBrowseFilteredExamBase();
     console.log('[Search] 当前筛选后索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {
@@ -18671,7 +18719,7 @@ async function toggleBulkDelete() {
             try {
                 await bulkDeleteRecords(selected);
             } catch (error) {
-                console.error('[System] 批量删除失败:', error);
+                console.error('[System] 批量删除失败:', summarizeMainErrorForLog(error));
                 showMessage('批量删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
             }
         }
@@ -18790,7 +18838,7 @@ async function clearCache() {
             await storage.set(practiceKey, []);
         }
     } catch (error) {
-        console.warn('[clearCache] failed to clear managed storage:', error);
+        console.warn('[clearCache] failed to clear managed storage:', summarizeMainErrorForLog(error));
     }
 
     localLegacyKeys.forEach((key) => {
@@ -18984,7 +19032,7 @@ async function resolveLibraryConfigurations() {
                 await storage.set('active_exam_index_key', 'exam_index');
             }
         } catch (error) {
-            console.warn('[LibraryConfig] 无法初始化默认题库配置', error);
+            console.warn('[LibraryConfig] 无法初始化默认题库配置', summarizeMainErrorForLog(error));
         }
     }
 
@@ -18992,7 +19040,7 @@ async function resolveLibraryConfigurations() {
         try {
             await storage.set('exam_index_configurations', configs);
         } catch (error) {
-            console.warn('[LibraryConfig] 无法同步题库配置记录', error);
+            console.warn('[LibraryConfig] 无法同步题库配置记录', summarizeMainErrorForLog(error));
         }
     }
 
@@ -19021,7 +19069,7 @@ function resetBrowseStateAfterLibrarySwitch() {
             return;
         }
     } catch (error) {
-        console.warn('[LibraryConfig] 重置 BrowseStateManager 失败:', error);
+        console.warn('[LibraryConfig] 重置 BrowseStateManager 失败:', summarizeMainErrorForLog(error));
     }
     setBrowseFilterState('all', 'all');
     setFilteredExamsState([]);
@@ -19085,10 +19133,14 @@ async function debugCompareActiveIndexWithDefault() {
             }
         });
 
-        console.log('[LibraryDebug] Active key:', activeKey, '命中/总', hit, '/', activeIndex.length, '未命中示例前5:', misses.slice(0, 5));
+        console.log('[LibraryDebug] 索引比对结果:', {
+            total: activeIndex.length,
+            hit,
+            miss
+        });
         return { activeKey, hit, miss, sampleMisses: misses.slice(0, 10) };
     } catch (error) {
-        console.warn('[LibraryDebug] 比对索引失败:', error);
+        console.warn('[LibraryDebug] 比对索引失败:', summarizeMainErrorForLog(error));
         return null;
     }
 }
@@ -19338,7 +19390,7 @@ async function switchLibraryConfig(configKey) {
             return;
         }
     } catch (error) {
-        console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+        console.warn('[LibraryConfig] 无法读取当前题库配置', summarizeMainErrorForLog(error));
     }
     const dataset = await fetchLibraryDataset(key);
     if (!Array.isArray(dataset) || dataset.length === 0) {
@@ -19369,7 +19421,7 @@ async function deleteLibraryConfig(configKey) {
             return;
         }
     } catch (error) {
-        console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+        console.warn('[LibraryConfig] 无法读取当前题库配置', summarizeMainErrorForLog(error));
     }
 
     let configLabel = key;
@@ -19390,7 +19442,7 @@ async function deleteLibraryConfig(configKey) {
             configLabel = config.name;
         }
     } catch (error) {
-        console.warn('[LibraryConfig] 无法读取题库配置名称', error);
+        console.warn('[LibraryConfig] 无法读取题库配置名称', summarizeMainErrorForLog(error));
     }
 
     const confirmed = await requestLibraryConfigDeleteConfirmation(configLabel);
@@ -19417,7 +19469,7 @@ async function deleteLibraryConfig(configKey) {
             showMessage('题库配置删除失败', 'error');
         }
     } catch (error) {
-        console.warn('[LibraryConfig] 删除题库配置失败', error);
+        console.warn('[LibraryConfig] 删除题库配置失败', summarizeMainErrorForLog(error));
         showMessage('题库配置删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
     }
 }
@@ -19450,7 +19502,7 @@ function startSuitePractice() {
         try {
             return appInstance.startSuitePractice();
         } catch (error) {
-            console.error('[main.js] 套题模式启动失败', error);
+            console.error('[main.js] 套题模式启动失败', summarizeMainErrorForLog(error));
             if (typeof showMessage === 'function') {
                 showMessage('套题模式启动失败，请稍后重试', 'error');
             }
@@ -19482,7 +19534,7 @@ function openExamWithFallback(exam, delay = 600) {
                 viewPDF(exam.id);
             }
         } catch (error) {
-            console.error('[main.js] 启动题目失败:', error);
+            console.error('[main.js] 启动题目失败:', summarizeMainErrorForLog(error));
             if (typeof showMessage === 'function') {
                 showMessage('无法打开题目，请检查题库路径', 'error');
             }

@@ -584,14 +584,14 @@
                 const normalizedList = this.normalizeVocabListShape(list, listId, listId);
 
                 if (normalizedList) {
-                    console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${normalizedList.words.length}`);
+                    console.log(`[SpellingErrorCollector] 加载词表成功，单词数: ${normalizedList.words.length}`);
                     return normalizedList;
                 }
 
-                console.log(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                console.log('[SpellingErrorCollector] 词表不存在');
                 return null;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 加载词表失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 加载词表失败', error);
                 return null;
             }
         }
@@ -629,7 +629,7 @@
                 }
 
                 await window.storage.set(storageKey, vocabList);
-                console.log(`[SpellingErrorCollector] 保存词表成功: ${vocabList.id}, 单词数: ${vocabList.words.length}`);
+                console.log(`[SpellingErrorCollector] 保存词表成功，单词数: ${vocabList.words.length}`);
 
                 return true;
             } catch (error) {
@@ -648,7 +648,7 @@
                 const list = await this.loadVocabList(listId);
                 return list ? list.words.length : 0;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 获取词表单词数失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 获取词表单词数失败', error);
                 return 0;
             }
         }
@@ -701,7 +701,7 @@
                     };
 
                     errors.push(error);
-                    console.log(`[SpellingErrorCollector] 检测到拼写错误: ${questionId} - "${detected.userInput}" → "${detected.word}"`);
+                    console.log('[SpellingErrorCollector] 检测到拼写错误');
                 }
             }
 
@@ -1277,7 +1277,7 @@
             // 如果词表不存在，创建新词表
             if (!vocabList) {
                 vocabList = this.createEmptyList(listId, source);
-                console.log(`[SpellingErrorCollector] 创建新词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 创建新词表');
             }
 
             // 合并错误到词表
@@ -1311,7 +1311,7 @@
                     const existing = vocabList.words[existingIndex];
                     vocabList.words[existingIndex] = this.buildVocabEntryFromError(error, existing, vocabList.source);
 
-                    console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${vocabList.words[existingIndex].errorCount}`);
+                    console.log(`[SpellingErrorCollector] 更新已存在单词，错误次数: ${vocabList.words[existingIndex].errorCount}`);
                 } else {
                     // 新单词，添加到词表
                     const entry = this.buildVocabEntryFromError(error, null, vocabList.source);
@@ -1320,7 +1320,7 @@
                     }
                     vocabList.words.push(entry);
 
-                    console.log(`[SpellingErrorCollector] 添加新单词: ${error.word}`);
+                    console.log('[SpellingErrorCollector] 添加新单词');
                 }
             }
         }
@@ -1367,7 +1367,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -1381,10 +1381,10 @@
 
                 if (vocabList.words.length < originalLength) {
                     await this.saveVocabList(vocabList);
-                    console.log(`[SpellingErrorCollector] 从词表 ${listId} 移除单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 从词表移除单词');
                     return true;
                 } else {
-                    console.log(`[SpellingErrorCollector] 词表 ${listId} 中未找到单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 词表中未找到单词');
                     return false;
                 }
             } catch (error) {
@@ -1403,7 +1403,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -1411,7 +1411,7 @@
                 vocabList.updatedAt = Date.now();
 
                 await this.saveVocabList(vocabList);
-                console.log(`[SpellingErrorCollector] 清空词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 清空词表');
 
                 return true;
             } catch (error) {
@@ -1438,6 +1438,16 @@
  * Markdown 导出器
  * 用于将练习数据导出为 Markdown 格式
  */
+function summarizeMarkdownExporterErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 class MarkdownExporter {
     escapeMarkdownText(value, maxLength = 200) {
         const text = String(value ?? '')
@@ -1494,6 +1504,19 @@ class MarkdownExporter {
             }
         }
         return 'unknown-date';
+    }
+
+    normalizeExportRecord(record) {
+        if (record && typeof record === 'object' && !Array.isArray(record)) {
+            return record;
+        }
+        return {
+            id: 'invalid-record',
+            title: 'Invalid practice record',
+            answers: {},
+            correctAnswers: {},
+            metadata: {}
+        };
     }
 
     hasAnswerDetails(record) {
@@ -1643,7 +1666,7 @@ class MarkdownExporter {
                 }, 100);
 
             } catch (error) {
-                console.error('Markdown导出失败:', error);
+                console.error('Markdown导出失败:', summarizeMarkdownExporterErrorForLog(error));
                 this.hideProgressIndicator();
                 reject(error);
             }
@@ -1729,7 +1752,7 @@ class MarkdownExporter {
             return markdownContent;
 
         } catch (error) {
-            console.error('Markdown导出失败:', error);
+            console.error('Markdown导出失败:', summarizeMarkdownExporterErrorForLog(error));
             this.hideProgressIndicator();
             throw error;
         }
@@ -1751,7 +1774,7 @@ class MarkdownExporter {
                     const processed = manager.ensureConsistency ? manager.ensureConsistency(record) : record;
                     processedRecords.push(processed);
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 处理记录失败:', error);
+                    console.warn('[MarkdownExporter] 处理记录失败:', summarizeMarkdownExporterErrorForLog(error));
                     processedRecords.push(record); // 使用原始记录
                 }
             }
@@ -1771,9 +1794,10 @@ class MarkdownExporter {
      */
     async groupRecordsByDateAsync(practiceRecords, examIndex) {
         const grouped = {};
+        const exams = Array.isArray(examIndex) ? examIndex : [];
 
         for (let i = 0; i < practiceRecords.length; i++) {
-            const record = practiceRecords[i];
+            const record = this.normalizeExportRecord(practiceRecords[i]);
 
             // 获取日期字符串 (YYYY-MM-DD)
             const date = this.resolveRecordDateKey(record);
@@ -1783,7 +1807,7 @@ class MarkdownExporter {
             }
 
             // 获取考试信息
-            const exam = examIndex.find(e => e.id === record.examId);
+            const exam = exams.find(e => e && e.id === record.examId);
             const enhancedRecord = {
                 ...record,
                 examInfo: exam || {},
@@ -1808,8 +1832,10 @@ class MarkdownExporter {
      */
     groupRecordsByDate(practiceRecords, examIndex) {
         const grouped = {};
+        const exams = Array.isArray(examIndex) ? examIndex : [];
 
         practiceRecords.forEach(record => {
+            record = this.normalizeExportRecord(record);
             // 获取日期字符串 (YYYY-MM-DD)
             const date = this.resolveRecordDateKey(record);
 
@@ -1818,7 +1844,7 @@ class MarkdownExporter {
             }
 
             // 获取考试信息
-            const exam = examIndex.find(e => e.id === record.examId);
+            const exam = exams.find(e => e && e.id === record.examId);
             const enhancedRecord = {
                 ...record,
                 examInfo: exam || {},
@@ -1866,7 +1892,7 @@ class MarkdownExporter {
                     markdown += recordMarkdown;
                     markdown += '\n\n'; // 记录之间空两行
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 生成记录Markdown失败:', error);
+                    console.warn('[MarkdownExporter] 生成记录Markdown失败:', summarizeMarkdownExporterErrorForLog(error));
                     markdown += `### 记录处理失败: ${this.escapeMarkdownText(record?.id || 'unknown', 80)}\n\n`;
                 }
 
@@ -1914,6 +1940,7 @@ class MarkdownExporter {
      * 生成单个记录的 Markdown
      */
     generateRecordMarkdown(record) {
+        record = this.normalizeExportRecord(record);
         const { title, category, frequency } = record;
         const metadata = record.metadata || {};
         const displayTitle = this.escapeMarkdownText(this.normalizeTitle(
@@ -2064,14 +2091,14 @@ class MarkdownExporter {
 
                     table += `| ${this.escapeMarkdownText(qNum, 20)} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 处理题目失败:', qNum, error);
+                    console.warn('[MarkdownExporter] 处理题目失败:', summarizeMarkdownExporterErrorForLog(error));
                     table += `| ${this.escapeMarkdownText(qNum, 20)} | Error | Error | ✗ |\n`;
                 }
             }
 
             return table;
         } catch (error) {
-            console.error('[MarkdownExporter] 生成答题表格失败:', error);
+            console.error('[MarkdownExporter] 生成答题表格失败:', summarizeMarkdownExporterErrorForLog(error));
             return '答题详情生成失败\n';
         }
     }
@@ -2125,13 +2152,13 @@ class MarkdownExporter {
 
                     table += `| ${this.escapeMarkdownText(questionNum, 20)} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
-                    console.warn('[MarkdownExporter] 处理比较数据失败:', key, error);
+                    console.warn('[MarkdownExporter] 处理比较数据失败:', summarizeMarkdownExporterErrorForLog(error));
                 }
             }
 
             return table;
         } catch (error) {
-            console.error('[MarkdownExporter] 从比较数据生成表格失败:', error);
+            console.error('[MarkdownExporter] 从比较数据生成表格失败:', summarizeMarkdownExporterErrorForLog(error));
             return '答题详情生成失败\n';
         }
     }
@@ -2213,7 +2240,7 @@ class MarkdownExporter {
             return stub;
         }
 
-        console.warn('[MarkdownExporter] 未找到正确答案数据，记录ID:', record.id);
+        console.warn('[MarkdownExporter] 未找到正确答案数据');
         return {};
     }
 
@@ -2397,7 +2424,7 @@ class MarkdownExporter {
 
             console.log('[MarkdownExporter] 文件下载完成');
         } catch (error) {
-            console.error('[MarkdownExporter] 文件下载失败:', error);
+            console.error('[MarkdownExporter] 文件下载失败:', summarizeMarkdownExporterErrorForLog(error));
             throw error;
         }
     }
@@ -4296,6 +4323,16 @@ function assertScoreImportStringSize(value) {
     }
 }
 
+function summarizeScoreStorageErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 function isUnsafeScoreRecordCloneKey(key) {
     return SCORE_BACKUP_POLLUTION_KEYS.has(String(key));
 }
@@ -4696,7 +4733,7 @@ class ScoreStorage {
             // await this.cleanupExpiredData();
         } catch (error) {
             this.initializationError = error;
-            console.error('[ScoreStorage] 初始化失败', error);
+            console.error('[ScoreStorage] 初始化失败', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -4737,7 +4774,7 @@ class ScoreStorage {
 
             await this.storage.set(migrationFlagKey, true);
         } catch (error) {
-            console.warn('[ScoreStorage] 迁移 legacy practice_records 失败，跳过:', error);
+            console.warn('[ScoreStorage] 迁移 legacy practice_records 失败，跳过:', summarizeScoreStorageErrorForLog(error));
         }
     }
 
@@ -4821,12 +4858,12 @@ class ScoreStorage {
             console.log('Data migration completed successfully');
 
         } catch (error) {
-            console.error('Data migration failed:', error);
+            console.error('Data migration failed:', summarizeScoreStorageErrorForLog(error));
             // 恢复备份数据
             try {
                 await this.restoreBackup('migration_backup', { allowDuringInit: true });
             } catch (restoreError) {
-                console.error('Failed to restore backup:', restoreError);
+                console.error('Failed to restore backup:', summarizeScoreStorageErrorForLog(restoreError));
             }
         }
     }
@@ -4908,7 +4945,7 @@ class ScoreStorage {
                     maxRecords: this.maxRecords
                 });
                 await this.updateUserStats(savedRecord);
-                console.log('Practice record saved:', savedRecord.id);
+                console.log('Practice record saved');
                 return savedRecord;
             }
 
@@ -4942,7 +4979,7 @@ class ScoreStorage {
                     }
                     if (seen.has(sessionId)) {
                         try {
-                            console.warn(`[ScoreStorage] 移除了重复的练习记录 (sessionId=${sessionId}, id=${item?.id || 'unknown'})${contextLabel ? ' during ' + contextLabel : ''}`);
+                            console.warn(`[ScoreStorage] Removed duplicate practice record${contextLabel ? ' during ' + contextLabel : ''}`);
                         } catch (_) {}
                         return;
                     }
@@ -4970,7 +5007,7 @@ class ScoreStorage {
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
-                console.log('更新现有记录:', standardizedRecord.id);
+                console.log('[ScoreStorage] Updated existing practice record');
                 records[existingIndex] = standardizedRecord;
             } else {
                 // 添加新记录到开头（保持最新记录在前）
@@ -4986,7 +5023,7 @@ class ScoreStorage {
                     const sessionId = extractSessionId(record);
                     if (sessionId && sessionId === newSessionId && record.id !== standardizedRecord.id) {
                         try {
-                            console.warn(`[ScoreStorage] 移除了旧的 session 记录 (sessionId=${sessionId}, id=${record?.id || 'unknown'}) 以保留最新结果`);
+                            console.warn('[ScoreStorage] Removed older session record to keep the latest result');
                         } catch (_) {}
                         return false;
                     }
@@ -5010,11 +5047,11 @@ class ScoreStorage {
             // 更新用户统计
             await this.updateUserStats(standardizedRecord);
 
-            console.log('Practice record saved:', standardizedRecord.id);
+            console.log('Practice record saved');
             return standardizedRecord;
 
         } catch (error) {
-            console.error('Failed to save practice record:', error);
+            console.error('Failed to save practice record:', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -5994,7 +6031,7 @@ class ScoreStorage {
 
             return r;
         } catch (e) {
-            try { console.warn('[ScoreStorage] normalizeRecordFields failed:', e); } catch(_) {}
+            try { console.warn('[ScoreStorage] normalizeRecordFields failed:', summarizeScoreStorageErrorForLog(e)); } catch(_) {}
             return record;
         }
     }
@@ -6032,7 +6069,7 @@ class ScoreStorage {
             }
 
             await this.storage.set('manual_backups', backups);
-            console.log('[ScoreStorage] Backup created:', backup.id);
+            console.log('[ScoreStorage] Backup created');
             return backup.id;
         } else {
             // 降级：不创建备份
@@ -6066,10 +6103,10 @@ class ScoreStorage {
                 }
             }
 
-            console.log('[ScoreStorage] Backup restored:', backupId);
+            console.log('[ScoreStorage] Backup restored');
             return backup;
         } catch (error) {
-            console.error('[ScoreStorage] Failed to restore backup:', error);
+            console.error('[ScoreStorage] Failed to restore backup:', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -6088,7 +6125,7 @@ class ScoreStorage {
             try {
                 return this.standardizeRecord(record);
             } catch (error) {
-                console.warn('[ScoreStorage] Failed to normalize backup record, skipping:', record && record.id, error);
+                console.warn('[ScoreStorage] Failed to normalize backup record, skipping one record:', summarizeScoreStorageErrorForLog(error));
                 return null;
             }
         }).filter(Boolean);
@@ -6143,7 +6180,7 @@ class ScoreStorage {
                 .filter(b => b.type === 'score_storage')
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         } catch (error) {
-            console.error('[ScoreStorage] Failed to get backups:', error);
+            console.error('[ScoreStorage] Failed to get backups:', summarizeScoreStorageErrorForLog(error));
             return [];
         }
     }
@@ -6239,7 +6276,7 @@ class ScoreStorage {
                 try {
                     return this.standardizeRecord(r);
                 } catch (e) {
-                    console.warn('[ScoreStorage] 标准化导入记录失败，跳过:', r && r.id, e);
+                    console.warn('[ScoreStorage] 标准化导入记录失败，跳过一条记录:', summarizeScoreStorageErrorForLog(e));
                     return null;
                 }
             }).filter(Boolean);
@@ -6295,7 +6332,7 @@ class ScoreStorage {
             return true;
 
         } catch (error) {
-            console.error('Failed to import data:', error);
+            console.error('Failed to import data:', summarizeScoreStorageErrorForLog(error));
             throw error;
         }
     }
@@ -6600,11 +6637,38 @@ function summarizeAnswerObjectForLog(value) {
         const keys = Object.keys(value);
         return {
             type: 'object',
-            keys: keys.slice(0, 20),
+            keyCount: keys.length,
             truncatedKeys: Math.max(0, keys.length - 20)
         };
     }
     return { type: typeof value };
+}
+
+function summarizePracticeDataForLog(value) {
+    if (Array.isArray(value)) {
+        return { type: 'array', length: value.length };
+    }
+    if (value && typeof value === 'object') {
+        const keys = Object.keys(value);
+        return {
+            type: 'object',
+            keyCount: keys.length,
+            hasAnswers: Boolean(value.answers || value.userAnswers || value.user_answers),
+            hasScore: Boolean(value.score || value.scoreInfo || value.score_info),
+            hasDuration: Boolean(value.duration || value.durationMs || value.duration_ms)
+        };
+    }
+    return { type: typeof value };
+}
+
+function summarizePracticeRecorderErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
 }
 
 function cloneRecorderData(value, depth = 0, state = null) {
@@ -6692,7 +6756,7 @@ class PracticeRecorder {
         })();
 
         this.ready.catch(error => {
-            console.error('[PracticeRecorder] 初始化失败', error);
+            console.error('[PracticeRecorder] 初始化失败', summarizePracticeRecorderErrorForLog(error));
         });
     }
 
@@ -6714,7 +6778,7 @@ class PracticeRecorder {
                 return window.EnvironmentDetector.isInTestEnvironment();
             }
         } catch (error) {
-            console.warn('[PracticeRecorder] 环境探测失败，默认按生产环境处理:', error);
+            console.warn('[PracticeRecorder] 环境探测失败，默认按生产环境处理:', summarizePracticeRecorderErrorForLog(error));
         }
         return false;
     }
@@ -6745,21 +6809,25 @@ class PracticeRecorder {
         try {
             const existing = await this.metaRepo.get('rejected_completion_payloads', []);
             const list = Array.isArray(existing) ? existing : [];
+            const payloadKeys = payload && typeof payload === 'object' ? Object.keys(payload) : [];
+            const candidateIds = Array.isArray(context.candidateExamIds) ? context.candidateExamIds : [];
             const snapshot = {
                 id: createPracticeRecorderId('rejected'),
                 createdAt: new Date().toISOString(),
-                context: Object.assign({}, context),
+                context: {
+                    reason: context.reason || 'unknown',
+                    hasResolvedExam: Boolean(context.resolvedExamId),
+                    candidateExamCount: candidateIds.length
+                },
                 payload: payload && typeof payload === 'object'
                     ? {
-                        examId: payload.examId || null,
-                        sessionId: payload.sessionId || null,
-                        originalExamId: payload.originalExamId || null,
-                        derivedExamId: payload.derivedExamId || null,
-                        rawExamId: payload.rawExamId || null,
-                        suiteSessionId: payload.suiteSessionId || null,
-                        metadata: payload.metadata || payload.results?.metadata || null
+                        type: 'object',
+                        keyCount: payloadKeys.length,
+                        hasExamId: Boolean(payload.examId || payload.originalExamId || payload.derivedExamId || payload.rawExamId),
+                        hasSessionId: Boolean(payload.sessionId || payload.suiteSessionId),
+                        hasMetadata: Boolean(payload.metadata || payload.results?.metadata)
                     }
-                    : null
+                    : { type: typeof payload }
             };
             list.unshift(snapshot);
             if (list.length > 50) {
@@ -6767,7 +6835,7 @@ class PracticeRecorder {
             }
             await this.metaRepo.set('rejected_completion_payloads', list);
         } catch (error) {
-            console.warn('[PracticeRecorder] 记录拒绝的完成负载失败:', error);
+            console.warn('[PracticeRecorder] 记录拒绝的完成负载失败:', summarizePracticeRecorderErrorForLog(error));
         }
     }
 
@@ -6952,7 +7020,7 @@ class PracticeRecorder {
         // 页面卸载时保存数据 - 全局事件必须使用原生 addEventListener
         window.addEventListener('beforeunload', () => {
             this.saveAllSessions().catch(error => {
-                console.error('[PracticeRecorder] 页面关闭时保存会话失败:', error);
+                console.error('[PracticeRecorder] 页面关闭时保存会话失败:', summarizePracticeRecorderErrorForLog(error));
             });
         });
     }
@@ -7014,7 +7082,7 @@ class PracticeRecorder {
                 break;
             case 'session_completed':
                 this.handleSessionCompleted(data).catch(error => {
-                    console.error('[PracticeRecorder] 会话完成处理失败:', error);
+                    console.error('[PracticeRecorder] 会话完成处理失败:', summarizePracticeRecorderErrorForLog(error));
                 });
                 break;
             case 'session_paused':
@@ -7667,13 +7735,13 @@ class PracticeRecorder {
         // 存储会话
         this.activeSessions.set(examId, sessionData);
         this.saveActiveSessions().catch(error => {
-            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
         });
 
         // 设置会话监听器
         this.setupSessionListener(examId);
 
-        console.log(`Practice session started for exam: ${examId}`);
+        console.log('Practice session started');
 
         // 触发事件
         this.dispatchSessionEvent('sessionStarted', { examId, sessionData });
@@ -7699,10 +7767,10 @@ class PracticeRecorder {
 
             this.activeSessions.set(examId, session);
             this.saveActiveSessions().catch(error => {
-                console.error('[PracticeRecorder] 保存活动会话失败:', error);
+                console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
             });
 
-            console.log(`Session confirmed started: ${examId}`);
+            console.log('Practice session confirmed started');
         }
     }
 
@@ -7780,11 +7848,7 @@ class PracticeRecorder {
         let syntheticSession = false;
         if (!session) {
             if (!this.isSyntheticSessionAllowed(payload)) {
-                console.error('[PracticeRecorder] 活动会话缺失，生产环境拒绝合成数据保存:', {
-                    resolvedExamId,
-                    sessionId: payload.sessionId || null,
-                    candidates: candidateExamIds
-                });
+                console.error('[PracticeRecorder] Active session missing; rejecting synthetic completion payload');
                 await this.recordRejectedCompletionPayload(payload, {
                     reason: 'missing_active_session',
                     resolvedExamId,
@@ -7794,7 +7858,7 @@ class PracticeRecorder {
             }
             session = this.buildSyntheticCompletionSession(resolvedExamId, results, payload.sessionId);
             syntheticSession = true;
-            console.warn('[PracticeRecorder] 未找到匹配的活动会话，测试环境启用合成数据保存:', resolvedExamId);
+            console.warn('[PracticeRecorder] No matching active session; using synthetic data in test mode');
         }
 
         const resolvedEndTime = (() => {
@@ -7934,7 +7998,7 @@ class PracticeRecorder {
             || metadata?.allowStandaloneSave;
 
         if (suiteSessionId && !allowSuiteStandaloneSave) {
-            console.log(`[PracticeRecorder] 套题模式条目 ${resolvedExamId} 属于 ${suiteSessionId}，跳过单篇记录保存。`);
+            console.log('[PracticeRecorder] Skipped single-record save for suite mode entry');
             if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
                 this.endPracticeSession(resolvedExamId);
             }
@@ -7954,13 +8018,13 @@ class PracticeRecorder {
                 this.endPracticeSession(resolvedExamId);
             }
 
-            console.log(`Practice session completed: ${resolvedExamId}`);
+            console.log('Practice session completed');
 
             this.dispatchSessionEvent('sessionCompleted', { examId: resolvedExamId, practiceRecord: savedRecord });
 
             return savedRecord;
         } catch (error) {
-            console.error('[PracticeRecorder] 处理完成会话时出错:', error);
+            console.error('[PracticeRecorder] 处理完成会话时出错:', summarizePracticeRecorderErrorForLog(error));
             await this.saveToTemporaryStorage(practiceRecord);
             if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
                 this.endPracticeSession(resolvedExamId, 'save_failed');
@@ -7999,7 +8063,7 @@ class PracticeRecorder {
                 }
             }
         } catch (error) {
-            console.warn('[PracticeRecorder] 无法从应用状态解析套题会话:', error);
+            console.warn('[PracticeRecorder] 无法从应用状态解析套题会话:', summarizePracticeRecorderErrorForLog(error));
         }
         return null;
     }
@@ -8018,10 +8082,10 @@ class PracticeRecorder {
 
         this.activeSessions.set(examId, session);
         this.saveActiveSessions().catch(error => {
-            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
         });
 
-        console.log(`Session paused: ${examId}`);
+        console.log('Practice session paused');
     }
 
     /**
@@ -8038,10 +8102,10 @@ class PracticeRecorder {
 
         this.activeSessions.set(examId, session);
         this.saveActiveSessions().catch(error => {
-            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
         });
 
-        console.log(`Session resumed: ${examId}`);
+        console.log('Practice session resumed');
     }
 
     /**
@@ -8059,10 +8123,10 @@ class PracticeRecorder {
 
         this.activeSessions.set(examId, session);
         this.saveActiveSessions().catch(error => {
-            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
         });
 
-        console.error(`Session error for ${examId}:`, error);
+        console.error('Practice session error:', summarizePracticeRecorderErrorForLog(error));
 
         // 触发错误事件
         this.dispatchSessionEvent('sessionError', { examId, error });
@@ -8097,7 +8161,7 @@ class PracticeRecorder {
             };
 
             this.saveInterruptedRecord(interruptedRecord).catch(error => {
-                console.error('[PracticeRecorder] 保存中断记录失败:', error);
+                console.error('[PracticeRecorder] 保存中断记录失败:', summarizePracticeRecorderErrorForLog(error));
             });
         }
 
@@ -8105,10 +8169,10 @@ class PracticeRecorder {
         this.activeSessions.delete(examId);
         this.cleanupSessionListener(examId);
         this.saveActiveSessions().catch(error => {
-            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
         });
 
-        console.log(`Practice session ended: ${examId} (${reason})`);
+        console.log('Practice session ended:', { reason });
 
         // 触发结束事件
         this.dispatchSessionEvent('sessionEnded', { examId, reason });
@@ -8149,7 +8213,7 @@ class PracticeRecorder {
 
         // 如果超过30分钟无活动，标记为超时
         if (inactiveTime > 30 * 60 * 1000) {
-            console.warn(`Session timeout detected for exam: ${examId}`);
+            console.warn('Practice session timeout detected');
             this.endPracticeSession(examId, 'timeout');
         }
     }
@@ -8173,7 +8237,7 @@ class PracticeRecorder {
 
         this.autoSaveTimer = setInterval(() => {
             this.saveAllSessions().catch(error => {
-                console.error('[PracticeRecorder] 自动保存失败:', error);
+                console.error('[PracticeRecorder] 自动保存失败:', summarizePracticeRecorderErrorForLog(error));
             });
         }, this.autoSaveInterval);
     }
@@ -8186,7 +8250,7 @@ class PracticeRecorder {
             await this.saveActiveSessions();
             console.log('Auto-saved all active sessions');
         } catch (error) {
-            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            console.error('[PracticeRecorder] 保存活动会话失败:', summarizePracticeRecorderErrorForLog(error));
         }
     }
 
@@ -8212,12 +8276,12 @@ class PracticeRecorder {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                console.log(`[PracticeRecorder] 开始保存练习记录(尝试 ${attempt}/${maxRetries}):`, record.id);
+                console.log(`[PracticeRecorder] 开始保存练习记录(尝试 ${attempt}/${maxRetries})`);
 
                 if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
                     const savedRawRecord = await this.scoreStorage.savePracticeRecord(storageReadyRecord);
                     const savedRecord = this.restoreRecordAnswerState(savedRawRecord, record);
-                    console.log(`[PracticeRecorder] ScoreStorage保存成功: ${savedRecord.id}`);
+                    console.log('[PracticeRecorder] ScoreStorage保存成功');
 
                     const verified = await this.verifyRecordSaved(savedRecord.id);
                     if (!verified) {
@@ -8293,7 +8357,7 @@ class PracticeRecorder {
                 throw new Error('Storage.set returned false');
             }
 
-            console.log(`[PracticeRecorder] 降级保存成功: ${standardizedRecord.id}`);
+            console.log('[PracticeRecorder] 降级保存成功');
 
             const verified = await this.verifyRecordSaved(standardizedRecord.id);
             if (!verified) {
@@ -8444,7 +8508,7 @@ class PracticeRecorder {
             const list = Array.isArray(records) ? records : [];
             return list.some(r => r && r.id === recordId);
         } catch (error) {
-            console.error('[PracticeRecorder] 验证记录保存时出错', error);
+            console.error('[PracticeRecorder] 验证记录保存时出错', summarizePracticeRecorderErrorForLog(error));
             return false;
         }
     }
@@ -8561,7 +8625,7 @@ class PracticeRecorder {
             await this.updateUserStats(practiceRecord);
             return true;
         } catch (error) {
-            console.error('[PracticeRecorder] 手动更新用户统计失败:', error);
+            console.error('[PracticeRecorder] 手动更新用户统计失败:', summarizePracticeRecorderErrorForLog(error));
             return false;
         }
     }
@@ -8588,10 +8652,10 @@ class PracticeRecorder {
             } else {
                 await this.metaRepo.set('temp_practice_records', finalTempRecords);
             }
-            console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
+            console.log('[PracticeRecorder] 记录已保存到临时存储');
 
         } catch (error) {
-            console.error('[PracticeRecorder] 临时存储也失败', error);
+            console.error('[PracticeRecorder] 临时存储也失败', summarizePracticeRecorderErrorForLog(error));
         }
     }
 
@@ -8606,7 +8670,7 @@ class PracticeRecorder {
         const finalRecords = records.length > 100 ? records.slice(-100) : records;
 
         await this.metaRepo.set('interrupted_records', finalRecords);
-        console.log(`Interrupted record saved: ${record.id}`);
+        console.log('Interrupted record saved');
     }
 
     /**
@@ -8706,7 +8770,7 @@ class PracticeRecorder {
         try {
             return await this.scoreStorage.getPracticeRecords(filters);
         } catch (error) {
-            console.error('Failed to get practice records from ScoreStorage:', error);
+            console.error('Failed to get practice records from ScoreStorage:', summarizePracticeRecorderErrorForLog(error));
 
             // 降级处理
             const records = await this.practiceRepo.list();
@@ -8736,7 +8800,7 @@ class PracticeRecorder {
         try {
             return await this.scoreStorage.getUserStats();
         } catch (error) {
-            console.error('Failed to get user stats from ScoreStorage:', error);
+            console.error('Failed to get user stats from ScoreStorage:', summarizePracticeRecorderErrorForLog(error));
 
             // 降级处理
             return await this.metaRepo.get('user_stats', {
@@ -8760,7 +8824,7 @@ class PracticeRecorder {
         try {
             return this.scoreStorage.exportData(format);
         } catch (error) {
-            console.error('Failed to export data:', error);
+            console.error('Failed to export data:', summarizePracticeRecorderErrorForLog(error));
             throw error;
         }
     }
@@ -8772,7 +8836,7 @@ class PracticeRecorder {
         try {
             return this.scoreStorage.importData(data, options);
         } catch (error) {
-            console.error('Failed to import data:', error);
+            console.error('Failed to import data:', summarizePracticeRecorderErrorForLog(error));
             throw error;
         }
     }
@@ -8784,7 +8848,7 @@ class PracticeRecorder {
         try {
             return this.scoreStorage.createBackup(backupName);
         } catch (error) {
-            console.error('Failed to create backup:', error);
+            console.error('Failed to create backup:', summarizePracticeRecorderErrorForLog(error));
             throw error;
         }
     }
@@ -8796,7 +8860,7 @@ class PracticeRecorder {
         try {
             return this.scoreStorage.restoreBackup(backupId);
         } catch (error) {
-            console.error('Failed to restore backup:', error);
+            console.error('Failed to restore backup:', summarizePracticeRecorderErrorForLog(error));
             throw error;
         }
     }
@@ -8808,7 +8872,7 @@ class PracticeRecorder {
         try {
             return this.scoreStorage.getBackups();
         } catch (error) {
-            console.error('Failed to get backups:', error);
+            console.error('Failed to get backups:', summarizePracticeRecorderErrorForLog(error));
             return [];
         }
     }
@@ -8820,7 +8884,7 @@ class PracticeRecorder {
         try {
             return this.scoreStorage.getStorageStats();
         } catch (error) {
-            console.error('Failed to get storage stats:', error);
+            console.error('Failed to get storage stats:', summarizePracticeRecorderErrorForLog(error));
             return null;
         }
     }
@@ -8870,7 +8934,7 @@ class PracticeRecorder {
      * 处理真实练习数据（新增方法）
      */
     async handleRealPracticeData(examId, realData) {
-        console.log('[PracticeRecorder] 处理真实练习数据:', examId, realData);
+        console.log('[PracticeRecorder] 处理真实练习数据:', summarizePracticeDataForLog(realData));
 
         try {
             // 验证数据完整性
@@ -8881,7 +8945,7 @@ class PracticeRecorder {
                     console.warn('[PracticeRecorder] 数据验证失败，测试环境使用模拟数据');
                     return await this.handleFallbackData(examId);
                 }
-                console.error('[PracticeRecorder] 数据验证失败，生产环境拒绝模拟数据回退:', examId);
+                console.error('[PracticeRecorder] 数据验证失败，生产环境拒绝模拟数据回退');
                 return null;
             }
 
@@ -8891,7 +8955,7 @@ class PracticeRecorder {
             const exam = examList.find(e => e.id === examId);
 
             if (!exam) {
-                console.error('[PracticeRecorder] 无法找到题目信息:', examId);
+                console.error('[PracticeRecorder] 无法找到题目信息');
                 return;
             }
 
@@ -8912,11 +8976,11 @@ class PracticeRecorder {
                 dataSource: 'real'
             });
 
-            console.log('[PracticeRecorder] 真实数据处理完成:', savedRecord.id);
+            console.log('[PracticeRecorder] 真实数据处理完成');
             return savedRecord;
 
         } catch (error) {
-            console.error('[PracticeRecorder] 真实数据处理失败:', error);
+            console.error('[PracticeRecorder] 真实数据处理失败:', summarizePracticeRecorderErrorForLog(error));
             if (this.isSyntheticSessionAllowed(realData)) {
                 return await this.handleFallbackData(examId);
             }
@@ -9204,7 +9268,7 @@ class PracticeRecorder {
      * 建立与练习页面的通信（新增方法）
      */
     setupPracticePageCommunication(examWindow, sessionId) {
-        console.log('[PracticeRecorder] 建立练习页面通信:', sessionId);
+        console.log('[PracticeRecorder] Setting up practice page communication');
 
         // 这个方法可以被ExamSystemApp调用来建立通信
         // 实际的消息处理已经在initialize()中设置
@@ -9246,7 +9310,7 @@ class PracticeRecorder {
                     const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord;
                     const sanitized = this.sanitizeRecoveredRecord(cleanRecord);
                     if (!sanitized) {
-                        console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord?.id);
+                        console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）');
                         continue;
                     }
 
@@ -9254,10 +9318,10 @@ class PracticeRecorder {
                     await this.savePracticeRecord(sanitized);
                     recoveredCount++;
 
-                    console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized.id}`);
+                    console.log('[PracticeRecorder] 恢复记录成功');
 
                 } catch (error) {
-                    console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord.id}`, error);
+                    console.error('[PracticeRecorder] 恢复记录失败:', summarizePracticeRecorderErrorForLog(error));
                     failedRecords.push(tempRecord);
                 }
             }
@@ -9282,7 +9346,7 @@ class PracticeRecorder {
             }
 
         } catch (error) {
-            console.error('[PracticeRecorder] 恢复临时记录时出错', error);
+            console.error('[PracticeRecorder] 恢复临时记录时出错', summarizePracticeRecorderErrorForLog(error));
         }
     }
 
@@ -9383,7 +9447,7 @@ class PracticeRecorder {
             return report;
 
         } catch (error) {
-            console.error('[PracticeRecorder] 生成完整性报告失败', error);
+            console.error('[PracticeRecorder] 生成完整性报告失败', summarizePracticeRecorderErrorForLog(error));
             return null;
         }
     }
@@ -9437,7 +9501,7 @@ class PracticeRecorder {
 
         // 保存所有数据
         this.saveAllSessions().catch(error => {
-            console.error('[PracticeRecorder] 销毁时保存会话失败:', error);
+            console.error('[PracticeRecorder] 销毁时保存会话失败:', summarizePracticeRecorderErrorForLog(error));
         });
 
         console.log('PracticeRecorder destroyed');

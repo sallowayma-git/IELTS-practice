@@ -63,6 +63,16 @@ function createImportLimitError(message) {
     return error;
 }
 
+function summarizeDataIntegrityErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
+}
+
 class DataIntegrityManager {
     constructor(options = {}) {
         this.backupInterval = 600000; // 10分钟自动备份
@@ -118,7 +128,7 @@ class DataIntegrityManager {
         try {
             await this.initializeWithRepositories();
         } catch (error) {
-            console.error('[DataIntegrityManager] 初始化失败:', error);
+            console.error('[DataIntegrityManager] 初始化失败:', summarizeDataIntegrityErrorForLog(error));
             this.startAutoBackup();
             this.isInitialized = true;
         }
@@ -132,9 +142,9 @@ class DataIntegrityManager {
 
             try {
                 this.consistencyReport = await this.repositories.runConsistencyChecks();
-                console.log('[DataIntegrityManager] 初始一致性检查完成', this.consistencyReport);
+                console.log('[DataIntegrityManager] 初始一致性检查完成');
             } catch (reportError) {
-                console.warn('[DataIntegrityManager] 初始一致性检查失败:', reportError);
+                console.warn('[DataIntegrityManager] 初始一致性检查失败:', summarizeDataIntegrityErrorForLog(reportError));
             }
 
             this.startAutoBackup();
@@ -161,7 +171,7 @@ class DataIntegrityManager {
             await this.repositories.backups.prune(this.maxBackups);
             console.log('[DataIntegrityManager] 已执行备份裁剪');
         } catch (error) {
-            console.error('[DataIntegrityManager] 清理旧备份失败:', error);
+            console.error('[DataIntegrityManager] 清理旧备份失败:', summarizeDataIntegrityErrorForLog(error));
         }
     }
 
@@ -186,10 +196,10 @@ class DataIntegrityManager {
                 size: JSON.stringify(data).length
             };
             await this.repositories.backups.add(backupObj);
-            console.log(`[DataIntegrityManager] ${type} 备份创建成功: ${id}`);
+            console.log('[DataIntegrityManager] Backup created successfully');
             return backupObj;
         } catch (error) {
-            console.error('[DataIntegrityManager] 创建备份失败:', error);
+            console.error('[DataIntegrityManager] 创建备份失败:', summarizeDataIntegrityErrorForLog(error));
             if (error.name === 'QuotaExceededError' && data) {
                 this.exportDataAsFallback(data);
             }
@@ -216,7 +226,7 @@ class DataIntegrityManager {
             setTimeout(() => URL.revokeObjectURL(url), 0);
             console.log('[DataIntegrityManager] 配额溢出备份已下载');
         } catch (fallbackError) {
-            console.error('[DataIntegrityManager] fallback 导出失败:', fallbackError);
+            console.error('[DataIntegrityManager] fallback 导出失败:', summarizeDataIntegrityErrorForLog(fallbackError));
         }
     }
 
@@ -280,7 +290,7 @@ class DataIntegrityManager {
                 console.log('[DataIntegrityManager] 无关键数据需要备份');
             }
         } catch (error) {
-            console.error('[DataIntegrityManager] 自动备份失败:', error);
+            console.error('[DataIntegrityManager] 自动备份失败:', summarizeDataIntegrityErrorForLog(error));
         }
     }
 
@@ -296,7 +306,7 @@ class DataIntegrityManager {
                 size: b.size
             }));
         } catch (error) {
-            console.error('[DataIntegrityManager] 获取备份列表失败:', error);
+            console.error('[DataIntegrityManager] 获取备份列表失败:', summarizeDataIntegrityErrorForLog(error));
             return [];
         }
     }
@@ -324,9 +334,9 @@ class DataIntegrityManager {
                 const restoredSettings = { ...currentSettings, ...systemSettings };
                 await repos.settings.saveAll(restoredSettings, { transaction: tx });
             });
-            console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功`);
+            console.log('[DataIntegrityManager] Backup restored successfully');
         } catch (error) {
-            console.error('[DataIntegrityManager] 恢复备份失败:', error);
+            console.error('[DataIntegrityManager] 恢复备份失败:', summarizeDataIntegrityErrorForLog(error));
             throw error;
         }
     }
@@ -350,7 +360,7 @@ class DataIntegrityManager {
             setTimeout(() => URL.revokeObjectURL(url), 0);
             console.log('[DataIntegrityManager] 数据导出成功');
         } catch (error) {
-            console.error('[DataIntegrityManager] 导出数据失败:', error);
+            console.error('[DataIntegrityManager] 导出数据失败:', summarizeDataIntegrityErrorForLog(error));
             throw error;
         }
     }
@@ -366,7 +376,7 @@ class DataIntegrityManager {
         try {
             payload = await this._normalizeImportPayload(source);
         } catch (error) {
-            console.error('[DataIntegrityManager] 解析导入源失败:', error);
+            console.error('[DataIntegrityManager] 解析导入源失败:', summarizeDataIntegrityErrorForLog(error));
             throw new Error(error?.message || '导入文件格式无效');
         }
 
@@ -382,7 +392,7 @@ class DataIntegrityManager {
         try {
             backup = await this.createBackup(null, 'pre_import');
         } catch (error) {
-            console.warn('[DataIntegrityManager] 导入前创建备份失败:', error);
+            console.warn('[DataIntegrityManager] 导入前创建备份失败:', summarizeDataIntegrityErrorForLog(error));
         }
 
         try {
@@ -398,7 +408,7 @@ class DataIntegrityManager {
                 }
             });
         } catch (error) {
-            console.error('[DataIntegrityManager] 导入数据失败:', error);
+            console.error('[DataIntegrityManager] 导入数据失败:', summarizeDataIntegrityErrorForLog(error));
             throw new Error(error?.message || '导入数据失败');
         }
 
@@ -420,7 +430,7 @@ class DataIntegrityManager {
                 const practiceRecords = await this.repositories.practice.list();
                 data.practice_records = practiceRecords || [];
             } catch (recordsError) {
-                console.warn('[DataIntegrityManager] 获取练习记录失败:', recordsError);
+                console.warn('[DataIntegrityManager] 获取练习记录失败:', summarizeDataIntegrityErrorForLog(recordsError));
                 data.practice_records = [];
             }
 
@@ -434,7 +444,7 @@ class DataIntegrityManager {
                 };
                 data.system_settings = systemSettings;
             } catch (settingsError) {
-                console.warn('[DataIntegrityManager] 获取系统设置失败:', settingsError);
+                console.warn('[DataIntegrityManager] 获取系统设置失败:', summarizeDataIntegrityErrorForLog(settingsError));
                 data.system_settings = {};
             }
 
@@ -447,12 +457,12 @@ class DataIntegrityManager {
                     data.vocab_list_reading_highlights = await metaRepo.get('vocab_list_reading_highlights', []);
                 }
             } catch (vocabError) {
-                console.warn('[DataIntegrityManager] 获取词汇数据失败:', vocabError);
+                console.warn('[DataIntegrityManager] 获取词汇数据失败:', summarizeDataIntegrityErrorForLog(vocabError));
             }
 
             return data;
         } catch (error) {
-            console.error('[DataIntegrityManager] 获取关键数据失败:', error);
+            console.error('[DataIntegrityManager] 获取关键数据失败:', summarizeDataIntegrityErrorForLog(error));
             return {};
         }
     }
@@ -959,10 +969,59 @@ function getBackupTextByteLength(value) {
     return text.length;
 }
 
+function describeBackupImportSourceLength(source) {
+    if (Array.isArray(source)) {
+        return source.length;
+    }
+    if (typeof source === 'string' || source instanceof String) {
+        return source.length;
+    }
+    if (source && typeof source === 'object') {
+        const candidates = [
+            source.practiceRecords,
+            source.practice_records,
+            source.records,
+            source.data && source.data.practiceRecords,
+            source.data && source.data.practice_records
+        ];
+        const match = candidates.find(Array.isArray);
+        if (match) {
+            return match.length;
+        }
+        if (Number.isFinite(source.size)) {
+            return source.size;
+        }
+    }
+    return undefined;
+}
+
+function isDataBackupDebugEnabled() {
+    return Boolean(
+        typeof window !== 'undefined'
+        && (window.__IELTS_DEBUG_IMPORTS__ === true || window.__IELTS_DEBUG_BACKUP__ === true)
+    );
+}
+
+function dataBackupDebugLog(...args) {
+    if (isDataBackupDebugEnabled()) {
+        console.log(...args);
+    }
+}
+
 function createImportLimitError(message) {
     const error = new Error(message);
     error.name = 'ImportLimitError';
     return error;
+}
+
+function summarizeDataBackupErrorForLog(error) {
+    const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+    };
+    if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+    }
+    return summary;
 }
 
 class DataBackupManager {
@@ -1023,7 +1082,7 @@ class DataBackupManager {
         try {
             await this.initializeSettings();
         } catch (error) {
-            console.error('[DataBackupManager] failed to initialize settings', error);
+            console.error('[DataBackupManager] failed to initialize settings', summarizeDataBackupErrorForLog(error));
         }
 
         this.setupPeriodicCleanup();
@@ -1043,7 +1102,7 @@ class DataBackupManager {
             const stored = await storage.get(this.storageKeys.backupSettings, defaults);
             await storage.set(this.storageKeys.backupSettings, this.normalizeBackupSettings(stored, defaults));
         } catch (error) {
-            console.error('[DataBackupManager] unable to persist settings', error);
+            console.error('[DataBackupManager] unable to persist settings', summarizeDataBackupErrorForLog(error));
         }
     }
 
@@ -1210,7 +1269,7 @@ class DataBackupManager {
     }
 
     async importPracticeData(source, options = {}) {
-        console.log('[DataBackupManager] importPracticeData called, source type:', typeof source, 'length:', Array.isArray(source) ? source.length : source.practiceRecords?.length);
+        dataBackupDebugLog('[DataBackupManager] importPracticeData called, source type:', typeof source, 'length:', describeBackupImportSourceLength(source));
         const {
             mergeMode = 'merge',
             validateData = true,
@@ -1227,7 +1286,7 @@ class DataBackupManager {
         }
 
         const normalized = this.normalizeImportPayload(payload, { preserveIds });
-        console.log('[DataBackupManager] Normalized records:', normalized.practiceRecords.length);
+        dataBackupDebugLog('[DataBackupManager] Normalized records:', normalized.practiceRecords.length);
 
         // 优先使用标准化提取结果，必要时再回退到原始载荷路径
         let practiceRecords = Array.isArray(normalized.practiceRecords) ? normalized.practiceRecords : [];
@@ -1271,7 +1330,7 @@ class DataBackupManager {
             })
             .filter(Boolean);
         normalized.practiceRecords = practiceRecords;
-        console.log('[DataBackupManager] After sanitize, records:', normalized.practiceRecords.length);
+        dataBackupDebugLog('[DataBackupManager] After sanitize, records:', normalized.practiceRecords.length);
 
         const originalLength = normalized.practiceRecords.length;
         if (validateData) {
@@ -1279,21 +1338,21 @@ class DataBackupManager {
         }
         const validatedLength = normalized.practiceRecords.length;
         const skippedCount = originalLength - validatedLength;
-        console.log('[DataBackupManager] Validated records:', validatedLength, 'skipped:', skippedCount);
+        dataBackupDebugLog('[DataBackupManager] Validated records:', validatedLength, 'skipped:', skippedCount);
 
         let backupId = null;
         if (createBackup) {
             backupId = await this.createPreImportBackup();
-            console.log('[DataBackupManager] Pre-import backup created:', backupId);
+            dataBackupDebugLog('[DataBackupManager] Pre-import backup created');
         }
 
         let mergeResult;
         try {
             mergeResult = await this.mergeWithScoreStorageIfAvailable(normalized.practiceRecords, normalized.userStats, mergeMode);
             if (!mergeResult) {
-                console.log('[DataBackupManager] Fallback to legacy storage merge');
+                dataBackupDebugLog('[DataBackupManager] Fallback to legacy storage merge');
                 mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
-                console.log('[DataBackupManager] Saving to storage');
+                dataBackupDebugLog('[DataBackupManager] Saving to storage');
 
                 if (normalized.userStats) {
                     await this.mergeUserStats(normalized.userStats, mergeMode);
@@ -1304,7 +1363,7 @@ class DataBackupManager {
                 try {
                     await this.restoreBackup(backupId);
                 } catch (restoreError) {
-                    console.error('[DataBackupManager] failed to restore backup after import error', restoreError);
+                    console.error('[DataBackupManager] failed to restore backup after import error', summarizeDataBackupErrorForLog(restoreError));
                 }
             }
 
@@ -1604,12 +1663,12 @@ class DataBackupManager {
                 skippedCount++;
                 records.splice(index, 1);
                 index--; // 调整索引
-                console.log("Skipped record: missing fields - ", missingFields, "at index", index + 1);
+                dataBackupDebugLog('[DataBackupManager] Skipped invalid record during validation');
             }
         }
 
         if (skippedCount > 0) {
-            console.log(`[DataBackupManager] Skipped ${skippedCount} invalid records during validation.`);
+            dataBackupDebugLog(`[DataBackupManager] Skipped ${skippedCount} invalid records during validation.`);
         }
 
         if (records.length === 0 && skippedCount > 0) {
@@ -1631,7 +1690,7 @@ class DataBackupManager {
         }
 
         try {
-            console.log('[DataBackupManager] Using ScoreStorage import path, mode:', mergeMode, 'records:', Array.isArray(records) ? records.length : 0);
+            dataBackupDebugLog('[DataBackupManager] Using ScoreStorage import path, mode:', mergeMode, 'records:', Array.isArray(records) ? records.length : 0);
             const existingList = (typeof scoreStorage.getPracticeRecords === 'function')
                 ? await scoreStorage.getPracticeRecords({})
                 : [];
@@ -1678,7 +1737,7 @@ class DataBackupManager {
                 : (mergeMode === 'skip' ? 0 : incoming.length - importedCount);
             const skippedCount = mergeMode === 'skip' ? (originalLength - incoming.length) : 0;
 
-            console.log('[DataBackupManager] ScoreStorage import finished', {
+            dataBackupDebugLog('[DataBackupManager] ScoreStorage import finished', {
                 mergeMode,
                 importedCount,
                 updatedCount,
@@ -1688,7 +1747,7 @@ class DataBackupManager {
 
             return { importedCount, updatedCount, skippedCount, finalCount };
         } catch (error) {
-            console.warn('[DataBackupManager] ScoreStorage import failed, fallback to storage', error);
+            console.warn('[DataBackupManager] ScoreStorage import failed, fallback to storage', summarizeDataBackupErrorForLog(error));
             return null;
         }
     }
@@ -2268,7 +2327,7 @@ class DataBackupManager {
                 return window.pako.gzip(data, { to: 'string' });
             }
         } catch (error) {
-            console.warn('[DataBackupManager] compression failed', error);
+            console.warn('[DataBackupManager] compression failed', summarizeDataBackupErrorForLog(error));
         }
         return data;
     }
@@ -2296,7 +2355,7 @@ class DataBackupManager {
             await storage.set(this.storageKeys.manualBackups, backups);
             return backup.id;
         } catch (error) {
-            console.error('[DataBackupManager] failed to create backup', error);
+            console.error('[DataBackupManager] failed to create backup', summarizeDataBackupErrorForLog(error));
             return null;
         }
     }
@@ -2389,7 +2448,7 @@ class DataBackupManager {
                 restored
             };
         } catch (error) {
-            console.error('[DataBackupManager] backup restore failed', error);
+            console.error('[DataBackupManager] backup restore failed', summarizeDataBackupErrorForLog(error));
             throw error;
         }
     }
@@ -2584,7 +2643,7 @@ class DataBackupManager {
                 storage: storageInfo
             };
         } catch (error) {
-            console.error('[DataBackupManager] failed to collect stats', error);
+            console.error('[DataBackupManager] failed to collect stats', summarizeDataBackupErrorForLog(error));
             return null;
         }
     }
@@ -2595,7 +2654,7 @@ class DataBackupManager {
         }
 
         this.cleanupTimer = setInterval(() => {
-            this.cleanupExpiredData().catch(error => console.error('[DataBackupManager] cleanup failed', error));
+            this.cleanupExpiredData().catch(error => console.error('[DataBackupManager] cleanup failed', summarizeDataBackupErrorForLog(error)));
         }, 24 * 60 * 60 * 1000);
     }
 
@@ -2616,7 +2675,7 @@ class DataBackupManager {
                 await this.writeHistory(this.storageKeys.importHistory, 'import', freshImports);
             }
         } catch (error) {
-            console.error('[DataBackupManager] cleanup error', error);
+            console.error('[DataBackupManager] cleanup error', summarizeDataBackupErrorForLog(error));
         }
     }
 

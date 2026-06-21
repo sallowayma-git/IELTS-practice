@@ -789,14 +789,14 @@
                 const normalizedList = this.normalizeVocabListShape(list, listId, listId);
 
                 if (normalizedList) {
-                    console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${normalizedList.words.length}`);
+                    console.log(`[SpellingErrorCollector] 加载词表成功，单词数: ${normalizedList.words.length}`);
                     return normalizedList;
                 }
 
-                console.log(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                console.log('[SpellingErrorCollector] 词表不存在');
                 return null;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 加载词表失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 加载词表失败', error);
                 return null;
             }
         }
@@ -834,7 +834,7 @@
                 }
 
                 await window.storage.set(storageKey, vocabList);
-                console.log(`[SpellingErrorCollector] 保存词表成功: ${vocabList.id}, 单词数: ${vocabList.words.length}`);
+                console.log(`[SpellingErrorCollector] 保存词表成功，单词数: ${vocabList.words.length}`);
 
                 return true;
             } catch (error) {
@@ -853,7 +853,7 @@
                 const list = await this.loadVocabList(listId);
                 return list ? list.words.length : 0;
             } catch (error) {
-                console.error(`[SpellingErrorCollector] 获取词表单词数失败: ${listId}`, error);
+                console.error('[SpellingErrorCollector] 获取词表单词数失败', error);
                 return 0;
             }
         }
@@ -906,7 +906,7 @@
                     };
 
                     errors.push(error);
-                    console.log(`[SpellingErrorCollector] 检测到拼写错误: ${questionId} - "${detected.userInput}" → "${detected.word}"`);
+                    console.log('[SpellingErrorCollector] 检测到拼写错误');
                 }
             }
 
@@ -1482,7 +1482,7 @@
             // 如果词表不存在，创建新词表
             if (!vocabList) {
                 vocabList = this.createEmptyList(listId, source);
-                console.log(`[SpellingErrorCollector] 创建新词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 创建新词表');
             }
 
             // 合并错误到词表
@@ -1516,7 +1516,7 @@
                     const existing = vocabList.words[existingIndex];
                     vocabList.words[existingIndex] = this.buildVocabEntryFromError(error, existing, vocabList.source);
 
-                    console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${vocabList.words[existingIndex].errorCount}`);
+                    console.log(`[SpellingErrorCollector] 更新已存在单词，错误次数: ${vocabList.words[existingIndex].errorCount}`);
                 } else {
                     // 新单词，添加到词表
                     const entry = this.buildVocabEntryFromError(error, null, vocabList.source);
@@ -1525,7 +1525,7 @@
                     }
                     vocabList.words.push(entry);
 
-                    console.log(`[SpellingErrorCollector] 添加新单词: ${error.word}`);
+                    console.log('[SpellingErrorCollector] 添加新单词');
                 }
             }
         }
@@ -1572,7 +1572,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -1586,10 +1586,10 @@
 
                 if (vocabList.words.length < originalLength) {
                     await this.saveVocabList(vocabList);
-                    console.log(`[SpellingErrorCollector] 从词表 ${listId} 移除单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 从词表移除单词');
                     return true;
                 } else {
-                    console.log(`[SpellingErrorCollector] 词表 ${listId} 中未找到单词: ${word}`);
+                    console.log('[SpellingErrorCollector] 词表中未找到单词');
                     return false;
                 }
             } catch (error) {
@@ -1608,7 +1608,7 @@
                 const vocabList = await this.loadVocabList(listId);
 
                 if (!vocabList) {
-                    console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
+                    console.warn('[SpellingErrorCollector] 词表不存在');
                     return false;
                 }
 
@@ -1616,7 +1616,7 @@
                 vocabList.updatedAt = Date.now();
 
                 await this.saveVocabList(vocabList);
-                console.log(`[SpellingErrorCollector] 清空词表: ${listId}`);
+                console.log('[SpellingErrorCollector] 清空词表');
 
                 return true;
             } catch (error) {
