@@ -338,7 +338,7 @@ function createApp(options = {}) {
         }
     }
 
-    app.use(['/api/auth', '/api/practice-records', '/api/admin'], noStoreSensitiveApiMiddleware);
+    app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin'], noStoreSensitiveApiMiddleware);
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin'], refreshSessionUser);
     app.use(createTrafficMiddleware({
         store: trafficStore,

@@ -26,6 +26,7 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     const torEntrypoint = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'docker-entrypoint.sh'), 'utf8');
     const siteHealthWatcher = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'watch-site-health.ps1'), 'utf8');
     const bridgeTester = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'test-obfs4-bridges.ps1'), 'utf8');
+    const healthLogRedactor = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'redact-site-health-logs.ps1'), 'utf8');
     const smokePostgres = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'smoke-postgres.mjs'), 'utf8');
 
     assert.match(dockerfile, /^FROM node:24-alpine/m);
@@ -37,6 +38,7 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
             `.dockerignore must exclude ${pattern}`
         );
     }
+    assert(gitignore.split(/\r?\n/).includes('backend/logs/'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.local.txt'));
     assert(compose.includes('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?'));
     assert(compose.includes('PGPASSWORD: ${POSTGRES_PASSWORD:?'));
@@ -65,23 +67,41 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(siteHealthWatcher.includes('[ValidateRange(1, 5000)]'));
     assert(siteHealthWatcher.includes('function Resolve-IntegerInRange'));
     assert(siteHealthWatcher.includes("-Name 'SITE_HEALTH_BRIDGE_WARNING_THRESHOLD'"));
+    assert(siteHealthWatcher.includes('[switch]$IncludeOnionHostname'));
+    assert(siteHealthWatcher.includes('hostnamePresent = [bool]$hostname'));
+    assert(siteHealthWatcher.includes("hostname = if ($IncludeOnionHostname) { $hostname } else { '' }"));
     assert(siteHealthWatcher.includes('[switch]$IncludeBridgeFingerprints'));
     assert(siteHealthWatcher.includes('fingerprints = if ($IncludeBridgeFingerprints) { $fingerprints } else { @() }'));
     assert(siteHealthWatcher.includes('seenFingerprints = if ($IncludeBridgeFingerprints) { $seenFingerprints } else { @() }'));
     assert(bridgeTester.includes('[switch]$RevealBridgeLines'));
+    assert(bridgeTester.includes('[switch]$RevealBridgeMetadata'));
     assert(bridgeTester.includes('[ValidateRange(10, 600)]'));
     assert(bridgeTester.includes('[ValidateRange(1, 100)]'));
     assert(bridgeTester.includes('[int]$MaxCandidates = 20'));
     assert(bridgeTester.includes('$MAX_BRIDGE_LINE_LENGTH = 1200'));
     assert(bridgeTester.includes('$OBFS4_BRIDGE_PATTERN'));
     assert(bridgeTester.includes('function Test-BridgeEndpoint'));
+    assert(bridgeTester.includes('function Protect-BridgeDiagnosticText'));
+    assert(bridgeTester.includes('function New-BridgeResult'));
     assert(bridgeTester.includes('cert='));
+    assert(bridgeTester.includes('[^|\\r\\n]*\\bcert=\\S+[^|\\r\\n]*'));
+    assert(!bridgeTester.includes('[^|`r`n]'));
     assert(bridgeTester.includes('$endpoint = $Matches[1]'));
     assert(bridgeTester.includes('$fingerprint = $Matches[2].ToUpperInvariant()'));
+    assert(bridgeTester.includes('bridgeIndex = $Index'));
+    assert(bridgeTester.includes('error = Protect-BridgeDiagnosticText -Text $ErrorText -Candidate $Candidate'));
+    assert(bridgeTester.includes('if ($RevealBridgeMetadata -or $RevealBridgeLines)'));
+    assert(!bridgeTester.includes('fingerprint.Substring(0, 8)'));
     assert(bridgeTester.includes('Get-CandidateBridges | Select-Object -First $MaxCandidates'));
     assert.match(bridgeTester, /if \(\$RevealBridgeLines\) \{\s*\$result\.line = \$Candidate\.line\s*\}/);
     assert.match(bridgeTester, /\$seen\.Add\(\$item\.line\)/);
     assert.doesNotMatch(bridgeTester, /\$seen\.Add\(\$item\.fingerprint\)/);
+    assert(healthLogRedactor.includes('[switch]$InPlace'));
+    assert(healthLogRedactor.includes("Pattern = '\\b[a-z2-7]{56}\\.onion\\b'"));
+    assert(healthLogRedactor.includes("Replacement = '[onion-hostname-hidden]'"));
+    assert(healthLogRedactor.includes("Pattern = '\\b[A-Fa-f0-9]{40}\\b'"));
+    assert(healthLogRedactor.includes("Replacement = '[bridge-fingerprint-hidden]'"));
+    assert(healthLogRedactor.includes('if ($InPlace)'));
     assert(smokePostgres.includes('dotenv.config'));
     assert(smokePostgres.includes('process.env.POSTGRES_PASSWORD'));
     assert(smokePostgres.includes('Set DATABASE_URL or POSTGRES_PASSWORD'));
@@ -179,6 +199,7 @@ async function createClient(options = {}) {
     const primarySession = createSessionClient();
 
     return {
+        sessionStore,
         authStore,
         adminStore,
         totpStore,
@@ -199,6 +220,24 @@ async function createClient(options = {}) {
 
 function getResponseSessionCookie(result) {
     return result.response.headers.get('set-cookie')?.split(';')[0] || '';
+}
+
+function getStoredSessions(sessionStore) {
+    return new Promise((resolve, reject) => {
+        sessionStore.all((error, sessions) => {
+            if (error) reject(error);
+            else resolve(sessions || {});
+        });
+    });
+}
+
+function setStoredSession(sessionStore, sid, value) {
+    return new Promise((resolve, reject) => {
+        sessionStore.set(sid, value, (error) => {
+            if (error) reject(error);
+            else resolve();
+        });
+    });
 }
 
 function createProductionAppWithSecret(sessionSecret, options = {}) {
@@ -482,6 +521,12 @@ test('sensitive API responses are not cacheable', async () => {
         const summary = await adminSession.request('GET', '/api/admin/summary');
         assert.equal(summary.response.status, 200);
         assert.equal(summary.response.headers.get('cache-control'), 'no-store');
+
+        const adminPage = await adminSession.request('GET', '/admin');
+        assert.equal(adminPage.response.status, 200);
+        assert.equal(adminPage.response.headers.get('cache-control'), 'no-store');
+        assert.equal(adminPage.response.headers.get('pragma'), 'no-cache');
+        assert.equal(adminPage.response.headers.get('expires'), '0');
     } finally {
         await client.close();
     }
@@ -993,6 +1038,14 @@ test('TOTP setup requires auth, CSRF, and returns recovery codes once', async ()
         assert.equal(setup.response.status, 200);
         assert(setup.json.secret);
         assert.match(setup.json.qrCodeDataUrl, /^data:image\/png;base64,/);
+        const sessionsAfterSetup = await getStoredSessions(client.sessionStore);
+        const pendingSetups = Object.values(sessionsAfterSetup)
+            .map((storedSession) => storedSession.pendingTotpSetup)
+            .filter(Boolean);
+        assert.equal(pendingSetups.length, 1);
+        assert.equal(pendingSetups[0].secret, undefined);
+        assert.match(pendingSetups[0].secretEncrypted, /^v1:/);
+        assert(!pendingSetups[0].secretEncrypted.includes(setup.json.secret));
 
         const bad = await client.request('POST', '/api/auth/totp/verify-setup', { token: '000000' });
         assert.equal(bad.response.status, 401);
@@ -1015,6 +1068,43 @@ test('TOTP setup requires auth, CSRF, and returns recovery codes once', async ()
 
         const repeatedSetup = await client.request('POST', '/api/auth/totp/setup', {});
         assert.equal(repeatedSetup.response.status, 409);
+    } finally {
+        await client.close();
+    }
+});
+
+test('TOTP setup rejects legacy plaintext pending secrets in sessions', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'totp_legacy_plaintext', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        const setup = await client.request('POST', '/api/auth/totp/setup', {});
+        assert.equal(setup.response.status, 200);
+        assert(setup.json.secret);
+
+        const sessions = await getStoredSessions(client.sessionStore);
+        const pendingEntry = Object.entries(sessions)
+            .find(([, storedSession]) => storedSession && storedSession.pendingTotpSetup);
+        assert(pendingEntry, 'expected a pending TOTP setup session');
+
+        const [sid, storedSession] = pendingEntry;
+        storedSession.pendingTotpSetup = {
+            user: storedSession.pendingTotpSetup.user,
+            secret: setup.json.secret,
+            startedAt: Date.now()
+        };
+        await setStoredSession(client.sessionStore, sid, storedSession);
+
+        const legacyVerify = await client.request('POST', '/api/auth/totp/verify-setup', {
+            token: generateTotpToken(setup.json.secret)
+        });
+        assert.equal(legacyVerify.response.status, 400);
+        assert.equal(legacyVerify.json.error, 'TOTP setup was not started');
+
+        const status = await client.request('GET', '/api/auth/totp/status');
+        assert.equal(status.response.status, 200);
+        assert.equal(status.json.status.enabled, false);
     } finally {
         await client.close();
     }
@@ -2147,7 +2237,7 @@ test('admin user deletion clears target TOTP state in memory store', async () =>
     }
 });
 
-test('traffic middleware truncates untrusted request metadata', async () => {
+test('traffic middleware minimizes untrusted request metadata', async () => {
     const client = await createClient();
     try {
         await client.csrf();
@@ -2168,9 +2258,10 @@ test('traffic middleware truncates untrusted request metadata', async () => {
         assert.equal(event.method, 'GET');
         assert.equal(event.routeGroup, 'page');
         assert.match(event.sessionId, /^[a-f0-9]{64}$/);
-        assert.equal(event.userAgent.length, 500);
+        assert.equal(event.userAgent, 'other');
         assert.equal(event.referrer, 'https://example.test');
         assert(!event.path.includes('token=secret'));
+        assert(!event.userAgent.includes(longHeader.slice(0, 20)));
         assert(!event.referrer.includes('token=secret'));
         assert(!event.referrer.includes(longHeader.slice(0, 20)));
 
@@ -2178,13 +2269,15 @@ test('traffic middleware truncates untrusted request metadata', async () => {
             method: 'po\nst',
             path: '/admin/\u0000users\r\nlist?token=secret',
             routeGroup: 'pa\tge',
-            userAgent: 'Mozilla\r\nInjected: yes',
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/120.0 SecretToken',
             referrer: 'not a url\r\nwith controls'
         });
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.method));
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.path));
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.routeGroup));
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.userAgent));
+        assert.equal(normalized.userAgent, 'chromium');
+        assert(!normalized.userAgent.includes('SecretToken'));
         assert(!/[\u0000-\u001F\u007F]/.test(normalized.referrer));
         assert.equal(normalized.referrer, '/');
 
@@ -2192,6 +2285,11 @@ test('traffic middleware truncates untrusted request metadata', async () => {
         assert.equal(normalizeTrafficEvent({ path: 'javascript:alert(1)' }).path, '/alert(1)');
         assert.equal(normalizeTrafficEvent({ path: 'https://example.test/admin?token=secret' }).path, '/admin');
         assert.equal(normalizeTrafficEvent({ path: '\r\n' }).path, '/');
+        assert.equal(normalizeTrafficEvent({ sessionId: 'raw-session-id' }).sessionId, null);
+        assert.equal(
+            normalizeTrafficEvent({ sessionId: 'A'.repeat(64) }).sessionId,
+            'a'.repeat(64)
+        );
     } finally {
         await client.close();
     }

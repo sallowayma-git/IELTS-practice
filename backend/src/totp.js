@@ -413,6 +413,17 @@ function isPendingExpired(pending, config) {
     return Date.now() - startedAt > config.pendingMaxAgeMs;
 }
 
+function getPendingSetupSecret(setup, config) {
+    if (typeof setup?.secretEncrypted === 'string' && setup.secretEncrypted) {
+        try {
+            return decryptSecret(setup.secretEncrypted, config.encryptionKeySource);
+        } catch (_) {
+            return null;
+        }
+    }
+    return null;
+}
+
 function markSessionTotpVerified(req, user) {
     const safeUser = publicUser(user);
     if (!req.session || !safeUser?.id) {
@@ -546,7 +557,7 @@ function createTotpRouter(options = {}) {
             });
             req.session.pendingTotpSetup = {
                 user,
-                secret,
+                secretEncrypted: encryptSecret(secret, config.encryptionKeySource),
                 startedAt: Date.now(),
                 forced: !req.session.user
             };
@@ -567,17 +578,22 @@ function createTotpRouter(options = {}) {
             assertEnabled();
             const setup = req.session?.pendingTotpSetup;
             const user = setup?.user ? publicUser(setup.user) : getSetupUser(req);
-            if (!user || !setup?.secret) {
+            if (!user || !setup) {
                 return res.status(400).json({ error: 'TOTP setup was not started' });
             }
             if (isPendingExpired(setup, config)) {
                 delete req.session.pendingTotpSetup;
                 return res.status(401).json({ error: 'TOTP setup expired' });
             }
+            const setupSecret = getPendingSetupSecret(setup, config);
+            if (!setupSecret) {
+                delete req.session.pendingTotpSetup;
+                return res.status(400).json({ error: 'TOTP setup was not started' });
+            }
             checkRateLimit(`totp-setup:${req.ip}:${user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
             const result = parsed.success
-                ? verifyTotpTokenWithReplayWindow(parsed.data.token, setup.secret, config)
+                ? verifyTotpTokenWithReplayWindow(parsed.data.token, setupSecret, config)
                 : { valid: false };
             if (!result.valid) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
@@ -590,7 +606,7 @@ function createTotpRouter(options = {}) {
             );
             const status = await store.saveEnabled(
                 user.id,
-                encryptSecret(setup.secret, config.encryptionKeySource),
+                encryptSecret(setupSecret, config.encryptionKeySource),
                 recoveryCodeHashes,
                 result.timeStep
             );

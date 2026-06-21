@@ -128,6 +128,44 @@ function normalizeReferrer(value) {
     }
 }
 
+function normalizeUserAgent(value) {
+    const text = truncateText(value, TRAFFIC_HEADER_MAX_LENGTH);
+    if (!text) {
+        return null;
+    }
+    const lower = text.toLowerCase();
+    if (/\b(?:bot|crawler|spider)\b/.test(lower)) {
+        return 'bot';
+    }
+    if (lower.includes('edg/')) {
+        return 'edge';
+    }
+    if (lower.includes('firefox/')) {
+        return 'firefox';
+    }
+    if (lower.includes('opr/') || lower.includes('opera')) {
+        return 'opera';
+    }
+    if (lower.includes('chrome/') || lower.includes('chromium/')) {
+        return 'chromium';
+    }
+    if (lower.includes('safari/') && lower.includes('version/')) {
+        return 'safari';
+    }
+    if (lower.includes('curl/')) {
+        return 'curl';
+    }
+    if (lower.includes('wget/')) {
+        return 'wget';
+    }
+    return 'other';
+}
+
+function normalizeTrafficSessionId(value) {
+    const text = truncateText(value || '', 128);
+    return /^[a-f0-9]{64}$/i.test(text) ? text.toLowerCase() : null;
+}
+
 function normalizeRole(value) {
     return value === 'admin' ? 'admin' : 'user';
 }
@@ -266,14 +304,14 @@ function normalizeTrafficEvent(event = {}) {
     const rawReferrer = normalizeReferrer(event.referrer);
     return {
         userId: event.userId || null,
-        sessionId: event.sessionId || null,
+        sessionId: normalizeTrafficSessionId(event.sessionId),
         method: truncateText(event.method || 'GET', TRAFFIC_METHOD_MAX_LENGTH, 'GET').toUpperCase(),
         path: truncateText(rawPath, TRAFFIC_PATH_MAX_LENGTH, '/') || '/',
         routeGroup: truncateText(event.routeGroup || classifyRouteGroup(rawPath), TRAFFIC_ROUTE_GROUP_MAX_LENGTH, 'other') || 'other',
         statusCode: toInteger(event.statusCode),
         durationMs: Math.max(0, toInteger(event.durationMs)),
         ipHash: event.ipHash ? truncateText(event.ipHash, 128) : null,
-        userAgent: event.userAgent ? truncateText(event.userAgent, TRAFFIC_HEADER_MAX_LENGTH) : null,
+        userAgent: normalizeUserAgent(event.userAgent),
         referrer: rawReferrer ? truncateText(rawReferrer, TRAFFIC_HEADER_MAX_LENGTH) : null
     };
 }

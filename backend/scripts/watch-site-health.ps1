@@ -12,6 +12,7 @@ param(
     [int]$HttpTimeoutSeconds = 5,
     [ValidateRange(1, 5000)]
     [int]$TorLogTail = 300,
+    [switch]$IncludeOnionHostname,
     [switch]$IncludeBridgeFingerprints,
     [switch]$Once
 )
@@ -175,7 +176,8 @@ function Get-TorStatus {
     return [ordered]@{
         logExitCode = $logsResult.exitCode
         hostnameExitCode = $hostnameResult.exitCode
-        hostname = $hostname
+        hostnamePresent = [bool]$hostname
+        hostname = if ($IncludeOnionHostname) { $hostname } else { '' }
         bootstrapped100 = [bool]$bootstrapped
         connectedRelay = [bool]$connectedRelay
         recentNoRunningBridges = [bool]$noRunningBridges

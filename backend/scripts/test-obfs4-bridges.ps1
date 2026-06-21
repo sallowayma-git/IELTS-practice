@@ -7,6 +7,7 @@ param(
     [int]$TimeoutSeconds = 75,
     [ValidateRange(1, 100)]
     [int]$MaxCandidates = 20,
+    [switch]$RevealBridgeMetadata,
     [switch]$RevealBridgeLines
 )
 
@@ -121,22 +122,69 @@ function Get-LastBootstrapPercent {
     return [int]$matches[$matches.Count - 1].Groups[1].Value
 }
 
+function Protect-BridgeDiagnosticText {
+    param(
+        [string]$Text,
+        [object]$Candidate
+    )
+    if (-not $Text) {
+        return $null
+    }
+    $safe = $Text
+    if (-not $RevealBridgeLines) {
+        $safe = $safe -replace 'obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|\r\n]*\bcert=\S+[^|\r\n]*', 'obfs4 [bridge-line-hidden]'
+        $safe = $safe -replace 'cert=\S+', 'cert=[hidden]'
+    }
+    if (-not ($RevealBridgeMetadata -or $RevealBridgeLines)) {
+        if ($Candidate -and $Candidate.endpoint) {
+            $safe = $safe.Replace([string]$Candidate.endpoint, '[bridge-endpoint]')
+        }
+        if ($Candidate -and $Candidate.fingerprint) {
+            $fingerprint = [string]$Candidate.fingerprint
+            $safe = $safe.Replace($fingerprint, '[bridge-fingerprint]')
+            $safe = $safe.Replace($fingerprint.ToLowerInvariant(), '[bridge-fingerprint]')
+        }
+    }
+    return $safe
+}
+
+function New-BridgeResult {
+    param(
+        [object]$Candidate,
+        [int]$Index,
+        [bool]$Reachable,
+        [int]$BootstrapPercent,
+        [string]$ErrorText
+    )
+    $result = [ordered]@{
+        bridgeIndex = $Index
+        reachable = $Reachable
+        bootstrapPercent = $BootstrapPercent
+        error = Protect-BridgeDiagnosticText -Text $ErrorText -Candidate $Candidate
+    }
+    if ($RevealBridgeMetadata -or $RevealBridgeLines) {
+        $result.fingerprint = $Candidate.fingerprint
+        $result.endpoint = $Candidate.endpoint
+    }
+    if ($RevealBridgeLines) {
+        $result.line = $Candidate.line
+    }
+    return $result
+}
+
 function Test-Bridge {
-    param([object]$Candidate)
-    $suffix = $Candidate.fingerprint.Substring(0, 8).ToLowerInvariant()
+    param(
+        [object]$Candidate,
+        [int]$Index
+    )
+    $suffix = "candidate$Index"
     $container = "ielts-bridge-test-$suffix-$([Guid]::NewGuid().ToString('N').Substring(0, 6))"
     $started = $false
     $logs = ''
     try {
         $containerId = & docker run -d --name $container --add-host 'app:127.0.0.1' -e 'TOR_BRIDGES_FILE=/tmp/no-bridges.txt' -e "TOR_BRIDGES=$($Candidate.line)" $Image 2>&1
         if ($LASTEXITCODE -ne 0) {
-            return [ordered]@{
-                fingerprint = $Candidate.fingerprint
-                endpoint = $Candidate.endpoint
-                reachable = $false
-                bootstrapPercent = 0
-                error = ($containerId -join "`n")
-            }
+            return New-BridgeResult -Candidate $Candidate -Index $Index -Reachable $false -BootstrapPercent 0 -ErrorText ($containerId -join "`n")
         }
         $started = $true
         $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -144,17 +192,7 @@ function Test-Bridge {
             Start-Sleep -Seconds 3
             $logs = (& docker logs $container 2>&1) -join "`n"
             if ($logs -match 'Bootstrapped 100% \(done\): Done') {
-                $result = [ordered]@{
-                    fingerprint = $Candidate.fingerprint
-                    endpoint = $Candidate.endpoint
-                    reachable = $true
-                    bootstrapPercent = 100
-                    error = $null
-                }
-                if ($RevealBridgeLines) {
-                    $result.line = $Candidate.line
-                }
-                return $result
+                return New-BridgeResult -Candidate $Candidate -Index $Index -Reachable $true -BootstrapPercent 100 -ErrorText $null
             }
             $state = (& docker inspect --format '{{.State.Running}}' $container 2>&1) -join ''
             if ($LASTEXITCODE -ne 0 -or $state.Trim() -ne 'true') {
@@ -162,13 +200,12 @@ function Test-Bridge {
             }
         } while ((Get-Date) -lt $deadline)
 
-        return [ordered]@{
-            fingerprint = $Candidate.fingerprint
-            endpoint = $Candidate.endpoint
-            reachable = $false
-            bootstrapPercent = Get-LastBootstrapPercent -Logs $logs
-            error = (($logs -split "`r?`n" | Select-Object -Last 8) -join ' | ')
-        }
+        return New-BridgeResult `
+            -Candidate $Candidate `
+            -Index $Index `
+            -Reachable $false `
+            -BootstrapPercent (Get-LastBootstrapPercent -Logs $logs) `
+            -ErrorText (($logs -split "`r?`n" | Select-Object -Last 8) -join ' | ')
     } finally {
         if ($started) {
             & docker rm -f $container *> $null
@@ -181,8 +218,8 @@ if ($candidates.Count -eq 0) {
     throw 'No obfs4 bridge candidates found.'
 }
 
-$results = foreach ($candidate in $candidates) {
-    Test-Bridge -Candidate $candidate
+$results = for ($index = 0; $index -lt $candidates.Count; $index += 1) {
+    Test-Bridge -Candidate $candidates[$index] -Index ($index + 1)
 }
 
 $results | ConvertTo-Json -Depth 5
