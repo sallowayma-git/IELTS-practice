@@ -46,6 +46,17 @@
     'text/plain': true
   };
 
+    function summarizeBootFallbackErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
   function escapeFallbackCssSelectorValue(value) {
     if (window.CSS && typeof window.CSS.escape === 'function') {
       try {
@@ -168,7 +179,7 @@
             syncOnNavigate: false
           });
         } catch (err) {
-          console.warn('[Fallback] 初始化导航控制器失败:', err);
+          console.warn('[Fallback] 初始化导航控制器失败:', summarizeBootFallbackErrorForLog(err));
         }
       }
 
@@ -237,7 +248,7 @@
       }
     }
   } catch (error) {
-    console.warn('[Fallback] 注册导航事件失败:', error);
+    console.warn('[Fallback] 注册导航事件失败:', summarizeBootFallbackErrorForLog(error));
   }
 
   var _fallbackBackupDelegatesConfigured = false;
@@ -252,7 +263,7 @@
       try {
         window.dataIntegrityManager = new window.DataIntegrityManager();
       } catch (error) {
-        console.warn('[Fallback] 初始化 DataIntegrityManager 失败:', error);
+        console.warn('[Fallback] 初始化 DataIntegrityManager 失败:', summarizeBootFallbackErrorForLog(error));
       }
     }
     return window.dataIntegrityManager || null;
@@ -432,11 +443,11 @@
             window.showBackupList();
           }
         } catch (error) {
-          console.warn('[Fallback] 刷新备份列表失败:', error);
+          console.warn('[Fallback] 刷新备份列表失败:', summarizeBootFallbackErrorForLog(error));
         }
       }, 1000);
     } catch (error) {
-      console.error('[Fallback] 恢复备份失败:', error);
+      console.error('[Fallback] 恢复备份失败:', summarizeBootFallbackErrorForLog(error));
       window.showMessage && window.showMessage('备份恢复失败: ' + (error && error.message ? error.message : error), 'error');
     }
   }
@@ -608,7 +619,7 @@
       style.textContent = `
         @keyframes importFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes importScaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        
+
         .import-mode-overlay-lite {
           position: fixed; inset: 0; z-index: 10000;
           background: rgba(0, 0, 0, 0.25);
@@ -626,8 +637,8 @@
           /* Highlight border */
           border: 1px solid rgba(255, 255, 255, 0.8);
           /* Rich shadow + Top highlight for 3D glass effect */
-          box-shadow: 
-            0 25px 50px -12px rgba(0, 0, 0, 0.15), 
+          box-shadow:
+            0 25px 50px -12px rgba(0, 0, 0, 0.15),
             inset 0 1px 0 rgba(255, 255, 255, 1),
             inset 0 0 0 1px rgba(255, 255, 255, 0.2);
           padding: 40px 32px;
@@ -732,7 +743,7 @@
         });
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
-        console.error('[importData] failed', error);
+        console.error('[importData] failed', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
       }
     };
@@ -745,7 +756,7 @@
       try {
         manager = await _ensureFallbackDataIntegrityManagerAsync();
       } catch (error) {
-        console.error('[Fallback] 数据导出模块加载失败:', error);
+        console.error('[Fallback] 数据导出模块加载失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
         return;
       }
@@ -754,7 +765,7 @@
         await manager.exportData();
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
-        console.error('[Fallback] 数据导出失败:', error);
+        console.error('[Fallback] 数据导出失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
       }
     };
@@ -831,7 +842,7 @@
       try {
         backups = await manager.getBackupList();
       } catch (error) {
-        console.warn('[Fallback] 获取备份列表失败:', error);
+        console.warn('[Fallback] 获取备份列表失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('无法获取备份列表', 'error');
         return;
       }
@@ -982,7 +993,7 @@
             var maybeSetConfigs = storage.set('exam_index_configurations', configs);
             if (maybeSetConfigs && typeof maybeSetConfigs.then === 'function') await maybeSetConfigs;
           } catch (err) {
-            console.warn('[Fallback] 无法保存 exam_index_configurations:', err);
+            console.warn('[Fallback] 无法保存 exam_index_configurations:', summarizeBootFallbackErrorForLog(err));
           }
         }
         if (window.storage && storage.get) {
@@ -1001,7 +1012,7 @@
       }
       return configs;
     } catch (e) {
-      console.warn('[Fallback] ensureDefaultConfig 失败:', e);
+      console.warn('[Fallback] ensureDefaultConfig 失败:', summarizeBootFallbackErrorForLog(e));
       return [];
     }
   }
@@ -1423,7 +1434,7 @@
             upload = window.handleLibraryUpload({ type: type, mode: mode }, files);
           }
         } catch (error) {
-          console.error('[Fallback] 处理题库上传失败:', error);
+          console.error('[Fallback] 处理题库上传失败:', summarizeBootFallbackErrorForLog(error));
           upload = Promise.reject(error);
         }
 
@@ -1435,7 +1446,7 @@
           }
           cleanup();
         }).catch(function (error) {
-          console.error('[Fallback] 题库上传流程出错:', error);
+          console.error('[Fallback] 题库上传流程出错:', summarizeBootFallbackErrorForLog(error));
           if (typeof window.renderLibraryUploadReport === 'function') {
             window.renderLibraryUploadReport({
               status: 'error',
@@ -1494,7 +1505,7 @@
           var maybe = storage.set('active_exam_index_key', key);
           if (maybe && typeof maybe.then === 'function') await maybe;
         } catch (err) {
-          console.warn('[Fallback] 无法写入 active_exam_index_key:', err);
+          console.warn('[Fallback] 无法写入 active_exam_index_key:', summarizeBootFallbackErrorForLog(err));
         }
       }
     }
@@ -1516,7 +1527,7 @@
           var maybeSave = storage.set('exam_index_configurations', existing);
           if (maybeSave && typeof maybeSave.then === 'function') await maybeSave;
         } catch (err) {
-          console.warn('[Fallback] 保存题库配置失败:', err);
+          console.warn('[Fallback] 保存题库配置失败:', summarizeBootFallbackErrorForLog(err));
         }
       }
     }
@@ -1710,7 +1721,7 @@
       try {
         discoveryResult = await _fallbackDiscoverLibraryEntries(files, type, label);
       } catch (error) {
-        console.error('[Fallback] 题库内容识别失败:', error);
+        console.error('[Fallback] 题库内容识别失败:', summarizeBootFallbackErrorForLog(error));
         window.showMessage && window.showMessage('题库识别失败：' + (error && error.message ? error.message : '未知错误'), 'error');
         return _fallbackBuildUploadReport(null, {
           status: 'error',

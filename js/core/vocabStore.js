@@ -77,6 +77,17 @@
     const MAX_EXTRA_ARRAY_ITEMS = 100;
     const EXTRA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+    function summarizeVocabStoreErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     const state = {
         repositories: null,
         metaRepo: null,
@@ -105,7 +116,7 @@
             try {
                 resolve(value);
             } catch (error) {
-                console.error('[VocabStore] ready resolve failed:', error);
+                console.error('[VocabStore] ready resolve failed:', summarizeVocabStoreErrorForLog(error));
             }
         }
     }
@@ -220,16 +231,16 @@
         const note = normalizeTextField(entry.note, MAX_NOTE_TEXT_LENGTH);
         const source = normalizeTextField(entry.source, MAX_SOURCE_TEXT_LENGTH);
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
-        
+
         // SM-2 字段
         const easeFactor = typeof entry.easeFactor === 'number' && Number.isFinite(entry.easeFactor)
             ? Math.min(3.0, Math.max(1.3, entry.easeFactor))
             : null; // 新词没有EF
-        
+
         const interval = typeof entry.interval === 'number' && Number.isFinite(entry.interval) && entry.interval >= 0
             ? Math.floor(entry.interval)
             : 1;
-        
+
         const repetitions = typeof entry.repetitions === 'number' && Number.isFinite(entry.repetitions) && entry.repetitions >= 0
             ? Math.floor(entry.repetitions)
             : 0;
@@ -241,7 +252,7 @@
 
         const correctCountValue = Number(entry.correctCount);
         const correctCount = Number.isFinite(correctCountValue) && correctCountValue >= 0 ? Math.floor(correctCountValue) : 0;
-        
+
         const lastReviewed = entry.lastReviewed && !Number.isNaN(new Date(entry.lastReviewed).getTime())
             ? new Date(entry.lastReviewed).toISOString()
             : null;
@@ -261,14 +272,14 @@
             meaning: baseMeaning,
             example,
             note,
-            
+
             // SM-2 字段
             easeFactor,
             interval,
             repetitions,
             intraCycles,
             correctCount,
-            
+
             lastReviewed,
             nextReview,
             createdAt,
@@ -377,7 +388,7 @@
                 return true;
             }
         } catch (error) {
-            console.error('[VocabStore] persist error:', error);
+            console.error('[VocabStore] persist error:', summarizeVocabStoreErrorForLog(error));
         }
         return false;
     }
@@ -390,7 +401,7 @@
                     return value;
                 }
             } catch (error) {
-                console.warn('[VocabStore] metaRepo读取失败:', error);
+                console.warn('[VocabStore] metaRepo读取失败:', summarizeVocabStoreErrorForLog(error));
             }
         }
         if (state.storageManager && typeof state.storageManager.get === 'function') {
@@ -400,7 +411,7 @@
                     return value;
                 }
             } catch (error) {
-                console.warn('[VocabStore] storageManager读取失败:', error);
+                console.warn('[VocabStore] storageManager读取失败:', summarizeVocabStoreErrorForLog(error));
             }
         }
         if (typeof localStorage !== 'undefined') {
@@ -411,7 +422,7 @@
                 }
                 return JSON.parse(raw);
             } catch (error) {
-                console.warn('[VocabStore] localStorage解析失败:', error);
+                console.warn('[VocabStore] localStorage解析失败:', summarizeVocabStoreErrorForLog(error));
             }
         }
         return defaultValue;
@@ -619,7 +630,7 @@
                 : [];
         })()
             .catch((error) => {
-                console.error('[VocabStore] 初始化加载失败:', error);
+                console.error('[VocabStore] 初始化加载失败:', summarizeVocabStoreErrorForLog(error));
             })
             .finally(() => {
                 state.loadingPromise = null;
@@ -670,7 +681,7 @@
             });
             return normalized;
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
+            console.warn('[VocabStore] 默认词库加载失败:', summarizeVocabStoreErrorForLog(error));
             return [];
         }
     }
@@ -836,7 +847,7 @@
 
         // 拼写错误词表格式: { word, userInput, questionId, examId, timestamp, errorCount, source }
         // VocabStore 格式: { id, word, meaning, example, note, easeFactor, interval, repetitions, ... }
-        
+
         const word = typeof error.word === 'string' ? error.word.trim() : '';
         if (!word) {
             return null;
@@ -852,7 +863,7 @@
         if (errorCount > 1) {
             spellingNote += ` (错误${errorCount}次)`;
         }
-        
+
         const sourceParts = [];
         if (examId) {
             sourceParts.push(`来源: ${examId}`);
@@ -959,7 +970,7 @@
             console.log(`[VocabStore] 加载词表成功，单词数: ${normalizedWords.length}`);
             return listData;
         } catch (error) {
-            console.error('[VocabStore] loadList 失败:', error);
+            console.error('[VocabStore] loadList 失败:', summarizeVocabStoreErrorForLog(error));
             return null;
         }
     }
@@ -997,7 +1008,7 @@
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
             state.listCache.delete(listId);
-            
+
             // 保存激活的词表 ID
             await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
 
@@ -1007,7 +1018,7 @@
 
             return true;
         } catch (error) {
-            console.error('[VocabStore] setActiveList 失败:', error);
+            console.error('[VocabStore] setActiveList 失败:', summarizeVocabStoreErrorForLog(error));
             return false;
         }
     }
@@ -1033,17 +1044,17 @@
         try {
             const listConfig = VOCAB_LISTS[listId];
             const storedData = await read(listConfig.storageKey, null);
-            
+
             // 检查是否为拼写错误词表格式
             if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
                 return storedData.words.length;
             } else if (Array.isArray(storedData)) {
                 return storedData.length;
             }
-            
+
             return 0;
         } catch (error) {
-            console.error('[VocabStore] getListWordCount 失败:', error);
+            console.error('[VocabStore] getListWordCount 失败:', summarizeVocabStoreErrorForLog(error));
             return 0;
         }
     }

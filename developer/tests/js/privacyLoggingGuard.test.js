@@ -14,6 +14,8 @@ function readSource(relativePath) {
 test('frontend console logs do not expose practice session identifiers or payloads', () => {
     const sources = [
         'js/app/examSessionMixin.js',
+        'js/app/examActions.js',
+        'js/app/main-entry.js',
         'js/app/spellingErrorCollector.js',
         'js/app/state-service.js',
         'js/app/suitePracticeMixin.js',
@@ -25,6 +27,8 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'js/components/PerformanceOptimizer.js',
         'js/components/SystemDiagnostics.js',
         'js/components/PDFHandler.js',
+        'js/components/practiceHistoryEnhancer.js',
+        'js/components/practiceRecordModal.js',
         'js/components/vocabSessionView.js',
         'js/core/practiceRecorder.js',
         'js/core/resourceCore.js',
@@ -105,6 +109,58 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/console\.error\(`\[App\][^`]*\$\{\s*path\s*\}/.test(appSource),
         'app state logging must not expose state paths'
+    );
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|event\.reason|event\.error)\s*\)/.test(appSource),
+        'app bootstrap must summarize raw errors and global event errors before logging them'
+    );
+
+    const bootFallbacks = readSource('js/boot-fallbacks.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(bootFallbacks),
+        'boot fallbacks must summarize raw errors before logging them'
+    );
+
+    const mainEntry = readSource('js/app/main-entry.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(mainEntry),
+        'main entry must summarize raw errors before logging them'
+    );
+
+    const examActions = readSource('js/app/examActions.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(examActions),
+        'exam actions must summarize raw errors before logging them'
+    );
+    assert(
+        !/showMessage\([^;\n]*(?:error\.message|e\.message)/.test(examActions),
+        'exam actions must not expose raw exception messages to users'
+    );
+
+    const practiceRecordModal = readSource('js/components/practiceRecordModal.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err)\s*\)/.test(practiceRecordModal),
+        'practice record modal must summarize raw errors before logging them'
+    );
+    assert(
+        !/showMessage\([^;\n]*(?:error\.message|err\.message)/.test(practiceRecordModal),
+        'practice record modal must not expose raw exception messages to users'
+    );
+
+    const practiceHistoryEnhancer = readSource('js/components/practiceHistoryEnhancer.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err)\s*\)/.test(practiceHistoryEnhancer),
+        'practice history enhancer must summarize raw errors before logging them'
+    );
+    assert(
+        !/showMessage\([^;\n]*(?:error\.message|err\.message)/.test(practiceHistoryEnhancer),
+        'practice history enhancer must not expose raw exception messages to users'
+    );
+
+    const vocabStore = readSource('js/core/vocabStore.js');
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(vocabStore),
+        'vocab store must summarize raw errors before logging them'
     );
 
     const examSessionMixin = readSource('js/app/examSessionMixin.js');

@@ -2,7 +2,7 @@
     'use strict';
 
    // 配置与常量
-   
+
     const preferredFirstExamByCategory = {
         'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
         'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
@@ -26,6 +26,17 @@
     };
     const CUSTOM_SUITE_PANEL_MARGIN = 12;
     let customSuitePortalPosition = null;
+
+    function summarizeExamActionsErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
 
     function normalizeExamSignature(value) {
         return String(value || '')
@@ -670,14 +681,14 @@
             '<section class="suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock') + '" aria-live="polite">',
             '<header class="suite-custom-selection__header">',
             '<div>',
-            '<p class="suite-custom-selection__eyebrow">套题自选</p>', 
-            '<h3 class="suite-custom-selection__title-main">' + (isReady ? '确认开始或取消' : '继续选择下一题型') + '</h3>', 
+            '<p class="suite-custom-selection__eyebrow">套题自选</p>',
+            '<h3 class="suite-custom-selection__title-main">' + (isReady ? '确认开始或取消' : '继续选择下一题型') + '</h3>',
             '</div>',
             '<div class="suite-custom-selection__progress">' + selectedCount + ' / ' + categories.length + '</div>',
             '</header>',
             '<div class="suite-custom-selection__body">',
             '<div class="suite-custom-selection__group">',
-            '<div class="suite-custom-selection__group-title">已选</div>', 
+            '<div class="suite-custom-selection__group-title">已选</div>',
             selectedMarkup,
             '</div>',
             '<div class="suite-custom-selection__group">',
@@ -805,7 +816,7 @@
     }
 
    // 核心功能：加载与渲染
-   
+
     /**
      * 加载并渲染题库列表
      */
@@ -816,12 +827,12 @@
             try {
                 global.setupBrowseControls();
             } catch (error) {
-                console.warn('[ExamActions] 浏览控件绑定失败:', error);
+                console.warn('[ExamActions] 浏览控件绑定失败:', summarizeExamActionsErrorForLog(error));
             }
         }
 
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
-        
+
         // 1. 频率模式委托给 BrowseController
         if (!memorizeSelectionActive && global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
             try {
@@ -836,7 +847,7 @@
                 }
                 return;
             } catch (error) {
-                console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
+                console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', summarizeExamActionsErrorForLog(error));
             }
         }
 
@@ -1334,14 +1345,14 @@
         try {
             await ensureSettingsToolsReady();
         } catch (error) {
-            console.warn('[ExamActions] 设置工具预加载失败，继续尝试导出:', error);
+            console.warn('[ExamActions] 设置工具预加载失败，继续尝试导出:', summarizeExamActionsErrorForLog(error));
         }
 
         if (!global.dataIntegrityManager && global.DataIntegrityManager) {
             try {
                 global.dataIntegrityManager = new global.DataIntegrityManager();
             } catch (error) {
-                console.warn('[ExamActions] 初始化 DataIntegrityManager 失败:', error);
+                console.warn('[ExamActions] 初始化 DataIntegrityManager 失败:', summarizeExamActionsErrorForLog(error));
             }
         }
 
@@ -1365,8 +1376,8 @@
             setTimeout(() => URL.revokeObjectURL(url), 0);
             try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
         } catch (e) {
-            try { global.showMessage && global.showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }
-            console.error('[Export] failed', e);
+            try { global.showMessage && global.showMessage('Export failed. Please retry.', 'error'); } catch (_) { }
+            console.error('[Export] failed', summarizeExamActionsErrorForLog(e));
         }
     }
 
@@ -1380,9 +1391,9 @@
                 return;
             }
         } catch (error) {
-            console.error('[ExamActions] 数据导出失败:', error);
+            console.error('[ExamActions] 数据导出失败:', summarizeExamActionsErrorForLog(error));
             if (typeof global.showMessage === 'function') {
-                global.showMessage('数据导出失败: ' + (error && error.message || error), 'error');
+                global.showMessage('Data export failed. Please retry.', 'error');
             }
             return;
         }

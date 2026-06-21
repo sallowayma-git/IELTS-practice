@@ -63,6 +63,17 @@ class ExamSystemApp {
 }
 
 (function(global) {
+    function summarizeAppErrorForLog(error) {
+        if (!error || typeof error !== 'object') {
+            return { name: typeof error };
+        }
+        const status = Number(error.status);
+        return {
+            name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+            status: Number.isFinite(status) ? status : undefined
+        };
+    }
+
     function escapeCssSelectorValue(value) {
         if (global.CSS && typeof global.CSS.escape === 'function') {
             try {
@@ -203,7 +214,7 @@ class ExamSystemApp {
                 const serializedValue = StateSerializer.serialize(value);
                 await storage.set(key, serializedValue);
             } catch (error) {
-                console.error('[App] 持久化状态失败:', error);
+                console.error('[App] 持久化状态失败:', summarizeAppErrorForLog(error));
             }
         },
         async persistMultipleState(mapping) {
@@ -213,7 +224,7 @@ class ExamSystemApp {
             try {
                 await Promise.all(promises);
             } catch (error) {
-                console.error('[App] 批量持久化状态失败:', error);
+                console.error('[App] 批量持久化状态失败:', summarizeAppErrorForLog(error));
             }
         },
         async loadState(path, storageKey = null) {
@@ -226,7 +237,7 @@ class ExamSystemApp {
                     return deserializedValue;
                 }
             } catch (error) {
-                console.error('[App] 加载状态失败:', error);
+                console.error('[App] 加载状态失败:', summarizeAppErrorForLog(error));
             }
             return null;
         },
@@ -261,7 +272,7 @@ class ExamSystemApp {
                     await window.AppLazyLoader.ensureGroup('practice-suite');
                 }
             } catch (error) {
-                console.warn('[App] 练习组件预加载失败:', error);
+                console.warn('[App] 练习组件预加载失败:', summarizeAppErrorForLog(error));
             }
             const components = {
                 SystemDiagnostics: window.SystemDiagnostics,
@@ -319,7 +330,7 @@ class ExamSystemApp {
                     window.appStateService.installGlobalBindings(window);
                     window.appStateService.connectApp(this);
                 } catch (error) {
-                    console.warn('[App] AppStateService connect failed:', error);
+                    console.warn('[App] AppStateService connect failed:', summarizeAppErrorForLog(error));
                 }
             }
             Object.defineProperty(window, 'dataIntegrityManager', {
@@ -364,7 +375,7 @@ class ExamSystemApp {
                     await this.initializeOptionalComponents();
                 }
             } catch (error) {
-                console.error('[App] 核心组件加载失败:', error);
+                console.error('[App] 核心组件加载失败:', summarizeAppErrorForLog(error));
                 throw error;
             }
         },
@@ -386,7 +397,7 @@ class ExamSystemApp {
                 this.ensurePracticeRecorderEvents();
                 return true;
             } catch (error) {
-                console.error('[App] PracticeRecorder初始化失败:', error);
+                console.error('[App] PracticeRecorder初始化失败:', summarizeAppErrorForLog(error));
                 return false;
             }
         },
@@ -424,7 +435,7 @@ class ExamSystemApp {
                             await window.storage.set(['practice', 'records'].join('_'), list);
                         }
                     } catch (error) {
-                        console.warn('[App] 降级记录器保存失败:', error);
+                        console.warn('[App] 降级记录器保存失败:', summarizeAppErrorForLog(error));
                     }
                     return record || null;
                 },
@@ -435,7 +446,7 @@ class ExamSystemApp {
                     try {
                         return normalizeRecords(await window.storage.get('practice_records', []));
                     } catch (error) {
-                        console.warn('[App] 降级记录器读取失败:', error);
+                        console.warn('[App] 降级记录器读取失败:', summarizeAppErrorForLog(error));
                         return [];
                     }
                 }
@@ -744,7 +755,7 @@ class ExamSystemApp {
                             return null;
                         })
                         .catch((error) => {
-                            console.error('[App] 激活练习视图失败:', error);
+                            console.error('[App] 激活练习视图失败:', summarizeAppErrorForLog(error));
                         });
                     break;
                 default:
@@ -841,7 +852,7 @@ class ExamSystemApp {
             }
         },
         handleInitializationError(error) {
-            console.error('[App] 系统初始化失败:', error);
+            console.error('[App] 系统初始化失败:', summarizeAppErrorForLog(error));
             let userMessage = '系统初始化失败';
             let canRecover = false;
             if (error.message.includes('组件加载超时')) {
@@ -863,12 +874,12 @@ class ExamSystemApp {
         },
         setupGlobalErrorHandling() {
             window.addEventListener('unhandledrejection', (event) => {
-                console.error('[App] 未处理的Promise拒绝:', event.reason);
+                console.error('[App] 未处理的Promise拒绝:', summarizeAppErrorForLog(event && event.reason));
                 this.handleGlobalError(event.reason, 'Promise拒绝');
                 event.preventDefault();
             });
             window.addEventListener('error', (event) => {
-                console.error('[App] JavaScript错误:', event.error);
+                console.error('[App] JavaScript错误:', summarizeAppErrorForLog(event && event.error));
                 this.handleGlobalError(event.error, 'JavaScript错误');
             });
         },
@@ -1024,7 +1035,7 @@ class ExamSystemApp {
                 await this.loadUserStats();
                 this.updateOverviewStats();
             } catch (error) {
-                console.error('Failed to load initial data:', error);
+                console.error('Failed to load initial data:', summarizeAppErrorForLog(error));
             }
         },
         async loadUserStats() {
@@ -1185,7 +1196,7 @@ class ExamSystemApp {
                                 window.showMessage('套题模块未就绪', 'warning');
                             }
                         }).catch((error) => {
-                            console.error('[App] 套题模块加载失败:', error);
+                            console.error('[App] 套题模块加载失败:', summarizeAppErrorForLog(error));
                             if (typeof window.showMessage === 'function') {
                                 window.showMessage('套题模块加载失败，请稍后重试', 'error');
                             }
@@ -1225,7 +1236,7 @@ class ExamSystemApp {
                 await this.loadInitialData();
                 this.onViewActivated(this.currentView);
             } catch (error) {
-                console.error('Failed to refresh data:', error);
+                console.error('Failed to refresh data:', summarizeAppErrorForLog(error));
             }
         },
         destroy() {
@@ -1332,18 +1343,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.app = new ExamSystemApp();
                     Promise.resolve(window.app.initialize())
                         .catch((error) => {
-                            console.error('[App] 初始化失败:', error);
+                            console.error('[App] 初始化失败:', summarizeAppErrorForLog(error));
                         })
                         .finally(() => {
                             signalAppCoreReady();
                         });
                 } catch (e) {
-                    console.error('[App] 初始化失败:', e);
+                    console.error('[App] 初始化失败:', summarizeAppErrorForLog(e));
                     signalAppCoreReady();
                 }
             })();
         } catch (error) {
-            console.error('Failed to start application:', error);
+            console.error('Failed to start application:', summarizeAppErrorForLog(error));
             if (window.handleError) {
                 window.handleError(error, 'Application Startup');
             } else {

@@ -13,6 +13,17 @@ const MAX_MODAL_ANSWER_TEXT_LENGTH = 200;
 const MAX_MODAL_QUESTION_LABEL_LENGTH = 80;
 const MAX_MODAL_JSON_TEXT_LENGTH = 1000;
 const MAX_MODAL_ANSWER_DEPTH = 6;
+function summarizePracticeRecordModalErrorForLog(error) {
+    if (!error || typeof error !== 'object') {
+        return { name: typeof error };
+    }
+    const status = Number(error.status);
+    return {
+        name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
+        status: Number.isFinite(status) ? status : undefined
+    };
+}
+
 
 class PracticeRecordModal {
     constructor() {
@@ -57,7 +68,7 @@ class PracticeRecordModal {
                 }
             }, 10);
         } catch (error) {
-            console.error('[PracticeRecordModal] \u663e\u793a\u5931\u8d25:', error);
+            console.error('[PracticeRecordModal] \u663e\u793a\u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
             if (typeof window.showMessage === 'function') {
                 window.showMessage('\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55', 'error');
             }
@@ -146,9 +157,9 @@ class PracticeRecordModal {
                 try {
                     await window.app.openPracticeRecordReplay(replayRecord);
                 } catch (error) {
-                    console.error('[PracticeRecordModal] 启动回放失败:', error);
+                    console.error('[PracticeRecordModal] 启动回放失败:', summarizePracticeRecordModalErrorForLog(error));
                     if (typeof window.showMessage === 'function') {
-                        window.showMessage(`无法回放该记录：${error.message || '未知错误'}`, 'error');
+                        window.showMessage('Unable to replay this record.', 'error');
                     }
                 }
             };
@@ -339,7 +350,7 @@ class PracticeRecordModal {
                 return parsed.toLocaleString();
             }
         } catch (error) {
-            console.warn('[PracticeRecordModal] \u65e5\u671f\u683c\u5f0f\u5316\u5931\u8d25:', error);
+            console.warn('[PracticeRecordModal] \u65e5\u671f\u683c\u5f0f\u5316\u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
         }
         return '\u672a\u77e5';
     }
@@ -1242,9 +1253,9 @@ class PracticeRecordModal {
                 window.showMessage('\u7ec3\u4e60\u8bb0\u5f55\u5df2\u5bfc\u51fa', 'success');
             }
         } catch (error) {
-            console.error('[PracticeRecordModal] \u5bfc\u51fa\u5931\u8d25:', error);
+            console.error('[PracticeRecordModal] \u5bfc\u51fa\u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
             if (typeof window.showMessage === 'function') {
-                window.showMessage(`\u5bfc\u51fa\u5931\u8d25\uff1a${error.message}`, 'error');
+                window.showMessage('Unable to show this practice record.', 'error');
             }
         }
     }
@@ -1268,9 +1279,9 @@ if (!window.practiceRecordModal.showById) {
 
             this.show(record);
         } catch (error) {
-            console.error('[PracticeRecordModal] showById \u5931\u8d25:', error);
+            console.error('[PracticeRecordModal] showById \u5931\u8d25:', summarizePracticeRecordModalErrorForLog(error));
             if (typeof window.showMessage === 'function') {
-                window.showMessage(`\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55\uff1a${error.message}`, 'error');
+                window.showMessage('Unable to show this practice record.', 'error');
             }
         }
     };
