@@ -693,7 +693,7 @@
             script.src = safeUrl;
             script.defer = true;
             script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${safeUrl}`));
+            script.onerror = () => reject(new Error('reading_exam_script_failed'));
             document.head.appendChild(script);
         });
         scriptCache.set(safeUrl, promise);

@@ -865,10 +865,25 @@ function setupMessageListener() {
     };
 
     window.addEventListener('message', (event) => {
+        const data = event.data || {};
+        const type = data.type;
+        const matchedWindow = findFallbackSessionByWindow(event.source);
+        const isOpaqueOrigin = !event.origin || event.origin === 'null';
+        const allowOpaqueFallbackMessage = Boolean(
+            isOpaqueOrigin
+            && matchedWindow
+            && (
+                type === 'SESSION_READY'
+                || type === 'REQUEST_INIT'
+                || type === 'VOCAB_HIGHLIGHT_SAVE'
+                || type === 'PRACTICE_COMPLETE'
+                || type === 'practice_completed'
+            )
+        );
         // 更兼容的安全检查：允许同源或file协议下的子窗口
         try {
             if (!event.origin || event.origin === 'null') {
-                if (!(window.location && window.location.protocol === 'file:')) {
+                if (!(window.location && window.location.protocol === 'file:') && !allowOpaqueFallbackMessage) {
                     return;
                 }
             } else if (event.origin !== window.location.origin) {
@@ -878,11 +893,9 @@ function setupMessageListener() {
             return;
         }
 
-        const data = event.data || {};
-        const type = data.type;
         if (type === 'SESSION_READY') {
             const payload = data && typeof data.data === 'object' ? data.data : data;
-            const matched = findFallbackSessionByWindow(event.source);
+            const matched = matchedWindow;
             if (payload && payload.initialized === false) {
                 sendFallbackInit(matched);
                 return;

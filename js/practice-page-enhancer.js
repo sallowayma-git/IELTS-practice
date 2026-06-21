@@ -111,6 +111,9 @@
         ],
         datasetExcludeAttribute: 'enhancerExclude'
     };
+    const ENHANCER_CONFIG_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    const isUnsafeEnhancerConfigKey = (key) => ENHANCER_CONFIG_POLLUTION_KEYS.has(String(key));
 
     const mergeConfig = (baseConfig, overrideConfig) => {
         const result = { ...(baseConfig || {}) };
@@ -119,6 +122,9 @@
         }
 
         Object.entries(overrideConfig).forEach(([key, value]) => {
+            if (isUnsafeEnhancerConfigKey(key)) {
+                return;
+            }
             if (value === undefined || value === null) {
                 return;
             }
@@ -130,8 +136,9 @@
             }
 
             if (typeof value === 'object') {
-                const existing = (result[key] && typeof result[key] === 'object' && !Array.isArray(result[key]))
-                    ? result[key]
+                const existingValue = Object.prototype.hasOwnProperty.call(result, key) ? result[key] : undefined;
+                const existing = (existingValue && typeof existingValue === 'object' && !Array.isArray(existingValue))
+                    ? existingValue
                     : {};
                 result[key] = mergeConfig(existing, value);
                 return;

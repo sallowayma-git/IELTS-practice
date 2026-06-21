@@ -169,6 +169,8 @@ async function testCompletionIngestionStripsPollutionKeys(PracticeCore) {
             realData: pollutedRealData,
             metadata: JSON.parse('{"type":"reading","__proto__":{"polluted":true}}')
         }
+    }, {
+        metadata: JSON.parse('{"category":"P1","constructor":{"prototype":{"polluted":true}},"prototype":{"polluted":true}}')
     });
 
     assert(record, 'pollution guard record should be created');
@@ -176,6 +178,9 @@ async function testCompletionIngestionStripsPollutionKeys(PracticeCore) {
     assert.strictEqual(Object.prototype.hasOwnProperty.call(record.scoreInfo, 'constructor'), false);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(record.realData, '__proto__'), false);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(record.metadata, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.metadata, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(record.metadata, 'prototype'), false);
+    assert.strictEqual(record.metadata.category, 'P1');
     assert.strictEqual(record.realData.polluted, undefined);
 
     recordResult('PracticeCore completion ingestion strips pollution keys', true, {

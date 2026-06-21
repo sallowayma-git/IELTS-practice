@@ -60,6 +60,14 @@
     return Boolean(origin && origin !== 'null' && event.origin === origin);
   }
 
+  function isOpaqueOriginMessage(event) {
+    return Boolean(event && (!event.origin || event.origin === 'null'));
+  }
+
+  function logThemeAdapterAsyncError(label, error) {
+    console.warn(label, summarizeThemeAdapterErrorForLog(error));
+  }
+
   function resolveTrustedResourceUrl(rawUrl) {
     if (!rawUrl) {
       return '';
@@ -988,13 +996,19 @@
         
         if (key === STORAGE_KEYS.ACTIVE_EXAM_INDEX_KEY) {
           console.log('[ThemeAdapterBase] 检测到题库索引切换');
-          this._loadExamIndex().catch(console.error);
+          this._loadExamIndex().catch((error) => {
+            logThemeAdapterAsyncError('[ThemeAdapterBase] exam index refresh failed:', error);
+          });
         } else if (key === STORAGE_KEYS.EXAM_INDEX || EXAM_INDEX_KEY_RE.test(key) || key === STORAGE_KEYS.EXAM_INDEX_CONFIGURATIONS) {
           console.log('[ThemeAdapterBase] 检测到题库索引变化');
-          this._loadExamIndex().catch(console.error);
+          this._loadExamIndex().catch((error) => {
+            logThemeAdapterAsyncError('[ThemeAdapterBase] exam index refresh failed:', error);
+          });
         } else if (key === STORAGE_KEYS.PRACTICE_RECORDS) {
           console.log('[ThemeAdapterBase] 检测到练习记录变化');
-          this._loadPracticeRecords().catch(console.error);
+          this._loadPracticeRecords().catch((error) => {
+            logThemeAdapterAsyncError('[ThemeAdapterBase] practice records refresh failed:', error);
+          });
         }
       });
 
@@ -1021,8 +1035,25 @@
      * 处理 postMessage 消息
      * @param {MessageEvent} event - 消息事件
      */
+    _isKnownOpaqueSessionWindow(event, payload) {
+      if (!isOpaqueOriginMessage(event) || !event.source || !this._activeSessions || !this._activeSessions.size) {
+        return false;
+      }
+      const sessionId = extractPayloadSessionId(payload);
+      if (sessionId && this._activeSessions.has(sessionId)) {
+        const session = this._activeSessions.get(sessionId);
+        return Boolean(session && session.window && event.source === session.window);
+      }
+      for (const session of this._activeSessions.values()) {
+        if (session && session.window === event.source) {
+          return true;
+        }
+      }
+      return false;
+    },
+
     _isKnownSessionMessage(event, payload) {
-      if (!hasAllowedMessageOrigin(event)) {
+      if (!hasAllowedMessageOrigin(event) && !this._isKnownOpaqueSessionWindow(event, payload)) {
         return false;
       }
       if (!this._activeSessions || !this._activeSessions.size) {
@@ -1129,7 +1160,9 @@
         if (mainHandles) {
           // 主系统会处理，延迟刷新本地缓存
           console.log('[ThemeAdapterBase] 主系统将处理练习完成消息');
-          setTimeout(() => this._loadPracticeRecords().catch(console.error), 800);
+          setTimeout(() => this._loadPracticeRecords().catch((error) => {
+            logThemeAdapterAsyncError('[ThemeAdapterBase] practice records refresh failed:', error);
+          }), 800);
           return;
         }
 
@@ -1146,7 +1179,9 @@
                 this._saveLocalPracticeRecord(normalized, payload);
               })
               .finally(() => {
-                setTimeout(() => this._loadPracticeRecords().catch(console.error), 400);
+                setTimeout(() => this._loadPracticeRecords().catch((error) => {
+                  logThemeAdapterAsyncError('[ThemeAdapterBase] practice records refresh failed:', error);
+                }), 400);
               });
             return;
           }

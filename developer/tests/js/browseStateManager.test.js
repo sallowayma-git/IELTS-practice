@@ -150,6 +150,8 @@ assert(lastFilterEvent.detail.filter.length <= 120);
 const importedHistory = JSON.parse(`{
   "browseHistory": [
     ${Array.from({ length: 12 }, (_, index) => `{"action":"filter_change","to":"category-${index}","timestamp":${index}}`).join(',')},
+    { "action": "filter_change", "to": "__proto__", "timestamp": 97 },
+    { "action": "filter_change", "to": "constructor", "timestamp": 98 },
     { "__proto__": { "polluted": true }, "action": "filter_change", "to": "${'y'.repeat(500)}", "timestamp": 99, "extra": "drop" },
     { "constructor": { "prototype": { "polluted": true } }, "action": "navigate_to_browse", "filter": "all", "timestamp": 100 }
   ]
@@ -160,6 +162,11 @@ assert.equal(imported.length, 10);
 assert(imported.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'extra')));
 assert(imported.every((entry) => !Object.prototype.hasOwnProperty.call(entry, '__proto__')));
 assert(imported.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'constructor')));
+assert.equal(Object.prototype.polluted, undefined);
+const importedStats = restored.getBrowseStats();
+assert.equal(Object.getPrototypeOf(importedStats.filterUsage), null);
+assert.equal(importedStats.filterUsage.__proto__, 1);
+assert.equal(importedStats.filterUsage.constructor, 1);
 assert.equal(Object.prototype.polluted, undefined);
 
 const originalConsoleError = restoredContext.console.error;

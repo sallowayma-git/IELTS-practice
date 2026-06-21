@@ -179,6 +179,32 @@ function testAdapterFallbackSkipsUnsafeAttributes() {
     assertUnsafeAttributesSkipped(element);
 }
 
+function testCreateReplacesUnsafeTags() {
+    const dom = loadDomUtils();
+    const script = dom.create('script', {}, 'alert(1)');
+    const iframe = dom.create('iframe', { src: 'https://example.test/' }, 'frame');
+    const invalid = dom.create('img src=x onerror=alert(1)', {}, 'bad');
+
+    assert.equal(script.tagName, 'DIV');
+    assert.equal(iframe.tagName, 'DIV');
+    assert.equal(invalid.tagName, 'DIV');
+    assert.equal(script.childNodes[0].type, 'text');
+    assert.equal(script.childNodes[0].text, 'alert(1)');
+}
+
+function testAdapterFallbackReplacesUnsafeTags() {
+    const dom = loadDomUtils();
+    const adapter = dom.adapter;
+    dom.window.DOM = null;
+    const script = adapter.create('script', {}, 'alert(1)');
+    const object = adapter.create('object', { data: 'https://example.test/' }, 'object');
+
+    assert.equal(script.tagName, 'DIV');
+    assert.equal(object.tagName, 'DIV');
+    assert.equal(script.childNodes[0].type, 'text');
+    assert.equal(script.childNodes[0].text, 'alert(1)');
+}
+
 function testBlankTargetRelIsEnforced() {
     const dom = loadDomUtils();
     const link = dom.create('a', {
@@ -239,6 +265,8 @@ function testStyleManagerSkipsUnsafeValues() {
 testReplaceContentTreatsStringsAsText();
 testCreateSkipsUnsafeAttributes();
 testAdapterFallbackSkipsUnsafeAttributes();
+testCreateReplacesUnsafeTags();
+testAdapterFallbackReplacesUnsafeTags();
 testBlankTargetRelIsEnforced();
 testAdapterFallbackBlankTargetRelIsEnforced();
 testStyleManagerSkipsUnsafeValues();
@@ -246,16 +274,17 @@ testStyleManagerSkipsUnsafeValues();
 const domSource = fs.readFileSync(path.join(repoRoot, 'js/utils/dom.js'), 'utf8');
 const appSource = fs.readFileSync(path.join(repoRoot, 'js/app.js'), 'utf8');
 const legacySource = fs.readFileSync(path.join(repoRoot, 'js/views/legacyViewBundle.js'), 'utf8');
-for (const [label, source, functionName] of [
-    ['DOMBuilder', domSource, 'isUnsafeStyleValue'],
-    ['App fallback', appSource, 'isAppUnsafeStyleValue'],
-    ['Legacy view', legacySource, 'isLegacyUnsafeStyleValue']
+for (const [label, source, functionName, tagFunctionName] of [
+    ['DOMBuilder', domSource, 'isUnsafeStyleValue', 'isUnsafeTagName'],
+    ['App fallback', appSource, 'isAppUnsafeStyleValue', 'isAppUnsafeTagName'],
+    ['Legacy view', legacySource, 'isLegacyUnsafeStyleValue', 'isLegacyUnsafeTagName']
 ]) {
     assert(source.includes(functionName), `${label} must expose CSS style value filtering`);
     assert(source.includes('javascript:'), `${label} must reject javascript CSS URLs`);
     assert(source.includes('vbscript:'), `${label} must reject vbscript CSS URLs`);
     assert(source.includes('expression('), `${label} must reject legacy CSS expressions`);
     assert(source.includes('data:image/svg+xml'), `${label} must reject SVG data CSS URLs`);
+    assert(source.includes(tagFunctionName), `${label} must reject unsafe DOM tag names`);
     for (const attr of ['srcset', 'imagesrcset', 'ping', 'background']) {
         assert(source.includes(attr), `${label} must treat ${attr} as a guarded URL-bearing attribute`);
     }

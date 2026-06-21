@@ -202,7 +202,7 @@ class ScoreStorage {
         if (coreContracts && typeof coreContracts.buildMetadata === 'function') {
             return coreContracts.buildMetadata(recordData, type);
         }
-        const metadata = { ...(recordData.metadata || {}) };
+        const metadata = this.clonePlainObject(recordData.metadata || {}) || {};
         const examId = recordData.examId;
         const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
         const fallbackCategory = recordData.category || 'Unknown';
@@ -789,7 +789,7 @@ class ScoreStorage {
         if (!record || typeof record !== 'object') {
             return record;
         }
-        const patched = Object.assign({}, record);
+        const patched = this.clonePlainObject(record) || {};
         if (Array.isArray(record.suiteEntries)) {
             patched.suiteEntries = record.suiteEntries.map(entry => this.clonePlainObject(entry)).filter(Boolean);
         }
@@ -807,7 +807,7 @@ class ScoreStorage {
             patched.type = inferredType;
         }
         const normalizedMetadata = this.buildMetadata(
-            Object.assign({}, patched, { metadata: patched.metadata || {} }),
+            this.assignSafePlainObject(patched, { metadata: patched.metadata || {} }),
             patched.type
         );
         patched.metadata = normalizedMetadata;
@@ -856,10 +856,10 @@ class ScoreStorage {
             patched.scoreInfo.details = patched.answerDetails;
         }
         if (patched.realData) {
-            patched.realData = Object.assign({}, patched.realData, {
+            patched.realData = this.assignSafePlainObject(patched.realData, {
                 answers: patched.realData.answers || answerMap,
                 correctAnswers: patched.realData.correctAnswers || patched.correctAnswerMap,
-                scoreInfo: Object.assign({}, patched.realData.scoreInfo || {}, {
+                scoreInfo: this.assignSafePlainObject(patched.realData.scoreInfo || {}, {
                     details: patched.realData.scoreInfo?.details || patched.answerDetails || null
                 })
             });
@@ -900,7 +900,7 @@ class ScoreStorage {
         const recordDate = this.resolveRecordDate(recordData, now);
         const resolvedExamId = this.inferExamId(recordData);
         const metadata = this.buildMetadata(
-            Object.assign({}, recordData, { examId: resolvedExamId }),
+            this.assignSafePlainObject(recordData, { examId: resolvedExamId }),
             type
         );
         const comparisonSource = recordData.answerComparison
@@ -1043,15 +1043,15 @@ class ScoreStorage {
             highlights,
             scrollY,
             scoreInfo: recordData.scoreInfo
-                ? Object.assign({}, recordData.scoreInfo, {
+                ? this.assignSafePlainObject(recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
                 })
                 : (detailSource ? { details: detailSource } : null),
             realData: recordData.realData
-                ? Object.assign({}, recordData.realData, {
+                ? this.assignSafePlainObject(recordData.realData, {
                     answers: recordData.realData.answers || answerMap,
                     correctAnswers: recordData.realData.correctAnswers || normalizedCorrectMap,
-                    scoreInfo: Object.assign({}, recordData.realData.scoreInfo || {}, {
+                    scoreInfo: this.assignSafePlainObject(recordData.realData.scoreInfo || {}, {
                         details: recordData.realData.scoreInfo?.details || detailSource || null
                     }),
                     answerComparison: recordData.realData.answerComparison
@@ -1161,6 +1161,22 @@ class ScoreStorage {
         return clone;
     }
 
+    assignSafePlainObject(...sources) {
+        const merged = {};
+        sources.forEach((source) => {
+            const safeSource = this.clonePlainObject(source);
+            if (!safeSource || typeof safeSource !== 'object' || Array.isArray(safeSource)) {
+                return;
+            }
+            Object.keys(safeSource).forEach((key) => {
+                if (!isUnsafeScoreRecordCloneKey(key)) {
+                    merged[key] = safeSource[key];
+                }
+            });
+        });
+        return merged;
+    }
+
     convertComparisonToMap(comparison, key = 'correctAnswer') {
         if (!comparison || typeof comparison !== 'object') {
             return {};
@@ -1209,7 +1225,7 @@ class ScoreStorage {
                 return map;
             }, {});
             const normalizedScoreInfo = entry.scoreInfo
-                ? Object.assign({}, entry.scoreInfo, {
+                ? this.assignSafePlainObject(entry.scoreInfo, {
                     details: entry.scoreInfo?.details
                         ? this.clonePlainObject(entry.scoreInfo.details)
                         : null
@@ -1233,7 +1249,7 @@ class ScoreStorage {
                 scoreInfo: normalizedScoreInfo,
                 answers: answerMap,
                 answerComparison: this.clonePlainObject(answerComparisonSource) || null,
-                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                metadata: entry.metadata ? this.clonePlainObject(entry.metadata) || {} : {},
                 highlights,
                 scrollY,
                 rawData: entry.rawData ? this.clonePlainObject(entry.rawData) : null

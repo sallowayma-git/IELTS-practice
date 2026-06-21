@@ -2,6 +2,7 @@
     'use strict';
 
     const MAX_QUESTION_NUMBER = 200;
+    const ANSWER_METADATA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const NOISE_KEYS = new Set([
         'playback-speed',
         'playbackspeed',
@@ -32,6 +33,23 @@
         /duration/i,
         /config/i
     ];
+
+    function isUnsafeMetadataKey(key) {
+        return ANSWER_METADATA_POLLUTION_KEYS.has(String(key));
+    }
+
+    function cloneSafeObject(value) {
+        const clone = {};
+        if (!value || typeof value !== 'object') {
+            return clone;
+        }
+        Object.keys(value).forEach((key) => {
+            if (!isUnsafeMetadataKey(key)) {
+                clone[key] = value[key];
+            }
+        });
+        return clone;
+    }
     const NO_ANSWER_MARKERS = new Set([
         'no answer',
         '未作答',
@@ -741,7 +759,7 @@
             };
         }
 
-        const metadata = Object.assign({}, record.metadata || {});
+        const metadata = cloneSafeObject(record.metadata || {});
 
         if (metadata.__enrichedMetadata) {
             record.metadata = metadata;
@@ -799,8 +817,8 @@
         if (!record || typeof record !== 'object') {
             return record;
         }
-        const clone = Object.assign({}, record);
-        clone.metadata = Object.assign({}, record.metadata || {});
+        const clone = cloneSafeObject(record);
+        clone.metadata = cloneSafeObject(record.metadata || {});
         enrichRecordMetadata(clone);
         return clone;
     }

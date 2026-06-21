@@ -235,6 +235,11 @@ assert(
     'unified reading page must not assign raw manifest script URLs to script.src'
 );
 assert(
+    unifiedReadingPage.includes("new Error('reading_exam_script_failed')") &&
+    !unifiedReadingPage.includes('reading_exam_script_failed:${safeUrl}'),
+    'unified reading page must not leak resolved script URLs through load failure errors'
+);
+assert(
     unifiedReadingPage.includes('function sanitizeReadingDatasetHtml') &&
     unifiedReadingPage.includes('UNSAFE_READING_HTML_TAGS') &&
     unifiedReadingPage.includes("'svg'") &&

@@ -49,6 +49,10 @@
     return Boolean(origin && origin !== 'null' && event.origin === origin);
   }
 
+  function isOpaqueOriginMessage(event) {
+    return Boolean(event && (!event.origin || event.origin === 'null'));
+  }
+
   function safeWindowName(prefix, value) {
     const safePrefix = String(prefix || 'window').replace(/[^\w-]/g, '_').slice(0, 32) || 'window';
     const safeValue = String(value || Date.now())
@@ -76,15 +80,15 @@
   }
 
   function isAllowedLocalSessionMessage(event, payload) {
-    if (!hasAllowedMessageOrigin(event)) {
-      return false;
-    }
     const session = findLocalSessionForMessage(event, payload);
     if (!session) {
       return false;
     }
     if (event && event.source && session.win && event.source !== session.win) {
       return false;
+    }
+    if (!hasAllowedMessageOrigin(event)) {
+      return Boolean(isOpaqueOriginMessage(event) && event && event.source && session.win === event.source);
     }
     return true;
   }

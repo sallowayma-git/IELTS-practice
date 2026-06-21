@@ -19,6 +19,36 @@
         return key.indexOf('on') === 0 || key === 'srcdoc';
     }
 
+    function isLegacyUnsafeTagName(name) {
+        var key = String(name || '').trim().toLowerCase();
+        if (!/^[a-z][a-z0-9-]*$/.test(key)) {
+            return true;
+        }
+        return {
+            script: true,
+            iframe: true,
+            object: true,
+            embed: true,
+            applet: true,
+            frame: true,
+            frameset: true,
+            base: true,
+            link: true,
+            meta: true,
+            style: true,
+            template: true
+        }[key] === true;
+    }
+
+    function createLegacySafeElement(tag) {
+        var requestedTag = String(tag || '').trim().toLowerCase();
+        var safeTag = isLegacyUnsafeTagName(tag) ? 'div' : requestedTag;
+        if (safeTag !== requestedTag) {
+            console.warn('[LegacyView] Replaced unsafe tag');
+        }
+        return document.createElement(safeTag || 'div');
+    }
+
     function isLegacyUnsafeUrlAttribute(name, value, tagName) {
         var key = String(name || '').toLowerCase();
         var urlAttributes = {
@@ -2278,7 +2308,7 @@
         if (domAdapter && typeof domAdapter.create === 'function') {
             return domAdapter.create(tag, attributes, children);
         }
-        var element = document.createElement(tag);
+        var element = createLegacySafeElement(tag);
         applyLegacyElementAttributes(element, attributes);
 
         var list = Array.isArray(children) ? children : [children];
@@ -3057,7 +3087,7 @@
             return this.domAdapter.create(tag, attributes, children);
         }
 
-        var element = document.createElement(tag);
+        var element = createLegacySafeElement(tag);
         applyLegacyElementAttributes(element, attributes);
 
         if (children != null) {
@@ -3574,7 +3604,7 @@
             return this.domAdapter.create(tag, attributes, children);
         }
 
-        var element = document.createElement(tag);
+        var element = createLegacySafeElement(tag);
         applyLegacyElementAttributes(element, attributes);
 
         var nodes = Array.isArray(children) ? children : (children != null ? [children] : []);

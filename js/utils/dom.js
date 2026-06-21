@@ -89,6 +89,27 @@ class DOMBuilder {
         this.fragmentCache = new Map();
     }
 
+    isUnsafeTagName(name) {
+        const key = String(name || '').trim().toLowerCase();
+        if (!/^[a-z][a-z0-9-]*$/.test(key)) {
+            return true;
+        }
+        return new Set([
+            'script',
+            'iframe',
+            'object',
+            'embed',
+            'applet',
+            'frame',
+            'frameset',
+            'base',
+            'link',
+            'meta',
+            'style',
+            'template'
+        ]).has(key);
+    }
+
     isUnsafeAttributeName(name) {
         const key = String(name || '').toLowerCase();
         return key.startsWith('on') || key === 'srcdoc';
@@ -181,7 +202,12 @@ class DOMBuilder {
      * @param {string|Node|Array} children 子元素
      */
     create(tag, attributes = {}, children = []) {
-        const element = document.createElement(tag);
+        const requestedTag = String(tag || '').trim().toLowerCase();
+        const safeTag = this.isUnsafeTagName(tag) ? 'div' : requestedTag;
+        if (safeTag !== requestedTag) {
+            console.warn('[DOMBuilder] Replaced unsafe tag');
+        }
+        const element = document.createElement(safeTag);
 
         // 兼容旧调用：传入 null/undefined/非对象属性时直接跳过属性设置
         const hasDOMNode = typeof Node !== 'undefined' && attributes instanceof Node;
@@ -556,7 +582,15 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function fallbackCreate(tag, attributes, children) {
-        var element = document.createElement(tag);
+        var requestedTag = String(tag || '').trim().toLowerCase();
+        var unsafeTag = global.DOMBuilder
+            && typeof global.DOMBuilder.isUnsafeTagName === 'function'
+            && global.DOMBuilder.isUnsafeTagName(tag);
+        var safeTag = unsafeTag ? 'div' : requestedTag;
+        if (unsafeTag) {
+            console.warn('[DOMAdapter] Replaced unsafe tag');
+        }
+        var element = document.createElement(safeTag || 'div');
         applyAttributes(element, attributes);
         ensureBlankTargetRel(element);
         appendChildren(element, children);

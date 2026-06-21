@@ -183,6 +183,22 @@
         return clone;
     }
 
+    function assignSafePlainObject() {
+        const merged = {};
+        Array.prototype.slice.call(arguments).forEach((source) => {
+            const safeSource = clonePlainObject(source);
+            if (!safeSource || typeof safeSource !== 'object' || Array.isArray(safeSource)) {
+                return;
+            }
+            Object.keys(safeSource).forEach((key) => {
+                if (!isUnsafePracticeCloneKey(key)) {
+                    merged[key] = safeSource[key];
+                }
+            });
+        });
+        return merged;
+    }
+
     function ensureNumber(value, fallback = 0) {
         const numeric = Number(value);
         return Number.isFinite(numeric) ? numeric : fallback;
@@ -632,7 +648,7 @@
     }
 
     function buildMetadata(recordData = {}, type) {
-        const metadata = Object.assign({}, recordData.metadata || {});
+        const metadata = clonePlainObject(recordData.metadata || {}) || {};
         const examId = recordData.examId;
         const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
         const fallbackCategory = recordData.category || metadata.category || 'Unknown';
@@ -696,7 +712,7 @@
                 scoreInfo: entry.scoreInfo ? clonePlainObject(entry.scoreInfo) : null,
                 answers: answerMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
-                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                metadata: entry.metadata ? clonePlainObject(entry.metadata) || {} : {},
                 highlights,
                 scrollY,
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
@@ -736,7 +752,7 @@
         const recordDate = resolveRecordDate(recordData, now);
         const resolvedExamId = inferExamId(recordData);
         const metadata = buildMetadata(
-            Object.assign({}, recordData, { examId: resolvedExamId }),
+            assignSafePlainObject(recordData, { examId: resolvedExamId }),
             type
         );
         const comparisonSource = recordData.answerComparison
@@ -857,15 +873,15 @@
             highlights,
             scrollY,
             scoreInfo: recordData.scoreInfo
-                ? Object.assign({}, recordData.scoreInfo, {
+                ? assignSafePlainObject(recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
                 })
                 : (detailSource ? { details: detailSource } : null),
             realData: recordData.realData
-                ? Object.assign({}, recordData.realData, {
+                ? assignSafePlainObject(recordData.realData, {
                     answers: (recordData.realData && recordData.realData.answers) || answerMap,
                     correctAnswers: (recordData.realData && recordData.realData.correctAnswers) || normalizedCorrectMap,
-                    scoreInfo: Object.assign({}, (recordData.realData && recordData.realData.scoreInfo) || {}, {
+                    scoreInfo: assignSafePlainObject((recordData.realData && recordData.realData.scoreInfo) || {}, {
                         details: (recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.details) || detailSource || null
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
@@ -1011,8 +1027,8 @@
             return null;
         }
 
-        const scoreInfo = Object.assign({}, rawPayload.scoreInfo || {});
-        const metadata = Object.assign({}, sessionContext.metadata || {}, rawPayload.metadata || {});
+        const scoreInfo = clonePlainObject(rawPayload.scoreInfo || {}) || {};
+        const metadata = assignSafePlainObject(sessionContext.metadata || {}, rawPayload.metadata || {});
         const resolvedExamId = rawPayload.examId
             || sessionContext.examId
             || metadata.examId
@@ -1125,7 +1141,7 @@
             answerComparison,
             questionTypeMap,
             questionTypePerformance,
-            metadata: Object.assign({}, metadata, {
+            metadata: assignSafePlainObject(metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
                 category,
@@ -1141,7 +1157,7 @@
             scrollY: Number.isFinite(Number(rawPayload.scrollY))
                 ? Number(rawPayload.scrollY)
                 : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0),
-            scoreInfo: Object.assign({}, scoreInfo, {
+            scoreInfo: assignSafePlainObject(scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
                 accuracy,
@@ -1149,13 +1165,13 @@
                 details: scoreInfo.details || answerDetails,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page'
             }),
-            realData: Object.assign({}, rawPayload.realData || {}, {
+            realData: assignSafePlainObject(rawPayload.realData || {}, {
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
                 questionTypeMap,
                 questionTypePerformance,
-                scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
+                scoreInfo: assignSafePlainObject((rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,
                     accuracy,

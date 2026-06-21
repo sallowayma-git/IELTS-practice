@@ -26,6 +26,10 @@ function isAllowedSameOriginMessage(event) {
     return Boolean(allowedOrigin && allowedOrigin !== 'null' && event.origin === allowedOrigin);
 }
 
+function isOpaqueOriginMessage(event) {
+    return Boolean(event && (!event.origin || event.origin === 'null'));
+}
+
 let practiceRecorderFallbackIdCounter = 0;
 const PRACTICE_RECORDER_CLONE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const PRACTICE_RECORDER_CLONE_LIMITS = Object.freeze({
@@ -537,10 +541,6 @@ class PracticeRecorder {
             return false;
         }
 
-        if (!isAllowedSameOriginMessage(event)) {
-            return false;
-        }
-
         const data = normalized.data;
         const candidateExamIds = [
             data.examId,
@@ -549,6 +549,11 @@ class PracticeRecorder {
             data.rawExamId
         ].map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean);
         const sessionId = typeof data.sessionId === 'string' ? data.sessionId.trim() : '';
+        const sameOrigin = isAllowedSameOriginMessage(event);
+
+        if (!sameOrigin) {
+            return this.isAllowedOpaqueActiveSessionMessage(event, candidateExamIds, sessionId);
+        }
 
         if (candidateExamIds.some((examId) => this.isAllowedActiveSessionMessage(event, examId, sessionId))) {
             return true;
@@ -563,6 +568,28 @@ class PracticeRecorder {
         }
 
         return normalized.type === 'session_completed' && this.isSyntheticSessionAllowed(data);
+    }
+
+    isAllowedOpaqueActiveSessionMessage(event, candidateExamIds = [], sessionId = '') {
+        if (!isOpaqueOriginMessage(event) || !event.source) {
+            return false;
+        }
+        const isExpectedWindow = (examId) => {
+            const expectedWindow = this.getExpectedExamMessageWindow(examId);
+            return Boolean(expectedWindow && event.source === expectedWindow);
+        };
+        if (candidateExamIds.some(isExpectedWindow)) {
+            return true;
+        }
+        if (!sessionId) {
+            return false;
+        }
+        for (const [examId, session] of this.activeSessions.entries()) {
+            if (session && session.sessionId === sessionId && isExpectedWindow(examId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     getExpectedExamMessageWindow(examId) {

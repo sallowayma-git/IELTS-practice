@@ -74,8 +74,11 @@
         if (!value) {
             return '';
         }
-        const normalized = String(value).trim().replace(/\\/g, '/').replace(/\/{2,}/g, '/');
-        return hasUnsafeRelativeResourcePath(normalized) ? '' : normalized;
+        const raw = String(value).trim().replace(/\\/g, '/');
+        if (hasUnsafeRelativeResourcePath(raw)) {
+            return '';
+        }
+        return raw.replace(/\/{2,}/g, '/');
     }
 
     function normalizeLibraryConfigKey(value) {
@@ -113,11 +116,15 @@
         if (!value) {
             return '';
         }
-        let root = String(value).replace(/\\/g, '/');
-        root = root.replace(/\/+$/, '') + '/';
+        let root = String(value).trim().replace(/\\/g, '/');
         if (root.startsWith('./')) {
             root = root.slice(2);
         }
+        root = normalizeResourceRelativePath(root);
+        if (!root) {
+            return '';
+        }
+        root = root.replace(/\/+$/, '') + '/';
         return root;
     }
 

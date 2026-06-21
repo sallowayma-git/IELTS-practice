@@ -161,13 +161,45 @@ async function testUnknownFallbacks() {
     recordResult(testName, true, { enriched });
 }
 
+async function testMetadataPollutionKeysAreStripped() {
+    const testName = 'metadata pollution keys are stripped';
+    resetGlobalIndexes();
+
+    const record = JSON.parse(`{
+        "examId": "pollution-record",
+        "title": "Pollution Record",
+        "__proto__": { "polluted": true },
+        "constructor": { "prototype": { "polluted": true } },
+        "metadata": {
+            "examTitle": "Safe title",
+            "category": "P1",
+            "__proto__": { "polluted": true },
+            "constructor": { "prototype": { "polluted": true } },
+            "prototype": { "polluted": true }
+        }
+    }`);
+
+    const enriched = AnswerComparisonUtils.withEnrichedMetadata(record);
+
+    assertStrictEqual(Object.prototype.polluted, undefined, 'unsafe metadata must not pollute Object.prototype');
+    assertStrictEqual(Object.prototype.hasOwnProperty.call(enriched, '__proto__'), false, 'record clone must drop __proto__');
+    assertStrictEqual(Object.prototype.hasOwnProperty.call(enriched, 'constructor'), false, 'record clone must drop constructor');
+    assertStrictEqual(Object.prototype.hasOwnProperty.call(enriched.metadata, '__proto__'), false, 'metadata clone must drop __proto__');
+    assertStrictEqual(Object.prototype.hasOwnProperty.call(enriched.metadata, 'constructor'), false, 'metadata clone must drop constructor');
+    assertStrictEqual(Object.prototype.hasOwnProperty.call(enriched.metadata, 'prototype'), false, 'metadata clone must drop prototype');
+    assertStrictEqual(enriched.metadata.examTitle, 'Safe title', 'safe metadata fields should remain');
+
+    recordResult(testName, true, { keys: Object.keys(enriched.metadata) });
+}
+
 async function runAllTests() {
     const suite = [
         testUrlPathMatching,
         testFuzzyTitleMatching,
         testCategoryInferenceFromId,
         testEnrichedMetadataGuard,
-        testUnknownFallbacks
+        testUnknownFallbacks,
+        testMetadataPollutionKeysAreStripped
     ];
 
     for (const testFn of suite) {

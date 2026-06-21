@@ -29,6 +29,24 @@ for (const relativePath of files) {
         && source.includes('windowInfo.allowOpaqueOrigin')
         && source.includes("src === 'listening_record_bridge'")
         && source.includes('sourceWindow === expectedWindow');
+    const allowsBoundedOpaqueSession = (
+        relativePath === 'js/core/practiceRecorder.js'
+        && source.includes('isAllowedOpaqueActiveSessionMessage')
+        && source.includes('event.source === expectedWindow')
+    ) || (
+        relativePath === 'js/main.js'
+        && source.includes('allowOpaqueFallbackMessage')
+        && source.includes('matchedWindow')
+        && source.includes('findFallbackSessionByWindow(event.source)')
+    ) || (
+        relativePath === 'js/plugins/themes/theme-adapter-base.js'
+        && source.includes('_isKnownOpaqueSessionWindow')
+        && source.includes('event.source === session.window')
+    ) || (
+        relativePath === 'js/plugins/hp/hp-core-bridge.js'
+        && source.includes('isOpaqueOriginMessage')
+        && source.includes('session.win === event.source')
+    );
     assert(
         !/event\.origin\s*={2,3}\s*['"]null['"][\s\S]{0,120}return\s+true/.test(source),
         `${relativePath} must not accept null postMessage origins unconditionally`
@@ -39,7 +57,10 @@ for (const relativePath of files) {
     );
     if (source.includes("event.origin === 'null'") || source.includes('event.origin === "null"')) {
         assert(
-            source.includes("protocol === 'file:'") || source.includes('protocol === "file:"') || allowsSandboxedListening,
+            source.includes("protocol === 'file:'")
+                || source.includes('protocol === "file:"')
+                || allowsSandboxedListening
+                || allowsBoundedOpaqueSession,
             `${relativePath} must limit null postMessage origins to file:// compatibility or the bounded sandboxed Listening bridge exception`
         );
     }

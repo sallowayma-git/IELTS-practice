@@ -177,6 +177,47 @@ function testDefaultRootStillWorks(ResourceCore) {
     });
 }
 
+function testUnsafePathMapRootsAreIgnored(ResourceCore) {
+    ResourceCore.setBasePrefix('./');
+
+    const unsafeRoots = [
+        'javascript:alert(1)',
+        '//evil.test/assets',
+        '../private',
+        'ReadingPractice?token=secret',
+        'C:\\Users\\secret'
+    ];
+
+    for (const root of unsafeRoots) {
+        assert.strictEqual(
+            ResourceCore.normalizePathRoot(root),
+            '',
+            `unsafe path map root must be rejected: ${root}`
+        );
+
+        ResourceCore.setActivePathMap({
+            reading: { root, exceptions: {} },
+            listening: { root, exceptions: {} }
+        });
+
+        const path = ResourceCore.buildResourcePath({
+            type: 'listening',
+            path: 'safe-set',
+            filename: 'index.html'
+        }, 'html');
+
+        assert.strictEqual(
+            path,
+            './safe-set/index.html',
+            `unsafe path map root must not be included in resource paths: ${root}`
+        );
+    }
+
+    recordResult('ResourceCore rejects unsafe path map roots', true, {
+        checked: unsafeRoots.length
+    });
+}
+
 function testExplicitEmptyRootDoesNotFallback(ResourceCore) {
     ResourceCore.setBasePrefix('./');
     ResourceCore.setActivePathMap({
@@ -267,6 +308,7 @@ async function main() {
         testCustomLibraryRootPreserved(ResourceCore);
         testMappedRootStillPrependsRelativePaths(ResourceCore);
         testDefaultRootStillWorks(ResourceCore);
+        testUnsafePathMapRootsAreIgnored(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
         await testDeletePathMapForConfiguration(context, ResourceCore);

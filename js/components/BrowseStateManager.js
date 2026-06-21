@@ -636,11 +636,14 @@ class BrowseStateManager {
      * 获取浏览统计信息
      */
     getBrowseStats() {
-        const filterCounts = {};
+        const filterCounts = Object.create(null);
         this.browseHistory.forEach(item => {
             if (item.action === 'filter_change') {
                 const key = normalizeBrowseText(item.to) || 'unknown';
-                filterCounts[key] = (filterCounts[key] || 0) + 1;
+                const currentCount = Object.prototype.hasOwnProperty.call(filterCounts, key)
+                    ? filterCounts[key]
+                    : 0;
+                filterCounts[key] = currentCount + 1;
             }
         });
 

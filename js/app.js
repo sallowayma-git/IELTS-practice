@@ -90,6 +90,36 @@ class ExamSystemApp {
         return key.startsWith('on') || key === 'srcdoc';
     }
 
+    function isAppUnsafeTagName(name) {
+        const key = String(name || '').trim().toLowerCase();
+        if (!/^[a-z][a-z0-9-]*$/.test(key)) {
+            return true;
+        }
+        return new Set([
+            'script',
+            'iframe',
+            'object',
+            'embed',
+            'applet',
+            'frame',
+            'frameset',
+            'base',
+            'link',
+            'meta',
+            'style',
+            'template'
+        ]).has(key);
+    }
+
+    function createAppSafeElement(tag) {
+        const requestedTag = String(tag || '').trim().toLowerCase();
+        const safeTag = isAppUnsafeTagName(tag) ? 'div' : requestedTag;
+        if (safeTag !== requestedTag) {
+            console.warn('[App] Replaced unsafe fallback tag');
+        }
+        return document.createElement(safeTag || 'div');
+    }
+
     function isAppUnsafeUrlAttribute(name, value, tagName) {
         const key = String(name || '').toLowerCase();
         const urlAttributes = new Set(['href', 'src', 'srcset', 'imagesrcset', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'cite', 'longdesc', 'ping']);
@@ -539,7 +569,7 @@ class ExamSystemApp {
                 if (adapter && typeof adapter.create === 'function') {
                     return adapter.create(tag, attrs, children);
                 }
-                const element = document.createElement(tag);
+                const element = createAppSafeElement(tag);
                 applySafeElementAttributes(element, attrs);
                 const nodes = Array.isArray(children) ? children : [children];
                 nodes.forEach((child) => {
@@ -633,7 +663,7 @@ class ExamSystemApp {
                 if (adapter && typeof adapter.create === 'function') {
                     return adapter.create(tag, attrs, children);
                 }
-                const element = document.createElement(tag);
+                const element = createAppSafeElement(tag);
                 applySafeElementAttributes(element, attrs);
                 const nodes = Array.isArray(children) ? children : [children];
                 nodes.forEach((child) => {
