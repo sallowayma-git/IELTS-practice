@@ -1,88 +1,216 @@
-# PostgreSQL + 普通登录认证落地计划
+# 多设备便捷部署后端说明
 
-## Summary
+## 定位
 
-- 新增 `Node.js/Express` 后端，目录使用 `backend/`，避免现有 `.gitignore` 中被忽略的 `/server/`。
-- PostgreSQL 成为练习记录的主存储；浏览器本地 IndexedDB/localStorage 仅作为未登录 fallback 和首次导入来源。
-- 登录认证使用用户名 + 密码 + 服务端 session cookie；注册开放，但加入基础限流、密码强度、CSRF 和安全响应头。
-- 暂不实现 FIDO2、`.onion` 配置、完整多端冲突同步；后端先服务本机普通登录和练习记录持久化。
+本分支把原本只能依赖浏览器本地存储的 IELTS Atlas，扩展为可选的个人后端部署模式。目标不是做公开 SaaS，而是方便用户把应用放在自己的电脑、NAS、私人服务器或受控网络入口上，在多台设备之间共享同一份练习记录。
 
-## Key Changes
+静态模式仍然保留：直接打开 `index.html`、使用本地静态服务器或静态网页空间时，应用继续使用 IndexedDB/localStorage 保存数据。后端模式只在 API 可用且用户登录后接管练习记录读写。
 
-- 后端新增：
-  - `backend/package.json`：依赖 `express`, `pg`, `bcryptjs`, `express-session`, `connect-pg-simple`, `helmet`, `dotenv`, `zod`。
-  - `backend/.env.example`：包含 `DATABASE_URL`, `SESSION_SECRET`, `PORT=3000`, `COOKIE_SECURE=false`。
-  - `backend/migrations/001_init.sql`：创建 `users`, `practice_records`, `session` 表。
-  - `backend/src/app.js`：Express app，先注册 API，再静态托管项目根目录。
-  - `backend/src/db.js` / `backend/src/auth.js` / `backend/src/practiceRecords.js`：拆分数据库、认证、练习记录逻辑。
-- `.gitignore` 调整：
-  - 忽略 `backend/.env`、`backend/node_modules/`。
-  - 显式允许 `backend/package-lock.json` 进入版本控制。
-- 后端静态服务：
-  - `GET /` 返回现有 `index.html`。
-  - 静态文件使用 `dotfiles: "deny"`，避免暴露 `.git` 等隐藏目录。
-  - API 与前端同源运行在 `http://127.0.0.1:3000/`，避免 CORS 和 cookie 复杂度。
+## 使用场景
 
-## Public API / Schema
+- 桌面、平板、手机或不同浏览器之间共用练习历史。
+- 在私人服务器或 NAS 上统一托管前端页面和练习记录。
+- 管理员为自己或小范围用户创建、维护账号。
+- 通过可选 Tor hidden service 访问个人部署环境。
+- 在浏览器本地存储被清理或切换设备后，减少手动导出导入次数。
 
-- Auth API：
-  - `GET /api/auth/me`：返回当前用户或 `401`。
-  - `GET /api/auth/csrf`：返回 `{ csrfToken }`，前端写操作使用 `X-CSRF-Token`。
-  - `POST /api/auth/register`：开放注册，字段 `{ username, password }`。
-  - `POST /api/auth/login`：字段 `{ username, password }`。
-  - `POST /api/auth/logout`：销毁 session。
-- Practice API：
-  - `GET /api/practice-records`：返回当前用户全部练习记录数组。
-  - `PUT /api/practice-records`：替换当前用户全部练习记录，用于兼容现有 `PracticeRepository.overwrite()`。
-  - `POST /api/practice-records/import`：批量导入本地记录，按 `id` 和非空 `sessionId` 去重合并。
-  - `DELETE /api/practice-records/:id`：删除单条记录。
-  - `DELETE /api/practice-records`：清空当前用户记录。
-- PostgreSQL：
-  - `users`: `id uuid`, `username text`, `username_lower text unique`, `password_hash text`, timestamps。
-  - `practice_records`: `user_id uuid`, `id text`, `session_id text`, `exam_id text`, `type text`, `title text`, score fields, `payload jsonb`, timestamps。
-  - 主键：`(user_id, id)`。
-  - 唯一索引：`(user_id, session_id)` where `session_id is not null`。
-- 前端接口：
-  - 新增 `RemoteApiClient`，统一处理 `fetch`, session cookie, CSRF, `401`。
-  - 新增 remote-backed data source：只把 `practice_records` 路由到 API；其他现有设置、词表、题库索引继续保留本地存储。
-  - 在 `js/data/index.js` 初始化时，如果 API 可用且用户已登录，使用 remote-backed data source；否则走现有本地存储。
-  - 更新 bundle 构建输入并运行 `node scripts/build-bundles.mjs` 生成同步产物。
+## 主要能力
 
-## Frontend Behavior
+- `backend/` 提供 Node.js/Express 服务，同源托管首页、静态资产、API 和 `/admin`。
+- PostgreSQL 保存用户、session、练习记录、TOTP 设置、恢复码和流量事件。
+- 用户可用用户名和密码注册、登录、登出。
+- 登录后练习记录通过 `/api/practice-records` 读写远端数据库。
+- 首次登录时可以把本地 `practice_records` 导入当前账号。
+- API 不可用或未登录时，前端继续使用本地存储 fallback。
+- 管理员页面支持用户管理、练习记录查看、统计和基础流量分析。
+- TOTP 可作为普通用户的可选二次验证；管理员访问 `/admin` 前必须启用并验证 TOTP。
+- Docker Compose 可以同时启动 `postgres`、`app` 和 `tor`。
 
-- 页面启动后调用 `GET /api/auth/me`：
-  - 已登录：进入应用，读取 PostgreSQL 练习记录。
-  - 未登录：显示登录/注册遮罩；API 数据不可用，本地数据不自动上传。
-- 首次登录后：
-  - 检测本地 `practice_records`。
-  - 如果本地有记录且当前账号未完成导入，显示一次导入确认。
-  - 用户确认后调用 `POST /api/practice-records/import`，成功后写入本地标记 `remote_import_completed:<userId>`。
-- 保存练习记录：
-  - 已登录时写入 PostgreSQL，并把返回/读取结果镜像到本地，保持现有 UI 兼容。
-  - API 不可用或未登录时沿用当前本地存储 fallback。
+## 运行方式
 
-## Test Plan
+### Docker Compose
 
-- 后端测试：
-  - 注册成功、用户名重复、弱密码拒绝。
-  - 登录成功/失败、登出后 API 返回 `401`。
-  - 未登录访问练习记录 API 返回 `401`。
-  - 批量导入按 `id` 和 `sessionId` 去重。
-  - `PUT /api/practice-records` 替换后 `GET` 返回一致数据。
-- 前端测试：
-  - fake `fetch` 验证 remote-backed data source 对 `practice_records` 使用 API，对其他 key 继续本地存储。
-  - `401` 时回退本地，不破坏现有启动流程。
-  - 首次登录导入标记按 `userId` 隔离。
-- 手动验收：
-  - 启动 PostgreSQL，执行 migration。
-  - `npm --prefix backend start` 后访问 `http://127.0.0.1:3000/`。
-  - 注册、登录、完成一次练习、刷新页面后记录仍存在。
-  - 换浏览器登录同一账号，能看到 PostgreSQL 中的练习记录。
-  - 运行 `node scripts/build-bundles.mjs` 后现有静态入口仍可加载。
+在项目根目录准备环境变量：
 
-## Assumptions
+```powershell
+Copy-Item backend\.env.example backend\.env
+```
 
-- 后端使用 Node/Express，账号模型为开放注册，本地记录采用一次性导入。
-- PostgreSQL 通过 `DATABASE_URL` 连接；实现不负责自动安装 PostgreSQL 服务。
-- v1 只保护 API 数据；静态题库页面本身仍可被访问，但没有登录不能读写服务端练习记录。
-- v1 不做 FIDO2、邮件验证、找回密码、管理员后台、`.onion` 服务配置。
+至少替换以下值：
+
+```text
+POSTGRES_PASSWORD
+SESSION_SECRET
+ADMIN_USERNAME
+ADMIN_PASSWORD
+```
+
+启动：
+
+```powershell
+docker compose --env-file backend\.env -f backend\docker-compose.yml up --build
+```
+
+访问：
+
+```text
+http://127.0.0.1:3000/
+http://127.0.0.1:3000/admin
+```
+
+镜像启动时会执行：
+
+```text
+node scripts/migrate.mjs
+node scripts/bootstrap-admin.mjs
+node src/server.js
+```
+
+### 本机 Node.js
+
+本机运行时需要先准备可访问的 PostgreSQL，并让 `backend/.env` 中的 `DATABASE_URL` 指向该数据库。
+
+```powershell
+npm --prefix backend install
+npm --prefix backend run migrate
+npm --prefix backend run bootstrap:admin
+npm --prefix backend start
+```
+
+默认监听：
+
+```text
+http://127.0.0.1:3000/
+```
+
+## 环境变量
+
+核心变量：
+
+- `DATABASE_URL`：本机 Node.js 模式连接 PostgreSQL 时使用。
+- `POSTGRES_PASSWORD`：Docker Compose 中 PostgreSQL 容器密码。
+- `SESSION_SECRET`：session 签名密钥，生产环境必须使用长随机值。
+- `PORT` / `HOST`：后端监听端口和地址。
+- `COOKIE_SECURE`：HTTPS 部署时应设为 `true`。
+- `TRUST_PROXY`：反向代理或 HTTPS 终止在代理层时应设为 `true`。
+
+管理员和 TOTP：
+
+- `ADMIN_USERNAME`：管理员用户名。
+- `ADMIN_PASSWORD`：管理员密码，必须满足密码强度要求。
+- `TOTP_ENABLED`：是否启用 TOTP。
+- `TOTP_ISSUER`：认证器中显示的发行者名称。
+- `TOTP_ENCRYPTION_KEY`：可选的 TOTP 密钥加密材料。
+- `ADMIN_RESET_TOTP`：管理员丢失认证器和恢复码时临时设为 `true`，重新初始化后应恢复为 `false`。
+
+Tor 和健康检查：
+
+- `TOR_BRIDGES`：直接传入 obfs4 bridge。
+- `TOR_BRIDGES_FILE`：容器内 bridge 文件路径。
+- `TOR_BRIDGES_LOCAL_FILE`：宿主机 bridge 文件路径。
+- `SITE_HEALTH_BRIDGE_WARNING_THRESHOLD`：站点健康监控的 bridge 告警阈值。
+
+## API 面
+
+认证：
+
+- `GET /api/auth/me`
+- `GET /api/auth/csrf`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `PATCH /api/auth/account/username`
+- `PATCH /api/auth/account/password`
+- `DELETE /api/auth/account`
+- `GET /api/auth/totp/status`
+- `POST /api/auth/totp/setup`
+- `POST /api/auth/totp/verify-setup`
+- `POST /api/auth/totp/login`
+- `POST /api/auth/totp/recovery-codes`
+- `POST /api/auth/totp/disable`
+
+练习记录：
+
+- `GET /api/practice-records`
+- `PUT /api/practice-records`
+- `POST /api/practice-records/import`
+- `DELETE /api/practice-records/:id`
+- `DELETE /api/practice-records`
+
+管理员：
+
+- `GET /api/admin/summary`
+- `GET /api/admin/stats`
+- `GET /api/admin/analytics`
+- `GET /api/admin/users`
+- `POST /api/admin/users`
+- `GET /api/admin/users/:userId/stats`
+- `GET /api/admin/users/:userId/practice-records`
+- `PATCH /api/admin/users/:userId`
+- `DELETE /api/admin/users/:userId`
+- `DELETE /api/admin/users/:userId/practice-records/:recordId`
+- `GET /api/admin/traffic`
+
+健康检查：
+
+- `GET /api/health`
+
+## 数据边界
+
+远端保存：
+
+- 用户账号和角色。
+- session。
+- 练习记录。
+- TOTP 设置和恢复码。
+- 管理员流量统计事件。
+
+仍保留本地：
+
+- 题库索引和题库配置。
+- 主题和浏览偏好。
+- 词表、部分统计派生状态和 UI 缓存。
+- 未登录、API 不可用或用户未导入时的本地练习记录。
+
+本地记录不会自动上传。首次登录导入需要用户确认，导入完成后以 `remote_import_completed:<userId>` 标记，避免重复提示。
+
+## 安全约束
+
+- 不提交真实 `backend/.env`。
+- 生产部署必须替换 `SESSION_SECRET`、数据库密码和管理员密码。
+- 管理员访问 `/admin` 必须满足管理员角色和 TOTP 验证。
+- API 写操作使用 CSRF token。
+- 静态文件托管会拒绝 dotfiles，并限制模板测试夹等不应暴露的路径。
+- 隐私日志和诊断输出应继续脱敏，不记录完整桥接信息、session、密码、TOTP 密钥或恢复码。
+- 公开传播包含题源的站点仍有版权和平台风险；后端部署只解决个人访问和多设备便利性，不改变使用声明。
+
+## 验证
+
+后端代码改动后至少运行：
+
+```powershell
+npm --prefix backend test
+```
+
+连接真实 PostgreSQL 的验证：
+
+```powershell
+npm --prefix backend run migrate
+npm --prefix backend run smoke:postgres
+```
+
+前端 bundle 或数据层改动后还应运行：
+
+```powershell
+node scripts/build-bundles.mjs
+python developer/tests/ci/run_static_suite.py
+```
+
+手动验收：
+
+1. 启动后端并访问 `http://127.0.0.1:3000/`。
+2. 注册或登录普通账号。
+3. 完成一次练习，刷新后确认记录仍存在。
+4. 换浏览器登录同一账号，确认能看到同一记录。
+5. 用管理员账号登录、绑定 TOTP、访问 `/admin`。
+6. 检查 Docker Compose 的 `postgres`、`app`、`tor` 健康状态。
