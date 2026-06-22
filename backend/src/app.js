@@ -422,6 +422,7 @@ function createApp(options = {}) {
     app.use('/api/admin', createAdminRouter({
         store: adminStore,
         requireAdminTotp,
+        rateLimit: options.adminRateLimit || options.rateLimit,
         totpVerificationMaxAgeMs
     }));
 

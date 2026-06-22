@@ -6,6 +6,8 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
 const INVALID_CREDENTIAL_FORMAT_ERROR = 'Username or password format is invalid';
 const INVALID_CREDENTIALS_ERROR = 'Username or password is incorrect';
 const DUMMY_PASSWORD_HASH = '$2a$12$OOrmAQgyb0OR42FfRf/D6.GOTtaUGKbmYgyZT2MoQOJMTFTxYjNG.';
+const MAX_MEMORY_SESSION_JSON_LENGTH = 256 * 1024;
+const MAX_BCRYPT_PASSWORD_BYTES = 72;
 
 const credentialsSchema = z.object({
     username: z.string().trim().min(3).max(32).regex(USERNAME_PATTERN),
@@ -40,6 +42,11 @@ function normalizeUsername(username) {
     return String(username || '').trim();
 }
 
+function isPasswordWithinBcryptByteLimit(password) {
+    return typeof password === 'string'
+        && Buffer.byteLength(password, 'utf8') <= MAX_BCRYPT_PASSWORD_BYTES;
+}
+
 function validatePasswordStrength(password) {
     const errors = [];
     if (typeof password !== 'string' || password.length < 8) {
@@ -47,6 +54,9 @@ function validatePasswordStrength(password) {
     }
     if (typeof password === 'string' && password.length > 128) {
         errors.push('Password must not exceed 128 characters');
+    }
+    if (typeof password === 'string' && !isPasswordWithinBcryptByteLimit(password)) {
+        errors.push('Password must not exceed 72 UTF-8 bytes');
     }
     if (!/[a-z]/.test(password || '')) {
         errors.push('Password must include a lowercase letter');
@@ -66,6 +76,17 @@ function validatePasswordStrength(password) {
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
     return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+function parseMemorySessionValue(raw) {
+    if (!raw) return null;
+    if (typeof raw !== 'string') return raw;
+    if (raw.length > MAX_MEMORY_SESSION_JSON_LENGTH) return null;
+    try {
+        return JSON.parse(raw);
+    } catch (_) {
+        return null;
+    }
 }
 
 function createRateLimiter(options = {}) {
@@ -209,6 +230,12 @@ function restoreSessionTotpVerification(req, marker, user) {
     };
 }
 
+function authMutationError(message, status = 409) {
+    const error = new Error(message);
+    error.status = status;
+    return error;
+}
+
 class PostgresAuthStore {
     constructor(db) {
         this.db = db;
@@ -267,14 +294,14 @@ class PostgresAuthStore {
         return result.rows[0]?.total || 0;
     }
 
-    async deleteSessionsForUser(userId, exceptSid = null) {
+    async deleteSessionsForUser(userId, exceptSid = null, client = this.db) {
         const params = [userId];
         let exceptClause = '';
         if (exceptSid) {
             params.push(exceptSid);
             exceptClause = ` AND sid <> $${params.length}`;
         }
-        await this.db.query(
+        await client.query(
             `DELETE FROM "session"
              WHERE (sess->'user'->>'id' = $1
                 OR sess->'pendingTotpLogin'->'user'->>'id' = $1
@@ -285,11 +312,33 @@ class PostgresAuthStore {
     }
 
     async deleteUser(userId) {
-        const result = await this.db.query(
-            'DELETE FROM users WHERE id = $1 RETURNING id, username, username_lower, password_hash, role',
-            [userId]
-        );
-        return result.rows[0] || null;
+        const runDelete = async (client) => {
+            await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
+            const current = await client.query(
+                'SELECT id, username, username_lower, password_hash, role FROM users WHERE id = $1 FOR UPDATE',
+                [userId]
+            );
+            if (!current.rows[0]) {
+                return null;
+            }
+            if (publicUser(current.rows[0]).role === 'admin') {
+                const adminCount = await client.query('SELECT count(*)::int AS total FROM users WHERE role = $1', ['admin']);
+                if (Number(adminCount.rows[0]?.total || 0) <= 1) {
+                    throw authMutationError('The last admin account cannot be deleted');
+                }
+            }
+            await this.deleteSessionsForUser(userId, null, client);
+            const result = await client.query(
+                'DELETE FROM users WHERE id = $1 RETURNING id, username, username_lower, password_hash, role',
+                [userId]
+            );
+            return result.rows[0] || null;
+        };
+
+        if (typeof this.db.withTransaction === 'function') {
+            return this.db.withTransaction(runDelete);
+        }
+        return runDelete(this.db);
     }
 }
 
@@ -362,25 +411,13 @@ class MemoryAuthStore {
                 || value?.pendingTotpSetup?.user?.id === userId;
         };
 
-        const parseSession = (raw) => {
-            if (!raw) return null;
-            if (typeof raw === 'string') {
-                try {
-                    return JSON.parse(raw);
-                } catch (_) {
-                    return null;
-                }
-            }
-            return raw;
-        };
-
         const destroy = (sid) => new Promise((resolve) => {
             store.destroy(sid, () => resolve());
         });
 
         if (store.sessions && typeof store.sessions === 'object') {
             const sids = Object.entries(store.sessions)
-                .filter(([sid, raw]) => sid !== exceptSid && shouldDestroy(parseSession(raw)))
+                .filter(([sid, raw]) => sid !== exceptSid && shouldDestroy(parseMemorySessionValue(raw)))
                 .map(([sid]) => sid);
             await Promise.all(sids.map(destroy));
             return;
@@ -392,7 +429,7 @@ class MemoryAuthStore {
                     if (!error && sessions) {
                         const entries = Object.entries(sessions);
                         const sids = entries
-                            .filter(([sid, value]) => sid !== exceptSid && shouldDestroy(parseSession(value)))
+                            .filter(([sid, value]) => sid !== exceptSid && shouldDestroy(parseMemorySessionValue(value)))
                             .map(([sid]) => sid);
                         await Promise.all(sids.map(destroy));
                     }
@@ -405,6 +442,10 @@ class MemoryAuthStore {
     async deleteUser(userId) {
         const existing = await this.findById(userId);
         if (!existing) return null;
+        if (publicUser(existing).role === 'admin' && await this.countAdmins() <= 1) {
+            throw authMutationError('The last admin account cannot be deleted');
+        }
+        await this.deleteSessionsForUser(userId);
         this.users.delete(String(existing.username_lower || existing.username || '').toLowerCase());
         return existing;
     }
@@ -507,6 +548,10 @@ function createAuthRouter(options = {}) {
             const usernameLower = username.toLowerCase();
             checkRateLimit(`login-ip:${req.ip}`);
             checkRateLimit(`login:${req.ip}:${usernameLower}`);
+            if (!isPasswordWithinBcryptByteLimit(parsed.data.password)) {
+                await bcryptImpl.compare(parsed.data.password, DUMMY_PASSWORD_HASH);
+                return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
+            }
 
             const user = await store.findByUsernameLower(usernameLower);
             if (!user) {
@@ -577,6 +622,9 @@ function createAuthRouter(options = {}) {
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
             }
+            if (!isPasswordWithinBcryptByteLimit(parsed.data.password)) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
             const passwordOk = await bcryptImpl.compare(parsed.data.password, currentUser.password_hash);
             if (!passwordOk) {
                 return res.status(401).json({ error: 'Current password is incorrect' });
@@ -624,6 +672,9 @@ function createAuthRouter(options = {}) {
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
             }
+            if (!isPasswordWithinBcryptByteLimit(parsed.data.currentPassword)) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
             const passwordOk = await bcryptImpl.compare(parsed.data.currentPassword, currentUser.password_hash);
             if (!passwordOk) {
                 return res.status(401).json({ error: 'Current password is incorrect' });
@@ -664,6 +715,9 @@ function createAuthRouter(options = {}) {
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
             }
+            if (!isPasswordWithinBcryptByteLimit(parsed.data.password)) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
             const passwordOk = await bcryptImpl.compare(parsed.data.password, currentUser.password_hash);
             if (!passwordOk) {
                 return res.status(401).json({ error: 'Current password is incorrect' });
@@ -702,6 +756,7 @@ module.exports = {
     createAuthRouter,
     createRateLimiter,
     ensureCsrfToken,
+    isPasswordWithinBcryptByteLimit,
     normalizeUsername,
     publicUser,
     requireAdmin,

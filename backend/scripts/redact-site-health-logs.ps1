@@ -8,14 +8,34 @@ param(
 
 $REDACTION_PATTERNS = @(
     @{
+        Name = 'onionUrls'
+        Pattern = '(?i)https?://[a-z2-7]{56}\.onion(?::\d+)?[^\s''"<>]*'
+        Replacement = '[onion-url-hidden]'
+    },
+    @{
+        Name = 'sensitiveQueryValues'
+        Pattern = '(?i)([?&#](?:access_token|auth|authorization|bridge|cert|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s''"<>]+'
+        Replacement = '$1[hidden]'
+    },
+    @{
         Name = 'bridgeLines'
         Pattern = 'obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|,\r\n]*\bcert=\S+[^|,\r\n]*'
         Replacement = 'obfs4 [bridge-line-hidden]'
     },
     @{
+        Name = 'webtunnelBridgeLines'
+        Pattern = 'webtunnel\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|,\r\n]*\burl=\S+[^|,\r\n]*'
+        Replacement = 'webtunnel [bridge-line-hidden]'
+    },
+    @{
         Name = 'bridgeCerts'
         Pattern = 'cert=\S+'
         Replacement = 'cert=[hidden]'
+    },
+    @{
+        Name = 'bridgeUrls'
+        Pattern = '\burl=https?://[^\s|,\r\n''"<>]+'
+        Replacement = 'url=[bridge-url-hidden]'
     },
     @{
         Name = 'onionHostnames'

@@ -143,7 +143,9 @@ function Protect-BridgeDiagnosticText {
     $safe = $Text
     if (-not $RevealBridgeLines) {
         $safe = $safe -replace 'obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|\r\n]*\bcert=\S+[^|\r\n]*', 'obfs4 [bridge-line-hidden]'
+        $safe = $safe -replace 'webtunnel\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|\r\n]*\burl=\S+[^|\r\n]*', 'webtunnel [bridge-line-hidden]'
         $safe = $safe -replace 'cert=\S+', 'cert=[hidden]'
+        $safe = $safe -replace '\burl=https?://[^\s|\r\n''"<>]+', 'url=[bridge-url-hidden]'
     }
     if (-not ($RevealBridgeMetadata -or $RevealBridgeLines)) {
         if ($Candidate -and $Candidate.endpoint) {
@@ -154,6 +156,7 @@ function Protect-BridgeDiagnosticText {
             $safe = $safe.Replace($fingerprint, '[bridge-fingerprint]')
             $safe = $safe.Replace($fingerprint.ToLowerInvariant(), '[bridge-fingerprint]')
         }
+        $safe = $safe -replace '\b[A-Fa-f0-9]{40}\b', '[bridge-fingerprint]'
     }
     return $safe
 }
@@ -182,6 +185,32 @@ function New-BridgeResult {
     return $result
 }
 
+function Protect-BridgeCandidateFile {
+    param([string]$Path)
+    if (-not $Path) {
+        throw 'Bridge candidate temporary file path is required.'
+    }
+
+    if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        if (-not $currentUser) {
+            throw 'Unable to determine current Windows user for bridge candidate file permissions.'
+        }
+        & icacls $Path /inheritance:r /grant:r "${currentUser}:F" *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Failed to restrict temporary bridge candidate file permissions.'
+        }
+        return
+    }
+
+    if (Get-Command chmod -ErrorAction SilentlyContinue) {
+        & chmod 600 $Path *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Failed to restrict temporary bridge candidate file permissions.'
+        }
+    }
+}
+
 function Test-Bridge {
     param(
         [object]$Candidate,
@@ -194,6 +223,7 @@ function Test-Bridge {
     $logs = ''
     try {
         $candidateFile = New-TemporaryFile
+        Protect-BridgeCandidateFile -Path $candidateFile.FullName
         [System.IO.File]::WriteAllText(
             $candidateFile.FullName,
             ([string]$Candidate.line + [Environment]::NewLine),

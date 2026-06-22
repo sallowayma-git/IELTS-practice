@@ -6,6 +6,7 @@ const { z } = require('zod');
 const {
     ensureCsrfToken,
     createRateLimiter,
+    isPasswordWithinBcryptByteLimit,
     publicUser,
     requireAuth,
     verifyCsrfToken
@@ -510,7 +511,12 @@ function createTotpRouter(options = {}) {
         if (!secretPayload) {
             return false;
         }
-        const secret = decryptSecret(secretPayload, config.encryptionKeySource);
+        let secret;
+        try {
+            secret = decryptSecret(secretPayload, config.encryptionKeySource);
+        } catch (_) {
+            return false;
+        }
         const afterTimeStep = typeof store.getLastTotpStep === 'function'
             ? await store.getLastTotpStep(userId)
             : undefined;
@@ -738,7 +744,9 @@ function createTotpRouter(options = {}) {
             }
             checkRateLimit(`totp-disable:${req.ip}:${user.id}`);
             const account = await authStore.findByUsernameLower(user.username.toLowerCase());
-            const passwordOk = account && await bcryptImpl.compare(parsed.data.password, account.password_hash);
+            const passwordOk = account
+                && isPasswordWithinBcryptByteLimit(parsed.data.password)
+                && await bcryptImpl.compare(parsed.data.password, account.password_hash);
             if (!passwordOk) {
                 return res.status(401).json({ error: 'Password is incorrect' });
             }

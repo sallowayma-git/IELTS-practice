@@ -105,9 +105,11 @@ http://127.0.0.1:3000/
 
 Tor 和健康检查：
 
-- `TOR_BRIDGES`：直接传入 obfs4 bridge。
 - `TOR_BRIDGES_FILE`：容器内 bridge 文件路径。
-- `TOR_BRIDGES_LOCAL_FILE`：宿主机 bridge 文件路径。
+- `TOR_BRIDGES_LOCAL_FILE`：宿主机明文 bridge 文件路径，应保持在 Git 之外。
+- `TOR_BRIDGES_ENCRYPTED_LOCAL_FILE`：宿主机 age 加密 bridge 文件路径。
+- `TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE`：宿主机 age identity 文件路径，用于解密加密 bridge。
+- `backend/scripts/encrypt-tor-bridges.ps1`：将 `backend/tor/bridges.local.txt` 加密为 `backend/tor/bridges.age`。
 - `SITE_HEALTH_BRIDGE_WARNING_THRESHOLD`：站点健康监控的 bridge 告警阈值。
 
 ## API 面

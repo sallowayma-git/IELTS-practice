@@ -5,6 +5,7 @@ const { requireRecordId } = require('./practiceRecords');
 const {
     USERNAME_PATTERN,
     ensureCsrfToken,
+    createRateLimiter,
     normalizeUsername,
     publicUser,
     requireAdmin,
@@ -55,7 +56,19 @@ const TRAFFIC_METHOD_MAX_LENGTH = 16;
 const TRAFFIC_PATH_MAX_LENGTH = 300;
 const TRAFFIC_ROUTE_GROUP_MAX_LENGTH = 32;
 const TRAFFIC_HEADER_MAX_LENGTH = 500;
+const TRAFFIC_USER_ID_MAX_LENGTH = 128;
 const DEFAULT_MEMORY_TRAFFIC_MAX_EVENTS = 10000;
+const MAX_MEMORY_SESSION_JSON_LENGTH = 256 * 1024;
+const ADMIN_RECORD_PAYLOAD_MAX_DEPTH = 12;
+const ADMIN_RECORD_PAYLOAD_MAX_NODES = 20000;
+const ADMIN_RECORD_PAYLOAD_MAX_ARRAY_ITEMS = 5000;
+const ADMIN_RECORD_PAYLOAD_MAX_OBJECT_KEYS = 1000;
+const ADMIN_RECORD_SENSITIVE_VALUE = '[redacted]';
+const ADMIN_RECORD_TRUNCATED_VALUE = '[truncated]';
+const ADMIN_RECORD_CIRCULAR_VALUE = '[circular]';
+const ADMIN_RECORD_MAX_DEPTH_VALUE = '[max-depth]';
+const ADMIN_RECORD_ACCESSOR_VALUE = '[accessor]';
+const ADMIN_RECORD_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 function toInteger(value) {
     const number = Number(value);
@@ -78,6 +91,20 @@ function truncateText(value, maxLength, fallback = '') {
         .replace(/[\u0000-\u001F\u007F]+/g, ' ')
         .trim();
     return text.length > maxLength ? text.slice(0, maxLength) : text;
+}
+
+function parseMemorySessionValue(raw) {
+    if (typeof raw !== 'string') {
+        return raw;
+    }
+    if (raw.length > MAX_MEMORY_SESSION_JSON_LENGTH) {
+        return null;
+    }
+    try {
+        return JSON.parse(raw);
+    } catch (_) {
+        return null;
+    }
 }
 
 function stripQueryAndFragment(value, fallback = '') {
@@ -168,9 +195,27 @@ function normalizeUserAgent(value) {
     return 'other';
 }
 
+function normalizeTrafficLanguage(value) {
+    const text = truncateText(value, TRAFFIC_HEADER_MAX_LENGTH)
+        .toLowerCase()
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .trim();
+    if (!text) {
+        return null;
+    }
+    const primary = text.split(',', 1)[0].trim().split(';', 1)[0].trim();
+    const match = primary.match(/^([a-z]{2,3})(?:-[a-z0-9]{2,8})?$/i);
+    return match ? match[1].toLowerCase() : null;
+}
+
 function normalizeTrafficSessionId(value) {
     const text = truncateText(value || '', 128);
     return /^[a-f0-9]{64}$/i.test(text) ? text.toLowerCase() : null;
+}
+
+function normalizeTrafficUserId(value) {
+    const text = truncateText(value || '', TRAFFIC_USER_ID_MAX_LENGTH);
+    return userIdParamSchema.safeParse(text).success ? text.toLowerCase() : null;
 }
 
 function normalizeRole(value) {
@@ -217,20 +262,124 @@ function serializeUser(row) {
     };
 }
 
+function isSensitiveAdminRecordKey(key) {
+    const normalized = String(key ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!normalized) {
+        return false;
+    }
+    return normalized.includes('password')
+        || normalized.includes('token')
+        || normalized.includes('secret')
+        || normalized.includes('csrf')
+        || normalized.includes('totp')
+        || normalized.includes('recoverycode')
+        || normalized.includes('credential')
+        || normalized.includes('privatekey')
+        || normalized === 'apikey'
+        || normalized === 'authorization'
+        || normalized === 'authheader'
+        || normalized === 'cookie'
+        || normalized === 'setcookie';
+}
+
+function sanitizeAdminRecordPayload(value, depth = 0, state = { nodes: 0, seen: new WeakSet() }) {
+    if (value === null) {
+        return null;
+    }
+
+    const valueType = typeof value;
+    if (valueType === 'string' || valueType === 'boolean') {
+        return value;
+    }
+    if (valueType === 'number') {
+        return Number.isFinite(value) ? value : null;
+    }
+    if (valueType === 'bigint') {
+        return value.toString();
+    }
+    if (valueType !== 'object') {
+        return null;
+    }
+
+    if (depth >= ADMIN_RECORD_PAYLOAD_MAX_DEPTH) {
+        return ADMIN_RECORD_MAX_DEPTH_VALUE;
+    }
+    if (state.seen.has(value)) {
+        return ADMIN_RECORD_CIRCULAR_VALUE;
+    }
+
+    state.nodes += 1;
+    if (state.nodes > ADMIN_RECORD_PAYLOAD_MAX_NODES) {
+        return ADMIN_RECORD_TRUNCATED_VALUE;
+    }
+
+    state.seen.add(value);
+
+    if (Array.isArray(value)) {
+        const result = [];
+        const limit = Math.min(value.length, ADMIN_RECORD_PAYLOAD_MAX_ARRAY_ITEMS);
+        for (let index = 0; index < limit; index += 1) {
+            result.push(sanitizeAdminRecordPayload(value[index], depth + 1, state));
+        }
+        if (value.length > limit) {
+            result.push(ADMIN_RECORD_TRUNCATED_VALUE);
+        }
+        return result;
+    }
+
+    let keys;
+    try {
+        keys = Object.keys(value);
+    } catch (_) {
+        return ADMIN_RECORD_TRUNCATED_VALUE;
+    }
+
+    const result = {};
+    const limit = Math.min(keys.length, ADMIN_RECORD_PAYLOAD_MAX_OBJECT_KEYS);
+    for (let index = 0; index < limit; index += 1) {
+        const key = keys[index];
+        if (ADMIN_RECORD_UNSAFE_KEYS.has(key)) {
+            continue;
+        }
+        if (isSensitiveAdminRecordKey(key)) {
+            result[key] = ADMIN_RECORD_SENSITIVE_VALUE;
+            continue;
+        }
+
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!descriptor) {
+            continue;
+        }
+        if (!Object.prototype.propertyIsEnumerable.call(value, key)) {
+            continue;
+        }
+        if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+            result[key] = ADMIN_RECORD_ACCESSOR_VALUE;
+            continue;
+        }
+        result[key] = sanitizeAdminRecordPayload(descriptor.value, depth + 1, state);
+    }
+    if (keys.length > limit) {
+        result.__truncatedKeys = keys.length - limit;
+    }
+    return result;
+}
+
 function serializeRecord(row) {
-    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const rawPayload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const payload = sanitizeAdminRecordPayload(rawPayload);
     return {
         id: row.id,
-        sessionId: row.session_id || payload.sessionId || null,
-        examId: row.exam_id || payload.examId || null,
-        type: row.type || payload.type || payload.examType || null,
-        title: row.title || payload.title || null,
-        score: row.score === null || row.score === undefined ? (payload.score ?? null) : Number(row.score),
-        totalQuestions: row.total_questions ?? payload.totalQuestions ?? null,
-        correctAnswers: row.correct_answers ?? payload.correctAnswers ?? null,
-        duration: row.duration === null || row.duration === undefined ? (payload.duration ?? null) : Number(row.duration),
-        createdAt: row.created_at || payload.createdAt || null,
-        updatedAt: row.updated_at || payload.updatedAt || null,
+        sessionId: row.session_id || rawPayload.sessionId || null,
+        examId: row.exam_id || rawPayload.examId || null,
+        type: row.type || rawPayload.type || rawPayload.examType || null,
+        title: row.title || rawPayload.title || null,
+        score: row.score === null || row.score === undefined ? (rawPayload.score ?? null) : Number(row.score),
+        totalQuestions: row.total_questions ?? rawPayload.totalQuestions ?? null,
+        correctAnswers: row.correct_answers ?? rawPayload.correctAnswers ?? null,
+        duration: row.duration === null || row.duration === undefined ? (rawPayload.duration ?? null) : Number(row.duration),
+        createdAt: row.created_at || rawPayload.createdAt || null,
+        updatedAt: row.updated_at || rawPayload.updatedAt || null,
         payload
     };
 }
@@ -275,7 +424,7 @@ function serializeTrafficEvent(row) {
         routeGroup: row.route_group || row.routeGroup || 'other',
         statusCode: toInteger(row.status_code ?? row.statusCode),
         durationMs: toInteger(row.duration_ms ?? row.durationMs),
-        userId: row.user_id || row.userId || null
+        userId: normalizeTrafficUserId(row.user_id || row.userId)
     };
 }
 
@@ -326,7 +475,7 @@ function normalizeTrafficEvent(event = {}) {
     const rawPath = normalizeRequestPath(event.path || '/');
     const rawReferrer = normalizeReferrer(event.referrer);
     return {
-        userId: event.userId || null,
+        userId: normalizeTrafficUserId(event.userId),
         sessionId: normalizeTrafficSessionId(event.sessionId),
         method: truncateText(event.method || 'GET', TRAFFIC_METHOD_MAX_LENGTH, 'GET').toUpperCase(),
         path: truncateText(rawPath, TRAFFIC_PATH_MAX_LENGTH, '/') || '/',
@@ -1107,7 +1256,13 @@ class MemoryAdminStore {
     async updateUser(userId, changes = {}) {
         const user = this._findUser(userId);
         if (!user) return null;
-        if (changes.role !== undefined) user.role = normalizeRole(changes.role);
+        if (changes.role !== undefined) {
+            const nextRole = normalizeRole(changes.role);
+            if (user.role === 'admin' && nextRole === 'user' && await this.countAdmins() <= 1) {
+                throw adminMutationError('Cannot demote the last admin');
+            }
+            user.role = nextRole;
+        }
         if (changes.password !== undefined) user.password_hash = await hashPassword(changes.password, 4);
         user.updatedAt = new Date().toISOString();
         return serializeUser(user);
@@ -1124,13 +1279,7 @@ class MemoryAdminStore {
         }
         let entries = [];
         if (store.sessions && typeof store.sessions === 'object') {
-            entries = Object.entries(store.sessions).map(([sid, raw]) => {
-                try {
-                    return [sid, typeof raw === 'string' ? JSON.parse(raw) : raw];
-                } catch (_) {
-                    return [sid, null];
-                }
-            });
+            entries = Object.entries(store.sessions).map(([sid, raw]) => [sid, parseMemorySessionValue(raw)]);
         } else if (typeof store.all === 'function') {
             const sessions = await new Promise((resolve, reject) => {
                 store.all((error, items) => error ? reject(error) : resolve(items || {}));
@@ -1154,6 +1303,9 @@ class MemoryAdminStore {
     async deleteUser(userId) {
         const user = this._findUser(userId);
         if (!user) return null;
+        if (user.role === 'admin' && await this.countAdmins() <= 1) {
+            throw adminMutationError('Cannot delete the last admin');
+        }
         await this.deleteSessionsForUser(userId);
         this.authStore.users.delete(String(user.username || '').toLowerCase());
         if (this.practiceStore?.recordsByUser) {
@@ -1386,9 +1538,18 @@ function createAdminRouter(options = {}) {
     const router = express.Router();
     const store = options.store || new PostgresAdminStore(options.db);
     const requireAdminTotp = options.requireAdminTotp || ((req, res, next) => next());
+    const checkRateLimit = options.checkRateLimit || createRateLimiter(options.rateLimit);
     const totpVerificationMaxAgeMs = resolveTotpVerificationMaxAgeMs({
         verificationMaxAgeMs: options.totpVerificationMaxAgeMs
     });
+
+    function checkAdminMutationRateLimit(req, action) {
+        const adminId = req.session?.user?.id || 'unknown';
+        const ip = req.ip || 'unknown';
+        checkRateLimit(`admin-mutation-ip:${ip}`);
+        checkRateLimit(`admin-mutation-user:${adminId}`);
+        checkRateLimit(`admin-mutation-action:${action}:${ip}:${adminId}`);
+    }
 
     router.use(requireAuth);
     router.use(async (req, res, next) => {
@@ -1452,6 +1613,7 @@ function createAdminRouter(options = {}) {
 
     router.post('/users', verifyCsrfToken, async (req, res, next) => {
         try {
+            checkAdminMutationRateLimit(req, 'create-user');
             const parsed = createUserSchema.safeParse(req.body || {});
             if (!parsed.success) {
                 return res.status(400).json({ error: 'Invalid user payload', details: parsed.error.flatten() });
@@ -1488,6 +1650,7 @@ function createAdminRouter(options = {}) {
     router.patch('/users/:userId', verifyCsrfToken, async (req, res, next) => {
         try {
             const userId = parseUserIdParam(req.params.userId);
+            checkAdminMutationRateLimit(req, 'update-user');
             const parsed = updateUserSchema.safeParse(req.body || {});
             if (!parsed.success) {
                 return res.status(400).json({ error: 'Invalid user update', details: parsed.error.flatten() });
@@ -1531,6 +1694,7 @@ function createAdminRouter(options = {}) {
     router.delete('/users/:userId', verifyCsrfToken, async (req, res, next) => {
         try {
             const userId = parseUserIdParam(req.params.userId);
+            checkAdminMutationRateLimit(req, 'delete-user');
             const current = await store.getUser(userId);
             if (!current) {
                 return res.status(404).json({ error: 'User not found' });
@@ -1569,6 +1733,7 @@ function createAdminRouter(options = {}) {
         try {
             const userId = parseUserIdParam(req.params.userId);
             const recordId = parseRecordIdParam(req.params.recordId);
+            checkAdminMutationRateLimit(req, 'delete-practice-record');
             const user = await store.getUser(userId);
             if (!user) {
                 return res.status(404).json({ error: 'User not found' });
@@ -1610,8 +1775,8 @@ function classifyRouteGroup(pathname) {
 function hashVisitor(req, secret) {
     const source = [
         req.ip || '',
-        req.get('user-agent') || '',
-        req.get('accept-language') || ''
+        normalizeUserAgent(req.get('user-agent')) || '',
+        normalizeTrafficLanguage(req.get('accept-language')) || ''
     ].join('|');
     return crypto.createHmac('sha256', secret).update(source).digest('hex');
 }
@@ -1676,6 +1841,7 @@ module.exports = {
     parseListQuery,
     parseUserIdParam,
     parseTrafficQuery,
+    sanitizeAdminRecordPayload,
     serializeRecord,
     serializeUser
 };

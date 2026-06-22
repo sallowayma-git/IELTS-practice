@@ -16,6 +16,15 @@ BRIDGE_AGE_IDENTITY_FILE="${TOR_BRIDGES_AGE_IDENTITY_FILE:-}"
 DECRYPTED_BRIDGES_FILE=""
 MAX_BRIDGE_LINE_LENGTH=1200
 
+cleanup_bridge_sensitive_files() {
+    rm -f "$VALID_BRIDGES_FILE"
+    if [ -n "$DECRYPTED_BRIDGES_FILE" ]; then
+        rm -f "$DECRYPTED_BRIDGES_FILE"
+    fi
+}
+
+trap cleanup_bridge_sensitive_files EXIT INT TERM HUP
+
 is_valid_bridge_endpoint() {
     endpoint="$1"
     printf '%s\n' "$endpoint" | grep -Eq '^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+):[0-9]{1,5}$' || return 1
@@ -109,20 +118,18 @@ if [ -f "$BRIDGE_SOURCE_FILE" ]; then
             echo "ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy"
             cat "$VALID_BRIDGES_FILE"
         } > "$BRIDGE_CONFIG"
-        chown root:"$TOR_USER" "$BRIDGE_CONFIG" 2>/dev/null || true
-        chmod 640 "$BRIDGE_CONFIG"
+        chown "$TOR_USER:$TOR_USER" "$BRIDGE_CONFIG" 2>/dev/null || true
+        chmod 600 "$BRIDGE_CONFIG"
         printf '%%include %s\n' "$BRIDGE_CONFIG" > "$BRIDGE_INCLUDE_CONFIG"
-        chown root:"$TOR_USER" "$BRIDGE_INCLUDE_CONFIG" 2>/dev/null || true
-        chmod 640 "$BRIDGE_INCLUDE_CONFIG"
+        chown "$TOR_USER:$TOR_USER" "$BRIDGE_INCLUDE_CONFIG" 2>/dev/null || true
+        chmod 600 "$BRIDGE_INCLUDE_CONFIG"
     fi
 fi
-rm -f "$VALID_BRIDGES_FILE"
-if [ -n "$DECRYPTED_BRIDGES_FILE" ]; then
-    rm -f "$DECRYPTED_BRIDGES_FILE"
-fi
+cleanup_bridge_sensitive_files
 
 mkdir -p /var/lib/tor/hidden_service
 chown -R "$TOR_USER:$TOR_USER" /var/lib/tor
 chmod 700 /var/lib/tor/hidden_service
 
+trap - EXIT INT TERM HUP
 exec "$@"

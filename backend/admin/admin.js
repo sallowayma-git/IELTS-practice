@@ -1,11 +1,15 @@
 (function() {
     const MAX_ADMIN_STATUS_CHARS = 240;
+    const MAX_ADMIN_RESPONSE_JSON_LENGTH = 1024 * 1024;
     const MAX_RECORD_DETAIL_PAYLOAD_CHARS = 20000;
     const MAX_RECORD_DETAIL_PAYLOAD_DEPTH = 8;
     const MAX_RECORD_DETAIL_PAYLOAD_NODES = 5000;
     const MAX_RECORD_DETAIL_ARRAY_ITEMS = 500;
     const MAX_RECORD_DETAIL_OBJECT_KEYS = 200;
     const RECORD_DETAIL_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const ADMIN_STATUS_AUTH_HEADER_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/\-=]+/gi;
+    const ADMIN_STATUS_SECRET_VALUE_PATTERN = /\b((?:csrf|token|secret|password|recovery[_-]?code|totp)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s"'<>]+)/gi;
+    const ADMIN_STATUS_SECRET_QUERY_PATTERN = /([?&](?:csrf|token|secret|password|recovery[_-]?code|totp)(?:[_-]?[A-Za-z0-9]*)?=)[^&\s"'<>]+/gi;
 
     const state = {
         csrfToken: '',
@@ -109,6 +113,9 @@
     function sanitizeStatusMessage(value, fallback = '') {
         const text = String(value ?? fallback)
             .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(ADMIN_STATUS_SECRET_QUERY_PATTERN, '$1[redacted]')
+            .replace(ADMIN_STATUS_SECRET_VALUE_PATTERN, '$1=[redacted]')
+            .replace(ADMIN_STATUS_AUTH_HEADER_PATTERN, '$1 [redacted]')
             .replace(/\s+/g, ' ')
             .trim();
         const normalized = text || fallback;
@@ -198,37 +205,41 @@
         state.seen.add(value);
         state.nodes++;
 
-        if (Array.isArray(value)) {
-            const safeItems = value
-                .slice(0, MAX_RECORD_DETAIL_ARRAY_ITEMS)
-                .map((item) => sanitizeRecordDetailValue(item, depth + 1, state));
-            if (value.length > safeItems.length) {
-                safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
-            }
-            return safeItems;
-        }
-
-        let keys;
         try {
-            keys = Object.keys(value);
-        } catch (_) {
-            return '[Unreadable]';
-        }
-        const safeObject = {};
-        for (const key of keys.slice(0, MAX_RECORD_DETAIL_OBJECT_KEYS)) {
-            if (RECORD_DETAIL_POLLUTION_KEYS.has(key)) {
-                continue;
+            if (Array.isArray(value)) {
+                const safeItems = value
+                    .slice(0, MAX_RECORD_DETAIL_ARRAY_ITEMS)
+                    .map((item) => sanitizeRecordDetailValue(item, depth + 1, state));
+                if (value.length > safeItems.length) {
+                    safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
+                }
+                return safeItems;
             }
+
+            let keys;
             try {
-                safeObject[key] = sanitizeRecordDetailValue(value[key], depth + 1, state);
+                keys = Object.keys(value);
             } catch (_) {
-                safeObject[key] = '[Unreadable]';
+                return '[Unreadable]';
             }
+            const safeObject = {};
+            for (const key of keys.slice(0, MAX_RECORD_DETAIL_OBJECT_KEYS)) {
+                if (RECORD_DETAIL_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    safeObject[key] = sanitizeRecordDetailValue(value[key], depth + 1, state);
+                } catch (_) {
+                    safeObject[key] = '[Unreadable]';
+                }
+            }
+            if (keys.length > MAX_RECORD_DETAIL_OBJECT_KEYS) {
+                safeObject.__truncatedKeys = keys.length - MAX_RECORD_DETAIL_OBJECT_KEYS;
+            }
+            return safeObject;
+        } finally {
+            state.seen.delete(value);
         }
-        if (keys.length > MAX_RECORD_DETAIL_OBJECT_KEYS) {
-            safeObject.__truncatedKeys = keys.length - MAX_RECORD_DETAIL_OBJECT_KEYS;
-        }
-        return safeObject;
     }
 
     function safeStringifyRecordPayload(payload) {
@@ -532,6 +543,20 @@
         return sanitizeStatusMessage(`Request failed with ${response.status}`);
     }
 
+    function parseAdminResponseJson(text) {
+        if (typeof text !== 'string' || !text) {
+            return null;
+        }
+        if (text.length > MAX_ADMIN_RESPONSE_JSON_LENGTH) {
+            return null;
+        }
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            return null;
+        }
+    }
+
     async function request(path, options = {}) {
         const headers = Object.assign({}, options.headers || {});
         const requiresCsrf = options.csrf !== false && options.method && options.method !== 'GET';
@@ -551,12 +576,7 @@
             body: options.body === undefined ? undefined : JSON.stringify(options.body)
         });
         const text = await response.text();
-        let payload = null;
-        try {
-            payload = text ? JSON.parse(text) : null;
-        } catch (_) {
-            payload = null;
-        }
+        const payload = parseAdminResponseJson(text);
         if (response.status === 401) {
             state.csrfToken = '';
             window.location.href = '/';
@@ -1178,7 +1198,9 @@
             formatNumber,
             formatScoreValue,
             formatScore,
+            sanitizeStatusMessage,
             safeStringifyRecordPayload,
+            parseAdminResponseJson,
             request,
             loadAuth,
             loadRecords,

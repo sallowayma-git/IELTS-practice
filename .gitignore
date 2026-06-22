@@ -42,6 +42,7 @@ backend/logs/
 backend/node_modules/
 backend/tor/bridges.local.txt
 backend/tor/bridges.age
+backend/tor/bridges.age.tmp-*
 backend/tor/bridges.decrypted.txt
 backend/tor/bridge-age-identity.txt
 backend/tor/bridge.identity

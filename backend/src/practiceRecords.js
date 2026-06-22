@@ -142,6 +142,15 @@ function assertSafeJsonPayload(value, path = 'record', depth = 0, state = { node
     }
 }
 
+function cloneSafeJsonValue(value) {
+    assertSafeJsonPayload(value);
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) {
+        return null;
+    }
+    return JSON.parse(serialized);
+}
+
 function normalizeRecordId(value, fieldName = 'id') {
     if (value === null || value === undefined || value === '') {
         return null;
@@ -255,8 +264,7 @@ function normalizePracticeRecord(record) {
     if (!parsed.success) {
         throw requestError('practice record must be an object', 400, parsed.error.flatten());
     }
-    assertSafeJsonPayload(parsed.data);
-    const normalized = { ...parsed.data };
+    const normalized = cloneSafeJsonValue(parsed.data);
     if (!normalizeRecordId(normalized.id)) {
         normalized.id = createRecordId();
     } else {
@@ -423,7 +431,7 @@ class PostgresPracticeRecordStore {
              ORDER BY sort_order ASC, updated_at DESC`,
             [userId]
         );
-        return result.rows.map((row) => row.payload);
+        return result.rows.map((row) => cloneSafeJsonValue(row.payload));
     }
 
     async replace(userId, records) {
@@ -434,7 +442,7 @@ class PostgresPracticeRecordStore {
                 await insertRecord(client, userId, list[index], index);
             }
         });
-        return list;
+        return list.map((record) => cloneSafeJsonValue(record));
     }
 
     async deleteById(userId, id) {
@@ -495,12 +503,12 @@ class MemoryPracticeRecordStore {
 
     async list(userId) {
         const records = this.recordsByUser.get(userId) || [];
-        return records.map((record) => ({ ...record }));
+        return records.map((record) => cloneSafeJsonValue(record));
     }
 
     async replace(userId, records) {
         const list = deduplicatePracticeRecordList(records);
-        this.recordsByUser.set(userId, list.map((record) => ({ ...record })));
+        this.recordsByUser.set(userId, list.map((record) => cloneSafeJsonValue(record)));
         return this.list(userId);
     }
 

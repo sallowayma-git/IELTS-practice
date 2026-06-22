@@ -52,6 +52,24 @@ function Ensure-ParentDirectory {
     }
 }
 
+function Protect-SiteHealthText {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) {
+        return $null
+    }
+
+    $safe = [string]$Value
+    $safe = $safe -replace '(?i)https?://[a-z2-7]{56}\.onion(?::\d+)?[^\s''"<>]*', '[onion-url-hidden]'
+    $safe = $safe -replace '(?i)([?&#](?:access_token|auth|authorization|bridge|cert|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s''"<>]+', '$1[hidden]'
+    $safe = $safe -replace 'obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|,\r\n]*\bcert=\S+[^|,\r\n]*', 'obfs4 [bridge-line-hidden]'
+    $safe = $safe -replace 'webtunnel\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|,\r\n]*\burl=\S+[^|,\r\n]*', 'webtunnel [bridge-line-hidden]'
+    $safe = $safe -replace 'cert=\S+', 'cert=[hidden]'
+    $safe = $safe -replace '\burl=https?://[^\s|,\r\n''"<>]+', 'url=[bridge-url-hidden]'
+    $safe = $safe -replace '\b[a-z2-7]{56}\.onion\b', '[onion-hostname-hidden]'
+    $safe = $safe -replace '\b[A-Fa-f0-9]{40}\b', '[bridge-fingerprint-hidden]'
+    return $safe
+}
+
 function Invoke-Compose {
     param([string[]]$ComposeArgs)
     $output = & docker compose -f $ComposeFile @ComposeArgs 2>&1
@@ -70,7 +88,7 @@ function Get-ContainerState {
             running = $false
             status = 'missing'
             health = 'unknown'
-            error = ($output -join "`n")
+            error = Protect-SiteHealthText ($output -join "`n")
         }
     }
 
@@ -94,7 +112,7 @@ function Get-ContainerState {
             running = $false
             status = 'invalid'
             health = 'unknown'
-            error = $_.Exception.Message
+            error = Protect-SiteHealthText $_.Exception.Message
         }
     }
 }
@@ -121,7 +139,7 @@ function Test-HttpEndpoint {
             ok = $false
             statusCode = $statusCode
             elapsedMs = [int]$timer.ElapsedMilliseconds
-            error = $_.Exception.Message
+            error = Protect-SiteHealthText $_.Exception.Message
         }
     }
 }
@@ -293,7 +311,7 @@ do {
     } catch {
         $timestamp = (Get-Date).ToString('o')
         Ensure-ParentDirectory -Path $AlertPath
-        $line = "[$timestamp] monitor failed: $($_.Exception.Message)"
+        $line = "[$timestamp] monitor failed: $(Protect-SiteHealthText $_.Exception.Message)"
         Add-Content -Encoding utf8 -Path $AlertPath -Value $line
         Write-Warning $line
     }

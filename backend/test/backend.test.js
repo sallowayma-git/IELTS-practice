@@ -8,8 +8,8 @@ const otp = require('otplib');
 const session = require('express-session');
 
 const { createApp } = require('../src/app');
-const { MemoryAuthStore, createRateLimiter } = require('../src/auth');
-const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeTrafficEvent } = require('../src/admin');
+const { MemoryAuthStore, PostgresAuthStore, createRateLimiter } = require('../src/auth');
+const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeTrafficEvent, serializeRecord } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { runMigrations } = require('../src/migrations');
 const { MemoryPracticeRecordStore, extractColumns, mergePracticeRecords, normalizePracticeRecord } = require('../src/practiceRecords');
@@ -30,6 +30,7 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     const torEntrypoint = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'docker-entrypoint.sh'), 'utf8');
     const siteHealthWatcher = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'watch-site-health.ps1'), 'utf8');
     const bridgeTester = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'test-obfs4-bridges.ps1'), 'utf8');
+    const bridgeEncryptor = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'encrypt-tor-bridges.ps1'), 'utf8');
     const healthLogRedactor = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'redact-site-health-logs.ps1'), 'utf8');
     const smokePostgres = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'smoke-postgres.mjs'), 'utf8');
 
@@ -42,9 +43,11 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
             `.dockerignore must exclude ${pattern}`
         );
     }
+    assert(dockerignore.split(/\r?\n/).includes('backend/tor/bridges.age.tmp-*'));
     assert(gitignore.split(/\r?\n/).includes('backend/logs/'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.local.txt'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.age'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.age.tmp-*'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridge-age-identity.txt'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridge.identity'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridge.pub'));
@@ -96,7 +99,10 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(torEntrypoint.includes('umask 077'));
     assert(torEntrypoint.includes('chmod 750 "$TORRC_DIR" "$RUNTIME_DIR"'));
     assert(torEntrypoint.includes('chmod 600 "$VALID_BRIDGES_FILE"'));
-    assert(torEntrypoint.includes('chmod 640 "$BRIDGE_CONFIG"'));
+    assert(torEntrypoint.includes('chown "$TOR_USER:$TOR_USER" "$BRIDGE_CONFIG"'));
+    assert(torEntrypoint.includes('chmod 600 "$BRIDGE_CONFIG"'));
+    assert(torEntrypoint.includes('chown "$TOR_USER:$TOR_USER" "$BRIDGE_INCLUDE_CONFIG"'));
+    assert(torEntrypoint.includes('chmod 600 "$BRIDGE_INCLUDE_CONFIG"'));
     assert(torEntrypoint.includes("printf '%%include %s\\n' \"$BRIDGE_CONFIG\""));
     assert(torEntrypoint.includes('MAX_BRIDGE_LINE_LENGTH=1200'));
     assert(torEntrypoint.includes('is_valid_bridge_endpoint()'));
@@ -111,7 +117,10 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(torEntrypoint.includes('BRIDGE_AGE_IDENTITY_FILE="${TOR_BRIDGES_AGE_IDENTITY_FILE:-}"'));
     assert(torEntrypoint.includes('age --decrypt --identity "$BRIDGE_AGE_IDENTITY_FILE"'));
     assert(torEntrypoint.includes('Failed to decrypt the configured Tor bridge file'));
+    assert(torEntrypoint.includes('cleanup_bridge_sensitive_files() {'));
+    assert(torEntrypoint.includes('trap cleanup_bridge_sensitive_files EXIT INT TERM HUP'));
     assert(torEntrypoint.includes('rm -f "$DECRYPTED_BRIDGES_FILE"'));
+    assert(torEntrypoint.includes('trap - EXIT INT TERM HUP'));
     assert(!/Bridge\\ \*\)\s*printf '%s\\n' "\$bridge"/.test(torEntrypoint));
     assert(siteHealthWatcher.includes('$response.StatusCode -lt 400'));
     assert(!siteHealthWatcher.includes('$response.StatusCode -lt 500'));
@@ -121,6 +130,16 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(siteHealthWatcher.includes('[ValidateRange(1, 60)]'));
     assert(siteHealthWatcher.includes('[ValidateRange(1, 5000)]'));
     assert(siteHealthWatcher.includes('function Resolve-IntegerInRange'));
+    assert(siteHealthWatcher.includes('function Protect-SiteHealthText'));
+    assert(siteHealthWatcher.includes('[onion-url-hidden]'));
+    assert(siteHealthWatcher.includes('[onion-hostname-hidden]'));
+    assert(siteHealthWatcher.includes('[bridge-line-hidden]'));
+    assert(siteHealthWatcher.includes('webtunnel\\s+\\S+\\s+[A-Fa-f0-9]{40}'));
+    assert(siteHealthWatcher.includes('url=[bridge-url-hidden]'));
+    assert(siteHealthWatcher.includes('[bridge-fingerprint-hidden]'));
+    assert(siteHealthWatcher.includes('error = Protect-SiteHealthText ($output -join "`n")'));
+    assert(siteHealthWatcher.includes('error = Protect-SiteHealthText $_.Exception.Message'));
+    assert(siteHealthWatcher.includes('monitor failed: $(Protect-SiteHealthText $_.Exception.Message)'));
     assert(siteHealthWatcher.includes("-Name 'SITE_HEALTH_BRIDGE_WARNING_THRESHOLD'"));
     assert(siteHealthWatcher.includes('[switch]$IncludeOnionHostname'));
     assert(siteHealthWatcher.includes('hostnamePresent = [bool]$hostname'));
@@ -151,6 +170,9 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(bridgeTester.includes('$OBFS4_BRIDGE_PATTERN'));
     assert(bridgeTester.includes('function Test-BridgeEndpoint'));
     assert(bridgeTester.includes('function Protect-BridgeDiagnosticText'));
+    assert(bridgeTester.includes("$safe = $safe -replace '\\b[A-Fa-f0-9]{40}\\b', '[bridge-fingerprint]'"));
+    assert(bridgeTester.includes('webtunnel\\s+\\S+\\s+[A-Fa-f0-9]{40}'));
+    assert(bridgeTester.includes('url=[bridge-url-hidden]'));
     assert(bridgeTester.includes('function New-BridgeResult'));
     assert(bridgeTester.includes('cert='));
     assert(bridgeTester.includes('[^|\\r\\n]*\\bcert=\\S+[^|\\r\\n]*'));
@@ -161,7 +183,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(bridgeTester.includes('error = Protect-BridgeDiagnosticText -Text $ErrorText -Candidate $Candidate'));
     assert(bridgeTester.includes('if ($RevealBridgeMetadata -or $RevealBridgeLines)'));
     assert(!bridgeTester.includes('fingerprint.Substring(0, 8)'));
+    assert(bridgeTester.includes('function Protect-BridgeCandidateFile'));
+    assert(bridgeTester.includes('[System.Security.Principal.WindowsIdentity]::GetCurrent().Name'));
+    assert(bridgeTester.includes('/inheritance:r'));
+    assert(bridgeTester.includes('chmod 600'));
     assert(bridgeTester.includes('$candidateFile = New-TemporaryFile'));
+    assert.match(bridgeTester, /\$candidateFile = New-TemporaryFile\s+Protect-BridgeCandidateFile -Path \$candidateFile\.FullName\s+\[System\.IO\.File\]::WriteAllText/s);
     assert(bridgeTester.includes('[System.IO.File]::WriteAllText'));
     assert(bridgeTester.includes('--mount $bridgeMount'));
     assert(bridgeTester.includes('target=/tmp/bridge-candidate.txt,readonly'));
@@ -174,7 +201,59 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert.match(bridgeTester, /if \(\$RevealBridgeLines\) \{\s*\$result\.line = \$Candidate\.line\s*\}/);
     assert.match(bridgeTester, /\$seen\.Add\(\$item\.line\)/);
     assert.doesNotMatch(bridgeTester, /\$seen\.Add\(\$item\.fingerprint\)/);
+    assert(bridgeEncryptor.includes('[string]$BridgeFile'));
+    assert(bridgeEncryptor.includes('[string]$OutputFile'));
+    assert(bridgeEncryptor.includes('[string]$AgeIdentityFile'));
+    assert(bridgeEncryptor.includes('[switch]$CreateIdentity'));
+    assert(bridgeEncryptor.includes('[switch]$Force'));
+    assert(bridgeEncryptor.includes("Join-Path $PSScriptRoot '..\\tor\\bridges.local.txt'"));
+    assert(bridgeEncryptor.includes("Join-Path $PSScriptRoot '..\\tor\\bridges.age'"));
+    assert(bridgeEncryptor.includes("Join-Path $PSScriptRoot '..\\tor\\bridge-age-identity.txt'"));
+    assert(bridgeEncryptor.includes('function Protect-PrivateFile'));
+    assert(bridgeEncryptor.includes('[System.Security.Principal.WindowsIdentity]::GetCurrent().Name'));
+    assert(bridgeEncryptor.includes('/inheritance:r'));
+    assert(bridgeEncryptor.includes('chmod 600'));
+    assert(bridgeEncryptor.includes('Assert-ToolAvailable -Tool $AgePath'));
+    assert(bridgeEncryptor.includes('Assert-ToolAvailable -Tool $AgeKeygenPath'));
+    assert(bridgeEncryptor.includes('& $AgeKeygenPath -o $AgeIdentityFile *> $null'));
+    assert(bridgeEncryptor.includes('& $AgeKeygenPath -y $AgeIdentityFile 2>$null'));
+    assert(bridgeEncryptor.includes('$recipientLines | Where-Object'));
+    assert(bridgeEncryptor.includes('^age1[0-9a-z]+$'));
+    assert(bridgeEncryptor.includes('$temporaryOutput = "$OutputFile.tmp-'));
+    assert(bridgeEncryptor.includes('& $AgePath --encrypt --recipient $recipient --output $temporaryOutput $BridgeFile *> $null'));
+    assert(bridgeEncryptor.includes('Move-Item -LiteralPath $temporaryOutput -Destination $OutputFile -Force'));
+    assert(bridgeEncryptor.includes('Remove-Item -LiteralPath $temporaryOutput -Force'));
+    assert(bridgeEncryptor.includes('TOR_BRIDGES_ENCRYPTED_LOCAL_FILE'));
+    assert(bridgeEncryptor.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE'));
+    assert(!bridgeEncryptor.includes('[string[]]$Bridge'));
+    assert(!bridgeEncryptor.includes('Write-Host'));
+    assert(!bridgeEncryptor.includes('Get-Content $BridgeFile'));
     assert(healthLogRedactor.includes('[switch]$InPlace'));
+    assert(healthLogRedactor.includes("Name = 'onionUrls'"));
+    assert(healthLogRedactor.includes("Name = 'sensitiveQueryValues'"));
+    assert(healthLogRedactor.includes("Name = 'webtunnelBridgeLines'"));
+    assert(healthLogRedactor.includes("Name = 'bridgeUrls'"));
+    assert(healthLogRedactor.includes('[?&#]'));
+    assert(siteHealthWatcher.includes('[?&#]'));
+    assert(healthLogRedactor.includes('access_token'));
+    assert(healthLogRedactor.includes('sessionId'));
+    assert(healthLogRedactor.includes('csrfToken'));
+    assert(siteHealthWatcher.includes('access_token'));
+    assert(siteHealthWatcher.includes('sessionId'));
+    assert(siteHealthWatcher.includes('csrfToken'));
+    assert(healthLogRedactor.includes('recoveryCode'));
+    assert(healthLogRedactor.includes('recovery_code'));
+    assert(healthLogRedactor.includes('totpToken'));
+    assert(healthLogRedactor.includes('passcode'));
+    assert(healthLogRedactor.includes('authorization'));
+    assert(siteHealthWatcher.includes('recoveryCode'));
+    assert(siteHealthWatcher.includes('recovery_code'));
+    assert(siteHealthWatcher.includes('totpToken'));
+    assert(siteHealthWatcher.includes('passcode'));
+    assert(siteHealthWatcher.includes('authorization'));
+    assert(healthLogRedactor.includes("Replacement = '[onion-url-hidden]'"));
+    assert(healthLogRedactor.includes("Replacement = '$1[hidden]'"));
+    assert(healthLogRedactor.includes("Replacement = 'url=[bridge-url-hidden]'"));
     assert(healthLogRedactor.includes("Pattern = '\\b[a-z2-7]{56}\\.onion\\b'"));
     assert(healthLogRedactor.includes("Replacement = '[onion-hostname-hidden]'"));
     assert(healthLogRedactor.includes("Pattern = '\\b[A-Fa-f0-9]{40}\\b'"));
@@ -211,6 +290,7 @@ async function createClient(options = {}) {
         trustProxy: options.trustProxy,
         bcrypt: options.bcrypt,
         rateLimit: options.rateLimit || { maxAttempts: 100, windowMs: 60_000 },
+        adminRateLimit: options.adminRateLimit,
         csrfRateLimit: options.csrfRateLimit,
         totpRateLimit: options.totpRateLimit,
         totpEnabled: options.totpEnabled,
@@ -440,6 +520,26 @@ test('auth registration rejects weak and duplicate credentials', async () => {
         assert.equal(weak.response.status, 400);
         assert.equal(weak.json.error, 'Password strength is insufficient');
         assert(weak.json.details.includes('Password must be at least 8 characters long'));
+
+        const longPassword = `Aa1${'x'.repeat(70)}`;
+        assert(Buffer.byteLength(longPassword, 'utf8') > 72);
+        const tooLong = await client.request('POST', '/api/auth/register', {
+            username: 'long_password_user',
+            password: longPassword
+        });
+        assert.equal(tooLong.response.status, 400);
+        assert.equal(tooLong.json.error, 'Password strength is insufficient');
+        assert(tooLong.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
+
+        const multibytePassword = `Aa1${'界'.repeat(24)}`;
+        assert(Buffer.byteLength(multibytePassword, 'utf8') > 72);
+        const tooLongMultibyte = await client.request('POST', '/api/auth/register', {
+            username: 'long_utf8_user',
+            password: multibytePassword
+        });
+        assert.equal(tooLongMultibyte.response.status, 400);
+        assert.equal(tooLongMultibyte.json.error, 'Password strength is insufficient');
+        assert(tooLongMultibyte.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
 
         const created = await client.request('POST', '/api/auth/register', {
             username: 'alice',
@@ -710,6 +810,58 @@ test('login performs a dummy password check for unknown users', async () => {
     }
 });
 
+test('password comparisons reject input beyond bcrypt byte limit', async () => {
+    const client = await createClient();
+    const passwordAtLimit = `Aa1${'x'.repeat(69)}`;
+    const extendedPassword = `${passwordAtLimit}Z`;
+    assert.equal(Buffer.byteLength(passwordAtLimit, 'utf8'), 72);
+    assert(Buffer.byteLength(extendedPassword, 'utf8') > 72);
+    try {
+        const created = await register(client, 'bcrypt_limit_user', passwordAtLimit);
+        assert.equal(created.response.status, 201);
+
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const extendedLogin = await client.request('POST', '/api/auth/login', {
+            username: 'bcrypt_limit_user',
+            password: extendedPassword
+        });
+        assert.equal(extendedLogin.response.status, 401);
+        assert.equal(extendedLogin.json.error, 'Username or password is incorrect');
+
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'bcrypt_limit_user',
+            password: passwordAtLimit
+        });
+        assert.equal(login.response.status, 200);
+
+        const rename = await client.request('PATCH', '/api/auth/account/username', {
+            username: 'bcrypt_limit_renamed',
+            password: extendedPassword
+        });
+        assert.equal(rename.response.status, 401);
+        assert.equal(rename.json.error, 'Current password is incorrect');
+
+        const passwordChange = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: extendedPassword,
+            newPassword: 'StrongerPass2'
+        });
+        assert.equal(passwordChange.response.status, 401);
+        assert.equal(passwordChange.json.error, 'Current password is incorrect');
+
+        const deleteAttempt = await client.request('DELETE', '/api/auth/account', {
+            password: extendedPassword,
+            confirm: 'bcrypt_limit_user'
+        });
+        assert.equal(deleteAttempt.response.status, 401);
+        assert.equal(deleteAttempt.json.error, 'Current password is incorrect');
+    } finally {
+        await client.close();
+    }
+});
+
 test('users can update their own username and password', async () => {
     const client = await createClient();
     try {
@@ -750,6 +902,16 @@ test('users can update their own username and password', async () => {
             newPassword: 'weak'
         });
         assert.equal(weakPassword.response.status, 400);
+
+        const longPassword = `Aa1${'x'.repeat(70)}`;
+        assert(Buffer.byteLength(longPassword, 'utf8') > 72);
+        const tooLongPassword = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'StrongPass1',
+            newPassword: longPassword
+        });
+        assert.equal(tooLongPassword.response.status, 400);
+        assert.equal(tooLongPassword.json.error, 'Password strength is insufficient');
+        assert(tooLongPassword.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
 
         const wrongCurrentPassword = await client.request('PATCH', '/api/auth/account/password', {
             currentPassword: 'WrongPass1',
@@ -1044,6 +1206,128 @@ test('the last admin account cannot delete itself', async () => {
     }
 });
 
+test('Auth stores refuse direct last-admin deletion', async () => {
+    const adminUser = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        username: 'auth_admin',
+        username_lower: 'auth_admin',
+        password_hash: 'hash',
+        role: 'admin'
+    };
+    const memoryStore = new MemoryAuthStore();
+    memoryStore.users.set(adminUser.username_lower, { ...adminUser });
+
+    await assert.rejects(
+        () => memoryStore.deleteUser(adminUser.id),
+        (error) => {
+            assert.equal(error.status, 409);
+            assert.equal(error.message, 'The last admin account cannot be deleted');
+            return true;
+        }
+    );
+    assert(memoryStore.users.has(adminUser.username_lower));
+
+    const deletedSessions = [];
+    const ordinaryUser = {
+        id: '123e4567-e89b-12d3-a456-426614174001',
+        username: 'auth_user',
+        username_lower: 'auth_user',
+        password_hash: 'hash',
+        role: 'user'
+    };
+    const memoryDeleteStore = new MemoryAuthStore({
+        sessionStore: {
+            sessions: {
+                target: JSON.stringify({ user: { id: ordinaryUser.id } }),
+                other: JSON.stringify({ user: { id: adminUser.id } })
+            },
+            destroy(sid, callback) {
+                deletedSessions.push(sid);
+                callback();
+            }
+        }
+    });
+    memoryDeleteStore.users.set(adminUser.username_lower, { ...adminUser });
+    memoryDeleteStore.users.set(ordinaryUser.username_lower, { ...ordinaryUser });
+
+    const deletedMemoryUser = await memoryDeleteStore.deleteUser(ordinaryUser.id);
+    assert.equal(deletedMemoryUser.id, ordinaryUser.id);
+    assert.deepEqual(deletedSessions, ['target']);
+    assert.equal(memoryDeleteStore.users.has(ordinaryUser.username_lower), false);
+
+    const queries = [];
+    const ordinaryPgUser = {
+        ...ordinaryUser,
+        username: 'auth_pg_user',
+        username_lower: 'auth_pg_user'
+    };
+    const client = {
+        async query(sql, params = []) {
+            const text = String(sql).replace(/\s+/g, ' ').trim();
+            queries.push({ text, params });
+            if (text === 'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE') {
+                return { rows: [], rowCount: 0 };
+            }
+            if (text === 'SELECT id, username, username_lower, password_hash, role FROM users WHERE id = $1 FOR UPDATE') {
+                return { rows: [params[0] === adminUser.id ? adminUser : ordinaryPgUser], rowCount: 1 };
+            }
+            if (text === 'SELECT count(*)::int AS total FROM users WHERE role = $1') {
+                return { rows: [{ total: 1 }], rowCount: 1 };
+            }
+            if (text.startsWith('DELETE FROM "session"')) {
+                return { rows: [], rowCount: 1 };
+            }
+            if (text.startsWith('DELETE FROM users')) {
+                return { rows: [ordinaryPgUser], rowCount: 1 };
+            }
+            return { rows: [], rowCount: 0 };
+        }
+    };
+    const db = {
+        async withTransaction(handler) {
+            queries.push({ text: 'BEGIN', params: [] });
+            try {
+                const result = await handler(client);
+                queries.push({ text: 'COMMIT', params: [] });
+                return result;
+            } catch (error) {
+                queries.push({ text: 'ROLLBACK', params: [] });
+                throw error;
+            }
+        }
+    };
+    const postgresStore = new PostgresAuthStore(db);
+
+    await assert.rejects(
+        () => postgresStore.deleteUser(adminUser.id),
+        (error) => {
+            assert.equal(error.status, 409);
+            assert.equal(error.message, 'The last admin account cannot be deleted');
+            return true;
+        }
+    );
+
+    assert.deepEqual(queries.map((item) => item.text), [
+        'BEGIN',
+        'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE',
+        'SELECT id, username, username_lower, password_hash, role FROM users WHERE id = $1 FOR UPDATE',
+        'SELECT count(*)::int AS total FROM users WHERE role = $1',
+        'ROLLBACK'
+    ]);
+
+    queries.length = 0;
+    const deletedPostgresUser = await postgresStore.deleteUser(ordinaryPgUser.id);
+    assert.equal(deletedPostgresUser.id, ordinaryPgUser.id);
+    assert.deepEqual(queries.map((item) => item.text), [
+        'BEGIN',
+        'LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE',
+        'SELECT id, username, username_lower, password_hash, role FROM users WHERE id = $1 FOR UPDATE',
+        'DELETE FROM "session" WHERE (sess->\'user\'->>\'id\' = $1 OR sess->\'pendingTotpLogin\'->\'user\'->>\'id\' = $1 OR sess->\'pendingTotpSetup\'->\'user\'->>\'id\' = $1)',
+        'DELETE FROM users WHERE id = $1 RETURNING id, username, username_lower, password_hash, role',
+        'COMMIT'
+    ]);
+});
+
 test('auth login rate limit returns 429 after repeated attempts', async () => {
     const client = await createClient({
         rateLimit: { maxAttempts: 1, windowMs: 60_000 }
@@ -1276,6 +1560,38 @@ test('TOTP login requires a second factor before full session access', async () 
 
         const records = await client.request('GET', '/api/practice-records');
         assert.equal(records.response.status, 200);
+    } finally {
+        await client.close();
+    }
+});
+
+test('TOTP login treats corrupted stored secrets as invalid codes', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'totp_corrupt_secret', 'StrongPass1');
+        const userId = created.json.user.id;
+        const { secret } = await enableTotpForCurrentSession(client);
+        const setting = client.totpStore.settings.get(userId);
+        assert(setting, 'expected enabled TOTP setting');
+        setting.secret_encrypted = 'not-an-encrypted-secret';
+
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const passwordOnly = await client.request('POST', '/api/auth/login', {
+            username: 'totp_corrupt_secret',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordOnly.response.status, 200);
+        assert.equal(passwordOnly.json.requiresTotp, true);
+
+        const login = await client.request('POST', '/api/auth/totp/login', {
+            token: generateTotpToken(secret)
+        });
+        assert.equal(login.response.status, 401);
+        assert.equal(login.json.error, 'TOTP code is invalid');
+        assert(!login.text.includes('Internal server error'));
     } finally {
         await client.close();
     }
@@ -1538,7 +1854,11 @@ test('Postgres TOTP time-step consumption rejects stale updates', async () => {
 test('ordinary users can disable TOTP with password and current code', async () => {
     const client = await createClient();
     try {
-        await register(client, 'totp_disable', 'StrongPass1');
+        const passwordAtLimit = `Aa1${'x'.repeat(69)}`;
+        const extendedPassword = `${passwordAtLimit}Z`;
+        assert.equal(Buffer.byteLength(passwordAtLimit, 'utf8'), 72);
+        assert(Buffer.byteLength(extendedPassword, 'utf8') > 72);
+        await register(client, 'totp_disable', passwordAtLimit);
         const { secret } = await enableTotpForCurrentSession(client);
 
         const wrongPassword = await withDateNowOffset(31_000, () => client.request('POST', '/api/auth/totp/disable', {
@@ -1547,8 +1867,15 @@ test('ordinary users can disable TOTP with password and current code', async () 
         }));
         assert.equal(wrongPassword.response.status, 401);
 
-        const disabled = await withDateNowOffset(31_000, () => client.request('POST', '/api/auth/totp/disable', {
-            password: 'StrongPass1',
+        const extendedPasswordAttempt = await withDateNowOffset(61_000, () => client.request('POST', '/api/auth/totp/disable', {
+            password: extendedPassword,
+            token: generateTotpToken(secret)
+        }));
+        assert.equal(extendedPasswordAttempt.response.status, 401);
+        assert.equal(extendedPasswordAttempt.json.error, 'Password is incorrect');
+
+        const disabled = await withDateNowOffset(91_000, () => client.request('POST', '/api/auth/totp/disable', {
+            password: passwordAtLimit,
             token: generateTotpToken(secret)
         }));
         assert.equal(disabled.response.status, 200);
@@ -1558,7 +1885,7 @@ test('ordinary users can disable TOTP with password and current code', async () 
         await client.csrf();
         const login = await client.request('POST', '/api/auth/login', {
             username: 'totp_disable',
-            password: 'StrongPass1'
+            password: passwordAtLimit
         });
         assert.equal(login.response.status, 200);
         assert.equal(login.json.user.username, 'totp_disable');
@@ -1827,6 +2154,33 @@ test('practice record normalization rejects circular payloads without overflowin
     );
 });
 
+test('practice record normalization and memory store do not expose mutable payload aliases', async () => {
+    const original = {
+        id: 'alias-record',
+        payload: {
+            answers: [
+                { question: 1, value: 'A' }
+            ]
+        }
+    };
+    const normalized = normalizePracticeRecord(original);
+    original.payload.answers[0].value = 'B';
+    assert.equal(normalized.payload.answers[0].value, 'A');
+
+    const store = new MemoryPracticeRecordStore();
+    const saved = await store.replace('alias-user', [
+        { id: 'store-record', payload: { nested: { value: 'initial' } } }
+    ]);
+    saved[0].payload.nested.value = 'mutated-return-value';
+
+    const listed = await store.list('alias-user');
+    assert.equal(listed[0].payload.nested.value, 'initial');
+    listed[0].payload.nested.value = 'mutated-list-value';
+
+    const listedAgain = await store.list('alias-user');
+    assert.equal(listedAgain[0].payload.nested.value, 'initial');
+});
+
 test('practice record normalization rejects non-JSON payload values before serialization', () => {
     assert.throws(
         () => normalizePracticeRecord({ id: 'bigint-record', payload: { value: 10n } }),
@@ -1911,6 +2265,46 @@ test('practice record normalization clamps numeric statistics', () => {
     });
 });
 
+test('admin record serialization redacts sensitive payload fields', () => {
+    const payload = JSON.parse(`{
+        "sessionId": "visible-session",
+        "title": "Visible Practice",
+        "accessToken": "token-secret",
+        "csrf_token": "csrf-secret",
+        "payload": {
+            "password": "password-secret",
+            "recoveryCode": "recovery-secret",
+            "nested": {
+                "safe": "visible-value",
+                "totpSecret": "totp-secret"
+            }
+        },
+        "correctAnswers": { "q1": "A" },
+        "answerKey": { "q1": "A" },
+        "__proto__": { "polluted": true }
+    }`);
+
+    const serialized = serializeRecord({
+        id: 'record-1',
+        payload
+    });
+    const serializedJson = JSON.stringify(serialized);
+
+    assert.equal(serialized.sessionId, 'visible-session');
+    assert.equal(serialized.title, 'Visible Practice');
+    assert.equal(serialized.payload.accessToken, '[redacted]');
+    assert.equal(serialized.payload.csrf_token, '[redacted]');
+    assert.equal(serialized.payload.payload.password, '[redacted]');
+    assert.equal(serialized.payload.payload.recoveryCode, '[redacted]');
+    assert.equal(serialized.payload.payload.nested.totpSecret, '[redacted]');
+    assert.equal(serialized.payload.payload.nested.safe, 'visible-value');
+    assert.deepEqual(serialized.payload.correctAnswers, { q1: 'A' });
+    assert.deepEqual(serialized.payload.answerKey, { q1: 'A' });
+    assert.equal(Object.prototype.hasOwnProperty.call(serialized.payload, '__proto__'), false);
+    assert.equal({}.polluted, undefined);
+    assert.doesNotMatch(serializedJson, /token-secret|csrf-secret|password-secret|recovery-secret|totp-secret/);
+});
+
 test('admin can list users, inspect records, and delete one record', async () => {
     const client = await createClient();
     try {
@@ -1920,7 +2314,21 @@ test('admin can list users, inspect records, and delete one record', async () =>
         const managedUserId = created.json.user.id;
 
         const records = [
-            { id: 'managed-record', sessionId: 'managed-session', type: 'reading', title: 'Managed Reading', score: 82 }
+            {
+                id: 'managed-record',
+                sessionId: 'managed-session',
+                type: 'reading',
+                title: 'Managed Reading',
+                score: 82,
+                accessToken: 'api-token-secret',
+                payload: {
+                    password: 'stored-password-secret',
+                    nested: {
+                        safe: 'visible-managed-value',
+                        csrfToken: 'stored-csrf-secret'
+                    }
+                }
+            }
         ];
         const replaced = await client.request('PUT', '/api/practice-records', { records });
         assert.equal(replaced.response.status, 200);
@@ -1964,6 +2372,14 @@ test('admin can list users, inspect records, and delete one record', async () =>
         const listed = await client.request('GET', `/api/admin/users/${managedUserId}/practice-records`);
         assert.equal(listed.response.status, 200);
         assert.equal(listed.json.records[0].id, 'managed-record');
+        assert.equal(listed.json.records[0].payload.accessToken, '[redacted]');
+        assert.equal(listed.json.records[0].payload.payload.password, '[redacted]');
+        assert.equal(listed.json.records[0].payload.payload.nested.csrfToken, '[redacted]');
+        assert.equal(listed.json.records[0].payload.payload.nested.safe, 'visible-managed-value');
+        assert.doesNotMatch(
+            JSON.stringify(listed.json.records[0]),
+            /api-token-secret|stored-password-secret|stored-csrf-secret/
+        );
 
         const missingUserId = '11111111-1111-4111-8111-111111111111';
         const missingUserRecords = await client.request('GET', `/api/admin/users/${missingUserId}/practice-records`);
@@ -1989,6 +2405,42 @@ test('admin can list users, inspect records, and delete one record', async () =>
 
         const afterDelete = await client.request('GET', `/api/admin/users/${managedUserId}/practice-records`);
         assert.equal(afterDelete.json.records.length, 0);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin sensitive mutations are rate limited', async () => {
+    const client = await createClient({
+        adminRateLimit: { maxAttempts: 1, windowMs: 60_000 }
+    });
+    try {
+        await seedAdmin(client, 'limited_admin', 'StrongPass1');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'limited_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(client);
+
+        const created = await client.request('POST', '/api/admin/users', {
+            username: 'limited_admin_target',
+            password: 'StrongPass1',
+            role: 'user'
+        });
+        assert.equal(created.response.status, 201);
+
+        const limited = await client.request('PATCH', `/api/admin/users/${created.json.user.id}`, {
+            password: 'StrongerPass2'
+        });
+        assert.equal(limited.response.status, 429);
+        assert.equal(limited.json.error, 'Too many requests, please try again later');
+
+        const readOnly = await client.request('GET', '/api/admin/users?q=limited_admin_target');
+        assert.equal(readOnly.response.status, 200);
+        assert.equal(readOnly.json.users.length, 1);
     } finally {
         await client.close();
     }
@@ -2147,6 +2599,17 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         });
         assert.equal(weak.response.status, 400);
 
+        const longPassword = `Aa1${'x'.repeat(70)}`;
+        assert(Buffer.byteLength(longPassword, 'utf8') > 72);
+        const tooLongCreated = await client.request('POST', '/api/admin/users', {
+            username: 'long_created',
+            password: longPassword,
+            role: 'user'
+        });
+        assert.equal(tooLongCreated.response.status, 400);
+        assert.equal(tooLongCreated.json.error, 'Password strength is insufficient');
+        assert(tooLongCreated.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
+
         const added = await client.request('POST', '/api/admin/users', {
             username: 'created_user',
             password: 'StrongPass1',
@@ -2161,6 +2624,13 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         });
         assert.equal(patched.response.status, 200);
         assert.equal(patched.json.user.role, 'admin');
+
+        const tooLongPatched = await client.request('PATCH', `/api/admin/users/${added.json.user.id}`, {
+            password: longPassword
+        });
+        assert.equal(tooLongPatched.response.status, 400);
+        assert.equal(tooLongPatched.json.error, 'Password strength is insufficient');
+        assert(tooLongPatched.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
 
         const adminUsers = await client.request('GET', '/api/admin/users?role=admin&limit=20&offset=0');
         assert.equal(adminUsers.response.status, 200);
@@ -2324,6 +2794,42 @@ test('PostgresAdminStore refuses last-admin demotion inside a locked transaction
     ]);
 });
 
+test('MemoryAdminStore refuses direct last-admin demotion and deletion', async () => {
+    const adminUser = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        username: 'memory_admin',
+        username_lower: 'memory_admin',
+        password_hash: 'hash',
+        role: 'admin'
+    };
+    const authStore = { users: new Map([[adminUser.username_lower, adminUser]]) };
+    const store = new MemoryAdminStore({
+        authStore,
+        practiceStore: {},
+        totpStore: {}
+    });
+
+    await assert.rejects(
+        () => store.updateUser(adminUser.id, { role: 'user' }),
+        (error) => {
+            assert.equal(error.status, 400);
+            assert.equal(error.message, 'Cannot demote the last admin');
+            return true;
+        }
+    );
+    assert.equal(authStore.users.get(adminUser.username_lower).role, 'admin');
+
+    await assert.rejects(
+        () => store.deleteUser(adminUser.id),
+        (error) => {
+            assert.equal(error.status, 400);
+            assert.equal(error.message, 'Cannot delete the last admin');
+            return true;
+        }
+    );
+    assert.equal(authStore.users.has(adminUser.username_lower), true);
+});
+
 test('PostgresAdminStore deletes sessions and users inside a locked transaction', async () => {
     const queries = [];
     const client = {
@@ -2414,6 +2920,59 @@ test('admin user deletion clears target TOTP state in memory store', async () =>
     }
 });
 
+test('memory admin session deletion skips oversized serialized sessions', async () => {
+    const destroyed = [];
+    const sessionStore = {
+        sessions: {
+            valid: JSON.stringify({ user: { id: 'target-user' } }),
+            oversized: '{"user":{"id":"target-user"},"padding":"' + 'x'.repeat(256 * 1024 + 1) + '"}',
+            other: JSON.stringify({ user: { id: 'other-user' } })
+        },
+        destroy(sid, callback) {
+            destroyed.push(sid);
+            callback();
+        }
+    };
+    const store = new MemoryAdminStore({
+        authStore: { users: new Map() },
+        practiceStore: {},
+        totpStore: {},
+        sessionStore
+    });
+
+    await store.deleteSessionsForUser('target-user');
+
+    assert.deepEqual(destroyed, ['valid']);
+    const adminSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'admin.js'), 'utf8');
+    assert(adminSource.includes('MAX_MEMORY_SESSION_JSON_LENGTH = 256 * 1024'));
+    assert(adminSource.includes('function parseMemorySessionValue(raw)'));
+    assert(adminSource.includes('raw.length > MAX_MEMORY_SESSION_JSON_LENGTH'));
+});
+
+test('memory auth session deletion skips oversized serialized sessions', async () => {
+    const destroyed = [];
+    const sessionStore = {
+        sessions: {
+            valid: JSON.stringify({ pendingTotpLogin: { user: { id: 'target-user' } } }),
+            oversized: '{"pendingTotpLogin":{"user":{"id":"target-user"}},"padding":"' + 'x'.repeat(256 * 1024 + 1) + '"}',
+            other: JSON.stringify({ user: { id: 'other-user' } })
+        },
+        destroy(sid, callback) {
+            destroyed.push(sid);
+            callback();
+        }
+    };
+    const store = new MemoryAuthStore({ sessionStore });
+
+    await store.deleteSessionsForUser('target-user');
+
+    assert.deepEqual(destroyed, ['valid']);
+    const authSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'auth.js'), 'utf8');
+    assert(authSource.includes('MAX_MEMORY_SESSION_JSON_LENGTH = 256 * 1024'));
+    assert(authSource.includes('function parseMemorySessionValue(raw)'));
+    assert(authSource.includes('raw.length > MAX_MEMORY_SESSION_JSON_LENGTH'));
+});
+
 test('traffic middleware minimizes untrusted request metadata', async () => {
     const client = await createClient();
     try {
@@ -2468,6 +3027,37 @@ test('traffic middleware minimizes untrusted request metadata', async () => {
             normalizeTrafficEvent({ sessionId: 'A'.repeat(64) }).sessionId,
             'a'.repeat(64)
         );
+        assert.equal(normalizeTrafficEvent({ userId: 'not-a-user-id\r\nsecret' }).userId, null);
+        assert.equal(
+            normalizeTrafficEvent({ userId: '123E4567-E89B-12D3-A456-426614174000' }).userId,
+            '123e4567-e89b-12d3-a456-426614174000'
+        );
+    } finally {
+        await client.close();
+    }
+});
+
+test('traffic visitor hashing ignores raw user-agent entropy', async () => {
+    const client = await createClient();
+    try {
+        await client.request('GET', '/visitor-a', undefined, {
+            headers: {
+                'user-agent': 'Mozilla/5.0 Chrome/120.0.0.0 SecretTokenA',
+                'accept-language': 'en-US,en;q=0.9'
+            }
+        });
+        await client.request('GET', '/visitor-b', undefined, {
+            headers: {
+                'user-agent': 'Mozilla/5.0 Chrome/121.9.8.7 SecretTokenB',
+                'accept-language': 'en-GB,en;q=0.7'
+            }
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        const events = client.adminStore.trafficEvents.filter((entry) => entry.path.startsWith('/visitor-'));
+        assert.equal(events.length, 2);
+        assert.match(events[0].ipHash, /^[a-f0-9]{64}$/);
+        assert.equal(events[0].ipHash, events[1].ipHash);
     } finally {
         await client.close();
     }
@@ -2904,6 +3494,10 @@ test('static hosting serves index and denies dotfiles with security headers', as
         const encodedSlashTraversal = await client.request('GET', '/assets/%2e%2e%2fbackend/src/app.js');
         assert.notEqual(encodedSlashTraversal.response.status, 200);
         assert.doesNotMatch(encodedSlashTraversal.text, /createApp/);
+
+        const encodedBackslashTraversal = await client.request('GET', '/assets/%2e%2e%5cbackend/src/app.js');
+        assert.notEqual(encodedBackslashTraversal.response.status, 200);
+        assert.doesNotMatch(encodedBackslashTraversal.text, /createApp/);
 
         let symlinkCreated = false;
         try {
