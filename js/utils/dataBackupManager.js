@@ -22,6 +22,37 @@ const MAX_BACKUP_HISTORY_ID_LENGTH = 160;
 const MAX_BACKUP_INTERVAL_HOURS = 24 * 365;
 const MAX_BACKUP_SETTING_COUNT = 100;
 const BACKUP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const BACKUP_IMPORT_SENSITIVE_KEYS = new Set([
+    'password',
+    'passwordhash',
+    'password_hash',
+    'currentpassword',
+    'newpassword',
+    'secret',
+    'secretkey',
+    'csrf',
+    'csrftoken',
+    'csrf_token',
+    'totp',
+    'totpsecret',
+    'totp_secret',
+    'recoverycode',
+    'recovery_code',
+    'recoverycodes',
+    'recovery_codes',
+    'authorization',
+    'cookie',
+    'apikey',
+    'api_key',
+    'privatekey',
+    'private_key',
+    'authtoken',
+    'auth_token',
+    'accesstoken',
+    'access_token',
+    'refreshtoken',
+    'refresh_token'
+]);
 
 function createDataBackupId(prefix) {
     const cryptoObj = window.crypto || window.msCrypto;
@@ -280,7 +311,7 @@ class DataBackupManager {
             practiceRecords = await storage.get('practice_records', []);
         }
 
-        practiceRecords = Array.isArray(practiceRecords) ? practiceRecords : [];
+        practiceRecords = this.normalizeExportRecords(practiceRecords);
 
         if (dateRange) {
             practiceRecords = this.filterByDateRange(practiceRecords, dateRange);
@@ -296,21 +327,23 @@ class DataBackupManager {
                 version: '1.0.0',
                 format: normalizedFormat,
                 recordCount: practiceRecords.length,
-                options: { format, includeStats, includeBackups, dateRange, categories }
+                options: this.normalizeExportOptions({ format, includeStats, includeBackups, dateRange, categories })
             },
             practiceRecords
         };
 
         if (includeStats) {
+            let userStats = {};
             if (window.practiceRecorder && typeof window.practiceRecorder.getUserStats === 'function') {
-                exportPayload.userStats = window.practiceRecorder.getUserStats();
+                userStats = window.practiceRecorder.getUserStats();
             } else {
-                exportPayload.userStats = await storage.get('user_stats', {});
+                userStats = await storage.get('user_stats', {});
             }
+            exportPayload.userStats = this.normalizeExportStats(userStats);
         }
 
         if (includeBackups && window.practiceRecorder && typeof window.practiceRecorder.getBackups === 'function') {
-            exportPayload.backups = window.practiceRecorder.getBackups();
+            exportPayload.backups = this.normalizeExportBackups(window.practiceRecorder.getBackups());
         }
 
         await this.recordExportHistory(exportPayload.exportInfo);
@@ -383,6 +416,48 @@ class DataBackupManager {
             mimeType: 'text/csv',
             size: csvContent.length
         };
+    }
+
+    normalizeExportRecords(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .slice(0, MAX_BACKUP_IMPORT_RECORDS)
+            .map((record, index) => this.normalizeRecord(this.sanitizeRecord(record), {
+                preserveIds: true,
+                fallbackIdPrefix: 'export',
+                index
+            }))
+            .filter(Boolean);
+    }
+
+    normalizeExportStats(stats) {
+        return this.cloneSafePlainObject(stats, {
+            maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+        });
+    }
+
+    normalizeExportBackups(backups) {
+        const cloned = this.cloneSafeValue(backups, {
+            maxDepth: MAX_BACKUP_HISTORY_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_HISTORY_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_HISTORY_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_HISTORY_TEXT_LENGTH
+        });
+        return Array.isArray(cloned) ? cloned : [];
+    }
+
+    normalizeExportOptions(options) {
+        return this.cloneSafePlainObject(options, {
+            maxDepth: 3,
+            maxArrayItems: MAX_BACKUP_HISTORY_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_HISTORY_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_HISTORY_TEXT_LENGTH
+        });
     }
     /**
      * Legacy-friendly wrapper.
@@ -574,18 +649,18 @@ class DataBackupManager {
             if (Number.isFinite(contentLength) && contentLength > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
                 throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
             }
-            if (typeof response.text === 'function') {
-                const body = await response.text();
-                if (getBackupTextByteLength(body) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
-                    throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
-                }
-                try {
-                    return JSON.parse(body);
-                } catch (_) {
-                    throw new Error('Fetched import file is not valid JSON.');
-                }
+            if (typeof response.text !== 'function') {
+                throw new Error('Fetched import response cannot be read safely.');
             }
-            return await response.json();
+            const body = await response.text();
+            if (getBackupTextByteLength(body) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+            }
+            try {
+                return JSON.parse(body);
+            } catch (_) {
+                throw new Error('Fetched import file is not valid JSON.');
+            }
         }
 
         if (Array.isArray(source) || this.isPlainObject(source)) {
@@ -1815,7 +1890,9 @@ class DataBackupManager {
     }
 
     isUnsafeImportKey(key) {
-        return BACKUP_IMPORT_POLLUTION_KEYS.has(String(key));
+        const normalized = String(key || '').trim().toLowerCase();
+        return BACKUP_IMPORT_POLLUTION_KEYS.has(normalized)
+            || BACKUP_IMPORT_SENSITIVE_KEYS.has(normalized);
     }
 
     safeEntries(value) {
@@ -1903,6 +1980,10 @@ class DataBackupManager {
             maxObjectKeys = MAX_BACKUP_RECORD_OBJECT_KEYS
         } = options;
         const clone = {};
+        const scanState = new WeakSet();
+        if (value && typeof value === 'object') {
+            scanState.add(value);
+        }
         for (const [key, item] of this.safeEntries(value)) {
             const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
             if (!safeKey || this.isUnsafeImportKey(safeKey)) {
@@ -1911,7 +1992,7 @@ class DataBackupManager {
             if (!Object.prototype.hasOwnProperty.call(clone, safeKey) && Object.keys(clone).length >= maxObjectKeys) {
                 continue;
             }
-            const safeValue = this.cloneSafeValue(item, options, 0);
+            const safeValue = this.cloneSafeValue(item, options, 0, scanState);
             if (safeValue !== undefined) {
                 clone[safeKey] = safeValue;
             }
@@ -1922,6 +2003,10 @@ class DataBackupManager {
     mergeSafePlainObjects(...objects) {
         const merged = {};
         objects.forEach((object) => {
+            const scanState = new WeakSet();
+            if (object && typeof object === 'object') {
+                scanState.add(object);
+            }
             for (const [key, value] of this.safeEntries(object)) {
                 const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
                 if (!safeKey || this.isUnsafeImportKey(safeKey)) {
@@ -1930,7 +2015,7 @@ class DataBackupManager {
                 if (!Object.prototype.hasOwnProperty.call(merged, safeKey) && Object.keys(merged).length >= MAX_BACKUP_RECORD_OBJECT_KEYS) {
                     continue;
                 }
-                const safeValue = this.cloneSafeValue(value);
+                const safeValue = this.cloneSafeValue(value, {}, 0, scanState);
                 if (safeValue !== undefined) {
                     merged[safeKey] = safeValue;
                 }

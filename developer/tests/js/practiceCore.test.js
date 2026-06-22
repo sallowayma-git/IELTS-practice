@@ -65,6 +65,49 @@ async function testProtocolNormalization(PracticeCore) {
     recordResult('PracticeCore 协议归一化', true, normalized);
 }
 
+async function testProtocolRejectsOversizedJson() {
+    let oversizedParsed = false;
+    const windowStub = {
+        console
+    };
+    const sandbox = {
+        window: windowStub,
+        console,
+        Date,
+        Math,
+        JSON: {
+            parse(value) {
+                if (String(value).length > 2 * 1024 * 1024) {
+                    oversizedParsed = true;
+                }
+                return JSON.parse(value);
+            },
+            stringify(value) {
+                return JSON.stringify(value);
+            }
+        }
+    };
+    sandbox.globalThis = sandbox.window;
+    const context = vm.createContext(sandbox);
+    loadScript('js/core/practiceCore.js', context);
+    const PracticeCore = sandbox.window.PracticeCore;
+    const oversizedEnvelope = '{"type":"practice_complete","data":"' + 'x'.repeat(2 * 1024 * 1024 + 1) + '"}';
+
+    assert.equal(PracticeCore.protocol.normalizeMessage(oversizedEnvelope), null);
+    assert.equal(oversizedParsed, false, 'oversized practice message JSON should be rejected before JSON.parse');
+
+    const practiceCoreSource = fs.readFileSync(path.join(repoRoot, 'js/core/practiceCore.js'), 'utf8');
+    assert(
+        practiceCoreSource.includes('MAX_PRACTICE_MESSAGE_JSON_LENGTH = 2 * 1024 * 1024') &&
+        practiceCoreSource.includes('value.length > MAX_PRACTICE_MESSAGE_JSON_LENGTH'),
+        'PracticeCore must size-check string message payloads before parsing JSON'
+    );
+
+    recordResult('PracticeCore rejects oversized JSON envelopes before parse', true, {
+        maxBytes: 2 * 1024 * 1024
+    });
+}
+
 async function testCompletionIngestion(PracticeCore) {
     const highlights = [{ id: 'hl-1', scope: 'left', text: 'highlight' }];
     const record = PracticeCore.ingestor.fromCompletion({
@@ -264,6 +307,7 @@ async function main() {
 
     try {
         await testProtocolNormalization(PracticeCore);
+        await testProtocolRejectsOversizedJson();
         await testCompletionIngestion(PracticeCore);
         await testAnswerComparisonKeepsListeningCandidates(PracticeCore);
         await testClonePlainObjectGuardsUntrustedPayloads(PracticeCore);

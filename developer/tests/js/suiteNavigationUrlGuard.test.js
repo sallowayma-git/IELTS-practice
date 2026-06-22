@@ -72,6 +72,12 @@ assert(
     !practicePageEnhancerSource.includes('document.querySelector(`label[for="${input.id}"]`)'),
     'practice page enhancer must escape dynamic input IDs before looking up labels'
 );
+assert(
+    practicePageEnhancerSource.includes('const suiteIdMatch = /^(?:set|page-test)(\\d{1,4})$/i.exec(suiteIdText)') &&
+    practicePageEnhancerSource.includes('normalizedLowerKey.startsWith(flatPrefixUnderscore)') &&
+    !practicePageEnhancerSource.includes('new RegExp(`^t${testNum}'),
+    'practice page enhancer must not build answer-key matching regexes from raw suite IDs'
+);
 
 const vocabSessionViewSource = fs.readFileSync(path.join(repoRoot, 'js/components/vocabSessionView.js'), 'utf8');
 assert(
@@ -155,6 +161,14 @@ assert(
     listeningRecordBridgeSource.includes('replace(/[\\u0000-\\u001F\\u007F"\\\\]/g') &&
     listeningRecordBridgeSource.includes("return '\\\\' + char.charCodeAt(0).toString(16) + ' ';"),
     'listening record bridge selector fallback must escape control characters as CSS code points'
+);
+
+const legacyViewBundleSource = fs.readFileSync(path.join(repoRoot, 'js/views/legacyViewBundle.js'), 'utf8');
+assert(
+    legacyViewBundleSource.includes('function normalizeLegacyActiveClass') &&
+    legacyViewBundleSource.includes('function removeLegacyClassToken') &&
+    !legacyViewBundleSource.includes("new RegExp('(?:^|\\\\s)' + activeClass"),
+    'legacy navigation fallback must normalize activeClass and avoid regexes built from configurable class names'
 );
 
 console.log(JSON.stringify({

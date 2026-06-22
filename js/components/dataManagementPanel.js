@@ -147,6 +147,37 @@ function validateImportFile(file) {
     }
 }
 
+function getImportTextByteLength(value) {
+    const text = String(value ?? '');
+    if (typeof TextEncoder === 'function') {
+        return new TextEncoder().encode(text).byteLength;
+    }
+    if (typeof Blob === 'function') {
+        return new Blob([text]).size;
+    }
+    return text.length;
+}
+
+function assertImportContentSize(content) {
+    if (getImportTextByteLength(content) > MAX_IMPORT_FILE_BYTES) {
+        throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+}
+
+function parseSelectedImportContent(content) {
+    assertImportContentSize(content);
+    try {
+        return JSON.parse(content);
+    } catch (_) {
+        return content;
+    }
+}
+
+function parseImportFileContent(content) {
+    assertImportContentSize(content);
+    return JSON.parse(content);
+}
+
 function describeImportPayloadLength(payload) {
     if (Array.isArray(payload)) {
         return payload.length;
@@ -804,9 +835,15 @@ class DataManagementPanel {
                     return;
                 }
                 try {
-                    this.selectedFileContent = JSON.parse(content);
-                } catch (_) {
-                    this.selectedFileContent = content;
+                    this.selectedFileContent = parseSelectedImportContent(content);
+                } catch (error) {
+                    console.error('[DataManagementPanel] Failed to prepare import file:', summarizeDataManagementErrorForLog(error));
+                    setElementText(fileNameSpan, '鏈€夋嫨鏂囦欢');
+                    setElementDisabled(importBtn, true);
+                    this.selectedFileContent = null;
+                    target.value = '';
+                    this.showMessage('Import file is invalid.', 'error');
+                    return;
                 }
                 dataManagementDebugLog('[DataManagementPanel] File content loaded');
             }).catch(error => {
@@ -844,7 +881,7 @@ class DataManagementPanel {
                 validateImportFile(file);
                 this.showProgress('读取文件...');
                 const rawContent = await this.readFile(file);
-                fileContent = JSON.parse(rawContent);
+                fileContent = parseImportFileContent(rawContent);
                 dataManagementDebugLog('[DataManagementPanel] JSON parsed, type:', Array.isArray(fileContent) ? 'array' : typeof fileContent, 'length:', describeImportPayloadLength(fileContent));
             } else {
                 this.showMessage('请先选择要导入的文件', 'warning');

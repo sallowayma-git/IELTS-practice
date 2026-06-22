@@ -22,6 +22,7 @@
     const MAX_SPELLING_VOCAB_WORDS = 5000;
     const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
     const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const MAX_SPELLING_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
     const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     function summarizeSpellingCollectorErrorForLog(error) {
         if (!error || typeof error !== 'object') {
@@ -32,6 +33,23 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function summarizeSpellingTextForLog(value) {
+        if (value === null || value === undefined || value === '') {
+            return '[empty]';
+        }
+        return `[${typeof value}:${String(value).length} chars]`;
+    }
+
+    function parseSpellingLexiconJson(text) {
+        if (typeof text !== 'string') {
+            throw new Error('lexicon_json_invalid');
+        }
+        if (text.length > MAX_SPELLING_LEXICON_JSON_BYTES) {
+            throw new Error('lexicon_json_too_large');
+        }
+        return JSON.parse(text);
     }
 
 
@@ -388,7 +406,11 @@
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            return response.json();
+            const contentLength = Number(response.headers?.get?.('content-length'));
+            if (Number.isFinite(contentLength) && contentLength > MAX_SPELLING_LEXICON_JSON_BYTES) {
+                throw new Error('lexicon_json_too_large');
+            }
+            return parseSpellingLexiconJson(await response.text());
         }
 
         readJsonViaXHR(url) {
@@ -416,7 +438,7 @@
                             return;
                         }
                         try {
-                            resolve(JSON.parse(xhr.responseText));
+                            resolve(parseSpellingLexiconJson(xhr.responseText));
                         } catch (error) {
                             reject(error);
                         }
@@ -1053,7 +1075,11 @@
             const threshold = this.resolveSimilarityThreshold(maxLen);
             const isSimilar = similarity >= threshold;
             if (isSimilar) {
-                console.log(`[SpellingErrorCollector] 拼写相似: "${input}" vs "${correct}", 相似度: ${(similarity * 100).toFixed(1)}%`);
+                console.log('[SpellingErrorCollector] Similar spelling detected:', {
+                    input: summarizeSpellingTextForLog(input),
+                    correct: summarizeSpellingTextForLog(correct),
+                    similarityPercent: Number((similarity * 100).toFixed(1))
+                });
                 return {
                     isSimilar: true,
                     reasonCode: this.isAdjacentTransposition(inputNorm, correctNorm) ? 'transpose' : 'edit',

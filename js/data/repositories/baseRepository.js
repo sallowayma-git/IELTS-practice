@@ -1,6 +1,11 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const UNSAFE_REPOSITORY_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_REPOSITORY_SANITIZE_DEPTH = 24;
+    const MAX_REPOSITORY_SANITIZE_NODES = 50000;
+    const MAX_REPOSITORY_ARRAY_ITEMS = 5000;
+    const MAX_REPOSITORY_OBJECT_KEYS = 500;
+    const MAX_REPOSITORY_STRING_LENGTH = 20000;
 
     function getValidationFailureMessage(name) {
         return `${name || 'Repository'} data validation failed`;
@@ -18,34 +23,89 @@
         return value && Object.prototype.toString.call(value) === '[object Object]';
     }
 
-    function sanitizeRepositoryValue(value, seen = new WeakMap()) {
-        if (!value || typeof value !== 'object') {
+    function sanitizeRepositoryValue(value, seen = null, depth = 0) {
+        if (value === null || value === undefined) {
             return value;
         }
-        if (seen.has(value)) {
-            return seen.get(value);
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_REPOSITORY_STRING_LENGTH
+                ? `${value.slice(0, MAX_REPOSITORY_STRING_LENGTH)}...`
+                : value;
         }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (depth > MAX_REPOSITORY_SANITIZE_DEPTH) {
+            return '[MaxDepth]';
+        }
+
+        const scanState = seen || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (scanState.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (scanState.nodes >= MAX_REPOSITORY_SANITIZE_NODES) {
+            return '[Truncated]';
+        }
+        scanState.nodes += 1;
+        scanState.seen.add(value);
+
         if (Array.isArray(value)) {
             const output = [];
-            seen.set(value, output);
-            value.forEach((item, index) => {
-                output[index] = sanitizeRepositoryValue(item, seen);
-            });
-            return output;
+            try {
+                value.slice(0, MAX_REPOSITORY_ARRAY_ITEMS).forEach((item) => {
+                    const safeValue = sanitizeRepositoryValue(item, scanState, depth + 1);
+                    if (safeValue !== undefined) {
+                        output.push(safeValue);
+                    }
+                });
+                if (value.length > MAX_REPOSITORY_ARRAY_ITEMS) {
+                    output.push(`[Truncated ${value.length - MAX_REPOSITORY_ARRAY_ITEMS} items]`);
+                }
+                return output;
+            } finally {
+                scanState.seen.delete(value);
+            }
         }
         if (!isPlainObject(value)) {
-            return value;
+            scanState.seen.delete(value);
+            return undefined;
         }
 
         const output = {};
-        seen.set(value, output);
-        Object.keys(value).forEach((key) => {
-            if (UNSAFE_REPOSITORY_KEYS.has(key)) {
-                return;
+        try {
+            const keys = Object.keys(value);
+            keys.slice(0, MAX_REPOSITORY_OBJECT_KEYS).forEach((key) => {
+                if (UNSAFE_REPOSITORY_KEYS.has(key)) {
+                    return;
+                }
+                const safeValue = sanitizeRepositoryValue(value[key], scanState, depth + 1);
+                if (safeValue !== undefined) {
+                    output[key] = safeValue;
+                }
+            });
+            if (keys.length > MAX_REPOSITORY_OBJECT_KEYS) {
+                output.__truncatedKeys = keys.length - MAX_REPOSITORY_OBJECT_KEYS;
             }
-            output[key] = sanitizeRepositoryValue(value[key], seen);
-        });
-        return output;
+            return output;
+        } finally {
+            scanState.seen.delete(value);
+        }
     }
 
     function cloneValue(value) {

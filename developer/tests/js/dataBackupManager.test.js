@@ -254,6 +254,83 @@ assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.metadata.safe, '
 assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.metadata.safe.child, 'prototype'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.realData.nested.level1.level2.level3, 'constructor'), false);
 
+const circularRecord = {
+    id: 'export-record',
+    examId: 'reading-export',
+    title: 'IELTS Listening Practice - Part 1: Exported title',
+    status: 'completed',
+    score: Infinity,
+    password: 'secret-password',
+    accessToken: 'secret-access-token',
+    metadata: JSON.parse(`{
+        "safe": "yes",
+        "category": "reading",
+        "csrfToken": "secret-csrf-token",
+        "__proto__": { "pollutedExport": true },
+        "constructor": { "prototype": { "pollutedExport": true } }
+    }`),
+    realData: {
+        count: 123n,
+        totpSecret: 'secret-totp-value',
+        recoveryCodes: ['secret-recovery-code'],
+        nested: {
+            ok: true,
+            accessToken: 'secret-nested-token'
+        }
+    }
+};
+circularRecord.realData.self = circularRecord.realData;
+const circularStats = {
+    totalPractice: 1,
+    largest: 123n,
+    nested: {}
+};
+circularStats.nested.self = circularStats.nested;
+const circularBackup = {
+    id: 'backup-circular',
+    data: {}
+};
+circularBackup.data.self = circularBackup.data;
+context.window.practiceRecorder = {
+    getPracticeRecords() {
+        return [circularRecord];
+    },
+    getUserStats() {
+        return circularStats;
+    },
+    getBackups() {
+        return [circularBackup];
+    }
+};
+const exportResult = await manager.exportPracticeRecords({
+    includeStats: true,
+    includeBackups: true,
+    categories: ['reading']
+});
+const exportedPayload = JSON.parse(exportResult.data);
+assert.equal(exportedPayload.practiceRecords.length, 1);
+assert.equal(exportedPayload.practiceRecords[0].title, 'Exported title');
+assert.equal(exportedPayload.practiceRecords[0].score, undefined);
+assert.equal(exportedPayload.practiceRecords[0].password, undefined);
+assert.equal(exportedPayload.practiceRecords[0].accessToken, undefined);
+assert.equal(exportedPayload.practiceRecords[0].metadata.safe, 'yes');
+assert.equal(exportedPayload.practiceRecords[0].metadata.csrfToken, undefined);
+assert.equal(exportedPayload.practiceRecords[0].realData.count, undefined);
+assert.equal(exportedPayload.practiceRecords[0].realData.totpSecret, undefined);
+assert.equal(exportedPayload.practiceRecords[0].realData.recoveryCodes, undefined);
+assert.equal(exportedPayload.practiceRecords[0].realData.nested.accessToken, undefined);
+assert.equal(exportedPayload.practiceRecords[0].realData.self, undefined);
+assert.equal(Object.prototype.hasOwnProperty.call(exportedPayload.practiceRecords[0].metadata, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(exportedPayload.practiceRecords[0].metadata, 'constructor'), false);
+assert.equal(exportedPayload.userStats.totalPractice, 1);
+assert.equal(exportedPayload.userStats.largest, undefined);
+assert.equal(exportedPayload.userStats.nested.self, undefined);
+assert.equal(exportedPayload.backups.length, 1);
+assert.equal(exportedPayload.backups[0].data.self, undefined);
+assert(!JSON.stringify(exportedPayload).includes('secret-'));
+assert.equal(Object.prototype.pollutedExport, undefined);
+delete context.window.practiceRecorder;
+
 const wideRecord = {
     id: 'wide-record',
     examId: 'reading-wide',

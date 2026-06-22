@@ -27,7 +27,7 @@ function createLocalStorage(seed = {}) {
     };
 }
 
-function loadVocabStore({ embeddedWords, storageSeed }) {
+function loadVocabStore({ embeddedWords, storageSeed, onJsonParse } = {}) {
     const quietConsole = {
         log() {},
         warn() {},
@@ -41,13 +41,22 @@ function loadVocabStore({ embeddedWords, storageSeed }) {
         },
         location: { protocol: 'file:' }
     };
+    const guardedJson = {
+        parse(value) {
+            if (typeof onJsonParse === 'function') {
+                onJsonParse(value);
+            }
+            return JSON.parse(value);
+        },
+        stringify: JSON.stringify
+    };
     const sandbox = {
         window: windowStub,
         console: quietConsole,
         localStorage: createLocalStorage(storageSeed),
         Date,
         Math,
-        JSON,
+        JSON: guardedJson,
         setTimeout,
         clearTimeout
     };
@@ -55,7 +64,7 @@ function loadVocabStore({ embeddedWords, storageSeed }) {
     sandbox.window.localStorage = sandbox.localStorage;
     sandbox.window.Date = Date;
     sandbox.window.Math = Math;
-    sandbox.window.JSON = JSON;
+    sandbox.window.JSON = guardedJson;
     sandbox.window.setTimeout = setTimeout;
     sandbox.window.clearTimeout = clearTimeout;
 
@@ -238,6 +247,26 @@ async function testVocabStoreCapsImportedWordPayloads() {
     assert.strictEqual(queue[0].length, 200, 'review queue ids must be truncated');
 }
 
+async function testVocabStoreRejectsOversizedLocalStorageBeforeParsing() {
+    let oversizedParsed = false;
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {
+            vocab_list_custom: '{"words":[],"padding":"' + 'x'.repeat((5 * 1024 * 1024) + 1) + '"}'
+        },
+        onJsonParse(value) {
+            if (String(value || '').length > 5 * 1024 * 1024) {
+                oversizedParsed = true;
+            }
+        }
+    });
+
+    await vocabStore.init();
+    const customList = await vocabStore.loadList('custom');
+    assert.strictEqual(customList.words.length, 0, 'oversized local vocab list should fall back to an empty list');
+    assert.strictEqual(oversizedParsed, false, 'oversized vocab localStorage payload must be rejected before JSON.parse');
+}
+
 async function testVocabStoreDropsUnsafeExtraMetadataKeys() {
     const vocabStore = loadVocabStore({
         embeddedWords: [],
@@ -276,6 +305,95 @@ async function testVocabStoreDropsUnsafeExtraMetadataKeys() {
     assert.strictEqual(Object.prototype.pollutedAnswer, undefined);
 }
 
+async function testVocabStoreKeepsSharedExtraMetadataButDropsCycles() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {}
+    });
+    const shared = { text: 'shared context' };
+    const metadata = {
+        first: shared,
+        second: shared
+    };
+    metadata.self = metadata;
+
+    await vocabStore.init();
+    await vocabStore.setWords([{
+        word: 'context',
+        meaning: 'shared data',
+        metadata
+    }]);
+    const [word] = vocabStore.getWords();
+
+    assert.strictEqual(word.metadata.first.text, 'shared context');
+    assert.strictEqual(word.metadata.second.text, 'shared context');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(word.metadata, 'self'), false);
+}
+
+async function testVocabStoreReturnsDefensiveClones() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {}
+    });
+
+    await vocabStore.init();
+    await vocabStore.setWords([{
+        id: 'clone-guard',
+        word: 'garden',
+        meaning: 'place with plants',
+        nextReview: '2020-01-01T00:00:00.000Z',
+        metadata: { ok: 'yes' },
+        acceptedAnswers: [{ text: 'garden' }]
+    }]);
+
+    const [word] = vocabStore.getWords();
+    word.metadata.ok = 'changed';
+    word.acceptedAnswers[0].text = 'changed';
+
+    const [stored] = vocabStore.getWords();
+    assert.strictEqual(stored.metadata.ok, 'yes', 'getWords must not expose nested store references');
+    assert.strictEqual(stored.acceptedAnswers[0].text, 'garden', 'getWords must clone nested arrays');
+
+    const [dueWord] = vocabStore.getDueWords(new Date('2020-01-02T00:00:00.000Z'));
+    dueWord.metadata.ok = 'due-changed';
+    assert.strictEqual(vocabStore.getWords()[0].metadata.ok, 'yes', 'getDueWords must not expose nested store references');
+
+    const [newWord] = vocabStore.getNewWords(1);
+    newWord.acceptedAnswers[0].text = 'new-changed';
+    assert.strictEqual(vocabStore.getWords()[0].acceptedAnswers[0].text, 'garden', 'getNewWords must not expose nested store references');
+
+    const updated = await vocabStore.updateWord('clone-guard', { note: 'remember' });
+    updated.metadata.ok = 'updated-changed';
+    assert.strictEqual(vocabStore.getWords()[0].metadata.ok, 'yes', 'updateWord return value must be detached from store state');
+}
+
+async function testVocabStoreReturnsDefensiveListAndConfigClones() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {
+            vocab_list_custom: JSON.stringify([{
+                id: 'custom-1',
+                word: 'custom',
+                meaning: 'owned by user',
+                metadata: { ok: 'yes' }
+            }])
+        }
+    });
+
+    await vocabStore.init();
+    const first = await vocabStore.loadList('custom');
+    first.words[0].metadata.ok = 'changed';
+    first.words.push({ word: 'evil', meaning: 'mutated' });
+
+    const second = await vocabStore.loadList('custom');
+    assert.strictEqual(second.words.length, 1, 'loadList cache must not expose mutable list arrays');
+    assert.strictEqual(second.words[0].metadata.ok, 'yes', 'loadList cache must clone nested word metadata');
+
+    const lists = vocabStore.VOCAB_LISTS;
+    lists.custom.storageKey = 'attacker-key';
+    assert.notStrictEqual(vocabStore.VOCAB_LISTS.custom.storageKey, 'attacker-key', 'VOCAB_LISTS getter must return detached config objects');
+}
+
 async function main() {
     const results = [];
     try {
@@ -289,8 +407,16 @@ async function main() {
         results.push({ name: '背诵更新保留错词业务元数据', status: 'pass' });
         await testVocabStoreCapsImportedWordPayloads();
         results.push({ name: '词库存储限制异常导入负载', status: 'pass' });
+        await testVocabStoreRejectsOversizedLocalStorageBeforeParsing();
+        results.push({ name: 'vocab store rejects oversized localStorage before parsing', status: 'pass' });
         await testVocabStoreDropsUnsafeExtraMetadataKeys();
         results.push({ name: 'vocab metadata strips prototype pollution keys', status: 'pass' });
+        await testVocabStoreKeepsSharedExtraMetadataButDropsCycles();
+        results.push({ name: 'vocab metadata preserves shared references without cycles', status: 'pass' });
+        await testVocabStoreReturnsDefensiveClones();
+        results.push({ name: 'vocab getters return defensive word clones', status: 'pass' });
+        await testVocabStoreReturnsDefensiveListAndConfigClones();
+        results.push({ name: 'vocab list cache and config getters return defensive clones', status: 'pass' });
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

@@ -16,8 +16,17 @@ const source = fs.readFileSync(sourcePath, 'utf8')
 const emitted = [];
 const messages = [];
 const localStorageState = new Map();
+let currentExams = [];
+let currentRecords = [];
+let oversizedParseCalls = 0;
 const hpCore = {
     ready() {},
+    getExamIndex() {
+        return currentExams;
+    },
+    getRecords() {
+        return currentRecords;
+    },
     emit(type, payload) {
         emitted.push({ type, payload });
     },
@@ -37,6 +46,15 @@ const context = {
         }
     },
     hpCore,
+    JSON: {
+        parse(value) {
+            if (String(value || '').length > 64 * 1024) {
+                oversizedParseCalls += 1;
+            }
+            return JSON.parse(value);
+        },
+        stringify: JSON.stringify
+    },
     document: {
         readyState: 'loading',
         addEventListener() {}
@@ -81,6 +99,20 @@ assert.equal(context.window.__hpPortalTest.state.practiceFilter.type, 'all');
 assert.equal(context.window.__hpPortalTest.state.practiceFilter.query.length, 120);
 assert.deepStrictEqual(Object.keys(context.window.__hpPortalTest.state.practiceFilter).sort(), ['query', 'type']);
 assert.equal(Object.prototype.polluted, undefined);
+
+oversizedParseCalls = 0;
+context.window.__hpPortalTest.state = {
+    activeView: 'history',
+    practiceFilter: { type: 'reading', query: 'keep-current-state' }
+};
+localStorageState.set('hp.portal.state', '{"padding":"' + 'x'.repeat(70 * 1024) + '"}');
+context.window.__hpPortalTest.restoreState();
+assert.equal(oversizedParseCalls, 0, 'oversized portal state should be rejected before JSON.parse');
+assert.equal(context.window.__hpPortalTest.state.activeView, 'history');
+assert.deepStrictEqual(context.window.__hpPortalTest.state.practiceFilter, {
+    type: 'reading',
+    query: 'keep-current-state'
+});
 
 context.window.__hpPortalTest.state = {
     activeView: 'not-a-view',
@@ -128,6 +160,40 @@ assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0].metadata, 'constructor'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.practiceRecords[0].realData, 'prototype'), false);
 
+const circularExam = JSON.parse(`{
+  "id": "backup-circular-exam",
+  "__proto__": { "polluted": true },
+  "metadata": {
+    "constructor": { "prototype": { "polluted": true } }
+  }
+}`);
+circularExam.self = circularExam;
+circularExam.big = 123n;
+const circularRecord = JSON.parse(`{
+  "id": "backup-circular-record",
+  "realData": {
+    "prototype": { "polluted": true }
+  }
+}`);
+circularRecord.score = Infinity;
+circularRecord.self = circularRecord;
+currentExams = [circularExam];
+currentRecords = [circularRecord];
+messages.length = 0;
+localStorageState.delete('hp.portal.backups');
+context.window.__hpPortalTest.createBackup();
+const createdBackups = JSON.parse(localStorageState.get('hp.portal.backups'));
+assert.equal(Object.prototype.polluted, undefined);
+assert.equal(createdBackups.length, 1);
+assert.equal(Object.prototype.hasOwnProperty.call(createdBackups[0].exams[0], '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(createdBackups[0].exams[0].metadata, 'constructor'), false);
+assert.equal(createdBackups[0].exams[0].self, '[Circular]');
+assert.equal(createdBackups[0].exams[0].big, '123');
+assert.equal(Object.prototype.hasOwnProperty.call(createdBackups[0].records[0].realData, 'prototype'), false);
+assert.equal(createdBackups[0].records[0].score, null);
+assert.equal(createdBackups[0].records[0].self, '[Circular]');
+assert(messages.some((entry) => entry.level === 'success'), 'creating a sanitized backup should still succeed');
+
 assert.throws(
     () => context.window.__hpPortalTest.applyImportedData({
         examIndex: Array.from({ length: 5001 }, (_, index) => ({ id: `exam-${index}` }))
@@ -160,6 +226,13 @@ assert.equal(emitted[0].type, 'dataUpdated');
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0], '__proto__'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0].metadata, 'constructor'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.practiceRecords[0].realData, 'prototype'), false);
+
+oversizedParseCalls = 0;
+localStorageState.set('hp.portal.backups', '[{"id":"oversized","padding":"' + 'x'.repeat((5 * 1024 * 1024) + 1) + '"}]');
+const oversizedBackups = context.window.__hpPortalTest.readBackups();
+assert(Array.isArray(oversizedBackups));
+assert.equal(oversizedBackups.length, 0);
+assert.equal(oversizedParseCalls, 0, 'oversized backup storage should be rejected before JSON.parse');
 
 console.log(JSON.stringify({
     status: 'pass',

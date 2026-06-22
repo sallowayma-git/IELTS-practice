@@ -114,37 +114,41 @@ class PracticeHistoryEnhancer {
         state.seen.add(value);
         state.nodes++;
 
-        if (Array.isArray(value)) {
-            const safeItems = value.slice(0, MAX_JSON_EXPORT_ARRAY_ITEMS)
-                .map(item => this.sanitizeJsonExportValue(item, depth + 1, state));
-            if (value.length > safeItems.length) {
-                safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
-            }
-            return safeItems;
-        }
-
-        const safeObject = {};
-        let allKeys;
         try {
-            allKeys = Object.keys(value);
-        } catch (error) {
-            return '[Unreadable]';
-        }
-        const keys = allKeys.slice(0, MAX_JSON_EXPORT_OBJECT_KEYS);
-        for (const key of keys) {
-            if (JSON_EXPORT_POLLUTION_KEYS.has(key)) {
-                continue;
+            if (Array.isArray(value)) {
+                const safeItems = value.slice(0, MAX_JSON_EXPORT_ARRAY_ITEMS)
+                    .map(item => this.sanitizeJsonExportValue(item, depth + 1, state));
+                if (value.length > safeItems.length) {
+                    safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
+                }
+                return safeItems;
             }
+
+            const safeObject = {};
+            let allKeys;
             try {
-                safeObject[key] = this.sanitizeJsonExportValue(value[key], depth + 1, state);
+                allKeys = Object.keys(value);
             } catch (error) {
-                safeObject[key] = '[Unreadable]';
+                return '[Unreadable]';
             }
+            const keys = allKeys.slice(0, MAX_JSON_EXPORT_OBJECT_KEYS);
+            for (const key of keys) {
+                if (JSON_EXPORT_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    safeObject[key] = this.sanitizeJsonExportValue(value[key], depth + 1, state);
+                } catch (error) {
+                    safeObject[key] = '[Unreadable]';
+                }
+            }
+            if (allKeys.length > keys.length) {
+                safeObject.__truncatedKeys = allKeys.length - keys.length;
+            }
+            return safeObject;
+        } finally {
+            state.seen.delete(value);
         }
-        if (allKeys.length > keys.length) {
-            safeObject.__truncatedKeys = allKeys.length - keys.length;
-        }
-        return safeObject;
     }
 
     /**

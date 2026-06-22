@@ -13,12 +13,14 @@ function read(relativePath) {
     return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-function loadRepositories() {
+function loadRepositories(options = {}) {
     const context = {
         console,
-        structuredClone,
         window: { ExamData: {} }
     };
+    if (!options.noStructuredClone) {
+        context.structuredClone = structuredClone;
+    }
     vm.createContext(context);
     for (const file of [
         'js/data/repositories/baseRepository.js',
@@ -100,6 +102,44 @@ const ExamData = loadRepositories();
 
 const cloned = ExamData.cloneValue(pollutedPayload());
 assertClean(cloned, 'cloneValue');
+
+const fallbackExamData = loadRepositories({ noStructuredClone: true });
+const cyclicPayload = {
+    safe: 'keep',
+    big: 10n,
+    badNumber: Number.POSITIVE_INFINITY,
+    longText: 'x'.repeat(20050),
+    list: Array.from({ length: 5002 }, (_, index) => index)
+};
+cyclicPayload.self = cyclicPayload;
+Object.defineProperty(cyclicPayload, '__proto__', {
+    value: { pollutedRepository: true },
+    enumerable: true,
+    configurable: true
+});
+cyclicPayload.constructor = { unsafe: true };
+const fallbackCloned = fallbackExamData.cloneValue(cyclicPayload);
+assert.equal(fallbackCloned.self, '[Circular]');
+assert.equal(fallbackCloned.big, '10');
+assert.equal(fallbackCloned.badNumber, null);
+assert.equal(fallbackCloned.longText.length, 20003);
+assert.equal(fallbackCloned.list.length, 5001);
+assert.equal(fallbackCloned.list[5000], '[Truncated 2 items]');
+assert.equal(Object.prototype.hasOwnProperty.call(fallbackCloned, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(fallbackCloned, 'constructor'), false);
+assert.equal(Object.prototype.pollutedRepository, undefined);
+
+const baseRepositorySource = read('js/data/repositories/baseRepository.js');
+assert(
+    baseRepositorySource.includes('MAX_REPOSITORY_SANITIZE_DEPTH = 24') &&
+    baseRepositorySource.includes('MAX_REPOSITORY_ARRAY_ITEMS = 5000') &&
+    baseRepositorySource.includes('valueType === \'bigint\'') &&
+    baseRepositorySource.includes("return '[Circular]'") &&
+    baseRepositorySource.includes('scanState.seen.delete(value)') &&
+    baseRepositorySource.includes("UNSAFE_REPOSITORY_KEYS.has(key)") &&
+    baseRepositorySource.includes('output.__truncatedKeys = keys.length - MAX_REPOSITORY_OBJECT_KEYS'),
+    'base repository sanitizer must bound and serialize unsafe repository values'
+);
 
 const settingsDataSource = createDataSource();
 const settingsRepo = new ExamData.SettingsRepository(settingsDataSource);

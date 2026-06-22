@@ -4,6 +4,7 @@
     const gatedElements = new Map();
     const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
     const MAX_REMOTE_AUTH_ERROR_CHARS = 240;
+    const MAX_BCRYPT_PASSWORD_BYTES = 72;
 
     function getImportMarkerKey(userId) {
         return `remote_import_completed:${userId}`;
@@ -37,6 +38,21 @@
             element.textContent = text;
         }
         return element;
+    }
+
+    function getUtf8ByteLength(value) {
+        const text = String(value || '');
+        if (typeof window.TextEncoder === 'function') {
+            return new window.TextEncoder().encode(text).length;
+        }
+        if (typeof window.Blob === 'function') {
+            return new window.Blob([text]).size;
+        }
+        try {
+            return encodeURIComponent(text).replace(/%[0-9A-F]{2}/gi, 'x').length;
+        } catch (_) {
+            return text.length;
+        }
     }
 
     function normalizeTotpQrDataUrl(value) {
@@ -106,6 +122,9 @@
         if (mode === 'register') {
             if (rawPassword.length < 8) {
                 errors.push('密码至少需要 8 个字符。');
+            }
+            if (getUtf8ByteLength(rawPassword) > MAX_BCRYPT_PASSWORD_BYTES) {
+                errors.push('密码不能超过 72 个 UTF-8 字节。');
             }
             if (!/[a-z]/.test(rawPassword)) {
                 errors.push('密码需要包含小写字母。');

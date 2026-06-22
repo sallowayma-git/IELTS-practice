@@ -57,10 +57,13 @@ function createPanelHarness({ missingControls = false, importFile = null } = {})
     vm.runInContext(panelSource, context, { filename: 'js/components/dataManagementPanel.js' });
 
     const pendingReads = new Map();
+    const messages = [];
     const panel = Object.create(context.window.DataManagementPanel.prototype);
     panel.selectedFileContent = null;
     panel.fileReadToken = 0;
-    panel.showMessage = () => {};
+    panel.showMessage = (message, type) => {
+        messages.push({ message, type });
+    };
     panel.loadDataStats = async () => {};
     panel.loadHistory = async () => {};
     panel.backupManager = {
@@ -85,6 +88,7 @@ function createPanelHarness({ missingControls = false, importFile = null } = {})
         pendingReads,
         selectedFileName,
         importButton,
+        messages,
         makeFile,
         makeEvent
     };
@@ -147,6 +151,19 @@ async function flushPromises() {
 }
 
 {
+    const harness = createPanelHarness();
+    const file = harness.makeFile('oversized.json');
+
+    harness.panel.handleFileSelect(harness.makeEvent(file));
+    harness.pendingReads.get('oversized.json').resolve('x'.repeat(10 * 1024 * 1024 + 1));
+    await flushPromises();
+
+    assert.equal(harness.panel.selectedFileContent, null);
+    assert.equal(harness.importButton.disabled, true);
+    assert.equal(harness.messages.at(-1)?.type, 'error');
+}
+
+{
     const harness = createPanelHarness({ missingControls: true });
     harness.panel.selectedFileContent = { practiceRecords: [{ id: 'cached' }] };
     await harness.panel.handleImport('merge');
@@ -167,6 +184,23 @@ async function flushPromises() {
 
     await harness.panel.handleImport('merge');
     assert.equal(importedPayload, null);
+}
+
+{
+    const file = { name: 'small-size.json', size: 4, type: 'application/json' };
+    const harness = createPanelHarness({ importFile: file });
+    let importCalled = false;
+    harness.panel.backupManager = {
+        async importPracticeData() {
+            importCalled = true;
+            return { success: true, importedCount: 0, skippedCount: 0 };
+        }
+    };
+    harness.panel.readFile = async () => 'x'.repeat(10 * 1024 * 1024 + 1);
+
+    await harness.panel.handleImport('merge');
+    assert.equal(importCalled, false);
+    assert.equal(harness.messages.at(-1)?.type, 'error');
 }
 
 assert(

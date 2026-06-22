@@ -33,6 +33,7 @@
   const MAX_PRACTICE_MESSAGE_ARRAY_ITEMS = 500;
   const MAX_PRACTICE_MESSAGE_OBJECT_KEYS = 200;
   const MAX_PRACTICE_MESSAGE_TEXT_LENGTH = 8000;
+  const MAX_THEME_STORAGE_JSON_LENGTH = 5 * 1024 * 1024;
 
   function summarizeThemeAdapterErrorForLog(error) {
     const summary = {
@@ -118,9 +119,13 @@
   /**
    * 安全解析 JSON
    */
-  function safeJsonParse(value) {
+  function safeJsonParse(value, maxLength = Infinity) {
     try {
-      return JSON.parse(value);
+      const source = String(value || '');
+      if (source.length > maxLength) {
+        return null;
+      }
+      return JSON.parse(source);
     } catch (_) {
       return null;
     }
@@ -1170,7 +1175,7 @@
         if (typeof window.savePracticeRecordFallback === 'function') {
           const examId = normalized.examId || this._getLastOpenedExamId();
           if (examId) {
-            Promise.resolve(window.savePracticeRecordFallback(examId, payload))
+            Promise.resolve(window.savePracticeRecordFallback(examId, normalized.raw || {}))
               .then(() => {
                 console.log('[ThemeAdapterBase] 通过主系统保存练习记录成功');
               })
@@ -1380,7 +1385,7 @@
         const prefixedKey = 'exam_system_' + key;
         const raw = localStorage.getItem(prefixedKey);
         if (raw) {
-          const parsed = safeJsonParse(raw);
+          const parsed = safeJsonParse(raw, MAX_THEME_STORAGE_JSON_LENGTH);
           return parsed ? parsed.data : null;
         }
       } catch (error) {

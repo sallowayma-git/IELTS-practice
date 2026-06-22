@@ -6,6 +6,7 @@ const BROWSE_STATE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'construc
 const BROWSE_STATE_MAX_TEXT_LENGTH = 120;
 const BROWSE_STATE_MAX_SEARCH_LENGTH = 300;
 const BROWSE_STATE_MAX_HISTORY_TEXT_LENGTH = 160;
+const BROWSE_STATE_MAX_IMPORT_STRING_LENGTH = 256 * 1024;
 const BROWSE_STATE_MAX_PAGE_SIZE = 200;
 const BROWSE_STATE_VIEW_MODES = new Set(['grid', 'list']);
 const BROWSE_STATE_SORT_FIELDS = new Set(['title', 'category', 'frequency', 'difficulty', 'date', 'score']);
@@ -185,6 +186,14 @@ function normalizeBrowseHistory(history, maxHistorySize) {
         .slice(-maxHistorySize)
         .map(normalizeBrowseHistoryItem)
         .filter(Boolean);
+}
+
+function parseBrowseStateJson(text, label = 'browse state') {
+    const source = String(text || '');
+    if (source.length > BROWSE_STATE_MAX_IMPORT_STRING_LENGTH) {
+        throw new Error(`${label} is too large`);
+    }
+    return JSON.parse(source);
 }
 
 class BrowseStateManager {
@@ -399,7 +408,7 @@ class BrowseStateManager {
         try {
             const savedData = localStorage.getItem('browse_state');
             if (savedData) {
-                const data = JSON.parse(savedData);
+                const data = parseBrowseStateJson(savedData, 'persisted browse state');
                 if (!isPlainBrowseObject(data)) {
                     throw new Error('Invalid browse state payload');
                 }
@@ -703,7 +712,9 @@ class BrowseStateManager {
      */
     importBrowseHistory(importData) {
         try {
-            const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
+            const data = typeof importData === 'string'
+                ? parseBrowseStateJson(importData, 'browse history import')
+                : importData;
 
             if (isPlainBrowseObject(data) && data.browseHistory && Array.isArray(data.browseHistory)) {
                 this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);

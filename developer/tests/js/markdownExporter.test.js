@@ -96,6 +96,36 @@ function testComparisonKeysAreEscaped() {
     assert(!markdown.includes('[user]('), 'comparison answers must escape markdown link syntax');
 }
 
+function testUnsafeComparisonKeysAreIgnored() {
+    const MarkdownExporter = loadMarkdownExporter();
+    const exporter = new MarkdownExporter();
+    const pollutedComparison = JSON.parse('{"__proto__":{"userAnswer":"polluted","correctAnswer":"polluted"},"constructor":{"userAnswer":"ctor","correctAnswer":"ctor"},"q1":{"userAnswer":"A","correctAnswer":"B","isCorrect":false}}');
+    const markdown = exporter.generateTableFromComparison(pollutedComparison);
+    const correctAnswers = exporter.getCorrectAnswers({ answerComparison: pollutedComparison });
+
+    assert(markdown.includes('| 1 | A | B |'), 'safe comparison entries should still export');
+    assert(!markdown.includes('polluted'), 'unsafe __proto__ comparison key must be ignored');
+    assert(!markdown.includes('ctor'), 'unsafe constructor comparison key must be ignored');
+    assert.equal(Object.getPrototypeOf(correctAnswers), null, 'derived correct answer maps must use a null prototype');
+    assert.deepEqual(Object.keys(correctAnswers), ['q1']);
+    assert.equal({}.polluted, undefined, 'exporting unsafe keys must not pollute Object.prototype');
+}
+
+function testAnswerMapsAreBounded() {
+    const MarkdownExporter = loadMarkdownExporter();
+    const exporter = new MarkdownExporter();
+    const oversized = {};
+    for (let index = 0; index < 1105; index += 1) {
+        oversized[`q${index}`] = `A${index}`;
+    }
+    const normalized = exporter.normalizeAnswerMap(oversized);
+
+    assert.equal(Object.getPrototypeOf(normalized), null);
+    assert.equal(Object.keys(normalized).length, 1000);
+    assert.equal(normalized.q999, 'A999');
+    assert.equal(normalized.q1000, undefined);
+}
+
 async function testInvalidDatesDoNotBreakGrouping() {
     const MarkdownExporter = loadMarkdownExporter();
     const exporter = new MarkdownExporter();
@@ -157,11 +187,23 @@ function testDateHeadingsAreEscaped() {
     assert(markdown.includes('2026\\-01\\-01 &lt;script&gt;alert\\(1\\)&lt;/script&gt;\\|x'));
 }
 
+function testProgressIndicatorStyleIsCleanedUp() {
+    const source = fs.readFileSync(path.join(repoRoot, 'js/utils/markdownExporter.js'), 'utf8');
+    assert(source.includes('<style id="export-progress-style">'), 'progress indicator style must be addressable');
+    assert(
+        /const style = document\.getElementById\('export-progress-style'\);[\s\S]{0,120}style\.remove\(\);/.test(source),
+        'progress indicator cleanup must remove its injected style node'
+    );
+}
+
 testRecordMarkdownEscapesUserControlledText();
 testComparisonKeysAreEscaped();
+testUnsafeComparisonKeysAreIgnored();
+testAnswerMapsAreBounded();
 await testInvalidDatesDoNotBreakGrouping();
 await testMalformedRecordsDoNotBreakExportGrouping();
 testDateHeadingsAreEscaped();
+testProgressIndicatorStyleIsCleanedUp();
 
 console.log(JSON.stringify({
     status: 'pass',

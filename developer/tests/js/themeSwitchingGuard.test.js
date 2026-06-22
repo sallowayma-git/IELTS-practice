@@ -48,6 +48,7 @@ function createThemeHarness(seed = {}) {
     const attributes = new Map();
     const localStorage = createStorage(seed.localStorage);
     const sessionStorage = createStorage(seed.sessionStorage);
+    const onJsonParse = typeof seed.onJsonParse === 'function' ? seed.onJsonParse : null;
     const document = {
         documentElement: {
             setAttribute(name, value) {
@@ -85,6 +86,17 @@ function createThemeHarness(seed = {}) {
             warn() {},
             error() {},
             log() {}
+        },
+        JSON: {
+            parse(value) {
+                if (onJsonParse) {
+                    onJsonParse(value);
+                }
+                return JSON.parse(value);
+            },
+            stringify(value) {
+                return JSON.stringify(value);
+            }
         }
     });
     vm.runInContext(readSource('js/theme-switcher.js'), context, { filename: 'js/theme-switcher.js' });
@@ -159,6 +171,18 @@ assert.equal(JSON.parse(startupHarness.localStorage.getItem('preferred_theme_por
 startupHarness.window.__themeSwitcher.recordInternalTheme('not-a-theme');
 assert.equal(JSON.parse(startupHarness.localStorage.getItem('preferred_theme_portal')).theme, 'blue');
 
+let oversizedThemePreferenceParsed = false;
+const oversizedThemePreferenceHarness = createThemeHarness({
+    localStorage: {
+        preferred_theme_portal: `{"theme":"${'a'.repeat(65 * 1024)}"}`
+    },
+    onJsonParse() {
+        oversizedThemePreferenceParsed = true;
+    }
+});
+assert.equal(oversizedThemePreferenceHarness.window.__themeSwitcher.load(), null);
+assert.equal(oversizedThemePreferenceParsed, false);
+
 const threeHarness = createThreeHarness();
 assert.equal(threeHarness.window.normalizeBackgroundThemeName('teal-ocean'), 'teal-ocean');
 assert.equal(threeHarness.window.normalizeBackgroundThemeName('bad-theme'), 'misty-mountain');
@@ -170,6 +194,8 @@ assert.equal(threeHarness.localStorage.getItem('three_bg_theme'), 'floral-bloom'
 const themeSource = readSource('js/theme-switcher.js');
 assert(
     themeSource.includes('function normalizeInternalTheme') &&
+    themeSource.includes('MAX_THEME_PREFERENCE_STORAGE_LENGTH = 64 * 1024') &&
+    themeSource.includes('source.length > MAX_THEME_PREFERENCE_STORAGE_LENGTH') &&
     themeSource.includes("root.removeAttribute('data-theme')") &&
     !themeSource.includes("root.setAttribute('data-theme', theme)"),
     'theme switcher must validate persisted theme IDs before writing data-theme'

@@ -26,7 +26,7 @@ function createLocalStorage(seed = {}) {
     };
 }
 
-function createHarness(seed = {}, externalConfig = {}) {
+function createHarness(seed = {}, externalConfig = {}, options = {}) {
     const localStorage = createLocalStorage(seed);
     const capturedLogs = [];
     function capture(method) {
@@ -46,10 +46,20 @@ function createHarness(seed = {}, externalConfig = {}) {
         console: { ...nativeConsole },
         __APP_LOG_CONFIG: externalConfig
     };
+    const guardedJson = {
+        parse(value) {
+            if (typeof options.onJsonParse === 'function') {
+                options.onJsonParse(value);
+            }
+            return JSON.parse(value);
+        },
+        stringify: JSON.stringify
+    };
     const context = vm.createContext({
         window,
         localStorage,
-        console: window.console
+        console: window.console,
+        JSON: guardedJson
     });
     vm.runInContext(source, context, { filename: 'js/utils/logger.js' });
     return { window, localStorage, capturedLogs };
@@ -112,6 +122,22 @@ const arrayConfig = arrayHarness.window.AppLogger.getConfig();
 assert.equal(arrayConfig.level, 'info');
 assert.equal(arrayConfig.categories.System, 'info');
 
+let oversizedConfigParsed = false;
+const oversizedHarness = createHarness(
+    { [STORAGE_KEY]: '{"level":"trace","padding":"' + 'x'.repeat(70 * 1024) + '"}' },
+    {},
+    {
+        onJsonParse(value) {
+            if (String(value || '').length > 64 * 1024) {
+                oversizedConfigParsed = true;
+            }
+        }
+    }
+);
+const oversizedConfig = oversizedHarness.window.AppLogger.getConfig();
+assert.equal(oversizedConfig.level, 'info');
+assert.equal(oversizedConfigParsed, false, 'oversized logger config must be rejected before JSON.parse');
+
 const redactionHarness = createHarness({}, { level: 'debug', categories: { PracticeRecorder: 'debug' } });
 redactionHarness.window.console.log('[PracticeRecorder] sensitive event', {
     sessionId: 'session-123',
@@ -119,7 +145,8 @@ redactionHarness.window.console.log('[PracticeRecorder] sensitive event', {
     password: 'StrongPass1',
     nested: {
         userInput: 'private answer',
-        url: 'https://example.test/path?token=secret-token&ok=1',
+        url: 'https://example.test/path?token=secret-token&recoveryCode=secret-recovery&totpToken=123456&otp=654321&ok=1',
+        fragmentUrl: 'https://example.test/callback#access_token=secret-fragment&state=ok',
         localPath: 'D:\\Users\\Alice\\IELTS\\private.html'
     },
     rows: [{ recordId: 'record-123', visible: 'count-only' }]
@@ -132,14 +159,38 @@ assert(!serializedLog.includes('csrf-123'), 'logger must redact CSRF tokens');
 assert(!serializedLog.includes('StrongPass1'), 'logger must redact passwords');
 assert(!serializedLog.includes('private answer'), 'logger must redact answer text');
 assert(!serializedLog.includes('secret-token'), 'logger must redact sensitive URL parameters');
+assert(!serializedLog.includes('secret-recovery'), 'logger must redact recovery codes in URL parameters');
+assert(!serializedLog.includes('123456'), 'logger must redact TOTP tokens in URL parameters');
+assert(!serializedLog.includes('654321'), 'logger must redact OTP tokens in URL parameters');
+assert(!serializedLog.includes('secret-fragment'), 'logger must redact sensitive URL fragment parameters');
 assert(!serializedLog.includes('D:\\Users\\Alice'), 'logger must redact local filesystem paths');
 assert(!serializedLog.includes('record-123'), 'logger must redact record identifiers');
 assert(serializedLog.includes('[redacted]'), 'logger should preserve structure with redacted markers');
 assert(serializedLog.includes('[local-path]'), 'logger should mark redacted local paths');
 
+const sharedReferenceHarness = createHarness({}, { level: 'debug', categories: { System: 'debug' } });
+const sharedLogValue = { visible: 'same object' };
+const circularLogValue = { visible: 'cycle root' };
+circularLogValue.self = circularLogValue;
+sharedReferenceHarness.window.AppLogger.debug('System', {
+    first: sharedLogValue,
+    second: sharedLogValue,
+    cycle: circularLogValue
+});
+const sharedReferenceLog = sharedReferenceHarness.capturedLogs.find((entry) => (
+    entry.args[0] && String(entry.args[0]).includes('[System]')
+));
+assert(sharedReferenceLog, 'shared-reference log should be captured');
+const sharedReferencePayload = sharedReferenceLog.args[1];
+assert.deepEqual(sharedReferencePayload.first, { visible: 'same object' });
+assert.deepEqual(sharedReferencePayload.second, { visible: 'same object' });
+assert.equal(sharedReferencePayload.cycle.self, '[Circular]');
+
 assert(
     source.includes('function normalizeLogLevel') &&
     source.includes('function normalizeCategoryLevels') &&
+    source.includes('MAX_LOG_CONFIG_STORAGE_STRING_LENGTH = 64 * 1024') &&
+    source.includes('function parseStoredLogConfig') &&
     source.includes('function sanitizeLogArg') &&
     source.includes('SENSITIVE_LOG_KEYS') &&
     source.includes("UNSAFE_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&

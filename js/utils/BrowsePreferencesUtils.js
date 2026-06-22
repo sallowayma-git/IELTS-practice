@@ -10,6 +10,7 @@
     const MAX_BROWSE_PREFERENCE_KEY_LENGTH = 160;
     const MAX_BROWSE_PREFERENCE_TEXT_LENGTH = 300;
     const MAX_BROWSE_SCROLL_TOP = 10000000;
+    const MAX_BROWSE_PREFERENCE_STORAGE_STRING_LENGTH = 512 * 1024;
     let browsePreferencesCache = null;
     let currentBrowseScrollElement = null;
     let removeBrowseScrollListener = null;
@@ -26,6 +27,17 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function parseStoredBrowsePreferences(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_BROWSE_PREFERENCE_STORAGE_STRING_LENGTH) {
+            return null;
+        }
+        return JSON.parse(source);
     }
 
     // --- Helper Functions ---
@@ -266,7 +278,7 @@
             if (!raw) {
                 return getDefaultBrowsePreferences();
             }
-            const parsed = JSON.parse(raw);
+            const parsed = parseStoredBrowsePreferences(raw);
             const defaults = getDefaultBrowsePreferences();
             const source = parsed && typeof parsed === 'object' ? parsed : {};
             return {

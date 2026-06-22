@@ -71,6 +71,13 @@ for (const relativePath of files) {
                 && source.includes('getMessageTargetOrigin(windowInfo)'),
             `${relativePath} must keep sandboxed Listening postMessage handling bound to the expected window and wildcard target only for marked sessions`
         );
+        assert(
+            source.includes('var parentWindow = window.opener || (window.parent && window.parent !== window ? window.parent : null);')
+                && source.includes('function isAllowedIncomingMessageSource(event)')
+                && source.includes('event.source === parentWindow')
+                && source.includes('if (!isAllowedIncomingMessageSource(event))'),
+            `${relativePath} inline fallback collector must bind incoming postMessage events to the expected parent window`
+        );
     }
     if (relativePath === 'js/listeningRecordBridge.js') {
         assert(

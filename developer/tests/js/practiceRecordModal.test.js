@@ -152,7 +152,9 @@ function testCircularLegacyComparisonDoesNotBreakModal() {
 
     assert.doesNotThrow(() => modal.generateLegacyTableFromComparison(circular));
     const html = modal.generateLegacyTableFromComparison(circular);
-    assert(html.includes('暂无答题数据') || html.includes('\u6682\u65e0\u7b54\u9898\u6570\u636e'));
+    assert(html.includes('<td class="question-num">1</td>'));
+    assert(html.includes('<td class="correct-answer" title="A">'));
+    assert(!html.includes('self'));
 }
 
 function testDeepNestedAnswerValuesAreBounded() {
@@ -166,11 +168,41 @@ function testDeepNestedAnswerValuesAreBounded() {
     assert.equal(modal.truncateAnswer(nested, 200), '');
 }
 
+function testUnsafeMapKeysAreIgnored() {
+    const modal = createModal();
+    const pollutedComparison = JSON.parse('{"__proto__":{"userAnswer":"polluted","correctAnswer":"polluted"},"constructor":{"userAnswer":"ctor","correctAnswer":"ctor"},"q1":{"userAnswer":"A","correctAnswer":"B","isCorrect":false}}');
+    const html = modal.generateLegacyTableFromComparison(pollutedComparison);
+    const correctAnswers = modal.getLegacyCorrectAnswers({ answerComparison: pollutedComparison });
+
+    assert(html.includes('<td class="question-num">1</td>'), 'safe entries should still render');
+    assert(!html.includes('polluted'), 'unsafe __proto__ keys must not render');
+    assert(!html.includes('ctor'), 'unsafe constructor keys must not render');
+    assert.equal(Object.getPrototypeOf(correctAnswers), null, 'legacy correct answer maps should use a null prototype');
+    assert.deepEqual(Object.keys(correctAnswers), ['q1']);
+    assert.equal({}.polluted, undefined, 'unsafe keys must not pollute Object.prototype');
+}
+
+function testModalMapsAreBounded() {
+    const modal = createModal();
+    const oversized = {};
+    for (let index = 0; index < 1105; index += 1) {
+        oversized[`q${index}`] = { userAnswer: `A${index}`, correctAnswer: `B${index}` };
+    }
+    const normalized = modal.normalizeComparisonMap(oversized);
+
+    assert.equal(Object.getPrototypeOf(normalized), null);
+    assert.equal(Object.keys(normalized).length, 1000);
+    assert.equal(normalized.q999.userAnswer, 'A999');
+    assert.equal(normalized.q1000, undefined);
+}
+
 testMultiSuiteMetadataIsEscaped();
 testSummaryCountsAreNumericOnly();
 testNormalizedEntriesAreBoundedAndTruncated();
 testCircularLegacyComparisonDoesNotBreakModal();
 testDeepNestedAnswerValuesAreBounded();
+testUnsafeMapKeysAreIgnored();
+testModalMapsAreBounded();
 console.log(JSON.stringify({
     status: 'pass',
     detail: 'practice record modal escaping tests passed'

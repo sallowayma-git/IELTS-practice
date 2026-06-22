@@ -26,11 +26,19 @@ function createLocalStorage(seed = {}) {
     };
 }
 
-function loadReviewHighlightDictionary() {
+function loadReviewHighlightDictionary(options = {}) {
     const context = {
         console,
         Date,
-        JSON,
+        JSON: {
+            parse(value) {
+                if (typeof options.onJsonParse === 'function') {
+                    options.onJsonParse(value);
+                }
+                return JSON.parse(value);
+            },
+            stringify: JSON.stringify
+        },
         Map,
         Object,
         Set,
@@ -89,4 +97,46 @@ test('review highlight fallback vocab strips unsafe stored keys before saving', 
     assert.equal(Object.prototype.hasOwnProperty.call(oldWord, 'prototype'), false);
     assert.equal(Object.prototype.hasOwnProperty.call(oldWord, 'constructor'), false);
     assert.equal(Object.prototype.pollutedReviewHighlight, undefined);
+});
+
+test('review highlight context keeps shared references but drops cycles', () => {
+    const { api } = loadReviewHighlightDictionary();
+    const shared = { selected: 'same paragraph' };
+    const context = {
+        first: shared,
+        second: shared
+    };
+    context.self = context;
+
+    const normalized = api._test.normalizeContextValue(context);
+
+    assert.deepEqual(normalized.first, { selected: 'same paragraph' });
+    assert.deepEqual(normalized.second, { selected: 'same paragraph' });
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'self'), false);
+});
+
+test('review highlight fallback rejects oversized storage before parsing', () => {
+    let oversizedParsed = false;
+    const { api, context } = loadReviewHighlightDictionary({
+        onJsonParse(value) {
+            if (String(value || '').length > 5 * 1024 * 1024) {
+                oversizedParsed = true;
+            }
+        }
+    });
+    context.localStorage = createLocalStorage({
+        [api.storageKey]: '{"data":{"words":[]},"padding":"' + 'x'.repeat((5 * 1024 * 1024) + 1) + '"}'
+    });
+
+    const saved = api._test.writeFallbackVocab({
+        word: 'bounded',
+        meaning: 'safe fallback',
+        sourceLabel: 'Unit test'
+    });
+
+    assert.equal(saved, true);
+    assert.equal(oversizedParsed, false, 'oversized fallback storage must be rejected before JSON.parse');
+    const savedEnvelope = JSON.parse(context.localStorage.getItem(api.storageKey));
+    assert.equal(savedEnvelope.data.words.length, 1);
+    assert.equal(savedEnvelope.data.words[0].word, 'bounded');
 });

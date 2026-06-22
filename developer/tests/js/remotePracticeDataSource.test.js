@@ -14,9 +14,9 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
-function createContext() {
+function createContext(options = {}) {
     const windowStub = {
-        ExamData: {
+        ExamData: options.withoutCloneValue ? {} : {
             cloneValue(value) {
                 return value == null ? value : JSON.parse(JSON.stringify(value));
             }
@@ -42,7 +42,7 @@ function createContext() {
     return { context, window: windowStub };
 }
 
-function createRemoteApiContext(fetchImpl) {
+function createRemoteApiContext(fetchImpl, options = {}) {
     const windowStub = {
         ExamData: {},
         fetch: fetchImpl,
@@ -51,7 +51,7 @@ function createRemoteApiContext(fetchImpl) {
     const context = vm.createContext({
         window: windowStub,
         console: windowStub.console,
-        JSON,
+        JSON: options.JSON || JSON,
         Promise,
         Error
     });
@@ -145,6 +145,48 @@ async function testPracticeRecordsUseRemoteAndMirrorLocal() {
     await dataSource.write('practice_records', replacement);
     assert.deepStrictEqual(apiCalls[1], ['replace', replacement]);
     assert.deepStrictEqual(local.state.get('practice_records'), replacement);
+}
+
+async function testStandaloneFallbackCloneSanitizesRemoteMirror() {
+    const { window } = createContext({ withoutCloneValue: true });
+    const local = createLocalDataSource();
+    const record = {
+        id: 'remote-cycle',
+        note: 'x'.repeat(20050),
+        big: 10n,
+        badNumber: Number.POSITIVE_INFINITY
+    };
+    record.self = record;
+    Object.defineProperty(record, '__proto__', {
+        value: { pollutedRemotePractice: true },
+        enumerable: true,
+        configurable: true
+    });
+    record.constructor = { unsafe: true };
+    const remoteRecords = [record];
+    const apiClient = {
+        user: { id: 'user-1' },
+        isAuthenticated() {
+            return true;
+        },
+        async listPracticeRecords() {
+            return remoteRecords;
+        }
+    };
+
+    const dataSource = new window.ExamData.RemotePracticeDataSource(local, apiClient);
+    assert.strictEqual(await dataSource.read('practice_records', []), remoteRecords);
+
+    const mirrored = local.state.get('practice_records');
+    assert.notStrictEqual(mirrored, remoteRecords);
+    assert.equal(mirrored[0].id, 'remote-cycle');
+    assert.equal(mirrored[0].self, '[Circular]');
+    assert.equal(mirrored[0].big, '10');
+    assert.equal(mirrored[0].badNumber, null);
+    assert.equal(mirrored[0].note.length, 20003);
+    assert.equal(Object.prototype.hasOwnProperty.call(mirrored[0], '__proto__'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(mirrored[0], 'constructor'), false);
+    assert.equal(Object.prototype.pollutedRemotePractice, undefined);
 }
 
 async function testUnauthorizedReadFallsBackToLocal() {
@@ -259,6 +301,79 @@ async function testRemoteApiClientClearsAuthStateOnMalformedAuthCheck() {
     assert.strictEqual(client.csrfToken, null);
     assert.strictEqual(client.pendingTotp, null);
     assert.deepStrictEqual(fetchCalls[0][0], '/api/auth/me');
+}
+
+async function testRemoteApiClientRejectsOversizedSuccessJsonBeforeParsing() {
+    const hostJson = globalThis.JSON;
+    let oversizedResponseParsed = false;
+    const contextJson = {
+        parse(value, reviver) {
+            if (String(value).length > 1024 * 1024) {
+                oversizedResponseParsed = true;
+            }
+            return hostJson.parse(value, reviver);
+        },
+        stringify(value, replacer, space) {
+            return hostJson.stringify(value, replacer, space);
+        }
+    };
+    const oversized = `{"data":"${'x'.repeat(1024 * 1024 + 1)}"}`;
+    const { window } = createRemoteApiContext(async () => ({
+        status: 200,
+        ok: true,
+        async text() {
+            return oversized;
+        }
+    }), { JSON: contextJson });
+    const client = new window.ExamData.RemoteApiClient();
+
+    await assert.rejects(
+        () => client.request('/api/practice-records', { method: 'GET', csrf: false }),
+        (error) => error
+            && error.name === 'RemoteApiError'
+            && error.status === 200
+            && /too large/.test(error.message)
+    );
+
+    assert.strictEqual(oversizedResponseParsed, false);
+}
+
+async function testRemoteApiClientRejectsInvalidSuccessJson() {
+    const { window } = createRemoteApiContext(async () => ({
+        status: 200,
+        ok: true,
+        async text() {
+            return '<!doctype html><title>not json</title>';
+        }
+    }));
+    const client = new window.ExamData.RemoteApiClient();
+
+    await assert.rejects(
+        () => client.listPracticeRecords(),
+        (error) => error
+            && error.name === 'RemoteApiError'
+            && error.status === 200
+            && /not valid JSON/.test(error.message)
+    );
+}
+
+async function testRemoteApiClientAllowsInvalidErrorJsonForStatusHandling() {
+    const { window } = createRemoteApiContext(async () => ({
+        status: 502,
+        ok: false,
+        async text() {
+            return '<!doctype html><title>bad gateway</title>';
+        }
+    }));
+    const client = new window.ExamData.RemoteApiClient();
+
+    await assert.rejects(
+        () => client.request('/api/practice-records', { method: 'GET', csrf: false }),
+        (error) => error
+            && error.name === 'RemoteApiError'
+            && error.status === 502
+            && /Request failed with 502/.test(error.message)
+    );
 }
 
 async function testRemoteApiClientTreatsUnauthorizedLogoutAsLocalLogout() {
@@ -652,6 +767,12 @@ async function testAuthOverlayValidationAndErrorFormatting() {
     assert.strictEqual(weakRegister.valid, false);
     assert(weakRegister.errors.length >= 3);
 
+    const longPassword = `Aa1${'x'.repeat(70)}`;
+    assert(Buffer.byteLength(longPassword, 'utf8') > 72);
+    const longRegister = windowStub.ExamData.validateRemoteAuthFields('valid_user', longPassword, 'register');
+    assert.strictEqual(longRegister.valid, false);
+    assert(longRegister.errors.some((message) => message.includes('72')));
+
     assert.strictEqual(
         windowStub.ExamData.formatRemoteAuthError({ status: 429, message: 'Too many requests' }),
         '请求过于频繁，请稍后再试。'
@@ -673,10 +794,14 @@ async function testAuthOverlayValidationAndErrorFormatting() {
 
 async function main() {
     await testPracticeRecordsUseRemoteAndMirrorLocal();
+    await testStandaloneFallbackCloneSanitizesRemoteMirror();
     await testUnauthorizedReadFallsBackToLocal();
     await testImportMarkersAreScopedByUserId();
     await testRemoteApiClientClearsAuthStateOnUnauthorized();
     await testRemoteApiClientClearsAuthStateOnMalformedAuthCheck();
+    await testRemoteApiClientRejectsOversizedSuccessJsonBeforeParsing();
+    await testRemoteApiClientRejectsInvalidSuccessJson();
+    await testRemoteApiClientAllowsInvalidErrorJsonForStatusHandling();
     await testRemoteApiClientTreatsUnauthorizedLogoutAsLocalLogout();
     await testRemoteApiClientAddsCsrfToWrites();
     await testRemoteApiClientRejectsMalformedCsrfResponse();

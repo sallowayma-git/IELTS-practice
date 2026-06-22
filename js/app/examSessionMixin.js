@@ -4,6 +4,12 @@
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
+    const MAX_REVIEW_REPLAY_CLONE_DEPTH = 12;
+    const MAX_REVIEW_REPLAY_CLONE_NODES = 50000;
+    const MAX_REVIEW_REPLAY_ARRAY_ITEMS = 2000;
+    const MAX_REVIEW_REPLAY_OBJECT_KEYS = 500;
+    const MAX_REVIEW_REPLAY_STRING_LENGTH = 20000;
+    const REVIEW_REPLAY_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     let fallbackIdCounter = 0;
 
     function randomIdSuffix() {
@@ -81,6 +87,89 @@
     function toSafeCount(value, fallback = 0) {
         const numeric = Number(value);
         return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : fallback;
+    }
+
+    function createReviewReplayCloneState() {
+        return {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+    }
+
+    function cloneReviewReplayValue(value, depth = 0, state = createReviewReplayCloneState()) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_REVIEW_REPLAY_STRING_LENGTH
+                ? `${value.slice(0, MAX_REVIEW_REPLAY_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return null;
+        }
+        if (depth > MAX_REVIEW_REPLAY_CLONE_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_REVIEW_REPLAY_CLONE_NODES) {
+            return '[Truncated]';
+        }
+        const objectType = Object.prototype.toString.call(value);
+        if (objectType === '[object Date]') {
+            const timestamp = value.getTime();
+            return Number.isFinite(timestamp) ? value.toISOString() : null;
+        }
+
+        state.nodes += 1;
+        state.seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                const items = value
+                    .slice(0, MAX_REVIEW_REPLAY_ARRAY_ITEMS)
+                    .map((item) => cloneReviewReplayValue(item, depth + 1, state));
+                if (value.length > items.length) {
+                    items.push(`[Truncated ${value.length - items.length} items]`);
+                }
+                return items;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const clone = {};
+            for (const key of keys.slice(0, MAX_REVIEW_REPLAY_OBJECT_KEYS)) {
+                if (REVIEW_REPLAY_UNSAFE_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    clone[key] = cloneReviewReplayValue(value[key], depth + 1, state);
+                } catch (_) {
+                    clone[key] = '[Unreadable]';
+                }
+            }
+            if (keys.length > MAX_REVIEW_REPLAY_OBJECT_KEYS) {
+                clone.__truncatedKeys = keys.length - MAX_REVIEW_REPLAY_OBJECT_KEYS;
+            }
+            return clone;
+        } finally {
+            state.seen.delete(value);
+        }
     }
 
     async function getActiveExamIndexSnapshot() {
@@ -1264,7 +1353,7 @@
                         }
                         window.__IELTS_INLINE_ENHANCER__ = true;
 
-                        var parentWindow = window.opener || window.parent || null;
+                        var parentWindow = window.opener || (window.parent && window.parent !== window ? window.parent : null);
                         var state = {
                             sessionId: ${JSON.stringify(sessionToken)},
                             examId: ${JSON.stringify(examId)},
@@ -1425,8 +1514,15 @@
                             });
                         }
 
+                        function isAllowedIncomingMessageSource(event) {
+                            return !!(event && event.source && parentWindow && event.source === parentWindow);
+                        }
+
                         function isAllowedIncomingMessage(event) {
                             if (!event) {
+                                return false;
+                            }
+                            if (!isAllowedIncomingMessageSource(event)) {
                                 return false;
                             }
                             if (!event.origin || event.origin === 'null') {
@@ -1795,8 +1891,11 @@
                 this.examWindows.set(examId, existingInfo);
             }
 
+            const MAX_EXAM_MESSAGE_JSON_LENGTH = 2 * 1024 * 1024;
+
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
+                if (value.length > MAX_EXAM_MESSAGE_JSON_LENGTH) return null;
                 try {
                     return JSON.parse(value);
                 } catch (_) {
@@ -2568,14 +2667,7 @@
         },
 
         _cloneReviewData(value) {
-            if (value == null) {
-                return value;
-            }
-            try {
-                return JSON.parse(JSON.stringify(value));
-            } catch (_) {
-                return value;
-            }
+            return cloneReviewReplayValue(value);
         },
 
         _isReplayObject(value) {

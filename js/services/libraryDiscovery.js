@@ -9,6 +9,8 @@
     const LISTENING_THRESHOLD = 5;
     const MAX_DISCOVERY_FILES = 5000;
     const MAX_DISCOVERY_HTML_BYTES = 5 * 1024 * 1024;
+    const MAX_DISCOVERY_FILE_BYTES = 100 * 1024 * 1024;
+    const MAX_DISCOVERY_TOTAL_BYTES = 1024 * 1024 * 1024;
     const runtimeResources = new Map();
     const runtimeObjectUrls = [];
 
@@ -112,6 +114,14 @@
     function getDeclaredFileSize(file) {
         const size = Number(file && file.size);
         return Number.isFinite(size) && size >= 0 ? size : 0;
+    }
+
+    function isFileTooLarge(file, kind) {
+        const declaredSize = getDeclaredFileSize(file);
+        if (kind === 'html') {
+            return declaredSize > MAX_DISCOVERY_HTML_BYTES;
+        }
+        return declaredSize > MAX_DISCOVERY_FILE_BYTES;
     }
 
     function isHtmlTooLarge(file, text) {
@@ -426,6 +436,7 @@
             console.warn(`[LibraryDiscovery] File picker import truncated to ${MAX_DISCOVERY_FILES} files.`);
         }
         const records = [];
+        let totalDeclaredBytes = 0;
         for (let i = 0; i < input.length; i += 1) {
             const file = input[i];
             const path = getFilePath(file);
@@ -433,6 +444,16 @@
                 continue;
             }
             const kind = getExtensionType(path);
+            const declaredSize = getDeclaredFileSize(file);
+            if (isFileTooLarge(file, kind)) {
+                console.warn('[LibraryDiscovery] File skipped because it is too large');
+                continue;
+            }
+            if (declaredSize && totalDeclaredBytes + declaredSize > MAX_DISCOVERY_TOTAL_BYTES) {
+                console.warn('[LibraryDiscovery] File picker import byte budget reached');
+                continue;
+            }
+            totalDeclaredBytes += declaredSize;
             const record = {
                 file,
                 path,
@@ -585,6 +606,7 @@
     (function () {
       var frame = document.getElementById('imported-practice-frame');
       var targetOrigin = (location.origin && location.origin !== 'null' && /^https?:\\/\\//i.test(location.origin)) ? location.origin : '*';
+      var MAX_BRIDGE_MESSAGE_CHARS = 2 * 1024 * 1024;
       var allowedFromFrame = {
         SESSION_READY: true,
         REQUEST_INIT: true,
@@ -613,9 +635,20 @@
       function getType(data) {
         return data && typeof data.type === 'string' ? data.type : '';
       }
+      function isSafeBridgeMessage(data) {
+        if (!data || typeof data !== 'object') return false;
+        var type = getType(data);
+        if (!type || type.length > 80) return false;
+        try {
+          return JSON.stringify(data).length <= MAX_BRIDGE_MESSAGE_CHARS;
+        } catch (_) {
+          return false;
+        }
+      }
       window.addEventListener('message', function (event) {
         var type = getType(event.data);
         if (!type) return;
+        if (!isSafeBridgeMessage(event.data)) return;
         if (frame && event.source === frame.contentWindow) {
           if (!allowedFromFrame[type]) return;
           if (window.opener && typeof window.opener.postMessage === 'function') {

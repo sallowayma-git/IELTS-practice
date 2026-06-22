@@ -32,7 +32,7 @@ function createStubWindow(name) {
     };
 }
 
-function createSandbox() {
+function createSandbox(options = {}) {
     const storageStub = {
         _data: new Map(),
         async get(key, fallback = null) {
@@ -115,6 +115,15 @@ function createSandbox() {
         setInterval,
         clearInterval,
         Math,
+        JSON: {
+            parse(value) {
+                if (typeof options.onJsonParse === 'function') {
+                    options.onJsonParse(value);
+                }
+                return JSON.parse(value);
+            },
+            stringify: JSON.stringify
+        },
         CustomEvent: windowStub.CustomEvent
     };
     windowStub.storage = storageStub;
@@ -796,6 +805,65 @@ async function run() {
     }
 
     // Case 6: _sendSimulationContext 应发送正确的上下文
+    // Case 5a: oversized sessionStorage mirror must be rejected before parsing.
+    {
+        let oversizedParsed = false;
+        const isolated = createSandbox({
+            onJsonParse(value) {
+                if (String(value || '').length > 2 * 1024 * 1024) {
+                    oversizedParsed = true;
+                }
+            }
+        });
+        const isolatedContext = vm.createContext(isolated.sandbox);
+        loadScript('js/app/examSessionMixin.js', isolatedContext);
+        loadScript('js/app/suitePracticeMixin.js', isolatedContext);
+        const app = createApp(isolated.windowStub);
+        isolated.sessionStorageStub.set(
+            'ielts_sim_session',
+            '{"id":"oversized-suite","sequence":[],"padding":"' + 'x'.repeat((2 * 1024 * 1024) + 1) + '"}'
+        );
+
+        assert.strictEqual(app._restoreSessionFromStorage(), null, 'oversized suite mirror should not restore');
+        assert.strictEqual(oversizedParsed, false, 'oversized suite mirror must be rejected before JSON.parse');
+    }
+
+    // Case 5b: suite rawData sanitizer must tolerate hostile runtime objects.
+    {
+        const app = createApp(windowStub);
+        const rawData = JSON.parse(`{
+            "answers": { "q1": "A" },
+            "__proto__": { "pollutedSuiteRaw": true },
+            "constructor": { "prototype": { "pollutedSuiteRaw": true } },
+            "metadata": {
+                "safe": "yes",
+                "prototype": { "pollutedSuiteRaw": true }
+            },
+            "highlights": [{ "id": "hl-1" }],
+            "scrollY": 200
+        }`);
+        rawData.big = 123n;
+        rawData.score = Infinity;
+        rawData.self = rawData;
+        rawData.items = Array.from({ length: 700 }, (_, index) => index);
+
+        const sanitized = app._sanitizeSuiteRawData(rawData);
+
+        assert.strictEqual(sanitized.answers.q1, 'A', 'suite rawData should keep safe answer payload');
+        assert.strictEqual(sanitized.big, undefined, 'suite rawData should drop BigInt values');
+        assert.strictEqual(sanitized.score, null, 'suite rawData should null non-finite numbers');
+        assert.strictEqual(sanitized.self, undefined, 'suite rawData should drop circular references');
+        assert.strictEqual(sanitized.items.length, 500, 'suite rawData arrays should be capped');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(sanitized, 'highlights'), false, 'suite rawData should strip duplicated highlights');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(sanitized, 'scrollY'), false, 'suite rawData should strip duplicated scrollY');
+        assert.strictEqual(sanitized.metadata.safe, 'yes', 'suite rawData should keep safe metadata');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(sanitized, '__proto__'), false);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(sanitized, 'constructor'), false);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(sanitized.metadata, 'prototype'), false);
+        assert.strictEqual(Object.prototype.pollutedSuiteRaw, undefined);
+        assert.doesNotThrow(() => JSON.stringify(sanitized), 'sanitized suite rawData should be JSON serializable');
+    }
+
     {
         const app = createApp(windowStub);
         const session = makeSession('suite_context');

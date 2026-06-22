@@ -1,5 +1,11 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const MAX_SUITE_CLONE_DEPTH = 12;
+    const MAX_SUITE_CLONE_ARRAY_ITEMS = 500;
+    const MAX_SUITE_CLONE_OBJECT_KEYS = 200;
+    const MAX_SUITE_CLONE_TEXT_LENGTH = 5000;
+    const MAX_SUITE_SESSION_STORAGE_CHARS = 2 * 1024 * 1024;
+    const SUITE_CLONE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     let fallbackIdCounter = 0;
 
@@ -74,6 +80,90 @@
             return ['high', 'medium', 'mid', '高频', '次高频', '中频', 'ultra-high', 'very-high', 'high frequency', 'medium frequency'].includes(normalizedFrequency);
         }
         return true;
+    }
+
+    function isSuiteUnsafeKey(key) {
+        return SUITE_CLONE_POLLUTION_KEYS.has(String(key));
+    }
+
+    function isSuitePlainObject(value) {
+        return value && Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function normalizeSuiteText(value, maxLength = MAX_SUITE_CLONE_TEXT_LENGTH) {
+        return String(value)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .slice(0, maxLength);
+    }
+
+    function cloneSuiteSafeValue(value, depth = 0, seen = null) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return normalizeSuiteText(value);
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (depth >= MAX_SUITE_CLONE_DEPTH) {
+            return undefined;
+        }
+
+        const scanState = seen || new WeakSet();
+        if (scanState.has(value)) {
+            return undefined;
+        }
+        scanState.add(value);
+
+        if (Array.isArray(value)) {
+            return value
+                .slice(0, MAX_SUITE_CLONE_ARRAY_ITEMS)
+                .map((item) => cloneSuiteSafeValue(item, depth + 1, scanState))
+                .filter((item) => item !== undefined);
+        }
+
+        if (!isSuitePlainObject(value)) {
+            return undefined;
+        }
+
+        const clone = {};
+        Object.keys(value)
+            .slice(0, MAX_SUITE_CLONE_OBJECT_KEYS)
+            .forEach((key) => {
+                if (isSuiteUnsafeKey(key)) {
+                    return;
+                }
+                const safeKey = normalizeSuiteText(key, 512);
+                if (!safeKey || isSuiteUnsafeKey(safeKey)) {
+                    return;
+                }
+                const safeValue = cloneSuiteSafeValue(value[key], depth + 1, scanState);
+                if (safeValue !== undefined) {
+                    clone[safeKey] = safeValue;
+                }
+            });
+        return clone;
+    }
+
+    function parseSuiteSessionSnapshot(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_SUITE_SESSION_STORAGE_CHARS) {
+            return null;
+        }
+        return JSON.parse(source);
     }
 
     const mixin = {
@@ -309,7 +399,7 @@
                 try {
                     await this.cleanupExamSession(examId);
                 } catch (cleanupError) {
-                    console.warn('[SuitePractice] 清理上一篇会话失败:', cleanupError);
+                    console.warn('[SuitePractice] 清理上一篇会话失败:', summarizeSuitePracticeErrorForLog(cleanupError));
                 }
             }
 
@@ -378,11 +468,8 @@
             if (!value || typeof value !== 'object') {
                 return value;
             }
-            try {
-                return JSON.parse(JSON.stringify(value));
-            } catch (_) {
-                return Array.isArray(value) ? value.slice() : { ...value };
-            }
+            const cloned = cloneSuiteSafeValue(value);
+            return cloned && typeof cloned === 'object' ? cloned : {};
         },
 
         _sanitizeSuiteRawData(rawData) {
@@ -775,7 +862,7 @@
 
             if (!nextWindow || nextWindow.closed) {
                 if (openError) {
-                    console.warn('[SuitePractice] 套题无法打开下一篇:', openError);
+                    console.warn('[SuitePractice] 套题无法打开下一篇:', summarizeSuitePracticeErrorForLog(openError));
                 }
                 window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: skipExamIdForAbort || null });
@@ -829,7 +916,7 @@
                 if (!global.sessionStorage) return null;
                 const raw = global.sessionStorage.getItem('ielts_sim_session');
                 if (!raw) return null;
-                const snapshot = JSON.parse(raw);
+                const snapshot = parseSuiteSessionSnapshot(raw);
                 if (!snapshot || !snapshot.id || !Array.isArray(snapshot.sequence)) return null;
                 return snapshot;
             } catch (_) { return null; }
@@ -2118,7 +2205,7 @@
                         sequenceTotal: normalizedSequence.length
                     });
                 } catch (openError) {
-                    console.error('[SuitePractice] 打开首篇失败:', openError);
+                    console.error('[SuitePractice] 打开首篇失败:', summarizeSuitePracticeErrorForLog(openError));
                     examWindow = null;
                 }
 
@@ -2489,7 +2576,7 @@
                         }
                     }, getMessageTargetOrigin());
                 } catch (forceCloseError) {
-                    console.warn('[SuitePractice] 无法通知套题窗口关闭:', forceCloseError);
+                    console.warn('[SuitePractice] 无法通知套题窗口关闭:', summarizeSuitePracticeErrorForLog(forceCloseError));
                 }
             }
 

@@ -1,15 +1,95 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
+    const MAX_REMOTE_PRACTICE_CLONE_DEPTH = 12;
+    const MAX_REMOTE_PRACTICE_CLONE_NODES = 50000;
+    const MAX_REMOTE_PRACTICE_ARRAY_ITEMS = 5000;
+    const MAX_REMOTE_PRACTICE_OBJECT_KEYS = 500;
+    const MAX_REMOTE_PRACTICE_STRING_LENGTH = 20000;
+    const REMOTE_PRACTICE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    function cloneRemotePracticeValue(value, depth = 0, state = { seen: new WeakSet(), nodes: 0 }) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_REMOTE_PRACTICE_STRING_LENGTH
+                ? `${value.slice(0, MAX_REMOTE_PRACTICE_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (depth > MAX_REMOTE_PRACTICE_CLONE_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_REMOTE_PRACTICE_CLONE_NODES) {
+            return '[Truncated]';
+        }
+
+        state.nodes += 1;
+        state.seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                const list = value
+                    .slice(0, MAX_REMOTE_PRACTICE_ARRAY_ITEMS)
+                    .map((item) => cloneRemotePracticeValue(item, depth + 1, state))
+                    .filter((item) => item !== undefined);
+                if (value.length > MAX_REMOTE_PRACTICE_ARRAY_ITEMS) {
+                    list.push(`[Truncated ${value.length - MAX_REMOTE_PRACTICE_ARRAY_ITEMS} items]`);
+                }
+                return list;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const output = {};
+            for (const key of keys.slice(0, MAX_REMOTE_PRACTICE_OBJECT_KEYS)) {
+                if (REMOTE_PRACTICE_UNSAFE_KEYS.has(key)) {
+                    continue;
+                }
+                const safeValue = cloneRemotePracticeValue(value[key], depth + 1, state);
+                if (safeValue !== undefined) {
+                    output[key] = safeValue;
+                }
+            }
+            if (keys.length > MAX_REMOTE_PRACTICE_OBJECT_KEYS) {
+                output.__truncatedKeys = keys.length - MAX_REMOTE_PRACTICE_OBJECT_KEYS;
+            }
+            return output;
+        } finally {
+            state.seen.delete(value);
+        }
+    }
 
     function cloneValue(value) {
         if (ExamData.cloneValue) {
-            return ExamData.cloneValue(value);
+            try {
+                return ExamData.cloneValue(value);
+            } catch (_) {
+                // Fallback below keeps local mirrors writable even when shared cloning is unavailable.
+            }
         }
-        try {
-            return JSON.parse(JSON.stringify(value));
-        } catch (_) {
-            return value;
-        }
+        return cloneRemotePracticeValue(value);
     }
 
     function isUnauthorized(error) {

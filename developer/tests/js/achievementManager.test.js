@@ -27,6 +27,17 @@ function createLocalStorage(seed = {}) {
 
 function createHarness(options = {}) {
     const localStorage = createLocalStorage(options.localStorage);
+    let jsonParseCalls = 0;
+    const guardedJson = {
+        parse(value) {
+            jsonParseCalls += 1;
+            if (typeof options.onJsonParse === 'function') {
+                options.onJsonParse(value);
+            }
+            return JSON.parse(value);
+        },
+        stringify: JSON.stringify
+    };
     const document = {
         readyState: 'loading',
         addEventListener() {},
@@ -56,10 +67,11 @@ function createHarness(options = {}) {
             log() {},
             warn() {},
             error() {}
-        }
+        },
+        JSON: guardedJson
     });
     vm.runInContext(source, context, { filename: 'js/services/achievementManager.js' });
-    return { window, localStorage };
+    return { window, localStorage, getJsonParseCalls: () => jsonParseCalls };
 }
 
 const unsafeStoredState = `{
@@ -83,6 +95,22 @@ assert.equal(
     '2026-01-01T00:00:00.000Z'
 );
 assert.equal({}.pollutedAchievement, undefined);
+
+let oversizedParsed = false;
+const oversizedHarness = createHarness({
+    localStorage: {
+        user_achievements: '{"padding":"' + 'x'.repeat(70 * 1024) + '"}'
+    },
+    onJsonParse(value) {
+        if (String(value || '').length > 64 * 1024) {
+            oversizedParsed = true;
+        }
+    }
+});
+await oversizedHarness.window.AchievementManager.init();
+assert.equal(Object.keys(oversizedHarness.window.AchievementManager.unlocked).length, 0);
+assert.equal(oversizedParsed, false, 'oversized achievement state must be rejected before JSON.parse');
+assert.equal(oversizedHarness.getJsonParseCalls(), 0);
 
 localHarness.window.AchievementManager.unlocked = {
     first_step: { unlockedAt: '2026-01-01T00:00:00.000Z' },
@@ -119,6 +147,8 @@ assert.deepStrictEqual(Object.keys(storedViaRepository), ['first_step']);
 
 assert(
     source.includes('MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200') &&
+    source.includes('MAX_UNLOCKED_STATE_STORAGE_STRING_LENGTH = 64 * 1024') &&
+    source.includes('parseStoredUnlockedState(raw)') &&
     source.includes("UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
     source.includes('_normalizeUnlockedState(value)') &&
     source.includes('this.unlocked = this._normalizeUnlockedState(this.unlocked)'),

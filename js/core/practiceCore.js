@@ -88,6 +88,7 @@
         tempPracticeRecords: 'temp_practice_records'
     });
 
+    const MAX_PRACTICE_MESSAGE_JSON_LENGTH = 2 * 1024 * 1024;
     const PRACTICE_CLONE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const PRACTICE_CLONE_LIMITS = Object.freeze({
         maxDepth: 12,
@@ -103,6 +104,9 @@
 
     function safeParseJson(value) {
         if (typeof value !== 'string') {
+            return null;
+        }
+        if (value.length > MAX_PRACTICE_MESSAGE_JSON_LENGTH) {
             return null;
         }
         try {

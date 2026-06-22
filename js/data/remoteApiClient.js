@@ -1,5 +1,6 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
+    const MAX_REMOTE_API_RESPONSE_JSON_LENGTH = 1024 * 1024;
 
     class RemoteApiError extends Error {
         constructor(message, options = {}) {
@@ -49,7 +50,7 @@
                     this.clearAuthState();
                     return { available: true, authenticated: false, user: null };
                 }
-                const payload = await this._parseJson(response);
+                const payload = await this._parseJson(response, { allowInvalidJson: !response.ok });
                 if (!response.ok) {
                     throw new RemoteApiError(payload?.error || 'Authentication check failed', {
                         status: response.status,
@@ -267,7 +268,7 @@
                 body: options.body === undefined ? undefined : JSON.stringify(options.body)
             });
             this.available = true;
-            const payload = await this._parseJson(response);
+            const payload = await this._parseJson(response, { allowInvalidJson: !response.ok });
             if (response.status === 401) {
                 this.clearAuthState();
             }
@@ -287,15 +288,28 @@
             return this.fetchImpl(`${this.baseUrl}${path}`, options);
         }
 
-        async _parseJson(response) {
+        async _parseJson(response, options = {}) {
             const text = await response.text();
             if (!text) {
                 return null;
             }
+            if (text.length > MAX_REMOTE_API_RESPONSE_JSON_LENGTH) {
+                if (options.allowInvalidJson) {
+                    return null;
+                }
+                throw new RemoteApiError('Response body is too large', {
+                    status: response.status
+                });
+            }
             try {
                 return JSON.parse(text);
             } catch (_) {
-                return null;
+                if (options.allowInvalidJson) {
+                    return null;
+                }
+                throw new RemoteApiError('Response body is not valid JSON', {
+                    status: response.status
+                });
             }
         }
     }

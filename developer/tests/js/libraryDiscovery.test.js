@@ -137,6 +137,10 @@ async function testDiscoversListeningHtmlAtAnyDepth() {
     assert(runtimeHtml.includes("navigate-to 'none'"), 'runtime wrapper CSP should block imported content navigation');
     assert(runtimeHtml.includes('&lt;script&gt;'), 'original imported scripts should be encoded into srcdoc instead of top-level HTML');
     assert(runtimeHtml.includes('function sameOriginParent(event)'), 'runtime bridge must validate parent message origin before forwarding into the sandbox');
+    assert(runtimeHtml.includes('MAX_BRIDGE_MESSAGE_CHARS = 2 * 1024 * 1024'), 'runtime bridge must cap forwarded message payload size');
+    assert(runtimeHtml.includes('function isSafeBridgeMessage(data)'), 'runtime bridge must validate forwarded message shape');
+    assert(runtimeHtml.includes('JSON.stringify(data).length <= MAX_BRIDGE_MESSAGE_CHARS'), 'runtime bridge must reject oversized structured messages before forwarding');
+    assert(runtimeHtml.includes('if (!isSafeBridgeMessage(event.data)) return;'), 'runtime bridge must apply message validation before forwarding both directions');
     assert(
         runtimeHtml.includes('sameOriginParent(event) && allowedFromParent[type] && frame && frame.contentWindow'),
         'runtime bridge must only forward allowlisted parent messages after the same-origin check'
@@ -314,6 +318,17 @@ async function testCapsImportedFileCountAndHtmlSize() {
     assert.strictEqual(oversizedResult.entries.length, 0, 'oversized imported HTML must not be accepted');
     assert.strictEqual(oversized.objectUrlPayloads.length, 0, 'oversized imported HTML must not create runtime blobs');
 
+    const oversizedAudio = createHarness();
+    const oversizedAudioResult = await oversizedAudio.discovery.discover([
+        makeFile('oversized-audio/listening.html', listeningHtml('Oversized Audio'), { size: 1000 }),
+        makeFile('oversized-audio/audio.mp3', '', { type: 'audio/mpeg', size: 101 * 1024 * 1024 })
+    ], { type: 'listening', registerRuntime: true });
+
+    assert.strictEqual(oversizedAudioResult.entries.length, 1, 'valid imported HTML can still be accepted when a companion asset is too large');
+    assert.strictEqual(oversizedAudioResult.entries[0].hasAudio, false, 'oversized imported audio must not be attached to the entry');
+    assert.strictEqual(oversizedAudioResult.report.audio, 0, 'oversized imported audio must not be counted as a usable resource');
+    assert.strictEqual(oversizedAudioResult.report.runtime.audio, 0, 'oversized imported audio must not create runtime object URLs');
+
     const capped = createHarness();
     const manyFiles = Array.from({ length: 5000 }, function (_, index) {
         return makeFile(`bulk/ignore-${index}.txt`, 'ignore');
@@ -328,6 +343,7 @@ async function testCapsImportedFileCountAndHtmlSize() {
 
     recordResult('文件夹导入限制文件数量和 HTML 体积', true, {
         oversizedEntries: oversizedResult.entries.length,
+        oversizedAudioRuntime: oversizedAudioResult.report.runtime.audio,
         cappedFiles: cappedResult.stats.files
     });
 }

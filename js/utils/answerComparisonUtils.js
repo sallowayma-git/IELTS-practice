@@ -38,6 +38,15 @@
         return ANSWER_METADATA_POLLUTION_KEYS.has(String(key));
     }
 
+    function createSafeAnswerMap() {
+        return Object.create(null);
+    }
+
+    function normalizeAnswerMapKey(key) {
+        const strKey = String(key == null ? '' : key).trim();
+        return strKey && !isUnsafeMetadataKey(strKey) ? strKey : '';
+    }
+
     function cloneSafeObject(value) {
         const clone = {};
         if (!value || typeof value !== 'object') {
@@ -249,16 +258,13 @@
     }
 
     function mergeSourceMaps(sources) {
-        const target = {};
+        const target = createSafeAnswerMap();
         sources.forEach(source => {
             if (!source || typeof source !== 'object') {
                 return;
             }
             Object.keys(source).forEach(key => {
-                if (key == null) {
-                    return;
-                }
-                const strKey = String(key).trim();
+                const strKey = normalizeAnswerMapKey(key);
                 if (!strKey) {
                     return;
                 }
@@ -272,15 +278,19 @@
 
     function extractFromComparison(comparison, selector) {
         if (!comparison || typeof comparison !== 'object') {
-            return {};
+            return createSafeAnswerMap();
         }
-        const result = {};
+        const result = createSafeAnswerMap();
         Object.keys(comparison).forEach(key => {
+            const strKey = normalizeAnswerMapKey(key);
+            if (!strKey) {
+                return;
+            }
             const entry = comparison[key];
             if (entry && typeof entry === 'object') {
                 const value = selector(entry);
                 if (value != null) {
-                    result[key] = value;
+                    result[strKey] = value;
                 }
             }
         });
@@ -289,15 +299,19 @@
 
     function extractFromDetails(details, selector) {
         if (!details || typeof details !== 'object') {
-            return {};
+            return createSafeAnswerMap();
         }
-        const result = {};
+        const result = createSafeAnswerMap();
         Object.keys(details).forEach(key => {
+            const strKey = normalizeAnswerMapKey(key);
+            if (!strKey) {
+                return;
+            }
             const entry = details[key];
             if (entry && typeof entry === 'object') {
                 const value = selector(entry);
                 if (value != null) {
-                    result[key] = value;
+                    result[strKey] = value;
                 }
             }
         });
@@ -435,11 +449,11 @@
             ...Object.keys(correctMap)
         ]);
 
-        const entryMap = {};
+        const entryMap = createSafeAnswerMap();
 
         allKeys.forEach(rawKey => {
             const keyInfo = normalizeKey(rawKey);
-            if (!keyInfo.canonicalKey) {
+            if (!keyInfo.canonicalKey || isUnsafeMetadataKey(keyInfo.canonicalKey)) {
                 return;
             }
             if (isNoiseKey(keyInfo.canonicalKey, keyInfo.questionNumber)) {

@@ -2,6 +2,12 @@
   'use strict';
 
   var TAG = '[ListeningBridge]';
+  var MAX_LISTENING_RESULT_HTML_LENGTH = 2 * 1024 * 1024;
+  var MAX_LISTENING_INLINE_OBJECT_LENGTH = 256 * 1024;
+  var MAX_LISTENING_EXAM_ID_LENGTH = 120;
+  var MAX_LISTENING_SESSION_ID_LENGTH = 160;
+  var MAX_LISTENING_URL_SOURCE_LENGTH = 2048;
+  var LISTENING_SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/;
 
   var state = {
     sessionId: null,
@@ -208,6 +214,28 @@
     return fallback;
   }
 
+  function normalizeListeningId(value, maxLength, fallback) {
+    var text = String(value == null ? '' : value).trim();
+    if (!text || text.length > maxLength || !LISTENING_SAFE_ID_PATTERN.test(text)) {
+      return fallback || '';
+    }
+    return text;
+  }
+
+  function normalizeListeningExamId(value, fallback) {
+    var fallbackValue = arguments.length >= 2 ? fallback : 'listening-unknown';
+    return normalizeListeningId(value, MAX_LISTENING_EXAM_ID_LENGTH, fallbackValue);
+  }
+
+  function normalizeListeningSessionId(value, fallback) {
+    var fallbackValue = arguments.length >= 2 ? fallback : '';
+    return normalizeListeningId(value, MAX_LISTENING_SESSION_ID_LENGTH, fallbackValue);
+  }
+
+  function createListeningSessionId(examId) {
+    return normalizeListeningExamId(examId, 'listening-unknown') + '_' + Date.now();
+  }
+
   function normalizeAcceptedAnswers(value, mode) {
     var values = Array.isArray(value) ? value.slice() : [value];
     var splitPattern = mode === 'multiple' ? /[|,;]+/ : /\|+/;
@@ -264,6 +292,17 @@
     return true;
   }
 
+  var LISTENING_RECORD_UNSAFE_KEYS = ['__proto__', 'prototype', 'constructor'];
+  var MAX_LISTENING_RECORD_KEY_LENGTH = 80;
+
+  function createSafeListeningRecordMap() {
+    return Object.create(null);
+  }
+
+  function isUnsafeListeningRecordKey(key) {
+    return LISTENING_RECORD_UNSAFE_KEYS.indexOf(String(key || '')) >= 0;
+  }
+
   function normalizeQuestionLabel(rawQuestion, fallbackIndex) {
     var raw = String(rawQuestion != null ? rawQuestion : '').replace(/\s+/g, ' ').trim();
     if (!raw) return String((fallbackIndex || 0) + 1);
@@ -283,6 +322,15 @@
     var label = normalizeQuestionLabel(rawQuestion, fallbackIndex);
     if (!label) return 'q' + ((fallbackIndex || 0) + 1);
     return /^q/i.test(label) ? label.replace(/^Q/, 'q') : 'q' + label;
+  }
+
+  function toSafeListeningRecordKey(rawQuestion, fallbackIndex) {
+    var fallback = 'q' + ((fallbackIndex || 0) + 1);
+    var key = String(toQuestionKey(rawQuestion, fallbackIndex) || '').trim();
+    if (!key || key.length > MAX_LISTENING_RECORD_KEY_LENGTH || isUnsafeListeningRecordKey(key)) {
+      return fallback;
+    }
+    return key;
   }
 
   function detectSource(examId) {
@@ -376,6 +424,9 @@
     if (typeof html !== 'string' || !html.trim() || typeof DOMParser !== 'function') {
       return [];
     }
+    if (html.length > MAX_LISTENING_RESULT_HTML_LENGTH) {
+      return [];
+    }
     try {
       var parsedDoc = new DOMParser().parseFromString(html, 'text/html');
       return parseResultsFromDocument(parsedDoc);
@@ -410,6 +461,7 @@
     }
     if (!started || depth !== 0) return null;
     var snippet = text.substring(objectStart, i + 1);
+    if (snippet.length > MAX_LISTENING_INLINE_OBJECT_LENGTH) return null;
     try {
       return parseSafeObjectLiteral(snippet);
     } catch (e) {
@@ -421,6 +473,7 @@
   function parseSafeObjectLiteral(snippet) {
     var source = String(snippet || '').trim();
     if (!source) return null;
+    if (source.length > MAX_LISTENING_INLINE_OBJECT_LENGTH) return null;
     if (/[`;]|\bfunction\b|=>/.test(source) || /[{,]\s*\[/.test(source)) {
       throw new Error('unsafe object literal');
     }
@@ -432,6 +485,7 @@
       })
       .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
       .replace(/,\s*([}\]])/g, '$1');
+    if (json.length > MAX_LISTENING_INLINE_OBJECT_LENGTH) return null;
     return JSON.parse(json);
   }
 
@@ -749,16 +803,16 @@
   }
 
   function buildBridgePayload(details) {
-    var answers = {};
-    var correctAnswers = {};
-    var answerComparison = {};
-    var answerDetails = {};
+    var answers = createSafeListeningRecordMap();
+    var correctAnswers = createSafeListeningRecordMap();
+    var answerComparison = createSafeListeningRecordMap();
+    var answerDetails = createSafeListeningRecordMap();
     var correct = 0;
     var total = details.length;
 
     for (var i = 0; i < details.length; i++) {
       var d = details[i];
-      var qId = toQuestionKey(d.question, i);
+      var qId = toSafeListeningRecordKey(d.question, i);
       answers[qId] = d.userAnswer;
       correctAnswers[qId] = d.correctAnswer;
       answerComparison[qId] = {
@@ -1103,9 +1157,11 @@
         if (event.source && event.source !== window && typeof event.source.postMessage === 'function') {
           state.parentWindow = event.source;
         }
-        state.sessionId = payload.sessionId || state.sessionId || (state.examId + '_' + Date.now());
-        state.examId = payload.examId || state.examId;
-        state.suiteSessionId = payload.suiteSessionId || state.suiteSessionId || null;
+        state.examId = normalizeListeningExamId(payload.examId, state.examId || 'listening-unknown');
+        state.sessionId = normalizeListeningSessionId(payload.sessionId, state.sessionId)
+          || state.sessionId
+          || createListeningSessionId(state.examId);
+        state.suiteSessionId = normalizeListeningSessionId(payload.suiteSessionId, state.suiteSessionId) || null;
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
         state.initialized = true;
         stopInitRequestLoop();
@@ -1118,12 +1174,12 @@
 
   function extractExamIdFromUrl() {
     try {
-      var url = window.location.href;
-      var match = url.match(/[?&]examId=([^&]+)/);
-      if (match) return decodeURIComponent(match[1]);
-      var srcMatch = url.match(/[?&]src=([^&]+)/);
-      if (srcMatch) {
-        var src = decodeURIComponent(srcMatch[1]);
+      var currentUrl = new URL(window.location.href);
+      var examId = normalizeListeningExamId(currentUrl.searchParams.get('examId'), '');
+      if (examId) return examId;
+      var rawSrc = String(currentUrl.searchParams.get('src') || '').trim();
+      if (rawSrc && rawSrc.length <= MAX_LISTENING_URL_SOURCE_LENGTH) {
+        var src = rawSrc;
         var partMatch = src.match(/(P[1-4])/i);
         if (partMatch) return 'listening-' + partMatch[1].toLowerCase();
       }
@@ -1142,7 +1198,7 @@
       state.examId = extractExamIdFromUrl();
     }
     if (!state.sessionId) {
-      state.sessionId = state.examId + '_' + Date.now();
+      state.sessionId = createListeningSessionId(state.examId);
     }
     state.startTime = Date.now();
 

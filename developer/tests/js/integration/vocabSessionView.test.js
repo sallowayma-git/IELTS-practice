@@ -54,6 +54,7 @@ function patchVocabSessionView(source) {
         handleImportInputChange,
         performImport,
         handleExportRequest,
+        renderCard,
         updateProgressStats,
         setSidePanelExpanded,
         showDueBanner,
@@ -854,6 +855,46 @@ async function run() {
 
         assert.strictEqual(hooks.state.session.stage, 'feedback');
         assert.strictEqual(hooks.state.session.lastAnswer.skipped, true);
+    });
+
+    await record('feedback card escapes stored word and answer markup', () => {
+        hooks.resetSessionState();
+        hooks.state.session.stage = 'feedback';
+        hooks.state.session.currentWord = {
+            id: 'w-xss',
+            word: '<img src=x onerror=alert(1)>',
+            meaning: '<svg onload=alert(2)>',
+            easeFactor: 2.4,
+            interval: 3,
+            repetitions: 2,
+            lastReviewed: '2026-01-01T00:00:00.000Z',
+            nextReview: '2026-01-02T00:00:00.000Z'
+        };
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'easy',
+            finalQuality: 'easy',
+            spellingAttempts: 1,
+            spellingCorrect: false,
+            typed: '<script>alert(3)</script>',
+            baseEF: 2.4,
+            finalEF: 2.55,
+            penalty: 0.05,
+            isIntraReview: true,
+            intraCycles: 2
+        };
+
+        hooks.renderCard();
+        const html = String(elements.sessionCard.innerHTML || '');
+
+        assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+        assert.ok(html.includes('&lt;svg onload=alert(2)&gt;'));
+        assert.ok(html.includes('你的回答：&lt;script&gt;alert(3)&lt;/script&gt;'));
+        assert.ok(html.includes('认识判断：简单'));
+        assert.ok(html.includes('EF 调整：+0.15'));
+        assert.ok(html.includes('当前 EF：2.55'));
+        assert.ok(!html.includes('<img src=x'));
+        assert.ok(!html.includes('<svg onload'));
+        assert.ok(!html.includes('<script>alert(3)</script>'));
     });
 
     await record('move to next word handles completion', () => {

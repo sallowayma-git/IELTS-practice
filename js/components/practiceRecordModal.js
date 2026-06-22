@@ -13,6 +13,9 @@ const MAX_MODAL_ANSWER_TEXT_LENGTH = 200;
 const MAX_MODAL_QUESTION_LABEL_LENGTH = 80;
 const MAX_MODAL_JSON_TEXT_LENGTH = 1000;
 const MAX_MODAL_ANSWER_DEPTH = 6;
+const MAX_MODAL_MAP_KEYS = 1000;
+const MAX_MODAL_MAP_KEY_LENGTH = 120;
+const MODAL_UNSAFE_MAP_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function summarizePracticeRecordModalErrorForLog(error) {
     if (!error || typeof error !== 'object') {
         return { name: typeof error };
@@ -900,15 +903,15 @@ class PracticeRecordModal {
     }
 
     mergeComparisonWithCorrections(record) {
-        const comparison = this.safeCloneObject(record.answerComparison || {});
+        const comparison = this.normalizeComparisonMap(record.answerComparison || {});
         const sources = [
-            record.correctAnswers || {},
-            record.realData && record.realData.correctAnswers,
+            this.normalizeAnswerMap(record.correctAnswers),
+            this.normalizeAnswerMap(record.realData && record.realData.correctAnswers),
             (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details)
-                ? Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                ? this.correctAnswerMapFromDetails(record.realData.scoreInfo.details)
                 : null,
             (record.scoreInfo && record.scoreInfo.details)
-                ? Object.fromEntries(Object.entries(record.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                ? this.correctAnswerMapFromDetails(record.scoreInfo.details)
                 : null
         ].filter(Boolean);
 
@@ -1005,16 +1008,19 @@ class PracticeRecordModal {
 
     getLegacyCorrectAnswers(record) {
         if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
+            return this.normalizeAnswerMap(record.correctAnswers);
         }
 
         if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
+            return this.normalizeAnswerMap(record.realData.correctAnswers);
         }
 
         if (record.answerComparison) {
-            const extracted = {};
+            const extracted = this.createSafeMap();
             Object.keys(record.answerComparison).forEach((key) => {
+                if (!this.isSafeMapKey(key)) {
+                    return;
+                }
                 const comparison = record.answerComparison[key];
                 if (comparison && comparison.correctAnswer) {
                     extracted[key] = comparison.correctAnswer;
@@ -1033,8 +1039,11 @@ class PracticeRecordModal {
             detailSources.push(record.scoreInfo.details);
         }
         for (const details of detailSources) {
-            const extracted = {};
+            const extracted = this.createSafeMap();
             Object.keys(details || {}).forEach((key) => {
+                if (!this.isSafeMapKey(key)) {
+                    return;
+                }
                 const detail = details[key];
                 if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
                     extracted[key] = detail.correctAnswer;
@@ -1185,16 +1194,75 @@ class PracticeRecordModal {
         return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
     }
 
+    createSafeMap() {
+        return Object.create(null);
+    }
+
+    isSafeMapKey(key) {
+        const text = String(key ?? '').trim();
+        return Boolean(text)
+            && text.length <= MAX_MODAL_MAP_KEY_LENGTH
+            && !MODAL_UNSAFE_MAP_KEYS.has(text);
+    }
+
+    normalizeAnswerMap(source) {
+        const safeMap = this.createSafeMap();
+        if (!source || typeof source !== 'object' || Array.isArray(source)) {
+            return safeMap;
+        }
+        Object.keys(source).slice(0, MAX_MODAL_MAP_KEYS).forEach((key) => {
+            if (this.isSafeMapKey(key)) {
+                safeMap[key] = source[key];
+            }
+        });
+        return safeMap;
+    }
+
+    normalizeComparisonEntry(entry) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return {};
+        }
+        return {
+            questionId: entry.questionId,
+            userAnswer: entry.userAnswer,
+            user: entry.user,
+            correctAnswer: entry.correctAnswer,
+            correct: entry.correct,
+            isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : Boolean(entry.isCorrect),
+            hasUserAnswer: Boolean(entry.hasUserAnswer)
+        };
+    }
+
+    normalizeComparisonMap(source) {
+        const safeMap = this.createSafeMap();
+        if (!source || typeof source !== 'object' || Array.isArray(source)) {
+            return safeMap;
+        }
+        Object.keys(source).slice(0, MAX_MODAL_MAP_KEYS).forEach((key) => {
+            if (this.isSafeMapKey(key)) {
+                safeMap[key] = this.normalizeComparisonEntry(source[key]);
+            }
+        });
+        return safeMap;
+    }
+
+    correctAnswerMapFromDetails(details) {
+        const safeMap = this.createSafeMap();
+        if (!details || typeof details !== 'object' || Array.isArray(details)) {
+            return safeMap;
+        }
+        Object.keys(details).slice(0, MAX_MODAL_MAP_KEYS).forEach((key) => {
+            if (!this.isSafeMapKey(key)) {
+                return;
+            }
+            const detail = details[key];
+            safeMap[key] = detail && detail.correctAnswer;
+        });
+        return safeMap;
+    }
+
     safeCloneObject(value) {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            return {};
-        }
-        try {
-            const cloned = JSON.parse(JSON.stringify(value));
-            return cloned && typeof cloned === 'object' && !Array.isArray(cloned) ? cloned : {};
-        } catch (_) {
-            return {};
-        }
+        return this.normalizeComparisonMap(value);
     }
 
     escapeHtml(value) {

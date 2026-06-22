@@ -13,15 +13,28 @@ function clone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
-function createHarness(seed = {}) {
+function createHarness(seed = {}, options = {}) {
     const storageState = new Map(Object.entries(clone(seed)));
+    const localStorageState = new Map(Object.entries(options.localStorage || {}).map(([key, value]) => [key, String(value)]));
     const events = [];
     const windowStub = {};
+    const onJsonParse = typeof options.onJsonParse === 'function' ? options.onJsonParse : null;
+    const guardedJson = {
+        parse(value) {
+            if (onJsonParse) {
+                onJsonParse(value);
+            }
+            return JSON.parse(value);
+        },
+        stringify(value) {
+            return JSON.stringify(value);
+        }
+    };
     const sandbox = {
         window: windowStub,
         console: { log() {}, warn() {}, error() {}, info() {} },
         Date,
-        JSON,
+        JSON: guardedJson,
         Map,
         Object,
         Array,
@@ -36,6 +49,17 @@ function createHarness(seed = {}) {
             }
         }
     };
+    const localStorage = {
+        getItem(key) {
+            return localStorageState.has(key) ? localStorageState.get(key) : null;
+        },
+        setItem(key, value) {
+            localStorageState.set(key, String(value));
+        },
+        removeItem(key) {
+            localStorageState.delete(key);
+        }
+    };
     windowStub.crypto = {
         randomUUID() {
             return '00000000-0000-4000-8000-000000000001';
@@ -47,15 +71,19 @@ function createHarness(seed = {}) {
         events.push(event);
         return true;
     };
-    windowStub.storage = {
-        async waitForInitialization() {},
-        async get(key, fallback) {
-            return storageState.has(key) ? clone(storageState.get(key)) : clone(fallback);
-        },
-        async set(key, value) {
-            storageState.set(key, clone(value));
-        }
-    };
+    windowStub.localStorage = localStorage;
+    sandbox.localStorage = localStorage;
+    if (options.useWindowStorage !== false) {
+        windowStub.storage = {
+            async waitForInitialization() {},
+            async get(key, fallback) {
+                return storageState.has(key) ? clone(storageState.get(key)) : clone(fallback);
+            },
+            async set(key, value) {
+                storageState.set(key, clone(value));
+            }
+        };
+    }
     sandbox.globalThis = windowStub;
     const context = vm.createContext(sandbox);
     const source = fs.readFileSync(path.join(repoRoot, 'js/core/goalManager.js'), 'utf8');
@@ -63,7 +91,8 @@ function createHarness(seed = {}) {
     return {
         GoalManager: windowStub.GoalManager,
         events,
-        storageState
+        storageState,
+        localStorageState
     };
 }
 
@@ -197,6 +226,59 @@ function createHarness(seed = {}) {
     assert.equal(manager.getGoals().length, 100, 'stored goals should be capped before rendering');
     assert.equal(manager.getGoals()[99].id, 'goal-99');
 }
+
+{
+    let parsed = false;
+    const { GoalManager } = createHarness({}, {
+        useWindowStorage: false,
+        localStorage: {
+            learning_goals: '[' + ' '.repeat(1024 * 1024 + 1) + ']',
+            goal_progress: '{"progress":{},"streak":{"current":1}}'
+        },
+        onJsonParse(value) {
+            if (String(value).length > 1024 * 1024) {
+                parsed = true;
+            }
+        }
+    });
+    const manager = new GoalManager();
+    await manager._readyPromise;
+    assert.equal(parsed, false, 'oversized locally stored goals should be rejected before JSON.parse');
+    assert.equal(manager.getGoals().length, 0);
+    assert.deepEqual(manager.getStreak(), {
+        current: 1,
+        best: 0,
+        lastDate: null
+    });
+}
+
+{
+    let parsed = false;
+    const { GoalManager } = createHarness({}, {
+        useWindowStorage: false,
+        localStorage: {
+            goal_progress: '{"progress":' + ' '.repeat(1024 * 1024 + 1) + '}'
+        },
+        onJsonParse(value) {
+            if (String(value).length > 1024 * 1024) {
+                parsed = true;
+            }
+        }
+    });
+    const manager = new GoalManager();
+    await manager._readyPromise;
+    assert.equal(parsed, false, 'oversized locally stored goal progress should be rejected before JSON.parse');
+    assert.deepEqual(manager.progress, {});
+}
+
+const goalManagerSource = fs.readFileSync(path.join(repoRoot, 'js/core/goalManager.js'), 'utf8');
+assert(
+    goalManagerSource.includes('MAX_GOAL_STORAGE_JSON_LENGTH = 1024 * 1024') &&
+    goalManagerSource.includes('MAX_PROGRESS_STORAGE_JSON_LENGTH = 1024 * 1024') &&
+    goalManagerSource.includes('function parseStoredGoalManagerJson') &&
+    goalManagerSource.includes('raw.length > maxLength'),
+    'goal manager localStorage JSON must be size-checked before parsing'
+);
 
 console.log(JSON.stringify({
     status: 'pass',

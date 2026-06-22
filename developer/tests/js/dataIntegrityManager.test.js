@@ -199,6 +199,42 @@ try {
     assert.equal(numericPrepared[0].correctAnswers, 50);
     assert.equal(numericPrepared[0].accuracy, 100);
 
+    const exportManager = new DataIntegrityManager();
+    let storedBackup = null;
+    exportManager.repositories = {
+        backups: {
+            async add(backup) {
+                storedBackup = backup;
+            }
+        }
+    };
+    const unsafeExportData = {
+        practice_records: [{
+            id: 'export-record',
+            note: 'x'.repeat(20050),
+            big: 10n
+        }]
+    };
+    unsafeExportData.self = unsafeExportData;
+    unsafeExportData.practice_records[0].loop = unsafeExportData;
+    Object.defineProperty(unsafeExportData, '__proto__', {
+        value: { polluted: true },
+        enumerable: true,
+        configurable: true
+    });
+    unsafeExportData.constructor = { unsafe: true };
+
+    const createdBackup = await exportManager.createBackup(unsafeExportData, 'manual');
+    assert.equal(createdBackup, storedBackup);
+    assert.equal(storedBackup.data.self, '[Circular]');
+    assert.equal(storedBackup.data.practice_records[0].loop, '[Circular]');
+    assert.equal(storedBackup.data.practice_records[0].big, '10');
+    assert.equal(storedBackup.data.practice_records[0].note.length, 20003);
+    assert.equal(typeof storedBackup.size, 'number');
+    assert.equal(Object.prototype.hasOwnProperty.call(storedBackup.data, '__proto__'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(storedBackup.data, 'constructor'), false);
+    assert.equal(Object.prototype.polluted, undefined);
+
     const restoreManager = new DataIntegrityManager();
     restoreManager.repositories = {
         backups: {

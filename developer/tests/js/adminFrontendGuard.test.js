@@ -87,11 +87,24 @@ const windowStub = {
 let fetchImpl = () => {
     throw new Error('fetch should not be called in this test');
 };
+const hostJson = globalThis.JSON;
+let oversizedAdminResponseParsed = false;
 
 const context = vm.createContext({
     window: windowStub,
     document: documentStub,
     console: { log() {}, warn() {}, error() {} },
+    JSON: {
+        parse(value, reviver) {
+            if (String(value).length > 1024 * 1024) {
+                oversizedAdminResponseParsed = true;
+            }
+            return hostJson.parse(value, reviver);
+        },
+        stringify(value, replacer, space) {
+            return hostJson.stringify(value, replacer, space);
+        }
+    },
     URLSearchParams,
     fetch(...args) {
         return fetchImpl(...args);
@@ -103,6 +116,31 @@ const hooks = windowStub.__IELTS_ADMIN_TEST_HOOKS__;
 assert(hooks, 'admin test hooks should be available');
 assert.equal(typeof hooks.confirmAction, 'function');
 assert.equal(typeof hooks.closeConfirm, 'function');
+assert.equal(typeof hooks.parseAdminResponseJson, 'function');
+assert.equal(typeof hooks.sanitizeStatusMessage, 'function');
+
+{
+    assert.deepEqual(hooks.parseAdminResponseJson('{"ok":true}'), { ok: true });
+    const oversized = `{"data":"${'x'.repeat(1024 * 1024 + 1)}"}`;
+    assert.equal(hooks.parseAdminResponseJson(oversized), null);
+    assert.equal(oversizedAdminResponseParsed, false, 'oversized admin API responses must be rejected before JSON.parse');
+}
+
+{
+    const sanitized = hooks.sanitizeStatusMessage(
+        'Request failed token=abc123 password:SecretPass1 Authorization: Bearer abc.def.ghi Basic dXNlcjpwYXNz https://example.test/cb?csrfToken=csrf-secret&keep=1'
+    );
+    assert(!sanitized.includes('abc123'));
+    assert(!sanitized.includes('SecretPass1'));
+    assert(!sanitized.includes('abc.def.ghi'));
+    assert(!sanitized.includes('dXNlcjpwYXNz'));
+    assert(!sanitized.includes('csrf-secret'));
+    assert(sanitized.includes('token=[redacted]'));
+    assert(sanitized.includes('password=[redacted]'));
+    assert(sanitized.includes('Bearer [redacted]'));
+    assert(sanitized.includes('Basic [redacted]'));
+    assert(sanitized.includes('csrfToken=[redacted]'));
+}
 
 const first = hooks.confirmAction({
     title: 'Delete old',
@@ -135,6 +173,23 @@ assert(
     source.includes('closeConfirm'),
     'admin confirm dialog must cancel any previous unresolved confirmation before opening a new one'
 );
+
+{
+    const shared = { label: 'shared' };
+    const rendered = JSON.parse(hooks.safeStringifyRecordPayload({
+        first: shared,
+        second: shared,
+        list: [shared]
+    }));
+    assert.deepEqual(rendered.first, { label: 'shared' });
+    assert.deepEqual(rendered.second, { label: 'shared' });
+    assert.deepEqual(rendered.list[0], { label: 'shared' });
+
+    const circular = { id: 'cycle' };
+    circular.self = circular;
+    const circularRendered = JSON.parse(hooks.safeStringifyRecordPayload(circular));
+    assert.equal(circularRendered.self, '[Circular]');
+}
 
 function jsonResponse(payload) {
     return {

@@ -10,6 +10,7 @@
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const MAX_DRAG_PAYLOAD_CHARS = 4096;
     const MAX_DRAG_TEXT_CHARS = 500;
+    const MAX_SIMULATION_DRAFT_STORAGE_CHARS = 1024 * 1024;
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -825,6 +826,8 @@
         if (!raw || typeof document === 'undefined' || typeof document.createElement !== 'function') {
             return raw
                 .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<script\b[^>]*\/?>/gi, '')
+                .replace(/<\/script\s*>/gi, '')
                 .replace(/<(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)\b[\s\S]*?<\/(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)>/gi, '')
                 .replace(/<(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)\b[^>]*\/?>/gi, '')
                 .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
@@ -3447,6 +3450,17 @@
         }
     }
 
+    function parseSimulationDraftStorage(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_SIMULATION_DRAFT_STORAGE_CHARS) {
+            return null;
+        }
+        return JSON.parse(source);
+    }
+
     function persistSimulationDraftMirror(draft) {
         const key = getSimulationDraftStorageKey();
         if (!key || !global.sessionStorage || !draft) {
@@ -3470,7 +3484,7 @@
         try {
             const raw = global.sessionStorage.getItem(key);
             if (!raw) return null;
-            const parsed = JSON.parse(raw);
+            const parsed = parseSimulationDraftStorage(raw);
             if (!parsed || typeof parsed !== 'object') {
                 return null;
             }

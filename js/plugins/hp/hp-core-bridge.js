@@ -32,6 +32,7 @@
   const MAX_PRACTICE_MESSAGE_ARRAY_ITEMS = 500;
   const MAX_PRACTICE_MESSAGE_OBJECT_KEYS = 200;
   const MAX_PRACTICE_MESSAGE_TEXT_LENGTH = 8000;
+  const MAX_HP_CORE_JSON_STRING_LENGTH = 64 * 1024;
 
   function getMessageTargetOrigin() {
     const origin = window.location && window.location.origin;
@@ -109,6 +110,17 @@
 
   function asObject(value) {
     return value && typeof value === 'object' ? value : {};
+  }
+
+  function parseHpCoreJsonString(value) {
+    if (typeof value !== 'string' || value.length > MAX_HP_CORE_JSON_STRING_LENGTH) {
+      return null;
+    }
+    try {
+      return JSON.parse(value);
+    } catch (_) {
+      return null;
+    }
   }
 
   function sanitizePracticeMessageValue(value, depth, state) {
@@ -193,13 +205,11 @@
         return;
       }
       if (typeof value === 'string') {
-        try {
-          const parsed = JSON.parse(value);
-          if (parsed === true || parsed?.isCorrect === true || parsed?.correct === true || parsed?.result === true) {
-            correct += 1;
-          }
-          return;
-        } catch (_) {}
+        const parsed = parseHpCoreJsonString(value);
+        if (parsed === true || parsed?.isCorrect === true || parsed?.correct === true || parsed?.result === true) {
+          correct += 1;
+        }
+        return;
       }
       if (typeof value === 'object' && value) {
         if (value.isCorrect === true || value.correct === true || value.result === true) {
@@ -577,7 +587,7 @@
     return false;
   }
 
-  function safeJsonParse(v) { try { return JSON.parse(v); } catch (_) { return null; } }
+  function safeJsonParse(v) { return parseHpCoreJsonString(v); }
   function coerceArray(x) { return Array.isArray(x) ? x : (x ? [x] : []); }
   function markTypes(list, type) {
     return (list || []).map(function (e) { if (e && !e.type) e.type = type; return e; });
@@ -927,6 +937,8 @@ return null;
         if (isPracticeCompleteType(normalized)) {
           const sid = payload.sessionId || payload.sessionID || (payload.data && (payload.data.sessionId || payload.data.sessionID));
           const sessionEntry = sid ? localFallbackSessions.get(sid) : null;
+          const normalizedPayload = normalizePracticePayload(payload);
+          const safePayload = normalizedPayload.raw || {};
           if (sid) clearLocalHandshake(sid, 'complete');
 
           const mainHandles = typeof window.startHandshakeFallback === 'function';
@@ -938,12 +950,12 @@ return null;
 
             if (derivedExamId) {
               if (typeof window.savePracticeRecordFallback === 'function') {
-                Promise.resolve(window.savePracticeRecordFallback(derivedExamId, payload))
+                Promise.resolve(window.savePracticeRecordFallback(derivedExamId, safePayload))
                   .catch((error) => { try { console.warn('[hpCore] 保存练习记录失败', summarizeHpCoreErrorForLog(error)); } catch (_) {} })
                   .finally(() => { setTimeout(() => this._loadRecords(), 400); });
               } else {
                 const recordContext = sessionEntry || { exam: this.lastOpenedExam || null };
-                ingestLocalPracticeRecord(derivedExamId, payload, recordContext);
+                ingestLocalPracticeRecord(derivedExamId, safePayload, recordContext);
                 setTimeout(() => this._loadRecords(), 400);
               }
             } else {

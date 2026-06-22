@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
-function loadPDFHandler(locationOverrides = {}) {
+function loadPDFHandler(locationOverrides = {}, options = {}) {
     const windowStub = {
         location: {
             href: 'http://127.0.0.1:3000/',
@@ -26,13 +26,15 @@ function loadPDFHandler(locationOverrides = {}) {
     const context = vm.createContext({
         window: windowStub,
         console: windowStub.console,
+        fetch: options.fetch,
         URL,
         Date,
         Map,
         String,
         Math,
         Number,
-        Object
+        Object,
+        setTimeout: options.setTimeout || (() => {})
     });
     const source = fs.readFileSync(path.join(repoRoot, 'js/components/PDFHandler.js'), 'utf8');
     vm.runInContext(source, context, { filename: 'js/components/PDFHandler.js' });
@@ -106,10 +108,44 @@ function testPDFHandlerWindowNamesAreBounded() {
     assert(!generated.includes('/'), 'window names should strip unsafe separators');
 }
 
-testPDFHandlerRejectsUntrustedUrls();
-testPDFHandlerAllowsFileOnlyInFileMode();
-testPDFHandlerForcesNoOpenerWindowFeatures();
-testPDFHandlerWindowNamesAreBounded();
+async function testPDFHandlerDoesNotExposePrivatePaths() {
+    const httpHandler = loadPDFHandler({}, {
+        fetch: async () => {
+            throw new Error('network failed for http://127.0.0.1:3000/assets/sample.pdf?token=secret');
+        }
+    });
+    const failedHttp = await httpHandler.getPDFInfo('/assets/sample.pdf?token=secret');
+    assert.equal(failedHttp.path, '/assets/sample.pdf', 'public PDF metadata should strip origins and query strings');
+    assert(!JSON.stringify(failedHttp).includes('token=secret'), 'failed PDF metadata must not expose query secrets');
+
+    const fileHandler = loadPDFHandler({
+        href: 'file:///Users/Alice/index.html',
+        origin: 'null',
+        protocol: 'file:'
+    }, {
+        fetch: async () => {
+            throw new Error('network failed for file:///Users/Alice/Secret/sample.pdf');
+        }
+    });
+    const failedFile = await fileHandler.getPDFInfo('file:///Users/Alice/Secret/sample.pdf');
+    assert.equal(failedFile.path, '[local-pdf]', 'file-mode PDF metadata should not expose local paths');
+    assert(!JSON.stringify(failedFile).includes('Alice'), 'failed PDF metadata must not expose local usernames');
+    assert(!JSON.stringify(failedFile).includes('Secret'), 'failed PDF metadata must not expose local directories');
+
+    const windowRef = {
+        closed: false,
+        addEventListener() {}
+    };
+    fileHandler.trackPDFWindow('file:///Users/Alice/Secret/sample.pdf', windowRef, 'Private PDF');
+    const openWindows = fileHandler.getOpenWindows();
+    assert.equal(openWindows[0].path, '[local-pdf]', 'open window status should not expose local PDF paths');
+}
+
+await testPDFHandlerRejectsUntrustedUrls();
+await testPDFHandlerAllowsFileOnlyInFileMode();
+await testPDFHandlerForcesNoOpenerWindowFeatures();
+await testPDFHandlerWindowNamesAreBounded();
+await testPDFHandlerDoesNotExposePrivatePaths();
 console.log(JSON.stringify({
     status: 'pass',
     detail: 'PDF URL guard tests passed'

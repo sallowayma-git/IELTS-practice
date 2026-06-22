@@ -119,6 +119,27 @@ assert.strictEqual(
     'oversized lookup ids do not trigger legacy record scans'
 );
 
+const sharedExportValue = { label: 'shared' };
+const sharedExportPayload = enhancer.createSafeJsonExportPayload([
+    { id: 'shared-a', meta: sharedExportValue },
+    { id: 'shared-b', meta: sharedExportValue }
+], { latest: sharedExportValue });
+assert.deepEqual(
+    sharedExportPayload.records[0].meta,
+    { label: 'shared' },
+    'first shared export value is preserved'
+);
+assert.deepEqual(
+    sharedExportPayload.records[1].meta,
+    { label: 'shared' },
+    'repeated shared export value is not mislabeled as circular'
+);
+assert.deepEqual(
+    sharedExportPayload.stats.latest,
+    { label: 'shared' },
+    'shared values across stats and records remain serializable'
+);
+
 const circular = { id: 'cycle' };
 circular.self = circular;
 const records = [

@@ -40,10 +40,11 @@ function createWebStorage() {
 async function createStorageHarness(options = {}) {
     const localStorage = createWebStorage();
     const sessionStorage = createWebStorage();
+    const onJsonParse = typeof options.onJsonParse === 'function' ? options.onJsonParse : null;
     const fetchImpl = options.fetch || (async () => ({
         ok: false,
-        async json() {
-            return {};
+        async text() {
+            return '{}';
         }
     }));
     const context = {
@@ -81,6 +82,17 @@ async function createStorageHarness(options = {}) {
             return 1;
         },
         clearTimeout() {},
+        JSON: {
+            parse(value) {
+                if (onJsonParse) {
+                    onJsonParse(value);
+                }
+                return JSON.parse(value);
+            },
+            stringify(value) {
+                return JSON.stringify(value);
+            }
+        },
         CustomEvent: function CustomEvent(type, init = {}) {
             return { type, detail: init.detail || null };
         }
@@ -145,6 +157,39 @@ async function createStorageHarness(options = {}) {
 {
     const { manager } = await createStorageHarness();
     await manager.set('practice_records', [{ id: 'existing', examId: 'reading-existing' }]);
+    await manager.set('user_stats', { totalPractices: 1 });
+
+    const originalSet = manager.set.bind(manager);
+    manager.set = async (key, value, options = {}) => {
+        if (key === 'user_stats' && value && value.totalPractices === 99) {
+            return false;
+        }
+        return originalSet(key, value, options);
+    };
+
+    const result = await manager.importData({
+        data: {
+            practice_records: { data: [{ id: 'imported', examId: 'reading-imported' }] },
+            user_stats: { data: { totalPractices: 99 } }
+        }
+    });
+
+    assert.equal(result.success, false, 'failed item writes must fail the full import');
+    assert.deepEqual(
+        await manager.get('practice_records', []),
+        [{ id: 'existing', examId: 'reading-existing' }],
+        'failed imports must restore original practice records'
+    );
+    assert.deepEqual(
+        await manager.get('user_stats', {}),
+        { totalPractices: 1 },
+        'failed imports must restore original stats'
+    );
+}
+
+{
+    const { manager } = await createStorageHarness();
+    await manager.set('practice_records', [{ id: 'existing', examId: 'reading-existing' }]);
 
     const result = await manager.importData({
         data: JSON.parse(`{
@@ -168,6 +213,32 @@ async function createStorageHarness(options = {}) {
         'unsafe nested import data must not replace existing records'
     );
     assert.equal(Object.prototype.polluted, undefined);
+}
+
+{
+    const { manager } = await createStorageHarness();
+    await manager.set('practice_records', [{ id: 'existing', examId: 'reading-existing' }]);
+    const cyclicRecord = { id: 'cycle', examId: 'reading-cycle' };
+    cyclicRecord.self = cyclicRecord;
+
+    const result = await manager.importData({
+        data: {
+            practice_records: { data: [cyclicRecord] }
+        }
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.message, 'Import data contains a circular reference');
+    assert.deepEqual(
+        await manager.get('practice_records', []),
+        [{ id: 'existing', examId: 'reading-existing' }],
+        'cyclic import data must not replace existing records'
+    );
+
+    const shared = { ok: true };
+    assert.doesNotThrow(() => {
+        manager.assertSafeBackupValue([shared, shared], 'shared');
+    }, 'shared non-cyclic objects should be allowed after recursion stack cleanup');
 }
 
 {
@@ -203,18 +274,78 @@ async function createStorageHarness(options = {}) {
 
 {
     const { manager, localStorage } = await createStorageHarness();
-    localStorage.setItem('exam_system_practice_records', JSON.stringify([{ id: 'stored', examId: 'reading-stored' }]));
+    localStorage.setItem('exam_system_practice_records', JSON.stringify([{
+        id: 'stored',
+        examId: 'reading-stored',
+        password: 'secret-password',
+        metadata: {
+            safe: 'ok',
+            csrfToken: 'secret-csrf-token'
+        },
+        realData: {
+            totpSecret: 'secret-totp-value',
+            recoveryCodes: ['secret-recovery-code'],
+            nested: {
+                accessToken: 'secret-access-token'
+            }
+        }
+    }]));
     localStorage.setItem('exam_system___proto__', JSON.stringify({ polluted: true }));
     localStorage.setItem('exam_system_constructor', JSON.stringify({ prototype: { polluted: true } }));
     localStorage.setItem('exam_system_storage_backend', JSON.stringify('session'));
 
     const exported = await manager.exportData({ skipReady: true });
 
-    assert.deepEqual(exported.data.practice_records, [{ id: 'stored', examId: 'reading-stored' }]);
+    assert.deepEqual(exported.data.practice_records, [{
+        id: 'stored',
+        examId: 'reading-stored',
+        metadata: { safe: 'ok' },
+        realData: { nested: {} }
+    }]);
+    assert(!JSON.stringify(exported).includes('secret-'));
     assert.equal(Object.prototype.hasOwnProperty.call(exported.data, '__proto__'), false);
     assert.equal(Object.prototype.hasOwnProperty.call(exported.data, 'constructor'), false);
     assert.equal(Object.prototype.hasOwnProperty.call(exported.data, 'storage_backend'), false);
     assert.equal(Object.prototype.polluted, undefined);
+}
+
+{
+    const { manager } = await createStorageHarness();
+    const imported = await manager.importData({
+        data: {
+            practice_records: {
+                data: [{
+                    id: 'imported',
+                    examId: 'reading-imported',
+                    startTime: '2026-01-01T00:00:00.000Z',
+                    endTime: '2026-01-01T00:10:00.000Z',
+                    password: 'secret-password',
+                    metadata: {
+                        csrfToken: 'secret-csrf-token',
+                        safe: 'ok'
+                    },
+                    realData: {
+                        totpSecret: 'secret-totp-value',
+                        recoveryCodes: ['secret-recovery-code'],
+                        nested: {
+                            accessToken: 'secret-access-token'
+                        }
+                    }
+                }]
+            }
+        }
+    }, { skipReady: true });
+    assert.equal(imported.success, true);
+    const stored = await manager.get('practice_records', [], { skipReady: true });
+    assert.deepEqual(stored, [{
+        id: 'imported',
+        examId: 'reading-imported',
+        startTime: '2026-01-01T00:00:00.000Z',
+        endTime: '2026-01-01T00:10:00.000Z',
+        metadata: { safe: 'ok' },
+        realData: { nested: {} }
+    }]);
+    assert(!JSON.stringify(stored).includes('secret-'));
 }
 
 {
@@ -255,10 +386,11 @@ async function createStorageHarness(options = {}) {
             assert.deepEqual(options, { credentials: 'same-origin', cache: 'no-store' });
             return {
                 ok: true,
-                async json() {
-                    return {
+                headers: { get() { return '64'; } },
+                async text() {
+                    return JSON.stringify({
                         practice_records: [{ id: 'restored', examId: 'reading-restored' }]
-                    };
+                    });
                 }
             };
         }
@@ -282,15 +414,16 @@ async function createStorageHarness(options = {}) {
         async fetch() {
             return {
                 ok: true,
-                async json() {
-                    return JSON.parse(`{
+                headers: { get() { return '128'; } },
+                async text() {
+                    return `{
                         "practice_records": [{
                             "id": "bad",
                             "payload": {
                                 "__proto__": { "polluted": true }
                             }
                         }]
-                    }`);
+                    }`;
                 }
             };
         }
@@ -315,10 +448,11 @@ async function createStorageHarness(options = {}) {
         async fetch() {
             return {
                 ok: true,
-                async json() {
-                    return {
+                headers: { get() { return '1024'; } },
+                async text() {
+                    return JSON.stringify({
                         practice_records: Array.from({ length: 5001 }, (_, index) => ({ id: `record-${index}` }))
-                    };
+                    });
                 }
             };
         }
@@ -334,6 +468,35 @@ async function createStorageHarness(options = {}) {
     await manager.set('practice_records', [{ id: 'existing', examId: 'reading-existing' }], { skipReady: true });
     const restored = await manager.restoreFromBackup({ skipReady: true });
     assert.equal(restored, false);
+    assert.deepEqual(await manager.get('practice_records', [], { skipReady: true }), [{ id: 'existing', examId: 'reading-existing' }]);
+}
+
+{
+    let bodyRead = false;
+    const { manager } = await createStorageHarness({
+        async fetch() {
+            return {
+                ok: true,
+                headers: { get(name) { return String(name).toLowerCase() === 'content-length' ? String(11 * 1024 * 1024) : null; } },
+                async text() {
+                    bodyRead = true;
+                    return JSON.stringify({ practice_records: [{ id: 'oversized' }] });
+                }
+            };
+        }
+    });
+    manager.ready = Promise.resolve();
+    manager.localStorageAvailable = true;
+    manager.sessionStorageAvailable = true;
+    manager.indexedDBBlocked = true;
+    manager.indexedDB = null;
+    manager.mode = 'localStorage';
+    manager.volatileMode = false;
+
+    await manager.set('practice_records', [{ id: 'existing', examId: 'reading-existing' }], { skipReady: true });
+    const restored = await manager.restoreFromBackup({ skipReady: true });
+    assert.equal(restored, false);
+    assert.equal(bodyRead, false, 'oversized built-in backups must be rejected before reading the response body');
     assert.deepEqual(await manager.get('practice_records', [], { skipReady: true }), [{ id: 'existing', examId: 'reading-existing' }]);
 }
 
@@ -405,6 +568,65 @@ async function createStorageHarness(options = {}) {
     assert.equal(themeSettings.nested.safe, 'keep');
     assert.equal(Object.prototype.pollutedStoredValue, undefined);
 }
+
+{
+    let oversizedParsed = false;
+    const { manager, localStorage } = await createStorageHarness({
+        onJsonParse(value) {
+            if (String(value).length > 25 * 1024 * 1024) {
+                oversizedParsed = true;
+            }
+        }
+    });
+    localStorage.setItem('exam_system_user_stats', '{"data":"' + 'x'.repeat(25 * 1024 * 1024 + 1) + '"}');
+
+    const value = await manager.get('user_stats', { fallback: true }, { skipReady: true });
+
+    assert.deepEqual(value, { fallback: true });
+    assert.equal(oversizedParsed, false, 'oversized stored envelopes must be rejected before JSON.parse');
+}
+
+{
+    let oversizedParsed = false;
+    const { manager, localStorage } = await createStorageHarness({
+        onJsonParse(value) {
+            if (String(value).length > 25 * 1024 * 1024) {
+                oversizedParsed = true;
+            }
+        }
+    });
+    localStorage.setItem('exam_system_practice_records', '{"data":"' + 'x'.repeat(25 * 1024 * 1024 + 1) + '"}');
+
+    const exported = await manager.exportData({ skipReady: true });
+
+    assert.equal(exported.data.practice_records, undefined);
+    assert.equal(oversizedParsed, false, 'oversized export storage entries must be rejected before JSON.parse');
+}
+
+assert(
+    source.includes('STORAGE_MAX_JSON_STRING_LENGTH = 25 * 1024 * 1024') &&
+    source.includes('function parseStorageJsonString') &&
+    source.includes('rawValue.length > STORAGE_MAX_JSON_STRING_LENGTH') &&
+    source.includes('parseStorageJsonString(serializedValue)') &&
+    source.includes('parseStorageJsonString(rawValue)'),
+    'storage JSON values must be size-checked before parsing'
+);
+
+assert(
+    source.includes('STORAGE_BACKUP_MAX_FETCH_BYTES = 10 * 1024 * 1024') &&
+    source.includes("typeof response.text !== 'function'") &&
+    source.includes('const backupText = await response.text()') &&
+    source.includes('getStorageTextByteLength(backupText) > STORAGE_BACKUP_MAX_FETCH_BYTES') &&
+    !source.includes('const backupData = await response.json()'),
+    'built-in backup restore must size-check fetched JSON before parsing'
+);
+
+assert(
+    source.includes('Backup contains a circular reference at ${path}') &&
+    source.includes('scanState.seen.delete(value)') &&
+    source.includes('Import data contains a circular reference'),
+    'storage backup validation must reject circular imports and clear the recursion stack after scanning'
+);
 
 {
     const { manager } = await createStorageHarness();

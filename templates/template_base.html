@@ -1245,6 +1245,16 @@
     document.addEventListener('input', updateAnswerStatus);
 
     // 练习页面增强脚本集成
+    function summarizeTemplateClientErrorForLog(error) {
+      const summary = {
+        name: error && typeof error.name === 'string' ? error.name : 'Error'
+      };
+      if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+        summary.code = error.code;
+      }
+      return summary;
+    }
+
     function loadPracticePageEnhancer() {
       if (window.storage && window.storage.ready) {
         window.storage.ready.then(() => {
@@ -1266,14 +1276,14 @@
                 }
                 await window.storage.remove(testKey);
               } catch (error) {
-                console.error('❌ 练习页面命名空间设置验证失败', error);
+                console.error('❌ 练习页面命名空间设置验证失败', summarizeTemplateClientErrorForLog(error));
               }
             }, 1000);
           } else {
             console.warn('存储管理器未加载或setNamespace方法不可用');
           }
         }).catch((error) => {
-          console.error('存储初始化失败，无法设置命名空间', error);
+          console.error('存储初始化失败，无法设置命名空间', summarizeTemplateClientErrorForLog(error));
         });
       } else {
         console.warn('存储管理器未加载或未暴露初始化状态');

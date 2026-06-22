@@ -10,6 +10,8 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
 const source = fs.readFileSync(path.join(repoRoot, 'js/plugins/themes/theme-adapter-base.js'), 'utf8');
+const localStorageState = new Map();
+let oversizedParseCalls = 0;
 const pollutedRecord = JSON.parse(`{
   "id": "record-1",
   "sessionId": "session-1",
@@ -26,6 +28,23 @@ const pollutedRecord = JSON.parse(`{
 
 const context = vm.createContext({
   console: { log() {}, warn() {}, error() {} },
+  JSON: {
+    parse(value) {
+      if (String(value || '').length > 5 * 1024 * 1024) {
+        oversizedParseCalls += 1;
+      }
+      return JSON.parse(value);
+    },
+    stringify: JSON.stringify
+  },
+  localStorage: {
+    getItem(key) {
+      return localStorageState.has(key) ? localStorageState.get(key) : null;
+    },
+    setItem(key, value) {
+      localStorageState.set(String(key), String(value));
+    }
+  },
   window: {
     location: { href: 'http://127.0.0.1:3000/', origin: 'http://127.0.0.1:3000', protocol: 'http:' },
     storage: {
@@ -48,6 +67,16 @@ assert.equal(record.type, 'listening');
 assert.equal(Object.prototype.hasOwnProperty.call(record, 'constructor'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(record.realData, '__proto__'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(record.realData.nested, 'prototype'), false);
+
+context.window.storage = null;
+oversizedParseCalls = 0;
+localStorageState.set(
+  'exam_system_practice_records',
+  '{"data":[],"padding":"' + 'x'.repeat((5 * 1024 * 1024) + 1) + '"}'
+);
+const fallbackRecords = await adapter._readFromStorage('practice_records');
+assert.equal(fallbackRecords, null);
+assert.equal(oversizedParseCalls, 0, 'oversized theme adapter fallback storage must be rejected before JSON.parse');
 
 console.log(JSON.stringify({
   status: 'pass',

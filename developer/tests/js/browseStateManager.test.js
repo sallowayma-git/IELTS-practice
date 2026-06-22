@@ -173,9 +173,23 @@ const originalConsoleError = restoredContext.console.error;
 restoredContext.console.error = () => {};
 try {
     assert.equal(restored.importBrowseHistory('[]'), false);
+    assert.equal(
+        restored.importBrowseHistory('{"browseHistory":[],"padding":"' + 'x'.repeat(300 * 1024) + '"}'),
+        false,
+        'oversized browse history import strings should be rejected before parsing'
+    );
 } finally {
     restoredContext.console.error = originalConsoleError;
 }
+
+const oversizedRestoreContext = createContext({
+    browse_state: '{"browseHistory":[],"padding":"' + 'x'.repeat(300 * 1024) + '"}'
+});
+oversizedRestoreContext.console.error = () => {};
+const OversizedRestoreManager = oversizedRestoreContext.window.BrowseStateManager;
+const oversizedRestored = new OversizedRestoreManager();
+assert.equal(oversizedRestored.getCurrentFilter(), 'all');
+assert.deepEqual(oversizedRestored.getBrowseHistory(), []);
 
 console.log(JSON.stringify({
     status: 'pass',

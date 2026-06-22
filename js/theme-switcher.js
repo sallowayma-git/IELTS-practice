@@ -1,5 +1,6 @@
 const THEME_PORTAL_STORAGE_KEY = 'preferred_theme_portal';
 const THEME_PORTAL_SESSION_SKIP_KEY = 'preferred_theme_skip_session';
+const MAX_THEME_PREFERENCE_STORAGE_LENGTH = 64 * 1024;
 const INTERNAL_THEME_DEFAULT = 'default';
 const INTERNAL_THEME_IDS = Object.freeze(['blue']);
 
@@ -34,8 +35,12 @@ function safeParse(json) {
     if (!json) {
         return null;
     }
+    const source = String(json);
+    if (source.length > MAX_THEME_PREFERENCE_STORAGE_LENGTH) {
+        return null;
+    }
     try {
-        const value = JSON.parse(json);
+        const value = JSON.parse(source);
         return isPlainRecord(value) ? value : null;
     } catch (error) {
         console.warn('[Theme] preference operation failed:', summarizeThemeSwitcherErrorForLog(error));

@@ -2,6 +2,7 @@
     'use strict';
 
     const MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200;
+    const MAX_UNLOCKED_STATE_STORAGE_STRING_LENGTH = 64 * 1024;
     const UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function summarizeAchievementErrorForLog(error) {
@@ -20,6 +21,17 @@
             return false;
         }
         return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function parseStoredUnlockedState(raw) {
+        if (!raw) {
+            return {};
+        }
+        const source = String(raw);
+        if (source.length > MAX_UNLOCKED_STATE_STORAGE_STRING_LENGTH) {
+            return {};
+        }
+        return JSON.parse(source);
     }
 
     class AchievementManager {
@@ -320,7 +332,7 @@
                 return this._normalizeUnlockedState(value);
             }
             const raw = localStorage.getItem(this.storageKey);
-            value = raw ? JSON.parse(raw) : {};
+            value = parseStoredUnlockedState(raw);
             return this._normalizeUnlockedState(value);
         }
 

@@ -140,7 +140,7 @@ class PDFHandler {
             }
 
             const info = {
-                path: safePdfPath,
+                path: this.getPublicPDFPath(safePdfPath),
                 size: response.headers.get('content-length'),
                 lastModified: response.headers.get('last-modified'),
                 contentType: response.headers.get('content-type'),
@@ -154,7 +154,7 @@ class PDFHandler {
         } catch (error) {
             console.error('[PDFHandler] Failed to get PDF info:', this.summarizeErrorForLog(error));
             return {
-                path: pdfPath,
+                path: this.getPublicPDFPath(pdfPath),
                 isAccessible: false,
                 error: getSafePdfHandlerErrorCode(error),
                 timestamp: new Date().toISOString()
@@ -205,6 +205,29 @@ class PDFHandler {
             return '';
         }
 
+        return '';
+    }
+
+    getPublicPDFPath(path) {
+        const safePath = this.resolvePDFPath(path);
+        if (!safePath) {
+            return '';
+        }
+        try {
+            const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+            const resolved = new URL(safePath, baseHref);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.pathname
+                    : '';
+            }
+            if (resolved.protocol === 'file:') {
+                return '[local-pdf]';
+            }
+        } catch (_) {
+            return '';
+        }
         return '';
     }
 
@@ -332,7 +355,7 @@ class PDFHandler {
     trackPDFWindow(pdfPath, pdfWindow, examTitle) {
         const windowInfo = {
             window: pdfWindow,
-            path: pdfPath,
+            path: this.getPublicPDFPath(pdfPath),
             title: examTitle,
             openedAt: new Date().toISOString(),
             isActive: true
@@ -391,7 +414,7 @@ class PDFHandler {
 
         // Dispatch custom event
         document.dispatchEvent(new CustomEvent('pdfLoaded', {
-            detail: { path: pdfPath }
+            detail: { path: this.getPublicPDFPath(pdfPath) }
         }));
     }
 
@@ -409,7 +432,7 @@ class PDFHandler {
 
         // Dispatch custom event
         document.dispatchEvent(new CustomEvent('pdfError', {
-            detail: { path: pdfPath, error: getSafePdfHandlerErrorCode(error) }
+            detail: { path: this.getPublicPDFPath(pdfPath), error: getSafePdfHandlerErrorCode(error) }
         }));
     }
 
@@ -456,7 +479,7 @@ class PDFHandler {
         for (const [path, info] of this.openWindows.entries()) {
             if (!info.window.closed) {
                 openWindows.push({
-                    path: path,
+                    path: info.path || this.getPublicPDFPath(path),
                     title: info.title,
                     openedAt: info.openedAt,
                     status: info.status || 'open'

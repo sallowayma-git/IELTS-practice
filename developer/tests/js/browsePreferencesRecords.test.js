@@ -14,7 +14,7 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
-function createHarness({ examIndex = [], records = [], initialStorage = {} } = {}) {
+function createHarness({ examIndex = [], records = [], initialStorage = {}, onJsonParse = null } = {}) {
     const localStorageState = new Map(Object.entries(initialStorage));
     const documentStub = {
         addEventListener() {},
@@ -50,7 +50,15 @@ function createHarness({ examIndex = [], records = [], initialStorage = {} } = {
         console: { log() {}, warn() {}, error() {}, info() {} },
         Date,
         Math,
-        JSON,
+        JSON: {
+            parse(value) {
+                if (typeof onJsonParse === 'function') {
+                    onJsonParse(value);
+                }
+                return JSON.parse(value);
+            },
+            stringify: JSON.stringify
+        },
         Map,
         Set,
         Array,
@@ -194,6 +202,30 @@ function testStoredBrowsePreferencesRejectUnsafeKeys() {
     });
 }
 
+function testStoredBrowsePreferencesRejectOversizedBeforeParsing() {
+    let oversizedParsed = false;
+    const { window } = createHarness({
+        initialStorage: {
+            browse_view_preferences_v2: '{"scrollPositions":{},"padding":"' + 'x'.repeat(520 * 1024) + '"}'
+        },
+        onJsonParse(value) {
+            if (String(value || '').length > 512 * 1024) {
+                oversizedParsed = true;
+            }
+        }
+    });
+
+    const prefs = window.getBrowseViewPreferences();
+    assert.strictEqual(oversizedParsed, false, 'oversized browse preferences must be rejected before JSON.parse');
+    assert.deepStrictEqual(Object.keys(prefs.scrollPositions), []);
+    assert.deepStrictEqual(Object.keys(prefs.listAnchors), []);
+    assert.strictEqual(prefs.autoScrollEnabled, true);
+
+    recordResult('stored browse preferences reject oversized payload before parsing', {
+        autoScrollEnabled: prefs.autoScrollEnabled
+    });
+}
+
 function testSavedBrowsePreferencesRejectUnsafeKeys() {
     const { window } = createHarness();
     const unsafeScrollPositions = JSON.parse('{"P2|reading":35,"__proto__":99,"constructor":100,"negative":-1}');
@@ -229,6 +261,7 @@ function main() {
         testExplicitMetadataOutranksCurrentExamIndex();
         testLatestTimestampWinsPerFilter();
         testStoredBrowsePreferencesRejectUnsafeKeys();
+        testStoredBrowsePreferencesRejectOversizedBeforeParsing();
         testSavedBrowsePreferencesRejectUnsafeKeys();
         console.log(JSON.stringify({
             status: 'pass',

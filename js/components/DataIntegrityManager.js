@@ -15,6 +15,10 @@ const MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH = 4000;
 const MAX_DATA_INTEGRITY_EXTRA_DEPTH = 8;
 const MAX_DATA_INTEGRITY_EXTRA_ARRAY_ITEMS = 200;
 const MAX_DATA_INTEGRITY_EXTRA_OBJECT_KEYS = 200;
+const MAX_DATA_INTEGRITY_EXPORT_DEPTH = 16;
+const MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS = 5000;
+const MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS = 500;
+const MAX_DATA_INTEGRITY_EXPORT_STRING_LENGTH = 20000;
 const MAX_DATA_INTEGRITY_SCORE = 100;
 const MAX_DATA_INTEGRITY_DURATION_SECONDS = 365 * 24 * 60 * 60;
 const MAX_DATA_INTEGRITY_QUESTION_COUNT = 10000;
@@ -188,7 +192,7 @@ class DataIntegrityManager {
             if (!this.repositories) {
                 throw new Error('数据仓库不可用');
             }
-            data = providedData || await this.getCriticalData();
+            data = this._prepareExportData(providedData || await this.getCriticalData());
             if (Object.keys(data).length === 0) {
                 throw new Error('无数据可备份');
             }
@@ -200,7 +204,7 @@ class DataIntegrityManager {
                 data,
                 version: this.dataVersion,
                 type,
-                size: JSON.stringify(data).length
+                size: this._stringifyExportPayload(data).length
             };
             await this.repositories.backups.add(backupObj);
             console.log('[DataIntegrityManager] Backup created successfully');
@@ -219,10 +223,10 @@ class DataIntegrityManager {
             const exportObj = {
                 exportDate: new Date().toISOString(),
                 version: this.dataVersion,
-                data: exportData,
+                data: this._prepareExportData(exportData),
                 note: 'Storage quota exceeded - manual backup'
             };
-            const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+            const blob = new Blob([this._stringifyExportPayload(exportObj)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -350,13 +354,13 @@ class DataIntegrityManager {
 
     async exportData() {
         try {
-            const data = await this.getCriticalData();
+            const data = this._prepareExportData(await this.getCriticalData());
             const exportObj = {
                 exportDate: new Date().toISOString(),
                 version: this.dataVersion,
                 data
             };
-            const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+            const blob = new Blob([this._stringifyExportPayload(exportObj)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -471,6 +475,105 @@ class DataIntegrityManager {
         } catch (error) {
             console.error('[DataIntegrityManager] 获取关键数据失败:', summarizeDataIntegrityErrorForLog(error));
             return {};
+        }
+    }
+
+    _prepareExportData(value) {
+        const sanitized = this._sanitizeExportValue(value, 0, {
+            seen: new WeakSet(),
+            nodes: 0
+        });
+        return sanitized && typeof sanitized === 'object' ? sanitized : {};
+    }
+
+    _stringifyExportPayload(value) {
+        return JSON.stringify(this._prepareExportData(value), null, 2);
+    }
+
+    _sanitizeExportValue(value, depth = 0, state = null) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return value.length > MAX_DATA_INTEGRITY_EXPORT_STRING_LENGTH
+                ? `${value.slice(0, MAX_DATA_INTEGRITY_EXPORT_STRING_LENGTH)}...`
+                : value;
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'bigint') {
+            return value.toString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (depth > MAX_DATA_INTEGRITY_EXPORT_DEPTH) {
+            return '[MaxDepth]';
+        }
+
+        const exportState = state || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (exportState.seen.has(value)) {
+            return '[Circular]';
+        }
+        exportState.nodes += 1;
+        if (exportState.nodes > MAX_DATA_INTEGRITY_IMPORT_NODES) {
+            return '[Truncated]';
+        }
+        exportState.seen.add(value);
+
+        try {
+            if (Array.isArray(value)) {
+                const list = value
+                    .slice(0, MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS)
+                    .map((item) => this._sanitizeExportValue(item, depth + 1, exportState))
+                    .filter((item) => item !== undefined);
+                if (value.length > MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS) {
+                    list.push(`[Truncated ${value.length - MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS} items]`);
+                }
+                return list;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const output = {};
+            for (const rawKey of keys.slice(0, MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS)) {
+                if (IMPORT_POLLUTION_KEYS.has(rawKey)) {
+                    continue;
+                }
+                const key = this._limitText(rawKey, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH).trim();
+                if (!key || IMPORT_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                let safeValue;
+                try {
+                    safeValue = this._sanitizeExportValue(value[rawKey], depth + 1, exportState);
+                } catch (_) {
+                    safeValue = '[Unreadable]';
+                }
+                if (safeValue !== undefined) {
+                    output[key] = safeValue;
+                }
+            }
+            if (keys.length > MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS) {
+                output.__truncatedKeys = keys.length - MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS;
+            }
+            return output;
+        } finally {
+            exportState.seen.delete(value);
         }
     }
 

@@ -30,6 +30,46 @@
     var vocabSparkFallbackNoticeShown = false;
     var vocabSparkInputBound = false;
     var vocabSparkDeck = [];
+    var MAX_VOCAB_SPARK_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
+
+    function getMiniGameTextByteLength(text) {
+        var source = String(text == null ? '' : text);
+        if (typeof TextEncoder === 'function') {
+            try {
+                return new TextEncoder().encode(source).length;
+            } catch (_) {
+                // fall through to manual UTF-8 length calculation
+            }
+        }
+        var bytes = 0;
+        for (var index = 0; index < source.length; index += 1) {
+            var code = source.charCodeAt(index);
+            if (code < 0x80) {
+                bytes += 1;
+            } else if (code < 0x800) {
+                bytes += 2;
+            } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < source.length) {
+                var next = source.charCodeAt(index + 1);
+                if (next >= 0xdc00 && next <= 0xdfff) {
+                    bytes += 4;
+                    index += 1;
+                } else {
+                    bytes += 3;
+                }
+            } else {
+                bytes += 3;
+            }
+        }
+        return bytes;
+    }
+
+    function parseVocabSparkLexiconJson(text) {
+        var source = String(text == null ? '' : text);
+        if (getMiniGameTextByteLength(source) > MAX_VOCAB_SPARK_LEXICON_JSON_BYTES) {
+            throw new Error('Vocab spark lexicon is too large.');
+        }
+        return JSON.parse(source);
+    }
 
     function summarizeMiniGamesErrorForLog(error) {
         if (!error || typeof error !== 'object') {
@@ -123,7 +163,16 @@
                 if (!response.ok) {
                     throw new Error('HTTP ' + response.status);
                 }
-                var payload = await response.json();
+                var contentLength = response.headers && typeof response.headers.get === 'function'
+                    ? Number(response.headers.get('content-length'))
+                    : 0;
+                if (Number.isFinite(contentLength) && contentLength > MAX_VOCAB_SPARK_LEXICON_JSON_BYTES) {
+                    throw new Error('Vocab spark lexicon is too large.');
+                }
+                if (typeof response.text !== 'function') {
+                    throw new Error('Vocab spark lexicon cannot be read safely.');
+                }
+                var payload = parseVocabSparkLexiconJson(await response.text());
                 var normalized = Array.isArray(payload)
                     ? payload.map(normalizeVocabEntry).filter(Boolean)
                     : [];

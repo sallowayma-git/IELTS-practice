@@ -25,6 +25,13 @@
         '低频': 1
     };
     const CUSTOM_SUITE_PANEL_MARGIN = 12;
+    const MAX_FALLBACK_EXPORT_RECORDS = 5000;
+    const MAX_FALLBACK_EXPORT_DEPTH = 12;
+    const MAX_FALLBACK_EXPORT_NODES = 50000;
+    const MAX_FALLBACK_EXPORT_ARRAY_ITEMS = 1000;
+    const MAX_FALLBACK_EXPORT_OBJECT_KEYS = 300;
+    const MAX_FALLBACK_EXPORT_STRING_LENGTH = 20000;
+    const FALLBACK_EXPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     let customSuitePortalPosition = null;
 
     function summarizeExamActionsErrorForLog(error) {
@@ -36,6 +43,91 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function createFallbackExportState() {
+        return {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+    }
+
+    function sanitizeFallbackExportValue(value, depth = 0, state = createFallbackExportState()) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_FALLBACK_EXPORT_STRING_LENGTH
+                ? `${value.slice(0, MAX_FALLBACK_EXPORT_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return null;
+        }
+        if (depth > MAX_FALLBACK_EXPORT_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_FALLBACK_EXPORT_NODES) {
+            return '[Truncated]';
+        }
+        state.nodes += 1;
+        state.seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                const items = value
+                    .slice(0, MAX_FALLBACK_EXPORT_ARRAY_ITEMS)
+                    .map((item) => sanitizeFallbackExportValue(item, depth + 1, state));
+                if (value.length > items.length) {
+                    items.push(`[Truncated ${value.length - items.length} items]`);
+                }
+                return items;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const safeObject = {};
+            for (const key of keys.slice(0, MAX_FALLBACK_EXPORT_OBJECT_KEYS)) {
+                if (FALLBACK_EXPORT_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    safeObject[key] = sanitizeFallbackExportValue(value[key], depth + 1, state);
+                } catch (_) {
+                    safeObject[key] = '[Unreadable]';
+                }
+            }
+            if (keys.length > MAX_FALLBACK_EXPORT_OBJECT_KEYS) {
+                safeObject.__truncatedKeys = keys.length - MAX_FALLBACK_EXPORT_OBJECT_KEYS;
+            }
+            return safeObject;
+        } finally {
+            state.seen.delete(value);
+        }
+    }
+
+    function createSafeFallbackExportRecords(records) {
+        const list = Array.isArray(records) ? records : [];
+        const state = createFallbackExportState();
+        return list
+            .slice(0, MAX_FALLBACK_EXPORT_RECORDS)
+            .map((record) => sanitizeFallbackExportValue(record, 0, state));
     }
 
     function normalizeExamSignature(value) {
@@ -1369,7 +1461,8 @@
         } catch (_) { }
         try {
             var records = (global.storage && storage.get) ? (await storage.get('practice_records', [])) : (global.getPracticeRecordsState ? global.getPracticeRecordsState() : []);
-            var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
+            var safeRecords = createSafeFallbackExportRecords(records);
+            var blob = new Blob([JSON.stringify(safeRecords, null, 2)], { type: 'application/json; charset=utf-8' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);

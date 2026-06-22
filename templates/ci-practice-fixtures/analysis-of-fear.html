@@ -370,6 +370,16 @@
             };
             const totalQuestions = 14;
 
+            function summarizeFixtureErrorForLog(error) {
+                const summary = {
+                    name: error && typeof error.name === 'string' ? error.name : 'Error'
+                };
+                if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+                    summary.code = error.code;
+                }
+                return summary;
+            }
+
             // --- Core Functions ---
             function startTimer() {
                 timer = setInterval(() => {
@@ -518,7 +528,7 @@
                     const span = document.createElement('span');
                     span.className = 'hl';
                     lastRange.surroundContents(span);
-                } catch (e) { console.error("Highlighting failed:", e); return; }
+                } catch (e) { console.error("Highlighting failed:", summarizeFixtureErrorForLog(e)); return; }
                 sel?.removeAllRanges();
                 selbar.style.display = 'none';
             }
@@ -609,6 +619,43 @@
 if (!window.practicePageEnhancer) {
     console.log('[PracticeEnhancer] 初始化增强器');
 
+    function summarizePracticeFixtureErrorForLog(error) {
+        const summary = {
+            name: error && typeof error.name === 'string' ? error.name : 'Error'
+        };
+        if (error && typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(error.code)) {
+            summary.code = error.code;
+        }
+        return summary;
+    }
+
+    function summarizePracticeFixtureMapForLog(map) {
+        return {
+            count: map && typeof map === 'object' ? Object.keys(map).length : 0
+        };
+    }
+
+    function summarizePracticeFixtureListForLog(items) {
+        return {
+            count: Array.isArray(items) ? items.length : 0
+        };
+    }
+
+    function summarizePracticeFixtureStatusForLog(status) {
+        const summary = Object.assign({}, status && typeof status === 'object' ? status : {});
+        summary.hasSessionId = !!summary.sessionId;
+        delete summary.sessionId;
+        return summary;
+    }
+
+    function summarizePracticeFixtureElementForLog(element) {
+        return {
+            tagName: element && element.tagName ? String(element.tagName).slice(0, 32) : '',
+            id: element && element.id ? String(element.id).slice(0, 64) : '',
+            className: element && element.className ? String(element.className).slice(0, 128) : ''
+        };
+    }
+
     // 内嵌CorrectAnswerExtractor功能，确保在练习页面中可用
     if (!window.CorrectAnswerExtractor) {
         window.CorrectAnswerExtractor = class {
@@ -628,11 +675,11 @@ if (!window.practicePageEnhancer) {
                     try {
                         const answers = strategy(document);
                         if (answers && Object.keys(answers).length > 0) {
-                            console.log('[CorrectAnswerExtractor] 提取成功:', strategy.name, answers);
+                            console.log('[CorrectAnswerExtractor] 提取成功:', strategy.name, summarizePracticeFixtureMapForLog(answers));
                             return this.normalizeAnswers(answers);
                         }
                     } catch (error) {
-                        console.warn(`[CorrectAnswerExtractor] 策略 ${strategy.name} 失败:`, error);
+                        console.warn(`[CorrectAnswerExtractor] 策略 ${strategy.name} 失败:`, summarizePracticeFixtureErrorForLog(error));
                     }
                 }
                 
@@ -669,11 +716,11 @@ if (!window.practicePageEnhancer) {
                             const answersStr = correctAnswersMatch[1];
                             const answers = this.parseAnswersObject(answersStr);
                             if (answers && Object.keys(answers).length > 0) {
-                                console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
+                                console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', summarizePracticeFixtureMapForLog(answers));
                                 return answers;
                             }
                         } catch (error) {
-                            console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', error);
+                            console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', summarizePracticeFixtureErrorForLog(error));
                         }
                     }
                 }
@@ -693,7 +740,7 @@ if (!window.practicePageEnhancer) {
                         return JSON.parse(cleanStr);
                     }
                 } catch (error) {
-                    console.warn('[CorrectAnswerExtractor] JSON解析失败，尝试其他方法:', error);
+                    console.warn('[CorrectAnswerExtractor] JSON解析失败，尝试其他方法:', summarizePracticeFixtureErrorForLog(error));
                 }
                 
                 return this.manualParseAnswers(objectStr);
@@ -927,14 +974,14 @@ if (!window.practicePageEnhancer) {
                             }
                             await window.storage.remove(testKey);
                         } catch (error) {
-                            console.error('❌ 练习页面命名空间设置验证失败', error);
+                            console.error('❌ 练习页面命名空间设置验证失败', summarizePracticeFixtureErrorForLog(error));
                         }
                     }, 1000);
                 } else {
                     console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
                 }
             } catch (error) {
-                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', error);
+                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', summarizePracticeFixtureErrorForLog(error));
             }
             this.setupCommunication();
             this.setupAnswerListeners();
@@ -974,7 +1021,7 @@ if (!window.practicePageEnhancer) {
                 }
                 if (event.data && event.data.type === 'INIT_SESSION') {
                     this.sessionId = event.data.data.sessionId;
-                    console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId);
+                    console.log('[PracticeEnhancer] 收到会话初始化');
                     this.sendMessage('SESSION_READY', {
                         pageType: this.detectPageType(),
                         url: window.location.href,
@@ -1040,13 +1087,13 @@ if (!window.practicePageEnhancer) {
                     
                     if (extractedAnswers && Object.keys(extractedAnswers).length > 0) {
                         this.correctAnswers = extractedAnswers;
-                        console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', this.correctAnswers);
+                        console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', summarizePracticeFixtureMapForLog(this.correctAnswers));
                     } else {
                         console.warn('[PracticeEnhancer] 提取器未找到答案，使用备用方法');
                         this.extractCorrectAnswersBackup();
                     }
                 } catch (error) {
-                    console.warn('[PracticeEnhancer] 提取器失败，使用备用方法:', error);
+                    console.warn('[PracticeEnhancer] 提取器失败，使用备用方法:', summarizePracticeFixtureErrorForLog(error));
                     this.extractCorrectAnswersBackup();
                 }
             } else {
@@ -1085,7 +1132,7 @@ if (!window.practicePageEnhancer) {
             // 尝试从DOM中提取
             this.extractFromDOM();
             
-            console.log('[PracticeEnhancer] 备用方法提取正确答案:', this.correctAnswers);
+            console.log('[PracticeEnhancer] 备用方法提取正确答案:', summarizePracticeFixtureMapForLog(this.correctAnswers));
         },
 
         extractFromDOM: function () {
@@ -1169,8 +1216,8 @@ if (!window.practicePageEnhancer) {
                 }
             }
             
-            console.log('[PracticeEnhancer] 表格提取完成，正确答案:', this.correctAnswers);
-            console.log('[PracticeEnhancer] 表格提取完成，用户答案:', this.answers);
+            console.log('[PracticeEnhancer] 表格提取完成，正确答案:', summarizePracticeFixtureMapForLog(this.correctAnswers));
+            console.log('[PracticeEnhancer] 表格提取完成，用户答案:', summarizePracticeFixtureMapForLog(this.answers));
         },
 
         setupAnswerListeners: function () {
@@ -1351,7 +1398,7 @@ if (!window.practicePageEnhancer) {
             // 监听提交按钮点击 - 增强版
             const self = this;
             document.addEventListener('click', function(e) {
-                console.log('[PracticeEnhancer] 点击事件:', e.target.tagName, e.target.id, e.target.className);
+                console.log('[PracticeEnhancer] 点击事件:', summarizePracticeFixtureElementForLog(e.target));
 
                 if (e.target.tagName === 'BUTTON' &&
                     (e.target.textContent.includes('Submit') ||
@@ -1361,7 +1408,7 @@ if (!window.practicePageEnhancer) {
                         e.target.classList.contains('primary') ||
                         e.target.id === 'submit-btn' ||
                         (e.target.onclick && e.target.onclick.toString().includes('grade')))) {
-                    console.log('[PracticeEnhancer] 检测到提交按钮点击:', e.target);
+                    console.log('[PracticeEnhancer] 检测到提交按钮点击:', summarizePracticeFixtureElementForLog(e.target));
                     self.collectAllAnswers();
                     self.handleSubmit();
                 }
@@ -1481,7 +1528,7 @@ if (!window.practicePageEnhancer) {
 
             const afterCount = Object.keys(this.answers).length;
             console.log(`[PracticeEnhancer] 全面收集完成，答案数量从 ${beforeCount} 增加到 ${afterCount}`);
-            console.log('[PracticeEnhancer] 收集到的所有答案:', this.answers);
+            console.log('[PracticeEnhancer] 收集到的所有答案:', summarizePracticeFixtureMapForLog(this.answers));
         },
 
         getQuestionId: function(input) {
@@ -1823,7 +1870,7 @@ if (!window.practicePageEnhancer) {
                 this.parentWindow.postMessage(message, this.getTargetOrigin());
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
-                console.error('[PracticeEnhancer] 发送消息失败:', error);
+                console.error('[PracticeEnhancer] 发送消息失败:', summarizePracticeFixtureErrorForLog(error));
             }
         },
 
@@ -1844,19 +1891,19 @@ if (!window.practicePageEnhancer) {
     window.collectAnswersNow = function() {
         console.log('[PracticeEnhancer] 手动触发答案收集');
         window.practicePageEnhancer.collectAllAnswers();
-        return window.practicePageEnhancer.answers;
+        return summarizePracticeFixtureMapForLog(window.practicePageEnhancer.answers);
     };
 
     window.getCorrectAnswers = function() {
         console.log('[PracticeEnhancer] 获取正确答案');
         window.practicePageEnhancer.extractCorrectAnswers();
-        return window.practicePageEnhancer.correctAnswers;
+        return summarizePracticeFixtureMapForLog(window.practicePageEnhancer.correctAnswers);
     };
 
     // 自动初始化
     const startPracticeEnhancer = () => {
         window.practicePageEnhancer.initialize().catch((error) => {
-            console.error('[PracticeEnhancer] 初始化失败', error);
+            console.error('[PracticeEnhancer] 初始化失败', summarizePracticeFixtureErrorForLog(error));
         });
     };
 
@@ -1869,11 +1916,11 @@ if (!window.practicePageEnhancer) {
     // 调试函数
     window.debugPracticeEnhancer = () => {
         console.log('=== 练习页面增强器调试信息 ===');
-        console.log('状态:', window.practicePageEnhancer.getStatus());
-        console.log('用户答案:', window.practicePageEnhancer.answers);
-        console.log('正确答案:', window.practicePageEnhancer.correctAnswers); // 新增
-        console.log('答案比较:', window.practicePageEnhancer.generateAnswerComparison()); // 新增
-        console.log('交互记录:', window.practicePageEnhancer.interactions);
+        console.log('状态:', summarizePracticeFixtureStatusForLog(window.practicePageEnhancer.getStatus()));
+        console.log('用户答案:', summarizePracticeFixtureMapForLog(window.practicePageEnhancer.answers));
+        console.log('正确答案:', summarizePracticeFixtureMapForLog(window.practicePageEnhancer.correctAnswers)); // 新增
+        console.log('答案比较:', summarizePracticeFixtureListForLog(window.practicePageEnhancer.generateAnswerComparison())); // 新增
+        console.log('交互记录:', summarizePracticeFixtureListForLog(window.practicePageEnhancer.interactions));
 
         // 测试成绩提取
         const scoreInfo = window.practicePageEnhancer.extractScore();

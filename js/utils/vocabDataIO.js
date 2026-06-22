@@ -18,6 +18,8 @@
     const MAX_PROGRESS_EXTRA_DEPTH = 8;
     const MAX_PROGRESS_EXTRA_ARRAY_ITEMS = 100;
     const MAX_PROGRESS_EXTRA_OBJECT_KEYS = 100;
+    const MAX_CATEGORY_SCAN_DEPTH = 8;
+    const MAX_CATEGORY_SCAN_NODES = 200;
     const VOCAB_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const PROGRESS_EXTRA_FIELDS = Object.freeze([
         'userInput',
@@ -61,6 +63,20 @@
 
     function isUnsafeImportKey(key) {
         return VOCAB_IMPORT_POLLUTION_KEYS.has(String(key));
+    }
+
+    function getOwnImportValue(source, key) {
+        if (!source || typeof source !== 'object' || isUnsafeImportKey(key)) {
+            return undefined;
+        }
+        if (!Object.prototype.hasOwnProperty.call(source, key)) {
+            return undefined;
+        }
+        try {
+            return source[key];
+        } catch (_) {
+            return undefined;
+        }
     }
 
     function normalizeInteger(value, min, max) {
@@ -111,29 +127,33 @@
             return undefined;
         }
         seen.add(value);
-        if (Array.isArray(value)) {
-            return value
-                .slice(0, MAX_PROGRESS_EXTRA_ARRAY_ITEMS)
-                .map((item) => sanitizeProgressExtraValue(item, depth + 1, seen))
-                .filter((item) => item !== undefined);
+        try {
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, MAX_PROGRESS_EXTRA_ARRAY_ITEMS)
+                    .map((item) => sanitizeProgressExtraValue(item, depth + 1, seen))
+                    .filter((item) => item !== undefined);
+            }
+            const clone = {};
+            Object.keys(value)
+                .slice(0, MAX_PROGRESS_EXTRA_OBJECT_KEYS)
+                .forEach((key) => {
+                    if (isUnsafeImportKey(key)) {
+                        return;
+                    }
+                    const safeKey = normalizeTextField(key, MAX_WORD_TEXT_LENGTH);
+                    if (!safeKey || isUnsafeImportKey(safeKey)) {
+                        return;
+                    }
+                    const safeValue = sanitizeProgressExtraValue(value[key], depth + 1, seen);
+                    if (safeValue !== undefined) {
+                        clone[safeKey] = safeValue;
+                    }
+                });
+            return clone;
+        } finally {
+            seen.delete(value);
         }
-        const clone = {};
-        Object.keys(value)
-            .slice(0, MAX_PROGRESS_EXTRA_OBJECT_KEYS)
-            .forEach((key) => {
-                if (isUnsafeImportKey(key)) {
-                    return;
-                }
-                const safeKey = normalizeTextField(key, MAX_WORD_TEXT_LENGTH);
-                if (!safeKey || isUnsafeImportKey(safeKey)) {
-                    return;
-                }
-                const safeValue = sanitizeProgressExtraValue(value[key], depth + 1, seen);
-                if (safeValue !== undefined) {
-                    clone[safeKey] = safeValue;
-                }
-            });
-        return clone;
     }
 
     function normalizeProgressConfig(config) {
@@ -188,10 +208,10 @@
         if (!normalized) {
             return fallback;
         }
-        if (/(自设|自定|自訂|自建|自制|custom|user|personal|self)/.test(normalized)) {
+        if (/(\u81ea\u8bbe|\u81ea\u5b9a|\u81ea\u8a02|\u81ea\u5efa|\u81ea\u5236|custom|user|personal|self)/.test(normalized)) {
             return 'user';
         }
-        if (/(外部|其他|其它|共享|公共|他人|others|other|external|shared|community|third)/.test(normalized)) {
+        if (/(\u5916\u90e8|\u5176\u4ed6|\u5176\u5b83|\u5171\u4eab|\u516c\u5171|\u4ed6\u4eba|others|other|external|shared|community|third)/.test(normalized)) {
             return 'external';
         }
         return fallback;
@@ -207,30 +227,43 @@
         if (typeof source !== 'object') {
             return fallback;
         }
-        const candidates = [];
-        const collect = (value) => {
-            if (typeof value === 'string' && value.trim()) {
-                candidates.push(value);
+        const stack = [{ value: source, depth: 0 }];
+        const seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+        let scanned = 0;
+        while (stack.length && scanned < MAX_CATEGORY_SCAN_NODES) {
+            const current = stack.shift();
+            const value = current && current.value;
+            if (!value || typeof value !== 'object') {
+                continue;
             }
-        };
-        collect(source.category);
-        collect(source.listType);
-        collect(source.listCategory);
-        collect(source.origin);
-        collect(source.source);
-        collect(source.sourceType);
-        collect(source.typeLabel);
-        collect(source.type);
-        if (source.meta && typeof source.meta === 'object' && source.meta !== source) {
-            const nested = extractCategory(source.meta, null);
-            if (nested) {
-                return nested;
+            if (seen) {
+                if (seen.has(value)) {
+                    continue;
+                }
+                seen.add(value);
             }
-        }
-        for (let i = 0; i < candidates.length; i += 1) {
-            const resolved = normalizeCategory(candidates[i], null);
-            if (resolved) {
-                return resolved;
+            scanned += 1;
+            const candidates = [
+                getOwnImportValue(value, 'category'),
+                getOwnImportValue(value, 'listType'),
+                getOwnImportValue(value, 'listCategory'),
+                getOwnImportValue(value, 'origin'),
+                getOwnImportValue(value, 'source'),
+                getOwnImportValue(value, 'sourceType'),
+                getOwnImportValue(value, 'typeLabel'),
+                getOwnImportValue(value, 'type')
+            ];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const resolved = normalizeCategory(candidates[i], null);
+                if (resolved) {
+                    return resolved;
+                }
+            }
+            if (current.depth < MAX_CATEGORY_SCAN_DEPTH) {
+                const meta = getOwnImportValue(value, 'meta');
+                if (meta && typeof meta === 'object' && meta !== value) {
+                    stack.push({ value: meta, depth: current.depth + 1 });
+                }
             }
         }
         return fallback;
@@ -311,6 +344,12 @@
         const supportedType = SUPPORTED_JSON_TYPES.has(mimeType) || SUPPORTED_CSV_TYPES.has(mimeType) || mimeType === '';
         if (!supportedExtension || !supportedType) {
             throw new Error('Only JSON and CSV import files are supported.');
+        }
+    }
+
+    function assertVocabImportTextSize(text) {
+        if (String(text || '').length > MAX_VOCAB_IMPORT_FILE_BYTES) {
+            throw new Error('Import file is too large. Maximum supported size is 10 MB.');
         }
     }
 
@@ -476,6 +515,7 @@
     }
 
     function parseJson(text) {
+        assertVocabImportTextSize(text);
         const payload = JSON.parse(text);
         if (Array.isArray(payload)) {
             const items = limitImportItems(payload);
@@ -548,6 +588,7 @@
         const extension = name.split('.').pop();
         const mimeType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
         const text = await readFileAsText(file);
+        assertVocabImportTextSize(text);
         let result;
         try {
             if (extension === 'csv' || SUPPORTED_CSV_TYPES.has(mimeType)) {
@@ -595,7 +636,12 @@
     });
 
     if (typeof module !== 'undefined' && module.exports) {
-        module.exports = api;
+        module.exports = {
+            ...api,
+            _test: {
+                sanitizeProgressExtraValue
+            }
+        };
     } else {
         window.VocabDataIO = api;
     }

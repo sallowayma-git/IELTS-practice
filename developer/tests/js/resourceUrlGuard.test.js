@@ -51,6 +51,12 @@ assert(
     !examSessionMixin.includes('|| isExamInActiveSuite\n                    )'),
     'suite postMessage fallback must require the current suiteSessionId instead of accepting examId-only messages from unknown same-origin windows'
 );
+assert(
+    examSessionMixin.includes('MAX_EXAM_MESSAGE_JSON_LENGTH = 2 * 1024 * 1024') &&
+    examSessionMixin.includes('value.length > MAX_EXAM_MESSAGE_JSON_LENGTH') &&
+    !examSessionMixin.includes('const parseJsonSafely = (value) => {\n                if (typeof value !== \'string\' || !value.trim()) return null;\n                try {\n                    return JSON.parse(value);'),
+    'exam session fallback message parser must size-check string JSON before parsing'
+);
 
 const mainSource = readSource('js/main.js');
 assert(
@@ -267,6 +273,11 @@ assert(
     unifiedReadingPage.includes('foreignobject') &&
     unifiedReadingPage.includes('<(?:iframe|object|embed|svg|math|foreignobject|base|link|meta|style)'),
     'unified reading no-DOM sanitizer fallback must remove unsafe tags and attributes conservatively'
+);
+assert(
+    unifiedReadingPage.includes(".replace(/<script\\b[^>]*\\/?>/gi, '')") &&
+    unifiedReadingPage.includes(".replace(/<\\/script\\s*>/gi, '')"),
+    'unified reading no-DOM sanitizer fallback must strip malformed or unclosed script tags'
 );
 assert(
     !unifiedReadingPage.includes('${group.bodyHtml || \'\'}') &&

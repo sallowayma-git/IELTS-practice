@@ -3,11 +3,85 @@
  * 提供统一的数据存储和检索接口
  */
 const STORAGE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const STORAGE_BACKUP_SENSITIVE_KEYS = new Set([
+    'password',
+    'passwordhash',
+    'password_hash',
+    'currentpassword',
+    'newpassword',
+    'secret',
+    'secretkey',
+    'csrf',
+    'csrftoken',
+    'csrf_token',
+    'totp',
+    'totpsecret',
+    'totp_secret',
+    'recoverycode',
+    'recovery_code',
+    'recoverycodes',
+    'recovery_codes',
+    'authorization',
+    'cookie',
+    'apikey',
+    'api_key',
+    'privatekey',
+    'private_key',
+    'authtoken',
+    'auth_token',
+    'accesstoken',
+    'access_token',
+    'refreshtoken',
+    'refresh_token'
+]);
 const STORAGE_BACKUP_MAX_PRACTICE_RECORDS = 5000;
 const STORAGE_BACKUP_MAX_NODES = 50000;
 const STORAGE_BACKUP_MAX_DEPTH = 40;
+const STORAGE_BACKUP_MAX_FETCH_BYTES = 10 * 1024 * 1024;
+const STORAGE_MAX_JSON_STRING_LENGTH = 25 * 1024 * 1024;
 const STORAGE_NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9:_-]{0,79}$/;
 const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+function getStorageTextByteLength(text) {
+    const source = String(text == null ? '' : text);
+    if (typeof TextEncoder === 'function') {
+        try {
+            return new TextEncoder().encode(source).length;
+        } catch (_) {
+            // fall through to manual UTF-8 length calculation
+        }
+    }
+    let bytes = 0;
+    for (let index = 0; index < source.length; index += 1) {
+        const code = source.charCodeAt(index);
+        if (code < 0x80) {
+            bytes += 1;
+        } else if (code < 0x800) {
+            bytes += 2;
+        } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < source.length) {
+            const next = source.charCodeAt(index + 1);
+            if (next >= 0xdc00 && next <= 0xdfff) {
+                bytes += 4;
+                index += 1;
+            } else {
+                bytes += 3;
+            }
+        } else {
+            bytes += 3;
+        }
+    }
+    return bytes;
+}
+
+function parseStorageJsonString(rawValue) {
+    if (typeof rawValue !== 'string') {
+        return rawValue;
+    }
+    if (rawValue.length > STORAGE_MAX_JSON_STRING_LENGTH) {
+        throw new Error('Stored JSON value is too large.');
+    }
+    return JSON.parse(rawValue);
+}
 
 function normalizeStorageNamespace(namespace) {
     if (typeof namespace !== 'string') {
@@ -22,6 +96,11 @@ function normalizeStorageNamespace(namespace) {
         return '';
     }
     return normalized;
+}
+
+function isSensitiveStorageBackupKey(key) {
+    const normalized = String(key || '').trim().toLowerCase();
+    return STORAGE_BACKUP_SENSITIVE_KEYS.has(normalized);
 }
 
 function sanitizeStoredValue(value, depth = 0, state = null) {
@@ -69,7 +148,8 @@ function sanitizeStoredValue(value, depth = 0, state = null) {
 
     const output = {};
     Object.keys(value).forEach((key) => {
-        if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
+        const normalizedKey = String(key || '').trim().toLowerCase();
+        if (STORAGE_BACKUP_POLLUTION_KEYS.has(normalizedKey) || isSensitiveStorageBackupKey(normalizedKey)) {
             return;
         }
         const safeValue = sanitizeStoredValue(value[key], depth + 1, cloneState);
@@ -104,6 +184,9 @@ function getSafeStorageImportErrorMessage(error) {
     }
     if (/unsafe key/i.test(message)) {
         return 'Import data contains an unsafe key';
+    }
+    if (/circular reference/i.test(message)) {
+        return 'Import data contains a circular reference';
     }
     if (/too deep|too large/i.test(message)) {
         return 'Import data is too large or deeply nested';
@@ -627,7 +710,7 @@ class StorageManager {
         if (serializedValue === undefined || serializedValue === null) {
             return defaultValue;
         }
-        const parsed = JSON.parse(serializedValue);
+        const parsed = parseStorageJsonString(serializedValue);
         const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
             ? sanitizeStoredValue(parsed.data)
             : undefined;
@@ -1244,7 +1327,7 @@ class StorageManager {
 
                         let legacyData;
                         try {
-                            legacyData = JSON.parse(legacyDataStr);
+                            legacyData = parseStorageJsonString(legacyDataStr);
                         } catch (parseError) {
                             console.warn('[Storage] 解析遗留数据失败', summarizeStorageErrorForLog(parseError));
                             continue;
@@ -1296,7 +1379,7 @@ class StorageManager {
                     if (legacyMyMelodyData) {
                         let legacyData;
                         try {
-                            const parsed = JSON.parse(legacyMyMelodyData);
+                            const parsed = parseStorageJsonString(legacyMyMelodyData);
                             legacyData = parsed.data || parsed;
                         } catch (parseError) {
                             console.warn('[Storage] 解析 MyMelody 遗留数据失败', summarizeStorageErrorForLog(parseError));
@@ -1378,7 +1461,20 @@ class StorageManager {
             if (!response.ok) {
                 return false;
             }
-            const backupData = await response.json();
+            const contentLength = response.headers && typeof response.headers.get === 'function'
+                ? Number(response.headers.get('content-length'))
+                : 0;
+            if (Number.isFinite(contentLength) && contentLength > STORAGE_BACKUP_MAX_FETCH_BYTES) {
+                throw new Error('Backup response is too large.');
+            }
+            if (typeof response.text !== 'function') {
+                throw new Error('Backup response cannot be read safely.');
+            }
+            const backupText = await response.text();
+            if (getStorageTextByteLength(backupText) > STORAGE_BACKUP_MAX_FETCH_BYTES) {
+                throw new Error('Backup response is too large.');
+            }
+            const backupData = JSON.parse(backupText);
             if (!backupData || !Array.isArray(backupData.practice_records)) {
                 console.warn('[Storage] 备份数据格式无效');
                 return false;
@@ -1420,25 +1516,30 @@ class StorageManager {
             throw new Error(`Backup structure is too deep at ${path}`);
         }
         if (scanState.seen.has(value)) {
-            return;
+            throw new Error(`Backup contains a circular reference at ${path}`);
         }
         scanState.seen.add(value);
-        scanState.nodes += 1;
-        if (scanState.nodes > STORAGE_BACKUP_MAX_NODES) {
-            throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${STORAGE_BACKUP_MAX_NODES}.`);
-        }
-        if (Array.isArray(value)) {
-            value.forEach((item, index) => {
-                this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
-            });
-            return;
-        }
-        Object.keys(value).forEach((key) => {
-            if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
-                throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+        try {
+            scanState.nodes += 1;
+            if (scanState.nodes > STORAGE_BACKUP_MAX_NODES) {
+                throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${STORAGE_BACKUP_MAX_NODES}.`);
             }
-            this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
-        });
+            if (Array.isArray(value)) {
+                value.forEach((item, index) => {
+                    this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
+                });
+                return;
+            }
+            Object.keys(value).forEach((key) => {
+                const normalizedKey = String(key || '').trim().toLowerCase();
+                if (STORAGE_BACKUP_POLLUTION_KEYS.has(normalizedKey)) {
+                    throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+                }
+                this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
+            });
+        } finally {
+            scanState.seen.delete(value);
+        }
     }
 
     handleStorageQuotaExceeded(key, value) {
@@ -1613,14 +1714,13 @@ class StorageManager {
 
             try {
                 // 清空现有数据
-                await this.clear({ skipReady });
+                const cleared = await this.clear({ skipReady });
+                if (!cleared) {
+                    throw new Error('Import clear failed');
+                }
 
                 // 导入新数据
-                const importPromises = importEntries.map(({ key, value }) => {
-                    return this.set(key, value, { skipReady });
-                });
-
-                await Promise.all(importPromises);
+                await this.writeImportEntries(importEntries, { skipReady, label: 'import' });
 
                 return {
                     success: true,
@@ -1631,16 +1731,16 @@ class StorageManager {
             } catch (importError) {
                 // 恢复备份
                 console.error('Import failed, restoring backup:', summarizeStorageErrorForLog(importError));
-                await this.clear({ skipReady });
+                const clearedForRestore = await this.clear({ skipReady });
+                if (!clearedForRestore) {
+                    throw importError;
+                }
 
                 if (backup && backup.data) {
                     const restoreEntries = Object.entries(backup.data)
                         .map(([key, value]) => this.normalizeImportDataEntry(key, value))
                         .filter(Boolean);
-                    const restorePromises = restoreEntries.map(({ key, value }) => {
-                        return this.set(key, value, { skipReady });
-                    });
-                    await Promise.all(restorePromises);
+                    await this.writeImportEntries(restoreEntries, { skipReady, label: 'restore' });
                 }
 
                 throw importError;
@@ -1654,6 +1754,16 @@ class StorageManager {
     /**
      * 数据验证
      */
+    async writeImportEntries(entries, options = {}) {
+        const { skipReady = false, label = 'import' } = options;
+        for (const { key, value } of entries) {
+            const success = await this.set(key, value, { skipReady });
+            if (!success) {
+                throw new Error(`${label} write failed`);
+            }
+        }
+    }
+
     normalizeImportDataEntry(key, envelope) {
         const cleanKey = this.normalizeImportKey(key);
         if (!cleanKey || !this.isImportableStorageKey(cleanKey)) {
@@ -1663,10 +1773,15 @@ class StorageManager {
             return null;
         }
         this.assertSafeBackupValue(envelope.data, `import.data.${cleanKey}`);
-        if (cleanKey === 'practice_records') {
-            this.validateBackupPracticeRecords(envelope.data);
+        const sanitizedData = sanitizeStoredValue(envelope.data);
+        if (sanitizedData === undefined) {
+            return null;
         }
-        return { key: cleanKey, value: envelope.data };
+        this.assertSafeBackupValue(sanitizedData, `import.data.${cleanKey}`);
+        if (cleanKey === 'practice_records') {
+            this.validateBackupPracticeRecords(sanitizedData);
+        }
+        return { key: cleanKey, value: sanitizedData };
     }
 
     normalizeImportKey(key) {
@@ -1734,10 +1849,9 @@ class StorageManager {
             return undefined;
         }
         try {
-            const parsed = typeof serializedValue === 'string'
-                ? JSON.parse(serializedValue)
-                : serializedValue;
-            this.assertSafeBackupValue(parsed, `export.${source}.${cleanKey}`);
+            const rawParsed = parseStorageJsonString(serializedValue);
+            this.assertSafeBackupValue(rawParsed, `export.${source}.${cleanKey}`);
+            const parsed = sanitizeStoredValue(rawParsed);
             if (cleanKey === 'practice_records') {
                 const records = Array.isArray(parsed)
                     ? parsed
@@ -3004,7 +3118,7 @@ class PreferenceStore {
             return defaultValue;
         }
         try {
-            const parsed = JSON.parse(rawValue);
+            const parsed = parseStorageJsonString(rawValue);
             const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
                 ? sanitizeStoredValue(parsed.data)
                 : undefined;

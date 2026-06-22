@@ -146,7 +146,7 @@ test('frontend console logs do not expose practice session identifiers or payloa
 
     const bootFallbacks = readSource('js/boot-fallbacks.js');
     assert(
-        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(bootFallbacks),
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|managerError|applyErr)\s*\)/.test(bootFallbacks),
         'boot fallbacks must summarize raw errors before logging them'
     );
     assert(
@@ -229,6 +229,12 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*(?:fetchError\.message|xhrError\.message|error\.message)/.test(spellingErrorCollector),
         'spelling error collector must not log raw exception messages'
     );
+    assert(
+        spellingErrorCollector.includes('function summarizeSpellingTextForLog(value)')
+        && spellingErrorCollector.includes("console.log('[SpellingErrorCollector] Similar spelling detected:', {")
+        && !/console\.log\(`\[SpellingErrorCollector\][^`]*\$\{\s*(?:input|correct)\s*\}/.test(spellingErrorCollector),
+        'spelling error collector must summarize user input and correct answers before logging similarity matches'
+    );
 
     const hpPortal = readSource('js/plugins/hp/hp-portal.js');
     assert(
@@ -284,7 +290,7 @@ test('frontend console logs do not expose practice session identifiers or payloa
 
     const suitePracticeMixin = readSource('js/app/suitePracticeMixin.js');
     assert(
-        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|sessionError|recorderError)\s*\)/.test(suitePracticeMixin),
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|sessionError|recorderError|cleanupError|openError|forceCloseError)\s*\)/.test(suitePracticeMixin),
         'suite practice mixin must summarize errors before logging them'
     );
 
@@ -385,8 +391,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
     );
     assert(
         pdfHandler.includes('function getSafePdfHandlerErrorCode(error)') &&
+        pdfHandler.includes('getPublicPDFPath(path)') &&
         pdfHandler.includes('windowInfo.error = getSafePdfHandlerErrorCode(error)') &&
-        pdfHandler.includes('detail: { path: pdfPath, error: getSafePdfHandlerErrorCode(error) }') &&
+        pdfHandler.includes('detail: { path: this.getPublicPDFPath(pdfPath), error: getSafePdfHandlerErrorCode(error) }') &&
+        !pdfHandler.includes('detail: { path: pdfPath') &&
         !pdfHandler.includes('error: error.message') &&
         !pdfHandler.includes('windowInfo.error = error.message'),
         'PDF handler must not expose raw exception messages through state or custom events'
@@ -633,6 +641,20 @@ test('frontend console logs do not expose practice session identifiers or payloa
 
     const practiceEnhancer = readSource('js/practice-page-enhancer.js');
     assert(
+        practiceEnhancer.includes('function summarizeResultsPayloadForLog(payload)')
+        && practiceEnhancer.includes("console.log('[PracticeEnhancer] Final practice result summary:', summarizeResultsPayloadForLog(finalResults))")
+        && !/console\.log\([^;\n]*,\s*finalResults\s*\)/.test(practiceEnhancer),
+        'practice enhancer must summarize final practice results before logging them'
+    );
+    assert(
+        practiceEnhancer.includes('function summarizeTextForLog(value)')
+        && practiceEnhancer.includes('function summarizeElementForLog(element)')
+        && practiceEnhancer.includes("console.log('[PracticeEnhancer] Result text summary:', summarizeTextForLog(text))")
+        && practiceEnhancer.includes("console.log('[PracticeEnhancer] Submit button click summary:', summarizeElementForLog(target))")
+        && !/console\.(?:log|warn|error|info)\([^;\n]*,\s*(?:text|target|questionText|normalizedKey)\b/.test(practiceEnhancer),
+        'practice enhancer must summarize result text, DOM targets, and question identifiers before logging them'
+    );
+    assert(
         !practiceEnhancer.includes("console.log('交互记录:', window.practicePageEnhancer.interactions)"),
         'practice enhancer debug output must summarize interactions instead of logging them'
     );
@@ -654,5 +676,22 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(legacyViewBundle),
         'legacy view bundle must summarize raw errors before logging them'
+    );
+
+    const templateBase = readSource('templates/template_base.html');
+    assert(
+        templateBase.includes('function summarizeTemplateClientErrorForLog') &&
+        !/console\.(?:error|warn)\([^;\n]*,\s*error\s*\)/.test(templateBase),
+        'base practice template must summarize raw client errors before logging them'
+    );
+
+    const ciPracticeFixture = readSource('templates/ci-practice-fixtures/analysis-of-fear.html');
+    assert(
+        ciPracticeFixture.includes('function summarizePracticeFixtureErrorForLog') &&
+        ciPracticeFixture.includes('function summarizePracticeFixtureMapForLog') &&
+        ciPracticeFixture.includes('function summarizePracticeFixtureElementForLog') &&
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|e)\s*\)/.test(ciPracticeFixture) &&
+        !/console\.log\([^;\n]*,\s*(?:this\.answers|this\.correctAnswers|answers|e\.target|this\.sessionId)\s*\)/.test(ciPracticeFixture),
+        'CI practice fixture must summarize errors, answer maps, DOM targets, and session identifiers before logging them'
     );
 });

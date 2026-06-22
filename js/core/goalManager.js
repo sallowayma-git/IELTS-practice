@@ -44,6 +44,8 @@
     var MAX_STORED_GOALS = 100;
     var MAX_PROGRESS_PERIODS = 400;
     var MAX_PROGRESS_VALUE = 1000000;
+    var MAX_GOAL_STORAGE_JSON_LENGTH = 1024 * 1024;
+    var MAX_PROGRESS_STORAGE_JSON_LENGTH = 1024 * 1024;
     var UNSAFE_OBJECT_KEYS = Object.freeze(['__proto__', 'prototype', 'constructor']);
 
     var PROGRESS_METRIC_VALUES = Object.freeze([
@@ -228,6 +230,12 @@
         return value.slice(0, MAX_STORED_GOALS).map(normalizeGoal).filter(Boolean);
     }
 
+    function parseStoredGoalManagerJson(raw, maxLength) {
+        if (typeof raw !== 'string' || raw.length === 0) return null;
+        if (raw.length > maxLength) return null;
+        return JSON.parse(raw);
+    }
+
     function normalizeStreak(value) {
         if (!value || typeof value !== 'object') {
             return { current: 0, best: 0, lastDate: null };
@@ -264,12 +272,14 @@
             } else {
                 try {
                     var raw = localStorage.getItem(STORAGE_KEY);
-                    this.goals = normalizeGoalList(raw ? JSON.parse(raw) : []);
+                    this.goals = normalizeGoalList(parseStoredGoalManagerJson(raw, MAX_GOAL_STORAGE_JSON_LENGTH) || []);
                     var rawP = localStorage.getItem(PROGRESS_KEY);
                     if (rawP) {
-                        var parsed = JSON.parse(rawP);
-                        this.progress = normalizeProgress(parsed.progress);
-                        this.streak = normalizeStreak(parsed.streak);
+                        var parsed = parseStoredGoalManagerJson(rawP, MAX_PROGRESS_STORAGE_JSON_LENGTH);
+                        if (parsed && typeof parsed === 'object') {
+                            this.progress = normalizeProgress(parsed.progress);
+                            this.streak = normalizeStreak(parsed.streak);
+                        }
                     }
                 } catch (e) {
                     this.goals = [];

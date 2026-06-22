@@ -3157,12 +3157,27 @@
     };
 
     // --- Legacy navigation controller ---
+    function normalizeLegacyActiveClass(value) {
+        var token = String(value || 'active').trim();
+        return /^[A-Za-z0-9_-]{1,64}$/.test(token) ? token : 'active';
+    }
+
+    function hasLegacyClassToken(className, token) {
+        return String(className || '').split(/\s+/).indexOf(token) !== -1;
+    }
+
+    function removeLegacyClassToken(className, token) {
+        return String(className || '').split(/\s+/).filter(function (item) {
+            return item && item !== token;
+        }).join(' ');
+    }
+
     function LegacyNavigationController(options) {
         options = options || {};
         this.options = {
             containerSelector: options.containerSelector || '.main-nav',
             navButtonSelector: options.navButtonSelector || '.nav-btn[data-view]',
-            activeClass: options.activeClass || 'active',
+            activeClass: normalizeLegacyActiveClass(options.activeClass),
             syncOnNavigate: options.syncOnNavigate !== false,
             onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : null,
             onRepeatNavigate: typeof options.onRepeatNavigate === 'function' ? options.onRepeatNavigate : null
@@ -3179,7 +3194,7 @@
         this.options = Object.assign({}, this.options, {
             containerSelector: options.containerSelector || this.options.containerSelector,
             navButtonSelector: options.navButtonSelector || this.options.navButtonSelector,
-            activeClass: options.activeClass || this.options.activeClass,
+            activeClass: options.activeClass ? normalizeLegacyActiveClass(options.activeClass) : this.options.activeClass,
             syncOnNavigate: options.syncOnNavigate === undefined ? this.options.syncOnNavigate : options.syncOnNavigate,
             onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : this.options.onNavigate,
             onRepeatNavigate: typeof options.onRepeatNavigate === 'function' ? options.onRepeatNavigate : this.options.onRepeatNavigate
@@ -3269,11 +3284,11 @@
                 button.classList.toggle(activeClass, button.dataset.view === viewName);
             } else if (typeof button.className === 'string') {
                 if (button.dataset.view === viewName) {
-                    if ((' ' + button.className + ' ').indexOf(' ' + activeClass + ' ') === -1) {
+                    if (!hasLegacyClassToken(button.className, activeClass)) {
                         button.className += ' ' + activeClass;
                     }
                 } else {
-                    button.className = button.className.replace(new RegExp('(?:^|\\s)' + activeClass + '(?:$|\\s)', 'g'), ' ').trim();
+                    button.className = removeLegacyClassToken(button.className, activeClass);
                 }
             }
         }
@@ -3299,7 +3314,7 @@
         if (target.classList && target.classList.contains(activeClass)) {
             alreadyActive = true;
         } else if (typeof target.className === 'string') {
-            alreadyActive = new RegExp('(?:^|\\s)' + activeClass + '(?:$|\\s)').test(target.className);
+            alreadyActive = hasLegacyClassToken(target.className, activeClass);
         }
 
         event.preventDefault();

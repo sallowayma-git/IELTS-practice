@@ -16,6 +16,7 @@
     const MAX_CONTEXT_DEPTH = 6;
     const MAX_CONTEXT_OBJECT_KEYS = 50;
     const MAX_CONTEXT_ARRAY_ITEMS = 50;
+    const MAX_FALLBACK_STORAGE_STRING_LENGTH = 5 * 1024 * 1024;
     const CONTEXT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const FALLBACK_STORAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
@@ -64,6 +65,40 @@
             : [];
     }
 
+    function estimateContextJsonChars(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return 4;
+        }
+        if (typeof value === 'string') {
+            return value.length + 2;
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value).length;
+        }
+        if (typeof value !== 'object' || depth >= MAX_CONTEXT_DEPTH || seen.has(value)) {
+            return 0;
+        }
+        seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                let size = 2;
+                value.slice(0, MAX_CONTEXT_ARRAY_ITEMS).forEach((item, index) => {
+                    size += (index > 0 ? 1 : 0) + estimateContextJsonChars(item, depth + 1, seen);
+                });
+                return size;
+            }
+            let size = 2;
+            Object.keys(value).slice(0, MAX_CONTEXT_OBJECT_KEYS).forEach((key, index) => {
+                size += (index > 0 ? 1 : 0) + String(key).length + 3 + estimateContextJsonChars(value[key], depth + 1, seen);
+            });
+            return size;
+        } catch (_) {
+            return MAX_CONTEXT_JSON_CHARS + 1;
+        } finally {
+            seen.delete(value);
+        }
+    }
+
     function normalizeContextValue(value, depth = 0, seen = new WeakSet()) {
         if (typeof value === 'string') {
             return cleanText(value, MAX_EXTRA_TEXT_LENGTH);
@@ -79,23 +114,23 @@
                 return null;
             }
             seen.add(value);
-            return value
-                .slice(0, MAX_CONTEXT_ARRAY_ITEMS)
-                .map((item) => normalizeContextValue(item, depth + 1, seen))
-                .filter((item) => item !== null && item !== undefined);
+            try {
+                return value
+                    .slice(0, MAX_CONTEXT_ARRAY_ITEMS)
+                    .map((item) => normalizeContextValue(item, depth + 1, seen))
+                    .filter((item) => item !== null && item !== undefined);
+            } finally {
+                seen.delete(value);
+            }
         }
         if (value && typeof value === 'object') {
             if (depth >= MAX_CONTEXT_DEPTH || seen.has(value)) {
                 return null;
             }
-            seen.add(value);
-            try {
-                if (JSON.stringify(value).length > MAX_CONTEXT_JSON_CHARS) {
-                    return null;
-                }
-            } catch (_) {
+            if (estimateContextJsonChars(value, depth) > MAX_CONTEXT_JSON_CHARS) {
                 return null;
             }
+            seen.add(value);
             const clone = {};
             Object.keys(value)
                 .slice(0, MAX_CONTEXT_OBJECT_KEYS)
@@ -113,6 +148,8 @@
                 return JSON.stringify(clone).length <= MAX_CONTEXT_JSON_CHARS ? clone : null;
             } catch (_) {
                 return null;
+            } finally {
+                seen.delete(value);
             }
         }
         return null;
@@ -606,13 +643,24 @@
         });
     }
 
+    function parseFallbackStorageJson(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_FALLBACK_STORAGE_STRING_LENGTH) {
+            return null;
+        }
+        return JSON.parse(source);
+    }
+
     function readFallbackList() {
         try {
             const raw = global.localStorage && global.localStorage.getItem(FALLBACK_STORAGE_KEY);
             if (!raw) {
                 return null;
             }
-            const parsed = JSON.parse(raw);
+            const parsed = parseFallbackStorageJson(raw);
             const data = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
                 ? parsed.data
                 : parsed;
@@ -776,6 +824,7 @@
 
     if (typeof module !== 'undefined' && module.exports) {
         api._test = {
+            normalizeContextValue,
             sanitizeFallbackList,
             sanitizeFallbackWordEntry,
             writeFallbackVocab

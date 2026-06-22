@@ -15,6 +15,11 @@
   const MAX_HP_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
   const MAX_HP_IMPORT_ITEMS = 5000;
   const MAX_HP_IMPORT_DEPTH = 24;
+  const MAX_HP_IMPORT_OBJECT_KEYS = 500;
+  const MAX_HP_IMPORT_STRING_LENGTH = 20000;
+  const MAX_HP_IMPORT_NODES = 50000;
+  const MAX_HP_STATE_STORAGE_STRING_LENGTH = 64 * 1024;
+  const MAX_HP_BACKUP_STORAGE_STRING_LENGTH = 5 * 1024 * 1024;
   const HP_JSON_MIME_TYPES = new Set(['', 'application/json', 'text/json', 'text/plain']);
   const HP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
   function summarizeHpPortalErrorForLog(error) {
@@ -166,25 +171,68 @@
     return normalized;
   }
 
-  function sanitizeHpImportValue(value, depth = 0) {
+  function createHpImportSanitizeState() {
+    return {
+      seen: typeof WeakSet !== 'undefined' ? new WeakSet() : null,
+      nodes: 0
+    };
+  }
+
+  function sanitizeHpImportValue(value, depth = 0, state = null) {
+    const sanitizeState = state || createHpImportSanitizeState();
     if (depth > MAX_HP_IMPORT_DEPTH) {
       throw new Error('Import data is too deeply nested.');
     }
+    if (value == null) {
+      return value;
+    }
+    const valueType = typeof value;
+    if (valueType === 'string') {
+      return value.length > MAX_HP_IMPORT_STRING_LENGTH
+        ? value.slice(0, MAX_HP_IMPORT_STRING_LENGTH)
+        : value;
+    }
+    if (valueType === 'number') {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (valueType === 'boolean') {
+      return value;
+    }
+    if (valueType === 'bigint') {
+      return value.toString();
+    }
+    if (valueType !== 'object') {
+      return null;
+    }
+    if (value instanceof Date) {
+      const timestamp = value.getTime();
+      return Number.isFinite(timestamp) ? value.toISOString() : null;
+    }
+    if (sanitizeState.nodes >= MAX_HP_IMPORT_NODES) {
+      return '[Truncated]';
+    }
+    if (sanitizeState.seen) {
+      if (sanitizeState.seen.has(value)) {
+        return '[Circular]';
+      }
+      sanitizeState.seen.add(value);
+    }
+    sanitizeState.nodes += 1;
     if (Array.isArray(value)) {
       if (value.length > MAX_HP_IMPORT_ITEMS) {
         throw new Error(`Import contains too many entries. Maximum supported count is ${MAX_HP_IMPORT_ITEMS}.`);
       }
-      return value.map((item) => sanitizeHpImportValue(item, depth + 1));
+      return value.map((item) => sanitizeHpImportValue(item, depth + 1, sanitizeState));
     }
     if (!isPlainObject(value)) {
-      return value;
+      return null;
     }
     const sanitized = {};
-    Object.entries(value).forEach(([key, item]) => {
+    Object.entries(value).slice(0, MAX_HP_IMPORT_OBJECT_KEYS).forEach(([key, item]) => {
       if (HP_IMPORT_POLLUTION_KEYS.has(String(key))) {
         return;
       }
-      sanitized[key] = sanitizeHpImportValue(item, depth + 1);
+      sanitized[key] = sanitizeHpImportValue(item, depth + 1, sanitizeState);
     });
     return sanitized;
   }
@@ -196,7 +244,8 @@
     if (list.length > MAX_HP_IMPORT_ITEMS) {
       throw new Error(`Import contains too many entries. Maximum supported count is ${MAX_HP_IMPORT_ITEMS}.`);
     }
-    return list.map((item) => sanitizeHpImportValue(item));
+    const state = createHpImportSanitizeState();
+    return list.map((item) => sanitizeHpImportValue(item, 0, state));
   }
 
   function normalizeHpBackupItem(item, fallbackIndex = 0) {
@@ -229,11 +278,20 @@
       .filter(Boolean);
   }
 
+  function parseBoundedStorageJson(raw, maxLength) {
+    if (!raw) return null;
+    const source = String(raw);
+    if (source.length > maxLength) {
+      throw new Error('Stored HP portal data is too large.');
+    }
+    return JSON.parse(source);
+  }
+
   function readState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return {};
-      const parsed = JSON.parse(raw);
+      const parsed = parseBoundedStorageJson(raw, MAX_HP_STATE_STORAGE_STRING_LENGTH);
       return normalizePortalState(parsed);
     } catch (_) {
       return {};
@@ -638,7 +696,7 @@
       try {
         const raw = localStorage.getItem(this.storageKeys.backups);
         if (!raw) return [];
-        const parsed = JSON.parse(raw);
+        const parsed = parseBoundedStorageJson(raw, MAX_HP_BACKUP_STORAGE_STRING_LENGTH);
         return normalizeHpBackupList(parsed);
       } catch (_) {
         return [];
@@ -654,22 +712,27 @@
     },
 
     createBackup() {
-      const exams = hpCore.getExamIndex() || [];
-      const records = hpCore.getRecords() || [];
-      if (!exams.length && !records.length) {
-        hpCore.showMessage('暂无数据可备份', 'info');
-        return;
+      try {
+        const exams = hpCore.getExamIndex() || [];
+        const records = hpCore.getRecords() || [];
+        if (!exams.length && !records.length) {
+          hpCore.showMessage('暂无数据可备份', 'info');
+          return;
+        }
+        const backups = this.readBackups();
+        const payload = {
+          id: 'backup-' + Date.now(),
+          createdAt: Date.now(),
+          exams: sanitizeHpImportList(exams),
+          records: sanitizeHpImportList(records)
+        };
+        backups.unshift(payload);
+        this.writeBackups(backups);
+        hpCore.showMessage('备份已创建', 'success');
+      } catch (error) {
+        console.warn('[hp-portal] create backup failed', summarizeHpPortalErrorForLog(error));
+        hpCore.showMessage('Backup failed. Please retry.', 'error');
       }
-      const backups = this.readBackups();
-      const payload = {
-        id: 'backup-' + Date.now(),
-        createdAt: Date.now(),
-        exams: JSON.parse(JSON.stringify(exams)),
-        records: JSON.parse(JSON.stringify(records))
-      };
-      backups.unshift(payload);
-      this.writeBackups(backups);
-      hpCore.showMessage('备份已创建', 'success');
     },
 
     showBackupList() {
@@ -788,22 +851,31 @@
     },
 
     exportData() {
-      const payload = {
-        exportedAt: new Date().toISOString(),
-        exams: hpCore.getExamIndex() || [],
-        records: hpCore.getRecords() || [],
-        state: this.state
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = 'ielts-backup-' + formatFileTimestamp(new Date()) + '.json';
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-      hpCore.showMessage('备份文件已导出', 'success');
+      let url = '';
+      try {
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          exams: sanitizeHpImportList(hpCore.getExamIndex() || []),
+          records: sanitizeHpImportList(hpCore.getRecords() || []),
+          state: normalizePortalState(this.state)
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'ielts-backup-' + formatFileTimestamp(new Date()) + '.json';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        hpCore.showMessage('备份文件已导出', 'success');
+      } catch (error) {
+        if (url) {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+        }
+        console.warn('[hp-portal] export failed', summarizeHpPortalErrorForLog(error));
+        hpCore.showMessage('Export failed. Please retry.', 'error');
+      }
     },
 
     promptImport() {

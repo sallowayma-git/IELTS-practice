@@ -75,6 +75,8 @@
     const MAX_EXTRA_DEPTH = 8;
     const MAX_EXTRA_OBJECT_KEYS = 100;
     const MAX_EXTRA_ARRAY_ITEMS = 100;
+    const MAX_VOCAB_STORAGE_JSON_LENGTH = 5 * 1024 * 1024;
+    const MAX_VOCAB_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
     const EXTRA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function summarizeVocabStoreErrorForLog(error) {
@@ -86,6 +88,27 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function parseBoundedVocabStorageJson(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_VOCAB_STORAGE_JSON_LENGTH) {
+            return null;
+        }
+        return JSON.parse(source);
+    }
+
+    function parseBoundedVocabLexiconJson(text) {
+        if (typeof text !== 'string') {
+            throw new Error('vocab_lexicon_json_invalid');
+        }
+        if (text.length > MAX_VOCAB_LEXICON_JSON_BYTES) {
+            throw new Error('vocab_lexicon_json_too_large');
+        }
+        return JSON.parse(text);
     }
 
     const state = {
@@ -164,6 +187,40 @@
         return value.trim().slice(0, maxLength);
     }
 
+    function estimateExtraJsonChars(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return 4;
+        }
+        if (typeof value === 'string') {
+            return value.length + 2;
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value).length;
+        }
+        if (typeof value !== 'object' || depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
+            return 0;
+        }
+        seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                let size = 2;
+                value.slice(0, MAX_EXTRA_ARRAY_ITEMS).forEach((item, index) => {
+                    size += (index > 0 ? 1 : 0) + estimateExtraJsonChars(item, depth + 1, seen);
+                });
+                return size;
+            }
+            let size = 2;
+            Object.keys(value).slice(0, MAX_EXTRA_OBJECT_KEYS).forEach((key, index) => {
+                size += (index > 0 ? 1 : 0) + String(key).length + 3 + estimateExtraJsonChars(value[key], depth + 1, seen);
+            });
+            return size;
+        } catch (_) {
+            return MAX_METADATA_JSON_CHARS + 1;
+        } finally {
+            seen.delete(value);
+        }
+    }
+
     function normalizeExtraValue(value, depth = 0, seen = new WeakSet()) {
         if (typeof value === 'string') {
             return normalizeTextField(value, MAX_EXTRA_TEXT_LENGTH);
@@ -179,20 +236,24 @@
                 return null;
             }
             seen.add(value);
-            return value
-                .slice(0, MAX_EXTRA_ARRAY_ITEMS)
-                .map((item) => normalizeExtraValue(item, depth + 1, seen))
-                .filter((item) => item !== null && item !== undefined);
+            try {
+                return value
+                    .slice(0, MAX_EXTRA_ARRAY_ITEMS)
+                    .map((item) => normalizeExtraValue(item, depth + 1, seen))
+                    .filter((item) => item !== null && item !== undefined);
+            } finally {
+                seen.delete(value);
+            }
         }
         if (value && typeof value === 'object') {
             if (depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
                 return null;
             }
+            if (estimateExtraJsonChars(value, depth) > MAX_METADATA_JSON_CHARS) {
+                return null;
+            }
             seen.add(value);
             try {
-                if (JSON.stringify(value).length > MAX_METADATA_JSON_CHARS) {
-                    return null;
-                }
                 const clone = {};
                 Object.keys(value)
                     .slice(0, MAX_EXTRA_OBJECT_KEYS)
@@ -212,6 +273,8 @@
                 return JSON.stringify(clone).length <= MAX_METADATA_JSON_CHARS ? clone : null;
             } catch (_) {
                 return null;
+            } finally {
+                seen.delete(value);
             }
         }
         return null;
@@ -314,6 +377,49 @@
             }
         });
         return record;
+    }
+
+    function cloneWordRecord(word) {
+        return normalizeWordRecord(word);
+    }
+
+    function cloneWordList(words) {
+        return Array.isArray(words)
+            ? words.slice(0, MAX_STORED_VOCAB_WORDS).map(cloneWordRecord).filter(Boolean)
+            : [];
+    }
+
+    function cloneListData(listData) {
+        if (!listData || typeof listData !== 'object') {
+            return null;
+        }
+        const words = cloneWordList(listData.words);
+        const stats = listData.stats && typeof listData.stats === 'object'
+            ? {
+                totalWords: Number.isFinite(Number(listData.stats.totalWords)) ? Math.max(0, Math.floor(Number(listData.stats.totalWords))) : words.length,
+                masteredWords: Number.isFinite(Number(listData.stats.masteredWords)) ? Math.max(0, Math.floor(Number(listData.stats.masteredWords))) : 0,
+                reviewingWords: Number.isFinite(Number(listData.stats.reviewingWords)) ? Math.max(0, Math.floor(Number(listData.stats.reviewingWords))) : 0
+            }
+            : {
+                totalWords: words.length,
+                masteredWords: words.filter((word) => (word.correctCount || 0) >= (state.config.masteryCount || 4)).length,
+                reviewingWords: words.filter((word) => word.lastReviewed && !word.nextReview).length
+            };
+        return {
+            id: normalizeTextField(listData.id, MAX_SOURCE_TEXT_LENGTH),
+            name: normalizeTextField(listData.name, MAX_SOURCE_TEXT_LENGTH),
+            icon: normalizeTextField(listData.icon, MAX_SOURCE_TEXT_LENGTH),
+            source: normalizeTextField(listData.source, MAX_SOURCE_TEXT_LENGTH),
+            words,
+            stats
+        };
+    }
+
+    function cloneVocabLists() {
+        return Object.keys(VOCAB_LISTS).reduce((clone, id) => {
+            clone[id] = { ...VOCAB_LISTS[id] };
+            return clone;
+        }, {});
     }
 
     function normalizeLexiconLookupKey(word) {
@@ -420,7 +526,8 @@
                 if (!raw) {
                     return defaultValue;
                 }
-                return JSON.parse(raw);
+                const parsed = parseBoundedVocabStorageJson(raw);
+                return parsed === null ? defaultValue : parsed;
             } catch (error) {
                 console.warn('[VocabStore] localStorage解析失败:', summarizeVocabStoreErrorForLog(error));
             }
@@ -441,7 +548,7 @@
     }
 
     function setWordsInternal(words) {
-        state.words = Array.isArray(words) ? words.slice(0, MAX_STORED_VOCAB_WORDS) : [];
+        state.words = cloneWordList(words);
         rebuildIndex();
     }
 
@@ -513,7 +620,11 @@
         if (!primary.ok) {
             throw new Error(`HTTP ${primary.status}`);
         }
-        return primary.json();
+        const contentLength = Number(primary.headers?.get?.('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > MAX_VOCAB_LEXICON_JSON_BYTES) {
+            throw new Error('vocab_lexicon_json_too_large');
+        }
+        return parseBoundedVocabLexiconJson(await primary.text());
     }
 
     async function readJsonViaXHR(url) {
@@ -541,7 +652,7 @@
                         return;
                     }
                     try {
-                        const parsed = JSON.parse(xhr.responseText);
+                        const parsed = parseBoundedVocabLexiconJson(xhr.responseText);
                         resolve(parsed);
                     } catch (error) {
                         reject(error);
@@ -665,7 +776,7 @@
                 state.lastLoadSource = 'default';
             }
             state.listCache.set(DEFAULT_LIST_ID, {
-                data: {
+                data: cloneListData({
                     id: DEFAULT_LIST_ID,
                     name: VOCAB_LISTS[DEFAULT_LIST_ID].name,
                     icon: VOCAB_LISTS[DEFAULT_LIST_ID].icon,
@@ -676,7 +787,7 @@
                         masteredWords: normalized.filter(w => (w.correctCount || 0) >= (state.config.masteryCount || 4)).length,
                         reviewingWords: normalized.filter(w => w.lastReviewed && !w.nextReview).length
                     }
-                },
+                }),
                 timestamp: Date.now()
             });
             return normalized;
@@ -742,7 +853,7 @@
     }
 
     function getWords() {
-        return state.words.map((word) => ({ ...word }));
+        return cloneWordList(state.words);
     }
 
     async function setWords(words) {
@@ -772,7 +883,7 @@
             state.wordIndex.set(id, updated);
             await persist(getActiveStorageKey(), state.words);
             state.listCache.delete(state.activeListId);
-            return { ...updated };
+            return cloneWordRecord(updated);
         }
         return null;
     }
@@ -809,11 +920,14 @@
             }
             const next = new Date(word.nextReview);
             if (!Number.isNaN(next.getTime()) && next <= now) {
-                due.push({ ...word });
+                const cloned = cloneWordRecord(word);
+                if (cloned) {
+                    due.push(cloned);
+                }
             }
         });
         if (scheduler && typeof scheduler.pickDailyTask === 'function') {
-            return scheduler.pickDailyTask(due, due.length, { now });
+            return cloneWordList(scheduler.pickDailyTask(due, due.length, { now }));
         }
         return due;
     }
@@ -821,7 +935,7 @@
     function getNewWords(limit = state.config.dailyNew) {
         const target = typeof limit === 'number' && limit > 0 ? Math.floor(limit) : state.config.dailyNew;
         const fresh = state.words.filter((word) => !word.lastReviewed || !word.nextReview);
-        return fresh.slice(0, target).map((word) => ({ ...word }));
+        return cloneWordList(fresh.slice(0, target));
     }
 
     function sourceForSpellingList(errorSource, listId) {
@@ -931,7 +1045,7 @@
         const cached = state.listCache.get(listId);
         if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
             console.log('[VocabStore] 从缓存加载词表');
-            return cached.data;
+            return cloneListData(cached.data);
         }
 
         try {
@@ -964,11 +1078,11 @@
 
             // 缓存词表数据（带时间戳）
             state.listCache.set(listId, {
-                data: listData,
+                data: cloneListData(listData),
                 timestamp: Date.now()
             });
             console.log(`[VocabStore] 加载词表成功，单词数: ${normalizedWords.length}`);
-            return listData;
+            return cloneListData(listData);
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', summarizeVocabStoreErrorForLog(error));
             return null;
@@ -1146,7 +1260,7 @@
         if (state.activeListId === listId) {
             setWordsInternal(limitedWords);
         }
-        return normalized;
+        return cloneWordRecord(normalized);
     }
 
     async function init() {
@@ -1176,7 +1290,7 @@
         getActiveListId,
         upsertReadingHighlightWord,
         get VOCAB_LISTS() {
-            return VOCAB_LISTS;
+            return cloneVocabLists();
         },
         get state() {
             return {

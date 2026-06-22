@@ -149,6 +149,34 @@ async function testProgressImportStripsUnsafeKeys() {
     assert.equal(Object.prototype.pollutedConfig, undefined);
 }
 
+async function testDeepCategoryMetadataDoesNotOverflow() {
+    const api = loadVocabDataIO();
+    const depth = 20000;
+    const nestedMeta = `${'{"meta":'.repeat(depth)}{"category":"user"}${'}'.repeat(depth)}`;
+    const payload = `{"words":[{"word":"deep","meaning":"safe"}],"meta":${nestedMeta}}`;
+    const file = createImportFile(payload, 'deep-meta.json', 'application/json');
+
+    const result = await api.importWordList(file);
+
+    assert.equal(result.type, 'wordlist');
+    assert.equal(result.entries.length, 1);
+    assert.equal(result.entries[0].word, 'deep');
+    assert.equal(result.meta.category, 'external');
+}
+
+async function testChineseCategoryLabelsNormalize() {
+    const api = loadVocabDataIO();
+    const payload = {
+        words: [createWord(1)],
+        meta: { category: '\u81ea\u5b9a' }
+    };
+    const file = createImportFile(JSON.stringify(payload), 'custom-category.json', 'application/json');
+
+    const result = await api.importWordList(file);
+
+    assert.equal(result.meta.category, 'user');
+}
+
 async function testCsvImportCapsRows() {
     const api = loadVocabDataIO();
     const rows = ['word,meaning,example'];
@@ -172,12 +200,31 @@ function testValidateSchemaRejectsOversizedPayloads() {
     assert.equal(api.validateSchema({ words: payload }), false);
 }
 
+function testProgressExtraAllowsSharedReferencesButDropsCycles() {
+    const api = loadVocabDataIO();
+    const shared = { text: 'shared answer' };
+    const metadata = {
+        first: shared,
+        second: shared
+    };
+    metadata.self = metadata;
+
+    const normalized = api._test.sanitizeProgressExtraValue(metadata);
+
+    assert.deepEqual(normalized.first, { text: 'shared answer' });
+    assert.deepEqual(normalized.second, { text: 'shared answer' });
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'self'), false);
+}
+
 async function main() {
     await testJsonArrayImportCapsEntries();
     await testProgressImportCapsWordsAndReviewQueue();
     await testProgressImportStripsUnsafeKeys();
+    await testDeepCategoryMetadataDoesNotOverflow();
+    await testChineseCategoryLabelsNormalize();
     await testCsvImportCapsRows();
     testValidateSchemaRejectsOversizedPayloads();
+    testProgressExtraAllowsSharedReferencesButDropsCycles();
     console.log(JSON.stringify({
         status: 'pass',
         detail: 'vocab data import limit tests passed'

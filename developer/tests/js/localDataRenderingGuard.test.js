@@ -143,19 +143,41 @@ assert(
 const performanceOptimizerSource = fs.readFileSync(path.join(repoRoot, 'js/components/PerformanceOptimizer.js'), 'utf8');
 assert(
     performanceOptimizerSource.includes('function resolveTrustedImagePreloadUrl') &&
+    performanceOptimizerSource.includes('MAX_PRELOAD_DATA_IMAGE_URL_LENGTH') &&
+    performanceOptimizerSource.includes('TRUSTED_PRELOAD_IMAGE_DATA_URL_PATTERN') &&
+    performanceOptimizerSource.includes('function isTrustedImageDataUrl') &&
     performanceOptimizerSource.includes('resolved.origin === currentOrigin') &&
-    performanceOptimizerSource.includes('/^data:image\\/(?:png|jpe?g|gif|webp);base64,/i') &&
+    performanceOptimizerSource.includes('isTrustedImageDataUrl(resolved.href)') &&
     performanceOptimizerSource.includes('const safeUrls = (Array.isArray(imageUrls) ? imageUrls : [])') &&
     !performanceOptimizerSource.includes('const promises = imageUrls.map(url =>'),
-    'performance image preloading must reject cross-origin and non-image URLs before assigning img.src'
+    'performance image preloading must reject cross-origin, malformed data, oversized data, and non-image URLs before assigning img.src'
 );
 
 const dataManagementPanelSource = fs.readFileSync(path.join(repoRoot, 'js/components/dataManagementPanel.js'), 'utf8');
+const remotePracticeDataSourceSource = fs.readFileSync(path.join(repoRoot, 'js/data/dataSources/remotePracticeDataSource.js'), 'utf8');
 assert(
     dataManagementPanelSource.includes('const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024') &&
     dataManagementPanelSource.includes('function validateImportFile(file)') &&
+    dataManagementPanelSource.includes('function assertImportContentSize(content)') &&
+    dataManagementPanelSource.includes('function parseSelectedImportContent(content)') &&
+    dataManagementPanelSource.includes('function parseImportFileContent(content)') &&
+    dataManagementPanelSource.includes('getImportTextByteLength(content) > MAX_IMPORT_FILE_BYTES') &&
+    dataManagementPanelSource.includes('this.selectedFileContent = parseSelectedImportContent(content)') &&
+    dataManagementPanelSource.includes('fileContent = parseImportFileContent(rawContent)') &&
+    !dataManagementPanelSource.includes('this.selectedFileContent = JSON.parse(content)') &&
+    !dataManagementPanelSource.includes('fileContent = JSON.parse(rawContent)') &&
     dataManagementPanelSource.includes("accept: '.json,application/json'"),
-    'data management imports must limit file size and only accept JSON files'
+    'data management imports must limit declared and actual file size and only accept JSON files'
+);
+assert(
+    remotePracticeDataSourceSource.includes('MAX_REMOTE_PRACTICE_CLONE_DEPTH = 12') &&
+    remotePracticeDataSourceSource.includes("REMOTE_PRACTICE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    remotePracticeDataSourceSource.includes('function cloneRemotePracticeValue(value, depth = 0') &&
+    remotePracticeDataSourceSource.includes("return '[Circular]'") &&
+    remotePracticeDataSourceSource.includes('return cloneRemotePracticeValue(value);') &&
+    !remotePracticeDataSourceSource.includes('return JSON.parse(JSON.stringify(value));') &&
+    !remotePracticeDataSourceSource.includes('return value;\n        }\n    }\n\n    function isUnauthorized'),
+    'remote practice data source fallback cloning must sanitize local mirrors instead of returning raw remote objects'
 );
 assert(
     dataManagementPanelSource.includes('function sanitizeDownloadFilename') &&
@@ -198,6 +220,19 @@ assert(
     'data integrity exports must delay object URL revocation until after the click dispatch'
 );
 assert(
+    dataIntegrityManagerSource.includes('MAX_DATA_INTEGRITY_EXPORT_DEPTH = 16') &&
+    dataIntegrityManagerSource.includes('MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS = 5000') &&
+    dataIntegrityManagerSource.includes('_prepareExportData(providedData || await this.getCriticalData())') &&
+    dataIntegrityManagerSource.includes('this._stringifyExportPayload(data).length') &&
+    dataIntegrityManagerSource.includes('_sanitizeExportValue(value, depth = 0') &&
+    dataIntegrityManagerSource.includes("IMPORT_POLLUTION_KEYS.has(rawKey)") &&
+    dataIntegrityManagerSource.includes("return '[Circular]'") &&
+    dataIntegrityManagerSource.includes('[Truncated ${value.length - MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS} items]') &&
+    !dataIntegrityManagerSource.includes('size: JSON.stringify(data).length') &&
+    !dataIntegrityManagerSource.includes('new Blob([JSON.stringify(exportObj, null, 2)]'),
+    'data integrity backup/export paths must sanitize data before sizing or JSON export'
+);
+assert(
     dataIntegrityManagerSource.includes('DEFAULT_MAX_IMPORT_SOURCE_BYTES = 10 * 1024 * 1024') &&
     dataIntegrityManagerSource.includes('normalizeImportSourceByteLimit(options.maxImportSourceBytes)') &&
     dataIntegrityManagerSource.includes('_assertImportSourceSize(getTextByteLength(source), \'string\')') &&
@@ -221,9 +256,13 @@ assert(
     dataBackupManagerSource.includes('function resolveTrustedImportFetchUrl') &&
     dataBackupManagerSource.includes('resolved.origin === currentOrigin') &&
     dataBackupManagerSource.includes('fetch(fetchUrl, { credentials: \'same-origin\', cache: \'no-store\' })') &&
+    dataBackupManagerSource.includes("typeof response.text !== 'function'") &&
+    dataBackupManagerSource.includes('const body = await response.text()') &&
+    dataBackupManagerSource.includes('getBackupTextByteLength(body) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES') &&
     !dataBackupManagerSource.includes('parseImportSource(source, { allowFetch: true })') &&
-    !dataBackupManagerSource.includes('fetch(trimmed)'),
-    'backup imports must not fetch arbitrary string sources unless explicitly enabled'
+    !dataBackupManagerSource.includes('fetch(trimmed)') &&
+    !dataBackupManagerSource.includes('response.json()'),
+    'backup imports must not fetch arbitrary string sources or parse fetched bodies without a size check'
 );
 assert(
     dataBackupManagerSource.includes('function formatCsvCell') &&
@@ -243,6 +282,33 @@ assert(
     dataBackupManagerSource.includes('error: getSafeDataBackupImportHistoryError(error)') &&
     !dataBackupManagerSource.includes('error: error.message'),
     'data backup import history must not persist raw exception messages'
+);
+assert(
+    dataBackupManagerSource.includes('practiceRecords = this.normalizeExportRecords(practiceRecords)') &&
+    dataBackupManagerSource.includes('normalizeExportStats(stats)') &&
+    dataBackupManagerSource.includes('normalizeExportBackups(backups)') &&
+    dataBackupManagerSource.includes('normalizeExportOptions(options)') &&
+    dataBackupManagerSource.includes('const scanState = new WeakSet()') &&
+    dataBackupManagerSource.includes('scanState.add(value)') &&
+    dataBackupManagerSource.includes('this.cloneSafeValue(item, options, 0, scanState)'),
+    'data backup exports and plain object clones must sanitize records/stats/backups and share cycle detection state'
+);
+
+const suitePracticeMixinSource = fs.readFileSync(path.join(repoRoot, 'js/app/suitePracticeMixin.js'), 'utf8');
+assert(
+    suitePracticeMixinSource.includes('MAX_SUITE_CLONE_DEPTH = 12') &&
+    suitePracticeMixinSource.includes('MAX_SUITE_SESSION_STORAGE_CHARS = 2 * 1024 * 1024') &&
+    suitePracticeMixinSource.includes('SUITE_CLONE_POLLUTION_KEYS') &&
+    suitePracticeMixinSource.includes('function cloneSuiteSafeValue') &&
+    suitePracticeMixinSource.includes('function parseSuiteSessionSnapshot') &&
+    suitePracticeMixinSource.includes('const snapshot = parseSuiteSessionSnapshot(raw)') &&
+    suitePracticeMixinSource.includes('scanState.add(value)') &&
+    suitePracticeMixinSource.includes('const cloned = cloneSuiteSafeValue(value)') &&
+    suitePracticeMixinSource.includes('delete cloned.highlights') &&
+    suitePracticeMixinSource.includes('delete cloned.scrollY') &&
+    !suitePracticeMixinSource.includes('return JSON.parse(JSON.stringify(value))') &&
+    !suitePracticeMixinSource.includes('Array.isArray(value) ? value.slice() : { ...value }'),
+    'suite rawData snapshots must use bounded safe cloning instead of JSON stringify or shallow fallback'
 );
 
 const scoreStorageSource = fs.readFileSync(path.join(repoRoot, 'js/core/scoreStorage.js'), 'utf8');
@@ -264,20 +330,60 @@ const bootFallbacksSource = fs.readFileSync(path.join(repoRoot, 'js/boot-fallbac
 assert(
     bootFallbacksSource.includes('MAX_FALLBACK_IMPORT_FILE_BYTES') &&
     bootFallbacksSource.includes('function validateFallbackJsonFile') &&
-    bootFallbacksSource.includes('validateFallbackJsonFile(inputFile)'),
-    'legacy import fallback must validate JSON import files before FileReader reads them'
+    bootFallbacksSource.includes('validateFallbackJsonFile(inputFile)') &&
+    bootFallbacksSource.includes('function getFallbackImportTextByteLength') &&
+    bootFallbacksSource.includes('function assertFallbackImportTextSize') &&
+    bootFallbacksSource.includes('assertFallbackImportTextSize(reader.result)'),
+    'legacy import fallback must validate JSON import files before FileReader reads them and before parsing read text'
 );
 
 const listeningRecordBridgeSource = fs.readFileSync(path.join(repoRoot, 'js/listeningRecordBridge.js'), 'utf8');
 assert(
     listeningRecordBridgeSource.includes('function parseGeneratedResultsHtml') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_RESULT_HTML_LENGTH = 2 * 1024 * 1024') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_INLINE_OBJECT_LENGTH = 256 * 1024') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_EXAM_ID_LENGTH = 120') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_SESSION_ID_LENGTH = 160') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_URL_SOURCE_LENGTH = 2048') &&
+    listeningRecordBridgeSource.includes('LISTENING_SAFE_ID_PATTERN') &&
+    listeningRecordBridgeSource.includes('function normalizeListeningExamId') &&
+    listeningRecordBridgeSource.includes('function normalizeListeningSessionId') &&
+    listeningRecordBridgeSource.includes('html.length > MAX_LISTENING_RESULT_HTML_LENGTH') &&
+    listeningRecordBridgeSource.includes('source.length > MAX_LISTENING_INLINE_OBJECT_LENGTH') &&
+    listeningRecordBridgeSource.includes('json.length > MAX_LISTENING_INLINE_OBJECT_LENGTH') &&
+    listeningRecordBridgeSource.includes('new URL(window.location.href)') &&
+    listeningRecordBridgeSource.includes("currentUrl.searchParams.get('examId')") &&
+    listeningRecordBridgeSource.includes("currentUrl.searchParams.get('src')") &&
+    listeningRecordBridgeSource.includes('rawSrc.length <= MAX_LISTENING_URL_SOURCE_LENGTH') &&
+    listeningRecordBridgeSource.includes('state.examId = normalizeListeningExamId(payload.examId') &&
+    listeningRecordBridgeSource.includes('state.sessionId = normalizeListeningSessionId(payload.sessionId') &&
     listeningRecordBridgeSource.includes("new DOMParser().parseFromString(html, 'text/html')") &&
     listeningRecordBridgeSource.includes('var s2 = parseGeneratedResultsHtml(html)'),
-    'listening result bridge must parse generated result HTML with DOMParser before reading table data'
+    'listening result bridge must bound URL/session identifiers and parse generated result HTML with DOMParser before reading table data'
 );
 assert(
     !listeningRecordBridgeSource.includes('tempDiv.innerHTML = html'),
     'listening result bridge must not inject generated result HTML through innerHTML'
+);
+assert(
+    listeningRecordBridgeSource.includes('function createSafeListeningRecordMap()') &&
+    listeningRecordBridgeSource.includes('return Object.create(null);') &&
+    listeningRecordBridgeSource.includes('function toSafeListeningRecordKey(rawQuestion, fallbackIndex)') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_RECORD_KEY_LENGTH') &&
+    listeningRecordBridgeSource.includes('isUnsafeListeningRecordKey(key)') &&
+    listeningRecordBridgeSource.includes('var answers = createSafeListeningRecordMap();') &&
+    listeningRecordBridgeSource.includes('var correctAnswers = createSafeListeningRecordMap();') &&
+    listeningRecordBridgeSource.includes('var answerComparison = createSafeListeningRecordMap();') &&
+    listeningRecordBridgeSource.includes('var answerDetails = createSafeListeningRecordMap();') &&
+    listeningRecordBridgeSource.includes('var qId = toSafeListeningRecordKey(d.question, i);'),
+    'listening result bridge must write extracted answers into null-prototype maps with bounded safe question keys'
+);
+assert(
+    !listeningRecordBridgeSource.includes('var answers = {};') &&
+    !listeningRecordBridgeSource.includes('var correctAnswers = {};') &&
+    !listeningRecordBridgeSource.includes('var answerComparison = {};') &&
+    !listeningRecordBridgeSource.includes('var answerDetails = {};'),
+    'listening result bridge answer maps must not be plain objects'
 );
 
 const practicePageEnhancerSource = fs.readFileSync(path.join(repoRoot, 'js/practice-page-enhancer.js'), 'utf8');
@@ -289,10 +395,44 @@ assert(
     !practicePageEnhancerSource.includes('得分 ${results.scoreInfo?.correct ?? 0}'),
     'practice replay fallback summary scores must be escaped before entering innerHTML'
 );
+assert(
+    practicePageEnhancerSource.includes('MAX_ENHANCER_ANSWER_LITERAL_CHARS = 64 * 1024') &&
+    practicePageEnhancerSource.includes('MAX_ENHANCER_FALLBACK_STORAGE_JSON_CHARS = 2 * 1024 * 1024') &&
+    practicePageEnhancerSource.includes('function parseBoundedEnhancerJson(source, maxLength = MAX_ENHANCER_ANSWER_LITERAL_CHARS)') &&
+    practicePageEnhancerSource.includes('literal.length > MAX_ENHANCER_ANSWER_LITERAL_CHARS') &&
+    practicePageEnhancerSource.includes('return parseBoundedEnhancerJson(cleanStr)') &&
+    practicePageEnhancerSource.includes('const answers = parseBoundedEnhancerJson(jsonMatch[1])') &&
+    practicePageEnhancerSource.includes('parseBoundedEnhancerJson(raw, MAX_ENHANCER_FALLBACK_STORAGE_JSON_CHARS)') &&
+    !practicePageEnhancerSource.includes('return JSON.parse(cleanStr)') &&
+    !practicePageEnhancerSource.includes('JSON.parse(jsonMatch[1])') &&
+    !practicePageEnhancerSource.includes('const parsed = JSON.parse(raw)'),
+    'practice page enhancer must bound answer JSON snippets and fallback storage before parsing'
+);
 
 const unifiedReadingPageSource = fs.readFileSync(path.join(repoRoot, 'js/runtime/unifiedReadingPage.js'), 'utf8');
+const readingExamRegistrySource = fs.readFileSync(path.join(repoRoot, 'js/runtime/readingExamRegistry.js'), 'utf8');
+const readingExplanationRegistrySource = fs.readFileSync(path.join(repoRoot, 'js/runtime/readingExplanationRegistry.js'), 'utf8');
+for (const [registryLabel, registrySource] of [
+    ['reading exam registry', readingExamRegistrySource],
+    ['reading explanation registry', readingExplanationRegistrySource]
+]) {
+    assert(
+        registrySource.includes('MAX_READING_REGISTRY_CLONE_DEPTH = 16') &&
+        registrySource.includes('MAX_READING_REGISTRY_ARRAY_ITEMS = 5000') &&
+        registrySource.includes("READING_REGISTRY_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+        registrySource.includes('function cloneRegistryValue(value, depth = 0') &&
+        registrySource.includes("return '[Circular]'") &&
+        registrySource.includes('return cloneRegistryValue(value);') &&
+        !registrySource.includes('JSON.parse(JSON.stringify(value))'),
+        `${registryLabel} must use bounded safe cloning instead of JSON stringify cloning`
+    );
+}
 assert(
     unifiedReadingPageSource.includes('function normalizeResultNumber(value, fallback = 0)') &&
+    unifiedReadingPageSource.includes('MAX_SIMULATION_DRAFT_STORAGE_CHARS = 1024 * 1024') &&
+    unifiedReadingPageSource.includes('function parseSimulationDraftStorage') &&
+    unifiedReadingPageSource.includes('const parsed = parseSimulationDraftStorage(raw)') &&
+    !unifiedReadingPageSource.includes('const parsed = JSON.parse(raw)') &&
     unifiedReadingPageSource.includes('const fallbackNumber = Number(fallback)') &&
     unifiedReadingPageSource.includes('return Number.isFinite(fallbackNumber) ? fallbackNumber : 0') &&
     unifiedReadingPageSource.includes('const safeCorrect = escapeHtml(normalizeResultNumber(scoreInfo.correct, 0))') &&
@@ -307,24 +447,47 @@ const hpPortalSource = fs.readFileSync(path.join(repoRoot, 'js/plugins/hp/hp-por
 assert(
     hpPortalSource.includes('MAX_HP_IMPORT_FILE_BYTES') &&
     hpPortalSource.includes('MAX_HP_IMPORT_ITEMS = 5000') &&
+    hpPortalSource.includes('MAX_HP_IMPORT_OBJECT_KEYS = 500') &&
+    hpPortalSource.includes('MAX_HP_IMPORT_STRING_LENGTH = 20000') &&
+    hpPortalSource.includes('MAX_HP_IMPORT_NODES = 50000') &&
     hpPortalSource.includes('HP_IMPORT_POLLUTION_KEYS') &&
     hpPortalSource.includes('function validateHpJsonFile') &&
+    hpPortalSource.includes('function createHpImportSanitizeState') &&
     hpPortalSource.includes('function sanitizeHpImportValue') &&
     hpPortalSource.includes('function sanitizeHpImportList') &&
+    hpPortalSource.includes("return '[Circular]'") &&
+    hpPortalSource.includes("return '[Truncated]'") &&
     hpPortalSource.includes('validateHpJsonFile(file)') &&
+    hpPortalSource.includes('exams: sanitizeHpImportList(exams)') &&
+    hpPortalSource.includes('records: sanitizeHpImportList(records)') &&
+    hpPortalSource.includes('exams: sanitizeHpImportList(hpCore.getExamIndex() || [])') &&
+    hpPortalSource.includes('records: sanitizeHpImportList(hpCore.getRecords() || [])') &&
+    hpPortalSource.includes('state: normalizePortalState(this.state)') &&
     hpPortalSource.includes('examIndex: sanitizeHpImportList(exams)') &&
     hpPortalSource.includes('practiceRecords: sanitizeHpImportList(records)') &&
-    hpPortalSource.includes('setTimeout(() => URL.revokeObjectURL(url), 0)'),
-    'HP portal backup import/export must validate files, sanitize imported arrays, and delay object URL revocation'
+    hpPortalSource.includes('setTimeout(() => URL.revokeObjectURL(url), 0)') &&
+    !hpPortalSource.includes('JSON.parse(JSON.stringify(exams))') &&
+    !hpPortalSource.includes('JSON.parse(JSON.stringify(records))'),
+    'HP portal backup import/export must validate files, sanitize imported/current arrays, tolerate circular data, and delay object URL revocation'
 );
 
 const hpCoreBridgeSource = fs.readFileSync(path.join(repoRoot, 'js/plugins/hp/hp-core-bridge.js'), 'utf8');
 assert(
     hpCoreBridgeSource.includes("PRACTICE_MESSAGE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
     hpCoreBridgeSource.includes('MAX_PRACTICE_MESSAGE_DEPTH = 16') &&
+    hpCoreBridgeSource.includes('MAX_HP_CORE_JSON_STRING_LENGTH = 64 * 1024') &&
+    hpCoreBridgeSource.includes('function parseHpCoreJsonString(value)') &&
+    hpCoreBridgeSource.includes('value.length > MAX_HP_CORE_JSON_STRING_LENGTH') &&
+    hpCoreBridgeSource.includes('const parsed = parseHpCoreJsonString(value)') &&
+    !hpCoreBridgeSource.includes('const parsed = JSON.parse(value)') &&
     hpCoreBridgeSource.includes('function sanitizePracticeMessageValue(value, depth, state)') &&
     hpCoreBridgeSource.includes('raw: sanitizePracticeMessageValue(payload) || {}') &&
+    hpCoreBridgeSource.includes('const safePayload = normalizedPayload.raw || {}') &&
+    hpCoreBridgeSource.includes('window.savePracticeRecordFallback(derivedExamId, safePayload)') &&
+    hpCoreBridgeSource.includes('ingestLocalPracticeRecord(derivedExamId, safePayload, recordContext)') &&
     hpCoreBridgeSource.includes('realData: normalized.raw || {}') &&
+    !hpCoreBridgeSource.includes('window.savePracticeRecordFallback(derivedExamId, payload)') &&
+    !hpCoreBridgeSource.includes('ingestLocalPracticeRecord(derivedExamId, payload, recordContext)') &&
     !hpCoreBridgeSource.includes('realData: normalized.raw || payload || {}'),
     'HP practice record fallback must sanitize postMessage payloads before persisting realData'
 );
@@ -340,6 +503,8 @@ assert(
     themeAdapterBaseSource.includes('.map(record => normalizePracticeRecordForStorage(record))') &&
     themeAdapterBaseSource.includes('this._practiceRecords = deduplicateRecords(normalizedRecords);') &&
     themeAdapterBaseSource.includes('realData: sanitizePracticeMessageValue(rawPayload) || {}') &&
+    themeAdapterBaseSource.includes('window.savePracticeRecordFallback(examId, normalized.raw || {})') &&
+    !themeAdapterBaseSource.includes('window.savePracticeRecordFallback(examId, payload)') &&
     !themeAdapterBaseSource.includes('realData: rawPayload') &&
     !themeAdapterBaseSource.includes('normalizedRecord.realData = sanitizePracticeMessageValue(normalizedRecord.realData) || {};'),
     'theme adapter practice record fallback must sanitize postMessage payloads and locally loaded records before use'
@@ -351,14 +516,20 @@ assert(
     vocabDataIoSource.includes('MAX_VOCAB_IMPORT_ENTRIES = 5000') &&
     vocabDataIoSource.includes('MAX_WORD_TEXT_LENGTH = 160') &&
     vocabDataIoSource.includes('MAX_MEANING_TEXT_LENGTH = 4000') &&
+    vocabDataIoSource.includes('MAX_CATEGORY_SCAN_DEPTH = 8') &&
+    vocabDataIoSource.includes('MAX_CATEGORY_SCAN_NODES = 200') &&
     vocabDataIoSource.includes('function validateVocabImportFile') &&
+    vocabDataIoSource.includes('function assertVocabImportTextSize(text)') &&
     vocabDataIoSource.includes('function normalizeTextField') &&
     vocabDataIoSource.includes('function limitImportItems') &&
+    vocabDataIoSource.includes('function getOwnImportValue') &&
+    vocabDataIoSource.includes('while (stack.length && scanned < MAX_CATEGORY_SCAN_NODES)') &&
     vocabDataIoSource.includes('const items = limitImportItems(payload)') &&
     vocabDataIoSource.includes('const words = limitImportItems(payload.words)') &&
     vocabDataIoSource.includes('const rowLimit = Math.min(lines.length, MAX_VOCAB_IMPORT_ENTRIES + 1)') &&
-    vocabDataIoSource.includes('validateVocabImportFile(file)'),
-    'vocab imports must validate file size, extension, MIME type, entry count, and text field lengths before reading or normalizing large payloads'
+    vocabDataIoSource.includes('validateVocabImportFile(file)') &&
+    vocabDataIoSource.includes('assertVocabImportTextSize(text)'),
+    'vocab imports must validate file size, read text size, extension, MIME type, entry count, and text field lengths before normalizing large payloads'
 );
 
 const vocabStoreSource = fs.readFileSync(path.join(repoRoot, 'js/core/vocabStore.js'), 'utf8');
@@ -366,14 +537,34 @@ assert(
     vocabStoreSource.includes('MAX_STORED_VOCAB_WORDS = 5000') &&
     vocabStoreSource.includes('MAX_WORD_TEXT_LENGTH = 160') &&
     vocabStoreSource.includes('MAX_METADATA_JSON_CHARS = 8000') &&
+    vocabStoreSource.includes('MAX_VOCAB_LEXICON_JSON_BYTES = 2 * 1024 * 1024') &&
+    vocabStoreSource.includes('function parseBoundedVocabLexiconJson(text)') &&
+    vocabStoreSource.includes('contentLength > MAX_VOCAB_LEXICON_JSON_BYTES') &&
+    vocabStoreSource.includes('parseBoundedVocabLexiconJson(await primary.text())') &&
+    vocabStoreSource.includes('parseBoundedVocabLexiconJson(xhr.responseText)') &&
+    !vocabStoreSource.includes('return primary.json()') &&
+    !vocabStoreSource.includes('JSON.parse(xhr.responseText)') &&
     vocabStoreSource.includes('function normalizeExtraValue') &&
+    vocabStoreSource.includes('function cloneWordRecord') &&
+    vocabStoreSource.includes('function cloneWordList') &&
+    vocabStoreSource.includes('function cloneListData') &&
+    vocabStoreSource.includes('return cloneWordList(state.words)') &&
+    vocabStoreSource.includes('return cloneListData(cached.data)') &&
+    vocabStoreSource.includes('return cloneVocabLists()') &&
     vocabStoreSource.includes('listWords\\n            .slice(0, MAX_STORED_VOCAB_WORDS)'.replace(/\\n/g, '\n')),
-    'vocab store must cap stored list size and normalize long imported word fields'
+    'vocab store must cap stored list size, normalize long imported word fields, and return defensive clones'
 );
 
 const spellingErrorCollectorSource = fs.readFileSync(path.join(repoRoot, 'js/app/spellingErrorCollector.js'), 'utf8');
 assert(
     spellingErrorCollectorSource.includes('MAX_SPELLING_VOCAB_WORDS = 5000') &&
+    spellingErrorCollectorSource.includes('MAX_SPELLING_LEXICON_JSON_BYTES = 2 * 1024 * 1024') &&
+    spellingErrorCollectorSource.includes('function parseSpellingLexiconJson(text)') &&
+    spellingErrorCollectorSource.includes('contentLength > MAX_SPELLING_LEXICON_JSON_BYTES') &&
+    spellingErrorCollectorSource.includes('parseSpellingLexiconJson(await response.text())') &&
+    spellingErrorCollectorSource.includes('parseSpellingLexiconJson(xhr.responseText)') &&
+    !spellingErrorCollectorSource.includes('return response.json()') &&
+    !spellingErrorCollectorSource.includes('JSON.parse(xhr.responseText)') &&
     spellingErrorCollectorSource.includes('SPELLING_IMPORT_POLLUTION_KEYS') &&
     spellingErrorCollectorSource.includes('cloneSafeObject(value)') &&
     spellingErrorCollectorSource.includes('normalizeStoredWordEntry(entry)') &&
@@ -382,6 +573,17 @@ assert(
     spellingErrorCollectorSource.includes('const safeList = this.cloneSafeObject(rawList)') &&
     spellingErrorCollectorSource.includes('return this.normalizeStoredWordEntry({'),
     'spelling error vocab lists must cap restored word count and strip unsafe imported keys'
+);
+
+const miniGamesSource = fs.readFileSync(path.join(repoRoot, 'js/presentation/miniGames.js'), 'utf8');
+assert(
+    miniGamesSource.includes('MAX_VOCAB_SPARK_LEXICON_JSON_BYTES = 2 * 1024 * 1024') &&
+    miniGamesSource.includes('function parseVocabSparkLexiconJson(text)') &&
+    miniGamesSource.includes('contentLength > MAX_VOCAB_SPARK_LEXICON_JSON_BYTES') &&
+    miniGamesSource.includes("typeof response.text !== 'function'") &&
+    miniGamesSource.includes('parseVocabSparkLexiconJson(await response.text())') &&
+    !miniGamesSource.includes('await response.json()'),
+    'vocab mini game lexicon fetches must size-check fetched JSON before parsing'
 );
 
 const practiceRecordModalSource = fs.readFileSync(path.join(repoRoot, 'js/components/practiceRecordModal.js'), 'utf8');
@@ -396,11 +598,15 @@ assert(
     practiceRecordModalSource.includes('MAX_MODAL_ANSWER_ROWS = 500') &&
     practiceRecordModalSource.includes('MAX_MODAL_ANSWER_TEXT_LENGTH = 200') &&
     practiceRecordModalSource.includes('MAX_MODAL_ANSWER_DEPTH = 6') &&
+    practiceRecordModalSource.includes('MAX_MODAL_MAP_KEYS = 1000') &&
+    practiceRecordModalSource.includes('MAX_MODAL_MAP_KEY_LENGTH = 120') &&
+    practiceRecordModalSource.includes('MODAL_UNSAFE_MAP_KEYS') &&
     practiceRecordModalSource.includes('.slice(0, MAX_MODAL_ANSWER_ROWS)') &&
     practiceRecordModalSource.includes('if (depth > MAX_MODAL_ANSWER_DEPTH)') &&
-    practiceRecordModalSource.includes('safeCloneObject(value)') &&
-    practiceRecordModalSource.includes('this.safeCloneObject(record.answerComparison || {})') &&
-    practiceRecordModalSource.includes('this.safeCloneObject(answerComparison)') &&
+    practiceRecordModalSource.includes('normalizeAnswerMap(source)') &&
+    practiceRecordModalSource.includes('normalizeComparisonMap(source)') &&
+    practiceRecordModalSource.includes('correctAnswerMapFromDetails(details)') &&
+    practiceRecordModalSource.includes('const comparison = this.normalizeComparisonMap(record.answerComparison || {})') &&
     practiceRecordModalSource.includes('this.truncateAnswer(rawUserAnswer, MAX_MODAL_ANSWER_TEXT_LENGTH)') &&
     practiceRecordModalSource.includes('this.truncateAnswer(rawCorrectAnswer, MAX_MODAL_ANSWER_TEXT_LENGTH)'),
     'practice record modal must cap rendered answer rows/text and safely clone imported comparison data'
@@ -421,6 +627,16 @@ assert(
     examActionsSource.includes("a.download = 'practice-records.json'") &&
     examActionsSource.includes('setTimeout(() => URL.revokeObjectURL(url), 0)'),
     'exam actions fallback exports must delay object URL revocation until after the click dispatch'
+);
+assert(
+    examActionsSource.includes('MAX_FALLBACK_EXPORT_RECORDS = 5000') &&
+    examActionsSource.includes("FALLBACK_EXPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    examActionsSource.includes('function sanitizeFallbackExportValue(value, depth = 0') &&
+    examActionsSource.includes('function createSafeFallbackExportRecords(records)') &&
+    examActionsSource.includes('var safeRecords = createSafeFallbackExportRecords(records)') &&
+    examActionsSource.includes('JSON.stringify(safeRecords, null, 2)') &&
+    !examActionsSource.includes('JSON.stringify(records, null, 2)'),
+    'exam actions fallback exports must safely clone, cap, and strip unsafe record data before JSON.stringify'
 );
 
 assert(
@@ -468,6 +684,9 @@ assert(
 assert(
     storageSource.includes('function getSafeStorageImportErrorMessage(error)') &&
     storageSource.includes('message: getSafeStorageImportErrorMessage(error)') &&
+    storageSource.includes('Backup contains a circular reference at ${path}') &&
+    storageSource.includes('Import data contains a circular reference') &&
+    storageSource.includes('scanState.seen.delete(value)') &&
     !storageSource.includes('message: error.message'),
     'storage import failures must return sanitized user-facing messages'
 );
@@ -495,6 +714,16 @@ assert(
     !examSessionMixinSource.includes('<h4>${exam.title}</h4>') &&
     !examSessionMixinSource.includes("${exam ? exam.title : '未知题目'}"),
     'exam session templates must escape exam titles before HTML interpolation'
+);
+
+assert(
+    examSessionMixinSource.includes('MAX_REVIEW_REPLAY_CLONE_DEPTH = 12') &&
+    examSessionMixinSource.includes('MAX_REVIEW_REPLAY_CLONE_NODES = 50000') &&
+    examSessionMixinSource.includes("REVIEW_REPLAY_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    examSessionMixinSource.includes('function cloneReviewReplayValue(value, depth = 0') &&
+    examSessionMixinSource.includes('return cloneReviewReplayValue(value);') &&
+    !examSessionMixinSource.includes('return JSON.parse(JSON.stringify(value));'),
+    'exam session replay data must use bounded safe cloning instead of JSON stringify fallback'
 );
 
 const templateBaseSource = fs.readFileSync(path.join(repoRoot, 'templates/template_base.html'), 'utf8');
@@ -561,7 +790,10 @@ assert(
 assert(
     reviewHighlightDictionarySource.includes('MAX_STORED_HIGHLIGHT_WORDS = 5000') &&
     reviewHighlightDictionarySource.includes('MAX_WORD_TEXT_LENGTH = 160') &&
+    reviewHighlightDictionarySource.includes('MAX_FALLBACK_STORAGE_STRING_LENGTH = 5 * 1024 * 1024') &&
     reviewHighlightDictionarySource.includes('function normalizeContextValue') &&
+    reviewHighlightDictionarySource.includes('function parseFallbackStorageJson') &&
+    reviewHighlightDictionarySource.includes('const parsed = parseFallbackStorageJson(raw)') &&
     reviewHighlightDictionarySource.includes("CONTEXT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
     reviewHighlightDictionarySource.includes('tags: normalizeTags(lookup.tags)') &&
     reviewHighlightDictionarySource.includes('context: normalizeContextValue(context) || {}') &&
@@ -611,6 +843,7 @@ assert(
 assert(
     goalSettingsPanelSource.includes('placeholder="自定义标题" maxlength="30"') &&
     goalSettingsPanelSource.includes('<label for="goal-target">目标值</label>') &&
+    !goalSettingsPanelSource.includes('placeholder="自定义标题 maxlength="30"') &&
     !goalSettingsPanelSource.includes('placeholder="鑷') &&
     !goalSettingsPanelSource.includes('鍊?/label'),
     'goal settings panel create form must keep valid input attributes and labels'
