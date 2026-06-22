@@ -1,6 +1,10 @@
 (function (global) {
     'use strict';
 
+    const MAX_MESSAGE_TEXT_LENGTH = 500;
+    const MESSAGE_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
+    const MESSAGE_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
+
     function ensureContainer(containerId) {
         if (typeof document === 'undefined') {
             return null;
@@ -20,8 +24,30 @@
         return ['info', 'success', 'warning', 'error'].includes(value) ? value : 'info';
     }
 
+    function truncateMessageText(text) {
+        if (text.length <= MAX_MESSAGE_TEXT_LENGTH) {
+            return text;
+        }
+        let truncated = text.slice(0, MAX_MESSAGE_TEXT_LENGTH - 3);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            truncated = truncated.slice(0, -1);
+        }
+        return `${truncated}...`;
+    }
+
+    function normalizeMessageText(message) {
+        const normalized = String(message == null ? '' : message)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(MESSAGE_SECRET_QUERY_PATTERN, '$1[hidden]')
+            .replace(MESSAGE_SECRET_VALUE_PATTERN, '$1=[hidden]')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return truncateMessageText(normalized);
+    }
+
     function createMessageNode(message, type) {
         const safeType = normalizeMessageType(type);
+        const safeMessage = normalizeMessageText(message);
         const note = document.createElement('div');
         note.className = 'message ' + safeType + ' message-entering';
         note.setAttribute('role', safeType === 'error' ? 'alert' : 'status');
@@ -33,8 +59,8 @@
 
         const text = document.createElement('span');
         text.className = 'message-text';
-        text.textContent = String(message || '');
-        note.title = text.textContent;
+        text.textContent = safeMessage;
+        note.title = safeMessage;
 
         note.appendChild(indicator);
         note.appendChild(text);
@@ -55,7 +81,7 @@
             if (typeof document === 'undefined') {
                 if (typeof console !== 'undefined') {
                     const logMethod = safeType === 'error' ? 'error' : 'log';
-                    console[logMethod]('[Message:' + safeType + ']', message);
+                    console[logMethod]('[Message:' + safeType + ']', normalizeMessageText(message));
                 }
                 return null;
             }

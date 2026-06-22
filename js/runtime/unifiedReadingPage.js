@@ -11,6 +11,13 @@
     const MAX_DRAG_PAYLOAD_CHARS = 4096;
     const MAX_DRAG_TEXT_CHARS = 500;
     const MAX_SIMULATION_DRAFT_STORAGE_CHARS = 1024 * 1024;
+    const MAX_SIMULATION_DRAFT_ANSWERS = 500;
+    const MAX_SIMULATION_DRAFT_ANSWER_CHARS = 4000;
+    const MAX_SIMULATION_DRAFT_ANSWER_ITEMS = 40;
+    const MAX_SIMULATION_DRAFT_HIGHLIGHTS = 500;
+    const MAX_SIMULATION_DRAFT_HIGHLIGHT_TEXT_CHARS = 1000;
+    const MAX_SIMULATION_DRAFT_SCROLL_Y = 10000000;
+    const SIMULATION_DRAFT_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -3425,18 +3432,7 @@
     }
 
     function cloneDraftSafely(draft) {
-        if (!draft || typeof draft !== 'object') {
-            return null;
-        }
-        try {
-            return JSON.parse(JSON.stringify(draft));
-        } catch (_) {
-            return {
-                answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
-                highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
-                scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
-            };
-        }
+        return sanitizeSimulationDraft(draft);
     }
 
     function buildDraftFingerprint(draft) {
@@ -3459,6 +3455,157 @@
             return null;
         }
         return JSON.parse(source);
+    }
+
+    function cleanSimulationDraftText(value, maxLength = MAX_SIMULATION_DRAFT_ANSWER_CHARS) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, Math.max(1, maxLength));
+    }
+
+    function isUnsafeSimulationDraftKey(key) {
+        return SIMULATION_DRAFT_UNSAFE_KEYS.has(String(key || '').trim());
+    }
+
+    function normalizeSimulationDraftNumber(value, fallback = 0, max = Number.MAX_SAFE_INTEGER) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+            return fallback;
+        }
+        return Math.max(0, Math.min(Math.floor(number), max));
+    }
+
+    function normalizeSimulationDraftAnswerValue(value) {
+        try {
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, MAX_SIMULATION_DRAFT_ANSWER_ITEMS)
+                    .map((item) => cleanSimulationDraftText(normalizeAnswerForReplay(item, 'value')))
+                    .filter(Boolean);
+            }
+            return cleanSimulationDraftText(normalizeAnswerForReplay(value, 'value'));
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function sanitizeSimulationDraftAnswers(value) {
+        if (!value || typeof value !== 'object') {
+            return {};
+        }
+        const answers = Object.create(null);
+        let keys;
+        try {
+            keys = Object.keys(value);
+        } catch (_) {
+            return answers;
+        }
+        keys.slice(0, MAX_SIMULATION_DRAFT_ANSWERS).forEach((rawKey) => {
+            if (isUnsafeSimulationDraftKey(rawKey)) {
+                return;
+            }
+            const questionId = normalizeQuestionId(rawKey);
+            if (!questionId || isUnsafeSimulationDraftKey(questionId)) {
+                return;
+            }
+            let rawAnswer;
+            try {
+                rawAnswer = value[rawKey];
+            } catch (_) {
+                return;
+            }
+            const answer = normalizeSimulationDraftAnswerValue(rawAnswer);
+            if (Array.isArray(answer) ? answer.length : answer) {
+                answers[questionId] = answer;
+            }
+        });
+        return answers;
+    }
+
+    function readSimulationDraftField(source, key) {
+        try {
+            return source ? source[key] : undefined;
+        } catch (_) {
+            return undefined;
+        }
+    }
+
+    function sanitizeSimulationDraftHighlight(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scope = cleanSimulationDraftText(readSimulationDraftField(record, 'scope'), 32) === 'left' ? 'left' : 'groups';
+        const text = cleanSimulationDraftText(readSimulationDraftField(record, 'text'), MAX_SIMULATION_DRAFT_HIGHLIGHT_TEXT_CHARS);
+        if (!text) {
+            return null;
+        }
+        const start = normalizeSimulationDraftNumber(
+            Object.prototype.hasOwnProperty.call(record, 'start')
+                ? readSimulationDraftField(record, 'start')
+                : readSimulationDraftField(record, 'startOffset'),
+            0,
+            MAX_SIMULATION_DRAFT_SCROLL_Y
+        );
+        const end = normalizeSimulationDraftNumber(
+            Object.prototype.hasOwnProperty.call(record, 'end')
+                ? readSimulationDraftField(record, 'end')
+                : readSimulationDraftField(record, 'endOffset'),
+            start,
+            MAX_SIMULATION_DRAFT_SCROLL_Y
+        );
+        const orderedStart = Math.min(start, end);
+        const orderedEnd = Math.max(start, end);
+        return {
+            scope,
+            text,
+            kind: cleanSimulationDraftText(readSimulationDraftField(record, 'kind'), 32) === 'note' ? 'note' : 'highlight',
+            occurrence: normalizeSimulationDraftNumber(readSimulationDraftField(record, 'occurrence'), 0, MAX_SIMULATION_DRAFT_HIGHLIGHTS),
+            start: orderedStart,
+            end: orderedEnd,
+            startOffset: orderedStart,
+            endOffset: orderedEnd,
+            before: cleanSimulationDraftText(readSimulationDraftField(record, 'before'), MAX_SIMULATION_DRAFT_HIGHLIGHT_TEXT_CHARS),
+            after: cleanSimulationDraftText(readSimulationDraftField(record, 'after'), MAX_SIMULATION_DRAFT_HIGHLIGHT_TEXT_CHARS)
+        };
+    }
+
+    function sanitizeSimulationDraftHighlights(value) {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        return value
+            .slice(0, MAX_SIMULATION_DRAFT_HIGHLIGHTS)
+            .map((record) => sanitizeSimulationDraftHighlight(record))
+            .filter(Boolean);
+    }
+
+    function sanitizeSimulationDraft(draft) {
+        if (!draft || typeof draft !== 'object') {
+            return null;
+        }
+        const normalized = {
+            answers: sanitizeSimulationDraftAnswers(readSimulationDraftField(draft, 'answers')),
+            highlights: sanitizeSimulationDraftHighlights(readSimulationDraftField(draft, 'highlights')),
+            scrollY: normalizeSimulationDraftNumber(
+                readSimulationDraftField(draft, 'scrollY'),
+                0,
+                MAX_SIMULATION_DRAFT_SCROLL_Y
+            )
+        };
+        const updatedAt = normalizeSimulationDraftNumber(
+            readSimulationDraftField(draft, 'updatedAt'),
+            0,
+            Number.MAX_SAFE_INTEGER
+        );
+        if (updatedAt > 0) {
+            normalized.updatedAt = updatedAt;
+        }
+        return normalized;
     }
 
     function persistSimulationDraftMirror(draft) {
@@ -3488,9 +3635,7 @@
             if (!parsed || typeof parsed !== 'object') {
                 return null;
             }
-            return parsed.draft && typeof parsed.draft === 'object'
-                ? parsed.draft
-                : null;
+            return sanitizeSimulationDraft(parsed.draft);
         } catch (_) {
             return null;
         }
@@ -4123,7 +4268,7 @@
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
                 : null;
-            const draft = draftFromParent || restoreSimulationDraftMirror();
+            const draft = sanitizeSimulationDraft(draftFromParent) || restoreSimulationDraftMirror();
             if (draft) {
                 applyDraftToDom(draft);
                 state.simulationDraftFingerprint = buildDraftFingerprint(draft);

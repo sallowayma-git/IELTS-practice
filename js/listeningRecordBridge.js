@@ -7,7 +7,13 @@
   var MAX_LISTENING_EXAM_ID_LENGTH = 120;
   var MAX_LISTENING_SESSION_ID_LENGTH = 160;
   var MAX_LISTENING_URL_SOURCE_LENGTH = 2048;
+  var MAX_LISTENING_INLINE_KEY_LENGTH = 160;
+  var MAX_LISTENING_INLINE_STRING_LENGTH = 2048;
+  var MAX_LISTENING_INLINE_ARRAY_LENGTH = 1000;
+  var MAX_LISTENING_INLINE_VALUE_DEPTH = 8;
+  var MAX_LISTENING_INLINE_VALUE_NODES = 5000;
   var LISTENING_SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/;
+  var LISTENING_INLINE_UNSAFE_KEYS = ['__proto__', 'prototype', 'constructor'];
 
   var state = {
     sessionId: null,
@@ -486,7 +492,59 @@
       .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
       .replace(/,\s*([}\]])/g, '$1');
     if (json.length > MAX_LISTENING_INLINE_OBJECT_LENGTH) return null;
-    return JSON.parse(json);
+    return sanitizeListeningInlineValue(JSON.parse(json), 0, { nodes: 0 }) || null;
+  }
+
+  function isUnsafeListeningInlineKey(key) {
+    return LISTENING_INLINE_UNSAFE_KEYS.indexOf(String(key || '')) >= 0;
+  }
+
+  function isPlainListeningInlineObject(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+  }
+
+  function sanitizeListeningInlineValue(value, depth, state) {
+    state = state || { nodes: 0 };
+    state.nodes++;
+    if (state.nodes > MAX_LISTENING_INLINE_VALUE_NODES || depth > MAX_LISTENING_INLINE_VALUE_DEPTH) {
+      return undefined;
+    }
+
+    if (value == null) return value;
+    var valueType = typeof value;
+    if (valueType === 'string') {
+      return value.length > MAX_LISTENING_INLINE_STRING_LENGTH
+        ? value.slice(0, MAX_LISTENING_INLINE_STRING_LENGTH)
+        : value;
+    }
+    if (valueType === 'number') return isFinite(value) ? value : undefined;
+    if (valueType === 'boolean') return value;
+    if (Array.isArray(value)) {
+      var list = [];
+      var arrayLength = Math.min(value.length, MAX_LISTENING_INLINE_ARRAY_LENGTH);
+      for (var ai = 0; ai < arrayLength; ai++) {
+        var itemDescriptor = Object.getOwnPropertyDescriptor(value, String(ai));
+        if (!itemDescriptor || !Object.prototype.hasOwnProperty.call(itemDescriptor, 'value')) continue;
+        var itemValue = sanitizeListeningInlineValue(itemDescriptor.value, depth + 1, state);
+        if (itemValue !== undefined) list.push(itemValue);
+      }
+      return list;
+    }
+    if (valueType !== 'object' || !isPlainListeningInlineObject(value)) return undefined;
+
+    var output = Object.create(null);
+    var keys = Object.keys(value);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var key = String(keys[ki] || '');
+      if (!key || key.length > MAX_LISTENING_INLINE_KEY_LENGTH || isUnsafeListeningInlineKey(key)) continue;
+      var descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) continue;
+      var safeValue = sanitizeListeningInlineValue(descriptor.value, depth + 1, state);
+      if (safeValue !== undefined) output[key] = safeValue;
+    }
+    return output;
   }
 
   function readInlineAnswerConfig(doc) {
@@ -499,9 +557,9 @@
         var config = parseObjectLiteral(text, configMatch.index + configMatch[0].length, 'inline CONFIG');
         if (config && (config.answerKey || config.answers)) {
           return {
-            answerKey: config.answerKey || null,
-            answers: config.answers || null,
-            questionList: config.questionList || config.questionIds || config.questions || config.qs || []
+            answerKey: sanitizeListeningInlineValue(config.answerKey, 0, { nodes: 0 }) || null,
+            answers: sanitizeListeningInlineValue(config.answers, 0, { nodes: 0 }) || null,
+            questionList: sanitizeListeningInlineValue(config.questionList || config.questionIds || config.questions || config.qs || [], 0, { nodes: 0 }) || []
           };
         }
       }
@@ -525,7 +583,11 @@
       }
     } catch (e) {}
     if (answerKey) {
-      return { answerKey: answerKey, answers: null, questionList: questionList || [] };
+      return {
+        answerKey: sanitizeListeningInlineValue(answerKey, 0, { nodes: 0 }) || null,
+        answers: null,
+        questionList: sanitizeListeningInlineValue(questionList || [], 0, { nodes: 0 }) || []
+      };
     }
 
     for (var ai = 0; ai < scripts.length; ai++) {
@@ -539,12 +601,12 @@
       var akIndex = text.search(/\banswerKey\s*:/);
       if (akIndex >= 0) {
         var ak = parseObjectLiteral(text, akIndex + 'answerKey:'.length, 'inline answerKey');
-        if (ak) return { answerKey: ak, answers: null, questionList: [] };
+        if (ak) return { answerKey: sanitizeListeningInlineValue(ak, 0, { nodes: 0 }) || null, answers: null, questionList: [] };
       }
       var ansIndex = text.search(/\banswers\s*:/);
       if (ansIndex >= 0) {
         var ans = parseObjectLiteral(text, ansIndex + 'answers:'.length, 'inline answers');
-        if (ans) return { answerKey: null, answers: ans, questionList: [] };
+        if (ans) return { answerKey: null, answers: sanitizeListeningInlineValue(ans, 0, { nodes: 0 }) || null, questionList: [] };
       }
     }
 
@@ -702,8 +764,9 @@
   function buildDetailsFromAppState(win) {
     var app = win && win.App;
     var config = app && app.config;
-    var answerKey = config && config.answerKey;
-    var questionList = Array.isArray(config && config.questionList) ? config.questionList : [];
+    var answerKey = sanitizeListeningInlineValue(config && config.answerKey, 0, { nodes: 0 }) || null;
+    var questionList = sanitizeListeningInlineValue(config && config.questionList, 0, { nodes: 0 }) || [];
+    questionList = Array.isArray(questionList) ? questionList : [];
     if (!answerKey || !questionList.length) return [];
     var doc = win.document;
 

@@ -364,6 +364,10 @@ assert(
     listeningRecordBridgeSource.includes('function parseGeneratedResultsHtml') &&
     listeningRecordBridgeSource.includes('MAX_LISTENING_RESULT_HTML_LENGTH = 2 * 1024 * 1024') &&
     listeningRecordBridgeSource.includes('MAX_LISTENING_INLINE_OBJECT_LENGTH = 256 * 1024') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_INLINE_KEY_LENGTH = 160') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_INLINE_VALUE_DEPTH = 8') &&
+    listeningRecordBridgeSource.includes('MAX_LISTENING_INLINE_VALUE_NODES = 5000') &&
+    listeningRecordBridgeSource.includes('LISTENING_INLINE_UNSAFE_KEYS') &&
     listeningRecordBridgeSource.includes('MAX_LISTENING_EXAM_ID_LENGTH = 120') &&
     listeningRecordBridgeSource.includes('MAX_LISTENING_SESSION_ID_LENGTH = 160') &&
     listeningRecordBridgeSource.includes('MAX_LISTENING_URL_SOURCE_LENGTH = 2048') &&
@@ -373,6 +377,8 @@ assert(
     listeningRecordBridgeSource.includes('html.length > MAX_LISTENING_RESULT_HTML_LENGTH') &&
     listeningRecordBridgeSource.includes('source.length > MAX_LISTENING_INLINE_OBJECT_LENGTH') &&
     listeningRecordBridgeSource.includes('json.length > MAX_LISTENING_INLINE_OBJECT_LENGTH') &&
+    listeningRecordBridgeSource.includes('function sanitizeListeningInlineValue') &&
+    listeningRecordBridgeSource.includes('sanitizeListeningInlineValue(JSON.parse(json), 0, { nodes: 0 })') &&
     listeningRecordBridgeSource.includes('new URL(window.location.href)') &&
     listeningRecordBridgeSource.includes("currentUrl.searchParams.get('examId')") &&
     listeningRecordBridgeSource.includes("currentUrl.searchParams.get('src')") &&
@@ -477,9 +483,11 @@ assert(
     hpPortalSource.includes('function createHpImportSanitizeState') &&
     hpPortalSource.includes('function sanitizeHpImportValue') &&
     hpPortalSource.includes('function sanitizeHpImportList') &&
+    hpPortalSource.includes('function assertHpImportTextSize') &&
     hpPortalSource.includes("return '[Circular]'") &&
     hpPortalSource.includes("return '[Truncated]'") &&
     hpPortalSource.includes('validateHpJsonFile(file)') &&
+    hpPortalSource.includes('assertHpImportTextSize(rawContent)') &&
     hpPortalSource.includes('exams: sanitizeHpImportList(exams)') &&
     hpPortalSource.includes('records: sanitizeHpImportList(records)') &&
     hpPortalSource.includes('exams: sanitizeHpImportList(hpCore.getExamIndex() || [])') &&
@@ -600,12 +608,18 @@ assert(
 const miniGamesSource = fs.readFileSync(path.join(repoRoot, 'js/presentation/miniGames.js'), 'utf8');
 assert(
     miniGamesSource.includes('MAX_VOCAB_SPARK_LEXICON_JSON_BYTES = 2 * 1024 * 1024') &&
+    miniGamesSource.includes('MAX_VOCAB_SPARK_LEXICON_ENTRIES = 5000') &&
+    miniGamesSource.includes('MAX_VOCAB_SPARK_WORD_TEXT_LENGTH = 120') &&
+    miniGamesSource.includes('MAX_VOCAB_SPARK_MEANING_TEXT_LENGTH = 500') &&
     miniGamesSource.includes('function parseVocabSparkLexiconJson(text)') &&
+    miniGamesSource.includes('function truncateMiniGameText(value, maxLength)') &&
     miniGamesSource.includes('contentLength > MAX_VOCAB_SPARK_LEXICON_JSON_BYTES') &&
     miniGamesSource.includes("typeof response.text !== 'function'") &&
     miniGamesSource.includes('parseVocabSparkLexiconJson(await response.text())') &&
+    miniGamesSource.includes('payload.slice(0, MAX_VOCAB_SPARK_LEXICON_ENTRIES).map(normalizeVocabEntry).filter(Boolean)') &&
+    miniGamesSource.includes('lexicon.slice(0, MAX_VOCAB_SPARK_LEXICON_ENTRIES)') &&
     !miniGamesSource.includes('await response.json()'),
-    'vocab mini game lexicon fetches must size-check fetched JSON before parsing'
+    'vocab mini game lexicon fetches must size-check fetched JSON before parsing and bound normalized entries'
 );
 
 const practiceRecordModalSource = fs.readFileSync(path.join(repoRoot, 'js/components/practiceRecordModal.js'), 'utf8');
@@ -854,8 +868,12 @@ assert(
     onboardingTourSource.includes('_appendTextElement(parent, tagName, className, text)') &&
     onboardingTourSource.includes('_createActionButton(action, text, modifierClass)') &&
     onboardingTourSource.includes('this._tooltip.replaceChildren(progress, title, content, actions)') &&
-    onboardingTourSource.includes('this._tooltip.replaceChildren(welcome)'),
-    'onboarding tooltip content must be built with DOM APIs'
+    onboardingTourSource.includes('this._tooltip.replaceChildren(welcome)') &&
+    onboardingTourSource.includes('MAX_ONBOARDING_STEPS = 100') &&
+    onboardingTourSource.includes('MAX_ONBOARDING_SELECTOR_LENGTH = 240') &&
+    onboardingTourSource.includes('function normalizeOnboardingSteps') &&
+    onboardingTourSource.includes('this._steps = normalizeOnboardingSteps(steps, DEFAULT_STEPS)'),
+    'onboarding tooltip content must be built with DOM APIs and custom steps must be bounded before use'
 );
 assert(
     !onboardingTourSource.includes('this._tooltip.innerHTML = `') &&

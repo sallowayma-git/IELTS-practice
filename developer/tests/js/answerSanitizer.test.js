@@ -22,6 +22,13 @@ describe('AnswerSanitizer.normalizeValue', () => {
     assert.strictEqual(sanitizer.normalizeValue({}), '');
     assert.strictEqual(sanitizer.normalizeValue('[object Object]'), '');
   });
+
+  it('bounds oversized answer text without leaving split surrogate pairs', () => {
+    const value = `${'a'.repeat(3999)}\uD83D\uDE00tail`;
+    const normalized = sanitizer.normalizeValue(value);
+    assert.strictEqual(normalized, 'a'.repeat(3999));
+    assert(!/[\uD800-\uDFFF]$/.test(normalized));
+  });
 });
 
 describe('AnswerSanitizer.sanitizeComparisonMap', () => {
@@ -58,6 +65,47 @@ describe('AnswerSanitizer.sanitizeComparisonMap', () => {
       acceptedAnswers: ['accommodation', 'lodging'],
       canonicalAnswer: 'accommodation'
     });
+  });
+
+  it('drops prototype-polluting comparison keys', () => {
+    const polluted = JSON.parse(`{
+      "__proto__": { "userAnswer": "polluted", "correctAnswer": "polluted" },
+      "constructor": { "userAnswer": "ctor", "correctAnswer": "ctor" },
+      "prototype": { "userAnswer": "proto", "correctAnswer": "proto" },
+      "q1": { "questionId": "__proto__", "userAnswer": "A", "correctAnswer": "A", "isCorrect": true }
+    }`);
+
+    const result = sanitizer.sanitizeComparisonMap(polluted);
+
+    assert.strictEqual(Object.getPrototypeOf(result), null);
+    assert.strictEqual(Object.prototype.polluted, undefined);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(result, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(result, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(result, 'prototype'), false);
+    assert.deepStrictEqual(result.q1, {
+      questionId: 'q1',
+      userAnswer: 'A',
+      correctAnswer: 'A',
+      isCorrect: true
+    });
+  });
+
+  it('bounds oversized comparison maps and accepted answer lists', () => {
+    const entries = {};
+    for (let index = 0; index < 1100; index += 1) {
+      entries[`q${index}`] = {
+        userAnswer: 'A',
+        correctAnswer: 'A',
+        acceptedAnswers: Array.from({ length: 250 }, (_, item) => `answer-${item}`)
+      };
+    }
+
+    const result = sanitizer.sanitizeComparisonMap(entries);
+
+    assert.strictEqual(Object.keys(result).length, 1000);
+    assert.strictEqual(result.q0.acceptedAnswers.length, 200);
+    assert.strictEqual(result.q999.correctAnswer, 'A');
+    assert.strictEqual(result.q1000, undefined);
   });
 });
 

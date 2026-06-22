@@ -9,6 +9,9 @@
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
     const BASE_PREFIX_CONTROL_RE = /[\u0000-\u001f\u007f<>"'`]/;
     const RESOURCE_PATH_CONTROL_RE = /[\u0000-\u001f\u007f<>"'`]/;
+    const PATH_MAP_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_PATH_MAP_EXCEPTION_KEY_LENGTH = 160;
+    const MAX_PATH_MAP_EXCEPTIONS = 500;
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
             root: '睡着过项目组/2. 所有文章(11.20)[192篇]/',
@@ -95,15 +98,63 @@
         return /^exam_index_[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/.test(key) ? key : '';
     }
 
+    function normalizePathMapExceptionKey(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        const key = value.trim();
+        if (
+            !key
+            || key.length > MAX_PATH_MAP_EXCEPTION_KEY_LENGTH
+            || PATH_MAP_UNSAFE_KEYS.has(key)
+            || RESOURCE_PATH_CONTROL_RE.test(key)
+        ) {
+            return '';
+        }
+        return key;
+    }
+
+    function normalizePathMapExceptionValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return normalizeResourceRelativePath(value);
+    }
+
+    function normalizePathMapExceptions(exceptions) {
+        if (!exceptions || typeof exceptions !== 'object') {
+            return {};
+        }
+        const safe = {};
+        let copied = 0;
+        let keys;
+        try {
+            keys = Object.keys(exceptions);
+        } catch (_) {
+            return safe;
+        }
+        for (let index = 0; index < keys.length && copied < MAX_PATH_MAP_EXCEPTIONS; index += 1) {
+            const key = normalizePathMapExceptionKey(keys[index]);
+            if (!key) {
+                continue;
+            }
+            const value = normalizePathMapExceptionValue(exceptions[key]);
+            if (!value) {
+                continue;
+            }
+            safe[key] = value;
+            copied += 1;
+        }
+        return safe;
+    }
+
     function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
         const source = map && typeof map === 'object' ? map : fallback;
         const cloneCategory = (category) => {
             const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
             return {
                 root: typeof segment.root === 'string' ? segment.root : '',
-                exceptions: segment.exceptions && typeof segment.exceptions === 'object'
-                    ? Object.assign({}, segment.exceptions)
-                    : {}
+                exceptions: normalizePathMapExceptions(segment.exceptions)
             };
         };
         return {
@@ -175,10 +226,10 @@
             base.listening.root = normalizePathRoot(incoming.listening.root);
         }
         if (Object.keys(incoming.reading.exceptions).length) {
-            base.reading.exceptions = Object.assign({}, incoming.reading.exceptions);
+            base.reading.exceptions = normalizePathMapExceptions(incoming.reading.exceptions);
         }
         if (Object.keys(incoming.listening.exceptions).length) {
-            base.listening.exceptions = Object.assign({}, incoming.listening.exceptions);
+            base.listening.exceptions = normalizePathMapExceptions(incoming.listening.exceptions);
         }
         return base;
     }
@@ -784,6 +835,7 @@
         PATH_FALLBACK_ORDER,
         clonePathMap,
         normalizePathRoot,
+        normalizePathMapExceptions,
         mergeRootWithFallback,
         buildOverridePathMap,
         derivePathMapFromIndex,

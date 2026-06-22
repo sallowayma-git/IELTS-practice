@@ -475,13 +475,40 @@
 
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
+    var MAX_FALLBACK_MESSAGE_TEXT_LENGTH = 500;
+    var FALLBACK_MESSAGE_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
+    var FALLBACK_MESSAGE_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
+
     var normalizeFallbackMessageType = function (type) {
       var value = String(type || '').trim().toLowerCase();
       return ['info', 'success', 'warning', 'error'].indexOf(value) !== -1 ? value : 'info';
     };
+
+    var truncateFallbackMessageText = function (text) {
+      if (text.length <= MAX_FALLBACK_MESSAGE_TEXT_LENGTH) {
+        return text;
+      }
+      var truncated = text.slice(0, MAX_FALLBACK_MESSAGE_TEXT_LENGTH - 3);
+      if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+      }
+      return truncated + '...';
+    };
+
+    var normalizeFallbackMessageText = function (message) {
+      var normalized = String(message == null ? '' : message)
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .replace(FALLBACK_MESSAGE_SECRET_QUERY_PATTERN, '$1[hidden]')
+        .replace(FALLBACK_MESSAGE_SECRET_VALUE_PATTERN, '$1=[hidden]')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return truncateFallbackMessageText(normalized);
+    };
+
     window.showMessage = function (message, type, duration) {
       try {
         var safeType = normalizeFallbackMessageType(type);
+        var safeMessage = normalizeFallbackMessageText(message);
         var container = document.getElementById('message-container');
         if (!container) {
           container = document.createElement('div');
@@ -501,8 +528,8 @@
 
         var text = document.createElement('span');
         text.className = 'message-text';
-        text.textContent = message || '';
-        note.title = text.textContent;
+        text.textContent = safeMessage;
+        note.title = safeMessage;
 
         note.appendChild(indicator);
         note.appendChild(text);

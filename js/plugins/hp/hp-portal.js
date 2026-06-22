@@ -129,6 +129,24 @@
     }
   }
 
+  function getHpImportTextByteLength(value) {
+    const text = String(value == null ? '' : value);
+    if (typeof TextEncoder === 'function') {
+      try {
+        return new TextEncoder().encode(text).byteLength;
+      } catch (_) {
+        // fall through to string length in older or restricted runtimes
+      }
+    }
+    return text.length;
+  }
+
+  function assertHpImportTextSize(content) {
+    if (getHpImportTextByteLength(content) > MAX_HP_IMPORT_FILE_BYTES) {
+      throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+  }
+
   function isPlainObject(value) {
     return Object.prototype.toString.call(value) === '[object Object]';
   }
@@ -228,8 +246,20 @@
       return null;
     }
     const sanitized = {};
-    Object.entries(value).slice(0, MAX_HP_IMPORT_OBJECT_KEYS).forEach(([key, item]) => {
+    let keys;
+    try {
+      keys = Object.keys(value);
+    } catch (_) {
+      return sanitized;
+    }
+    keys.slice(0, MAX_HP_IMPORT_OBJECT_KEYS).forEach((key) => {
       if (HP_IMPORT_POLLUTION_KEYS.has(String(key))) {
+        return;
+      }
+      let item;
+      try {
+        item = value[key];
+      } catch (_) {
         return;
       }
       sanitized[key] = sanitizeHpImportValue(item, depth + 1, sanitizeState);
@@ -898,7 +928,9 @@
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const parsed = JSON.parse(String(reader.result || '{}'));
+          const rawContent = String(reader.result || '{}');
+          assertHpImportTextSize(rawContent);
+          const parsed = JSON.parse(rawContent);
           this.applyImportedData(parsed);
         } catch (error) {
           hpCore.showMessage('Import failed. Please retry.', 'error');

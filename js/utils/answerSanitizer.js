@@ -1,11 +1,38 @@
 (function (global) {
     'use strict';
 
+    var ANSWER_MAP_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    var MAX_ANSWER_MAP_KEY_LENGTH = 160;
+    var MAX_ANSWER_MAP_ENTRIES = 1000;
+    var MAX_NORMALIZED_ANSWER_TEXT_LENGTH = 4000;
+    var MAX_NORMALIZED_ANSWER_LIST_ITEMS = 200;
+
     function toStringSafe(value) {
         if (value === null || value === undefined) {
             return '';
         }
         return String(value);
+    }
+
+    function truncateAnswerText(value) {
+        var text = String(value == null ? '' : value);
+        if (text.length <= MAX_NORMALIZED_ANSWER_TEXT_LENGTH) {
+            return text;
+        }
+        var truncated = text.slice(0, MAX_NORMALIZED_ANSWER_TEXT_LENGTH);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            truncated = truncated.slice(0, -1);
+        }
+        return truncated;
+    }
+
+    function createSafeAnswerMap() {
+        return Object.create(null);
+    }
+
+    function isUnsafeAnswerMapKey(key) {
+        var text = String(key || '');
+        return !text || text.length > MAX_ANSWER_MAP_KEY_LENGTH || ANSWER_MAP_UNSAFE_KEYS.has(text);
     }
 
     function normalizeFromObject(object) {
@@ -51,7 +78,7 @@
             return '';
         }
         if (typeof value === 'string') {
-            var trimmed = value.trim();
+            var trimmed = truncateAnswerText(value.trim());
             if (/^\[object\s/i.test(trimmed)) {
                 return '';
             }
@@ -61,16 +88,17 @@
             return value ? 'True' : 'False';
         }
         if (typeof value === 'number') {
-            return toStringSafe(value).trim();
+            return truncateAnswerText(toStringSafe(value).trim());
         }
         if (Array.isArray(value)) {
             var normalizedArray = value
+                .slice(0, MAX_NORMALIZED_ANSWER_LIST_ITEMS)
                 .map(function (item) { return normalizeValue(item); })
                 .filter(function (item) { return item !== null && item !== undefined && item !== ''; })
                 .join(', ');
             return normalizedArray.trim();
         }
-        return normalizeFromObject(value).replace(/^\[object\s[^\]]+\]$/i, '').trim();
+        return truncateAnswerText(normalizeFromObject(value).replace(/^\[object\s[^\]]+\]$/i, '').trim());
     }
 
     function hasMeaningfulValue(value) {
@@ -86,7 +114,7 @@
     }
 
     function normalizeValueList(value) {
-        var values = Array.isArray(value) ? value : (value === null || value === undefined ? [] : [value]);
+        var values = Array.isArray(value) ? value.slice(0, MAX_NORMALIZED_ANSWER_LIST_ITEMS) : (value === null || value === undefined ? [] : [value]);
         var normalized = [];
         values.forEach(function (item) {
             var text = normalizeValue(item);
@@ -102,10 +130,13 @@
 
     function sanitizeComparisonMap(comparisonMap) {
         if (!comparisonMap || typeof comparisonMap !== 'object') {
-            return {};
+            return createSafeAnswerMap();
         }
-        var sanitized = {};
-        Object.keys(comparisonMap).forEach(function (key) {
+        var sanitized = createSafeAnswerMap();
+        Object.keys(comparisonMap).slice(0, MAX_ANSWER_MAP_ENTRIES).forEach(function (key) {
+            if (isUnsafeAnswerMapKey(key)) {
+                return;
+            }
             var entry = comparisonMap[key];
             if (!entry || typeof entry !== 'object') {
                 return;
@@ -118,7 +149,7 @@
                 return;
             }
             sanitized[key] = {
-                questionId: entry.questionId || key,
+                questionId: isUnsafeAnswerMapKey(entry.questionId) ? key : (entry.questionId || key),
                 userAnswer: normalizedUser,
                 correctAnswer: normalizedCorrect,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null

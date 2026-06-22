@@ -31,6 +31,9 @@
     var vocabSparkInputBound = false;
     var vocabSparkDeck = [];
     var MAX_VOCAB_SPARK_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
+    var MAX_VOCAB_SPARK_LEXICON_ENTRIES = 5000;
+    var MAX_VOCAB_SPARK_WORD_TEXT_LENGTH = 120;
+    var MAX_VOCAB_SPARK_MEANING_TEXT_LENGTH = 500;
 
     function getMiniGameTextByteLength(text) {
         var source = String(text == null ? '' : text);
@@ -69,6 +72,21 @@
             throw new Error('Vocab spark lexicon is too large.');
         }
         return JSON.parse(source);
+    }
+
+    function truncateMiniGameText(value, maxLength) {
+        var text = String(value == null ? '' : value)
+            .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (text.length <= maxLength) {
+            return text;
+        }
+        var truncated = text.slice(0, maxLength);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            truncated = truncated.slice(0, -1);
+        }
+        return truncated;
     }
 
     function summarizeMiniGamesErrorForLog(error) {
@@ -112,8 +130,12 @@
         if (!entry || typeof entry !== 'object') {
             return null;
         }
-        var word = typeof entry.word === 'string' ? entry.word.trim() : '';
-        var meaning = typeof entry.meaning === 'string' ? entry.meaning.trim() : '';
+        var word = typeof entry.word === 'string'
+            ? truncateMiniGameText(entry.word, MAX_VOCAB_SPARK_WORD_TEXT_LENGTH)
+            : '';
+        var meaning = typeof entry.meaning === 'string'
+            ? truncateMiniGameText(entry.meaning, MAX_VOCAB_SPARK_MEANING_TEXT_LENGTH)
+            : '';
         if (!word || !meaning) {
             return null;
         }
@@ -174,7 +196,7 @@
                 }
                 var payload = parseVocabSparkLexiconJson(await response.text());
                 var normalized = Array.isArray(payload)
-                    ? payload.map(normalizeVocabEntry).filter(Boolean)
+                    ? payload.slice(0, MAX_VOCAB_SPARK_LEXICON_ENTRIES).map(normalizeVocabEntry).filter(Boolean)
                     : [];
 
                 if (!normalized.length) {
@@ -211,8 +233,9 @@
         if (!Array.isArray(lexicon) || !lexicon.length) {
             return [];
         }
+        var boundedLexicon = lexicon.slice(0, MAX_VOCAB_SPARK_LEXICON_ENTRIES);
 
-        var total = Math.min(Math.max(1, desiredCount), lexicon.length);
+        var total = Math.min(Math.max(1, desiredCount), boundedLexicon.length);
 
         if (!Array.isArray(vocabSparkDeck)) {
             vocabSparkDeck = [];
@@ -221,7 +244,7 @@
         var normalizeKey = function (entry) { return String(entry.word || '').toLowerCase(); };
 
         var ensureDeck = function () {
-            var base = shuffleArray(lexicon);
+            var base = shuffleArray(boundedLexicon);
             vocabSparkDeck = base.slice();
         };
 
@@ -251,7 +274,7 @@
         }
 
         if (vocabSparkDeck.length < total) {
-            var filler = shuffleArray(lexicon);
+            var filler = shuffleArray(boundedLexicon);
             for (var j = 0; j < filler.length && vocabSparkDeck.length < total; j += 1) {
                 vocabSparkDeck.push(filler[j]);
             }

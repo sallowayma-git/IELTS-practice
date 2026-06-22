@@ -19,6 +19,8 @@ const localStorageState = new Map();
 let currentExams = [];
 let currentRecords = [];
 let oversizedParseCalls = 0;
+let fakeImportFileText = '{}';
+let fileReaderReadCount = 0;
 const hpCore = {
     ready() {},
     getExamIndex() {
@@ -66,6 +68,15 @@ const context = {
     sessionStorage: {
         getItem() { return null; },
         removeItem() {}
+    },
+    FileReader: class FileReader {
+        readAsText() {
+            fileReaderReadCount += 1;
+            this.result = fakeImportFileText;
+            if (typeof this.onload === 'function') {
+                this.onload({ target: this });
+            }
+        }
     },
     URL,
     URLSearchParams
@@ -160,6 +171,28 @@ assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0].metadata, 'constructor'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.practiceRecords[0].realData, 'prototype'), false);
 
+emitted.length = 0;
+const hostileExam = { id: 'runtime-safe' };
+Object.defineProperty(hostileExam, 'title', {
+    enumerable: true,
+    get() {
+        throw new Error('bad title getter');
+    }
+});
+const hostileProxy = new Proxy({}, {
+    ownKeys() {
+        throw new Error('bad ownKeys');
+    }
+});
+context.window.__hpPortalTest.applyImportedData({
+    examIndex: [hostileExam, hostileProxy],
+    practiceRecords: []
+});
+assert.equal(emitted.length, 1);
+assert.equal(emitted[0].payload.examIndex[0].id, 'runtime-safe');
+assert.equal(Object.prototype.hasOwnProperty.call(emitted[0].payload.examIndex[0], 'title'), false);
+assert.deepStrictEqual(Object.keys(emitted[0].payload.examIndex[1]), []);
+
 const circularExam = JSON.parse(`{
   "id": "backup-circular-exam",
   "__proto__": { "polluted": true },
@@ -233,6 +266,23 @@ const oversizedBackups = context.window.__hpPortalTest.readBackups();
 assert(Array.isArray(oversizedBackups));
 assert.equal(oversizedBackups.length, 0);
 assert.equal(oversizedParseCalls, 0, 'oversized backup storage should be rejected before JSON.parse');
+
+oversizedParseCalls = 0;
+emitted.length = 0;
+messages.length = 0;
+fileReaderReadCount = 0;
+fakeImportFileText = '{"padding":"' + 'x'.repeat((10 * 1024 * 1024) + 1) + '"}';
+context.window.__hpPortalTest.dom.importInput = { value: 'selected' };
+context.window.__hpPortalTest.handleImportChange({
+    target: {
+        files: [{ name: 'small.json', size: 12, type: 'application/json' }]
+    }
+});
+assert.equal(fileReaderReadCount, 1, 'small declared files should still be read once');
+assert.equal(oversizedParseCalls, 0, 'oversized FileReader results should be rejected before JSON.parse');
+assert.equal(emitted.length, 0, 'oversized FileReader results must not be imported');
+assert.equal(context.window.__hpPortalTest.dom.importInput.value, '');
+assert(messages.some((entry) => entry.level === 'error'), 'oversized FileReader results should show an import error');
 
 console.log(JSON.stringify({
     status: 'pass',

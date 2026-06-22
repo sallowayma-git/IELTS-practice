@@ -27,28 +27,50 @@ const messageCenterSource = readSource('js/presentation/message-center.js');
 assert(
     messageCenterSource.includes('function normalizeMessageType') &&
     messageCenterSource.includes("['info', 'success', 'warning', 'error'].includes(value)") &&
+    messageCenterSource.includes('const MAX_MESSAGE_TEXT_LENGTH = 500') &&
+    messageCenterSource.includes('MESSAGE_SECRET_QUERY_PATTERN') &&
+    messageCenterSource.includes('MESSAGE_SECRET_VALUE_PATTERN') &&
+    messageCenterSource.includes('function normalizeMessageText(message)') &&
     messageCenterSource.includes("const safeType = normalizeMessageType(type)") &&
+    messageCenterSource.includes('const safeMessage = normalizeMessageText(message)') &&
     messageCenterSource.includes("note.className = 'message ' + safeType + ' message-entering'") &&
-    messageCenterSource.includes('text.textContent = String(message || \'\')'),
-    'message center must render message text safely and normalize toast type classes'
+    messageCenterSource.includes('text.textContent = safeMessage') &&
+    messageCenterSource.includes('note.title = safeMessage') &&
+    messageCenterSource.includes('console[logMethod](\'[Message:\' + safeType + \']\', normalizeMessageText(message))'),
+    'message center must normalize toast type classes and redact/clamp user-facing message text'
 );
 assert(
     !messageCenterSource.includes("note.className = 'message ' + (type || 'info') + ' message-entering'"),
     'message center must not interpolate raw toast type into className'
+);
+assert(
+    !messageCenterSource.includes('text.textContent = String(message || \'\')') &&
+    !messageCenterSource.includes('console[logMethod](\'[Message:\' + safeType + \']\', message)'),
+    'message center must not render or log raw message text'
 );
 
 const bootFallbacksSource = readSource('js/boot-fallbacks.js');
 assertExtendedUrlAttributes(bootFallbacksSource, 'boot fallback DOM helper');
 assert(
     bootFallbacksSource.includes('normalizeFallbackMessageType') &&
+    bootFallbacksSource.includes('var MAX_FALLBACK_MESSAGE_TEXT_LENGTH = 500') &&
+    bootFallbacksSource.includes('FALLBACK_MESSAGE_SECRET_QUERY_PATTERN') &&
+    bootFallbacksSource.includes('FALLBACK_MESSAGE_SECRET_VALUE_PATTERN') &&
+    bootFallbacksSource.includes('var normalizeFallbackMessageText = function (message)') &&
     bootFallbacksSource.includes('var safeType = normalizeFallbackMessageType(type)') &&
+    bootFallbacksSource.includes('var safeMessage = normalizeFallbackMessageText(message)') &&
     bootFallbacksSource.includes("note.className = 'message ' + safeType + ' message-entering'") &&
-    bootFallbacksSource.includes("text.textContent = message || ''"),
-    'fallback message renderer must normalize toast type classes and use textContent'
+    bootFallbacksSource.includes('text.textContent = safeMessage') &&
+    bootFallbacksSource.includes('note.title = safeMessage'),
+    'fallback message renderer must normalize toast type classes and redact/clamp user-facing message text'
 );
 assert(
     !bootFallbacksSource.includes("note.className = 'message ' + (type || 'info') + ' message-entering'"),
     'fallback message renderer must not interpolate raw toast type into className'
+);
+assert(
+    !bootFallbacksSource.includes("text.textContent = message || ''"),
+    'fallback message renderer must not render raw message text'
 );
 assert(
     bootFallbacksSource.includes('function isFallbackUnsafeAttributeName') &&

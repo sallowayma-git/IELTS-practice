@@ -218,6 +218,55 @@ function testUnsafePathMapRootsAreIgnored(ResourceCore) {
     });
 }
 
+function testPathMapExceptionsAreSanitized(ResourceCore) {
+    const pollutedExceptions = JSON.parse(`{
+        "safe-exam": "Safe/Folder/index.html",
+        "__proto__": { "pollutedResourceCore": true },
+        "constructor": { "prototype": { "pollutedResourceCore": true } },
+        "unsafe-url": "https://attacker.example/paper.html",
+        "unsafe-parent": "../private/paper.html",
+        "unsafe-query": "Safe/Folder/index.html?token=secret"
+    }`);
+    const map = {
+        reading: {
+            root: 'ReadingCustom/',
+            exceptions: pollutedExceptions
+        },
+        listening: {
+            root: 'ListeningCustom/',
+            exceptions: {
+                'listen-safe': 'Listening/Set/audio.html',
+                prototype: 'Listening/Set/prototype.html'
+            }
+        }
+    };
+
+    const cloned = ResourceCore.clonePathMap(map);
+    assert.strictEqual(Object.prototype.pollutedResourceCore, undefined, 'path map clone must not pollute Object.prototype');
+    assert.strictEqual(cloned.reading.exceptions.pollutedResourceCore, undefined, 'reading exceptions must not inherit attacker prototype properties');
+    assert.strictEqual(cloned.listening.exceptions.pollutedResourceCore, undefined, 'listening exceptions must not inherit attacker prototype properties');
+    assert.deepStrictEqual(Object.keys(cloned.reading.exceptions), ['safe-exam']);
+    assert.strictEqual(cloned.reading.exceptions['safe-exam'], 'Safe/Folder/index.html');
+    assert.deepStrictEqual(Object.keys(cloned.listening.exceptions), ['listen-safe']);
+    assert.strictEqual(cloned.listening.exceptions['listen-safe'], 'Listening/Set/audio.html');
+
+    const active = ResourceCore.setActivePathMap(map);
+    assert.strictEqual(active.reading.exceptions.pollutedResourceCore, undefined, 'active reading exceptions must not inherit attacker prototype properties');
+    assert.strictEqual(active.listening.exceptions.pollutedResourceCore, undefined, 'active listening exceptions must not inherit attacker prototype properties');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(active.reading.exceptions, '__proto__'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(active.reading.exceptions, 'constructor'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(active.listening.exceptions, 'prototype'), false);
+    assert.deepStrictEqual(Object.keys(active.reading.exceptions), ['safe-exam']);
+    assert.strictEqual(active.reading.exceptions['safe-exam'], 'Safe/Folder/index.html');
+    assert.deepStrictEqual(Object.keys(active.listening.exceptions), ['listen-safe']);
+    assert.strictEqual(active.listening.exceptions['listen-safe'], 'Listening/Set/audio.html');
+
+    recordResult('ResourceCore sanitizes path map exceptions', true, {
+        reading: active.reading.exceptions,
+        listening: active.listening.exceptions
+    });
+}
+
 function testExplicitEmptyRootDoesNotFallback(ResourceCore) {
     ResourceCore.setBasePrefix('./');
     ResourceCore.setActivePathMap({
@@ -309,6 +358,7 @@ async function main() {
         testMappedRootStillPrependsRelativePaths(ResourceCore);
         testDefaultRootStillWorks(ResourceCore);
         testUnsafePathMapRootsAreIgnored(ResourceCore);
+        testPathMapExceptionsAreSanitized(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
         await testDeletePathMapForConfiguration(context, ResourceCore);

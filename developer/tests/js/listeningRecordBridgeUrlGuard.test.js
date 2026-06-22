@@ -34,11 +34,17 @@ function loadBridge(href, options = {}) {
         referrer: '',
         body: {},
         documentElement: {},
-        scripts: [],
-        querySelectorAll() {
+        scripts: options.scripts || [],
+        querySelectorAll(selector) {
+            if (typeof options.querySelectorAll === 'function') {
+                return options.querySelectorAll(selector);
+            }
             return [];
         },
-        querySelector() {
+        querySelector(selector) {
+            if (typeof options.querySelector === 'function') {
+                return options.querySelector(selector);
+            }
             return null;
         },
         addEventListener() {},
@@ -69,6 +75,7 @@ function loadBridge(href, options = {}) {
         },
         Date,
         JSON,
+        Object,
         setTimeout() {
             return 1;
         },
@@ -158,6 +165,56 @@ assert.strictEqual(
     bridge.window.__listeningBridgeGetState().suiteSessionId,
     null,
     'unsafe INIT_SESSION suiteSessionId values should be rejected'
+);
+
+bridge = loadBridge('http://localhost:3000/ListeningPractice/P1/index.html?examId=listening-p1', {
+    withParent: true,
+    scripts: [{
+        src: '',
+        textContent: `
+            var CONFIG = {
+                answerKey: {
+                    text: {
+                        q1: 'Alpha',
+                        __proto__: { polluted: true },
+                        constructor: 'Unsafe'
+                    },
+                    prototype: { q2: 'Unsafe' }
+                },
+                answers: {
+                    constructor: 'Unsafe'
+                }
+            };
+        `
+    }],
+    querySelectorAll(selector) {
+        if (selector === '[name="q1"]') {
+            return [{ type: 'text', value: 'Alpha' }];
+        }
+        return [];
+    }
+});
+assert.strictEqual(
+    bridge.window.__listeningBridgeComplete({ allowGenerated: true }),
+    true,
+    'safe inline Listening config entries should still be accepted'
+);
+const completeMessage = bridge.parentWindow.messages.find(({ message }) => message && message.type === 'PRACTICE_COMPLETE');
+assert(completeMessage, 'unsafe inline config must not block safe completion payloads');
+assert.deepStrictEqual(
+    Object.keys(completeMessage.message.data.answers),
+    ['q1'],
+    'unsafe inline config keys must not enter answer maps'
+);
+assert.strictEqual(
+    completeMessage.message.data.answers.constructor,
+    undefined,
+    'unsafe constructor answers must be removed before payload creation'
+);
+assert.strictEqual(
+    Object.prototype.polluted,
+    undefined,
+    'inline config parsing must not pollute Object.prototype'
 );
 
 console.log('listeningRecordBridgeUrlGuard.test.js passed');
