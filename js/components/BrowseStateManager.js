@@ -65,9 +65,18 @@ function normalizeBrowseText(value, maxLength = BROWSE_STATE_MAX_TEXT_LENGTH) {
     }
     const text = String(value)
         .replace(/[\u0000-\u001F\u007F]+/g, ' ')
-        .trim()
-        .slice(0, maxLength);
-    return text || null;
+        .trim();
+    if (!text) {
+        return null;
+    }
+    if (text.length <= maxLength) {
+        return text;
+    }
+    const truncated = text.slice(0, maxLength);
+    const safeText = /[\uD800-\uDBFF]$/.test(truncated)
+        ? truncated.slice(0, -1)
+        : truncated;
+    return safeText || null;
 }
 
 function normalizeBrowseEnum(value, allowed, fallback) {

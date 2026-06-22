@@ -247,6 +247,41 @@ async function testVocabStoreCapsImportedWordPayloads() {
     assert.strictEqual(queue[0].length, 200, 'review queue ids must be truncated');
 }
 
+async function testVocabStoreTruncatesTextAtUnicodeBoundaries() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {}
+    });
+
+    await vocabStore.init();
+    await vocabStore.setWords([{
+        id: `${'i'.repeat(199)}\uD83D\uDE00tail`,
+        word: `${'w'.repeat(159)}\uD83D\uDE00tail`,
+        meaning: `${'m'.repeat(3999)}\uD83D\uDE00tail`,
+        note: `${'n'.repeat(3999)}\uD83D\uDE00tail`,
+        source: `${'s'.repeat(199)}\uD83D\uDE00tail`,
+        acceptedAnswers: [`${'a'.repeat(999)}\uD83D\uDE00tail`]
+    }]);
+    const [word] = vocabStore.getWords();
+    assert.strictEqual(word.id, 'i'.repeat(199));
+    assert.strictEqual(word.word, 'w'.repeat(159));
+    assert.strictEqual(word.meaning, 'm'.repeat(3999));
+    assert.strictEqual(word.note, 'n'.repeat(3999));
+    assert.strictEqual(word.source, 's'.repeat(199));
+    assert.strictEqual(word.acceptedAnswers[0], 'a'.repeat(999));
+    assert.strictEqual(/[\uD800-\uDFFF]/.test([
+        word.id,
+        word.word,
+        word.meaning,
+        word.note,
+        word.source,
+        word.acceptedAnswers[0]
+    ].join('')), false);
+
+    await vocabStore.setReviewQueue([`${'q'.repeat(199)}\uD83D\uDE00tail`]);
+    assert.strictEqual(vocabStore.getReviewQueue()[0], 'q'.repeat(199));
+}
+
 async function testVocabStoreRejectsOversizedLocalStorageBeforeParsing() {
     let oversizedParsed = false;
     const vocabStore = loadVocabStore({
@@ -407,6 +442,8 @@ async function main() {
         results.push({ name: '背诵更新保留错词业务元数据', status: 'pass' });
         await testVocabStoreCapsImportedWordPayloads();
         results.push({ name: '词库存储限制异常导入负载', status: 'pass' });
+        await testVocabStoreTruncatesTextAtUnicodeBoundaries();
+        results.push({ name: 'vocab store truncates text at valid Unicode boundaries', status: 'pass' });
         await testVocabStoreRejectsOversizedLocalStorageBeforeParsing();
         results.push({ name: 'vocab store rejects oversized localStorage before parsing', status: 'pass' });
         await testVocabStoreDropsUnsafeExtraMetadataKeys();

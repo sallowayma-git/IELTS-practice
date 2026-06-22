@@ -1906,10 +1906,16 @@ class DataBackupManager {
         if (value === undefined || value === null) {
             return '';
         }
-        return String(value)
+        const text = String(value)
             .replace(/[\u0000-\u001F\u007F]+/g, ' ')
-            .trim()
-            .slice(0, maxLength);
+            .trim();
+        if (text.length <= maxLength) {
+            return text;
+        }
+        const truncated = text.slice(0, maxLength);
+        return /[\uD800-\uDBFF]$/.test(truncated)
+            ? truncated.slice(0, -1)
+            : truncated;
     }
 
     cloneSafeValue(value, options = {}, depth = 0, seen = null) {

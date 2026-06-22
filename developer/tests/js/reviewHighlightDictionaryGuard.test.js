@@ -140,3 +140,36 @@ test('review highlight fallback rejects oversized storage before parsing', () =>
     assert.equal(savedEnvelope.data.words.length, 1);
     assert.equal(savedEnvelope.data.words[0].word, 'bounded');
 });
+
+test('review highlight fallback truncates saved text at valid Unicode boundaries', () => {
+    const { api, context } = loadReviewHighlightDictionary();
+    context.localStorage = createLocalStorage();
+
+    const saved = api._test.writeFallbackVocab({
+        word: `${'w'.repeat(159)}\uD83D\uDE00tail`,
+        meaning: `${'m'.repeat(3999)}\uD83D\uDE00tail`,
+        example: `${'e'.repeat(3999)}\uD83D\uDE00tail`,
+        phonetic: `${'p'.repeat(199)}\uD83D\uDE00tail`,
+        partOfSpeech: `${'s'.repeat(199)}\uD83D\uDE00tail`,
+        selectedText: `${'x'.repeat(159)}\uD83D\uDE00tail`,
+        sourceLabel: `${'l'.repeat(199)}\uD83D\uDE00tail`
+    });
+
+    assert.equal(saved, true);
+    const savedEnvelope = JSON.parse(context.localStorage.getItem(api.storageKey));
+    const [word] = savedEnvelope.data.words;
+
+    assert.equal(word.word, 'w'.repeat(159));
+    assert.equal(word.meaning, 'm'.repeat(3999));
+    assert.equal(word.example, 'e'.repeat(3999));
+    assert.equal(word.note.includes('p'.repeat(199)), true);
+    assert.equal(word.note.includes('s'.repeat(199)), true);
+    assert.equal(word.note.includes('x'.repeat(159)), true);
+    assert.equal(word.note.includes('l'.repeat(199)), true);
+    assert.equal(/[\uD800-\uDFFF]/.test([
+        word.word,
+        word.meaning,
+        word.example,
+        word.note
+    ].join('')), false);
+});

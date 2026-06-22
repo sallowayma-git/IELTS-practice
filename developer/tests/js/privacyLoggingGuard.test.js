@@ -276,8 +276,13 @@ test('frontend console logs do not expose practice session identifiers or payloa
 
     const examSessionMixin = readSource('js/app/examSessionMixin.js');
     assert(
-        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|sessionError|recorderError|monitorError|loadError|restoreError)\s*\)/.test(examSessionMixin),
+        !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|sessionError|recorderError|monitorError|loadError|restoreError|navigationError|openError)\s*\)/.test(examSessionMixin),
         'exam session mixin must summarize errors before logging them'
+    );
+    assert(
+        examSessionMixin.includes("summarizeExamSessionErrorForLog(navigationError)")
+        && examSessionMixin.includes("summarizeExamSessionErrorForLog(openError)"),
+        'exam session mixin must summarize placeholder navigation and reopen errors before logging them'
     );
     assert(
         !/catch\(console\.warn\)/.test(examSessionMixin),
@@ -286,6 +291,20 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/Practice session error:',\s*error\b/.test(examSessionMixin),
         'exam session mixin must not log raw practice session errors'
+    );
+    assert(
+        examSessionMixin.includes('MAX_EXAM_ERROR_MESSAGE_LENGTH = 240')
+        && examSessionMixin.includes('function sanitizeExamErrorMessageForUser(value)')
+        && examSessionMixin.includes('EXAM_ERROR_SECRET_QUERY_PATTERN')
+        && examSessionMixin.includes('EXAM_ERROR_SECRET_VALUE_PATTERN')
+        && examSessionMixin.includes('const safeErrorMessage = sanitizeExamErrorMessageForUser(')
+        && examSessionMixin.includes('window.showMessage(`题目出现错误: ${safeErrorMessage}`, \'error\')'),
+        'exam session mixin must sanitize, redact, and bound practice-page error messages before showing them'
+    );
+    assert(
+        !/showMessage\(`题目出现错误: \$\{errorData\.message/.test(examSessionMixin)
+        && !/Exam error:',\s*errorData\.message/.test(examSessionMixin),
+        'exam session mixin must not show or log raw practice-page errorData.message'
     );
 
     const suitePracticeMixin = readSource('js/app/suitePracticeMixin.js');
@@ -657,6 +676,13 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !practiceEnhancer.includes("console.log('交互记录:', window.practicePageEnhancer.interactions)"),
         'practice enhancer debug output must summarize interactions instead of logging them'
+    );
+    assert(
+        practiceEnhancer.includes('return summarizeAnswerMapForLog(window.practicePageEnhancer.answers);') &&
+        practiceEnhancer.includes('return summarizeAnswerMapForLog(window.practicePageEnhancer.correctAnswers);') &&
+        !practiceEnhancer.includes('return window.practicePageEnhancer.answers;') &&
+        !practiceEnhancer.includes('return window.practicePageEnhancer.correctAnswers;'),
+        'practice enhancer global debug helpers must not return raw answer maps'
     );
     assert(
         !practiceEnhancer.includes('keys: keys.slice')

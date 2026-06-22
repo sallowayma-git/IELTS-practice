@@ -321,55 +321,80 @@ class PracticeHistoryEnhancer {
      */
     showExportDialog() {
         document.getElementById('export-dialog')?.remove();
-        const dialogHtml = `
-            <div id="export-dialog" class="modal-overlay">
-                <div class="modal-container" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3 class="modal-title">导出练习记录</h3>
-                        <button class="modal-close" type="button" data-action="export-dialog-close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+        const createNode = (tagName, className, text) => {
+            const node = document.createElement(tagName);
+            if (className) {
+                node.className = className;
+            }
+            if (text != null) {
+                node.textContent = String(text);
+            }
+            return node;
+        };
+        const createActionButton = (className, action, text, iconClass) => {
+            const button = createNode('button', className);
+            button.type = 'button';
+            button.dataset.action = action;
+            if (iconClass) {
+                button.appendChild(createNode('i', iconClass));
+                button.appendChild(document.createTextNode(' '));
+            }
+            if (text) {
+                button.appendChild(document.createTextNode(text));
+            }
+            return button;
+        };
+        const createFormatOption = ({ value, title, description, checked = false }) => {
+            const label = createNode('label', 'format-option');
+            const input = createNode('input');
+            input.type = 'radio';
+            input.name = 'export-format';
+            input.value = value;
+            input.checked = checked;
+            const content = createNode('div', 'option-content');
+            content.appendChild(createNode('strong', null, title));
+            content.appendChild(createNode('p', null, description));
+            label.appendChild(input);
+            label.appendChild(content);
+            return label;
+        };
 
-                    <div class="modal-body">
-                        <div class="export-options">
-                            <h4>选择导出格式：</h4>
-                            <div class="format-options">
-                                <label class="format-option">
-                                    <input type="radio" name="export-format" value="json" checked>
-                                    <div class="option-content">
-                                        <strong>JSON 格式</strong>
-                                        <p>完整的数据格式，可用于备份和导入</p>
-                                    </div>
-                                </label>
-                                <label class="format-option">
-                                    <input type="radio" name="export-format" value="markdown">
-                                    <div class="option-content">
-                                        <strong>Markdown 格式</strong>
-                                        <p>易读的文档格式，包含详细的答题表格</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+        const dialog = createNode('div', 'modal-overlay');
+        dialog.id = 'export-dialog';
+        const container = createNode('div', 'modal-container');
+        container.style.maxWidth = '500px';
 
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" type="button" data-action="export-dialog-close">
-                            取消
-                        </button>
-                        <button class="btn btn-primary" type="button" data-action="export-dialog-submit">
-                            <i class="fas fa-download"></i> 导出
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
+        const header = createNode('div', 'modal-header');
+        header.appendChild(createNode('h3', 'modal-title', '导出练习记录'));
+        header.appendChild(createActionButton('modal-close', 'export-dialog-close', '', 'fas fa-times'));
+        container.appendChild(header);
 
-        document.body.insertAdjacentHTML('beforeend', dialogHtml);
-        const dialog = document.getElementById('export-dialog');
-        if (!dialog) {
-            return;
-        }
+        const body = createNode('div', 'modal-body');
+        const options = createNode('div', 'export-options');
+        options.appendChild(createNode('h4', null, '选择导出格式：'));
+        const formatOptions = createNode('div', 'format-options');
+        formatOptions.appendChild(createFormatOption({
+            value: 'json',
+            title: 'JSON 格式',
+            description: '完整的数据格式，可用于备份和导入',
+            checked: true
+        }));
+        formatOptions.appendChild(createFormatOption({
+            value: 'markdown',
+            title: 'Markdown 格式',
+            description: '易读的文档格式，包含详细的答题表格'
+        }));
+        options.appendChild(formatOptions);
+        body.appendChild(options);
+        container.appendChild(body);
+
+        const footer = createNode('div', 'modal-footer');
+        footer.appendChild(createActionButton('btn btn-secondary', 'export-dialog-close', '取消'));
+        footer.appendChild(createActionButton('btn btn-primary', 'export-dialog-submit', '导出', 'fas fa-download'));
+        container.appendChild(footer);
+
+        dialog.appendChild(container);
+        document.body.appendChild(dialog);
         dialog.addEventListener('click', (event) => {
             const trigger = event.target instanceof HTMLElement
                 ? event.target.closest('[data-action]')

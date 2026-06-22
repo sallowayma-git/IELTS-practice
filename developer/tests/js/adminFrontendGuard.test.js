@@ -142,6 +142,16 @@ assert.equal(typeof hooks.sanitizeStatusMessage, 'function');
     assert(sanitized.includes('csrfToken=[redacted]'));
 }
 
+{
+    const statusBoundary = hooks.sanitizeStatusMessage(`${'s'.repeat(236)}\uD83D\uDE00tail`);
+    assert.equal(statusBoundary, `${'s'.repeat(236)}...`);
+    assert(!/[\uD800-\uDFFF]/.test(statusBoundary), 'truncated admin status text must not retain unmatched surrogate halves');
+
+    const payloadBoundary = hooks.safeStringifyRecordPayload(`${'p'.repeat(19984)}\uD83D\uDE00tail${'q'.repeat(100)}`);
+    assert(payloadBoundary.endsWith('\n... truncated'));
+    assert(!/[\uD800-\uDFFF]/.test(payloadBoundary), 'truncated record payload text must not retain unmatched surrogate halves');
+}
+
 const first = hooks.confirmAction({
     title: 'Delete old',
     message: 'First confirm',
@@ -172,6 +182,12 @@ assert(
     source.includes('confirmAction') &&
     source.includes('closeConfirm'),
     'admin confirm dialog must cancel any previous unresolved confirmation before opening a new one'
+);
+assert(
+    source.includes('function truncateAdminText') &&
+    source.includes("truncateAdminText(normalized, MAX_ADMIN_STATUS_CHARS, '...')") &&
+    source.includes("truncateAdminText(text, MAX_RECORD_DETAIL_PAYLOAD_CHARS, '\\n... truncated')"),
+    'admin UI must use Unicode-safe truncation for status and record detail text'
 );
 
 {

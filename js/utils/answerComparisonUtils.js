@@ -33,6 +33,9 @@
         /duration/i,
         /config/i
     ];
+    const MAX_SAFE_CLONE_DEPTH = 8;
+    const MAX_SAFE_CLONE_KEYS = 1000;
+    const MAX_SAFE_CLONE_ARRAY_ITEMS = 1000;
 
     function isUnsafeMetadataKey(key) {
         return ANSWER_METADATA_POLLUTION_KEYS.has(String(key));
@@ -47,17 +50,47 @@
         return strKey && !isUnsafeMetadataKey(strKey) ? strKey : '';
     }
 
-    function cloneSafeObject(value) {
-        const clone = {};
-        if (!value || typeof value !== 'object') {
-            return clone;
+    function cloneSafeValue(value, depth = 0, seen = new WeakSet()) {
+        if (value == null || typeof value !== 'object') {
+            return value;
         }
-        Object.keys(value).forEach((key) => {
-            if (!isUnsafeMetadataKey(key)) {
-                clone[key] = value[key];
+        if (depth > MAX_SAFE_CLONE_DEPTH) {
+            return undefined;
+        }
+        if (seen.has(value)) {
+            return undefined;
+        }
+
+        seen.add(value);
+        if (Array.isArray(value)) {
+            const items = value
+                .slice(0, MAX_SAFE_CLONE_ARRAY_ITEMS)
+                .map((item) => cloneSafeValue(item, depth + 1, seen))
+                .filter((item) => item !== undefined);
+            seen.delete(value);
+            return items;
+        }
+
+        const clone = {};
+        Object.keys(value).slice(0, MAX_SAFE_CLONE_KEYS).forEach((key) => {
+            if (isUnsafeMetadataKey(key)) {
+                return;
+            }
+            const cloned = cloneSafeValue(value[key], depth + 1, seen);
+            if (cloned !== undefined) {
+                clone[key] = cloned;
             }
         });
+        seen.delete(value);
         return clone;
+    }
+
+    function cloneSafeObject(value) {
+        if (!value || typeof value !== 'object') {
+            return {};
+        }
+        const clone = cloneSafeValue(value);
+        return clone && typeof clone === 'object' && !Array.isArray(clone) ? clone : {};
     }
     const NO_ANSWER_MARKERS = new Set([
         'no answer',

@@ -196,6 +196,56 @@ function testModalMapsAreBounded() {
     assert.equal(normalized.q1000, undefined);
 }
 
+function createFakeElement(tagName, attributes = []) {
+    const node = {
+        tagName,
+        attributes: attributes.map(([name, value]) => ({ name, value })),
+        children: [],
+        removed: false,
+        querySelectorAll() {
+            return this.children;
+        },
+        removeAttribute(name) {
+            this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
+        },
+        remove() {
+            this.removed = true;
+        }
+    };
+    return node;
+}
+
+function testModalElementSanitizerDropsExecutableMarkup() {
+    const modal = createModal();
+    const root = createFakeElement('div', [
+        ['class', 'modal-overlay'],
+        ['onclick', 'alert(1)'],
+        ['style', 'background:url(javascript:alert(1))']
+    ]);
+    const link = createFakeElement('a', [
+        ['href', 'java\u0000script:alert(1)'],
+        ['data-action', 'safe']
+    ]);
+    const image = createFakeElement('img', [
+        ['src', 'data:image/png;base64,AAAA'],
+        ['onerror', 'alert(1)']
+    ]);
+    const frame = createFakeElement('iframe', [
+        ['srcdoc', '<script>alert(1)</script>']
+    ]);
+    root.children.push(link, image, frame);
+
+    modal.sanitizeModalElement(root);
+
+    assert(!root.attributes.some((attribute) => attribute.name === 'onclick'));
+    assert(!root.attributes.some((attribute) => attribute.name === 'style'));
+    assert(!link.attributes.some((attribute) => attribute.name === 'href'));
+    assert(link.attributes.some((attribute) => attribute.name === 'data-action'));
+    assert(image.attributes.some((attribute) => attribute.name === 'src'));
+    assert(!image.attributes.some((attribute) => attribute.name === 'onerror'));
+    assert.equal(frame.removed, true);
+}
+
 testMultiSuiteMetadataIsEscaped();
 testSummaryCountsAreNumericOnly();
 testNormalizedEntriesAreBoundedAndTruncated();
@@ -203,6 +253,7 @@ testCircularLegacyComparisonDoesNotBreakModal();
 testDeepNestedAnswerValuesAreBounded();
 testUnsafeMapKeysAreIgnored();
 testModalMapsAreBounded();
+testModalElementSanitizerDropsExecutableMarkup();
 console.log(JSON.stringify({
     status: 'pass',
     detail: 'practice record modal escaping tests passed'

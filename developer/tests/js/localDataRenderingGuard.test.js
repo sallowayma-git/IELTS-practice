@@ -106,16 +106,38 @@ assert(
     'achievement unlocked state must strip unsafe keys and unknown IDs before use or persistence'
 );
 
+const answerComparisonUtilsSource = fs.readFileSync(path.join(repoRoot, 'js/utils/answerComparisonUtils.js'), 'utf8');
+assert(
+    answerComparisonUtilsSource.includes("ANSWER_METADATA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor'])") &&
+    answerComparisonUtilsSource.includes('MAX_SAFE_CLONE_DEPTH = 8') &&
+    answerComparisonUtilsSource.includes('MAX_SAFE_CLONE_KEYS = 1000') &&
+    answerComparisonUtilsSource.includes('MAX_SAFE_CLONE_ARRAY_ITEMS = 1000') &&
+    answerComparisonUtilsSource.includes('function cloneSafeValue(value, depth = 0, seen = new WeakSet())') &&
+    answerComparisonUtilsSource.includes('if (seen.has(value))') &&
+    answerComparisonUtilsSource.includes('Object.keys(value).slice(0, MAX_SAFE_CLONE_KEYS)') &&
+    answerComparisonUtilsSource.includes('if (isUnsafeMetadataKey(key))') &&
+    answerComparisonUtilsSource.includes('const cloned = cloneSafeValue(value[key], depth + 1, seen)'),
+    'answer comparison metadata enrichment must deep-clone records while stripping nested prototype-pollution keys'
+);
+
 const practiceHistoryEnhancerSource = fs.readFileSync(path.join(repoRoot, 'js/components/practiceHistoryEnhancer.js'), 'utf8');
 assert(
     !practiceHistoryEnhancerSource.includes('onclick="'),
     'practice history export dialog must not use inline onclick handlers'
 );
 assert(
-    practiceHistoryEnhancerSource.includes('data-action="export-dialog-close"') &&
-    practiceHistoryEnhancerSource.includes('data-action="export-dialog-submit"') &&
+    practiceHistoryEnhancerSource.includes('const createNode = (tagName, className, text) =>') &&
+    practiceHistoryEnhancerSource.includes('node.textContent = String(text)') &&
+    practiceHistoryEnhancerSource.includes('const createActionButton = (className, action, text, iconClass) =>') &&
+    practiceHistoryEnhancerSource.includes('button.dataset.action = action') &&
+    practiceHistoryEnhancerSource.includes('document.body.appendChild(dialog)') &&
     practiceHistoryEnhancerSource.includes("dialog.addEventListener('click'"),
     'practice history export dialog actions must be delegated through event listeners'
+);
+assert(
+    !practiceHistoryEnhancerSource.includes('document.body.insertAdjacentHTML') &&
+    !practiceHistoryEnhancerSource.includes('const dialogHtml = `'),
+    'practice history export dialog must construct DOM nodes instead of injecting an HTML template'
 );
 assert(
     practiceHistoryEnhancerSource.includes('setTimeout(() => URL.revokeObjectURL(url), 0)'),
@@ -611,6 +633,18 @@ assert(
     practiceRecordModalSource.includes('this.truncateAnswer(rawCorrectAnswer, MAX_MODAL_ANSWER_TEXT_LENGTH)'),
     'practice record modal must cap rendered answer rows/text and safely clone imported comparison data'
 );
+assert(
+    practiceRecordModalSource.includes('createModalElement(record)') &&
+    practiceRecordModalSource.includes('template.innerHTML = this.createModalHtml(record).trim()') &&
+    practiceRecordModalSource.includes('this.sanitizeModalElement(modalElement)') &&
+    practiceRecordModalSource.includes('document.body.appendChild(modalElement)') &&
+    practiceRecordModalSource.includes("const blockedTags = new Set(['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base'])") &&
+    practiceRecordModalSource.includes("name.startsWith('on')") &&
+    practiceRecordModalSource.includes("name === 'srcdoc'") &&
+    practiceRecordModalSource.includes('isUnsafeModalUrlAttribute(name, value)') &&
+    !practiceRecordModalSource.includes("document.body.insertAdjacentHTML('beforeend', modalHtml)"),
+    'practice record modal must sanitize parsed modal markup before appending it to the document'
+);
 
 const markdownExporterSource = fs.readFileSync(path.join(repoRoot, 'js/utils/markdownExporter.js'), 'utf8');
 assert(
@@ -618,7 +652,11 @@ assert(
     markdownExporterSource.includes('escapeMarkdownText(value, maxLength = 200)') &&
     markdownExporterSource.includes(".replace(/</g, '&lt;')") &&
     markdownExporterSource.includes('const displayTitle = this.escapeMarkdownText(this.normalizeTitle(') &&
-    markdownExporterSource.includes('return this.escapeMarkdownText(text, 100);'),
+    markdownExporterSource.includes('return this.escapeMarkdownText(text, 100);') &&
+    markdownExporterSource.includes("style.id = 'export-progress-style'") &&
+    markdownExporterSource.includes("progressText.textContent = '正在准备导出...'") &&
+    markdownExporterSource.includes('document.body.append(overlay, style)') &&
+    !markdownExporterSource.includes('document.body.insertAdjacentHTML'),
     'markdown exports must delay object URL revocation and escape user-controlled markdown/HTML text'
 );
 
@@ -637,6 +675,16 @@ assert(
     examActionsSource.includes('JSON.stringify(safeRecords, null, 2)') &&
     !examActionsSource.includes('JSON.stringify(records, null, 2)'),
     'exam actions fallback exports must safely clone, cap, and strip unsafe record data before JSON.stringify'
+);
+assert(
+    examActionsSource.includes('function createCustomSuiteElement(tagName, className, textContent)') &&
+    examActionsSource.includes('function appendCustomSuiteRow(parent, row, includeDelete)') &&
+    examActionsSource.includes('node.textContent = String(textContent)') &&
+    examActionsSource.includes("deleteButton.dataset.action = 'suite-custom-delete'") &&
+    examActionsSource.includes("footer.appendChild(createCustomSuiteFooterButton('确认开始'") &&
+    !examActionsSource.includes('portal.innerHTML = [') &&
+    !examActionsSource.includes('const rowMarkup = (row, includeDelete) =>'),
+    'custom suite selection portal must render dynamic rows with DOM APIs instead of innerHTML templates'
 );
 
 assert(

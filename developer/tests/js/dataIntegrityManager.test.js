@@ -174,6 +174,35 @@ try {
     assert.equal(Object.prototype.hasOwnProperty.call(prepared[0].realData, 'constructor'), false);
     assert.equal(Object.prototype.polluted, undefined);
 
+    const unicodePrepared = guardManager._preparePracticeRecords([{
+        id: `${'i'.repeat(511)}\uD83D\uDE00tail`,
+        sessionId: `${'s'.repeat(511)}\uD83D\uDE00tail`,
+        examId: `${'e'.repeat(511)}\uD83D\uDE00tail`,
+        title: `${'t'.repeat(499)}\uD83D\uDE00tail`,
+        type: `${'p'.repeat(63)}\uD83D\uDE00tail`,
+        extraField: `${'x'.repeat(3999)}\uD83D\uDE00tail`,
+        realData: {
+            note: `${'n'.repeat(3999)}\uD83D\uDE00tail`
+        }
+    }]);
+    assert.equal(unicodePrepared.length, 1);
+    assert.equal(unicodePrepared[0].id, 'i'.repeat(511));
+    assert.equal(unicodePrepared[0].sessionId, 's'.repeat(511));
+    assert.equal(unicodePrepared[0].examId, 'e'.repeat(511));
+    assert.equal(unicodePrepared[0].title, 't'.repeat(499));
+    assert.equal(unicodePrepared[0].type, 'p'.repeat(63));
+    assert.equal(unicodePrepared[0].extraField, 'x'.repeat(3999));
+    assert.equal(unicodePrepared[0].realData.note, 'n'.repeat(3999));
+    assert.equal(/[\uD800-\uDFFF]/.test([
+        unicodePrepared[0].id,
+        unicodePrepared[0].sessionId,
+        unicodePrepared[0].examId,
+        unicodePrepared[0].title,
+        unicodePrepared[0].type,
+        unicodePrepared[0].extraField,
+        unicodePrepared[0].realData.note
+    ].join('')), false);
+
     const numericPrepared = guardManager._preparePracticeRecords([{
         id: 'numeric-record',
         date: 1e100,

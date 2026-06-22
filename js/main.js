@@ -588,18 +588,27 @@ const MAX_FALLBACK_ANSWER_OBJECT_KEYS = 25;
 const MAX_FALLBACK_ANSWER_DEPTH = 4;
 const FALLBACK_ANSWER_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+function truncateFallbackTextAtLength(text, maxLength, suffix = '') {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    let truncated = text.slice(0, maxLength);
+    if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+    }
+    return `${truncated}${suffix}`;
+}
+
 function truncateFallbackAnswerText(value) {
     const text = String(value == null ? '' : value)
         .replace(/[\u0000-\u001F\u007F]+/g, ' ')
         .trim();
-    return text.length > MAX_FALLBACK_ANSWER_TEXT_LENGTH
-        ? `${text.slice(0, MAX_FALLBACK_ANSWER_TEXT_LENGTH)}...`
-        : text;
+    return truncateFallbackTextAtLength(text, MAX_FALLBACK_ANSWER_TEXT_LENGTH, '...');
 }
 
 function normalizeFallbackAnswerKey(value, fallback = '', options = {}) {
     const prefixNonQuestion = options.prefixNonQuestion === true;
-    let key = truncateFallbackAnswerText(value).slice(0, MAX_FALLBACK_ANSWER_KEY_LENGTH);
+    let key = truncateFallbackTextAtLength(truncateFallbackAnswerText(value), MAX_FALLBACK_ANSWER_KEY_LENGTH);
     if (!key) {
         key = fallback;
     }
@@ -608,6 +617,7 @@ function normalizeFallbackAnswerKey(value, fallback = '', options = {}) {
     }
     if (prefixNonQuestion && !key.startsWith('q')) {
         key = `q${key}`;
+        key = truncateFallbackTextAtLength(key, MAX_FALLBACK_ANSWER_KEY_LENGTH);
     }
     if (FALLBACK_ANSWER_POLLUTION_KEYS.has(key)) {
         return fallback && !FALLBACK_ANSWER_POLLUTION_KEYS.has(fallback) ? fallback : '';
@@ -986,8 +996,8 @@ function normalizeFallbackAnswerValue(value, depth = 0, state = { seen: new Weak
             .slice(0, MAX_FALLBACK_ANSWER_ARRAY_ITEMS)
             .map((item) => normalizeFallbackAnswerValue(item, depth + 1, state))
             .filter(Boolean)
-            .join(', ')
-            .slice(0, MAX_FALLBACK_ANSWER_TEXT_LENGTH);
+            .join(', ');
+        return truncateFallbackAnswerText(normalizedItems);
     }
     if (typeof value === 'object') {
         if (state.seen.has(value)) {

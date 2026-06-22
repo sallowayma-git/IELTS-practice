@@ -37,7 +37,14 @@
     }
 
     function cleanText(value, maxLength = MAX_EXTRA_TEXT_LENGTH) {
-        return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+        const text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (text.length <= maxLength) {
+            return text;
+        }
+        const truncated = text.slice(0, maxLength);
+        return /[\uD800-\uDBFF]$/.test(truncated)
+            ? truncated.slice(0, -1)
+            : truncated;
     }
 
     function hashText(value) {
@@ -693,17 +700,18 @@
         }
         const key = safeWord.toLowerCase();
         const existingIndex = list.words.findIndex((item) => String(item.word || '').trim().toLowerCase() === key);
+        const noteText = cleanText([
+            payload.phonetic ? `音标: ${cleanText(payload.phonetic, MAX_SOURCE_TEXT_LENGTH)}` : '',
+            payload.partOfSpeech ? `词性: ${cleanText(payload.partOfSpeech, MAX_SOURCE_TEXT_LENGTH)}` : '',
+            payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${cleanText(payload.selectedText, MAX_WORD_TEXT_LENGTH)}` : '',
+            payload.sourceLabel ? `来源: ${cleanText(payload.sourceLabel, MAX_SOURCE_TEXT_LENGTH)}` : ''
+        ].filter(Boolean).join('；'), MAX_MEANING_TEXT_LENGTH);
         const wordRecord = {
             id: buildHighlightId(safeWord),
             word: safeWord,
             meaning: cleanText(payload.meaning || payload.definition || '待补充释义', MAX_MEANING_TEXT_LENGTH),
             example: cleanText(payload.example || '', MAX_MEANING_TEXT_LENGTH),
-            note: [
-                payload.phonetic ? `音标: ${cleanText(payload.phonetic, MAX_SOURCE_TEXT_LENGTH)}` : '',
-                payload.partOfSpeech ? `词性: ${cleanText(payload.partOfSpeech, MAX_SOURCE_TEXT_LENGTH)}` : '',
-                payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${cleanText(payload.selectedText, MAX_WORD_TEXT_LENGTH)}` : '',
-                payload.sourceLabel ? `来源: ${cleanText(payload.sourceLabel, MAX_SOURCE_TEXT_LENGTH)}` : ''
-            ].filter(Boolean).join('；').slice(0, MAX_MEANING_TEXT_LENGTH),
+            note: noteText,
             timestamp: Date.now(),
             source: 'reading-highlight',
             easeFactor: null,

@@ -4727,13 +4727,13 @@
     window.collectAnswersNow = function () {
         console.log('[PracticeEnhancer] 手动触发答案收集');
         window.practicePageEnhancer.collectAllAnswers();
-        return window.practicePageEnhancer.answers;
+        return summarizeAnswerMapForLog(window.practicePageEnhancer.answers);
     };
 
     window.getCorrectAnswers = function () {
         console.log('[PracticeEnhancer] 获取正确答案');
         window.practicePageEnhancer.extractCorrectAnswers();
-        return window.practicePageEnhancer.correctAnswers;
+        return summarizeAnswerMapForLog(window.practicePageEnhancer.correctAnswers);
     };
 
     // 自动初始化

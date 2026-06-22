@@ -162,6 +162,27 @@ function createHarness(seed = {}, options = {}) {
 }
 
 {
+    const { GoalManager } = createHarness({
+        learning_goals: [
+            {
+                id: `${'g'.repeat(159)}\uD83D\uDE00tail`,
+                type: 'practice_count',
+                period: 'daily',
+                target: 1,
+                title: `${'t'.repeat(79)}\uD83D\uDE00tail`
+            }
+        ]
+    });
+    const manager = new GoalManager();
+    await manager._readyPromise;
+    const [goal] = manager.getGoals();
+    assert.equal(goal.id, 'g'.repeat(159), 'goal id truncation should not keep a dangling high surrogate');
+    assert.equal(goal.title, 't'.repeat(79), 'goal title truncation should not keep a dangling high surrogate');
+    assert.equal(/[\uD800-\uDFFF]/.test(goal.id), false);
+    assert.equal(/[\uD800-\uDFFF]/.test(goal.title), false);
+}
+
+{
     const today = new Date().toISOString().slice(0, 10);
     const progressPayload = JSON.parse(`{
       "${today}": {

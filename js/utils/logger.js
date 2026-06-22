@@ -150,12 +150,16 @@
         text = text.replace(/\\\\[^\\/\s"'<>]+\\[^\s"'<>]+/g, '[local-path]');
         text = text.replace(/[a-z2-7]{16,56}\.onion\b/gi, '[onion-host]');
         text = text.replace(
-            /([?&#](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|token|totp|totpToken)=)[^&#\s]+/gi,
+            /([?&#](?:access_token|api_key|apikey|auth|authorization|client_secret|code|csrf|csrfToken|id_token|otp|passcode|password|recoveryCode|recovery_code|refresh_token|secret|session|sessionId|sid|token|totp|totpSecret|totpToken|[A-Za-z0-9_.-]*(?:token|secret|password|session|recovery|otp|totp)[A-Za-z0-9_.-]*)=)[^&#\s]+/gi,
             '$1[redacted]'
         );
         text = text.replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '[redacted-auth]');
         if (text.length > MAX_LOG_STRING_LENGTH) {
-            return `${text.slice(0, MAX_LOG_STRING_LENGTH)}...[truncated]`;
+            let truncated = text.slice(0, MAX_LOG_STRING_LENGTH);
+            if (/[\uD800-\uDBFF]$/.test(truncated)) {
+                truncated = truncated.slice(0, -1);
+            }
+            return `${truncated}...[truncated]`;
         }
         return text;
     }

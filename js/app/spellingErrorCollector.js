@@ -252,7 +252,13 @@
             if (typeof value !== 'string') {
                 return value;
             }
-            return value.length > maxLength ? value.slice(0, maxLength) : value;
+            if (value.length <= maxLength) {
+                return value;
+            }
+            const truncated = value.slice(0, maxLength);
+            return /[\uD800-\uDBFF]$/.test(truncated)
+                ? truncated.slice(0, -1)
+                : truncated;
         }
 
         wordTimestamp(entry) {

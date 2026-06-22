@@ -253,6 +253,9 @@
             if (!this.fetchImpl) {
                 throw new RemoteApiError('Fetch API is not available');
             }
+            if (typeof path !== 'string' || !path.startsWith('/api/')) {
+                throw new RemoteApiError('Remote API path must be a same-origin /api/ path');
+            }
             const method = options.method || 'GET';
             const headers = Object.assign({}, options.headers || {});
             if (options.body !== undefined) {

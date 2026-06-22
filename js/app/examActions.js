@@ -697,6 +697,59 @@
         customSuitePortalPosition = null;
     }
 
+    function createCustomSuiteElement(tagName, className, textContent) {
+        const node = document.createElement(tagName);
+        if (className) {
+            node.className = className;
+        }
+        if (textContent != null) {
+            node.textContent = String(textContent);
+        }
+        return node;
+    }
+
+    function appendCustomSuiteRow(parent, row, includeDelete) {
+        const item = createCustomSuiteElement(
+            'div',
+            'suite-custom-selection__row' + (includeDelete ? ' suite-custom-selection__row--selected' : ' suite-custom-selection__row--pending')
+        );
+        const main = createCustomSuiteElement('div', 'suite-custom-selection__row-main');
+        main.appendChild(createCustomSuiteElement('span', 'suite-custom-selection__title', row.title));
+        main.appendChild(createCustomSuiteElement('span', 'suite-custom-selection__meta', row.category));
+        main.appendChild(createCustomSuiteElement('span', 'suite-custom-selection__meta', row.frequency));
+        item.appendChild(main);
+
+        if (includeDelete) {
+            const deleteButton = createCustomSuiteElement('button', 'suite-custom-selection__delete', '删除');
+            deleteButton.type = 'button';
+            deleteButton.dataset.action = 'suite-custom-delete';
+            deleteButton.dataset.category = String(row.category || '');
+            deleteButton.setAttribute('aria-label', '删除 ' + String(row.category || ''));
+            item.appendChild(deleteButton);
+        }
+
+        parent.appendChild(item);
+    }
+
+    function appendCustomSuiteGroupRows(group, rows, includeDelete, emptyText) {
+        if (!rows.length) {
+            group.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__empty', emptyText));
+            return;
+        }
+        rows.forEach((row) => appendCustomSuiteRow(group, row, includeDelete));
+    }
+
+    function createCustomSuiteFooterButton(label, modifierClass, action) {
+        const button = createCustomSuiteElement(
+            'button',
+            'suite-custom-selection__button ' + modifierClass,
+            label
+        );
+        button.type = 'button';
+        button.dataset.action = action;
+        return button;
+    }
+
     function renderCustomSuiteSelectionPortal() {
         const draft = getCustomSuiteDraft();
         if (!draft || draft.status === 'idle') {
@@ -738,61 +791,49 @@
                 frequency: '待选'
             }));
 
-        const rowMarkup = (row, includeDelete) => {
-            const deleteMarkup = includeDelete
-                ? '<button type="button" class="suite-custom-selection__delete" data-action="suite-custom-delete" data-category="' + escapeHtml(row.category) + '" aria-label="删除 ' + escapeHtml(row.category) + '">删除</button>'
-                : '';
-            return [
-                '<div class="suite-custom-selection__row' + (includeDelete ? ' suite-custom-selection__row--selected' : ' suite-custom-selection__row--pending') + '">',
-                '<div class="suite-custom-selection__row-main">',
-                '<span class="suite-custom-selection__title">' + escapeHtml(row.title) + '</span>',
-                '<span class="suite-custom-selection__meta">' + escapeHtml(row.category) + '</span>',
-                '<span class="suite-custom-selection__meta">' + escapeHtml(row.frequency) + '</span>',
-                '</div>',
-                deleteMarkup,
-                '</div>'
-            ].join('');
-        };
+        portal.textContent = '';
+        const backdrop = createCustomSuiteElement('div', 'suite-custom-selection__backdrop');
+        backdrop.setAttribute('aria-hidden', 'true');
 
-        const footerButtons = isReady
-            ? [
-                '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--primary" data-action="suite-custom-confirm">确认开始</button>',
-                '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--secondary" data-action="suite-custom-cancel">取消</button>'
-            ].join('')
-            : '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--secondary" data-action="suite-custom-cancel">取消</button>';
+        const panel = createCustomSuiteElement(
+            'section',
+            'suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock')
+        );
+        panel.setAttribute('aria-live', 'polite');
 
-        const selectedMarkup = selectedRows.length
-            ? selectedRows.map((row) => rowMarkup(row, true)).join('')
-            : '<div class="suite-custom-selection__empty">尚未选择题目</div>';
-        const pendingMarkup = pendingRows.length
-            ? pendingRows.map((row) => rowMarkup(row, false)).join('')
-            : '';
+        const header = createCustomSuiteElement('header', 'suite-custom-selection__header');
+        const heading = createCustomSuiteElement('div');
+        heading.appendChild(createCustomSuiteElement('p', 'suite-custom-selection__eyebrow', '套题自选'));
+        heading.appendChild(createCustomSuiteElement(
+            'h3',
+            'suite-custom-selection__title-main',
+            isReady ? '确认开始或取消' : '继续选择下一题型'
+        ));
+        header.appendChild(heading);
+        header.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__progress', selectedCount + ' / ' + categories.length));
+        panel.appendChild(header);
 
-        portal.innerHTML = [
-            '<div class="suite-custom-selection__backdrop" aria-hidden="true"></div>',
-            '<section class="suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock') + '" aria-live="polite">',
-            '<header class="suite-custom-selection__header">',
-            '<div>',
-            '<p class="suite-custom-selection__eyebrow">套题自选</p>',
-            '<h3 class="suite-custom-selection__title-main">' + (isReady ? '确认开始或取消' : '继续选择下一题型') + '</h3>',
-            '</div>',
-            '<div class="suite-custom-selection__progress">' + selectedCount + ' / ' + categories.length + '</div>',
-            '</header>',
-            '<div class="suite-custom-selection__body">',
-            '<div class="suite-custom-selection__group">',
-            '<div class="suite-custom-selection__group-title">已选</div>',
-            selectedMarkup,
-            '</div>',
-            '<div class="suite-custom-selection__group">',
-            '<div class="suite-custom-selection__group-title">待选</div>',
-            pendingMarkup || '<div class="suite-custom-selection__empty">暂无待选项</div>',
-            '</div>',
-            '</div>',
-            '<footer class="suite-custom-selection__footer">',
-            footerButtons,
-            '</footer>',
-            '</section>'
-        ].join('');
+        const body = createCustomSuiteElement('div', 'suite-custom-selection__body');
+        const selectedGroup = createCustomSuiteElement('div', 'suite-custom-selection__group');
+        selectedGroup.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__group-title', '已选'));
+        appendCustomSuiteGroupRows(selectedGroup, selectedRows, true, '尚未选择题目');
+        body.appendChild(selectedGroup);
+
+        const pendingGroup = createCustomSuiteElement('div', 'suite-custom-selection__group');
+        pendingGroup.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__group-title', '待选'));
+        appendCustomSuiteGroupRows(pendingGroup, pendingRows, false, '暂无待选项');
+        body.appendChild(pendingGroup);
+        panel.appendChild(body);
+
+        const footer = createCustomSuiteElement('footer', 'suite-custom-selection__footer');
+        if (isReady) {
+            footer.appendChild(createCustomSuiteFooterButton('确认开始', 'suite-custom-selection__button--primary', 'suite-custom-confirm'));
+        }
+        footer.appendChild(createCustomSuiteFooterButton('取消', 'suite-custom-selection__button--secondary', 'suite-custom-cancel'));
+        panel.appendChild(footer);
+
+        portal.appendChild(backdrop);
+        portal.appendChild(panel);
         setupCustomSuitePanelDrag(portal);
         applyCustomSuitePanelFloatingState(portal);
     }

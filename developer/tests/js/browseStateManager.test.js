@@ -136,9 +136,26 @@ assert(history.every((entry) => !Object.prototype.hasOwnProperty.call(entry, '__
 assert(history.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'constructor')));
 assert(history.some((entry) => String(entry.to || '').length <= 160));
 
+restored.setState({
+    searchQuery: `${'q'.repeat(299)}\uD83D\uDE00tail`,
+    currentFrequency: `${'f'.repeat(119)}\uD83D\uDE00tail`,
+    filters: {
+        frequency: `${'p'.repeat(119)}\uD83D\uDE00tail`
+    }
+});
+const unicodeState = restored.getState();
+assert.equal(unicodeState.searchQuery, 'q'.repeat(299));
+assert.equal(unicodeState.currentFrequency, 'f'.repeat(119));
+assert.equal(unicodeState.filters.frequency, 'p'.repeat(119));
+assert.equal(/[\uD800-\uDFFF]/.test([
+    unicodeState.searchQuery,
+    unicodeState.currentFrequency,
+    unicodeState.filters.frequency
+].join('')), false);
+
 const stateClone = restored.getState();
 stateClone.filters.frequency = 'mutated';
-assert.equal(restored.getState().filters.frequency, 'p1');
+assert.equal(restored.getState().filters.frequency, 'p'.repeat(119));
 
 restored.setBrowseFilter('reading-' + 'x'.repeat(500));
 assert(restored.getCurrentFilter().length <= 120);
@@ -152,6 +169,7 @@ const importedHistory = JSON.parse(`{
     ${Array.from({ length: 12 }, (_, index) => `{"action":"filter_change","to":"category-${index}","timestamp":${index}}`).join(',')},
     { "action": "filter_change", "to": "__proto__", "timestamp": 97 },
     { "action": "filter_change", "to": "constructor", "timestamp": 98 },
+    { "action": "filter_change", "to": "${'z'.repeat(159)}\uD83D\uDE00tail", "timestamp": 98 },
     { "__proto__": { "polluted": true }, "action": "filter_change", "to": "${'y'.repeat(500)}", "timestamp": 99, "extra": "drop" },
     { "constructor": { "prototype": { "polluted": true } }, "action": "navigate_to_browse", "filter": "all", "timestamp": 100 }
   ]
@@ -162,6 +180,8 @@ assert.equal(imported.length, 10);
 assert(imported.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'extra')));
 assert(imported.every((entry) => !Object.prototype.hasOwnProperty.call(entry, '__proto__')));
 assert(imported.every((entry) => !Object.prototype.hasOwnProperty.call(entry, 'constructor')));
+assert(imported.some((entry) => entry.to === 'z'.repeat(159)));
+assert.equal(/[\uD800-\uDFFF]/.test(imported.map((entry) => entry.to || entry.filter || '').join('')), false);
 assert.equal(Object.prototype.polluted, undefined);
 const importedStats = restored.getBrowseStats();
 assert.equal(Object.getPrototypeOf(importedStats.filterUsage), null);

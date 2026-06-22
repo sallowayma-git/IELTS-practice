@@ -597,6 +597,7 @@ function testVocabListSanitization() {
         "words": [{
             "word": "${'a'.repeat(220)}",
             "userInput": "${'b'.repeat(220)}",
+            "timestamp": 10000,
             "__proto__": { "wordPolluted": true },
             "metadata": {
                 "origin": "import",
@@ -624,6 +625,52 @@ function testVocabListSanitization() {
     assert(normalized.words.every((entry) => !entry.metadata || !Object.prototype.hasOwnProperty.call(entry.metadata, 'constructor')));
     assert(normalized.words.every((entry) => typeof entry.word !== 'string' || entry.word.length <= 160));
     assert(normalized.words.every((entry) => typeof entry.userInput !== 'string' || entry.userInput.length <= 160));
+
+    const boundedEntry = normalized.words.find((entry) => entry.timestamp === 10000);
+    assert(boundedEntry, 'expected overlong entry to remain after timestamp sort');
+    assert.strictEqual(boundedEntry.word, 'a'.repeat(160));
+    assert.strictEqual(boundedEntry.userInput, 'b'.repeat(160));
+
+    const unicodePayload = {
+        id: 'p1',
+        source: 'p1',
+        words: [{
+            word: `${'w'.repeat(159)}\uD83D\uDE00tail`,
+            userInput: `${'u'.repeat(159)}\uD83D\uDE00tail`,
+            questionId: `${'q'.repeat(3999)}\uD83D\uDE00tail`,
+            suiteId: `${'s'.repeat(3999)}\uD83D\uDE00tail`,
+            examId: `${'e'.repeat(3999)}\uD83D\uDE00tail`,
+            meaning: `${'m'.repeat(3999)}\uD83D\uDE00tail`,
+            example: `${'x'.repeat(3999)}\uD83D\uDE00tail`,
+            note: `${'n'.repeat(3999)}\uD83D\uDE00tail`,
+            spellingNote: `${'p'.repeat(3999)}\uD83D\uDE00tail`,
+            source: `${'r'.repeat(3999)}\uD83D\uDE00tail`
+        }]
+    };
+    const unicodeNormalized = collector.normalizeVocabListShape(unicodePayload, 'p1', 'p1');
+    const unicodeEntry = unicodeNormalized.words[0];
+    assert.strictEqual(unicodeEntry.word, 'w'.repeat(159));
+    assert.strictEqual(unicodeEntry.userInput, 'u'.repeat(159));
+    assert.strictEqual(unicodeEntry.questionId, 'q'.repeat(3999));
+    assert.strictEqual(unicodeEntry.suiteId, 's'.repeat(3999));
+    assert.strictEqual(unicodeEntry.examId, 'e'.repeat(3999));
+    assert.strictEqual(unicodeEntry.meaning, 'm'.repeat(3999));
+    assert.strictEqual(unicodeEntry.example, 'x'.repeat(3999));
+    assert.strictEqual(unicodeEntry.note, 'n'.repeat(3999));
+    assert.strictEqual(unicodeEntry.spellingNote, 'p'.repeat(3999));
+    assert.strictEqual(unicodeEntry.source, 'r'.repeat(3999));
+    assert(!/[\uD800-\uDFFF]/.test([
+        unicodeEntry.word,
+        unicodeEntry.userInput,
+        unicodeEntry.questionId,
+        unicodeEntry.suiteId,
+        unicodeEntry.examId,
+        unicodeEntry.meaning,
+        unicodeEntry.example,
+        unicodeEntry.note,
+        unicodeEntry.spellingNote,
+        unicodeEntry.source
+    ].join('')), 'truncated vocab text must not retain unmatched surrogate halves');
 
     console.log('  ok vocab list sanitization');
 }

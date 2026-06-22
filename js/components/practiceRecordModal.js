@@ -55,12 +55,12 @@ class PracticeRecordModal {
 
             processedRecord = this.prepareRecordForDisplay(processedRecord);
 
-            const modalHtml = this.createModalHtml(processedRecord);
-
             this.hide();
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-            this.modalElement = document.getElementById(this.modalId);
+            const modalElement = this.createModalElement(processedRecord);
+            document.body.appendChild(modalElement);
+
+            this.modalElement = modalElement;
             this.currentRecord = processedRecord;
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
@@ -265,6 +265,61 @@ class PracticeRecordModal {
                 </div>
             </div>
         `;
+    }
+
+    createModalElement(record) {
+        const template = document.createElement('template');
+        template.innerHTML = this.createModalHtml(record).trim();
+        const modalElement = template.content && template.content.firstElementChild;
+        if (!modalElement || modalElement.id !== this.modalId) {
+            throw new Error('Invalid practice record modal markup');
+        }
+        this.sanitizeModalElement(modalElement);
+        return modalElement;
+    }
+
+    sanitizeModalElement(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') {
+            return root;
+        }
+
+        const blockedTags = new Set(['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base']);
+        const nodes = [root, ...Array.from(root.querySelectorAll('*'))];
+        nodes.forEach((node) => {
+            const tagName = String(node.tagName || '').toLowerCase();
+            if (blockedTags.has(tagName)) {
+                if (typeof node.remove === 'function') {
+                    node.remove();
+                }
+                return;
+            }
+
+            Array.from(node.attributes || []).forEach((attribute) => {
+                const name = String(attribute.name || '').toLowerCase();
+                const value = String(attribute.value || '');
+                if (
+                    name.startsWith('on')
+                    || name === 'srcdoc'
+                    || name === 'style'
+                    || this.isUnsafeModalUrlAttribute(name, value)
+                ) {
+                    node.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return root;
+    }
+
+    isUnsafeModalUrlAttribute(name, value) {
+        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'formaction', 'action']);
+        if (!urlAttributes.has(String(name || '').toLowerCase())) {
+            return false;
+        }
+        const normalized = String(value || '').replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        return normalized.startsWith('javascript:')
+            || normalized.startsWith('vbscript:')
+            || (normalized.startsWith('data:') && !normalized.startsWith('data:image/'));
     }
 
     prepareRecordForDisplay(record) {

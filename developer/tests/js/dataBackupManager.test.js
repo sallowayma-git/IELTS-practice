@@ -254,6 +254,39 @@ assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.metadata.safe, '
 assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.metadata.safe.child, 'prototype'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(boundedRecord.realData.nested.level1.level2.level3, 'constructor'), false);
 
+const unicodeBoundaryImport = manager.normalizeImportPayload({
+    practiceRecords: [{
+        id: `${'i'.repeat(511)}\uD83D\uDE00tail`,
+        examId: `${'e'.repeat(511)}\uD83D\uDE00tail`,
+        title: `${'t'.repeat(499)}\uD83D\uDE00tail`,
+        status: `${'s'.repeat(63)}\uD83D\uDE00tail`,
+        metadata: {
+            notes: `${'m'.repeat(4999)}\uD83D\uDE00tail`
+        },
+        realData: {
+            note: `${'r'.repeat(4999)}\uD83D\uDE00tail`
+        },
+        source: `${'o'.repeat(4999)}\uD83D\uDE00tail`
+    }]
+});
+const unicodeBoundaryRecord = unicodeBoundaryImport.practiceRecords[0];
+assert.equal(unicodeBoundaryRecord.id, 'i'.repeat(511));
+assert.equal(unicodeBoundaryRecord.examId, 'e'.repeat(511));
+assert.equal(unicodeBoundaryRecord.title, 't'.repeat(499));
+assert.equal(unicodeBoundaryRecord.status, 's'.repeat(63));
+assert.equal(unicodeBoundaryRecord.metadata.notes, 'm'.repeat(4999));
+assert.equal(unicodeBoundaryRecord.realData.note, 'r'.repeat(4999));
+assert.equal(unicodeBoundaryRecord.source, 'o'.repeat(4999));
+assert.equal(/[\uD800-\uDFFF]/.test([
+    unicodeBoundaryRecord.id,
+    unicodeBoundaryRecord.examId,
+    unicodeBoundaryRecord.title,
+    unicodeBoundaryRecord.status,
+    unicodeBoundaryRecord.metadata.notes,
+    unicodeBoundaryRecord.realData.note,
+    unicodeBoundaryRecord.source
+].join('')), false);
+
 const circularRecord = {
     id: 'export-record',
     examId: 'reading-export',
@@ -397,6 +430,16 @@ assert.equal(Object.prototype.hasOwnProperty.call(exportHistory[0], 'constructor
 assert.equal(Object.prototype.hasOwnProperty.call(exportHistory[0].details, 'constructor'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(exportHistory[0].details.details, 'prototype'), false);
 assert.equal(Object.prototype.pollutedHistory, undefined);
+
+await manager.recordExportHistory({
+    id: `${'h'.repeat(159)}\uD83D\uDE00tail`,
+    timestamp: currentHistoryTimestamp,
+    format: 'json',
+    note: `${'u'.repeat(999)}\uD83D\uDE00tail`
+});
+const unicodeHistory = (await manager.getExportHistory()).find(entry => entry.note === 'u'.repeat(999));
+assert(unicodeHistory, 'export history note should be truncated at a valid Unicode boundary');
+assert.equal(unicodeHistory.note, 'u'.repeat(999));
 
 await context.storage.set('import_history', [
     unsafeHistoryEntry,

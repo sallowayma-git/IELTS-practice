@@ -145,7 +145,7 @@ redactionHarness.window.console.log('[PracticeRecorder] sensitive event', {
     password: 'StrongPass1',
     nested: {
         userInput: 'private answer',
-        url: 'https://example.test/path?token=secret-token&recoveryCode=secret-recovery&totpToken=123456&otp=654321&ok=1',
+        url: 'https://example.test/path?token=secret-token&recoveryCode=secret-recovery&totpToken=123456&otp=654321&client_secret=client-secret&refresh_token=refresh-secret&id_token=id-secret&api_key=api-secret&totpSecret=totp-secret&ok=1',
         fragmentUrl: 'https://example.test/callback#access_token=secret-fragment&state=ok',
         localPath: 'D:\\Users\\Alice\\IELTS\\private.html'
     },
@@ -162,11 +162,25 @@ assert(!serializedLog.includes('secret-token'), 'logger must redact sensitive UR
 assert(!serializedLog.includes('secret-recovery'), 'logger must redact recovery codes in URL parameters');
 assert(!serializedLog.includes('123456'), 'logger must redact TOTP tokens in URL parameters');
 assert(!serializedLog.includes('654321'), 'logger must redact OTP tokens in URL parameters');
+assert(!serializedLog.includes('client-secret'), 'logger must redact client_secret URL parameters');
+assert(!serializedLog.includes('refresh-secret'), 'logger must redact refresh_token URL parameters');
+assert(!serializedLog.includes('id-secret'), 'logger must redact id_token URL parameters');
+assert(!serializedLog.includes('api-secret'), 'logger must redact api_key URL parameters');
+assert(!serializedLog.includes('totp-secret'), 'logger must redact totpSecret URL parameters');
 assert(!serializedLog.includes('secret-fragment'), 'logger must redact sensitive URL fragment parameters');
 assert(!serializedLog.includes('D:\\Users\\Alice'), 'logger must redact local filesystem paths');
 assert(!serializedLog.includes('record-123'), 'logger must redact record identifiers');
 assert(serializedLog.includes('[redacted]'), 'logger should preserve structure with redacted markers');
 assert(serializedLog.includes('[local-path]'), 'logger should mark redacted local paths');
+
+const unicodeLogHarness = createHarness({}, { level: 'debug', categories: { System: 'debug' } });
+unicodeLogHarness.window.AppLogger.debug('System', `${'x'.repeat(999)}\uD83D\uDE00tail`);
+const unicodeLog = unicodeLogHarness.capturedLogs.find((entry) => (
+    entry.args[0] && String(entry.args[0]).includes('[System]')
+));
+assert(unicodeLog, 'unicode boundary log should be captured');
+assert.equal(unicodeLog.args[1], `${'x'.repeat(999)}...[truncated]`);
+assert.equal(/[\uD800-\uDFFF]/.test(unicodeLog.args[1]), false, 'truncated logs must not keep dangling surrogate code units');
 
 const sharedReferenceHarness = createHarness({}, { level: 'debug', categories: { System: 'debug' } });
 const sharedLogValue = { visible: 'same object' };

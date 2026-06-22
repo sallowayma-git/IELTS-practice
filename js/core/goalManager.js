@@ -172,6 +172,16 @@
         return Math.floor(number);
     }
 
+    function truncateSafeText(value, maxLength) {
+        var text = String(value || '').trim();
+        if (text.length <= maxLength) return text;
+        var truncated = text.slice(0, maxLength);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            return truncated.slice(0, -1);
+        }
+        return truncated;
+    }
+
     function todayKey() {
         return new Date().toISOString().slice(0, 10);
     }
@@ -207,11 +217,14 @@
 
         var target = Number(input.target);
         if (!Number.isFinite(target) || target <= 0) return null;
-        var id = typeof input.id === 'string' && input.id.trim()
-            ? input.id.trim().slice(0, MAX_GOAL_ID_LENGTH)
+        var normalizedId = typeof input.id === 'string'
+            ? truncateSafeText(input.id, MAX_GOAL_ID_LENGTH)
+            : '';
+        var id = normalizedId
+            ? normalizedId
             : generateId();
         var title = typeof input.title === 'string'
-            ? input.title.trim().slice(0, MAX_GOAL_TITLE_LENGTH)
+            ? truncateSafeText(input.title, MAX_GOAL_TITLE_LENGTH)
             : '';
 
         return {

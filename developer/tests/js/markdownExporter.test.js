@@ -16,6 +16,54 @@ function loadMarkdownExporter() {
         error() {},
         info() {}
     };
+    const elements = new Map();
+    function trackElement(element) {
+        if (element && element.id) {
+            elements.set(element.id, element);
+        }
+    }
+    function createElement(tagName) {
+        const element = {
+            tagName: String(tagName || '').toUpperCase(),
+            style: {},
+            children: [],
+            _id: '',
+            textContent: '',
+            set id(value) {
+                if (this._id) {
+                    elements.delete(this._id);
+                }
+                this._id = String(value || '');
+                trackElement(this);
+            },
+            get id() {
+                return this._id;
+            },
+            append(...children) {
+                this.children.push(...children);
+                children.forEach(trackElement);
+            },
+            appendChild(child) {
+                this.children.push(child);
+                trackElement(child);
+                return child;
+            },
+            removeChild(child) {
+                this.children = this.children.filter((item) => item !== child);
+                if (child && child.id) {
+                    elements.delete(child.id);
+                }
+            },
+            remove() {
+                if (this.id) {
+                    elements.delete(this.id);
+                }
+            },
+            click() {}
+        };
+        return element;
+    }
+    const body = createElement('body');
     const sandbox = {
         window: {},
         console: quietConsole,
@@ -27,17 +75,10 @@ function loadMarkdownExporter() {
             revokeObjectURL() {}
         },
         document: {
-            body: {
-                appendChild() {},
-                removeChild() {}
-            },
-            createElement() {
-                return {
-                    click() {}
-                };
-            },
-            getElementById() {
-                return null;
+            body,
+            createElement,
+            getElementById(id) {
+                return elements.get(String(id)) || null;
             }
         },
         Date,
@@ -188,8 +229,16 @@ function testDateHeadingsAreEscaped() {
 }
 
 function testProgressIndicatorStyleIsCleanedUp() {
+    const MarkdownExporter = loadMarkdownExporter();
+    const exporter = new MarkdownExporter();
+    exporter.showProgressIndicator();
+    assert(exporter.constructor, 'exporter should remain usable after progress indicator creation');
+
     const source = fs.readFileSync(path.join(repoRoot, 'js/utils/markdownExporter.js'), 'utf8');
-    assert(source.includes('<style id="export-progress-style">'), 'progress indicator style must be addressable');
+    assert(source.includes("style.id = 'export-progress-style'"), 'progress indicator style must be addressable');
+    assert(source.includes("progressText.textContent = '正在准备导出...'"), 'progress text must be assigned through textContent');
+    assert(source.includes('document.body.append(overlay, style)'), 'progress indicator must append explicit DOM nodes');
+    assert(!source.includes('document.body.insertAdjacentHTML'), 'progress indicator must not inject HTML strings');
     assert(
         /const style = document\.getElementById\('export-progress-style'\);[\s\S]{0,120}style\.remove\(\);/.test(source),
         'progress indicator cleanup must remove its injected style node'

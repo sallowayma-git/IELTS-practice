@@ -9,7 +9,10 @@
     const MAX_REVIEW_REPLAY_ARRAY_ITEMS = 2000;
     const MAX_REVIEW_REPLAY_OBJECT_KEYS = 500;
     const MAX_REVIEW_REPLAY_STRING_LENGTH = 20000;
+    const MAX_EXAM_ERROR_MESSAGE_LENGTH = 240;
     const REVIEW_REPLAY_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const EXAM_ERROR_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
+    const EXAM_ERROR_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
     let fallbackIdCounter = 0;
 
     function randomIdSuffix() {
@@ -46,6 +49,27 @@
             return 'script_injection_security_error';
         }
         return 'script_injection_error';
+    }
+
+    function truncateExamErrorMessage(text) {
+        if (text.length <= MAX_EXAM_ERROR_MESSAGE_LENGTH) {
+            return text;
+        }
+        let truncated = text.slice(0, MAX_EXAM_ERROR_MESSAGE_LENGTH - 3);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            truncated = truncated.slice(0, -1);
+        }
+        return `${truncated}...`;
+    }
+
+    function sanitizeExamErrorMessageForUser(value) {
+        const raw = String(value == null ? '' : value)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(EXAM_ERROR_SECRET_QUERY_PATTERN, '$1[hidden]')
+            .replace(EXAM_ERROR_SECRET_VALUE_PATTERN, '$1=[hidden]')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return truncateExamErrorMessage(raw || '未知错误');
     }
 
     function getMessageTargetOrigin(options = {}) {
@@ -1090,7 +1114,7 @@
                 examWindow.location.href = placeholderUrl;
                 return examWindow;
             } catch (navigationError) {
-                console.warn('[App] 题目窗口导航占位页失败，尝试重新打开:', navigationError);
+                console.warn('[App] 题目窗口导航占位页失败，尝试重新打开:', summarizeExamSessionErrorForLog(navigationError));
                 try {
                     const windowName = (options && options.windowName)
                         ? String(options.windowName)
@@ -1100,7 +1124,7 @@
                         return reopened;
                     }
                 } catch (openError) {
-                    console.warn('[App] 重新打开占位窗口失败:', openError);
+                    console.warn('[App] 重新打开占位窗口失败:', summarizeExamSessionErrorForLog(openError));
                 }
             }
 
@@ -3629,14 +3653,17 @@
          * 处理题目错误
          */
         handleExamError(examId, errorData) {
+            const safeErrorMessage = sanitizeExamErrorMessageForUser(
+                errorData && typeof errorData === 'object'
+                    ? errorData.message
+                    : ''
+            );
             console.error(
                 'Exam error:',
-                errorData && typeof errorData === 'object'
-                    ? (errorData.message || 'object')
-                    : typeof errorData
+                safeErrorMessage
             );
 
-            window.showMessage(`题目出现错误: ${errorData.message || '未知错误'}`, 'error');
+            window.showMessage(`题目出现错误: ${safeErrorMessage}`, 'error');
 
             // 清理会话
             this.cleanupExamSession(examId);

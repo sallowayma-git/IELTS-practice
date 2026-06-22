@@ -56,6 +56,42 @@ assert.equal(entries[0].isCorrect, true);
 assert(!entries.some((entry) => /(?:__proto__|prototype|constructor)/i.test(entry.canonicalKey)));
 assert(!entries.some((entry) => entry.originalKeys.some((key) => /(?:__proto__|prototype|constructor)/i.test(key))));
 
+const nestedRecord = JSON.parse(`{
+  "id": "nested-record",
+  "title": "Nested safety",
+  "metadata": {
+    "examTitle": "Nested safety",
+    "nested": {
+      "safe": "ok",
+      "constructor": { "prototype": { "pollutedNestedAnswerComparison": true } }
+    },
+    "items": [
+      {
+        "label": "safe",
+        "prototype": { "pollutedNestedAnswerComparison": true }
+      }
+    ]
+  },
+  "realData": {
+    "__proto__": { "pollutedNestedAnswerComparison": true },
+    "safe": {
+      "constructor": { "prototype": { "pollutedNestedAnswerComparison": true } }
+    }
+  }
+}`);
+nestedRecord.metadata.self = nestedRecord.metadata;
+
+const enriched = AnswerComparisonUtils.withEnrichedMetadata(nestedRecord);
+assert.equal(Object.prototype.pollutedNestedAnswerComparison, undefined);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched.metadata, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched.metadata.nested, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched.metadata.items[0], 'prototype'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched.realData, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched.realData.safe, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(enriched.metadata, 'self'), false);
+assert.equal(enriched.metadata.nested.safe, 'ok');
+
 console.log(JSON.stringify({
     status: 'pass',
     detail: 'answer comparison utils prototype-pollution guard passed'

@@ -78,6 +78,43 @@ async function testProgressImportCapsWordsAndReviewQueue() {
     assert.equal(result.entries.at(-1).word, 'word-4999');
 }
 
+async function testProgressImportTruncatesTextAtUnicodeBoundaries() {
+    const api = loadVocabDataIO();
+    const payload = {
+        version: '1.0.0',
+        reviewQueue: [`${'q'.repeat(159)}\uD83D\uDE00tail`],
+        words: [{
+            id: `${'i'.repeat(199)}\uD83D\uDE00tail`,
+            word: `${'w'.repeat(159)}\uD83D\uDE00tail`,
+            meaning: `${'m'.repeat(3999)}\uD83D\uDE00tail`,
+            example: `${'e'.repeat(3999)}\uD83D\uDE00tail`,
+            note: `${'n'.repeat(3999)}\uD83D\uDE00tail`,
+            source: `${'s'.repeat(199)}\uD83D\uDE00tail`
+        }]
+    };
+    const file = createImportFile(JSON.stringify(payload), 'progress.json', 'application/json');
+
+    const result = await api.importWordList(file);
+    const entry = result.entries[0];
+
+    assert.equal(entry.id, 'i'.repeat(199));
+    assert.equal(entry.word, 'w'.repeat(159));
+    assert.equal(entry.meaning, 'm'.repeat(3999));
+    assert.equal(entry.example, 'e'.repeat(3999));
+    assert.equal(entry.note, 'n'.repeat(3999));
+    assert.equal(entry.source, 's'.repeat(199));
+    assert.equal(result.meta.reviewQueue[0], 'q'.repeat(159));
+    assert.equal(/[\uD800-\uDFFF]/.test([
+        entry.id,
+        entry.word,
+        entry.meaning,
+        entry.example,
+        entry.note,
+        entry.source,
+        result.meta.reviewQueue[0]
+    ].join('')), false);
+}
+
 async function testProgressImportStripsUnsafeKeys() {
     const api = loadVocabDataIO();
     const payload = `{
@@ -219,6 +256,7 @@ function testProgressExtraAllowsSharedReferencesButDropsCycles() {
 async function main() {
     await testJsonArrayImportCapsEntries();
     await testProgressImportCapsWordsAndReviewQueue();
+    await testProgressImportTruncatesTextAtUnicodeBoundaries();
     await testProgressImportStripsUnsafeKeys();
     await testDeepCategoryMetadataDoesNotOverflow();
     await testChineseCategoryLabelsNormalize();

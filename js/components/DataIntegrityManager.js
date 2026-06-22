@@ -834,7 +834,13 @@ class DataIntegrityManager {
 
     _limitText(value, maxLength = MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH) {
         const text = String(value ?? '');
-        return text.length > maxLength ? text.slice(0, maxLength) : text;
+        if (text.length <= maxLength) {
+            return text;
+        }
+        const truncated = text.slice(0, maxLength);
+        return /[\uD800-\uDBFF]$/.test(truncated)
+            ? truncated.slice(0, -1)
+            : truncated;
     }
 
     _cloneImportRecord(value, depth = 0, state = null) {

@@ -464,6 +464,39 @@ async function testRemoteApiClientRejectsMalformedCsrfResponse() {
     assert.strictEqual(client.csrfToken, null);
 }
 
+async function testRemoteApiClientRejectsNonApiPathsBeforeFetch() {
+    const fetchCalls = [];
+    const { window } = createRemoteApiContext(async (url, options = {}) => {
+        fetchCalls.push([url, options]);
+        return {
+            status: 200,
+            ok: true,
+            async text() {
+                return JSON.stringify({ ok: true });
+            }
+        };
+    });
+    const client = new window.ExamData.RemoteApiClient();
+
+    const invalidPaths = [
+        '/admin',
+        'api/auth/me',
+        'https://example.test/api/auth/me',
+        '//example.test/api/auth/me',
+        '',
+        null
+    ];
+    for (const path of invalidPaths) {
+        await assert.rejects(
+            () => client.request(path, { method: 'GET', csrf: false }),
+            (error) => error
+                && error.name === 'RemoteApiError'
+                && /same-origin \/api\/ path/.test(error.message)
+        );
+    }
+    assert.deepStrictEqual(fetchCalls, []);
+}
+
 async function testRemoteApiClientIgnoresMalformedCsrfFieldsOnAuthResponses() {
     const fetchCalls = [];
     const { window } = createRemoteApiContext(async (url, options = {}) => {
@@ -805,6 +838,7 @@ async function main() {
     await testRemoteApiClientTreatsUnauthorizedLogoutAsLocalLogout();
     await testRemoteApiClientAddsCsrfToWrites();
     await testRemoteApiClientRejectsMalformedCsrfResponse();
+    await testRemoteApiClientRejectsNonApiPathsBeforeFetch();
     await testRemoteApiClientIgnoresMalformedCsrfFieldsOnAuthResponses();
     await testRemoteApiClientClearsInvalidCsrfTokenOnly();
     await testRemoteApiClientHandlesTotpFlow();

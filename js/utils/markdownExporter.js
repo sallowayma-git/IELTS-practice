@@ -986,50 +986,57 @@ class MarkdownExporter {
     showProgressIndicator() {
         // 移除已存在的进度指示器
         this.hideProgressIndicator();
-        
-        const progressHtml = `
-            <div id="export-progress-overlay" style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 10000;
-            ">
-                <div style="
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    text-align: center;
-                    min-width: 300px;
-                ">
-                    <div style="margin-bottom: 15px;">
-                        <div style="
-                            width: 40px;
-                            height: 40px;
-                            border: 4px solid #f3f3f3;
-                            border-top: 4px solid #3498db;
-                            border-radius: 50%;
-                            animation: spin 1s linear infinite;
-                            margin: 0 auto;
-                        "></div>
-                    </div>
-                    <div id="export-progress-text">正在准备导出...</div>
-                </div>
-            </div>
-            <style id="export-progress-style">
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            </style>
-        `;
-        
-        document.body.insertAdjacentHTML('beforeend', progressHtml);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'export-progress-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '10000'
+        });
+
+        const panel = document.createElement('div');
+        Object.assign(panel.style, {
+            background: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            textAlign: 'center',
+            minWidth: '300px'
+        });
+
+        const spinnerWrap = document.createElement('div');
+        spinnerWrap.style.marginBottom = '15px';
+
+        const spinner = document.createElement('div');
+        Object.assign(spinner.style, {
+            width: '40px',
+            height: '40px',
+            border: '4px solid #f3f3f3',
+            borderTop: '4px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto'
+        });
+
+        const progressText = document.createElement('div');
+        progressText.id = 'export-progress-text';
+        progressText.textContent = '正在准备导出...';
+
+        const style = document.createElement('style');
+        style.id = 'export-progress-style';
+        style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+
+        spinnerWrap.appendChild(spinner);
+        panel.append(spinnerWrap, progressText);
+        overlay.appendChild(panel);
+        document.body.append(overlay, style);
     }
 
     /**

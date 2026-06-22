@@ -46,12 +46,17 @@ assert(
 );
 
 assert(
+    source.includes('function truncateFallbackTextAtLength') &&
+    source.includes('/[\\uD800-\\uDBFF]$/.test(truncated)') &&
     source.includes('.slice(0, MAX_FALLBACK_ANSWER_ARRAY_ITEMS)') &&
     source.includes('if (depth > MAX_FALLBACK_ANSWER_DEPTH)') &&
     source.includes('state.seen.has(value)') &&
     source.includes('copied >= MAX_FALLBACK_ANSWER_OBJECT_KEYS') &&
+    source.includes('truncateFallbackTextAtLength(truncateFallbackAnswerText(value), MAX_FALLBACK_ANSWER_KEY_LENGTH)') &&
+    source.includes('key = truncateFallbackTextAtLength(key, MAX_FALLBACK_ANSWER_KEY_LENGTH)') &&
+    source.includes('return truncateFallbackAnswerText(normalizedItems)') &&
     source.includes('truncateFallbackAnswerText(json)'),
-    'fallback completion answer values must cap nested arrays/objects and avoid circular or oversized stringification'
+    'fallback completion answer values must cap nested arrays/objects, truncate safely, and avoid circular or oversized stringification'
 );
 
 assert(
