@@ -135,6 +135,7 @@
     const MAX_LOG_ARRAY_ITEMS = 50;
     const MAX_LOG_OBJECT_KEYS = 80;
     const MAX_LOG_STRING_LENGTH = 1000;
+    const MAX_LOG_CONFIG_STORAGE_STRING_LENGTH = 64 * 1024;
     const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f]/;
     const SENSITIVE_LOG_KEYS = new Set([
         'access_token',
@@ -170,6 +171,17 @@
 
     function isPlainRecord(value) {
         return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function parseStoredLogConfig(value) {
+        if (!value) {
+            return null;
+        }
+        const source = String(value);
+        if (source.length > MAX_LOG_CONFIG_STORAGE_STRING_LENGTH) {
+            return null;
+        }
+        return JSON.parse(source);
     }
 
     function normalizeLogLevel(level, fallback = '') {
@@ -235,7 +247,7 @@
         text = text.replace(/\\\\[^\\/\s"'<>]+\\[^\s"'<>]+/g, '[local-path]');
         text = text.replace(/[a-z2-7]{16,56}\.onion\b/gi, '[onion-host]');
         text = text.replace(
-            /([?&](?:access_token|code|csrf|csrfToken|password|secret|session|sessionId|sid|token)=)[^&#\s]+/gi,
+            /([?&#](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|token|totp|totpToken)=)[^&#\s]+/gi,
             '$1[redacted]'
         );
         text = text.replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, '[redacted-auth]');
@@ -268,40 +280,44 @@
             return '[Circular]';
         }
         seen.add(value);
-        if (value instanceof Error) {
-            return {
-                name: sanitizeLogString(value.name || 'Error'),
-                message: sanitizeLogString(value.message || ''),
-                stack: value.stack ? sanitizeLogString(value.stack) : undefined
-            };
-        }
-        if (Array.isArray(value)) {
-            const output = value
-                .slice(0, MAX_LOG_ARRAY_ITEMS)
-                .map((item) => sanitizeLogArg(item, depth + 1, seen));
-            if (value.length > MAX_LOG_ARRAY_ITEMS) {
-                output.push(`[${value.length - MAX_LOG_ARRAY_ITEMS} more items]`);
+        try {
+            if (value instanceof Error) {
+                return {
+                    name: sanitizeLogString(value.name || 'Error'),
+                    message: sanitizeLogString(value.message || ''),
+                    stack: value.stack ? sanitizeLogString(value.stack) : undefined
+                };
+            }
+            if (Array.isArray(value)) {
+                const output = value
+                    .slice(0, MAX_LOG_ARRAY_ITEMS)
+                    .map((item) => sanitizeLogArg(item, depth + 1, seen));
+                if (value.length > MAX_LOG_ARRAY_ITEMS) {
+                    output.push(`[${value.length - MAX_LOG_ARRAY_ITEMS} more items]`);
+                }
+                return output;
+            }
+            if (!isPlainRecord(value)) {
+                return sanitizeLogString(Object.prototype.toString.call(value));
+            }
+            const output = {};
+            const entries = Object.entries(value).slice(0, MAX_LOG_OBJECT_KEYS);
+            for (const [key, item] of entries) {
+                if (UNSAFE_CONFIG_KEYS.has(key)) {
+                    continue;
+                }
+                output[key] = isSensitiveLogKey(key)
+                    ? '[redacted]'
+                    : sanitizeLogArg(item, depth + 1, seen);
+            }
+            const totalKeys = Object.keys(value).length;
+            if (totalKeys > MAX_LOG_OBJECT_KEYS) {
+                output.__truncatedKeys = totalKeys - MAX_LOG_OBJECT_KEYS;
             }
             return output;
+        } finally {
+            seen.delete(value);
         }
-        if (!isPlainRecord(value)) {
-            return sanitizeLogString(Object.prototype.toString.call(value));
-        }
-        const output = {};
-        const entries = Object.entries(value).slice(0, MAX_LOG_OBJECT_KEYS);
-        for (const [key, item] of entries) {
-            if (UNSAFE_CONFIG_KEYS.has(key)) {
-                continue;
-            }
-            output[key] = isSensitiveLogKey(key)
-                ? '[redacted]'
-                : sanitizeLogArg(item, depth + 1, seen);
-        }
-        const totalKeys = Object.keys(value).length;
-        if (totalKeys > MAX_LOG_OBJECT_KEYS) {
-            output.__truncatedKeys = totalKeys - MAX_LOG_OBJECT_KEYS;
-        }
-        return output;
     }
 
     function sanitizeLogArgs(args) {
@@ -337,7 +353,7 @@
             try {
                 const stored = global.localStorage.getItem(STORAGE_KEY);
                 if (stored) {
-                    const parsed = JSON.parse(stored);
+                    const parsed = parseStoredLogConfig(stored);
                     storedConfig = isPlainRecord(parsed) ? parsed : {};
                 }
             } catch (e) {
@@ -577,11 +593,85 @@
  * 提供统一的数据存储和检索接口
  */
 const STORAGE_BACKUP_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const STORAGE_BACKUP_SENSITIVE_KEYS = new Set([
+    'password',
+    'passwordhash',
+    'password_hash',
+    'currentpassword',
+    'newpassword',
+    'secret',
+    'secretkey',
+    'csrf',
+    'csrftoken',
+    'csrf_token',
+    'totp',
+    'totpsecret',
+    'totp_secret',
+    'recoverycode',
+    'recovery_code',
+    'recoverycodes',
+    'recovery_codes',
+    'authorization',
+    'cookie',
+    'apikey',
+    'api_key',
+    'privatekey',
+    'private_key',
+    'authtoken',
+    'auth_token',
+    'accesstoken',
+    'access_token',
+    'refreshtoken',
+    'refresh_token'
+]);
 const STORAGE_BACKUP_MAX_PRACTICE_RECORDS = 5000;
 const STORAGE_BACKUP_MAX_NODES = 50000;
 const STORAGE_BACKUP_MAX_DEPTH = 40;
+const STORAGE_BACKUP_MAX_FETCH_BYTES = 10 * 1024 * 1024;
+const STORAGE_MAX_JSON_STRING_LENGTH = 25 * 1024 * 1024;
 const STORAGE_NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9:_-]{0,79}$/;
 const WINDOWS_RESERVED_DOWNLOAD_BASENAME_PATTERN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+function getStorageTextByteLength(text) {
+    const source = String(text == null ? '' : text);
+    if (typeof TextEncoder === 'function') {
+        try {
+            return new TextEncoder().encode(source).length;
+        } catch (_) {
+            // fall through to manual UTF-8 length calculation
+        }
+    }
+    let bytes = 0;
+    for (let index = 0; index < source.length; index += 1) {
+        const code = source.charCodeAt(index);
+        if (code < 0x80) {
+            bytes += 1;
+        } else if (code < 0x800) {
+            bytes += 2;
+        } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < source.length) {
+            const next = source.charCodeAt(index + 1);
+            if (next >= 0xdc00 && next <= 0xdfff) {
+                bytes += 4;
+                index += 1;
+            } else {
+                bytes += 3;
+            }
+        } else {
+            bytes += 3;
+        }
+    }
+    return bytes;
+}
+
+function parseStorageJsonString(rawValue) {
+    if (typeof rawValue !== 'string') {
+        return rawValue;
+    }
+    if (rawValue.length > STORAGE_MAX_JSON_STRING_LENGTH) {
+        throw new Error('Stored JSON value is too large.');
+    }
+    return JSON.parse(rawValue);
+}
 
 function normalizeStorageNamespace(namespace) {
     if (typeof namespace !== 'string') {
@@ -596,6 +686,11 @@ function normalizeStorageNamespace(namespace) {
         return '';
     }
     return normalized;
+}
+
+function isSensitiveStorageBackupKey(key) {
+    const normalized = String(key || '').trim().toLowerCase();
+    return STORAGE_BACKUP_SENSITIVE_KEYS.has(normalized);
 }
 
 function sanitizeStoredValue(value, depth = 0, state = null) {
@@ -643,7 +738,8 @@ function sanitizeStoredValue(value, depth = 0, state = null) {
 
     const output = {};
     Object.keys(value).forEach((key) => {
-        if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
+        const normalizedKey = String(key || '').trim().toLowerCase();
+        if (STORAGE_BACKUP_POLLUTION_KEYS.has(normalizedKey) || isSensitiveStorageBackupKey(normalizedKey)) {
             return;
         }
         const safeValue = sanitizeStoredValue(value[key], depth + 1, cloneState);
@@ -678,6 +774,9 @@ function getSafeStorageImportErrorMessage(error) {
     }
     if (/unsafe key/i.test(message)) {
         return 'Import data contains an unsafe key';
+    }
+    if (/circular reference/i.test(message)) {
+        return 'Import data contains a circular reference';
     }
     if (/too deep|too large/i.test(message)) {
         return 'Import data is too large or deeply nested';
@@ -1201,7 +1300,7 @@ class StorageManager {
         if (serializedValue === undefined || serializedValue === null) {
             return defaultValue;
         }
-        const parsed = JSON.parse(serializedValue);
+        const parsed = parseStorageJsonString(serializedValue);
         const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
             ? sanitizeStoredValue(parsed.data)
             : undefined;
@@ -1818,7 +1917,7 @@ class StorageManager {
 
                         let legacyData;
                         try {
-                            legacyData = JSON.parse(legacyDataStr);
+                            legacyData = parseStorageJsonString(legacyDataStr);
                         } catch (parseError) {
                             console.warn('[Storage] 解析遗留数据失败', summarizeStorageErrorForLog(parseError));
                             continue;
@@ -1870,7 +1969,7 @@ class StorageManager {
                     if (legacyMyMelodyData) {
                         let legacyData;
                         try {
-                            const parsed = JSON.parse(legacyMyMelodyData);
+                            const parsed = parseStorageJsonString(legacyMyMelodyData);
                             legacyData = parsed.data || parsed;
                         } catch (parseError) {
                             console.warn('[Storage] 解析 MyMelody 遗留数据失败', summarizeStorageErrorForLog(parseError));
@@ -1952,7 +2051,20 @@ class StorageManager {
             if (!response.ok) {
                 return false;
             }
-            const backupData = await response.json();
+            const contentLength = response.headers && typeof response.headers.get === 'function'
+                ? Number(response.headers.get('content-length'))
+                : 0;
+            if (Number.isFinite(contentLength) && contentLength > STORAGE_BACKUP_MAX_FETCH_BYTES) {
+                throw new Error('Backup response is too large.');
+            }
+            if (typeof response.text !== 'function') {
+                throw new Error('Backup response cannot be read safely.');
+            }
+            const backupText = await response.text();
+            if (getStorageTextByteLength(backupText) > STORAGE_BACKUP_MAX_FETCH_BYTES) {
+                throw new Error('Backup response is too large.');
+            }
+            const backupData = JSON.parse(backupText);
             if (!backupData || !Array.isArray(backupData.practice_records)) {
                 console.warn('[Storage] 备份数据格式无效');
                 return false;
@@ -1994,25 +2106,30 @@ class StorageManager {
             throw new Error(`Backup structure is too deep at ${path}`);
         }
         if (scanState.seen.has(value)) {
-            return;
+            throw new Error(`Backup contains a circular reference at ${path}`);
         }
         scanState.seen.add(value);
-        scanState.nodes += 1;
-        if (scanState.nodes > STORAGE_BACKUP_MAX_NODES) {
-            throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${STORAGE_BACKUP_MAX_NODES}.`);
-        }
-        if (Array.isArray(value)) {
-            value.forEach((item, index) => {
-                this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
-            });
-            return;
-        }
-        Object.keys(value).forEach((key) => {
-            if (STORAGE_BACKUP_POLLUTION_KEYS.has(key)) {
-                throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+        try {
+            scanState.nodes += 1;
+            if (scanState.nodes > STORAGE_BACKUP_MAX_NODES) {
+                throw new Error(`Backup structure is too large to scan safely. Maximum supported node count is ${STORAGE_BACKUP_MAX_NODES}.`);
             }
-            this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
-        });
+            if (Array.isArray(value)) {
+                value.forEach((item, index) => {
+                    this.assertSafeBackupValue(item, `${path}[${index}]`, depth + 1, scanState);
+                });
+                return;
+            }
+            Object.keys(value).forEach((key) => {
+                const normalizedKey = String(key || '').trim().toLowerCase();
+                if (STORAGE_BACKUP_POLLUTION_KEYS.has(normalizedKey)) {
+                    throw new Error(`Backup contains an unsafe key at ${path}.${key}`);
+                }
+                this.assertSafeBackupValue(value[key], `${path}.${key}`, depth + 1, scanState);
+            });
+        } finally {
+            scanState.seen.delete(value);
+        }
     }
 
     handleStorageQuotaExceeded(key, value) {
@@ -2187,14 +2304,13 @@ class StorageManager {
 
             try {
                 // 清空现有数据
-                await this.clear({ skipReady });
+                const cleared = await this.clear({ skipReady });
+                if (!cleared) {
+                    throw new Error('Import clear failed');
+                }
 
                 // 导入新数据
-                const importPromises = importEntries.map(({ key, value }) => {
-                    return this.set(key, value, { skipReady });
-                });
-
-                await Promise.all(importPromises);
+                await this.writeImportEntries(importEntries, { skipReady, label: 'import' });
 
                 return {
                     success: true,
@@ -2205,16 +2321,16 @@ class StorageManager {
             } catch (importError) {
                 // 恢复备份
                 console.error('Import failed, restoring backup:', summarizeStorageErrorForLog(importError));
-                await this.clear({ skipReady });
+                const clearedForRestore = await this.clear({ skipReady });
+                if (!clearedForRestore) {
+                    throw importError;
+                }
 
                 if (backup && backup.data) {
                     const restoreEntries = Object.entries(backup.data)
                         .map(([key, value]) => this.normalizeImportDataEntry(key, value))
                         .filter(Boolean);
-                    const restorePromises = restoreEntries.map(({ key, value }) => {
-                        return this.set(key, value, { skipReady });
-                    });
-                    await Promise.all(restorePromises);
+                    await this.writeImportEntries(restoreEntries, { skipReady, label: 'restore' });
                 }
 
                 throw importError;
@@ -2228,6 +2344,16 @@ class StorageManager {
     /**
      * 数据验证
      */
+    async writeImportEntries(entries, options = {}) {
+        const { skipReady = false, label = 'import' } = options;
+        for (const { key, value } of entries) {
+            const success = await this.set(key, value, { skipReady });
+            if (!success) {
+                throw new Error(`${label} write failed`);
+            }
+        }
+    }
+
     normalizeImportDataEntry(key, envelope) {
         const cleanKey = this.normalizeImportKey(key);
         if (!cleanKey || !this.isImportableStorageKey(cleanKey)) {
@@ -2237,10 +2363,15 @@ class StorageManager {
             return null;
         }
         this.assertSafeBackupValue(envelope.data, `import.data.${cleanKey}`);
-        if (cleanKey === 'practice_records') {
-            this.validateBackupPracticeRecords(envelope.data);
+        const sanitizedData = sanitizeStoredValue(envelope.data);
+        if (sanitizedData === undefined) {
+            return null;
         }
-        return { key: cleanKey, value: envelope.data };
+        this.assertSafeBackupValue(sanitizedData, `import.data.${cleanKey}`);
+        if (cleanKey === 'practice_records') {
+            this.validateBackupPracticeRecords(sanitizedData);
+        }
+        return { key: cleanKey, value: sanitizedData };
     }
 
     normalizeImportKey(key) {
@@ -2308,10 +2439,9 @@ class StorageManager {
             return undefined;
         }
         try {
-            const parsed = typeof serializedValue === 'string'
-                ? JSON.parse(serializedValue)
-                : serializedValue;
-            this.assertSafeBackupValue(parsed, `export.${source}.${cleanKey}`);
+            const rawParsed = parseStorageJsonString(serializedValue);
+            this.assertSafeBackupValue(rawParsed, `export.${source}.${cleanKey}`);
+            const parsed = sanitizeStoredValue(rawParsed);
             if (cleanKey === 'practice_records') {
                 const records = Array.isArray(parsed)
                     ? parsed
@@ -3578,7 +3708,7 @@ class PreferenceStore {
             return defaultValue;
         }
         try {
-            const parsed = JSON.parse(rawValue);
+            const parsed = parseStorageJsonString(rawValue);
             const safeValue = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
                 ? sanitizeStoredValue(parsed.data)
                 : undefined;
@@ -3958,6 +4088,7 @@ storageManager.ready
 /* ===== js/data/remoteApiClient.js ===== */
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
+    const MAX_REMOTE_API_RESPONSE_JSON_LENGTH = 1024 * 1024;
 
     class RemoteApiError extends Error {
         constructor(message, options = {}) {
@@ -4007,7 +4138,7 @@ storageManager.ready
                     this.clearAuthState();
                     return { available: true, authenticated: false, user: null };
                 }
-                const payload = await this._parseJson(response);
+                const payload = await this._parseJson(response, { allowInvalidJson: !response.ok });
                 if (!response.ok) {
                     throw new RemoteApiError(payload?.error || 'Authentication check failed', {
                         status: response.status,
@@ -4225,7 +4356,7 @@ storageManager.ready
                 body: options.body === undefined ? undefined : JSON.stringify(options.body)
             });
             this.available = true;
-            const payload = await this._parseJson(response);
+            const payload = await this._parseJson(response, { allowInvalidJson: !response.ok });
             if (response.status === 401) {
                 this.clearAuthState();
             }
@@ -4245,15 +4376,28 @@ storageManager.ready
             return this.fetchImpl(`${this.baseUrl}${path}`, options);
         }
 
-        async _parseJson(response) {
+        async _parseJson(response, options = {}) {
             const text = await response.text();
             if (!text) {
                 return null;
             }
+            if (text.length > MAX_REMOTE_API_RESPONSE_JSON_LENGTH) {
+                if (options.allowInvalidJson) {
+                    return null;
+                }
+                throw new RemoteApiError('Response body is too large', {
+                    status: response.status
+                });
+            }
             try {
                 return JSON.parse(text);
             } catch (_) {
-                return null;
+                if (options.allowInvalidJson) {
+                    return null;
+                }
+                throw new RemoteApiError('Response body is not valid JSON', {
+                    status: response.status
+                });
             }
         }
     }
@@ -4266,16 +4410,96 @@ storageManager.ready
 /* ===== js/data/dataSources/remotePracticeDataSource.js ===== */
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
+    const MAX_REMOTE_PRACTICE_CLONE_DEPTH = 12;
+    const MAX_REMOTE_PRACTICE_CLONE_NODES = 50000;
+    const MAX_REMOTE_PRACTICE_ARRAY_ITEMS = 5000;
+    const MAX_REMOTE_PRACTICE_OBJECT_KEYS = 500;
+    const MAX_REMOTE_PRACTICE_STRING_LENGTH = 20000;
+    const REMOTE_PRACTICE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+    function cloneRemotePracticeValue(value, depth = 0, state = { seen: new WeakSet(), nodes: 0 }) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_REMOTE_PRACTICE_STRING_LENGTH
+                ? `${value.slice(0, MAX_REMOTE_PRACTICE_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (depth > MAX_REMOTE_PRACTICE_CLONE_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_REMOTE_PRACTICE_CLONE_NODES) {
+            return '[Truncated]';
+        }
+
+        state.nodes += 1;
+        state.seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                const list = value
+                    .slice(0, MAX_REMOTE_PRACTICE_ARRAY_ITEMS)
+                    .map((item) => cloneRemotePracticeValue(item, depth + 1, state))
+                    .filter((item) => item !== undefined);
+                if (value.length > MAX_REMOTE_PRACTICE_ARRAY_ITEMS) {
+                    list.push(`[Truncated ${value.length - MAX_REMOTE_PRACTICE_ARRAY_ITEMS} items]`);
+                }
+                return list;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const output = {};
+            for (const key of keys.slice(0, MAX_REMOTE_PRACTICE_OBJECT_KEYS)) {
+                if (REMOTE_PRACTICE_UNSAFE_KEYS.has(key)) {
+                    continue;
+                }
+                const safeValue = cloneRemotePracticeValue(value[key], depth + 1, state);
+                if (safeValue !== undefined) {
+                    output[key] = safeValue;
+                }
+            }
+            if (keys.length > MAX_REMOTE_PRACTICE_OBJECT_KEYS) {
+                output.__truncatedKeys = keys.length - MAX_REMOTE_PRACTICE_OBJECT_KEYS;
+            }
+            return output;
+        } finally {
+            state.seen.delete(value);
+        }
+    }
 
     function cloneValue(value) {
         if (ExamData.cloneValue) {
-            return ExamData.cloneValue(value);
+            try {
+                return ExamData.cloneValue(value);
+            } catch (_) {
+                // Fallback below keeps local mirrors writable even when shared cloning is unavailable.
+            }
         }
-        try {
-            return JSON.parse(JSON.stringify(value));
-        } catch (_) {
-            return value;
-        }
+        return cloneRemotePracticeValue(value);
     }
 
     function isUnauthorized(error) {
@@ -4458,6 +4682,7 @@ storageManager.ready
     const gatedElements = new Map();
     const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
     const MAX_REMOTE_AUTH_ERROR_CHARS = 240;
+    const MAX_BCRYPT_PASSWORD_BYTES = 72;
 
     function getImportMarkerKey(userId) {
         return `remote_import_completed:${userId}`;
@@ -4491,6 +4716,21 @@ storageManager.ready
             element.textContent = text;
         }
         return element;
+    }
+
+    function getUtf8ByteLength(value) {
+        const text = String(value || '');
+        if (typeof window.TextEncoder === 'function') {
+            return new window.TextEncoder().encode(text).length;
+        }
+        if (typeof window.Blob === 'function') {
+            return new window.Blob([text]).size;
+        }
+        try {
+            return encodeURIComponent(text).replace(/%[0-9A-F]{2}/gi, 'x').length;
+        } catch (_) {
+            return text.length;
+        }
     }
 
     function normalizeTotpQrDataUrl(value) {
@@ -4560,6 +4800,9 @@ storageManager.ready
         if (mode === 'register') {
             if (rawPassword.length < 8) {
                 errors.push('密码至少需要 8 个字符。');
+            }
+            if (getUtf8ByteLength(rawPassword) > MAX_BCRYPT_PASSWORD_BYTES) {
+                errors.push('密码不能超过 72 个 UTF-8 字节。');
             }
             if (!/[a-z]/.test(rawPassword)) {
                 errors.push('密码需要包含小写字母。');
@@ -5614,6 +5857,11 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const UNSAFE_REPOSITORY_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const MAX_REPOSITORY_SANITIZE_DEPTH = 24;
+    const MAX_REPOSITORY_SANITIZE_NODES = 50000;
+    const MAX_REPOSITORY_ARRAY_ITEMS = 5000;
+    const MAX_REPOSITORY_OBJECT_KEYS = 500;
+    const MAX_REPOSITORY_STRING_LENGTH = 20000;
 
     function getValidationFailureMessage(name) {
         return `${name || 'Repository'} data validation failed`;
@@ -5631,34 +5879,89 @@ storageManager.ready
         return value && Object.prototype.toString.call(value) === '[object Object]';
     }
 
-    function sanitizeRepositoryValue(value, seen = new WeakMap()) {
-        if (!value || typeof value !== 'object') {
+    function sanitizeRepositoryValue(value, seen = null, depth = 0) {
+        if (value === null || value === undefined) {
             return value;
         }
-        if (seen.has(value)) {
-            return seen.get(value);
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_REPOSITORY_STRING_LENGTH
+                ? `${value.slice(0, MAX_REPOSITORY_STRING_LENGTH)}...`
+                : value;
         }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (depth > MAX_REPOSITORY_SANITIZE_DEPTH) {
+            return '[MaxDepth]';
+        }
+
+        const scanState = seen || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (scanState.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (scanState.nodes >= MAX_REPOSITORY_SANITIZE_NODES) {
+            return '[Truncated]';
+        }
+        scanState.nodes += 1;
+        scanState.seen.add(value);
+
         if (Array.isArray(value)) {
             const output = [];
-            seen.set(value, output);
-            value.forEach((item, index) => {
-                output[index] = sanitizeRepositoryValue(item, seen);
-            });
-            return output;
+            try {
+                value.slice(0, MAX_REPOSITORY_ARRAY_ITEMS).forEach((item) => {
+                    const safeValue = sanitizeRepositoryValue(item, scanState, depth + 1);
+                    if (safeValue !== undefined) {
+                        output.push(safeValue);
+                    }
+                });
+                if (value.length > MAX_REPOSITORY_ARRAY_ITEMS) {
+                    output.push(`[Truncated ${value.length - MAX_REPOSITORY_ARRAY_ITEMS} items]`);
+                }
+                return output;
+            } finally {
+                scanState.seen.delete(value);
+            }
         }
         if (!isPlainObject(value)) {
-            return value;
+            scanState.seen.delete(value);
+            return undefined;
         }
 
         const output = {};
-        seen.set(value, output);
-        Object.keys(value).forEach((key) => {
-            if (UNSAFE_REPOSITORY_KEYS.has(key)) {
-                return;
+        try {
+            const keys = Object.keys(value);
+            keys.slice(0, MAX_REPOSITORY_OBJECT_KEYS).forEach((key) => {
+                if (UNSAFE_REPOSITORY_KEYS.has(key)) {
+                    return;
+                }
+                const safeValue = sanitizeRepositoryValue(value[key], scanState, depth + 1);
+                if (safeValue !== undefined) {
+                    output[key] = safeValue;
+                }
+            });
+            if (keys.length > MAX_REPOSITORY_OBJECT_KEYS) {
+                output.__truncatedKeys = keys.length - MAX_REPOSITORY_OBJECT_KEYS;
             }
-            output[key] = sanitizeRepositoryValue(value[key], seen);
-        });
-        return output;
+            return output;
+        } finally {
+            scanState.seen.delete(value);
+        }
     }
 
     function cloneValue(value) {
@@ -6781,6 +7084,7 @@ storageManager.ready
         tempPracticeRecords: 'temp_practice_records'
     });
 
+    const MAX_PRACTICE_MESSAGE_JSON_LENGTH = 2 * 1024 * 1024;
     const PRACTICE_CLONE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const PRACTICE_CLONE_LIMITS = Object.freeze({
         maxDepth: 12,
@@ -6796,6 +7100,9 @@ storageManager.ready
 
     function safeParseJson(value) {
         if (typeof value !== 'string') {
+            return null;
+        }
+        if (value.length > MAX_PRACTICE_MESSAGE_JSON_LENGTH) {
             return null;
         }
         try {
@@ -11752,6 +12059,8 @@ if (typeof module !== 'undefined' && module.exports) {
     const LISTENING_THRESHOLD = 5;
     const MAX_DISCOVERY_FILES = 5000;
     const MAX_DISCOVERY_HTML_BYTES = 5 * 1024 * 1024;
+    const MAX_DISCOVERY_FILE_BYTES = 100 * 1024 * 1024;
+    const MAX_DISCOVERY_TOTAL_BYTES = 1024 * 1024 * 1024;
     const runtimeResources = new Map();
     const runtimeObjectUrls = [];
 
@@ -11855,6 +12164,14 @@ if (typeof module !== 'undefined' && module.exports) {
     function getDeclaredFileSize(file) {
         const size = Number(file && file.size);
         return Number.isFinite(size) && size >= 0 ? size : 0;
+    }
+
+    function isFileTooLarge(file, kind) {
+        const declaredSize = getDeclaredFileSize(file);
+        if (kind === 'html') {
+            return declaredSize > MAX_DISCOVERY_HTML_BYTES;
+        }
+        return declaredSize > MAX_DISCOVERY_FILE_BYTES;
     }
 
     function isHtmlTooLarge(file, text) {
@@ -12169,6 +12486,7 @@ if (typeof module !== 'undefined' && module.exports) {
             console.warn(`[LibraryDiscovery] File picker import truncated to ${MAX_DISCOVERY_FILES} files.`);
         }
         const records = [];
+        let totalDeclaredBytes = 0;
         for (let i = 0; i < input.length; i += 1) {
             const file = input[i];
             const path = getFilePath(file);
@@ -12176,6 +12494,16 @@ if (typeof module !== 'undefined' && module.exports) {
                 continue;
             }
             const kind = getExtensionType(path);
+            const declaredSize = getDeclaredFileSize(file);
+            if (isFileTooLarge(file, kind)) {
+                console.warn('[LibraryDiscovery] File skipped because it is too large');
+                continue;
+            }
+            if (declaredSize && totalDeclaredBytes + declaredSize > MAX_DISCOVERY_TOTAL_BYTES) {
+                console.warn('[LibraryDiscovery] File picker import byte budget reached');
+                continue;
+            }
+            totalDeclaredBytes += declaredSize;
             const record = {
                 file,
                 path,
@@ -12328,6 +12656,7 @@ if (typeof module !== 'undefined' && module.exports) {
     (function () {
       var frame = document.getElementById('imported-practice-frame');
       var targetOrigin = (location.origin && location.origin !== 'null' && /^https?:\\/\\//i.test(location.origin)) ? location.origin : '*';
+      var MAX_BRIDGE_MESSAGE_CHARS = 2 * 1024 * 1024;
       var allowedFromFrame = {
         SESSION_READY: true,
         REQUEST_INIT: true,
@@ -12356,9 +12685,20 @@ if (typeof module !== 'undefined' && module.exports) {
       function getType(data) {
         return data && typeof data.type === 'string' ? data.type : '';
       }
+      function isSafeBridgeMessage(data) {
+        if (!data || typeof data !== 'object') return false;
+        var type = getType(data);
+        if (!type || type.length > 80) return false;
+        try {
+          return JSON.stringify(data).length <= MAX_BRIDGE_MESSAGE_CHARS;
+        } catch (_) {
+          return false;
+        }
+      }
       window.addEventListener('message', function (event) {
         var type = getType(event.data);
         if (!type) return;
+        if (!isSafeBridgeMessage(event.data)) return;
         if (frame && event.source === frame.contentWindow) {
           if (!allowedFromFrame[type]) return;
           if (window.opener && typeof window.opener.postMessage === 'function') {

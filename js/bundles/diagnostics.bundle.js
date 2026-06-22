@@ -288,9 +288,6 @@ class SystemDiagnostics {
             const windowName = `comm_test_${String(examId || '').replace(/[^\w-]/g, '_')}`;
             const examWindow = window.open(trustedPath, windowName,
                 'width=1000,height=700,scrollbars=yes,resizable=yes');
-            if (examWindow) {
-                try { examWindow.opener = null; } catch (_) { }
-            }
 
             if (!examWindow) {
                 return {
@@ -865,6 +862,15 @@ window.SystemDiagnostics = SystemDiagnostics;
  * 虚拟滚动器组件
  * 用于处理大量数据的高性能渲染
  */
+const MAX_PRELOAD_DATA_IMAGE_URL_LENGTH = 1024 * 1024;
+const TRUSTED_PRELOAD_IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpe?g|gif|webp);base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$/i;
+
+function isTrustedImageDataUrl(value) {
+    return typeof value === 'string'
+        && value.length <= MAX_PRELOAD_DATA_IMAGE_URL_LENGTH
+        && TRUSTED_PRELOAD_IMAGE_DATA_URL_PATTERN.test(value);
+}
+
 function resolveTrustedImagePreloadUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string') {
         return '';
@@ -896,7 +902,7 @@ function resolveTrustedImagePreloadUrl(rawUrl) {
                 ? resolved.href
                 : '';
         }
-        if (protocol === 'data:' && /^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(resolved.href)) {
+        if (protocol === 'data:' && isTrustedImageDataUrl(resolved.href)) {
             return resolved.href;
         }
     } catch (_) {

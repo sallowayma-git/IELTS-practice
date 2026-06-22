@@ -25,6 +25,7 @@
     const MAX_SPELLING_VOCAB_WORDS = 5000;
     const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
     const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const MAX_SPELLING_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
     const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     function summarizeSpellingCollectorErrorForLog(error) {
         if (!error || typeof error !== 'object') {
@@ -35,6 +36,23 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function summarizeSpellingTextForLog(value) {
+        if (value === null || value === undefined || value === '') {
+            return '[empty]';
+        }
+        return `[${typeof value}:${String(value).length} chars]`;
+    }
+
+    function parseSpellingLexiconJson(text) {
+        if (typeof text !== 'string') {
+            throw new Error('lexicon_json_invalid');
+        }
+        if (text.length > MAX_SPELLING_LEXICON_JSON_BYTES) {
+            throw new Error('lexicon_json_too_large');
+        }
+        return JSON.parse(text);
     }
 
 
@@ -391,7 +409,11 @@
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            return response.json();
+            const contentLength = Number(response.headers?.get?.('content-length'));
+            if (Number.isFinite(contentLength) && contentLength > MAX_SPELLING_LEXICON_JSON_BYTES) {
+                throw new Error('lexicon_json_too_large');
+            }
+            return parseSpellingLexiconJson(await response.text());
         }
 
         readJsonViaXHR(url) {
@@ -419,7 +441,7 @@
                             return;
                         }
                         try {
-                            resolve(JSON.parse(xhr.responseText));
+                            resolve(parseSpellingLexiconJson(xhr.responseText));
                         } catch (error) {
                             reject(error);
                         }
@@ -1056,7 +1078,11 @@
             const threshold = this.resolveSimilarityThreshold(maxLen);
             const isSimilar = similarity >= threshold;
             if (isSimilar) {
-                console.log(`[SpellingErrorCollector] 拼写相似: "${input}" vs "${correct}", 相似度: ${(similarity * 100).toFixed(1)}%`);
+                console.log('[SpellingErrorCollector] Similar spelling detected:', {
+                    input: summarizeSpellingTextForLog(input),
+                    correct: summarizeSpellingTextForLog(correct),
+                    similarityPercent: Number((similarity * 100).toFixed(1))
+                });
                 return {
                     isSimilar: true,
                     reasonCode: this.isAdjacentTransposition(inputNorm, correctNorm) ? 'transpose' : 'edit',
@@ -1462,7 +1488,78 @@ function summarizeMarkdownExporterErrorForLog(error) {
     return summary;
 }
 
+const MARKDOWN_EXPORT_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const MAX_MARKDOWN_EXPORT_MAP_KEYS = 1000;
+const MAX_MARKDOWN_EXPORT_KEY_LENGTH = 120;
+
 class MarkdownExporter {
+    createSafeMap() {
+        return Object.create(null);
+    }
+
+    isSafeMapKey(key) {
+        const text = String(key ?? '').trim();
+        return Boolean(text)
+            && text.length <= MAX_MARKDOWN_EXPORT_KEY_LENGTH
+            && !MARKDOWN_EXPORT_UNSAFE_KEYS.has(text);
+    }
+
+    normalizeAnswerMap(source) {
+        const safeMap = this.createSafeMap();
+        if (!source || typeof source !== 'object') {
+            return safeMap;
+        }
+        Object.keys(source).slice(0, MAX_MARKDOWN_EXPORT_MAP_KEYS).forEach((key) => {
+            if (this.isSafeMapKey(key)) {
+                safeMap[key] = source[key];
+            }
+        });
+        return safeMap;
+    }
+
+    normalizeComparisonEntry(entry) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return {};
+        }
+        return {
+            questionId: entry.questionId,
+            userAnswer: entry.userAnswer,
+            user: entry.user,
+            correctAnswer: entry.correctAnswer,
+            correct: entry.correct,
+            isCorrect: Boolean(entry.isCorrect),
+            hasUserAnswer: Boolean(entry.hasUserAnswer)
+        };
+    }
+
+    normalizeComparisonMap(source) {
+        const safeMap = this.createSafeMap();
+        if (!source || typeof source !== 'object') {
+            return safeMap;
+        }
+        Object.keys(source).slice(0, MAX_MARKDOWN_EXPORT_MAP_KEYS).forEach((key) => {
+            if (this.isSafeMapKey(key)) {
+                safeMap[key] = this.normalizeComparisonEntry(source[key]);
+            }
+        });
+        return safeMap;
+    }
+
+    correctAnswerMapFromDetails(details) {
+        const safeMap = this.createSafeMap();
+        if (!details || typeof details !== 'object') {
+            return safeMap;
+        }
+        Object.keys(details).slice(0, MAX_MARKDOWN_EXPORT_MAP_KEYS).forEach((key) => {
+            if (!this.isSafeMapKey(key)) {
+                return;
+            }
+            const detail = details[key];
+            safeMap[key] = detail && detail.correctAnswer;
+        });
+        return safeMap;
+    }
+
     escapeMarkdownText(value, maxLength = 200) {
         const text = String(value ?? '')
             .replace(/[\x00-\x1f\x7f]/g, ' ')
@@ -1545,16 +1642,16 @@ class MarkdownExporter {
 
     // 合并 comparison 与其他来源以补全缺失 correctAnswer
     mergeComparisonWithCorrections(record) {
-        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const comparison = this.normalizeComparisonMap(record.answerComparison || {});
         const sources = [
-            record.correctAnswers || {},
-            (record.realData && record.realData.correctAnswers) || {},
+            this.normalizeAnswerMap(record.correctAnswers),
+            this.normalizeAnswerMap(record.realData && record.realData.correctAnswers),
         ];
         if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            sources.push(Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+            sources.push(this.correctAnswerMapFromDetails(record.realData.scoreInfo.details));
         }
         if (record.scoreInfo && record.scoreInfo.details) {
-            sources.push(Object.fromEntries(Object.entries(record.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+            sources.push(this.correctAnswerMapFromDetails(record.scoreInfo.details));
         }
         const getFromSources = (key) => {
             for (const src of sources) {
@@ -2131,6 +2228,7 @@ class MarkdownExporter {
 
             // 按问题编号排序
             const sortedKeys = Object.keys(answerComparison)
+                .filter(k => this.isSafeMapKey(k))
                 .filter(k => !noiseKeys.has(k))
                 .filter(k => {
                     const entry = answerComparison[k];
@@ -2192,26 +2290,29 @@ class MarkdownExporter {
     getCorrectAnswers(record) {
         // 优先使用顶级的correctAnswers
         if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
+            return this.normalizeAnswerMap(record.correctAnswers);
         }
         // 其次使用 correctAnswerMap
         if (record.correctAnswerMap && Object.keys(record.correctAnswerMap).length > 0) {
-            return record.correctAnswerMap;
+            return this.normalizeAnswerMap(record.correctAnswerMap);
         }
 
         // 其次使用realData中的correctAnswers / correctAnswerMap
         if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
+            return this.normalizeAnswerMap(record.realData.correctAnswers);
         }
         if (record.realData && record.realData.correctAnswerMap && Object.keys(record.realData.correctAnswerMap).length > 0) {
-            return record.realData.correctAnswerMap;
+            return this.normalizeAnswerMap(record.realData.correctAnswerMap);
         }
 
         // 尝试从answerComparison中提取
         if (record.answerComparison || record.realData?.answerComparison) {
             const comparison = record.answerComparison || record.realData?.answerComparison || {};
-            const correctAnswers = {};
+            const correctAnswers = this.createSafeMap();
             Object.keys(comparison).forEach(key => {
+                if (!this.isSafeMapKey(key)) {
+                    return;
+                }
                 const entry = comparison[key];
                 const val = entry && (entry.correctAnswer ?? entry.correct);
                 if (val != null && String(val).trim() !== '') {
@@ -2235,8 +2336,11 @@ class MarkdownExporter {
             detailsSources.push(record.answerDetails);
         }
         for (const details of detailsSources) {
-            const correctAnswers = {};
+            const correctAnswers = this.createSafeMap();
             Object.keys(details).forEach(key => {
+                if (!this.isSafeMapKey(key)) {
+                    return;
+                }
                 const detail = details[key];
                 if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
                     correctAnswers[key] = detail.correctAnswer;
@@ -2249,8 +2353,12 @@ class MarkdownExporter {
 
         // fallback：若answers有值且无正确答案，至少返回题号以生成表格
         if (record.answers && Object.keys(record.answers).length > 0) {
-            const stub = {};
-            Object.keys(record.answers).forEach(key => { stub[key] = ''; });
+            const stub = this.createSafeMap();
+            Object.keys(record.answers).slice(0, MAX_MARKDOWN_EXPORT_MAP_KEYS).forEach(key => {
+                if (this.isSafeMapKey(key)) {
+                    stub[key] = '';
+                }
+            });
             return stub;
         }
 
@@ -2389,7 +2497,7 @@ class MarkdownExporter {
                     <div id="export-progress-text">正在准备导出...</div>
                 </div>
             </div>
-            <style>
+            <style id="export-progress-style">
                 @keyframes spin {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
@@ -2417,6 +2525,10 @@ class MarkdownExporter {
         const overlay = document.getElementById('export-progress-overlay');
         if (overlay) {
             overlay.remove();
+        }
+        const style = document.getElementById('export-progress-style');
+        if (style) {
+            style.remove();
         }
     }
 
@@ -2464,6 +2576,9 @@ const MAX_MODAL_ANSWER_TEXT_LENGTH = 200;
 const MAX_MODAL_QUESTION_LABEL_LENGTH = 80;
 const MAX_MODAL_JSON_TEXT_LENGTH = 1000;
 const MAX_MODAL_ANSWER_DEPTH = 6;
+const MAX_MODAL_MAP_KEYS = 1000;
+const MAX_MODAL_MAP_KEY_LENGTH = 120;
+const MODAL_UNSAFE_MAP_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function summarizePracticeRecordModalErrorForLog(error) {
     if (!error || typeof error !== 'object') {
         return { name: typeof error };
@@ -3351,15 +3466,15 @@ class PracticeRecordModal {
     }
 
     mergeComparisonWithCorrections(record) {
-        const comparison = this.safeCloneObject(record.answerComparison || {});
+        const comparison = this.normalizeComparisonMap(record.answerComparison || {});
         const sources = [
-            record.correctAnswers || {},
-            record.realData && record.realData.correctAnswers,
+            this.normalizeAnswerMap(record.correctAnswers),
+            this.normalizeAnswerMap(record.realData && record.realData.correctAnswers),
             (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details)
-                ? Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                ? this.correctAnswerMapFromDetails(record.realData.scoreInfo.details)
                 : null,
             (record.scoreInfo && record.scoreInfo.details)
-                ? Object.fromEntries(Object.entries(record.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                ? this.correctAnswerMapFromDetails(record.scoreInfo.details)
                 : null
         ].filter(Boolean);
 
@@ -3456,16 +3571,19 @@ class PracticeRecordModal {
 
     getLegacyCorrectAnswers(record) {
         if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
+            return this.normalizeAnswerMap(record.correctAnswers);
         }
 
         if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
+            return this.normalizeAnswerMap(record.realData.correctAnswers);
         }
 
         if (record.answerComparison) {
-            const extracted = {};
+            const extracted = this.createSafeMap();
             Object.keys(record.answerComparison).forEach((key) => {
+                if (!this.isSafeMapKey(key)) {
+                    return;
+                }
                 const comparison = record.answerComparison[key];
                 if (comparison && comparison.correctAnswer) {
                     extracted[key] = comparison.correctAnswer;
@@ -3484,8 +3602,11 @@ class PracticeRecordModal {
             detailSources.push(record.scoreInfo.details);
         }
         for (const details of detailSources) {
-            const extracted = {};
+            const extracted = this.createSafeMap();
             Object.keys(details || {}).forEach((key) => {
+                if (!this.isSafeMapKey(key)) {
+                    return;
+                }
                 const detail = details[key];
                 if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
                     extracted[key] = detail.correctAnswer;
@@ -3636,16 +3757,75 @@ class PracticeRecordModal {
         return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
     }
 
+    createSafeMap() {
+        return Object.create(null);
+    }
+
+    isSafeMapKey(key) {
+        const text = String(key ?? '').trim();
+        return Boolean(text)
+            && text.length <= MAX_MODAL_MAP_KEY_LENGTH
+            && !MODAL_UNSAFE_MAP_KEYS.has(text);
+    }
+
+    normalizeAnswerMap(source) {
+        const safeMap = this.createSafeMap();
+        if (!source || typeof source !== 'object' || Array.isArray(source)) {
+            return safeMap;
+        }
+        Object.keys(source).slice(0, MAX_MODAL_MAP_KEYS).forEach((key) => {
+            if (this.isSafeMapKey(key)) {
+                safeMap[key] = source[key];
+            }
+        });
+        return safeMap;
+    }
+
+    normalizeComparisonEntry(entry) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return {};
+        }
+        return {
+            questionId: entry.questionId,
+            userAnswer: entry.userAnswer,
+            user: entry.user,
+            correctAnswer: entry.correctAnswer,
+            correct: entry.correct,
+            isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : Boolean(entry.isCorrect),
+            hasUserAnswer: Boolean(entry.hasUserAnswer)
+        };
+    }
+
+    normalizeComparisonMap(source) {
+        const safeMap = this.createSafeMap();
+        if (!source || typeof source !== 'object' || Array.isArray(source)) {
+            return safeMap;
+        }
+        Object.keys(source).slice(0, MAX_MODAL_MAP_KEYS).forEach((key) => {
+            if (this.isSafeMapKey(key)) {
+                safeMap[key] = this.normalizeComparisonEntry(source[key]);
+            }
+        });
+        return safeMap;
+    }
+
+    correctAnswerMapFromDetails(details) {
+        const safeMap = this.createSafeMap();
+        if (!details || typeof details !== 'object' || Array.isArray(details)) {
+            return safeMap;
+        }
+        Object.keys(details).slice(0, MAX_MODAL_MAP_KEYS).forEach((key) => {
+            if (!this.isSafeMapKey(key)) {
+                return;
+            }
+            const detail = details[key];
+            safeMap[key] = detail && detail.correctAnswer;
+        });
+        return safeMap;
+    }
+
     safeCloneObject(value) {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) {
-            return {};
-        }
-        try {
-            const cloned = JSON.parse(JSON.stringify(value));
-            return cloned && typeof cloned === 'object' && !Array.isArray(cloned) ? cloned : {};
-        } catch (_) {
-            return {};
-        }
+        return this.normalizeComparisonMap(value);
     }
 
     escapeHtml(value) {
@@ -3856,37 +4036,41 @@ class PracticeHistoryEnhancer {
         state.seen.add(value);
         state.nodes++;
 
-        if (Array.isArray(value)) {
-            const safeItems = value.slice(0, MAX_JSON_EXPORT_ARRAY_ITEMS)
-                .map(item => this.sanitizeJsonExportValue(item, depth + 1, state));
-            if (value.length > safeItems.length) {
-                safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
-            }
-            return safeItems;
-        }
-
-        const safeObject = {};
-        let allKeys;
         try {
-            allKeys = Object.keys(value);
-        } catch (error) {
-            return '[Unreadable]';
-        }
-        const keys = allKeys.slice(0, MAX_JSON_EXPORT_OBJECT_KEYS);
-        for (const key of keys) {
-            if (JSON_EXPORT_POLLUTION_KEYS.has(key)) {
-                continue;
+            if (Array.isArray(value)) {
+                const safeItems = value.slice(0, MAX_JSON_EXPORT_ARRAY_ITEMS)
+                    .map(item => this.sanitizeJsonExportValue(item, depth + 1, state));
+                if (value.length > safeItems.length) {
+                    safeItems.push(`[Truncated ${value.length - safeItems.length} items]`);
+                }
+                return safeItems;
             }
+
+            const safeObject = {};
+            let allKeys;
             try {
-                safeObject[key] = this.sanitizeJsonExportValue(value[key], depth + 1, state);
+                allKeys = Object.keys(value);
             } catch (error) {
-                safeObject[key] = '[Unreadable]';
+                return '[Unreadable]';
             }
+            const keys = allKeys.slice(0, MAX_JSON_EXPORT_OBJECT_KEYS);
+            for (const key of keys) {
+                if (JSON_EXPORT_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    safeObject[key] = this.sanitizeJsonExportValue(value[key], depth + 1, state);
+                } catch (error) {
+                    safeObject[key] = '[Unreadable]';
+                }
+            }
+            if (allKeys.length > keys.length) {
+                safeObject.__truncatedKeys = allKeys.length - keys.length;
+            }
+            return safeObject;
+        } finally {
+            state.seen.delete(value);
         }
-        if (allKeys.length > keys.length) {
-            safeObject.__truncatedKeys = allKeys.length - keys.length;
-        }
-        return safeObject;
     }
 
     /**

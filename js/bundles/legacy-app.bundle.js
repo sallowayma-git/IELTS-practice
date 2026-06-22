@@ -95,6 +95,27 @@
     }
   }
 
+  function getFallbackImportTextByteLength(content) {
+    var text = typeof content === 'string' ? content : String(content || '');
+    if (typeof Blob === 'function') {
+      try {
+        return new Blob([text]).size;
+      } catch (_) { }
+    }
+    if (typeof TextEncoder === 'function') {
+      try {
+        return new TextEncoder().encode(text).length;
+      } catch (_) { }
+    }
+    return text.length;
+  }
+
+  function assertFallbackImportTextSize(content) {
+    if (getFallbackImportTextByteLength(content) > MAX_FALLBACK_IMPORT_FILE_BYTES) {
+      throw new Error('Import file is too large. Maximum supported size is 10 MB.');
+    }
+  }
+
   function isFallbackUnsafeAttributeName(name) {
     var key = String(name || '').toLowerCase();
     return key.indexOf('on') === 0 || key === 'srcdoc';
@@ -732,6 +753,7 @@
     reader.onload = async () => {
       let data;
       try {
+        assertFallbackImportTextSize(reader.result);
         data = JSON.parse(reader.result);
       } catch (error) {
         window.showMessage && window.showMessage('文件格式无效，需为 JSON', 'error');
@@ -1771,7 +1793,7 @@
             message: '新的题库配置已创建并激活'
           });
         } catch (managerError) {
-          console.warn('[Fallback] LibraryManager 导入配置创建失败，使用旧降级路径:', managerError);
+          console.warn('[Fallback] LibraryManager 导入配置创建失败，使用旧降级路径:', summarizeBootFallbackErrorForLog(managerError));
         }
       }
 
@@ -1841,7 +1863,7 @@
             message: '新的题库配置已创建并激活'
           });
         } catch (applyErr) {
-          console.warn('[Fallback] 应用新题库失败，尝试刷新页面', applyErr);
+          console.warn('[Fallback] 应用新题库失败，尝试刷新页面', summarizeBootFallbackErrorForLog(applyErr));
           window.showMessage && window.showMessage('新的题库已保存，正在刷新界面...', 'warning');
           setTimeout(function () { try { location.reload(); } catch (_) { } }, 500);
           return _fallbackBuildUploadReport(discoveryResult, {

@@ -18,6 +18,10 @@ const MAX_DATA_INTEGRITY_EXTRA_TEXT_LENGTH = 4000;
 const MAX_DATA_INTEGRITY_EXTRA_DEPTH = 8;
 const MAX_DATA_INTEGRITY_EXTRA_ARRAY_ITEMS = 200;
 const MAX_DATA_INTEGRITY_EXTRA_OBJECT_KEYS = 200;
+const MAX_DATA_INTEGRITY_EXPORT_DEPTH = 16;
+const MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS = 5000;
+const MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS = 500;
+const MAX_DATA_INTEGRITY_EXPORT_STRING_LENGTH = 20000;
 const MAX_DATA_INTEGRITY_SCORE = 100;
 const MAX_DATA_INTEGRITY_DURATION_SECONDS = 365 * 24 * 60 * 60;
 const MAX_DATA_INTEGRITY_QUESTION_COUNT = 10000;
@@ -191,7 +195,7 @@ class DataIntegrityManager {
             if (!this.repositories) {
                 throw new Error('数据仓库不可用');
             }
-            data = providedData || await this.getCriticalData();
+            data = this._prepareExportData(providedData || await this.getCriticalData());
             if (Object.keys(data).length === 0) {
                 throw new Error('无数据可备份');
             }
@@ -203,7 +207,7 @@ class DataIntegrityManager {
                 data,
                 version: this.dataVersion,
                 type,
-                size: JSON.stringify(data).length
+                size: this._stringifyExportPayload(data).length
             };
             await this.repositories.backups.add(backupObj);
             console.log('[DataIntegrityManager] Backup created successfully');
@@ -222,10 +226,10 @@ class DataIntegrityManager {
             const exportObj = {
                 exportDate: new Date().toISOString(),
                 version: this.dataVersion,
-                data: exportData,
+                data: this._prepareExportData(exportData),
                 note: 'Storage quota exceeded - manual backup'
             };
-            const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+            const blob = new Blob([this._stringifyExportPayload(exportObj)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -353,13 +357,13 @@ class DataIntegrityManager {
 
     async exportData() {
         try {
-            const data = await this.getCriticalData();
+            const data = this._prepareExportData(await this.getCriticalData());
             const exportObj = {
                 exportDate: new Date().toISOString(),
                 version: this.dataVersion,
                 data
             };
-            const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+            const blob = new Blob([this._stringifyExportPayload(exportObj)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -474,6 +478,105 @@ class DataIntegrityManager {
         } catch (error) {
             console.error('[DataIntegrityManager] 获取关键数据失败:', summarizeDataIntegrityErrorForLog(error));
             return {};
+        }
+    }
+
+    _prepareExportData(value) {
+        const sanitized = this._sanitizeExportValue(value, 0, {
+            seen: new WeakSet(),
+            nodes: 0
+        });
+        return sanitized && typeof sanitized === 'object' ? sanitized : {};
+    }
+
+    _stringifyExportPayload(value) {
+        return JSON.stringify(this._prepareExportData(value), null, 2);
+    }
+
+    _sanitizeExportValue(value, depth = 0, state = null) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            return value.length > MAX_DATA_INTEGRITY_EXPORT_STRING_LENGTH
+                ? `${value.slice(0, MAX_DATA_INTEGRITY_EXPORT_STRING_LENGTH)}...`
+                : value;
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'bigint') {
+            return value.toString();
+        }
+        if (typeof value !== 'object') {
+            return undefined;
+        }
+        if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value.toISOString();
+        }
+        if (depth > MAX_DATA_INTEGRITY_EXPORT_DEPTH) {
+            return '[MaxDepth]';
+        }
+
+        const exportState = state || {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+        if (exportState.seen.has(value)) {
+            return '[Circular]';
+        }
+        exportState.nodes += 1;
+        if (exportState.nodes > MAX_DATA_INTEGRITY_IMPORT_NODES) {
+            return '[Truncated]';
+        }
+        exportState.seen.add(value);
+
+        try {
+            if (Array.isArray(value)) {
+                const list = value
+                    .slice(0, MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS)
+                    .map((item) => this._sanitizeExportValue(item, depth + 1, exportState))
+                    .filter((item) => item !== undefined);
+                if (value.length > MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS) {
+                    list.push(`[Truncated ${value.length - MAX_DATA_INTEGRITY_EXPORT_ARRAY_ITEMS} items]`);
+                }
+                return list;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const output = {};
+            for (const rawKey of keys.slice(0, MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS)) {
+                if (IMPORT_POLLUTION_KEYS.has(rawKey)) {
+                    continue;
+                }
+                const key = this._limitText(rawKey, MAX_DATA_INTEGRITY_RECORD_ID_LENGTH).trim();
+                if (!key || IMPORT_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                let safeValue;
+                try {
+                    safeValue = this._sanitizeExportValue(value[rawKey], depth + 1, exportState);
+                } catch (_) {
+                    safeValue = '[Unreadable]';
+                }
+                if (safeValue !== undefined) {
+                    output[key] = safeValue;
+                }
+            }
+            if (keys.length > MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS) {
+                output.__truncatedKeys = keys.length - MAX_DATA_INTEGRITY_EXPORT_OBJECT_KEYS;
+            }
+            return output;
+        } finally {
+            exportState.seen.delete(value);
         }
     }
 
@@ -926,6 +1029,37 @@ const MAX_BACKUP_HISTORY_ID_LENGTH = 160;
 const MAX_BACKUP_INTERVAL_HOURS = 24 * 365;
 const MAX_BACKUP_SETTING_COUNT = 100;
 const BACKUP_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const BACKUP_IMPORT_SENSITIVE_KEYS = new Set([
+    'password',
+    'passwordhash',
+    'password_hash',
+    'currentpassword',
+    'newpassword',
+    'secret',
+    'secretkey',
+    'csrf',
+    'csrftoken',
+    'csrf_token',
+    'totp',
+    'totpsecret',
+    'totp_secret',
+    'recoverycode',
+    'recovery_code',
+    'recoverycodes',
+    'recovery_codes',
+    'authorization',
+    'cookie',
+    'apikey',
+    'api_key',
+    'privatekey',
+    'private_key',
+    'authtoken',
+    'auth_token',
+    'accesstoken',
+    'access_token',
+    'refreshtoken',
+    'refresh_token'
+]);
 
 function createDataBackupId(prefix) {
     const cryptoObj = window.crypto || window.msCrypto;
@@ -1184,7 +1318,7 @@ class DataBackupManager {
             practiceRecords = await storage.get('practice_records', []);
         }
 
-        practiceRecords = Array.isArray(practiceRecords) ? practiceRecords : [];
+        practiceRecords = this.normalizeExportRecords(practiceRecords);
 
         if (dateRange) {
             practiceRecords = this.filterByDateRange(practiceRecords, dateRange);
@@ -1200,21 +1334,23 @@ class DataBackupManager {
                 version: '1.0.0',
                 format: normalizedFormat,
                 recordCount: practiceRecords.length,
-                options: { format, includeStats, includeBackups, dateRange, categories }
+                options: this.normalizeExportOptions({ format, includeStats, includeBackups, dateRange, categories })
             },
             practiceRecords
         };
 
         if (includeStats) {
+            let userStats = {};
             if (window.practiceRecorder && typeof window.practiceRecorder.getUserStats === 'function') {
-                exportPayload.userStats = window.practiceRecorder.getUserStats();
+                userStats = window.practiceRecorder.getUserStats();
             } else {
-                exportPayload.userStats = await storage.get('user_stats', {});
+                userStats = await storage.get('user_stats', {});
             }
+            exportPayload.userStats = this.normalizeExportStats(userStats);
         }
 
         if (includeBackups && window.practiceRecorder && typeof window.practiceRecorder.getBackups === 'function') {
-            exportPayload.backups = window.practiceRecorder.getBackups();
+            exportPayload.backups = this.normalizeExportBackups(window.practiceRecorder.getBackups());
         }
 
         await this.recordExportHistory(exportPayload.exportInfo);
@@ -1287,6 +1423,48 @@ class DataBackupManager {
             mimeType: 'text/csv',
             size: csvContent.length
         };
+    }
+
+    normalizeExportRecords(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .slice(0, MAX_BACKUP_IMPORT_RECORDS)
+            .map((record, index) => this.normalizeRecord(this.sanitizeRecord(record), {
+                preserveIds: true,
+                fallbackIdPrefix: 'export',
+                index
+            }))
+            .filter(Boolean);
+    }
+
+    normalizeExportStats(stats) {
+        return this.cloneSafePlainObject(stats, {
+            maxDepth: MAX_BACKUP_RECORD_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_RECORD_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_RECORD_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_RECORD_TEXT_LENGTH
+        });
+    }
+
+    normalizeExportBackups(backups) {
+        const cloned = this.cloneSafeValue(backups, {
+            maxDepth: MAX_BACKUP_HISTORY_CLONE_DEPTH,
+            maxArrayItems: MAX_BACKUP_HISTORY_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_HISTORY_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_HISTORY_TEXT_LENGTH
+        });
+        return Array.isArray(cloned) ? cloned : [];
+    }
+
+    normalizeExportOptions(options) {
+        return this.cloneSafePlainObject(options, {
+            maxDepth: 3,
+            maxArrayItems: MAX_BACKUP_HISTORY_ARRAY_ITEMS,
+            maxObjectKeys: MAX_BACKUP_HISTORY_OBJECT_KEYS,
+            maxTextLength: MAX_BACKUP_HISTORY_TEXT_LENGTH
+        });
     }
     /**
      * Legacy-friendly wrapper.
@@ -1478,18 +1656,18 @@ class DataBackupManager {
             if (Number.isFinite(contentLength) && contentLength > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
                 throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
             }
-            if (typeof response.text === 'function') {
-                const body = await response.text();
-                if (getBackupTextByteLength(body) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
-                    throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
-                }
-                try {
-                    return JSON.parse(body);
-                } catch (_) {
-                    throw new Error('Fetched import file is not valid JSON.');
-                }
+            if (typeof response.text !== 'function') {
+                throw new Error('Fetched import response cannot be read safely.');
             }
-            return await response.json();
+            const body = await response.text();
+            if (getBackupTextByteLength(body) > DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES) {
+                throw createImportLimitError(`Import source is too large. Maximum supported size is ${DEFAULT_MAX_BACKUP_IMPORT_SOURCE_BYTES} bytes.`);
+            }
+            try {
+                return JSON.parse(body);
+            } catch (_) {
+                throw new Error('Fetched import file is not valid JSON.');
+            }
         }
 
         if (Array.isArray(source) || this.isPlainObject(source)) {
@@ -2719,7 +2897,9 @@ class DataBackupManager {
     }
 
     isUnsafeImportKey(key) {
-        return BACKUP_IMPORT_POLLUTION_KEYS.has(String(key));
+        const normalized = String(key || '').trim().toLowerCase();
+        return BACKUP_IMPORT_POLLUTION_KEYS.has(normalized)
+            || BACKUP_IMPORT_SENSITIVE_KEYS.has(normalized);
     }
 
     safeEntries(value) {
@@ -2807,6 +2987,10 @@ class DataBackupManager {
             maxObjectKeys = MAX_BACKUP_RECORD_OBJECT_KEYS
         } = options;
         const clone = {};
+        const scanState = new WeakSet();
+        if (value && typeof value === 'object') {
+            scanState.add(value);
+        }
         for (const [key, item] of this.safeEntries(value)) {
             const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
             if (!safeKey || this.isUnsafeImportKey(safeKey)) {
@@ -2815,7 +2999,7 @@ class DataBackupManager {
             if (!Object.prototype.hasOwnProperty.call(clone, safeKey) && Object.keys(clone).length >= maxObjectKeys) {
                 continue;
             }
-            const safeValue = this.cloneSafeValue(item, options, 0);
+            const safeValue = this.cloneSafeValue(item, options, 0, scanState);
             if (safeValue !== undefined) {
                 clone[safeKey] = safeValue;
             }
@@ -2826,6 +3010,10 @@ class DataBackupManager {
     mergeSafePlainObjects(...objects) {
         const merged = {};
         objects.forEach((object) => {
+            const scanState = new WeakSet();
+            if (object && typeof object === 'object') {
+                scanState.add(object);
+            }
             for (const [key, value] of this.safeEntries(object)) {
                 const safeKey = this.normalizeText(key, MAX_BACKUP_RECORD_ID_LENGTH);
                 if (!safeKey || this.isUnsafeImportKey(safeKey)) {
@@ -2834,7 +3022,7 @@ class DataBackupManager {
                 if (!Object.prototype.hasOwnProperty.call(merged, safeKey) && Object.keys(merged).length >= MAX_BACKUP_RECORD_OBJECT_KEYS) {
                     continue;
                 }
-                const safeValue = this.cloneSafeValue(value);
+                const safeValue = this.cloneSafeValue(value, {}, 0, scanState);
                 if (safeValue !== undefined) {
                     merged[safeKey] = safeValue;
                 }

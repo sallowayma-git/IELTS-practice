@@ -429,6 +429,7 @@
     const MAX_SPELLING_VOCAB_WORDS = 5000;
     const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
     const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const MAX_SPELLING_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
     const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     function summarizeSpellingCollectorErrorForLog(error) {
         if (!error || typeof error !== 'object') {
@@ -439,6 +440,23 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function summarizeSpellingTextForLog(value) {
+        if (value === null || value === undefined || value === '') {
+            return '[empty]';
+        }
+        return `[${typeof value}:${String(value).length} chars]`;
+    }
+
+    function parseSpellingLexiconJson(text) {
+        if (typeof text !== 'string') {
+            throw new Error('lexicon_json_invalid');
+        }
+        if (text.length > MAX_SPELLING_LEXICON_JSON_BYTES) {
+            throw new Error('lexicon_json_too_large');
+        }
+        return JSON.parse(text);
     }
 
 
@@ -795,7 +813,11 @@
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            return response.json();
+            const contentLength = Number(response.headers?.get?.('content-length'));
+            if (Number.isFinite(contentLength) && contentLength > MAX_SPELLING_LEXICON_JSON_BYTES) {
+                throw new Error('lexicon_json_too_large');
+            }
+            return parseSpellingLexiconJson(await response.text());
         }
 
         readJsonViaXHR(url) {
@@ -823,7 +845,7 @@
                             return;
                         }
                         try {
-                            resolve(JSON.parse(xhr.responseText));
+                            resolve(parseSpellingLexiconJson(xhr.responseText));
                         } catch (error) {
                             reject(error);
                         }
@@ -1460,7 +1482,11 @@
             const threshold = this.resolveSimilarityThreshold(maxLen);
             const isSimilar = similarity >= threshold;
             if (isSimilar) {
-                console.log(`[SpellingErrorCollector] 拼写相似: "${input}" vs "${correct}", 相似度: ${(similarity * 100).toFixed(1)}%`);
+                console.log('[SpellingErrorCollector] Similar spelling detected:', {
+                    input: summarizeSpellingTextForLog(input),
+                    correct: summarizeSpellingTextForLog(correct),
+                    similarityPercent: Number((similarity * 100).toFixed(1))
+                });
                 return {
                     isSimilar: true,
                     reasonCode: this.isAdjacentTransposition(inputNorm, correctNorm) ? 'transpose' : 'edit',
@@ -1870,6 +1896,9 @@
     console.log('[PracticeEnhancer] 初始化增强器');
 
     let fallbackTokenCounter = 0;
+    const MAX_ENHANCER_ANSWER_LITERAL_CHARS = 64 * 1024;
+    const MAX_ENHANCER_FALLBACK_STORAGE_JSON_CHARS = 2 * 1024 * 1024;
+    const HISTORY_STATE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function summarizePracticeEnhancerErrorForLog(error) {
         const summary = {
@@ -1923,6 +1952,49 @@
         };
     }
 
+    function summarizeTextForLog(value) {
+        if (value === null || value === undefined || value === '') {
+            return '[empty]';
+        }
+        const text = String(value);
+        return {
+            chars: text.length,
+            compactChars: text.replace(/\s+/g, ' ').trim().length
+        };
+    }
+
+    function summarizeElementForLog(element) {
+        if (!element || typeof element !== 'object') {
+            return { tagName: 'unknown' };
+        }
+        const tagName = typeof element.tagName === 'string'
+            ? element.tagName.toLowerCase()
+            : 'unknown';
+        return {
+            tagName,
+            type: typeof element.type === 'string' ? element.type.slice(0, 32) : undefined,
+            hasSubmitSuite: Boolean(element.dataset && element.dataset.submitSuite)
+        };
+    }
+
+    function summarizeResultsPayloadForLog(payload) {
+        const safePayload = payload && typeof payload === 'object' ? payload : {};
+        const scoreInfo = safePayload.scoreInfo && typeof safePayload.scoreInfo === 'object'
+            ? safePayload.scoreInfo
+            : null;
+        return {
+            status: typeof safePayload.status === 'string' ? safePayload.status : 'unknown',
+            pageType: typeof safePayload.pageType === 'string' ? safePayload.pageType : 'unknown',
+            practiceType: typeof safePayload.practiceType === 'string' ? safePayload.practiceType : 'unknown',
+            answers: summarizeAnswerMapForLog(safePayload.answers),
+            correctAnswers: summarizeAnswerMapForLog(safePayload.correctAnswers),
+            answerComparison: summarizeAnswerComparisonForLog(safePayload.answerComparison),
+            interactions: summarizeInteractionsForLog(safePayload.interactions),
+            hasScore: Boolean(scoreInfo),
+            scoreSource: scoreInfo && typeof scoreInfo.source === 'string' ? scoreInfo.source : null
+        };
+    }
+
     function randomTokenSuffix() {
         const cryptoObj = window.crypto || window.msCrypto;
         if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
@@ -1935,6 +2007,30 @@
         }
         fallbackTokenCounter += 1;
         return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
+
+    function copySafeHistoryState(baseState) {
+        const output = {};
+        if (!baseState || typeof baseState !== 'object' || Array.isArray(baseState)) {
+            return output;
+        }
+        Object.keys(baseState).forEach((key) => {
+            if (HISTORY_STATE_UNSAFE_KEYS.has(key)) {
+                return;
+            }
+            output[key] = baseState[key];
+        });
+        return output;
+    }
+
+    function parseBoundedEnhancerJson(source, maxLength = MAX_ENHANCER_ANSWER_LITERAL_CHARS) {
+        if (typeof source !== 'string') {
+            throw new Error('enhancer_json_invalid');
+        }
+        if (source.length > maxLength) {
+            throw new Error('enhancer_json_too_large');
+        }
+        return JSON.parse(source);
     }
 
     const DEFAULT_ENHANCER_CONFIG = {
@@ -2411,6 +2507,9 @@
         for (; i < content.length; i++) {
             const char = content[i];
             literal += char;
+            if (literal.length > MAX_ENHANCER_ANSWER_LITERAL_CHARS) {
+                return null;
+            }
             if (inString) {
                 if (char === '\\') {
                     i++;
@@ -2574,7 +2673,7 @@
 
                     if (cleanStr.startsWith('{') && cleanStr.endsWith('}')) {
                         cleanStr = cleanStr.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
-                        return JSON.parse(cleanStr);
+                        return parseBoundedEnhancerJson(cleanStr);
                     }
                 } catch (error) {
                     console.warn('[CorrectAnswerExtractor] JSON解析失败，尝试其他方法:', summarizePracticeEnhancerErrorForLog(error));
@@ -2584,6 +2683,9 @@
             }
 
             manualParseAnswers(objectStr) {
+                if (typeof objectStr !== 'string' || objectStr.length > MAX_ENHANCER_ANSWER_LITERAL_CHARS) {
+                    return null;
+                }
                 const answers = {};
                 const keyValuePattern = /([a-zA-Z0-9_]+)\s*:\s*['"`]([^'"`]+)['"`]/g;
                 let match;
@@ -2644,7 +2746,7 @@
                         try {
                             const jsonMatch = content.match(/(?:answers?|correct)\s*[:=]\s*(\{[^}]+\}|\[[^\]]+\])/i);
                             if (jsonMatch) {
-                                const answers = JSON.parse(jsonMatch[1]);
+                                const answers = parseBoundedEnhancerJson(jsonMatch[1]);
                                 if (answers && typeof answers === 'object') {
                                     return answers;
                                 }
@@ -3163,7 +3265,7 @@
                     const raw = safeStore.getItem(k);
                     if (!raw) return null;
                     try {
-                        const parsed = JSON.parse(raw);
+                        const parsed = parseBoundedEnhancerJson(raw, MAX_ENHANCER_FALLBACK_STORAGE_JSON_CHARS);
                         return parsed && parsed.value !== undefined ? parsed.value : parsed;
                     } catch (_) {
                         return null;
@@ -3990,12 +4092,11 @@
                 }
                 try {
                     this._suiteHistoryBypassPopstate = true;
-                    const marker = Object.assign({}, (event && event.state && typeof event.state === 'object') ? event.state : {}, {
-                        __suiteGuard: true,
-                        __suiteGuardToken: this._suiteHistoryGuardToken,
-                        suiteSessionId: this.suiteSessionId || null,
-                        timestamp: Date.now()
-                    });
+                    const marker = copySafeHistoryState(event && event.state);
+                    marker.__suiteGuard = true;
+                    marker.__suiteGuardToken = this._suiteHistoryGuardToken;
+                    marker.suiteSessionId = this.suiteSessionId || null;
+                    marker.timestamp = Date.now();
                     window.history.pushState(marker, document.title, window.location.href);
                     this.notifySuiteCloseAttempt('history_back_blocked');
                 } catch (_) {
@@ -4007,12 +4108,11 @@
                 }
             };
             try {
-                const marker = Object.assign({}, (window.history.state && typeof window.history.state === 'object') ? window.history.state : {}, {
-                    __suiteGuard: true,
-                    __suiteGuardToken: this._suiteHistoryGuardToken,
-                    suiteSessionId: this.suiteSessionId || null,
-                    timestamp: Date.now()
-                });
+                const marker = copySafeHistoryState(window.history.state);
+                marker.__suiteGuard = true;
+                marker.__suiteGuardToken = this._suiteHistoryGuardToken;
+                marker.suiteSessionId = this.suiteSessionId || null;
+                marker.timestamp = Date.now();
                 window.history.pushState(marker, document.title, window.location.href);
                 this._suiteHistoryGuardPushed = true;
             } catch (_) {
@@ -4061,7 +4161,7 @@
                     const state = window.history.state;
                     const currentToken = state && state.__suiteGuardToken;
                     if (currentToken && currentToken === this._suiteHistoryGuardToken) {
-                        const restored = Object.assign({}, state);
+                        const restored = copySafeHistoryState(state);
                         delete restored.__suiteGuard;
                         delete restored.__suiteGuardToken;
                         delete restored.suiteSessionId;
@@ -4437,10 +4537,10 @@
 
             // 从suiteId提取测试编号（如"set1" -> "1"）
             let testNum = null;
-            if (suiteId.startsWith('set')) {
-                testNum = suiteId.replace('set', '');
-            } else if (suiteId.startsWith('page-test')) {
-                testNum = suiteId.replace('page-test', '');
+            const suiteIdText = String(suiteId || '').trim();
+            const suiteIdMatch = /^(?:set|page-test)(\d{1,4})$/i.exec(suiteIdText);
+            if (suiteIdMatch) {
+                testNum = suiteIdMatch[1];
             }
 
             if (!testNum) {
@@ -4453,8 +4553,8 @@
 
             if (Array.isArray(answerKey)) {
                 // 如果是数组，按索引查找
-                const index = parseInt(testNum) - 1;
-                if (index >= 0 && index < answerKey.length) {
+                const index = Number.parseInt(testNum, 10) - 1;
+                if (Number.isInteger(index) && index >= 0 && index < answerKey.length) {
                     testAnswers = answerKey[index];
                 }
             } else if (typeof answerKey === 'object') {
@@ -4465,14 +4565,16 @@
 
                 // 兼容 V2 资源页：answerKey 为扁平映射（如 { t1_q1: 'xxx', ... }）
                 if (!testAnswers) {
-                    const pattern = new RegExp(`^t${testNum}[_-]`, 'i');
+                    const flatPrefixUnderscore = `t${testNum}_`.toLowerCase();
+                    const flatPrefixDash = `t${testNum}-`.toLowerCase();
                     const filtered = {};
                     Object.entries(answerKey).forEach(([key, value]) => {
                         if (!key) {
                             return;
                         }
                         const normalizedKey = String(key).trim();
-                        if (pattern.test(normalizedKey)) {
+                        const normalizedLowerKey = normalizedKey.toLowerCase();
+                        if (normalizedLowerKey.startsWith(flatPrefixUnderscore) || normalizedLowerKey.startsWith(flatPrefixDash)) {
                             filtered[normalizedKey] = value;
                         }
                     });
@@ -4651,7 +4753,8 @@
                         const userAnswer = userAnswerCell.textContent.trim();
                         const correctAnswer = correctAnswerCell.textContent.trim();
 
-                        console.log('[PracticeEnhancer] 处理行:', questionText, {
+                        console.log('[PracticeEnhancer] Result row summary:', {
+                            question: summarizeTextForLog(questionText),
                             userAnswer: summarizeAnswerValueForLog(userAnswer),
                             correctAnswer: summarizeAnswerValueForLog(correctAnswer)
                         });
@@ -4668,7 +4771,8 @@
                                 this.addAnswer(normalizedKey, userAnswer);
                             }
 
-                            console.log('[PracticeEnhancer] 从表格提取:', normalizedKey, {
+                            console.log('[PracticeEnhancer] Extracted table answer summary:', {
+                                questionKey: summarizeAnswerValueForLog(normalizedKey),
                                 userAnswer: summarizeAnswerValueForLog(userAnswer),
                                 correctAnswer: summarizeAnswerValueForLog(correctAnswer)
                             });
@@ -4967,7 +5071,7 @@
                     return;
                 }
 
-                console.log('[PracticeEnhancer] 检测到提交按钮点击:', target);
+                console.log('[PracticeEnhancer] Submit button click summary:', summarizeElementForLog(target));
 
                 // 多套题模式：提取套题ID
                 if (self.isMultiSuite) {
@@ -5935,7 +6039,7 @@
                 self.dispatchPracticeResultsEvent(finalResults);
 
                 const pushResults = function () {
-                    console.log('[PracticeEnhancer] 发送练习完成数据:', finalResults);
+                    console.log('[PracticeEnhancer] Final practice result summary:', summarizeResultsPayloadForLog(finalResults));
                     self.sendMessage('PRACTICE_COMPLETE', finalResults);
                     self.hasDispatchedFinalResults = true;
                     self.submitInProgress = false;
@@ -6326,7 +6430,7 @@
             }
 
             const text = resultsEl.textContent || '';
-            console.log('[PracticeEnhancer] 结果文本:', text);
+            console.log('[PracticeEnhancer] Result text summary:', summarizeTextForLog(text));
 
             // 匹配 "Final Score: 85% (11/13)" 格式 - 66号文件格式
             const finalScoreMatch = text.match(/Final\s+Score:\s*(\d+)%\s*\((\d+)\/(\d+)\)/i);
@@ -6456,7 +6560,7 @@
                 };
             }
 
-            console.warn('[PracticeEnhancer] 无法提取成绩信息，结果文本:', text);
+            console.warn('[PracticeEnhancer] Unable to extract score from result text summary:', summarizeTextForLog(text));
             return null;
         },
 

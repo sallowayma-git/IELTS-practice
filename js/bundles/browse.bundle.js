@@ -3160,12 +3160,27 @@
     };
 
     // --- Legacy navigation controller ---
+    function normalizeLegacyActiveClass(value) {
+        var token = String(value || 'active').trim();
+        return /^[A-Za-z0-9_-]{1,64}$/.test(token) ? token : 'active';
+    }
+
+    function hasLegacyClassToken(className, token) {
+        return String(className || '').split(/\s+/).indexOf(token) !== -1;
+    }
+
+    function removeLegacyClassToken(className, token) {
+        return String(className || '').split(/\s+/).filter(function (item) {
+            return item && item !== token;
+        }).join(' ');
+    }
+
     function LegacyNavigationController(options) {
         options = options || {};
         this.options = {
             containerSelector: options.containerSelector || '.main-nav',
             navButtonSelector: options.navButtonSelector || '.nav-btn[data-view]',
-            activeClass: options.activeClass || 'active',
+            activeClass: normalizeLegacyActiveClass(options.activeClass),
             syncOnNavigate: options.syncOnNavigate !== false,
             onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : null,
             onRepeatNavigate: typeof options.onRepeatNavigate === 'function' ? options.onRepeatNavigate : null
@@ -3182,7 +3197,7 @@
         this.options = Object.assign({}, this.options, {
             containerSelector: options.containerSelector || this.options.containerSelector,
             navButtonSelector: options.navButtonSelector || this.options.navButtonSelector,
-            activeClass: options.activeClass || this.options.activeClass,
+            activeClass: options.activeClass ? normalizeLegacyActiveClass(options.activeClass) : this.options.activeClass,
             syncOnNavigate: options.syncOnNavigate === undefined ? this.options.syncOnNavigate : options.syncOnNavigate,
             onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : this.options.onNavigate,
             onRepeatNavigate: typeof options.onRepeatNavigate === 'function' ? options.onRepeatNavigate : this.options.onRepeatNavigate
@@ -3272,11 +3287,11 @@
                 button.classList.toggle(activeClass, button.dataset.view === viewName);
             } else if (typeof button.className === 'string') {
                 if (button.dataset.view === viewName) {
-                    if ((' ' + button.className + ' ').indexOf(' ' + activeClass + ' ') === -1) {
+                    if (!hasLegacyClassToken(button.className, activeClass)) {
                         button.className += ' ' + activeClass;
                     }
                 } else {
-                    button.className = button.className.replace(new RegExp('(?:^|\\s)' + activeClass + '(?:$|\\s)', 'g'), ' ').trim();
+                    button.className = removeLegacyClassToken(button.className, activeClass);
                 }
             }
         }
@@ -3302,7 +3317,7 @@
         if (target.classList && target.classList.contains(activeClass)) {
             alreadyActive = true;
         } else if (typeof target.className === 'string') {
-            alreadyActive = new RegExp('(?:^|\\s)' + activeClass + '(?:$|\\s)').test(target.className);
+            alreadyActive = hasLegacyClassToken(target.className, activeClass);
         }
 
         event.preventDefault();
@@ -3694,6 +3709,13 @@
         '低频': 1
     };
     const CUSTOM_SUITE_PANEL_MARGIN = 12;
+    const MAX_FALLBACK_EXPORT_RECORDS = 5000;
+    const MAX_FALLBACK_EXPORT_DEPTH = 12;
+    const MAX_FALLBACK_EXPORT_NODES = 50000;
+    const MAX_FALLBACK_EXPORT_ARRAY_ITEMS = 1000;
+    const MAX_FALLBACK_EXPORT_OBJECT_KEYS = 300;
+    const MAX_FALLBACK_EXPORT_STRING_LENGTH = 20000;
+    const FALLBACK_EXPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     let customSuitePortalPosition = null;
 
     function summarizeExamActionsErrorForLog(error) {
@@ -3705,6 +3727,91 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function createFallbackExportState() {
+        return {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+    }
+
+    function sanitizeFallbackExportValue(value, depth = 0, state = createFallbackExportState()) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_FALLBACK_EXPORT_STRING_LENGTH
+                ? `${value.slice(0, MAX_FALLBACK_EXPORT_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return null;
+        }
+        if (depth > MAX_FALLBACK_EXPORT_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_FALLBACK_EXPORT_NODES) {
+            return '[Truncated]';
+        }
+        state.nodes += 1;
+        state.seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                const items = value
+                    .slice(0, MAX_FALLBACK_EXPORT_ARRAY_ITEMS)
+                    .map((item) => sanitizeFallbackExportValue(item, depth + 1, state));
+                if (value.length > items.length) {
+                    items.push(`[Truncated ${value.length - items.length} items]`);
+                }
+                return items;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const safeObject = {};
+            for (const key of keys.slice(0, MAX_FALLBACK_EXPORT_OBJECT_KEYS)) {
+                if (FALLBACK_EXPORT_POLLUTION_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    safeObject[key] = sanitizeFallbackExportValue(value[key], depth + 1, state);
+                } catch (_) {
+                    safeObject[key] = '[Unreadable]';
+                }
+            }
+            if (keys.length > MAX_FALLBACK_EXPORT_OBJECT_KEYS) {
+                safeObject.__truncatedKeys = keys.length - MAX_FALLBACK_EXPORT_OBJECT_KEYS;
+            }
+            return safeObject;
+        } finally {
+            state.seen.delete(value);
+        }
+    }
+
+    function createSafeFallbackExportRecords(records) {
+        const list = Array.isArray(records) ? records : [];
+        const state = createFallbackExportState();
+        return list
+            .slice(0, MAX_FALLBACK_EXPORT_RECORDS)
+            .map((record) => sanitizeFallbackExportValue(record, 0, state));
     }
 
     function normalizeExamSignature(value) {
@@ -5038,7 +5145,8 @@
         } catch (_) { }
         try {
             var records = (global.storage && storage.get) ? (await storage.get('practice_records', [])) : (global.getPracticeRecordsState ? global.getPracticeRecordsState() : []);
-            var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
+            var safeRecords = createSafeFallbackExportRecords(records);
+            var blob = new Blob([JSON.stringify(safeRecords, null, 2)], { type: 'application/json; charset=utf-8' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -5168,6 +5276,7 @@
     const MAX_SPELLING_VOCAB_WORDS = 5000;
     const MAX_SPELLING_WORD_TEXT_LENGTH = 160;
     const MAX_SPELLING_NOTE_TEXT_LENGTH = 4000;
+    const MAX_SPELLING_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
     const SPELLING_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     function summarizeSpellingCollectorErrorForLog(error) {
         if (!error || typeof error !== 'object') {
@@ -5178,6 +5287,23 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function summarizeSpellingTextForLog(value) {
+        if (value === null || value === undefined || value === '') {
+            return '[empty]';
+        }
+        return `[${typeof value}:${String(value).length} chars]`;
+    }
+
+    function parseSpellingLexiconJson(text) {
+        if (typeof text !== 'string') {
+            throw new Error('lexicon_json_invalid');
+        }
+        if (text.length > MAX_SPELLING_LEXICON_JSON_BYTES) {
+            throw new Error('lexicon_json_too_large');
+        }
+        return JSON.parse(text);
     }
 
 
@@ -5534,7 +5660,11 @@
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            return response.json();
+            const contentLength = Number(response.headers?.get?.('content-length'));
+            if (Number.isFinite(contentLength) && contentLength > MAX_SPELLING_LEXICON_JSON_BYTES) {
+                throw new Error('lexicon_json_too_large');
+            }
+            return parseSpellingLexiconJson(await response.text());
         }
 
         readJsonViaXHR(url) {
@@ -5562,7 +5692,7 @@
                             return;
                         }
                         try {
-                            resolve(JSON.parse(xhr.responseText));
+                            resolve(parseSpellingLexiconJson(xhr.responseText));
                         } catch (error) {
                             reject(error);
                         }
@@ -6199,7 +6329,11 @@
             const threshold = this.resolveSimilarityThreshold(maxLen);
             const isSimilar = similarity >= threshold;
             if (isSimilar) {
-                console.log(`[SpellingErrorCollector] 拼写相似: "${input}" vs "${correct}", 相似度: ${(similarity * 100).toFixed(1)}%`);
+                console.log('[SpellingErrorCollector] Similar spelling detected:', {
+                    input: summarizeSpellingTextForLog(input),
+                    correct: summarizeSpellingTextForLog(correct),
+                    similarityPercent: Number((similarity * 100).toFixed(1))
+                });
                 return {
                     isSimilar: true,
                     reasonCode: this.isAdjacentTransposition(inputNorm, correctNorm) ? 'transpose' : 'edit',
@@ -6597,6 +6731,12 @@
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
+    const MAX_REVIEW_REPLAY_CLONE_DEPTH = 12;
+    const MAX_REVIEW_REPLAY_CLONE_NODES = 50000;
+    const MAX_REVIEW_REPLAY_ARRAY_ITEMS = 2000;
+    const MAX_REVIEW_REPLAY_OBJECT_KEYS = 500;
+    const MAX_REVIEW_REPLAY_STRING_LENGTH = 20000;
+    const REVIEW_REPLAY_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     let fallbackIdCounter = 0;
 
     function randomIdSuffix() {
@@ -6674,6 +6814,89 @@
     function toSafeCount(value, fallback = 0) {
         const numeric = Number(value);
         return Number.isFinite(numeric) && numeric >= 0 ? Math.floor(numeric) : fallback;
+    }
+
+    function createReviewReplayCloneState() {
+        return {
+            seen: new WeakSet(),
+            nodes: 0
+        };
+    }
+
+    function cloneReviewReplayValue(value, depth = 0, state = createReviewReplayCloneState()) {
+        if (value == null) {
+            return value;
+        }
+        const valueType = typeof value;
+        if (valueType === 'string') {
+            return value.length > MAX_REVIEW_REPLAY_STRING_LENGTH
+                ? `${value.slice(0, MAX_REVIEW_REPLAY_STRING_LENGTH)}...`
+                : value;
+        }
+        if (valueType === 'number') {
+            return Number.isFinite(value) ? value : null;
+        }
+        if (valueType === 'boolean') {
+            return value;
+        }
+        if (valueType === 'bigint') {
+            return value.toString();
+        }
+        if (valueType !== 'object') {
+            return null;
+        }
+        if (depth > MAX_REVIEW_REPLAY_CLONE_DEPTH) {
+            return '[MaxDepth]';
+        }
+        if (state.seen.has(value)) {
+            return '[Circular]';
+        }
+        if (state.nodes >= MAX_REVIEW_REPLAY_CLONE_NODES) {
+            return '[Truncated]';
+        }
+        const objectType = Object.prototype.toString.call(value);
+        if (objectType === '[object Date]') {
+            const timestamp = value.getTime();
+            return Number.isFinite(timestamp) ? value.toISOString() : null;
+        }
+
+        state.nodes += 1;
+        state.seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                const items = value
+                    .slice(0, MAX_REVIEW_REPLAY_ARRAY_ITEMS)
+                    .map((item) => cloneReviewReplayValue(item, depth + 1, state));
+                if (value.length > items.length) {
+                    items.push(`[Truncated ${value.length - items.length} items]`);
+                }
+                return items;
+            }
+
+            let keys;
+            try {
+                keys = Object.keys(value);
+            } catch (_) {
+                return '[Unreadable]';
+            }
+            const clone = {};
+            for (const key of keys.slice(0, MAX_REVIEW_REPLAY_OBJECT_KEYS)) {
+                if (REVIEW_REPLAY_UNSAFE_KEYS.has(key)) {
+                    continue;
+                }
+                try {
+                    clone[key] = cloneReviewReplayValue(value[key], depth + 1, state);
+                } catch (_) {
+                    clone[key] = '[Unreadable]';
+                }
+            }
+            if (keys.length > MAX_REVIEW_REPLAY_OBJECT_KEYS) {
+                clone.__truncatedKeys = keys.length - MAX_REVIEW_REPLAY_OBJECT_KEYS;
+            }
+            return clone;
+        } finally {
+            state.seen.delete(value);
+        }
     }
 
     async function getActiveExamIndexSnapshot() {
@@ -7219,7 +7442,6 @@
                     : '_blank';
                 try {
                     tabWindow = window.open(finalUrl, requestedName);
-                    this._detachWindowOpener(tabWindow);
                     if (tabWindow && typeof tabWindow.focus === 'function') {
                         tabWindow.focus();
                     }
@@ -7241,7 +7463,6 @@
                     this._sanitizeWindowName('exam', exam && exam.id),
                     windowFeatures
                 );
-                this._detachWindowOpener(examWindow);
             } catch (_) { }
 
             // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
@@ -7602,7 +7823,6 @@
                         ? String(options.windowName)
                         : (examWindow.name || '_blank');
                     const reopened = window.open(placeholderUrl, windowName);
-                    this._detachWindowOpener(reopened);
                     if (reopened) {
                         return reopened;
                     }
@@ -7697,17 +7917,6 @@
                 .replace(/_+/g, '_')
                 .slice(0, 80) || 'target';
             return `${safePrefix}_${safeValue}`;
-        },
-
-        _detachWindowOpener(targetWindow) {
-            if (!targetWindow) {
-                return;
-            }
-            try {
-                targetWindow.opener = null;
-            } catch (_) {
-                // Some browsers block opener mutation for already-isolated windows.
-            }
         },
 
         /**
@@ -7871,7 +8080,7 @@
                         }
                         window.__IELTS_INLINE_ENHANCER__ = true;
 
-                        var parentWindow = window.opener || window.parent || null;
+                        var parentWindow = window.opener || (window.parent && window.parent !== window ? window.parent : null);
                         var state = {
                             sessionId: ${JSON.stringify(sessionToken)},
                             examId: ${JSON.stringify(examId)},
@@ -8032,8 +8241,15 @@
                             });
                         }
 
+                        function isAllowedIncomingMessageSource(event) {
+                            return !!(event && event.source && parentWindow && event.source === parentWindow);
+                        }
+
                         function isAllowedIncomingMessage(event) {
                             if (!event) {
+                                return false;
+                            }
+                            if (!isAllowedIncomingMessageSource(event)) {
                                 return false;
                             }
                             if (!event.origin || event.origin === 'null') {
@@ -8402,8 +8618,11 @@
                 this.examWindows.set(examId, existingInfo);
             }
 
+            const MAX_EXAM_MESSAGE_JSON_LENGTH = 2 * 1024 * 1024;
+
             const parseJsonSafely = (value) => {
                 if (typeof value !== 'string' || !value.trim()) return null;
+                if (value.length > MAX_EXAM_MESSAGE_JSON_LENGTH) return null;
                 try {
                     return JSON.parse(value);
                 } catch (_) {
@@ -9175,14 +9394,7 @@
         },
 
         _cloneReviewData(value) {
-            if (value == null) {
-                return value;
-            }
-            try {
-                return JSON.parse(JSON.stringify(value));
-            } catch (_) {
-                return value;
-            }
+            return cloneReviewReplayValue(value);
         },
 
         _isReplayObject(value) {
@@ -10112,8 +10324,7 @@
                 throw new Error('Practice URL is invalid or untrusted');
             }
             const windowName = this._sanitizeWindowName('practice', sessionData.sessionId);
-            const practiceWindow = window.open(practiceUrl, windowName, 'width=1200,height=800');
-            this._detachWindowOpener(practiceWindow);
+            window.open(practiceUrl, windowName, 'width=1200,height=800');
         },
 
         /**
@@ -12236,7 +12447,7 @@ class PDFHandler {
             }
 
             const info = {
-                path: safePdfPath,
+                path: this.getPublicPDFPath(safePdfPath),
                 size: response.headers.get('content-length'),
                 lastModified: response.headers.get('last-modified'),
                 contentType: response.headers.get('content-type'),
@@ -12250,7 +12461,7 @@ class PDFHandler {
         } catch (error) {
             console.error('[PDFHandler] Failed to get PDF info:', this.summarizeErrorForLog(error));
             return {
-                path: pdfPath,
+                path: this.getPublicPDFPath(pdfPath),
                 isAccessible: false,
                 error: getSafePdfHandlerErrorCode(error),
                 timestamp: new Date().toISOString()
@@ -12301,6 +12512,29 @@ class PDFHandler {
             return '';
         }
 
+        return '';
+    }
+
+    getPublicPDFPath(path) {
+        const safePath = this.resolvePDFPath(path);
+        if (!safePath) {
+            return '';
+        }
+        try {
+            const baseHref = window.location && window.location.href ? window.location.href : 'http://localhost/';
+            const resolved = new URL(safePath, baseHref);
+            if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+                const currentOrigin = window.location && window.location.origin;
+                return currentOrigin && currentOrigin !== 'null' && resolved.origin === currentOrigin
+                    ? resolved.pathname
+                    : '';
+            }
+            if (resolved.protocol === 'file:') {
+                return '[local-pdf]';
+            }
+        } catch (_) {
+            return '';
+        }
         return '';
     }
 
@@ -12428,7 +12662,7 @@ class PDFHandler {
     trackPDFWindow(pdfPath, pdfWindow, examTitle) {
         const windowInfo = {
             window: pdfWindow,
-            path: pdfPath,
+            path: this.getPublicPDFPath(pdfPath),
             title: examTitle,
             openedAt: new Date().toISOString(),
             isActive: true
@@ -12487,7 +12721,7 @@ class PDFHandler {
 
         // Dispatch custom event
         document.dispatchEvent(new CustomEvent('pdfLoaded', {
-            detail: { path: pdfPath }
+            detail: { path: this.getPublicPDFPath(pdfPath) }
         }));
     }
 
@@ -12505,7 +12739,7 @@ class PDFHandler {
 
         // Dispatch custom event
         document.dispatchEvent(new CustomEvent('pdfError', {
-            detail: { path: pdfPath, error: getSafePdfHandlerErrorCode(error) }
+            detail: { path: this.getPublicPDFPath(pdfPath), error: getSafePdfHandlerErrorCode(error) }
         }));
     }
 
@@ -12552,7 +12786,7 @@ class PDFHandler {
         for (const [path, info] of this.openWindows.entries()) {
             if (!info.window.closed) {
                 openWindows.push({
-                    path: path,
+                    path: info.path || this.getPublicPDFPath(path),
                     title: info.title,
                     openedAt: info.openedAt,
                     status: info.status || 'open'
@@ -12621,6 +12855,7 @@ const BROWSE_STATE_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'construc
 const BROWSE_STATE_MAX_TEXT_LENGTH = 120;
 const BROWSE_STATE_MAX_SEARCH_LENGTH = 300;
 const BROWSE_STATE_MAX_HISTORY_TEXT_LENGTH = 160;
+const BROWSE_STATE_MAX_IMPORT_STRING_LENGTH = 256 * 1024;
 const BROWSE_STATE_MAX_PAGE_SIZE = 200;
 const BROWSE_STATE_VIEW_MODES = new Set(['grid', 'list']);
 const BROWSE_STATE_SORT_FIELDS = new Set(['title', 'category', 'frequency', 'difficulty', 'date', 'score']);
@@ -12800,6 +13035,14 @@ function normalizeBrowseHistory(history, maxHistorySize) {
         .slice(-maxHistorySize)
         .map(normalizeBrowseHistoryItem)
         .filter(Boolean);
+}
+
+function parseBrowseStateJson(text, label = 'browse state') {
+    const source = String(text || '');
+    if (source.length > BROWSE_STATE_MAX_IMPORT_STRING_LENGTH) {
+        throw new Error(`${label} is too large`);
+    }
+    return JSON.parse(source);
 }
 
 class BrowseStateManager {
@@ -13014,7 +13257,7 @@ class BrowseStateManager {
         try {
             const savedData = localStorage.getItem('browse_state');
             if (savedData) {
-                const data = JSON.parse(savedData);
+                const data = parseBrowseStateJson(savedData, 'persisted browse state');
                 if (!isPlainBrowseObject(data)) {
                     throw new Error('Invalid browse state payload');
                 }
@@ -13318,7 +13561,9 @@ class BrowseStateManager {
      */
     importBrowseHistory(importData) {
         try {
-            const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
+            const data = typeof importData === 'string'
+                ? parseBrowseStateJson(importData, 'browse history import')
+                : importData;
 
             if (isPlainBrowseObject(data) && data.browseHistory && Array.isArray(data.browseHistory)) {
                 this.browseHistory = normalizeBrowseHistory(data.browseHistory, this.maxHistorySize);
@@ -13785,6 +14030,15 @@ window.BrowseStateManager = BrowseStateManager;
         return ANSWER_METADATA_POLLUTION_KEYS.has(String(key));
     }
 
+    function createSafeAnswerMap() {
+        return Object.create(null);
+    }
+
+    function normalizeAnswerMapKey(key) {
+        const strKey = String(key == null ? '' : key).trim();
+        return strKey && !isUnsafeMetadataKey(strKey) ? strKey : '';
+    }
+
     function cloneSafeObject(value) {
         const clone = {};
         if (!value || typeof value !== 'object') {
@@ -13996,16 +14250,13 @@ window.BrowseStateManager = BrowseStateManager;
     }
 
     function mergeSourceMaps(sources) {
-        const target = {};
+        const target = createSafeAnswerMap();
         sources.forEach(source => {
             if (!source || typeof source !== 'object') {
                 return;
             }
             Object.keys(source).forEach(key => {
-                if (key == null) {
-                    return;
-                }
-                const strKey = String(key).trim();
+                const strKey = normalizeAnswerMapKey(key);
                 if (!strKey) {
                     return;
                 }
@@ -14019,15 +14270,19 @@ window.BrowseStateManager = BrowseStateManager;
 
     function extractFromComparison(comparison, selector) {
         if (!comparison || typeof comparison !== 'object') {
-            return {};
+            return createSafeAnswerMap();
         }
-        const result = {};
+        const result = createSafeAnswerMap();
         Object.keys(comparison).forEach(key => {
+            const strKey = normalizeAnswerMapKey(key);
+            if (!strKey) {
+                return;
+            }
             const entry = comparison[key];
             if (entry && typeof entry === 'object') {
                 const value = selector(entry);
                 if (value != null) {
-                    result[key] = value;
+                    result[strKey] = value;
                 }
             }
         });
@@ -14036,15 +14291,19 @@ window.BrowseStateManager = BrowseStateManager;
 
     function extractFromDetails(details, selector) {
         if (!details || typeof details !== 'object') {
-            return {};
+            return createSafeAnswerMap();
         }
-        const result = {};
+        const result = createSafeAnswerMap();
         Object.keys(details).forEach(key => {
+            const strKey = normalizeAnswerMapKey(key);
+            if (!strKey) {
+                return;
+            }
             const entry = details[key];
             if (entry && typeof entry === 'object') {
                 const value = selector(entry);
                 if (value != null) {
-                    result[key] = value;
+                    result[strKey] = value;
                 }
             }
         });
@@ -14182,11 +14441,11 @@ window.BrowseStateManager = BrowseStateManager;
             ...Object.keys(correctMap)
         ]);
 
-        const entryMap = {};
+        const entryMap = createSafeAnswerMap();
 
         allKeys.forEach(rawKey => {
             const keyInfo = normalizeKey(rawKey);
-            if (!keyInfo.canonicalKey) {
+            if (!keyInfo.canonicalKey || isUnsafeMetadataKey(keyInfo.canonicalKey)) {
                 return;
             }
             if (isNoiseKey(keyInfo.canonicalKey, keyInfo.questionNumber)) {
@@ -14599,6 +14858,7 @@ window.BrowseStateManager = BrowseStateManager;
     const MAX_BROWSE_PREFERENCE_KEY_LENGTH = 160;
     const MAX_BROWSE_PREFERENCE_TEXT_LENGTH = 300;
     const MAX_BROWSE_SCROLL_TOP = 10000000;
+    const MAX_BROWSE_PREFERENCE_STORAGE_STRING_LENGTH = 512 * 1024;
     let browsePreferencesCache = null;
     let currentBrowseScrollElement = null;
     let removeBrowseScrollListener = null;
@@ -14615,6 +14875,17 @@ window.BrowseStateManager = BrowseStateManager;
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function parseStoredBrowsePreferences(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_BROWSE_PREFERENCE_STORAGE_STRING_LENGTH) {
+            return null;
+        }
+        return JSON.parse(source);
     }
 
     // --- Helper Functions ---
@@ -14855,7 +15126,7 @@ window.BrowseStateManager = BrowseStateManager;
             if (!raw) {
                 return getDefaultBrowsePreferences();
             }
-            const parsed = JSON.parse(raw);
+            const parsed = parseStoredBrowsePreferences(raw);
             const defaults = getDefaultBrowsePreferences();
             const source = parsed && typeof parsed === 'object' ? parsed : {};
             return {

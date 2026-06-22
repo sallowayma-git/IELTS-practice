@@ -31,6 +31,8 @@
     const MAX_PROGRESS_EXTRA_DEPTH = 8;
     const MAX_PROGRESS_EXTRA_ARRAY_ITEMS = 100;
     const MAX_PROGRESS_EXTRA_OBJECT_KEYS = 100;
+    const MAX_CATEGORY_SCAN_DEPTH = 8;
+    const MAX_CATEGORY_SCAN_NODES = 200;
     const VOCAB_IMPORT_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const PROGRESS_EXTRA_FIELDS = Object.freeze([
         'userInput',
@@ -74,6 +76,20 @@
 
     function isUnsafeImportKey(key) {
         return VOCAB_IMPORT_POLLUTION_KEYS.has(String(key));
+    }
+
+    function getOwnImportValue(source, key) {
+        if (!source || typeof source !== 'object' || isUnsafeImportKey(key)) {
+            return undefined;
+        }
+        if (!Object.prototype.hasOwnProperty.call(source, key)) {
+            return undefined;
+        }
+        try {
+            return source[key];
+        } catch (_) {
+            return undefined;
+        }
     }
 
     function normalizeInteger(value, min, max) {
@@ -124,29 +140,33 @@
             return undefined;
         }
         seen.add(value);
-        if (Array.isArray(value)) {
-            return value
-                .slice(0, MAX_PROGRESS_EXTRA_ARRAY_ITEMS)
-                .map((item) => sanitizeProgressExtraValue(item, depth + 1, seen))
-                .filter((item) => item !== undefined);
+        try {
+            if (Array.isArray(value)) {
+                return value
+                    .slice(0, MAX_PROGRESS_EXTRA_ARRAY_ITEMS)
+                    .map((item) => sanitizeProgressExtraValue(item, depth + 1, seen))
+                    .filter((item) => item !== undefined);
+            }
+            const clone = {};
+            Object.keys(value)
+                .slice(0, MAX_PROGRESS_EXTRA_OBJECT_KEYS)
+                .forEach((key) => {
+                    if (isUnsafeImportKey(key)) {
+                        return;
+                    }
+                    const safeKey = normalizeTextField(key, MAX_WORD_TEXT_LENGTH);
+                    if (!safeKey || isUnsafeImportKey(safeKey)) {
+                        return;
+                    }
+                    const safeValue = sanitizeProgressExtraValue(value[key], depth + 1, seen);
+                    if (safeValue !== undefined) {
+                        clone[safeKey] = safeValue;
+                    }
+                });
+            return clone;
+        } finally {
+            seen.delete(value);
         }
-        const clone = {};
-        Object.keys(value)
-            .slice(0, MAX_PROGRESS_EXTRA_OBJECT_KEYS)
-            .forEach((key) => {
-                if (isUnsafeImportKey(key)) {
-                    return;
-                }
-                const safeKey = normalizeTextField(key, MAX_WORD_TEXT_LENGTH);
-                if (!safeKey || isUnsafeImportKey(safeKey)) {
-                    return;
-                }
-                const safeValue = sanitizeProgressExtraValue(value[key], depth + 1, seen);
-                if (safeValue !== undefined) {
-                    clone[safeKey] = safeValue;
-                }
-            });
-        return clone;
     }
 
     function normalizeProgressConfig(config) {
@@ -201,10 +221,10 @@
         if (!normalized) {
             return fallback;
         }
-        if (/(自设|自定|自訂|自建|自制|custom|user|personal|self)/.test(normalized)) {
+        if (/(\u81ea\u8bbe|\u81ea\u5b9a|\u81ea\u8a02|\u81ea\u5efa|\u81ea\u5236|custom|user|personal|self)/.test(normalized)) {
             return 'user';
         }
-        if (/(外部|其他|其它|共享|公共|他人|others|other|external|shared|community|third)/.test(normalized)) {
+        if (/(\u5916\u90e8|\u5176\u4ed6|\u5176\u5b83|\u5171\u4eab|\u516c\u5171|\u4ed6\u4eba|others|other|external|shared|community|third)/.test(normalized)) {
             return 'external';
         }
         return fallback;
@@ -220,30 +240,43 @@
         if (typeof source !== 'object') {
             return fallback;
         }
-        const candidates = [];
-        const collect = (value) => {
-            if (typeof value === 'string' && value.trim()) {
-                candidates.push(value);
+        const stack = [{ value: source, depth: 0 }];
+        const seen = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+        let scanned = 0;
+        while (stack.length && scanned < MAX_CATEGORY_SCAN_NODES) {
+            const current = stack.shift();
+            const value = current && current.value;
+            if (!value || typeof value !== 'object') {
+                continue;
             }
-        };
-        collect(source.category);
-        collect(source.listType);
-        collect(source.listCategory);
-        collect(source.origin);
-        collect(source.source);
-        collect(source.sourceType);
-        collect(source.typeLabel);
-        collect(source.type);
-        if (source.meta && typeof source.meta === 'object' && source.meta !== source) {
-            const nested = extractCategory(source.meta, null);
-            if (nested) {
-                return nested;
+            if (seen) {
+                if (seen.has(value)) {
+                    continue;
+                }
+                seen.add(value);
             }
-        }
-        for (let i = 0; i < candidates.length; i += 1) {
-            const resolved = normalizeCategory(candidates[i], null);
-            if (resolved) {
-                return resolved;
+            scanned += 1;
+            const candidates = [
+                getOwnImportValue(value, 'category'),
+                getOwnImportValue(value, 'listType'),
+                getOwnImportValue(value, 'listCategory'),
+                getOwnImportValue(value, 'origin'),
+                getOwnImportValue(value, 'source'),
+                getOwnImportValue(value, 'sourceType'),
+                getOwnImportValue(value, 'typeLabel'),
+                getOwnImportValue(value, 'type')
+            ];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const resolved = normalizeCategory(candidates[i], null);
+                if (resolved) {
+                    return resolved;
+                }
+            }
+            if (current.depth < MAX_CATEGORY_SCAN_DEPTH) {
+                const meta = getOwnImportValue(value, 'meta');
+                if (meta && typeof meta === 'object' && meta !== value) {
+                    stack.push({ value: meta, depth: current.depth + 1 });
+                }
             }
         }
         return fallback;
@@ -324,6 +357,12 @@
         const supportedType = SUPPORTED_JSON_TYPES.has(mimeType) || SUPPORTED_CSV_TYPES.has(mimeType) || mimeType === '';
         if (!supportedExtension || !supportedType) {
             throw new Error('Only JSON and CSV import files are supported.');
+        }
+    }
+
+    function assertVocabImportTextSize(text) {
+        if (String(text || '').length > MAX_VOCAB_IMPORT_FILE_BYTES) {
+            throw new Error('Import file is too large. Maximum supported size is 10 MB.');
         }
     }
 
@@ -489,6 +528,7 @@
     }
 
     function parseJson(text) {
+        assertVocabImportTextSize(text);
         const payload = JSON.parse(text);
         if (Array.isArray(payload)) {
             const items = limitImportItems(payload);
@@ -561,6 +601,7 @@
         const extension = name.split('.').pop();
         const mimeType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
         const text = await readFileAsText(file);
+        assertVocabImportTextSize(text);
         let result;
         try {
             if (extension === 'csv' || SUPPORTED_CSV_TYPES.has(mimeType)) {
@@ -608,7 +649,12 @@
     });
 
     if (typeof module !== 'undefined' && module.exports) {
-        module.exports = api;
+        module.exports = {
+            ...api,
+            _test: {
+                sanitizeProgressExtraValue
+            }
+        };
     } else {
         window.VocabDataIO = api;
     }
@@ -1056,6 +1102,8 @@
     const MAX_EXTRA_DEPTH = 8;
     const MAX_EXTRA_OBJECT_KEYS = 100;
     const MAX_EXTRA_ARRAY_ITEMS = 100;
+    const MAX_VOCAB_STORAGE_JSON_LENGTH = 5 * 1024 * 1024;
+    const MAX_VOCAB_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
     const EXTRA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function summarizeVocabStoreErrorForLog(error) {
@@ -1067,6 +1115,27 @@
             name: typeof error.name === 'string' && error.name ? error.name.slice(0, 80) : 'Error',
             status: Number.isFinite(status) ? status : undefined
         };
+    }
+
+    function parseBoundedVocabStorageJson(raw) {
+        if (!raw) {
+            return null;
+        }
+        const source = String(raw);
+        if (source.length > MAX_VOCAB_STORAGE_JSON_LENGTH) {
+            return null;
+        }
+        return JSON.parse(source);
+    }
+
+    function parseBoundedVocabLexiconJson(text) {
+        if (typeof text !== 'string') {
+            throw new Error('vocab_lexicon_json_invalid');
+        }
+        if (text.length > MAX_VOCAB_LEXICON_JSON_BYTES) {
+            throw new Error('vocab_lexicon_json_too_large');
+        }
+        return JSON.parse(text);
     }
 
     const state = {
@@ -1145,6 +1214,40 @@
         return value.trim().slice(0, maxLength);
     }
 
+    function estimateExtraJsonChars(value, depth = 0, seen = new WeakSet()) {
+        if (value == null) {
+            return 4;
+        }
+        if (typeof value === 'string') {
+            return value.length + 2;
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value).length;
+        }
+        if (typeof value !== 'object' || depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
+            return 0;
+        }
+        seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                let size = 2;
+                value.slice(0, MAX_EXTRA_ARRAY_ITEMS).forEach((item, index) => {
+                    size += (index > 0 ? 1 : 0) + estimateExtraJsonChars(item, depth + 1, seen);
+                });
+                return size;
+            }
+            let size = 2;
+            Object.keys(value).slice(0, MAX_EXTRA_OBJECT_KEYS).forEach((key, index) => {
+                size += (index > 0 ? 1 : 0) + String(key).length + 3 + estimateExtraJsonChars(value[key], depth + 1, seen);
+            });
+            return size;
+        } catch (_) {
+            return MAX_METADATA_JSON_CHARS + 1;
+        } finally {
+            seen.delete(value);
+        }
+    }
+
     function normalizeExtraValue(value, depth = 0, seen = new WeakSet()) {
         if (typeof value === 'string') {
             return normalizeTextField(value, MAX_EXTRA_TEXT_LENGTH);
@@ -1160,20 +1263,24 @@
                 return null;
             }
             seen.add(value);
-            return value
-                .slice(0, MAX_EXTRA_ARRAY_ITEMS)
-                .map((item) => normalizeExtraValue(item, depth + 1, seen))
-                .filter((item) => item !== null && item !== undefined);
+            try {
+                return value
+                    .slice(0, MAX_EXTRA_ARRAY_ITEMS)
+                    .map((item) => normalizeExtraValue(item, depth + 1, seen))
+                    .filter((item) => item !== null && item !== undefined);
+            } finally {
+                seen.delete(value);
+            }
         }
         if (value && typeof value === 'object') {
             if (depth >= MAX_EXTRA_DEPTH || seen.has(value)) {
                 return null;
             }
+            if (estimateExtraJsonChars(value, depth) > MAX_METADATA_JSON_CHARS) {
+                return null;
+            }
             seen.add(value);
             try {
-                if (JSON.stringify(value).length > MAX_METADATA_JSON_CHARS) {
-                    return null;
-                }
                 const clone = {};
                 Object.keys(value)
                     .slice(0, MAX_EXTRA_OBJECT_KEYS)
@@ -1193,6 +1300,8 @@
                 return JSON.stringify(clone).length <= MAX_METADATA_JSON_CHARS ? clone : null;
             } catch (_) {
                 return null;
+            } finally {
+                seen.delete(value);
             }
         }
         return null;
@@ -1295,6 +1404,49 @@
             }
         });
         return record;
+    }
+
+    function cloneWordRecord(word) {
+        return normalizeWordRecord(word);
+    }
+
+    function cloneWordList(words) {
+        return Array.isArray(words)
+            ? words.slice(0, MAX_STORED_VOCAB_WORDS).map(cloneWordRecord).filter(Boolean)
+            : [];
+    }
+
+    function cloneListData(listData) {
+        if (!listData || typeof listData !== 'object') {
+            return null;
+        }
+        const words = cloneWordList(listData.words);
+        const stats = listData.stats && typeof listData.stats === 'object'
+            ? {
+                totalWords: Number.isFinite(Number(listData.stats.totalWords)) ? Math.max(0, Math.floor(Number(listData.stats.totalWords))) : words.length,
+                masteredWords: Number.isFinite(Number(listData.stats.masteredWords)) ? Math.max(0, Math.floor(Number(listData.stats.masteredWords))) : 0,
+                reviewingWords: Number.isFinite(Number(listData.stats.reviewingWords)) ? Math.max(0, Math.floor(Number(listData.stats.reviewingWords))) : 0
+            }
+            : {
+                totalWords: words.length,
+                masteredWords: words.filter((word) => (word.correctCount || 0) >= (state.config.masteryCount || 4)).length,
+                reviewingWords: words.filter((word) => word.lastReviewed && !word.nextReview).length
+            };
+        return {
+            id: normalizeTextField(listData.id, MAX_SOURCE_TEXT_LENGTH),
+            name: normalizeTextField(listData.name, MAX_SOURCE_TEXT_LENGTH),
+            icon: normalizeTextField(listData.icon, MAX_SOURCE_TEXT_LENGTH),
+            source: normalizeTextField(listData.source, MAX_SOURCE_TEXT_LENGTH),
+            words,
+            stats
+        };
+    }
+
+    function cloneVocabLists() {
+        return Object.keys(VOCAB_LISTS).reduce((clone, id) => {
+            clone[id] = { ...VOCAB_LISTS[id] };
+            return clone;
+        }, {});
     }
 
     function normalizeLexiconLookupKey(word) {
@@ -1401,7 +1553,8 @@
                 if (!raw) {
                     return defaultValue;
                 }
-                return JSON.parse(raw);
+                const parsed = parseBoundedVocabStorageJson(raw);
+                return parsed === null ? defaultValue : parsed;
             } catch (error) {
                 console.warn('[VocabStore] localStorage解析失败:', summarizeVocabStoreErrorForLog(error));
             }
@@ -1422,7 +1575,7 @@
     }
 
     function setWordsInternal(words) {
-        state.words = Array.isArray(words) ? words.slice(0, MAX_STORED_VOCAB_WORDS) : [];
+        state.words = cloneWordList(words);
         rebuildIndex();
     }
 
@@ -1494,7 +1647,11 @@
         if (!primary.ok) {
             throw new Error(`HTTP ${primary.status}`);
         }
-        return primary.json();
+        const contentLength = Number(primary.headers?.get?.('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > MAX_VOCAB_LEXICON_JSON_BYTES) {
+            throw new Error('vocab_lexicon_json_too_large');
+        }
+        return parseBoundedVocabLexiconJson(await primary.text());
     }
 
     async function readJsonViaXHR(url) {
@@ -1522,7 +1679,7 @@
                         return;
                     }
                     try {
-                        const parsed = JSON.parse(xhr.responseText);
+                        const parsed = parseBoundedVocabLexiconJson(xhr.responseText);
                         resolve(parsed);
                     } catch (error) {
                         reject(error);
@@ -1646,7 +1803,7 @@
                 state.lastLoadSource = 'default';
             }
             state.listCache.set(DEFAULT_LIST_ID, {
-                data: {
+                data: cloneListData({
                     id: DEFAULT_LIST_ID,
                     name: VOCAB_LISTS[DEFAULT_LIST_ID].name,
                     icon: VOCAB_LISTS[DEFAULT_LIST_ID].icon,
@@ -1657,7 +1814,7 @@
                         masteredWords: normalized.filter(w => (w.correctCount || 0) >= (state.config.masteryCount || 4)).length,
                         reviewingWords: normalized.filter(w => w.lastReviewed && !w.nextReview).length
                     }
-                },
+                }),
                 timestamp: Date.now()
             });
             return normalized;
@@ -1723,7 +1880,7 @@
     }
 
     function getWords() {
-        return state.words.map((word) => ({ ...word }));
+        return cloneWordList(state.words);
     }
 
     async function setWords(words) {
@@ -1753,7 +1910,7 @@
             state.wordIndex.set(id, updated);
             await persist(getActiveStorageKey(), state.words);
             state.listCache.delete(state.activeListId);
-            return { ...updated };
+            return cloneWordRecord(updated);
         }
         return null;
     }
@@ -1790,11 +1947,14 @@
             }
             const next = new Date(word.nextReview);
             if (!Number.isNaN(next.getTime()) && next <= now) {
-                due.push({ ...word });
+                const cloned = cloneWordRecord(word);
+                if (cloned) {
+                    due.push(cloned);
+                }
             }
         });
         if (scheduler && typeof scheduler.pickDailyTask === 'function') {
-            return scheduler.pickDailyTask(due, due.length, { now });
+            return cloneWordList(scheduler.pickDailyTask(due, due.length, { now }));
         }
         return due;
     }
@@ -1802,7 +1962,7 @@
     function getNewWords(limit = state.config.dailyNew) {
         const target = typeof limit === 'number' && limit > 0 ? Math.floor(limit) : state.config.dailyNew;
         const fresh = state.words.filter((word) => !word.lastReviewed || !word.nextReview);
-        return fresh.slice(0, target).map((word) => ({ ...word }));
+        return cloneWordList(fresh.slice(0, target));
     }
 
     function sourceForSpellingList(errorSource, listId) {
@@ -1912,7 +2072,7 @@
         const cached = state.listCache.get(listId);
         if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
             console.log('[VocabStore] 从缓存加载词表');
-            return cached.data;
+            return cloneListData(cached.data);
         }
 
         try {
@@ -1945,11 +2105,11 @@
 
             // 缓存词表数据（带时间戳）
             state.listCache.set(listId, {
-                data: listData,
+                data: cloneListData(listData),
                 timestamp: Date.now()
             });
             console.log(`[VocabStore] 加载词表成功，单词数: ${normalizedWords.length}`);
-            return listData;
+            return cloneListData(listData);
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', summarizeVocabStoreErrorForLog(error));
             return null;
@@ -2127,7 +2287,7 @@
         if (state.activeListId === listId) {
             setWordsInternal(limitedWords);
         }
-        return normalized;
+        return cloneWordRecord(normalized);
     }
 
     async function init() {
@@ -2157,7 +2317,7 @@
         getActiveListId,
         upsertReadingHighlightWord,
         get VOCAB_LISTS() {
-            return VOCAB_LISTS;
+            return cloneVocabLists();
         },
         get state() {
             return {
@@ -6104,6 +6264,46 @@
     var vocabSparkFallbackNoticeShown = false;
     var vocabSparkInputBound = false;
     var vocabSparkDeck = [];
+    var MAX_VOCAB_SPARK_LEXICON_JSON_BYTES = 2 * 1024 * 1024;
+
+    function getMiniGameTextByteLength(text) {
+        var source = String(text == null ? '' : text);
+        if (typeof TextEncoder === 'function') {
+            try {
+                return new TextEncoder().encode(source).length;
+            } catch (_) {
+                // fall through to manual UTF-8 length calculation
+            }
+        }
+        var bytes = 0;
+        for (var index = 0; index < source.length; index += 1) {
+            var code = source.charCodeAt(index);
+            if (code < 0x80) {
+                bytes += 1;
+            } else if (code < 0x800) {
+                bytes += 2;
+            } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < source.length) {
+                var next = source.charCodeAt(index + 1);
+                if (next >= 0xdc00 && next <= 0xdfff) {
+                    bytes += 4;
+                    index += 1;
+                } else {
+                    bytes += 3;
+                }
+            } else {
+                bytes += 3;
+            }
+        }
+        return bytes;
+    }
+
+    function parseVocabSparkLexiconJson(text) {
+        var source = String(text == null ? '' : text);
+        if (getMiniGameTextByteLength(source) > MAX_VOCAB_SPARK_LEXICON_JSON_BYTES) {
+            throw new Error('Vocab spark lexicon is too large.');
+        }
+        return JSON.parse(source);
+    }
 
     function summarizeMiniGamesErrorForLog(error) {
         if (!error || typeof error !== 'object') {
@@ -6197,7 +6397,16 @@
                 if (!response.ok) {
                     throw new Error('HTTP ' + response.status);
                 }
-                var payload = await response.json();
+                var contentLength = response.headers && typeof response.headers.get === 'function'
+                    ? Number(response.headers.get('content-length'))
+                    : 0;
+                if (Number.isFinite(contentLength) && contentLength > MAX_VOCAB_SPARK_LEXICON_JSON_BYTES) {
+                    throw new Error('Vocab spark lexicon is too large.');
+                }
+                if (typeof response.text !== 'function') {
+                    throw new Error('Vocab spark lexicon cannot be read safely.');
+                }
+                var payload = parseVocabSparkLexiconJson(await response.text());
                 var normalized = Array.isArray(payload)
                     ? payload.map(normalizeVocabEntry).filter(Boolean)
                     : [];
@@ -6615,6 +6824,7 @@
     'use strict';
 
     const MAX_STORED_UNLOCKED_ACHIEVEMENTS = 200;
+    const MAX_UNLOCKED_STATE_STORAGE_STRING_LENGTH = 64 * 1024;
     const UNSAFE_UNLOCKED_STATE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function summarizeAchievementErrorForLog(error) {
@@ -6633,6 +6843,17 @@
             return false;
         }
         return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
+    function parseStoredUnlockedState(raw) {
+        if (!raw) {
+            return {};
+        }
+        const source = String(raw);
+        if (source.length > MAX_UNLOCKED_STATE_STORAGE_STRING_LENGTH) {
+            return {};
+        }
+        return JSON.parse(source);
     }
 
     class AchievementManager {
@@ -6933,7 +7154,7 @@
                 return this._normalizeUnlockedState(value);
             }
             const raw = localStorage.getItem(this.storageKey);
-            value = raw ? JSON.parse(raw) : {};
+            value = parseStoredUnlockedState(raw);
             return this._normalizeUnlockedState(value);
         }
 

@@ -1922,9 +1922,6 @@
         if (!win) {
             try {
                 win = window.open(url, ENDLESS_WINDOW_NAME);
-                if (win) {
-                    try { win.opener = null; } catch (_) { }
-                }
                 if (win) win.focus();
             } catch (_) { }
         }
