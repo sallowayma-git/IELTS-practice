@@ -67,7 +67,14 @@
         if (typeof value !== 'string') {
             return '';
         }
-        return value.trim().slice(0, maxLength);
+        const text = value.trim();
+        if (text.length <= maxLength) {
+            return text;
+        }
+        const truncated = text.slice(0, maxLength);
+        return /[\uD800-\uDBFF]$/.test(truncated)
+            ? truncated.slice(0, -1)
+            : truncated;
     }
 
     function limitImportItems(items) {
@@ -1211,7 +1218,14 @@
         if (typeof value !== 'string') {
             return '';
         }
-        return value.trim().slice(0, maxLength);
+        const text = value.trim();
+        if (text.length <= maxLength) {
+            return text;
+        }
+        const truncated = text.slice(0, maxLength);
+        return /[\uD800-\uDBFF]$/.test(truncated)
+            ? truncated.slice(0, -1)
+            : truncated;
     }
 
     function estimateExtraJsonChars(value, depth = 0, seen = new WeakSet()) {

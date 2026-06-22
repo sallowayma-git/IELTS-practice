@@ -255,7 +255,13 @@
             if (typeof value !== 'string') {
                 return value;
             }
-            return value.length > maxLength ? value.slice(0, maxLength) : value;
+            if (value.length <= maxLength) {
+                return value;
+            }
+            const truncated = value.slice(0, maxLength);
+            return /[\uD800-\uDBFF]$/.test(truncated)
+                ? truncated.slice(0, -1)
+                : truncated;
         }
 
         wordTimestamp(entry) {
@@ -2463,49 +2469,56 @@ class MarkdownExporter {
         // 移除已存在的进度指示器
         this.hideProgressIndicator();
 
-        const progressHtml = `
-            <div id="export-progress-overlay" style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 10000;
-            ">
-                <div style="
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    text-align: center;
-                    min-width: 300px;
-                ">
-                    <div style="margin-bottom: 15px;">
-                        <div style="
-                            width: 40px;
-                            height: 40px;
-                            border: 4px solid #f3f3f3;
-                            border-top: 4px solid #3498db;
-                            border-radius: 50%;
-                            animation: spin 1s linear infinite;
-                            margin: 0 auto;
-                        "></div>
-                    </div>
-                    <div id="export-progress-text">正在准备导出...</div>
-                </div>
-            </div>
-            <style id="export-progress-style">
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            </style>
-        `;
+        const overlay = document.createElement('div');
+        overlay.id = 'export-progress-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '10000'
+        });
 
-        document.body.insertAdjacentHTML('beforeend', progressHtml);
+        const panel = document.createElement('div');
+        Object.assign(panel.style, {
+            background: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            textAlign: 'center',
+            minWidth: '300px'
+        });
+
+        const spinnerWrap = document.createElement('div');
+        spinnerWrap.style.marginBottom = '15px';
+
+        const spinner = document.createElement('div');
+        Object.assign(spinner.style, {
+            width: '40px',
+            height: '40px',
+            border: '4px solid #f3f3f3',
+            borderTop: '4px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto'
+        });
+
+        const progressText = document.createElement('div');
+        progressText.id = 'export-progress-text';
+        progressText.textContent = '正在准备导出...';
+
+        const style = document.createElement('style');
+        style.id = 'export-progress-style';
+        style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+
+        spinnerWrap.appendChild(spinner);
+        panel.append(spinnerWrap, progressText);
+        overlay.appendChild(panel);
+        document.body.append(overlay, style);
     }
 
     /**
@@ -2618,12 +2631,12 @@ class PracticeRecordModal {
 
             processedRecord = this.prepareRecordForDisplay(processedRecord);
 
-            const modalHtml = this.createModalHtml(processedRecord);
-
             this.hide();
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-            this.modalElement = document.getElementById(this.modalId);
+            const modalElement = this.createModalElement(processedRecord);
+            document.body.appendChild(modalElement);
+
+            this.modalElement = modalElement;
             this.currentRecord = processedRecord;
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
@@ -2828,6 +2841,61 @@ class PracticeRecordModal {
                 </div>
             </div>
         `;
+    }
+
+    createModalElement(record) {
+        const template = document.createElement('template');
+        template.innerHTML = this.createModalHtml(record).trim();
+        const modalElement = template.content && template.content.firstElementChild;
+        if (!modalElement || modalElement.id !== this.modalId) {
+            throw new Error('Invalid practice record modal markup');
+        }
+        this.sanitizeModalElement(modalElement);
+        return modalElement;
+    }
+
+    sanitizeModalElement(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') {
+            return root;
+        }
+
+        const blockedTags = new Set(['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base']);
+        const nodes = [root, ...Array.from(root.querySelectorAll('*'))];
+        nodes.forEach((node) => {
+            const tagName = String(node.tagName || '').toLowerCase();
+            if (blockedTags.has(tagName)) {
+                if (typeof node.remove === 'function') {
+                    node.remove();
+                }
+                return;
+            }
+
+            Array.from(node.attributes || []).forEach((attribute) => {
+                const name = String(attribute.name || '').toLowerCase();
+                const value = String(attribute.value || '');
+                if (
+                    name.startsWith('on')
+                    || name === 'srcdoc'
+                    || name === 'style'
+                    || this.isUnsafeModalUrlAttribute(name, value)
+                ) {
+                    node.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return root;
+    }
+
+    isUnsafeModalUrlAttribute(name, value) {
+        const urlAttributes = new Set(['href', 'src', 'xlink:href', 'formaction', 'action']);
+        if (!urlAttributes.has(String(name || '').toLowerCase())) {
+            return false;
+        }
+        const normalized = String(value || '').replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+        return normalized.startsWith('javascript:')
+            || normalized.startsWith('vbscript:')
+            || (normalized.startsWith('data:') && !normalized.startsWith('data:image/'));
     }
 
     prepareRecordForDisplay(record) {
@@ -4243,55 +4311,80 @@ class PracticeHistoryEnhancer {
      */
     showExportDialog() {
         document.getElementById('export-dialog')?.remove();
-        const dialogHtml = `
-            <div id="export-dialog" class="modal-overlay">
-                <div class="modal-container" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3 class="modal-title">导出练习记录</h3>
-                        <button class="modal-close" type="button" data-action="export-dialog-close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+        const createNode = (tagName, className, text) => {
+            const node = document.createElement(tagName);
+            if (className) {
+                node.className = className;
+            }
+            if (text != null) {
+                node.textContent = String(text);
+            }
+            return node;
+        };
+        const createActionButton = (className, action, text, iconClass) => {
+            const button = createNode('button', className);
+            button.type = 'button';
+            button.dataset.action = action;
+            if (iconClass) {
+                button.appendChild(createNode('i', iconClass));
+                button.appendChild(document.createTextNode(' '));
+            }
+            if (text) {
+                button.appendChild(document.createTextNode(text));
+            }
+            return button;
+        };
+        const createFormatOption = ({ value, title, description, checked = false }) => {
+            const label = createNode('label', 'format-option');
+            const input = createNode('input');
+            input.type = 'radio';
+            input.name = 'export-format';
+            input.value = value;
+            input.checked = checked;
+            const content = createNode('div', 'option-content');
+            content.appendChild(createNode('strong', null, title));
+            content.appendChild(createNode('p', null, description));
+            label.appendChild(input);
+            label.appendChild(content);
+            return label;
+        };
 
-                    <div class="modal-body">
-                        <div class="export-options">
-                            <h4>选择导出格式：</h4>
-                            <div class="format-options">
-                                <label class="format-option">
-                                    <input type="radio" name="export-format" value="json" checked>
-                                    <div class="option-content">
-                                        <strong>JSON 格式</strong>
-                                        <p>完整的数据格式，可用于备份和导入</p>
-                                    </div>
-                                </label>
-                                <label class="format-option">
-                                    <input type="radio" name="export-format" value="markdown">
-                                    <div class="option-content">
-                                        <strong>Markdown 格式</strong>
-                                        <p>易读的文档格式，包含详细的答题表格</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+        const dialog = createNode('div', 'modal-overlay');
+        dialog.id = 'export-dialog';
+        const container = createNode('div', 'modal-container');
+        container.style.maxWidth = '500px';
 
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" type="button" data-action="export-dialog-close">
-                            取消
-                        </button>
-                        <button class="btn btn-primary" type="button" data-action="export-dialog-submit">
-                            <i class="fas fa-download"></i> 导出
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
+        const header = createNode('div', 'modal-header');
+        header.appendChild(createNode('h3', 'modal-title', '导出练习记录'));
+        header.appendChild(createActionButton('modal-close', 'export-dialog-close', '', 'fas fa-times'));
+        container.appendChild(header);
 
-        document.body.insertAdjacentHTML('beforeend', dialogHtml);
-        const dialog = document.getElementById('export-dialog');
-        if (!dialog) {
-            return;
-        }
+        const body = createNode('div', 'modal-body');
+        const options = createNode('div', 'export-options');
+        options.appendChild(createNode('h4', null, '选择导出格式：'));
+        const formatOptions = createNode('div', 'format-options');
+        formatOptions.appendChild(createFormatOption({
+            value: 'json',
+            title: 'JSON 格式',
+            description: '完整的数据格式，可用于备份和导入',
+            checked: true
+        }));
+        formatOptions.appendChild(createFormatOption({
+            value: 'markdown',
+            title: 'Markdown 格式',
+            description: '易读的文档格式，包含详细的答题表格'
+        }));
+        options.appendChild(formatOptions);
+        body.appendChild(options);
+        container.appendChild(body);
+
+        const footer = createNode('div', 'modal-footer');
+        footer.appendChild(createActionButton('btn btn-secondary', 'export-dialog-close', '取消'));
+        footer.appendChild(createActionButton('btn btn-primary', 'export-dialog-submit', '导出', 'fas fa-download'));
+        container.appendChild(footer);
+
+        dialog.appendChild(container);
+        document.body.appendChild(dialog);
         dialog.addEventListener('click', (event) => {
             const trigger = event.target instanceof HTMLElement
                 ? event.target.closest('[data-action]')

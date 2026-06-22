@@ -659,7 +659,13 @@
             if (typeof value !== 'string') {
                 return value;
             }
-            return value.length > maxLength ? value.slice(0, maxLength) : value;
+            if (value.length <= maxLength) {
+                return value;
+            }
+            const truncated = value.slice(0, maxLength);
+            return /[\uD800-\uDBFF]$/.test(truncated)
+                ? truncated.slice(0, -1)
+                : truncated;
         }
 
         wordTimestamp(entry) {
@@ -6607,13 +6613,13 @@
     window.collectAnswersNow = function () {
         console.log('[PracticeEnhancer] 手动触发答案收集');
         window.practicePageEnhancer.collectAllAnswers();
-        return window.practicePageEnhancer.answers;
+        return summarizeAnswerMapForLog(window.practicePageEnhancer.answers);
     };
 
     window.getCorrectAnswers = function () {
         console.log('[PracticeEnhancer] 获取正确答案');
         window.practicePageEnhancer.extractCorrectAnswers();
-        return window.practicePageEnhancer.correctAnswers;
+        return summarizeAnswerMapForLog(window.practicePageEnhancer.correctAnswers);
     };
 
     // 自动初始化

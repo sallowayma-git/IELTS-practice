@@ -4381,6 +4381,59 @@
         customSuitePortalPosition = null;
     }
 
+    function createCustomSuiteElement(tagName, className, textContent) {
+        const node = document.createElement(tagName);
+        if (className) {
+            node.className = className;
+        }
+        if (textContent != null) {
+            node.textContent = String(textContent);
+        }
+        return node;
+    }
+
+    function appendCustomSuiteRow(parent, row, includeDelete) {
+        const item = createCustomSuiteElement(
+            'div',
+            'suite-custom-selection__row' + (includeDelete ? ' suite-custom-selection__row--selected' : ' suite-custom-selection__row--pending')
+        );
+        const main = createCustomSuiteElement('div', 'suite-custom-selection__row-main');
+        main.appendChild(createCustomSuiteElement('span', 'suite-custom-selection__title', row.title));
+        main.appendChild(createCustomSuiteElement('span', 'suite-custom-selection__meta', row.category));
+        main.appendChild(createCustomSuiteElement('span', 'suite-custom-selection__meta', row.frequency));
+        item.appendChild(main);
+
+        if (includeDelete) {
+            const deleteButton = createCustomSuiteElement('button', 'suite-custom-selection__delete', '删除');
+            deleteButton.type = 'button';
+            deleteButton.dataset.action = 'suite-custom-delete';
+            deleteButton.dataset.category = String(row.category || '');
+            deleteButton.setAttribute('aria-label', '删除 ' + String(row.category || ''));
+            item.appendChild(deleteButton);
+        }
+
+        parent.appendChild(item);
+    }
+
+    function appendCustomSuiteGroupRows(group, rows, includeDelete, emptyText) {
+        if (!rows.length) {
+            group.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__empty', emptyText));
+            return;
+        }
+        rows.forEach((row) => appendCustomSuiteRow(group, row, includeDelete));
+    }
+
+    function createCustomSuiteFooterButton(label, modifierClass, action) {
+        const button = createCustomSuiteElement(
+            'button',
+            'suite-custom-selection__button ' + modifierClass,
+            label
+        );
+        button.type = 'button';
+        button.dataset.action = action;
+        return button;
+    }
+
     function renderCustomSuiteSelectionPortal() {
         const draft = getCustomSuiteDraft();
         if (!draft || draft.status === 'idle') {
@@ -4422,61 +4475,49 @@
                 frequency: '待选'
             }));
 
-        const rowMarkup = (row, includeDelete) => {
-            const deleteMarkup = includeDelete
-                ? '<button type="button" class="suite-custom-selection__delete" data-action="suite-custom-delete" data-category="' + escapeHtml(row.category) + '" aria-label="删除 ' + escapeHtml(row.category) + '">删除</button>'
-                : '';
-            return [
-                '<div class="suite-custom-selection__row' + (includeDelete ? ' suite-custom-selection__row--selected' : ' suite-custom-selection__row--pending') + '">',
-                '<div class="suite-custom-selection__row-main">',
-                '<span class="suite-custom-selection__title">' + escapeHtml(row.title) + '</span>',
-                '<span class="suite-custom-selection__meta">' + escapeHtml(row.category) + '</span>',
-                '<span class="suite-custom-selection__meta">' + escapeHtml(row.frequency) + '</span>',
-                '</div>',
-                deleteMarkup,
-                '</div>'
-            ].join('');
-        };
+        portal.textContent = '';
+        const backdrop = createCustomSuiteElement('div', 'suite-custom-selection__backdrop');
+        backdrop.setAttribute('aria-hidden', 'true');
 
-        const footerButtons = isReady
-            ? [
-                '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--primary" data-action="suite-custom-confirm">确认开始</button>',
-                '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--secondary" data-action="suite-custom-cancel">取消</button>'
-            ].join('')
-            : '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--secondary" data-action="suite-custom-cancel">取消</button>';
+        const panel = createCustomSuiteElement(
+            'section',
+            'suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock')
+        );
+        panel.setAttribute('aria-live', 'polite');
 
-        const selectedMarkup = selectedRows.length
-            ? selectedRows.map((row) => rowMarkup(row, true)).join('')
-            : '<div class="suite-custom-selection__empty">尚未选择题目</div>';
-        const pendingMarkup = pendingRows.length
-            ? pendingRows.map((row) => rowMarkup(row, false)).join('')
-            : '';
+        const header = createCustomSuiteElement('header', 'suite-custom-selection__header');
+        const heading = createCustomSuiteElement('div');
+        heading.appendChild(createCustomSuiteElement('p', 'suite-custom-selection__eyebrow', '套题自选'));
+        heading.appendChild(createCustomSuiteElement(
+            'h3',
+            'suite-custom-selection__title-main',
+            isReady ? '确认开始或取消' : '继续选择下一题型'
+        ));
+        header.appendChild(heading);
+        header.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__progress', selectedCount + ' / ' + categories.length));
+        panel.appendChild(header);
 
-        portal.innerHTML = [
-            '<div class="suite-custom-selection__backdrop" aria-hidden="true"></div>',
-            '<section class="suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock') + '" aria-live="polite">',
-            '<header class="suite-custom-selection__header">',
-            '<div>',
-            '<p class="suite-custom-selection__eyebrow">套题自选</p>',
-            '<h3 class="suite-custom-selection__title-main">' + (isReady ? '确认开始或取消' : '继续选择下一题型') + '</h3>',
-            '</div>',
-            '<div class="suite-custom-selection__progress">' + selectedCount + ' / ' + categories.length + '</div>',
-            '</header>',
-            '<div class="suite-custom-selection__body">',
-            '<div class="suite-custom-selection__group">',
-            '<div class="suite-custom-selection__group-title">已选</div>',
-            selectedMarkup,
-            '</div>',
-            '<div class="suite-custom-selection__group">',
-            '<div class="suite-custom-selection__group-title">待选</div>',
-            pendingMarkup || '<div class="suite-custom-selection__empty">暂无待选项</div>',
-            '</div>',
-            '</div>',
-            '<footer class="suite-custom-selection__footer">',
-            footerButtons,
-            '</footer>',
-            '</section>'
-        ].join('');
+        const body = createCustomSuiteElement('div', 'suite-custom-selection__body');
+        const selectedGroup = createCustomSuiteElement('div', 'suite-custom-selection__group');
+        selectedGroup.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__group-title', '已选'));
+        appendCustomSuiteGroupRows(selectedGroup, selectedRows, true, '尚未选择题目');
+        body.appendChild(selectedGroup);
+
+        const pendingGroup = createCustomSuiteElement('div', 'suite-custom-selection__group');
+        pendingGroup.appendChild(createCustomSuiteElement('div', 'suite-custom-selection__group-title', '待选'));
+        appendCustomSuiteGroupRows(pendingGroup, pendingRows, false, '暂无待选项');
+        body.appendChild(pendingGroup);
+        panel.appendChild(body);
+
+        const footer = createCustomSuiteElement('footer', 'suite-custom-selection__footer');
+        if (isReady) {
+            footer.appendChild(createCustomSuiteFooterButton('确认开始', 'suite-custom-selection__button--primary', 'suite-custom-confirm'));
+        }
+        footer.appendChild(createCustomSuiteFooterButton('取消', 'suite-custom-selection__button--secondary', 'suite-custom-cancel'));
+        panel.appendChild(footer);
+
+        portal.appendChild(backdrop);
+        portal.appendChild(panel);
         setupCustomSuitePanelDrag(portal);
         applyCustomSuitePanelFloatingState(portal);
     }
@@ -5506,7 +5547,13 @@
             if (typeof value !== 'string') {
                 return value;
             }
-            return value.length > maxLength ? value.slice(0, maxLength) : value;
+            if (value.length <= maxLength) {
+                return value;
+            }
+            const truncated = value.slice(0, maxLength);
+            return /[\uD800-\uDBFF]$/.test(truncated)
+                ? truncated.slice(0, -1)
+                : truncated;
         }
 
         wordTimestamp(entry) {
@@ -6736,7 +6783,10 @@
     const MAX_REVIEW_REPLAY_ARRAY_ITEMS = 2000;
     const MAX_REVIEW_REPLAY_OBJECT_KEYS = 500;
     const MAX_REVIEW_REPLAY_STRING_LENGTH = 20000;
+    const MAX_EXAM_ERROR_MESSAGE_LENGTH = 240;
     const REVIEW_REPLAY_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const EXAM_ERROR_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
+    const EXAM_ERROR_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
     let fallbackIdCounter = 0;
 
     function randomIdSuffix() {
@@ -6773,6 +6823,27 @@
             return 'script_injection_security_error';
         }
         return 'script_injection_error';
+    }
+
+    function truncateExamErrorMessage(text) {
+        if (text.length <= MAX_EXAM_ERROR_MESSAGE_LENGTH) {
+            return text;
+        }
+        let truncated = text.slice(0, MAX_EXAM_ERROR_MESSAGE_LENGTH - 3);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            truncated = truncated.slice(0, -1);
+        }
+        return `${truncated}...`;
+    }
+
+    function sanitizeExamErrorMessageForUser(value) {
+        const raw = String(value == null ? '' : value)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(EXAM_ERROR_SECRET_QUERY_PATTERN, '$1[hidden]')
+            .replace(EXAM_ERROR_SECRET_VALUE_PATTERN, '$1=[hidden]')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return truncateExamErrorMessage(raw || '未知错误');
     }
 
     function getMessageTargetOrigin(options = {}) {
@@ -7817,7 +7888,7 @@
                 examWindow.location.href = placeholderUrl;
                 return examWindow;
             } catch (navigationError) {
-                console.warn('[App] 题目窗口导航占位页失败，尝试重新打开:', navigationError);
+                console.warn('[App] 题目窗口导航占位页失败，尝试重新打开:', summarizeExamSessionErrorForLog(navigationError));
                 try {
                     const windowName = (options && options.windowName)
                         ? String(options.windowName)
@@ -7827,7 +7898,7 @@
                         return reopened;
                     }
                 } catch (openError) {
-                    console.warn('[App] 重新打开占位窗口失败:', openError);
+                    console.warn('[App] 重新打开占位窗口失败:', summarizeExamSessionErrorForLog(openError));
                 }
             }
 
@@ -10356,14 +10427,17 @@
          * 处理题目错误
          */
         handleExamError(examId, errorData) {
+            const safeErrorMessage = sanitizeExamErrorMessageForUser(
+                errorData && typeof errorData === 'object'
+                    ? errorData.message
+                    : ''
+            );
             console.error(
                 'Exam error:',
-                errorData && typeof errorData === 'object'
-                    ? (errorData.message || 'object')
-                    : typeof errorData
+                safeErrorMessage
             );
 
-            window.showMessage(`题目出现错误: ${errorData.message || '未知错误'}`, 'error');
+            window.showMessage(`题目出现错误: ${safeErrorMessage}`, 'error');
 
             // 清理会话
             this.cleanupExamSession(examId);
@@ -12914,9 +12988,18 @@ function normalizeBrowseText(value, maxLength = BROWSE_STATE_MAX_TEXT_LENGTH) {
     }
     const text = String(value)
         .replace(/[\u0000-\u001F\u007F]+/g, ' ')
-        .trim()
-        .slice(0, maxLength);
-    return text || null;
+        .trim();
+    if (!text) {
+        return null;
+    }
+    if (text.length <= maxLength) {
+        return text;
+    }
+    const truncated = text.slice(0, maxLength);
+    const safeText = /[\uD800-\uDBFF]$/.test(truncated)
+        ? truncated.slice(0, -1)
+        : truncated;
+    return safeText || null;
 }
 
 function normalizeBrowseEnum(value, allowed, fallback) {
@@ -14025,6 +14108,9 @@ window.BrowseStateManager = BrowseStateManager;
         /duration/i,
         /config/i
     ];
+    const MAX_SAFE_CLONE_DEPTH = 8;
+    const MAX_SAFE_CLONE_KEYS = 1000;
+    const MAX_SAFE_CLONE_ARRAY_ITEMS = 1000;
 
     function isUnsafeMetadataKey(key) {
         return ANSWER_METADATA_POLLUTION_KEYS.has(String(key));
@@ -14039,17 +14125,47 @@ window.BrowseStateManager = BrowseStateManager;
         return strKey && !isUnsafeMetadataKey(strKey) ? strKey : '';
     }
 
-    function cloneSafeObject(value) {
-        const clone = {};
-        if (!value || typeof value !== 'object') {
-            return clone;
+    function cloneSafeValue(value, depth = 0, seen = new WeakSet()) {
+        if (value == null || typeof value !== 'object') {
+            return value;
         }
-        Object.keys(value).forEach((key) => {
-            if (!isUnsafeMetadataKey(key)) {
-                clone[key] = value[key];
+        if (depth > MAX_SAFE_CLONE_DEPTH) {
+            return undefined;
+        }
+        if (seen.has(value)) {
+            return undefined;
+        }
+
+        seen.add(value);
+        if (Array.isArray(value)) {
+            const items = value
+                .slice(0, MAX_SAFE_CLONE_ARRAY_ITEMS)
+                .map((item) => cloneSafeValue(item, depth + 1, seen))
+                .filter((item) => item !== undefined);
+            seen.delete(value);
+            return items;
+        }
+
+        const clone = {};
+        Object.keys(value).slice(0, MAX_SAFE_CLONE_KEYS).forEach((key) => {
+            if (isUnsafeMetadataKey(key)) {
+                return;
+            }
+            const cloned = cloneSafeValue(value[key], depth + 1, seen);
+            if (cloned !== undefined) {
+                clone[key] = cloned;
             }
         });
+        seen.delete(value);
         return clone;
+    }
+
+    function cloneSafeObject(value) {
+        if (!value || typeof value !== 'object') {
+            return {};
+        }
+        const clone = cloneSafeValue(value);
+        return clone && typeof clone === 'object' && !Array.isArray(clone) ? clone : {};
     }
     const NO_ANSWER_MARKERS = new Set([
         'no answer',
@@ -16381,18 +16497,27 @@ const MAX_FALLBACK_ANSWER_OBJECT_KEYS = 25;
 const MAX_FALLBACK_ANSWER_DEPTH = 4;
 const FALLBACK_ANSWER_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+function truncateFallbackTextAtLength(text, maxLength, suffix = '') {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    let truncated = text.slice(0, maxLength);
+    if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+    }
+    return `${truncated}${suffix}`;
+}
+
 function truncateFallbackAnswerText(value) {
     const text = String(value == null ? '' : value)
         .replace(/[\u0000-\u001F\u007F]+/g, ' ')
         .trim();
-    return text.length > MAX_FALLBACK_ANSWER_TEXT_LENGTH
-        ? `${text.slice(0, MAX_FALLBACK_ANSWER_TEXT_LENGTH)}...`
-        : text;
+    return truncateFallbackTextAtLength(text, MAX_FALLBACK_ANSWER_TEXT_LENGTH, '...');
 }
 
 function normalizeFallbackAnswerKey(value, fallback = '', options = {}) {
     const prefixNonQuestion = options.prefixNonQuestion === true;
-    let key = truncateFallbackAnswerText(value).slice(0, MAX_FALLBACK_ANSWER_KEY_LENGTH);
+    let key = truncateFallbackTextAtLength(truncateFallbackAnswerText(value), MAX_FALLBACK_ANSWER_KEY_LENGTH);
     if (!key) {
         key = fallback;
     }
@@ -16401,6 +16526,7 @@ function normalizeFallbackAnswerKey(value, fallback = '', options = {}) {
     }
     if (prefixNonQuestion && !key.startsWith('q')) {
         key = `q${key}`;
+        key = truncateFallbackTextAtLength(key, MAX_FALLBACK_ANSWER_KEY_LENGTH);
     }
     if (FALLBACK_ANSWER_POLLUTION_KEYS.has(key)) {
         return fallback && !FALLBACK_ANSWER_POLLUTION_KEYS.has(fallback) ? fallback : '';
@@ -16779,8 +16905,8 @@ function normalizeFallbackAnswerValue(value, depth = 0, state = { seen: new Weak
             .slice(0, MAX_FALLBACK_ANSWER_ARRAY_ITEMS)
             .map((item) => normalizeFallbackAnswerValue(item, depth + 1, state))
             .filter(Boolean)
-            .join(', ')
-            .slice(0, MAX_FALLBACK_ANSWER_TEXT_LENGTH);
+            .join(', ');
+        return truncateFallbackAnswerText(normalizedItems);
     }
     if (typeof value === 'object') {
         if (state.seen.has(value)) {
