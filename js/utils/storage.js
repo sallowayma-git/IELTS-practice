@@ -91,6 +91,29 @@ function summarizeStorageErrorForLog(error) {
     return summary;
 }
 
+function getSafeStorageImportErrorMessage(error) {
+    const message = String(error && error.message ? error.message : '');
+    if (/Invalid import data format/i.test(message)) {
+        return 'Invalid import data format';
+    }
+    if (/Import data contains no allowed storage keys/i.test(message)) {
+        return 'Import data contains no allowed storage keys';
+    }
+    if (/too many practice records/i.test(message)) {
+        return 'Import contains too many practice records';
+    }
+    if (/unsafe key/i.test(message)) {
+        return 'Import data contains an unsafe key';
+    }
+    if (/too deep|too large/i.test(message)) {
+        return 'Import data is too large or deeply nested';
+    }
+    if (/must be an array/i.test(message)) {
+        return 'Import practice records must be an array';
+    }
+    return 'Import failed. Please retry.';
+}
+
 function summarizeStorageValidationForLog(validation) {
     if (!validation || typeof validation !== 'object') {
         return { valid: false };
@@ -1624,7 +1647,7 @@ class StorageManager {
             }
         } catch (error) {
             console.error('Import data error:', summarizeStorageErrorForLog(error));
-            return { success: false, message: error.message };
+            return { success: false, message: getSafeStorageImportErrorMessage(error) };
         }
     }
 

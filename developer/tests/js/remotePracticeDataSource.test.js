@@ -660,6 +660,15 @@ async function testAuthOverlayValidationAndErrorFormatting() {
         windowStub.ExamData.formatRemoteAuthError({ payload: { details: ['a', 'b'] } }),
         'a；b'
     );
+    assert.strictEqual(
+        windowStub.ExamData.formatRemoteAuthError({ message: 'SECRET_TOKEN_12345 <script>alert(1)</script>' }),
+        'Authentication failed. Please retry.'
+    );
+    const longError = `bad\r\n${'x'.repeat(400)}`;
+    const formattedLongError = windowStub.ExamData.formatRemoteAuthError({ payload: { error: longError } });
+    assert(formattedLongError.length <= 240);
+    assert(!/[\u0000-\u001F\u007F]/.test(formattedLongError));
+    assert(formattedLongError.endsWith('...'));
 }
 
 async function main() {

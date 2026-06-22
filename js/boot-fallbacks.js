@@ -1006,7 +1006,7 @@
               if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
             }
           } catch (activeErr) {
-            console.warn('[Fallback] 无法校正 active_exam_index_key:', activeErr);
+            console.warn('[Fallback] 无法校正 active_exam_index_key:', summarizeBootFallbackErrorForLog(activeErr));
           }
         }
       }

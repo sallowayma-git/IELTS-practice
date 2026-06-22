@@ -46,35 +46,6 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
             <div class="hero-header">
                 <h1 style="width: 100%">
                     📚 考试总览系统
-                    <span
-                        style="
-                            font-size: 0.35em;
-                            opacity: 0.6;
-                            font-weight: normal;
-                            margin-left: 12px;
-                            vertical-align: middle;
-                            display: inline-block;
-                        "
-                        >项目仅授权ZYZ Reading Walks
-                        提供分发，小红书号：276752989</span
-                    >
-                    <a
-                        href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="hero-badge hero-badge--cta"
-                        style="
-                            background: #ff1c1c;
-                            box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35);
-                            text-decoration: none;
-                            display: inline-flex;
-                            align-items: center;
-                            justify-content: center;
-                        "
-                        aria-label="小红书主页"
-                    >
-                        小红书
-                    </a>
                     <a
                         href="https://github.com/sallowayma-git/IELTS-practice"
                         target="_blank"
@@ -629,23 +600,6 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                             "
                         >
                             <a
-                                href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="inline-hover-link"
-                                style="
-                                    color: #ff1c1c;
-                                    text-decoration: none;
-                                    font-size: 0.9em;
-                                    font-weight: bold;
-                                    display: block;
-                                    margin-bottom: 12px;
-                                    transition: opacity 0.2s;
-                                "
-                            >
-                                问题反馈
-                            </a>
-                            <a
                                 href="https://github.com/sallowayma-git"
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1014,17 +968,6 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                     </p>
                     <p>
                         本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
-                    </p>
-                    <p>
-                        腾讯文档：
-                        <a
-                            href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="lm-warning"
-                            style="text-decoration: underline"
-                            >问题反馈</a
-                        >
                     </p>
                     <div class="lm-info-box">
                         <p>

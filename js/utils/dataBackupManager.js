@@ -130,6 +130,23 @@ function summarizeDataBackupErrorForLog(error) {
     return summary;
 }
 
+function getSafeDataBackupImportHistoryError(error) {
+    if (error && error.name === 'ImportLimitError') {
+        return 'Import data exceeds the supported safety limits.';
+    }
+
+    const message = error && typeof error.message === 'string' ? error.message : '';
+    const safeMessages = new Set([
+        'All records were invalid after validation.',
+        'Import file does not contain any practice records.'
+    ]);
+    if (safeMessages.has(message)) {
+        return message;
+    }
+
+    return 'Import failed while saving records.';
+}
+
 class DataBackupManager {
     constructor() {
         this.storageKeys = {
@@ -480,7 +497,7 @@ class DataBackupManager {
                 mergeMode,
                 backupId,
                 success: false,
-                error: error.message
+                error: getSafeDataBackupImportHistoryError(error)
             });
             throw error;
         }

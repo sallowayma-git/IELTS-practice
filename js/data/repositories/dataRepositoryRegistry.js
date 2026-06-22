@@ -55,7 +55,11 @@
                     } catch (error) {
                         report[name] = {
                             valid: false,
-                            errors: [error.message || String(error)]
+                            errors: [
+                                ExamData.getConsistencyExceptionMessage
+                                    ? ExamData.getConsistencyExceptionMessage(name)
+                                    : `${name || 'Repository'} consistency check failed.`
+                            ]
                         };
                     }
                 }

@@ -223,7 +223,7 @@ class SystemDiagnostics {
             return this.validateExamFile(exam);
         });
         const report = this.generateValidationReport();
-        console.log('[SystemDiagnostics] 验证完成:', report);
+        console.log('[SystemDiagnostics] 验证完成:', report.summary);
 
         return report;
     }

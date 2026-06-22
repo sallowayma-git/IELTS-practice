@@ -22,6 +22,7 @@ function loadRepositories() {
     vm.createContext(context);
     for (const file of [
         'js/data/repositories/baseRepository.js',
+        'js/data/repositories/dataRepositoryRegistry.js',
         'js/data/repositories/settingsRepository.js',
         'js/data/repositories/backupRepository.js',
         'js/data/repositories/practiceRepository.js'
@@ -155,6 +156,68 @@ assert.equal(
     false,
     'practice consistency errors should not expose record ids'
 );
+
+const cleanPracticeDataSource = createDataSource();
+const cleanPracticeRepo = new ExamData.PracticeRepository(cleanPracticeDataSource);
+const upsertedPractice = await cleanPracticeRepo.upsert(JSON.parse(`{
+    "id": "safe-record",
+    "type": "reading",
+    "score": 1,
+    "date": "2026-01-01T00:00:00.000Z",
+    "__proto__": { "pollutedRepository": true },
+    "metadata": {
+        "title": "Safe",
+        "constructor": { "prototype": { "pollutedRepository": true } }
+    }
+}`));
+assert.equal(Object.prototype.hasOwnProperty.call(upsertedPractice, '__proto__'), false, 'practice upsert return should remove top-level __proto__');
+assert.equal(Object.prototype.hasOwnProperty.call(upsertedPractice.metadata, 'constructor'), false, 'practice upsert return should remove nested constructor');
+const storedPractice = cleanPracticeDataSource.data.get('practice_records')[0];
+assert.equal(Object.prototype.hasOwnProperty.call(storedPractice, '__proto__'), false, 'practice upsert should not persist top-level __proto__');
+assert.equal(Object.prototype.hasOwnProperty.call(storedPractice.metadata, 'constructor'), false, 'practice upsert should not persist nested constructor');
+assert.equal(Object.prototype.pollutedRepository, undefined);
+
+const updatedPractice = await cleanPracticeRepo.update('safe-record', JSON.parse(`{
+    "score": 2,
+    "prototype": { "pollutedRepository": true },
+    "realData": {
+        "duration": 60,
+        "__proto__": { "pollutedRepository": true }
+    }
+}`));
+assert.equal(updatedPractice.score, 2);
+assert.equal(Object.prototype.hasOwnProperty.call(updatedPractice, 'prototype'), false, 'practice update return should remove top-level prototype');
+assert.equal(Object.prototype.hasOwnProperty.call(updatedPractice.realData, '__proto__'), false, 'practice update return should remove nested __proto__');
+const storedUpdatedPractice = cleanPracticeDataSource.data.get('practice_records')[0];
+assert.equal(Object.prototype.hasOwnProperty.call(storedUpdatedPractice, 'prototype'), false, 'practice update should not persist top-level prototype');
+assert.equal(Object.prototype.hasOwnProperty.call(storedUpdatedPractice.realData, '__proto__'), false, 'practice update should not persist nested __proto__');
+assert.equal(Object.prototype.pollutedRepository, undefined);
+
+const throwingRepo = new ExamData.BaseRepository({
+    dataSource: createDataSource({ throwing_repo: { ok: true } }),
+    key: 'throwing_repo',
+    name: 'throwing_repo',
+    validators: [
+        () => {
+            throw new Error('validator failed: SECRET_TOKEN_12345 <script>alert(1)</script>');
+        }
+    ]
+});
+const throwingReport = await throwingRepo.runConsistencyCheck();
+assert.equal(throwingReport.valid, false, 'throwing validator should fail consistency check');
+assert.deepEqual(throwingReport.errors, ['Repository validator failed.']);
+assert(!JSON.stringify(throwingReport).includes('SECRET_TOKEN_12345'), 'validator exception details must not leak');
+
+const registry = new ExamData.DataRepositoryRegistry(createDataSource());
+registry.register('broken_repo', {
+    async runConsistencyCheck() {
+        throw new Error('registry failure: SECRET_TOKEN_12345 <script>alert(1)</script>');
+    }
+});
+const registryReport = await registry.runConsistencyChecks();
+assert.equal(registryReport.broken_repo.valid, false, 'registry should report failed repository checks');
+assert.deepEqual(registryReport.broken_repo.errors, ['broken_repo consistency check failed.']);
+assert(!JSON.stringify(registryReport).includes('SECRET_TOKEN_12345'), 'registry exception details must not leak');
 
 console.log(JSON.stringify({
     status: 'pass',

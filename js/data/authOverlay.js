@@ -3,6 +3,7 @@
 
     const gatedElements = new Map();
     const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
+    const MAX_REMOTE_AUTH_ERROR_CHARS = 240;
 
     function getImportMarkerKey(userId) {
         return `remote_import_completed:${userId}`;
@@ -123,17 +124,28 @@
         };
     }
 
+    function sanitizeRemoteAuthMessage(value, fallback = 'Authentication failed. Please retry.') {
+        const text = String(value ?? fallback)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const normalized = text || fallback;
+        return normalized.length > MAX_REMOTE_AUTH_ERROR_CHARS
+            ? `${normalized.slice(0, MAX_REMOTE_AUTH_ERROR_CHARS - 3)}...`
+            : normalized;
+    }
+
     function formatRemoteAuthError(error) {
         if (error && error.payload && Array.isArray(error.payload.details) && error.payload.details.length) {
-            return error.payload.details.join('；');
+            return sanitizeRemoteAuthMessage(error.payload.details.join('；'));
         }
         if (error && error.status === 429) {
             return '请求过于频繁，请稍后再试。';
         }
         if (error && error.status === 403) {
-            return error.payload?.error || '当前操作被拒绝，请刷新后重试。';
+            return sanitizeRemoteAuthMessage(error.payload?.error, '当前操作被拒绝，请刷新后重试。');
         }
-        return error?.payload?.error || error?.message || '认证失败';
+        return sanitizeRemoteAuthMessage(error?.payload?.error);
     }
 
     function normalizeCode(value) {

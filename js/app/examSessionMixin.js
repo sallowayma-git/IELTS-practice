@@ -35,6 +35,13 @@
         };
     }
 
+    function getSafeExamSessionStoredError(error) {
+        if (error && error.name === 'SecurityError') {
+            return 'script_injection_security_error';
+        }
+        return 'script_injection_error';
+    }
+
     function getMessageTargetOrigin(options = {}) {
         if (options && options.allowOpaqueOrigin) {
             return '*';
@@ -527,7 +534,7 @@
                     options.reuseWindow.focus();
                     pdfWin = options.reuseWindow;
                 } catch (reuseError) {
-                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
+                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', summarizeExamSessionErrorForLog(reuseError));
                 }
             }
 
@@ -1649,7 +1656,7 @@
             // 记录错误信息
             const errorInfo = {
                 examId: examId,
-                error: error.message,
+                error: getSafeExamSessionStoredError(error),
                 timestamp: Date.now(),
                 type: 'script_injection_error'
             };

@@ -2488,15 +2488,6 @@ body.hero-body .hero-shell > #account-view.hero-section {
     padding-top: 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
-.settings-footer__feedback {
-    color: #ff1c1c;
-    text-decoration: none;
-    font-size: 0.9em;
-    font-weight: bold;
-    display: block;
-    margin-bottom: 12px;
-    transition: opacity 0.2s;
-}
 .settings-footer__author {
     color: var(--shui-text-muted);
     text-decoration: none;

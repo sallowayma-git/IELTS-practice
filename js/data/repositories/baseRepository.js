@@ -2,6 +2,18 @@
     const ExamData = window.ExamData = window.ExamData || {};
     const UNSAFE_REPOSITORY_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+    function getValidationFailureMessage(name) {
+        return `${name || 'Repository'} data validation failed`;
+    }
+
+    function getValidatorExceptionMessage() {
+        return 'Repository validator failed.';
+    }
+
+    function getConsistencyExceptionMessage(name) {
+        return `${name || 'Repository'} consistency check failed.`;
+    }
+
     function isPlainObject(value) {
         return value && Object.prototype.toString.call(value) === '[object Object]';
     }
@@ -152,20 +164,20 @@
                 try {
                     const result = validator(value);
                     if (result === false) {
-                        errors.push(`${this.name} 数据验证失败`);
+                        errors.push(getValidationFailureMessage(this.name));
                     } else if (typeof result === 'string') {
                         errors.push(result);
                     } else if (result && typeof result === 'object') {
                         if (result.valid === false || result.isValid === false) {
-                            errors.push(result.message || result.error || `${this.name} 数据验证失败`);
+                            errors.push(result.message || result.error || getValidationFailureMessage(this.name));
                         }
                     }
                 } catch (error) {
-                    errors.push(error.message || String(error));
+                    errors.push(getValidatorExceptionMessage(error));
                 }
             }
             if (errors.length > 0) {
-                const err = new Error(`[${this.name}] 数据验证失败: ${errors.join('; ')}`);
+                const err = new Error(`[${this.name}] ${getValidationFailureMessage(this.name)}: ${errors.join('; ')}`);
                 err.validationErrors = errors;
                 throw err;
             }
@@ -177,7 +189,7 @@
                 const data = await this.read({ ...options, skipValidation: false });
                 return { valid: true, data, errors: [] };
             } catch (error) {
-                const errors = error.validationErrors || [error.message || String(error)];
+                const errors = error.validationErrors || [getConsistencyExceptionMessage(this.name)];
                 return { valid: false, errors };
             }
         }
@@ -197,5 +209,8 @@
 
     ExamData.cloneValue = cloneValue;
     ExamData.sanitizeRepositoryValue = sanitizeRepositoryValue;
+    ExamData.getValidationFailureMessage = getValidationFailureMessage;
+    ExamData.getValidatorExceptionMessage = getValidatorExceptionMessage;
+    ExamData.getConsistencyExceptionMessage = getConsistencyExceptionMessage;
     ExamData.BaseRepository = BaseRepository;
 })(window);

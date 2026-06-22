@@ -269,6 +269,24 @@ assert.equal(Object.prototype.hasOwnProperty.call(standardizedFallbackRecord.rea
 assert.equal(Object.prototype.hasOwnProperty.call(standardizedFallbackRecord.scoreInfo, 'constructor'), false);
 assert.equal(Object.prototype.hasOwnProperty.call(standardizedFallbackRecord.realData.scoreInfo, 'constructor'), false);
 
+const legacyNormalizedRecord = fallbackScoreStorage.normalizeLegacyRecord({
+    id: 'legacy-score-pollution-guard',
+    examId: 'reading-legacy-pollution',
+    type: 'reading',
+    metadata: JSON.parse('{"category":"P2","__proto__":{"pollutedScoreRecord":true},"constructor":{"prototype":{"pollutedScoreRecord":true}}}'),
+    scoreInfo: JSON.parse('{"details":{},"constructor":{"prototype":{"pollutedScoreRecord":true}}}'),
+    realData: JSON.parse('{"__proto__":{"pollutedScoreRecord":true},"scoreInfo":{"constructor":{"prototype":{"pollutedScoreRecord":true}}}}'),
+    answers: [{ questionId: 'q1', answer: 'A', correctAnswer: 'A', correct: true }]
+});
+assert.equal(Object.prototype.pollutedScoreRecord, undefined);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyNormalizedRecord, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyNormalizedRecord.metadata, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyNormalizedRecord.metadata, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyNormalizedRecord.scoreInfo, 'constructor'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyNormalizedRecord.realData, '__proto__'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(legacyNormalizedRecord.realData.scoreInfo, 'constructor'), false);
+assert.equal(legacyNormalizedRecord.metadata.category, 'P2');
+
 const csvOutput = fallbackScoreStorage.convertToCSV([
     { id: 'legacy-record-without-metadata', examId: 'reading-legacy' },
     {

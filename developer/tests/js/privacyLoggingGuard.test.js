@@ -40,6 +40,7 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'js/core/scoreStorage.js',
         'js/core/storageProviderRegistry.js',
         'js/core/vocabStore.js',
+        'js/data/authOverlay.js',
         'js/data/dataSources/remotePracticeDataSource.js',
         'js/data/dataSources/storageDataSource.js',
         'js/data/index.js',
@@ -136,6 +137,12 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e|event\.reason|event\.error)\s*\)/.test(appSource),
         'app bootstrap must summarize raw errors and global event errors before logging them'
     );
+    assert(
+        appSource.includes('function getSafeAppStoredError(error)')
+        && !/window\.handleError\(\s*error\s*,/.test(appSource)
+        && !/stack:\s*normalizedError\.stack/.test(appSource),
+        'app global error handling must not forward or persist raw exception messages and stacks'
+    );
 
     const bootFallbacks = readSource('js/boot-fallbacks.js');
     assert(
@@ -145,6 +152,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/(?:showMessage\([^;\n]*|message:\s*)(?:error && error\.message|error\.message|exportErr && exportErr\.message|exportErr\.message)/.test(bootFallbacks),
         'boot fallbacks must not expose raw exception messages to users or reports'
+    );
+    assert(
+        !/console\.(?:error|warn)\([^;\n]*,\s*activeErr\s*\)/.test(bootFallbacks),
+        'boot fallbacks must summarize active exam key correction errors before logging them'
     );
 
     const mainEntry = readSource('js/app/main-entry.js');
@@ -302,6 +313,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(indexInteractions),
         'index interactions must summarize raw errors before logging them'
     );
+    assert(
+        !/notify\([^;\n]*(?:error && error\.message|error\.message|\|\|\s*error|\+\s*\(error)/.test(indexInteractions),
+        'index interactions must not expose raw exception messages to users'
+    );
 
     const miniGames = readSource('js/presentation/miniGames.js');
     assert(
@@ -341,6 +356,12 @@ test('frontend console logs do not expose practice session identifiers or payloa
         'data integrity manager must not log backup identifiers'
     );
 
+    const dataConsistency = readSource('js/utils/dataConsistencyManager.js');
+    assert(
+        !/console\.log\([^;\n]*,\s*(?:validation|report)\s*\)/.test(dataConsistency),
+        'data consistency manager must not log raw validation results or reports'
+    );
+
     const dataManagementPanel = readSource('js/components/dataManagementPanel.js');
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*error\s*\)/.test(dataManagementPanel),
@@ -362,6 +383,14 @@ test('frontend console logs do not expose practice session identifiers or payloa
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(pdfHandler),
         'PDF handler must summarize raw errors before logging them'
     );
+    assert(
+        pdfHandler.includes('function getSafePdfHandlerErrorCode(error)') &&
+        pdfHandler.includes('windowInfo.error = getSafePdfHandlerErrorCode(error)') &&
+        pdfHandler.includes('detail: { path: pdfPath, error: getSafePdfHandlerErrorCode(error) }') &&
+        !pdfHandler.includes('error: error.message') &&
+        !pdfHandler.includes('windowInfo.error = error.message'),
+        'PDF handler must not expose raw exception messages through state or custom events'
+    );
 
     assert(
         !/console\.(?:error|warn)\([^;\n]*,\s*(?:error|err|e)\s*\)/.test(systemDiagnostics),
@@ -370,6 +399,10 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/(?:error:\s*error\.message|message:\s*`[^`]*error\.message)/.test(systemDiagnostics),
         'system diagnostics must not place raw exception messages into diagnostic reports'
+    );
+    assert(
+        !/console\.log\([^;\n]*,\s*report\s*\)/.test(systemDiagnostics),
+        'system diagnostics must not log full validation reports'
     );
 
     const browseStateManager = readSource('js/components/BrowseStateManager.js');
@@ -426,6 +459,38 @@ test('frontend console logs do not expose practice session identifiers or payloa
     assert(
         !/throw new Error\([^;\n]*error\.message/.test(dataBackupManager),
         'data backup manager must not wrap raw exception messages into thrown errors'
+    );
+
+    const authOverlay = readSource('js/data/authOverlay.js');
+    assert(
+        authOverlay.includes('function sanitizeRemoteAuthMessage(value') &&
+        authOverlay.includes('MAX_REMOTE_AUTH_ERROR_CHARS') &&
+        !/return\s+[^;\n]*error\?\.message/.test(authOverlay),
+        'auth overlay must sanitize server payload errors and avoid raw exception messages'
+    );
+
+    const baseRepository = readSource('js/data/repositories/baseRepository.js');
+    assert(
+        baseRepository.includes("errors.push(getValidatorExceptionMessage(error))")
+        && baseRepository.includes("const errors = error.validationErrors || [getConsistencyExceptionMessage(this.name)]")
+        && !/errors\.push\(error\.message \|\| String\(error\)\)/.test(baseRepository),
+        'base repository consistency checks must not persist raw validator exception messages'
+    );
+
+    const dataRepositoryRegistry = readSource('js/data/repositories/dataRepositoryRegistry.js');
+    assert(
+        dataRepositoryRegistry.includes('ExamData.getConsistencyExceptionMessage(name)')
+        && !/errors:\s*\[error\.message \|\| String\(error\)\]/.test(dataRepositoryRegistry),
+        'data repository registry must not persist raw repository exception messages'
+    );
+
+    const adminPage = readSource('backend/admin/admin.js');
+    assert(
+        adminPage.includes('function formatRequestError(response, payload)')
+        && adminPage.includes('function sanitizeStatusMessage(value')
+        && adminPage.includes('MAX_ADMIN_STATUS_CHARS')
+        && !/JSON\.stringify\(payload\.details\)/.test(adminPage),
+        'admin UI must sanitize API status messages and avoid raw details JSON'
     );
 
     const markdownExporter = readSource('js/utils/markdownExporter.js');

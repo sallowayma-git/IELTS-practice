@@ -205,6 +205,14 @@ assert(
     dataIntegrityManagerSource.includes("_assertImportSourceSize(source.byteLength, 'arrayBuffer')"),
     'data integrity imports must cap string, Blob/File, and ArrayBuffer sources before JSON parsing'
 );
+assert(
+    dataIntegrityManagerSource.includes('function getSafeDataIntegrityImportError(error, phase)') &&
+    dataIntegrityManagerSource.includes("throw new Error(getSafeDataIntegrityImportError(error, 'read'))") &&
+    dataIntegrityManagerSource.includes("throw new Error(getSafeDataIntegrityImportError(error, 'save'))") &&
+    !dataIntegrityManagerSource.includes("throw new Error(error?.message || '导入文件格式无效')") &&
+    !dataIntegrityManagerSource.includes("throw new Error(error?.message || '导入数据失败')"),
+    'data integrity import failures must not rethrow raw exception messages to the UI'
+);
 
 const dataBackupManagerSource = fs.readFileSync(path.join(repoRoot, 'js/utils/dataBackupManager.js'), 'utf8');
 assert(
@@ -229,6 +237,12 @@ assert(
     dataBackupManagerSource.includes('collectedArrays.has(records)') &&
     dataBackupManagerSource.includes('Import contains too many practice records'),
     'backup imports must cap record count, traversal size, and avoid collecting the same record array twice'
+);
+assert(
+    dataBackupManagerSource.includes('function getSafeDataBackupImportHistoryError(error)') &&
+    dataBackupManagerSource.includes('error: getSafeDataBackupImportHistoryError(error)') &&
+    !dataBackupManagerSource.includes('error: error.message'),
+    'data backup import history must not persist raw exception messages'
 );
 
 const scoreStorageSource = fs.readFileSync(path.join(repoRoot, 'js/core/scoreStorage.js'), 'utf8');
@@ -451,6 +465,12 @@ assert(
     !storageSource.includes('URL.revokeObjectURL(url);\n\n            console.log'),
     'storage exports must sanitize download filenames, Windows reserved basenames, and delay object URL revocation'
 );
+assert(
+    storageSource.includes('function getSafeStorageImportErrorMessage(error)') &&
+    storageSource.includes('message: getSafeStorageImportErrorMessage(error)') &&
+    !storageSource.includes('message: error.message'),
+    'storage import failures must return sanitized user-facing messages'
+);
 
 const examSessionMixinSource = fs.readFileSync(path.join(repoRoot, 'js/app/examSessionMixin.js'), 'utf8');
 assert(
@@ -462,6 +482,12 @@ assert(
     examSessionMixinSource.includes('data-exam-modal-action="focus-session"') &&
     examSessionMixinSource.includes("document.addEventListener('click', (event) => {"),
     'exam session modal actions must be handled through delegated event listeners'
+);
+assert(
+    examSessionMixinSource.includes('function getSafeExamSessionStoredError(error)') &&
+    examSessionMixinSource.includes('error: getSafeExamSessionStoredError(error)') &&
+    !examSessionMixinSource.includes('error: error.message'),
+    'exam session injection error logs must not persist raw exception messages'
 );
 assert(
     examSessionMixinSource.includes('const safeExamTitle = escapeHtml(exam.title || \'\');') &&

@@ -1,6 +1,9 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const BaseRepository = ExamData.BaseRepository;
+    const sanitizeRepositoryValue = typeof ExamData.sanitizeRepositoryValue === 'function'
+        ? ExamData.sanitizeRepositoryValue
+        : (value) => value;
 
     function ensureArray(value) {
         return Array.isArray(value) ? value : [];
@@ -50,7 +53,7 @@
             if (!record || typeof record !== 'object') {
                 throw new Error('practice record 必须是对象');
             }
-            const normalized = { ...record };
+            const normalized = sanitizeRepositoryValue({ ...record });
             if (!normalized.id) {
                 normalized.id = createLocalId('record');
             } else {
@@ -135,7 +138,7 @@
                 records = ensureArray(records);
                 const index = records.findIndex(r => r.id === normalized.id);
                 if (index >= 0) {
-                    records[index] = merge ? { ...records[index], ...normalized } : normalized;
+                    records[index] = merge ? sanitizeRepositoryValue({ ...records[index], ...normalized }) : normalized;
                 } else {
                     records.unshift(normalized);
                 }
@@ -184,7 +187,8 @@
                 if (index === -1) {
                     return null;
                 }
-                const updated = { ...records[index], ...updates };
+                const safeUpdates = sanitizeRepositoryValue(updates);
+                const updated = sanitizeRepositoryValue({ ...records[index], ...safeUpdates });
                 this._assertRecord(updated);
                 records[index] = updated;
                 await this.write(records, { transaction: tx, skipValidation: true, clone: false });

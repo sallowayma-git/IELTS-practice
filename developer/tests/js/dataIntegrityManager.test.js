@@ -83,6 +83,42 @@ try {
         /unsafe key/
     );
 
+    const publicImportReadManager = new DataIntegrityManager();
+    publicImportReadManager.repositories = {};
+    await assert.rejects(
+        () => publicImportReadManager.importData('{"data":{"practice_records":[{"id":"polluted","payload":{"__proto__":{"admin":true}}}]}}'),
+        (error) => {
+            assert.equal(error.message, 'Import file format is invalid or unsupported.');
+            assert(!error.message.includes('__proto__'));
+            assert(!error.message.includes('payload'));
+            return true;
+        }
+    );
+
+    const publicImportSaveManager = new DataIntegrityManager();
+    publicImportSaveManager.createBackup = async () => ({ id: 'backup-before-sensitive-failure' });
+    publicImportSaveManager.repositories = {
+        async transaction() {
+            throw new Error('db failed: SECRET_TOKEN_12345 <script>alert(1)</script>');
+        }
+    };
+    await assert.rejects(
+        () => publicImportSaveManager.importData(JSON.stringify({
+            data: {
+                practice_records: [{
+                    id: 'record-save-error',
+                    title: 'Safe import'
+                }]
+            }
+        })),
+        (error) => {
+            assert.equal(error.message, 'Import failed while saving data.');
+            assert(!error.message.includes('SECRET_TOKEN_12345'));
+            assert(!error.message.includes('<script>'));
+            return true;
+        }
+    );
+
     await assert.rejects(
         () => guardManager._normalizeImportPayload({
             data: {

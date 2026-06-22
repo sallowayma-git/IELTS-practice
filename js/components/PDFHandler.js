@@ -13,6 +13,17 @@ function summarizePdfHandlerErrorForLog(error) {
     };
 }
 
+function getSafePdfHandlerErrorCode(error) {
+    const message = error && typeof error.message === 'string' ? error.message : '';
+    if (message.includes('popup blocker')) {
+        return 'popup_blocked';
+    }
+    if (message.includes('Invalid PDF path')) {
+        return 'invalid_pdf_path';
+    }
+    return 'pdf_error';
+}
+
 class PDFHandler {
     constructor() {
         this.pdfViewerUrl = null;
@@ -145,7 +156,7 @@ class PDFHandler {
             return {
                 path: pdfPath,
                 isAccessible: false,
-                error: error.message,
+                error: getSafePdfHandlerErrorCode(error),
                 timestamp: new Date().toISOString()
             };
         }
@@ -393,12 +404,12 @@ class PDFHandler {
         const windowInfo = this.openWindows.get(pdfPath);
         if (windowInfo) {
             windowInfo.status = 'error';
-            windowInfo.error = error.message;
+            windowInfo.error = getSafePdfHandlerErrorCode(error);
         }
 
         // Dispatch custom event
         document.dispatchEvent(new CustomEvent('pdfError', {
-            detail: { path: pdfPath, error: error.message }
+            detail: { path: pdfPath, error: getSafePdfHandlerErrorCode(error) }
         }));
     }
 

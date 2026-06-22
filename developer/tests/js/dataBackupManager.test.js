@@ -347,6 +347,31 @@ assert.equal(failedImportHistory.error.length, 1000);
 assert.equal(Object.prototype.hasOwnProperty.call(failedImportHistory.sources[0], 'constructor'), false);
 assert.equal(Object.prototype.pollutedHistory, undefined);
 
+const failingHistoryContext = createContext();
+const failingHistoryManager = new failingHistoryContext.window.DataBackupManager();
+const originalFailingSet = failingHistoryContext.storage.set.bind(failingHistoryContext.storage);
+failingHistoryContext.storage.set = async (key, value) => {
+    if (key === 'practice_records') {
+        throw new Error('merge failed: SECRET_TOKEN_12345 <script>alert(1)</script>');
+    }
+    return originalFailingSet(key, value);
+};
+await assert.rejects(
+    () => failingHistoryManager.importPracticeData({
+        practiceRecords: [{
+            id: 'record-sensitive-error',
+            examId: 'reading-sensitive-error',
+            startTime: '2026-01-01T00:00:00.000Z'
+        }]
+    }, { createBackup: false }),
+    /SECRET_TOKEN_12345/
+);
+const sanitizedFailureHistory = await failingHistoryContext.storage.get('import_history', []);
+assert.equal(sanitizedFailureHistory.length, 1);
+assert.equal(sanitizedFailureHistory[0].error, 'Import failed while saving records.');
+assert(!JSON.stringify(sanitizedFailureHistory).includes('SECRET_TOKEN_12345'));
+assert(!JSON.stringify(sanitizedFailureHistory).includes('<script>'));
+
 await context.storage.set('export_history', [
     { id: 'old-export', timestamp: expiredHistoryTimestamp },
     { id: 'fresh-export', timestamp: currentHistoryTimestamp }

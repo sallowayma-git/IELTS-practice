@@ -171,6 +171,37 @@ async function createStorageHarness(options = {}) {
 }
 
 {
+    const { manager } = await createStorageHarness();
+    await manager.set('practice_records', [{ id: 'existing', examId: 'reading-existing' }]);
+    const sensitiveKey = 'secret_token_should_not_be_reflected';
+    const result = await manager.importData({
+        data: {
+            practice_records: {
+                data: [{
+                    id: 'bad-reflection',
+                    examId: 'reading-bad',
+                    metadata: {
+                        [sensitiveKey]: {
+                            constructor: { prototype: { polluted: true } }
+                        }
+                    }
+                }]
+            }
+        }
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.message, 'Import data contains an unsafe key');
+    assert.equal(result.message.includes(sensitiveKey), false);
+    assert.deepEqual(
+        await manager.get('practice_records', []),
+        [{ id: 'existing', examId: 'reading-existing' }],
+        'unsafe import errors must not replace existing records'
+    );
+    assert.equal(Object.prototype.polluted, undefined);
+}
+
+{
     const { manager, localStorage } = await createStorageHarness();
     localStorage.setItem('exam_system_practice_records', JSON.stringify([{ id: 'stored', examId: 'reading-stored' }]));
     localStorage.setItem('exam_system___proto__', JSON.stringify({ polluted: true }));

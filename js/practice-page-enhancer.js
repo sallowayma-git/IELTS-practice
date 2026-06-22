@@ -16,6 +16,7 @@
     console.log('[PracticeEnhancer] 初始化增强器');
 
     let fallbackTokenCounter = 0;
+    const HISTORY_STATE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function summarizePracticeEnhancerErrorForLog(error) {
         const summary = {
@@ -81,6 +82,20 @@
         }
         fallbackTokenCounter += 1;
         return `fallback_${fallbackTokenCounter.toString(36)}`;
+    }
+
+    function copySafeHistoryState(baseState) {
+        const output = {};
+        if (!baseState || typeof baseState !== 'object' || Array.isArray(baseState)) {
+            return output;
+        }
+        Object.keys(baseState).forEach((key) => {
+            if (HISTORY_STATE_UNSAFE_KEYS.has(key)) {
+                return;
+            }
+            output[key] = baseState[key];
+        });
+        return output;
     }
 
     const DEFAULT_ENHANCER_CONFIG = {
@@ -2136,12 +2151,11 @@
                 }
                 try {
                     this._suiteHistoryBypassPopstate = true;
-                    const marker = Object.assign({}, (event && event.state && typeof event.state === 'object') ? event.state : {}, {
-                        __suiteGuard: true,
-                        __suiteGuardToken: this._suiteHistoryGuardToken,
-                        suiteSessionId: this.suiteSessionId || null,
-                        timestamp: Date.now()
-                    });
+                    const marker = copySafeHistoryState(event && event.state);
+                    marker.__suiteGuard = true;
+                    marker.__suiteGuardToken = this._suiteHistoryGuardToken;
+                    marker.suiteSessionId = this.suiteSessionId || null;
+                    marker.timestamp = Date.now();
                     window.history.pushState(marker, document.title, window.location.href);
                     this.notifySuiteCloseAttempt('history_back_blocked');
                 } catch (_) {
@@ -2153,12 +2167,11 @@
                 }
             };
             try {
-                const marker = Object.assign({}, (window.history.state && typeof window.history.state === 'object') ? window.history.state : {}, {
-                    __suiteGuard: true,
-                    __suiteGuardToken: this._suiteHistoryGuardToken,
-                    suiteSessionId: this.suiteSessionId || null,
-                    timestamp: Date.now()
-                });
+                const marker = copySafeHistoryState(window.history.state);
+                marker.__suiteGuard = true;
+                marker.__suiteGuardToken = this._suiteHistoryGuardToken;
+                marker.suiteSessionId = this.suiteSessionId || null;
+                marker.timestamp = Date.now();
                 window.history.pushState(marker, document.title, window.location.href);
                 this._suiteHistoryGuardPushed = true;
             } catch (_) {
@@ -2207,7 +2220,7 @@
                     const state = window.history.state;
                     const currentToken = state && state.__suiteGuardToken;
                     if (currentToken && currentToken === this._suiteHistoryGuardToken) {
-                        const restored = Object.assign({}, state);
+                        const restored = copySafeHistoryState(state);
                         delete restored.__suiteGuard;
                         delete restored.__suiteGuardToken;
                         delete restored.suiteSessionId;
