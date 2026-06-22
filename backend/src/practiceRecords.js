@@ -193,7 +193,19 @@ function normalizeLimitedText(value, maxLength, fieldName = 'record metadata') {
             field: fieldName
         });
     }
-    return text.length > maxLength ? text.slice(0, maxLength) : text;
+    return truncateSafeText(text, maxLength, fieldName);
+}
+
+function truncateSafeText(text, maxLength, fieldName) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    let truncated = text.slice(0, maxLength);
+    if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+    }
+    assertSafeUnicodeText(truncated, fieldName);
+    return truncated;
 }
 
 function getSessionId(record) {

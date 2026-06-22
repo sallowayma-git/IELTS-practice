@@ -9,7 +9,7 @@ const session = require('express-session');
 
 const { createApp } = require('../src/app');
 const { MemoryAuthStore, PostgresAuthStore, createRateLimiter } = require('../src/auth');
-const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeTrafficEvent, serializeRecord } = require('../src/admin');
+const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeAdminSearchQuery, normalizeTrafficEvent, serializeRecord } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { runMigrations } = require('../src/migrations');
 const { MemoryPracticeRecordStore, extractColumns, mergePracticeRecords, normalizePracticeRecord } = require('../src/practiceRecords');
@@ -82,7 +82,9 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(!/^TOR_BRIDGES=/m.test(envExample));
     assert(envExample.includes('TOR_BRIDGES_ENCRYPTED_FILE='));
     assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_FILE='));
-    assert(envExample.includes('TOR_BRIDGES_LOCAL_FILE=./tor/bridges.local.txt'));
+    assert(envExample.includes('TOR_BRIDGES_LOCAL_FILE=./tor/bridges.placeholder.txt'));
+    assert(envExample.includes('# TOR_BRIDGES_LOCAL_FILE=./tor/bridges.local.txt'));
+    assert(!/^TOR_BRIDGES_LOCAL_FILE=\.\/tor\/bridges\.local\.txt$/m.test(envExample));
     assert(envExample.includes('TOR_BRIDGES_ENCRYPTED_LOCAL_FILE=./tor/bridges.age'));
     assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE=./tor/bridge-age-identity.txt'));
     assert(envExample.includes('TRAFFIC_SECRET='));
@@ -184,8 +186,13 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(bridgeTester.includes('if ($RevealBridgeMetadata -or $RevealBridgeLines)'));
     assert(!bridgeTester.includes('fingerprint.Substring(0, 8)'));
     assert(bridgeTester.includes('function Protect-BridgeCandidateFile'));
-    assert(bridgeTester.includes('[System.Security.Principal.WindowsIdentity]::GetCurrent().Name'));
-    assert(bridgeTester.includes('/inheritance:r'));
+    assert(bridgeTester.includes('[System.Security.Principal.WindowsIdentity]::GetCurrent()'));
+    assert(bridgeTester.includes('$acl.SetAccessRuleProtection($true, $false)'));
+    assert(bridgeTester.includes('$acl.RemoveAccessRuleAll($rule)'));
+    assert(bridgeTester.includes("[System.Security.Principal.SecurityIdentifier]::new($sidValue)"));
+    assert(bridgeTester.includes("'S-1-5-18'"));
+    assert(bridgeTester.includes("'S-1-5-32-544'"));
+    assert(bridgeTester.includes('Set-Acl -LiteralPath $Path -AclObject $acl'));
     assert(bridgeTester.includes('chmod 600'));
     assert(bridgeTester.includes('$candidateFile = New-TemporaryFile'));
     assert.match(bridgeTester, /\$candidateFile = New-TemporaryFile\s+Protect-BridgeCandidateFile -Path \$candidateFile\.FullName\s+\[System\.IO\.File\]::WriteAllText/s);
@@ -210,8 +217,13 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(bridgeEncryptor.includes("Join-Path $PSScriptRoot '..\\tor\\bridges.age'"));
     assert(bridgeEncryptor.includes("Join-Path $PSScriptRoot '..\\tor\\bridge-age-identity.txt'"));
     assert(bridgeEncryptor.includes('function Protect-PrivateFile'));
-    assert(bridgeEncryptor.includes('[System.Security.Principal.WindowsIdentity]::GetCurrent().Name'));
-    assert(bridgeEncryptor.includes('/inheritance:r'));
+    assert(bridgeEncryptor.includes('[System.Security.Principal.WindowsIdentity]::GetCurrent()'));
+    assert(bridgeEncryptor.includes('$acl.SetAccessRuleProtection($true, $false)'));
+    assert(bridgeEncryptor.includes('$acl.RemoveAccessRuleAll($rule)'));
+    assert(bridgeEncryptor.includes("[System.Security.Principal.SecurityIdentifier]::new($sidValue)"));
+    assert(bridgeEncryptor.includes("'S-1-5-18'"));
+    assert(bridgeEncryptor.includes("'S-1-5-32-544'"));
+    assert(bridgeEncryptor.includes('Set-Acl -LiteralPath $Path -AclObject $acl'));
     assert(bridgeEncryptor.includes('chmod 600'));
     assert(bridgeEncryptor.includes('Assert-ToolAvailable -Tool $AgePath'));
     assert(bridgeEncryptor.includes('Assert-ToolAvailable -Tool $AgeKeygenPath'));
@@ -2265,12 +2277,31 @@ test('practice record normalization clamps numeric statistics', () => {
     });
 });
 
+test('practice record metadata truncation preserves valid Unicode', () => {
+    const normalized = normalizePracticeRecord({
+        id: 'unicode-metadata-record',
+        title: `${'a'.repeat(499)}😀tail`,
+        type: `${'b'.repeat(63)}😀tail`
+    });
+
+    assert.equal(normalized.title, 'a'.repeat(499));
+    assert.equal(normalized.type, 'b'.repeat(63));
+    assert.doesNotThrow(() => normalizePracticeRecord({
+        id: 'unicode-metadata-record-2',
+        title: `${'a'.repeat(498)}😀tail`
+    }));
+});
+
 test('admin record serialization redacts sensitive payload fields', () => {
     const payload = JSON.parse(`{
         "sessionId": "visible-session",
         "title": "Visible Practice",
         "accessToken": "token-secret",
         "csrf_token": "csrf-secret",
+        "apiKey": "api-key-secret",
+        "xApiKey": "x-api-key-secret",
+        "openai_api_key": "openai-api-key-secret",
+        "accessKeyId": "access-key-secret",
         "payload": {
             "password": "password-secret",
             "recoveryCode": "recovery-secret",
@@ -2294,6 +2325,10 @@ test('admin record serialization redacts sensitive payload fields', () => {
     assert.equal(serialized.title, 'Visible Practice');
     assert.equal(serialized.payload.accessToken, '[redacted]');
     assert.equal(serialized.payload.csrf_token, '[redacted]');
+    assert.equal(serialized.payload.apiKey, '[redacted]');
+    assert.equal(serialized.payload.xApiKey, '[redacted]');
+    assert.equal(serialized.payload.openai_api_key, '[redacted]');
+    assert.equal(serialized.payload.accessKeyId, '[redacted]');
     assert.equal(serialized.payload.payload.password, '[redacted]');
     assert.equal(serialized.payload.payload.recoveryCode, '[redacted]');
     assert.equal(serialized.payload.payload.nested.totpSecret, '[redacted]');
@@ -2302,7 +2337,28 @@ test('admin record serialization redacts sensitive payload fields', () => {
     assert.deepEqual(serialized.payload.answerKey, { q1: 'A' });
     assert.equal(Object.prototype.hasOwnProperty.call(serialized.payload, '__proto__'), false);
     assert.equal({}.polluted, undefined);
-    assert.doesNotMatch(serializedJson, /token-secret|csrf-secret|password-secret|recovery-secret|totp-secret/);
+    assert.doesNotMatch(serializedJson, /token-secret|csrf-secret|api-key-secret|x-api-key-secret|openai-api-key-secret|access-key-secret|password-secret|recovery-secret|totp-secret/);
+});
+
+test('admin record serialization preserves shared references while still detecting cycles', () => {
+    const shared = { label: 'shared context' };
+    const circular = { id: 'cycle' };
+    circular.self = circular;
+
+    const serialized = serializeRecord({
+        id: 'record-shared-reference',
+        payload: {
+            first: shared,
+            second: shared,
+            list: [shared],
+            circular
+        }
+    });
+
+    assert.deepEqual(serialized.payload.first, { label: 'shared context' });
+    assert.deepEqual(serialized.payload.second, { label: 'shared context' });
+    assert.deepEqual(serialized.payload.list[0], { label: 'shared context' });
+    assert.equal(serialized.payload.circular.self, '[circular]');
 });
 
 test('admin can list users, inspect records, and delete one record', async () => {
@@ -2973,6 +3029,17 @@ test('memory auth session deletion skips oversized serialized sessions', async (
     assert(authSource.includes('raw.length > MAX_MEMORY_SESSION_JSON_LENGTH'));
 });
 
+test('admin search query normalization preserves valid Unicode', () => {
+    const splitSurrogate = normalizeAdminSearchQuery(`${'A'.repeat(79)}😀tail`);
+    assert.equal(splitSurrogate, 'a'.repeat(79));
+    assert(!/[\uD800-\uDFFF]/.test(splitSurrogate));
+
+    assert.equal(
+        normalizeAdminSearchQuery('  Alice_%!\n\tBob  '),
+        'alice_%! bob'
+    );
+});
+
 test('traffic middleware minimizes untrusted request metadata', async () => {
     const client = await createClient();
     try {
@@ -3032,6 +3099,11 @@ test('traffic middleware minimizes untrusted request metadata', async () => {
             normalizeTrafficEvent({ userId: '123E4567-E89B-12D3-A456-426614174000' }).userId,
             '123e4567-e89b-12d3-a456-426614174000'
         );
+        const surrogateBoundary = normalizeTrafficEvent({
+            routeGroup: `${'r'.repeat(31)}😀tail`
+        });
+        assert.equal(surrogateBoundary.routeGroup, 'r'.repeat(31));
+        assert(!/[\uD800-\uDFFF]/.test(surrogateBoundary.routeGroup));
     } finally {
         await client.close();
     }

@@ -37,6 +37,20 @@
         confirmResolver: null
     };
 
+    function truncateAdminText(value, maxLength, suffix = '') {
+        const text = String(value ?? '');
+        if (text.length <= maxLength) {
+            return text;
+        }
+        const suffixText = String(suffix || '');
+        const bodyLength = Math.max(0, maxLength - suffixText.length);
+        let truncated = text.slice(0, bodyLength);
+        if (/[\uD800-\uDBFF]$/.test(truncated)) {
+            truncated = truncated.slice(0, -1);
+        }
+        return `${truncated}${suffixText}`;
+    }
+
     const nodes = {
         status: document.getElementById('status'),
         logoutButton: document.getElementById('logout-button'),
@@ -119,9 +133,7 @@
             .replace(/\s+/g, ' ')
             .trim();
         const normalized = text || fallback;
-        return normalized.length > MAX_ADMIN_STATUS_CHARS
-            ? `${normalized.slice(0, MAX_ADMIN_STATUS_CHARS - 3)}...`
-            : normalized;
+        return truncateAdminText(normalized, MAX_ADMIN_STATUS_CHARS, '...');
     }
 
     function setStatus(message, kind = 'info') {
@@ -253,7 +265,7 @@
             text = String(text || '');
         }
         if (text.length > MAX_RECORD_DETAIL_PAYLOAD_CHARS) {
-            return `${text.slice(0, MAX_RECORD_DETAIL_PAYLOAD_CHARS)}\n... truncated`;
+            return truncateAdminText(text, MAX_RECORD_DETAIL_PAYLOAD_CHARS, '\n... truncated');
         }
         return text;
     }

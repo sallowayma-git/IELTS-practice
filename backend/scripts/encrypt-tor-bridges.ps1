@@ -36,14 +36,27 @@ function Protect-PrivateFile {
     }
 
     if ($IsWindows -or $env:OS -eq 'Windows_NT') {
-        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-        if (-not $currentUser) {
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        if (-not $identity -or -not $identity.User) {
             throw 'Unable to determine current Windows user for private file permissions.'
         }
-        & icacls $Path /inheritance:r /grant:r "${currentUser}:F" *> $null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Failed to restrict private file permissions.'
+
+        $acl = Get-Acl -LiteralPath $Path
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) {
+            $acl.RemoveAccessRuleAll($rule)
         }
+
+        foreach ($sidValue in @($identity.User.Value, 'S-1-5-18', 'S-1-5-32-544')) {
+            $sid = [System.Security.Principal.SecurityIdentifier]::new($sidValue)
+            $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+                $sid,
+                [System.Security.AccessControl.FileSystemRights]::FullControl,
+                [System.Security.AccessControl.AccessControlType]::Allow
+            )
+            $acl.AddAccessRule($rule)
+        }
+        Set-Acl -LiteralPath $Path -AclObject $acl
         return
     }
 

@@ -1,8 +1,10 @@
 # Template for obfs4 bridges.
 #
 # Do not commit real bridges here. Publicly publishing bridges makes them less
-# useful and leaks deployment details. Put private bridge lines in
-# backend/tor/bridges.local.txt and set:
+# useful and leaks deployment details. The default compose/env example mounts
+# backend/tor/bridges.placeholder.txt so a copied .env does not require a local
+# plaintext secret. If you intentionally want plaintext local bridges, put
+# private bridge lines in backend/tor/bridges.local.txt and set:
 #
 #   TOR_BRIDGES_LOCAL_FILE=./tor/bridges.local.txt
 #

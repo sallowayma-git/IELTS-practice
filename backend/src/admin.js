@@ -90,7 +90,14 @@ function truncateText(value, maxLength, fallback = '') {
     const text = String(value ?? fallback)
         .replace(/[\u0000-\u001F\u007F]+/g, ' ')
         .trim();
-    return text.length > maxLength ? text.slice(0, maxLength) : text;
+    if (text.length <= maxLength) {
+        return text;
+    }
+    let truncated = text.slice(0, maxLength);
+    if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+    }
+    return truncated;
 }
 
 function parseMemorySessionValue(raw) {
@@ -120,8 +127,7 @@ function escapeLikePattern(value) {
 }
 
 function normalizeAdminSearchQuery(value) {
-    const q = String(value ?? '').trim().toLowerCase();
-    return q.length > ADMIN_SEARCH_QUERY_MAX_LENGTH ? q.slice(0, ADMIN_SEARCH_QUERY_MAX_LENGTH) : q;
+    return truncateText(String(value ?? '').toLowerCase(), ADMIN_SEARCH_QUERY_MAX_LENGTH);
 }
 
 function normalizeRequestPath(value) {
@@ -273,9 +279,10 @@ function isSensitiveAdminRecordKey(key) {
         || normalized.includes('csrf')
         || normalized.includes('totp')
         || normalized.includes('recoverycode')
+        || normalized.includes('apikey')
+        || normalized.includes('accesskey')
         || normalized.includes('credential')
         || normalized.includes('privatekey')
-        || normalized === 'apikey'
         || normalized === 'authorization'
         || normalized === 'authheader'
         || normalized === 'cookie'
@@ -315,54 +322,58 @@ function sanitizeAdminRecordPayload(value, depth = 0, state = { nodes: 0, seen: 
 
     state.seen.add(value);
 
-    if (Array.isArray(value)) {
-        const result = [];
-        const limit = Math.min(value.length, ADMIN_RECORD_PAYLOAD_MAX_ARRAY_ITEMS);
-        for (let index = 0; index < limit; index += 1) {
-            result.push(sanitizeAdminRecordPayload(value[index], depth + 1, state));
+    try {
+        if (Array.isArray(value)) {
+            const result = [];
+            const limit = Math.min(value.length, ADMIN_RECORD_PAYLOAD_MAX_ARRAY_ITEMS);
+            for (let index = 0; index < limit; index += 1) {
+                result.push(sanitizeAdminRecordPayload(value[index], depth + 1, state));
+            }
+            if (value.length > limit) {
+                result.push(ADMIN_RECORD_TRUNCATED_VALUE);
+            }
+            return result;
         }
-        if (value.length > limit) {
-            result.push(ADMIN_RECORD_TRUNCATED_VALUE);
+
+        let keys;
+        try {
+            keys = Object.keys(value);
+        } catch (_) {
+            return ADMIN_RECORD_TRUNCATED_VALUE;
+        }
+
+        const result = {};
+        const limit = Math.min(keys.length, ADMIN_RECORD_PAYLOAD_MAX_OBJECT_KEYS);
+        for (let index = 0; index < limit; index += 1) {
+            const key = keys[index];
+            if (ADMIN_RECORD_UNSAFE_KEYS.has(key)) {
+                continue;
+            }
+            if (isSensitiveAdminRecordKey(key)) {
+                result[key] = ADMIN_RECORD_SENSITIVE_VALUE;
+                continue;
+            }
+
+            const descriptor = Object.getOwnPropertyDescriptor(value, key);
+            if (!descriptor) {
+                continue;
+            }
+            if (!Object.prototype.propertyIsEnumerable.call(value, key)) {
+                continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+                result[key] = ADMIN_RECORD_ACCESSOR_VALUE;
+                continue;
+            }
+            result[key] = sanitizeAdminRecordPayload(descriptor.value, depth + 1, state);
+        }
+        if (keys.length > limit) {
+            result.__truncatedKeys = keys.length - limit;
         }
         return result;
+    } finally {
+        state.seen.delete(value);
     }
-
-    let keys;
-    try {
-        keys = Object.keys(value);
-    } catch (_) {
-        return ADMIN_RECORD_TRUNCATED_VALUE;
-    }
-
-    const result = {};
-    const limit = Math.min(keys.length, ADMIN_RECORD_PAYLOAD_MAX_OBJECT_KEYS);
-    for (let index = 0; index < limit; index += 1) {
-        const key = keys[index];
-        if (ADMIN_RECORD_UNSAFE_KEYS.has(key)) {
-            continue;
-        }
-        if (isSensitiveAdminRecordKey(key)) {
-            result[key] = ADMIN_RECORD_SENSITIVE_VALUE;
-            continue;
-        }
-
-        const descriptor = Object.getOwnPropertyDescriptor(value, key);
-        if (!descriptor) {
-            continue;
-        }
-        if (!Object.prototype.propertyIsEnumerable.call(value, key)) {
-            continue;
-        }
-        if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
-            result[key] = ADMIN_RECORD_ACCESSOR_VALUE;
-            continue;
-        }
-        result[key] = sanitizeAdminRecordPayload(descriptor.value, depth + 1, state);
-    }
-    if (keys.length > limit) {
-        result.__truncatedKeys = keys.length - limit;
-    }
-    return result;
 }
 
 function serializeRecord(row) {
@@ -1836,6 +1847,7 @@ module.exports = {
     classifyRouteGroup,
     createAdminRouter,
     createTrafficMiddleware,
+    normalizeAdminSearchQuery,
     normalizeTrafficEvent,
     parseAnalyticsQuery,
     parseListQuery,
