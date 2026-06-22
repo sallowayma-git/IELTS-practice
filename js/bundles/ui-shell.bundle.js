@@ -2007,8 +2007,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                                     notify('success', '题库刷新完成');
                                     global.__forceLibraryRefreshInProgress = false;
                                 }
-                            }).catch(function (error) {
-                                notify('error', '题库刷新失败: ' + (error && error.message || error));
+                            }).catch(function () {
+                                notify('error', '题库刷新失败，请稍后重试');
                                 global.__forceLibraryRefreshInProgress = false;
                             });
                         } else {
@@ -2019,8 +2019,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                                 }
                             }, 800);
                         }
-                    } catch (error) {
-                        notify('error', '题库刷新失败: ' + (error && error.message || error));
+                    } catch (_) {
+                        notify('error', '题库刷新失败，请稍后重试');
                         global.__forceLibraryRefreshInProgress = false;
                     }
                 }

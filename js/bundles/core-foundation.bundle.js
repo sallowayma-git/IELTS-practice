@@ -665,6 +665,29 @@ function summarizeStorageErrorForLog(error) {
     return summary;
 }
 
+function getSafeStorageImportErrorMessage(error) {
+    const message = String(error && error.message ? error.message : '');
+    if (/Invalid import data format/i.test(message)) {
+        return 'Invalid import data format';
+    }
+    if (/Import data contains no allowed storage keys/i.test(message)) {
+        return 'Import data contains no allowed storage keys';
+    }
+    if (/too many practice records/i.test(message)) {
+        return 'Import contains too many practice records';
+    }
+    if (/unsafe key/i.test(message)) {
+        return 'Import data contains an unsafe key';
+    }
+    if (/too deep|too large/i.test(message)) {
+        return 'Import data is too large or deeply nested';
+    }
+    if (/must be an array/i.test(message)) {
+        return 'Import practice records must be an array';
+    }
+    return 'Import failed. Please retry.';
+}
+
 function summarizeStorageValidationForLog(validation) {
     if (!validation || typeof validation !== 'object') {
         return { valid: false };
@@ -2198,7 +2221,7 @@ class StorageManager {
             }
         } catch (error) {
             console.error('Import data error:', summarizeStorageErrorForLog(error));
-            return { success: false, message: error.message };
+            return { success: false, message: getSafeStorageImportErrorMessage(error) };
         }
     }
 
@@ -4434,6 +4457,7 @@ storageManager.ready
 
     const gatedElements = new Map();
     const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
+    const MAX_REMOTE_AUTH_ERROR_CHARS = 240;
 
     function getImportMarkerKey(userId) {
         return `remote_import_completed:${userId}`;
@@ -4554,17 +4578,28 @@ storageManager.ready
         };
     }
 
+    function sanitizeRemoteAuthMessage(value, fallback = 'Authentication failed. Please retry.') {
+        const text = String(value ?? fallback)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const normalized = text || fallback;
+        return normalized.length > MAX_REMOTE_AUTH_ERROR_CHARS
+            ? `${normalized.slice(0, MAX_REMOTE_AUTH_ERROR_CHARS - 3)}...`
+            : normalized;
+    }
+
     function formatRemoteAuthError(error) {
         if (error && error.payload && Array.isArray(error.payload.details) && error.payload.details.length) {
-            return error.payload.details.join('；');
+            return sanitizeRemoteAuthMessage(error.payload.details.join('；'));
         }
         if (error && error.status === 429) {
             return '请求过于频繁，请稍后再试。';
         }
         if (error && error.status === 403) {
-            return error.payload?.error || '当前操作被拒绝，请刷新后重试。';
+            return sanitizeRemoteAuthMessage(error.payload?.error, '当前操作被拒绝，请刷新后重试。');
         }
-        return error?.payload?.error || error?.message || '认证失败';
+        return sanitizeRemoteAuthMessage(error?.payload?.error);
     }
 
     function normalizeCode(value) {
@@ -5580,6 +5615,18 @@ storageManager.ready
     const ExamData = window.ExamData = window.ExamData || {};
     const UNSAFE_REPOSITORY_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
+    function getValidationFailureMessage(name) {
+        return `${name || 'Repository'} data validation failed`;
+    }
+
+    function getValidatorExceptionMessage() {
+        return 'Repository validator failed.';
+    }
+
+    function getConsistencyExceptionMessage(name) {
+        return `${name || 'Repository'} consistency check failed.`;
+    }
+
     function isPlainObject(value) {
         return value && Object.prototype.toString.call(value) === '[object Object]';
     }
@@ -5730,20 +5777,20 @@ storageManager.ready
                 try {
                     const result = validator(value);
                     if (result === false) {
-                        errors.push(`${this.name} 数据验证失败`);
+                        errors.push(getValidationFailureMessage(this.name));
                     } else if (typeof result === 'string') {
                         errors.push(result);
                     } else if (result && typeof result === 'object') {
                         if (result.valid === false || result.isValid === false) {
-                            errors.push(result.message || result.error || `${this.name} 数据验证失败`);
+                            errors.push(result.message || result.error || getValidationFailureMessage(this.name));
                         }
                     }
                 } catch (error) {
-                    errors.push(error.message || String(error));
+                    errors.push(getValidatorExceptionMessage(error));
                 }
             }
             if (errors.length > 0) {
-                const err = new Error(`[${this.name}] 数据验证失败: ${errors.join('; ')}`);
+                const err = new Error(`[${this.name}] ${getValidationFailureMessage(this.name)}: ${errors.join('; ')}`);
                 err.validationErrors = errors;
                 throw err;
             }
@@ -5755,7 +5802,7 @@ storageManager.ready
                 const data = await this.read({ ...options, skipValidation: false });
                 return { valid: true, data, errors: [] };
             } catch (error) {
-                const errors = error.validationErrors || [error.message || String(error)];
+                const errors = error.validationErrors || [getConsistencyExceptionMessage(this.name)];
                 return { valid: false, errors };
             }
         }
@@ -5775,6 +5822,9 @@ storageManager.ready
 
     ExamData.cloneValue = cloneValue;
     ExamData.sanitizeRepositoryValue = sanitizeRepositoryValue;
+    ExamData.getValidationFailureMessage = getValidationFailureMessage;
+    ExamData.getValidatorExceptionMessage = getValidatorExceptionMessage;
+    ExamData.getConsistencyExceptionMessage = getConsistencyExceptionMessage;
     ExamData.BaseRepository = BaseRepository;
 })(window);
 
@@ -5837,7 +5887,11 @@ storageManager.ready
                     } catch (error) {
                         report[name] = {
                             valid: false,
-                            errors: [error.message || String(error)]
+                            errors: [
+                                ExamData.getConsistencyExceptionMessage
+                                    ? ExamData.getConsistencyExceptionMessage(name)
+                                    : `${name || 'Repository'} consistency check failed.`
+                            ]
                         };
                     }
                 }
@@ -5854,6 +5908,9 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
     const BaseRepository = ExamData.BaseRepository;
+    const sanitizeRepositoryValue = typeof ExamData.sanitizeRepositoryValue === 'function'
+        ? ExamData.sanitizeRepositoryValue
+        : (value) => value;
 
     function ensureArray(value) {
         return Array.isArray(value) ? value : [];
@@ -5903,7 +5960,7 @@ storageManager.ready
             if (!record || typeof record !== 'object') {
                 throw new Error('practice record 必须是对象');
             }
-            const normalized = { ...record };
+            const normalized = sanitizeRepositoryValue({ ...record });
             if (!normalized.id) {
                 normalized.id = createLocalId('record');
             } else {
@@ -5988,7 +6045,7 @@ storageManager.ready
                 records = ensureArray(records);
                 const index = records.findIndex(r => r.id === normalized.id);
                 if (index >= 0) {
-                    records[index] = merge ? { ...records[index], ...normalized } : normalized;
+                    records[index] = merge ? sanitizeRepositoryValue({ ...records[index], ...normalized }) : normalized;
                 } else {
                     records.unshift(normalized);
                 }
@@ -6037,7 +6094,8 @@ storageManager.ready
                 if (index === -1) {
                     return null;
                 }
-                const updated = { ...records[index], ...updates };
+                const safeUpdates = sanitizeRepositoryValue(updates);
+                const updated = sanitizeRepositoryValue({ ...records[index], ...safeUpdates });
                 this._assertRecord(updated);
                 records[index] = updated;
                 await this.write(records, { transaction: tx, skipValidation: true, clone: false });
@@ -6818,6 +6876,22 @@ storageManager.ready
         return clone;
     }
 
+    function assignSafePlainObject() {
+        const merged = {};
+        Array.prototype.slice.call(arguments).forEach((source) => {
+            const safeSource = clonePlainObject(source);
+            if (!safeSource || typeof safeSource !== 'object' || Array.isArray(safeSource)) {
+                return;
+            }
+            Object.keys(safeSource).forEach((key) => {
+                if (!isUnsafePracticeCloneKey(key)) {
+                    merged[key] = safeSource[key];
+                }
+            });
+        });
+        return merged;
+    }
+
     function ensureNumber(value, fallback = 0) {
         const numeric = Number(value);
         return Number.isFinite(numeric) ? numeric : fallback;
@@ -7267,7 +7341,7 @@ storageManager.ready
     }
 
     function buildMetadata(recordData = {}, type) {
-        const metadata = Object.assign({}, recordData.metadata || {});
+        const metadata = clonePlainObject(recordData.metadata || {}) || {};
         const examId = recordData.examId;
         const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
         const fallbackCategory = recordData.category || metadata.category || 'Unknown';
@@ -7331,7 +7405,7 @@ storageManager.ready
                 scoreInfo: entry.scoreInfo ? clonePlainObject(entry.scoreInfo) : null,
                 answers: answerMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
-                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                metadata: entry.metadata ? clonePlainObject(entry.metadata) || {} : {},
                 highlights,
                 scrollY,
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
@@ -7371,7 +7445,7 @@ storageManager.ready
         const recordDate = resolveRecordDate(recordData, now);
         const resolvedExamId = inferExamId(recordData);
         const metadata = buildMetadata(
-            Object.assign({}, recordData, { examId: resolvedExamId }),
+            assignSafePlainObject(recordData, { examId: resolvedExamId }),
             type
         );
         const comparisonSource = recordData.answerComparison
@@ -7492,15 +7566,15 @@ storageManager.ready
             highlights,
             scrollY,
             scoreInfo: recordData.scoreInfo
-                ? Object.assign({}, recordData.scoreInfo, {
+                ? assignSafePlainObject(recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
                 })
                 : (detailSource ? { details: detailSource } : null),
             realData: recordData.realData
-                ? Object.assign({}, recordData.realData, {
+                ? assignSafePlainObject(recordData.realData, {
                     answers: (recordData.realData && recordData.realData.answers) || answerMap,
                     correctAnswers: (recordData.realData && recordData.realData.correctAnswers) || normalizedCorrectMap,
-                    scoreInfo: Object.assign({}, (recordData.realData && recordData.realData.scoreInfo) || {}, {
+                    scoreInfo: assignSafePlainObject((recordData.realData && recordData.realData.scoreInfo) || {}, {
                         details: (recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.details) || detailSource || null
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
@@ -7646,8 +7720,8 @@ storageManager.ready
             return null;
         }
 
-        const scoreInfo = Object.assign({}, rawPayload.scoreInfo || {});
-        const metadata = Object.assign({}, sessionContext.metadata || {}, rawPayload.metadata || {});
+        const scoreInfo = clonePlainObject(rawPayload.scoreInfo || {}) || {};
+        const metadata = assignSafePlainObject(sessionContext.metadata || {}, rawPayload.metadata || {});
         const resolvedExamId = rawPayload.examId
             || sessionContext.examId
             || metadata.examId
@@ -7760,7 +7834,7 @@ storageManager.ready
             answerComparison,
             questionTypeMap,
             questionTypePerformance,
-            metadata: Object.assign({}, metadata, {
+            metadata: assignSafePlainObject(metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
                 category,
@@ -7776,7 +7850,7 @@ storageManager.ready
             scrollY: Number.isFinite(Number(rawPayload.scrollY))
                 ? Number(rawPayload.scrollY)
                 : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0),
-            scoreInfo: Object.assign({}, scoreInfo, {
+            scoreInfo: assignSafePlainObject(scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
                 accuracy,
@@ -7784,13 +7858,13 @@ storageManager.ready
                 details: scoreInfo.details || answerDetails,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page'
             }),
-            realData: Object.assign({}, rawPayload.realData || {}, {
+            realData: assignSafePlainObject(rawPayload.realData || {}, {
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
                 questionTypeMap,
                 questionTypePerformance,
-                scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
+                scoreInfo: assignSafePlainObject((rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,
                     accuracy,

@@ -73,6 +73,16 @@ function summarizeDataIntegrityErrorForLog(error) {
     return summary;
 }
 
+function getSafeDataIntegrityImportError(error, phase) {
+    if (error && error.name === 'ImportLimitError') {
+        return 'Import data exceeds the supported safety limits.';
+    }
+    if (phase === 'save') {
+        return 'Import failed while saving data.';
+    }
+    return 'Import file format is invalid or unsupported.';
+}
+
 class DataIntegrityManager {
     constructor(options = {}) {
         this.backupInterval = 600000; // 10分钟自动备份
@@ -377,7 +387,7 @@ class DataIntegrityManager {
             payload = await this._normalizeImportPayload(source);
         } catch (error) {
             console.error('[DataIntegrityManager] 解析导入源失败:', summarizeDataIntegrityErrorForLog(error));
-            throw new Error(error?.message || '导入文件格式无效');
+            throw new Error(getSafeDataIntegrityImportError(error, 'read'));
         }
 
         const hasPracticeSection = Array.isArray(payload.practice_records);
@@ -409,7 +419,7 @@ class DataIntegrityManager {
             });
         } catch (error) {
             console.error('[DataIntegrityManager] 导入数据失败:', summarizeDataIntegrityErrorForLog(error));
-            throw new Error(error?.message || '导入数据失败');
+            throw new Error(getSafeDataIntegrityImportError(error, 'save'));
         }
 
         return {
@@ -1024,6 +1034,23 @@ function summarizeDataBackupErrorForLog(error) {
     return summary;
 }
 
+function getSafeDataBackupImportHistoryError(error) {
+    if (error && error.name === 'ImportLimitError') {
+        return 'Import data exceeds the supported safety limits.';
+    }
+
+    const message = error && typeof error.message === 'string' ? error.message : '';
+    const safeMessages = new Set([
+        'All records were invalid after validation.',
+        'Import file does not contain any practice records.'
+    ]);
+    if (safeMessages.has(message)) {
+        return message;
+    }
+
+    return 'Import failed while saving records.';
+}
+
 class DataBackupManager {
     constructor() {
         this.storageKeys = {
@@ -1374,7 +1401,7 @@ class DataBackupManager {
                 mergeMode,
                 backupId,
                 success: false,
-                error: error.message
+                error: getSafeDataBackupImportHistoryError(error)
             });
             throw error;
         }

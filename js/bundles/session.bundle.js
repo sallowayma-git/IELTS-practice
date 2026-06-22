@@ -2556,6 +2556,9 @@
             let reopened = null;
             try {
                 reopened = window.open('about:blank', normalizedName);
+                if (reopened) {
+                    try { reopened.opener = null; } catch (_) { }
+                }
             } catch (error) {
                 console.warn('[SuitePractice] 无法重建套题标签:', summarizeSuitePracticeErrorForLog(error));
                 reopened = null;

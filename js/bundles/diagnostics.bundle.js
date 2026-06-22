@@ -226,7 +226,7 @@ class SystemDiagnostics {
             return this.validateExamFile(exam);
         });
         const report = this.generateValidationReport();
-        console.log('[SystemDiagnostics] 验证完成:', report);
+        console.log('[SystemDiagnostics] 验证完成:', report.summary);
 
         return report;
     }
@@ -288,6 +288,9 @@ class SystemDiagnostics {
             const windowName = `comm_test_${String(examId || '').replace(/[^\w-]/g, '_')}`;
             const examWindow = window.open(trustedPath, windowName,
                 'width=1000,height=700,scrollbars=yes,resizable=yes');
+            if (examWindow) {
+                try { examWindow.opener = null; } catch (_) { }
+            }
 
             if (!examWindow) {
                 return {
@@ -1692,7 +1695,13 @@ class DataConsistencyManager {
             validation.dataQuality = 'fair';
         }
 
-        console.log('[DataConsistencyManager] 数据验证结果:', validation);
+        console.log('[DataConsistencyManager] 数据验证结果:', {
+            isValid: validation.isValid,
+            errorCount: validation.errors.length,
+            warningCount: validation.warnings.length,
+            missingFieldCount: validation.missingFields.length,
+            dataQuality: validation.dataQuality
+        });
         return validation;
     }
 
@@ -2032,7 +2041,14 @@ class DataConsistencyManager {
 
         report.averageAnswerCount = list.length > 0 ? totalAnswers / list.length : 0;
 
-        console.log('[DataConsistencyManager] 数据质量报告:', report);
+        console.log('[DataConsistencyManager] 数据质量报告:', {
+            totalRecords: report.totalRecords,
+            validRecords: report.validRecords,
+            recordsWithCorrectAnswers: report.recordsWithCorrectAnswers,
+            recordsWithComparison: report.recordsWithComparison,
+            averageAnswerCount: report.averageAnswerCount,
+            qualityDistribution: report.qualityDistribution
+        });
         return report;
     }
 }

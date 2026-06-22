@@ -1009,7 +1009,7 @@
               if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
             }
           } catch (activeErr) {
-            console.warn('[Fallback] 无法校正 active_exam_index_key:', activeErr);
+            console.warn('[Fallback] 无法校正 active_exam_index_key:', summarizeBootFallbackErrorForLog(activeErr));
           }
         }
       }
@@ -2120,6 +2120,16 @@ class ExamSystemApp {
         };
     }
 
+    function getSafeAppStoredError(error) {
+        const summary = summarizeAppErrorForLog(error);
+        return {
+            name: summary.name || 'Error',
+            status: summary.status,
+            message: 'Application error',
+            stack: undefined
+        };
+    }
+
     function escapeCssSelectorValue(value) {
         if (global.CSS && typeof global.CSS.escape === 'function') {
             try {
@@ -2931,12 +2941,13 @@ class ExamSystemApp {
             console.error('[App] 系统初始化失败:', summarizeAppErrorForLog(error));
             let userMessage = '系统初始化失败';
             let canRecover = false;
-            if (error.message.includes('组件加载超时')) {
+            const errorMessage = error && typeof error.message === 'string' ? error.message : '';
+            if (errorMessage.includes('组件加载超时')) {
                 userMessage = '系统组件加载超时，请刷新页面重试';
                 canRecover = true;
-            } else if (error.message.includes('依赖')) {
+            } else if (errorMessage.includes('依赖')) {
                 userMessage = '系统依赖检查失败，请确保所有必需文件已正确加载';
-            } else if (error.message.includes('网络')) {
+            } else if (errorMessage.includes('网络')) {
                 userMessage = '网络连接问题，请检查网络连接后重试';
                 canRecover = true;
             } else {
@@ -2944,7 +2955,7 @@ class ExamSystemApp {
             }
             this.showUserMessage(userMessage, 'error');
             if (window.handleError) {
-                window.handleError(error, 'App Initialization');
+                window.handleError(getSafeAppStoredError(error), 'App Initialization');
             }
             this.showFallbackUI(canRecover);
         },
@@ -2961,17 +2972,17 @@ class ExamSystemApp {
         },
         handleGlobalError(error, context) {
             try {
-                const normalizedError = error && typeof error === 'object'
-                    ? error
-                    : { message: String(error || 'Unknown error'), stack: undefined };
+                const normalizedError = getSafeAppStoredError(error);
                 if (!this.globalErrors) {
                     this.globalErrors = [];
                 }
                 this.globalErrors.push({
-                    error: normalizedError.message || String(error),
+                    error: normalizedError.message,
+                    name: normalizedError.name,
+                    status: normalizedError.status,
                     context,
                     timestamp: Date.now(),
-                    stack: normalizedError.stack
+                    stack: undefined
                 });
                 if (this.globalErrors.length > 100) {
                     this.globalErrors = this.globalErrors.slice(-50);
@@ -2983,7 +2994,7 @@ class ExamSystemApp {
                     this.showUserMessage('系统遇到错误，但仍可继续使用', 'warning');
                 }
             } catch (handlingError) {
-                console.error('[App] 错误处理失败:', handlingError);
+                console.error('[App] 错误处理失败:', summarizeAppErrorForLog(handlingError));
             }
         },
         updateLoadingMessage(message) {
@@ -3432,7 +3443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Failed to start application:', summarizeAppErrorForLog(error));
             if (window.handleError) {
-                window.handleError(error, 'Application Startup');
+                window.handleError(getSafeAppStoredError(error), 'Application Startup');
             } else {
                 // Fallback: non-blocking user message if error handler is unavailable
                 try {

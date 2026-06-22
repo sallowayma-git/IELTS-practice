@@ -6628,6 +6628,13 @@
         };
     }
 
+    function getSafeExamSessionStoredError(error) {
+        if (error && error.name === 'SecurityError') {
+            return 'script_injection_security_error';
+        }
+        return 'script_injection_error';
+    }
+
     function getMessageTargetOrigin(options = {}) {
         if (options && options.allowOpaqueOrigin) {
             return '*';
@@ -7120,7 +7127,7 @@
                     options.reuseWindow.focus();
                     pdfWin = options.reuseWindow;
                 } catch (reuseError) {
-                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
+                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', summarizeExamSessionErrorForLog(reuseError));
                 }
             }
 
@@ -7212,6 +7219,7 @@
                     : '_blank';
                 try {
                     tabWindow = window.open(finalUrl, requestedName);
+                    this._detachWindowOpener(tabWindow);
                     if (tabWindow && typeof tabWindow.focus === 'function') {
                         tabWindow.focus();
                     }
@@ -7233,6 +7241,7 @@
                     this._sanitizeWindowName('exam', exam && exam.id),
                     windowFeatures
                 );
+                this._detachWindowOpener(examWindow);
             } catch (_) { }
 
             // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
@@ -7593,6 +7602,7 @@
                         ? String(options.windowName)
                         : (examWindow.name || '_blank');
                     const reopened = window.open(placeholderUrl, windowName);
+                    this._detachWindowOpener(reopened);
                     if (reopened) {
                         return reopened;
                     }
@@ -7687,6 +7697,17 @@
                 .replace(/_+/g, '_')
                 .slice(0, 80) || 'target';
             return `${safePrefix}_${safeValue}`;
+        },
+
+        _detachWindowOpener(targetWindow) {
+            if (!targetWindow) {
+                return;
+            }
+            try {
+                targetWindow.opener = null;
+            } catch (_) {
+                // Some browsers block opener mutation for already-isolated windows.
+            }
         },
 
         /**
@@ -8242,7 +8263,7 @@
             // 记录错误信息
             const errorInfo = {
                 examId: examId,
-                error: error.message,
+                error: getSafeExamSessionStoredError(error),
                 timestamp: Date.now(),
                 type: 'script_injection_error'
             };
@@ -10091,7 +10112,8 @@
                 throw new Error('Practice URL is invalid or untrusted');
             }
             const windowName = this._sanitizeWindowName('practice', sessionData.sessionId);
-            window.open(practiceUrl, windowName, 'width=1200,height=800');
+            const practiceWindow = window.open(practiceUrl, windowName, 'width=1200,height=800');
+            this._detachWindowOpener(practiceWindow);
         },
 
         /**
@@ -12087,6 +12109,17 @@ function summarizePdfHandlerErrorForLog(error) {
     };
 }
 
+function getSafePdfHandlerErrorCode(error) {
+    const message = error && typeof error.message === 'string' ? error.message : '';
+    if (message.includes('popup blocker')) {
+        return 'popup_blocked';
+    }
+    if (message.includes('Invalid PDF path')) {
+        return 'invalid_pdf_path';
+    }
+    return 'pdf_error';
+}
+
 class PDFHandler {
     constructor() {
         this.pdfViewerUrl = null;
@@ -12219,7 +12252,7 @@ class PDFHandler {
             return {
                 path: pdfPath,
                 isAccessible: false,
-                error: error.message,
+                error: getSafePdfHandlerErrorCode(error),
                 timestamp: new Date().toISOString()
             };
         }
@@ -12467,12 +12500,12 @@ class PDFHandler {
         const windowInfo = this.openWindows.get(pdfPath);
         if (windowInfo) {
             windowInfo.status = 'error';
-            windowInfo.error = error.message;
+            windowInfo.error = getSafePdfHandlerErrorCode(error);
         }
 
         // Dispatch custom event
         document.dispatchEvent(new CustomEvent('pdfError', {
-            detail: { path: pdfPath, error: error.message }
+            detail: { path: pdfPath, error: getSafePdfHandlerErrorCode(error) }
         }));
     }
 
@@ -13312,6 +13345,7 @@ window.BrowseStateManager = BrowseStateManager;
     'use strict';
 
     let fallbackTokenCounter = 0;
+    const HISTORY_STATE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function randomTokenSuffix() {
         const cryptoObj = global.crypto || global.msCrypto;
@@ -13352,17 +13386,26 @@ window.BrowseStateManager = BrowseStateManager;
             return normalized || null;
         }
 
-        function buildMarker(baseState) {
-            const marker = Object.assign(
-                {},
-                (baseState && typeof baseState === 'object') ? baseState : {},
-                {
-                    __suiteGuard: true,
-                    __suiteGuardToken: token,
-                    suiteSessionId: currentSessionId(),
-                    timestamp: Date.now()
+        function copySafeHistoryState(baseState) {
+            const output = {};
+            if (!baseState || typeof baseState !== 'object' || Array.isArray(baseState)) {
+                return output;
+            }
+            Object.keys(baseState).forEach((key) => {
+                if (HISTORY_STATE_UNSAFE_KEYS.has(key)) {
+                    return;
                 }
-            );
+                output[key] = baseState[key];
+            });
+            return output;
+        }
+
+        function buildMarker(baseState) {
+            const marker = copySafeHistoryState(baseState);
+            marker.__suiteGuard = true;
+            marker.__suiteGuardToken = token;
+            marker.suiteSessionId = currentSessionId();
+            marker.timestamp = Date.now();
             return marker;
         }
 
@@ -13450,7 +13493,7 @@ window.BrowseStateManager = BrowseStateManager;
                     const state = historyRef.state;
                     const currentToken = state && state.__suiteGuardToken;
                     if (currentToken && currentToken === token) {
-                        const restored = Object.assign({}, state);
+                        const restored = copySafeHistoryState(state);
                         delete restored.__suiteGuard;
                         delete restored.__suiteGuardToken;
                         delete restored.suiteSessionId;
@@ -13706,6 +13749,7 @@ window.BrowseStateManager = BrowseStateManager;
     'use strict';
 
     const MAX_QUESTION_NUMBER = 200;
+    const ANSWER_METADATA_POLLUTION_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const NOISE_KEYS = new Set([
         'playback-speed',
         'playbackspeed',
@@ -13736,6 +13780,23 @@ window.BrowseStateManager = BrowseStateManager;
         /duration/i,
         /config/i
     ];
+
+    function isUnsafeMetadataKey(key) {
+        return ANSWER_METADATA_POLLUTION_KEYS.has(String(key));
+    }
+
+    function cloneSafeObject(value) {
+        const clone = {};
+        if (!value || typeof value !== 'object') {
+            return clone;
+        }
+        Object.keys(value).forEach((key) => {
+            if (!isUnsafeMetadataKey(key)) {
+                clone[key] = value[key];
+            }
+        });
+        return clone;
+    }
     const NO_ANSWER_MARKERS = new Set([
         'no answer',
         '未作答',
@@ -14445,7 +14506,7 @@ window.BrowseStateManager = BrowseStateManager;
             };
         }
 
-        const metadata = Object.assign({}, record.metadata || {});
+        const metadata = cloneSafeObject(record.metadata || {});
 
         if (metadata.__enrichedMetadata) {
             record.metadata = metadata;
@@ -14503,8 +14564,8 @@ window.BrowseStateManager = BrowseStateManager;
         if (!record || typeof record !== 'object') {
             return record;
         }
-        const clone = Object.assign({}, record);
-        clone.metadata = Object.assign({}, record.metadata || {});
+        const clone = cloneSafeObject(record);
+        clone.metadata = cloneSafeObject(record.metadata || {});
         enrichRecordMetadata(clone);
         return clone;
     }

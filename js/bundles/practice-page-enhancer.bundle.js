@@ -5,6 +5,7 @@
     'use strict';
 
     let fallbackTokenCounter = 0;
+    const HISTORY_STATE_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
     function randomTokenSuffix() {
         const cryptoObj = global.crypto || global.msCrypto;
@@ -45,17 +46,26 @@
             return normalized || null;
         }
 
-        function buildMarker(baseState) {
-            const marker = Object.assign(
-                {},
-                (baseState && typeof baseState === 'object') ? baseState : {},
-                {
-                    __suiteGuard: true,
-                    __suiteGuardToken: token,
-                    suiteSessionId: currentSessionId(),
-                    timestamp: Date.now()
+        function copySafeHistoryState(baseState) {
+            const output = {};
+            if (!baseState || typeof baseState !== 'object' || Array.isArray(baseState)) {
+                return output;
+            }
+            Object.keys(baseState).forEach((key) => {
+                if (HISTORY_STATE_UNSAFE_KEYS.has(key)) {
+                    return;
                 }
-            );
+                output[key] = baseState[key];
+            });
+            return output;
+        }
+
+        function buildMarker(baseState) {
+            const marker = copySafeHistoryState(baseState);
+            marker.__suiteGuard = true;
+            marker.__suiteGuardToken = token;
+            marker.suiteSessionId = currentSessionId();
+            marker.timestamp = Date.now();
             return marker;
         }
 
@@ -143,7 +153,7 @@
                     const state = historyRef.state;
                     const currentToken = state && state.__suiteGuardToken;
                     if (currentToken && currentToken === token) {
-                        const restored = Object.assign({}, state);
+                        const restored = copySafeHistoryState(state);
                         delete restored.__suiteGuard;
                         delete restored.__suiteGuardToken;
                         delete restored.suiteSessionId;
