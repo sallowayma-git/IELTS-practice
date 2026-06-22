@@ -478,13 +478,40 @@
 
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
+    var MAX_FALLBACK_MESSAGE_TEXT_LENGTH = 500;
+    var FALLBACK_MESSAGE_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
+    var FALLBACK_MESSAGE_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
+
     var normalizeFallbackMessageType = function (type) {
       var value = String(type || '').trim().toLowerCase();
       return ['info', 'success', 'warning', 'error'].indexOf(value) !== -1 ? value : 'info';
     };
+
+    var truncateFallbackMessageText = function (text) {
+      if (text.length <= MAX_FALLBACK_MESSAGE_TEXT_LENGTH) {
+        return text;
+      }
+      var truncated = text.slice(0, MAX_FALLBACK_MESSAGE_TEXT_LENGTH - 3);
+      if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+      }
+      return truncated + '...';
+    };
+
+    var normalizeFallbackMessageText = function (message) {
+      var normalized = String(message == null ? '' : message)
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .replace(FALLBACK_MESSAGE_SECRET_QUERY_PATTERN, '$1[hidden]')
+        .replace(FALLBACK_MESSAGE_SECRET_VALUE_PATTERN, '$1=[hidden]')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return truncateFallbackMessageText(normalized);
+    };
+
     window.showMessage = function (message, type, duration) {
       try {
         var safeType = normalizeFallbackMessageType(type);
+        var safeMessage = normalizeFallbackMessageText(message);
         var container = document.getElementById('message-container');
         if (!container) {
           container = document.createElement('div');
@@ -504,8 +531,8 @@
 
         var text = document.createElement('span');
         text.className = 'message-text';
-        text.textContent = message || '';
-        note.title = text.textContent;
+        text.textContent = safeMessage;
+        note.title = safeMessage;
 
         note.appendChild(indicator);
         note.appendChild(text);
@@ -3504,6 +3531,15 @@ window.addEventListener('beforeunload', () => {
 (function (global) {
   'use strict';
 
+  const MAX_ONBOARDING_STEPS = 100;
+  const MAX_ONBOARDING_SUB_STEPS = 20;
+  const MAX_ONBOARDING_ID_LENGTH = 80;
+  const MAX_ONBOARDING_TEXT_LENGTH = 800;
+  const MAX_ONBOARDING_BUTTON_TEXT_LENGTH = 80;
+  const MAX_ONBOARDING_SELECTOR_LENGTH = 240;
+  const ALLOWED_ONBOARDING_POSITIONS = new Set(['top', 'bottom', 'left', 'right', 'center']);
+  const ALLOWED_ONBOARDING_VIEWS = new Set(['overview', 'browse', 'practice', 'more', 'settings']);
+
   function summarizeOnboardingErrorForLog(error) {
     if (!error || typeof error !== 'object') {
       return { name: typeof error };
@@ -3526,11 +3562,100 @@ window.addEventListener('beforeunload', () => {
     if (!selector || typeof document === 'undefined') {
       return null;
     }
+    const safeSelector = normalizeOnboardingSelector(selector);
+    if (!safeSelector) {
+      return null;
+    }
     try {
-      return document.querySelector(String(selector));
+      return document.querySelector(safeSelector);
     } catch (_) {
       return null;
     }
+  }
+
+  function truncateOnboardingText(value, maxLength, fallback = '') {
+    const text = String(value ?? fallback)
+      .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text.length <= maxLength) {
+      return text;
+    }
+    let truncated = text.slice(0, maxLength);
+    if (/[\uD800-\uDBFF]$/.test(truncated)) {
+      truncated = truncated.slice(0, -1);
+    }
+    return truncated;
+  }
+
+  function normalizeOnboardingSelector(value) {
+    const selector = String(value ?? '')
+      .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!selector || selector.length > MAX_ONBOARDING_SELECTOR_LENGTH) {
+      return null;
+    }
+    return selector;
+  }
+
+  function normalizeOnboardingPosition(value) {
+    const position = truncateOnboardingText(value, 16).toLowerCase();
+    return ALLOWED_ONBOARDING_POSITIONS.has(position) ? position : 'right';
+  }
+
+  function normalizeOnboardingView(value) {
+    const view = truncateOnboardingText(value, 32).toLowerCase();
+    return ALLOWED_ONBOARDING_VIEWS.has(view) ? view : null;
+  }
+
+  function normalizeOnboardingOffset(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return 0;
+    }
+    return Math.max(-200, Math.min(200, Math.trunc(number)));
+  }
+
+  function normalizeOnboardingStep(step, allowSubSteps = true) {
+    if (!step || typeof step !== 'object') {
+      return null;
+    }
+    const normalized = {
+      id: truncateOnboardingText(step.id, MAX_ONBOARDING_ID_LENGTH, 'step'),
+      target: normalizeOnboardingSelector(step.target),
+      title: truncateOnboardingText(step.title, MAX_ONBOARDING_TEXT_LENGTH),
+      content: truncateOnboardingText(step.content, MAX_ONBOARDING_TEXT_LENGTH),
+      position: normalizeOnboardingPosition(step.position),
+      showSkip: step.showSkip === true,
+      showPrev: step.showPrev === true,
+      nextText: truncateOnboardingText(step.nextText, MAX_ONBOARDING_BUTTON_TEXT_LENGTH),
+      activateView: normalizeOnboardingView(step.activateView),
+      action: truncateOnboardingText(step.action, MAX_ONBOARDING_ID_LENGTH),
+      lockScroll: step.lockScroll === true,
+      lockPointer: step.lockPointer === true,
+      waitForClick: step.waitForClick === true,
+      hideNext: step.hideNext === true,
+      waitForElement: normalizeOnboardingSelector(step.waitForElement),
+      triggerElement: normalizeOnboardingSelector(step.triggerElement),
+      disableHighlightPointer: step.disableHighlightPointer === true,
+      offsetY: normalizeOnboardingOffset(step.offsetY)
+    };
+    if (allowSubSteps && Array.isArray(step.subSteps)) {
+      normalized.subSteps = step.subSteps
+        .slice(0, MAX_ONBOARDING_SUB_STEPS)
+        .map((subStep) => normalizeOnboardingStep(subStep, false))
+        .filter(Boolean);
+    }
+    return normalized;
+  }
+
+  function normalizeOnboardingSteps(steps, fallbackSteps = DEFAULT_STEPS) {
+    const source = Array.isArray(steps) && steps.length ? steps : fallbackSteps;
+    return source
+      .slice(0, MAX_ONBOARDING_STEPS)
+      .map((step) => normalizeOnboardingStep(step))
+      .filter(Boolean);
   }
 
   // 默认步骤配置
@@ -4079,7 +4204,7 @@ window.addEventListener('beforeunload', () => {
     constructor(config = {}) {
       this._stateManager = new TourStateManager();
       this._renderer = new TourRenderer();
-      this._steps = config.steps || DEFAULT_STEPS;
+      this._steps = normalizeOnboardingSteps(config.steps, DEFAULT_STEPS);
       this._currentStep = 0;
       this._isActive = false;
       this._boundKeyHandler = null;
@@ -4202,7 +4327,10 @@ window.addEventListener('beforeunload', () => {
     }
 
     registerSteps(steps) {
-      this._steps = steps;
+      this._steps = normalizeOnboardingSteps(steps, DEFAULT_STEPS);
+      if (this._currentStep >= this._steps.length) {
+        this._currentStep = Math.max(0, this._steps.length - 1);
+      }
     }
 
     _activateView(viewId) {
