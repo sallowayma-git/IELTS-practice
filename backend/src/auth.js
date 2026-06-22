@@ -8,6 +8,7 @@ const INVALID_CREDENTIALS_ERROR = 'Username or password is incorrect';
 const DUMMY_PASSWORD_HASH = '$2a$12$OOrmAQgyb0OR42FfRf/D6.GOTtaUGKbmYgyZT2MoQOJMTFTxYjNG.';
 const MAX_MEMORY_SESSION_JSON_LENGTH = 256 * 1024;
 const MAX_BCRYPT_PASSWORD_BYTES = 72;
+const MAX_RATE_LIMIT_KEY_LENGTH = 256;
 
 const credentialsSchema = z.object({
     username: z.string().trim().min(3).max(32).regex(USERNAME_PATTERN),
@@ -89,6 +90,20 @@ function parseMemorySessionValue(raw) {
     }
 }
 
+function normalizeRateLimitKey(key) {
+    let text;
+    try {
+        text = String(key || 'unknown');
+    } catch (_) {
+        text = 'unknown';
+    }
+    const normalized = text.replace(/[\u0000-\u001F\u007F]+/g, ' ').trim() || 'unknown';
+    if (normalized.length <= MAX_RATE_LIMIT_KEY_LENGTH) {
+        return normalized;
+    }
+    return `sha256:${crypto.createHash('sha256').update(normalized).digest('hex')}`;
+}
+
 function createRateLimiter(options = {}) {
     const windowMs = options.windowMs || 10 * 60 * 1000;
     const maxAttempts = options.maxAttempts || 20;
@@ -112,7 +127,7 @@ function createRateLimiter(options = {}) {
 
     function checkRateLimit(key) {
         const now = Date.now();
-        const safeKey = String(key || 'unknown');
+        const safeKey = normalizeRateLimitKey(key);
         const entry = attempts.get(safeKey);
         if (!entry || entry.resetAt <= now) {
             if (attempts.size >= maxKeys) {
@@ -757,6 +772,7 @@ module.exports = {
     createRateLimiter,
     ensureCsrfToken,
     isPasswordWithinBcryptByteLimit,
+    normalizeRateLimitKey,
     normalizeUsername,
     publicUser,
     requireAdmin,

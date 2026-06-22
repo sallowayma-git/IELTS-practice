@@ -63,8 +63,13 @@ const ADMIN_RECORD_PAYLOAD_MAX_DEPTH = 12;
 const ADMIN_RECORD_PAYLOAD_MAX_NODES = 20000;
 const ADMIN_RECORD_PAYLOAD_MAX_ARRAY_ITEMS = 5000;
 const ADMIN_RECORD_PAYLOAD_MAX_OBJECT_KEYS = 1000;
+const ADMIN_RECORD_PAYLOAD_MAX_KEY_LENGTH = 120;
+const ADMIN_RECORD_PAYLOAD_MAX_STRING_LENGTH = 4096;
+const ADMIN_RECORD_METADATA_MAX_LENGTH = 512;
+const ADMIN_RECORD_DATE_MAX_LENGTH = 128;
 const ADMIN_RECORD_SENSITIVE_VALUE = '[redacted]';
 const ADMIN_RECORD_TRUNCATED_VALUE = '[truncated]';
+const ADMIN_RECORD_TRUNCATED_SUFFIX = '... [truncated]';
 const ADMIN_RECORD_CIRCULAR_VALUE = '[circular]';
 const ADMIN_RECORD_MAX_DEPTH_VALUE = '[max-depth]';
 const ADMIN_RECORD_ACCESSOR_VALUE = '[accessor]';
@@ -289,13 +294,60 @@ function isSensitiveAdminRecordKey(key) {
         || normalized === 'setcookie';
 }
 
+function truncateAdminRecordText(value, maxLength, suffix = '') {
+    const text = String(value ?? '')
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .trim();
+    if (text.length <= maxLength) {
+        return text;
+    }
+    let truncated = text.slice(0, maxLength);
+    if (/[\uD800-\uDBFF]$/.test(truncated)) {
+        truncated = truncated.slice(0, -1);
+    }
+    return `${truncated}${suffix}`;
+}
+
+function normalizeAdminRecordText(value, maxLength = ADMIN_RECORD_METADATA_MAX_LENGTH) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+    const text = truncateAdminRecordText(value, maxLength);
+    return text || null;
+}
+
+function normalizeAdminRecordPayloadKey(key) {
+    const text = truncateAdminRecordText(key, ADMIN_RECORD_PAYLOAD_MAX_KEY_LENGTH);
+    return text || null;
+}
+
+function normalizeAdminRecordNumber(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+function normalizeAdminRecordInteger(value) {
+    const number = normalizeAdminRecordNumber(value);
+    return number === null ? null : Math.trunc(number);
+}
+
 function sanitizeAdminRecordPayload(value, depth = 0, state = { nodes: 0, seen: new WeakSet() }) {
     if (value === null) {
         return null;
     }
 
     const valueType = typeof value;
-    if (valueType === 'string' || valueType === 'boolean') {
+    if (valueType === 'string') {
+        return truncateAdminRecordText(
+            value,
+            ADMIN_RECORD_PAYLOAD_MAX_STRING_LENGTH,
+            ADMIN_RECORD_TRUNCATED_SUFFIX
+        );
+    }
+    if (valueType === 'boolean') {
         return value;
     }
     if (valueType === 'number') {
@@ -349,8 +401,12 @@ function sanitizeAdminRecordPayload(value, depth = 0, state = { nodes: 0, seen: 
             if (ADMIN_RECORD_UNSAFE_KEYS.has(key)) {
                 continue;
             }
+            const safeKey = normalizeAdminRecordPayloadKey(key);
+            if (!safeKey || Object.prototype.hasOwnProperty.call(result, safeKey)) {
+                continue;
+            }
             if (isSensitiveAdminRecordKey(key)) {
-                result[key] = ADMIN_RECORD_SENSITIVE_VALUE;
+                result[safeKey] = ADMIN_RECORD_SENSITIVE_VALUE;
                 continue;
             }
 
@@ -362,10 +418,10 @@ function sanitizeAdminRecordPayload(value, depth = 0, state = { nodes: 0, seen: 
                 continue;
             }
             if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
-                result[key] = ADMIN_RECORD_ACCESSOR_VALUE;
+                result[safeKey] = ADMIN_RECORD_ACCESSOR_VALUE;
                 continue;
             }
-            result[key] = sanitizeAdminRecordPayload(descriptor.value, depth + 1, state);
+            result[safeKey] = sanitizeAdminRecordPayload(descriptor.value, depth + 1, state);
         }
         if (keys.length > limit) {
             result.__truncatedKeys = keys.length - limit;
@@ -380,17 +436,17 @@ function serializeRecord(row) {
     const rawPayload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const payload = sanitizeAdminRecordPayload(rawPayload);
     return {
-        id: row.id,
-        sessionId: row.session_id || rawPayload.sessionId || null,
-        examId: row.exam_id || rawPayload.examId || null,
-        type: row.type || rawPayload.type || rawPayload.examType || null,
-        title: row.title || rawPayload.title || null,
-        score: row.score === null || row.score === undefined ? (rawPayload.score ?? null) : Number(row.score),
-        totalQuestions: row.total_questions ?? rawPayload.totalQuestions ?? null,
-        correctAnswers: row.correct_answers ?? rawPayload.correctAnswers ?? null,
-        duration: row.duration === null || row.duration === undefined ? (rawPayload.duration ?? null) : Number(row.duration),
-        createdAt: row.created_at || rawPayload.createdAt || null,
-        updatedAt: row.updated_at || rawPayload.updatedAt || null,
+        id: normalizeAdminRecordText(row.id),
+        sessionId: normalizeAdminRecordText(row.session_id ?? rawPayload.sessionId),
+        examId: normalizeAdminRecordText(row.exam_id ?? rawPayload.examId),
+        type: normalizeAdminRecordText(row.type ?? rawPayload.type ?? rawPayload.examType),
+        title: normalizeAdminRecordText(row.title ?? rawPayload.title),
+        score: normalizeAdminRecordNumber(row.score ?? rawPayload.score),
+        totalQuestions: normalizeAdminRecordInteger(row.total_questions ?? rawPayload.totalQuestions),
+        correctAnswers: normalizeAdminRecordInteger(row.correct_answers ?? rawPayload.correctAnswers),
+        duration: normalizeAdminRecordNumber(row.duration ?? rawPayload.duration),
+        createdAt: normalizeAdminRecordText(row.created_at ?? rawPayload.createdAt, ADMIN_RECORD_DATE_MAX_LENGTH),
+        updatedAt: normalizeAdminRecordText(row.updated_at ?? rawPayload.updatedAt, ADMIN_RECORD_DATE_MAX_LENGTH),
         payload
     };
 }

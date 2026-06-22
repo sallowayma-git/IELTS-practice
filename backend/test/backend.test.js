@@ -8,7 +8,7 @@ const otp = require('otplib');
 const session = require('express-session');
 
 const { createApp } = require('../src/app');
-const { MemoryAuthStore, PostgresAuthStore, createRateLimiter } = require('../src/auth');
+const { MemoryAuthStore, PostgresAuthStore, createRateLimiter, normalizeRateLimitKey } = require('../src/auth');
 const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeAdminSearchQuery, normalizeTrafficEvent, serializeRecord } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { runMigrations } = require('../src/migrations');
@@ -636,6 +636,22 @@ test('rate limiter bounds tracked keys', () => {
     limiter('second');
     limiter('third');
     assert.equal(limiter.size(), 2);
+});
+
+test('rate limiter hashes oversized keys before tracking attempts', () => {
+    const longKey = `login-ip:${'x'.repeat(10_000)}`;
+    const normalized = normalizeRateLimitKey(longKey);
+    assert.match(normalized, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(normalizeRateLimitKey(longKey), normalized);
+    assert.equal(normalizeRateLimitKey('csrf-ip:\r\n127.0.0.1'), 'csrf-ip: 127.0.0.1');
+
+    const limiter = createRateLimiter({ maxAttempts: 1, windowMs: 60_000 });
+    limiter(longKey);
+    assert.throws(
+        () => limiter(longKey),
+        /Too many requests, please try again later/
+    );
+    assert.equal(limiter.size(), 1);
 });
 
 test('login, logout, and authenticated practice API access', async () => {
@@ -2361,6 +2377,39 @@ test('admin record serialization preserves shared references while still detecti
     assert.equal(serialized.payload.circular.self, '[circular]');
 });
 
+test('admin record serialization caps display payload text and normalizes scalar fields', () => {
+    const longKey = 'k'.repeat(180);
+    const serialized = serializeRecord({
+        id: 'record-display-limits',
+        session_id: 's'.repeat(700),
+        score: 'not-a-score',
+        total_questions: '12.9',
+        correct_answers: '7.9',
+        duration: '30.5',
+        payload: {
+            title: 't'.repeat(700),
+            createdAt: '2026-01-01T00:00:00Z'.repeat(20),
+            longText: `${'x'.repeat(4095)}\uD83Dtail`,
+            [longKey]: 'long key value'
+        }
+    });
+
+    const payloadKeys = Object.keys(serialized.payload);
+    const cappedKey = payloadKeys.find((key) => key.startsWith('k'));
+
+    assert.equal(serialized.score, null);
+    assert.equal(serialized.totalQuestions, 12);
+    assert.equal(serialized.correctAnswers, 7);
+    assert.equal(serialized.duration, 30.5);
+    assert.equal(serialized.sessionId.length, 512);
+    assert.equal(serialized.title.length, 512);
+    assert.equal(serialized.createdAt.length, 128);
+    assert(serialized.payload.longText.endsWith('... [truncated]'));
+    assert(!serialized.payload.longText.includes('\uD83D'), 'payload string truncation must not leave an unmatched surrogate half');
+    assert.equal(cappedKey.length, 120);
+    assert.equal(serialized.payload[cappedKey], 'long key value');
+});
+
 test('admin can list users, inspect records, and delete one record', async () => {
     const client = await createClient();
     try {
@@ -3601,12 +3650,26 @@ test('static hosting serves index and denies dotfiles with security headers', as
         assert.match(listeningCsp, /sandbox allow-scripts allow-downloads/);
         assert.doesNotMatch(listeningCsp, /allow-same-origin/);
 
+        const lowerCaseListening = await client.request('GET', '/listeningpractice/P1/sample.html');
+        assert.equal(lowerCaseListening.response.status, 200);
+        const lowerCaseListeningCsp = lowerCaseListening.response.headers.get('content-security-policy') || '';
+        assert.match(lowerCaseListeningCsp, /connect-src 'none'/);
+        assert.match(lowerCaseListeningCsp, /form-action 'none'/);
+        assert.match(lowerCaseListeningCsp, /base-uri 'none'/);
+        assert.match(lowerCaseListeningCsp, /sandbox allow-scripts allow-downloads/);
+
         const legacyTemplate = await client.request('GET', '/templates/legacy.html');
         assert.equal(legacyTemplate.response.status, 200);
         const templateCsp = legacyTemplate.response.headers.get('content-security-policy') || '';
         assert.match(templateCsp, /script-src 'self' 'unsafe-inline'/);
         assert.match(templateCsp, /connect-src 'self'/);
         assert.doesNotMatch(templateCsp, /sandbox/);
+
+        const mixedCaseTemplate = await client.request('GET', '/Templates/legacy.html');
+        assert.equal(mixedCaseTemplate.response.status, 200);
+        const mixedCaseTemplateCsp = mixedCaseTemplate.response.headers.get('content-security-policy') || '';
+        assert.match(mixedCaseTemplateCsp, /script-src 'self' 'unsafe-inline'/);
+        assert.doesNotMatch(mixedCaseTemplateCsp, /sandbox/);
 
         const ciFixture = await client.request('GET', '/templates/ci-practice-fixtures/debug.html');
         assert.equal(ciFixture.response.status, 404);

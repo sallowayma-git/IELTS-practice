@@ -32,11 +32,11 @@ function createDefaultSessionStore(pool) {
 }
 
 function createContentSecurityPolicy(req) {
-    const path = req.path || '';
-    const listeningContent = path === '/ListeningPractice'
-        || path.startsWith('/ListeningPractice/');
-    const legacyTemplate = path === '/templates'
-        || path.startsWith('/templates/');
+    const requestPath = String(req.path || '').toLowerCase();
+    const listeningContent = requestPath === '/listeningpractice'
+        || requestPath.startsWith('/listeningpractice/');
+    const legacyTemplate = requestPath === '/templates'
+        || requestPath.startsWith('/templates/');
     const legacyExercisePage = listeningContent || legacyTemplate;
     const scriptSrc = legacyExercisePage
         ? ["'self'", "'unsafe-inline'"]
