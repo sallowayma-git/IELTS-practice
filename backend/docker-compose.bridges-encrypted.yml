@@ -1,0 +1,25 @@
+services:
+  tor:
+    environment:
+      TOR_BRIDGES_ENCRYPTED_FILE: /run/secrets/tor_bridges_encrypted
+      TOR_BRIDGES_AGE_IDENTITY_FILE: /run/secrets/tor_bridge_age_identity
+    secrets:
+      - source: tor_bridges_encrypted
+        target: tor_bridges_encrypted
+        mode: 0400
+      - source: tor_bridge_age_identity
+        target: tor_bridge_age_identity
+        mode: 0400
+    volumes:
+      - type: bind
+        source: ./tor/bridges.placeholder.txt
+        target: /etc/tor/bridges.local.txt
+        read_only: true
+        bind:
+          create_host_path: false
+
+secrets:
+  tor_bridges_encrypted:
+    file: ${TOR_BRIDGES_ENCRYPTED_LOCAL_FILE:?Set TOR_BRIDGES_ENCRYPTED_LOCAL_FILE to an age-encrypted bridge file}
+  tor_bridge_age_identity:
+    file: ${TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE:?Set TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE to an age identity file}

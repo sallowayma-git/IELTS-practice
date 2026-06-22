@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates obfs4proxy tor \
+    && apt-get install -y --no-install-recommends age ca-certificates obfs4proxy tor \
     && rm -rf /var/lib/apt/lists/*
 
 COPY tor/torrc /etc/tor/torrc

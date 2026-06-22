@@ -6,6 +6,11 @@
 #
 #   TOR_BRIDGES_LOCAL_FILE=./tor/bridges.local.txt
 #
+# To distribute encrypted bridge material instead, encrypt the private bridge
+# file with age, mount the encrypted file and identity into the tor container,
+# then set TOR_BRIDGES_ENCRYPTED_FILE and TOR_BRIDGES_AGE_IDENTITY_FILE to the
+# container paths. The encrypted file takes precedence over TOR_BRIDGES_FILE.
+#
 # Valid obfs4 lines are normalized and deduplicated by docker-entrypoint.sh.
 # This template file alone does not enable bridge mode.
 # Example:

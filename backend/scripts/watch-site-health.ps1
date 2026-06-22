@@ -138,17 +138,47 @@ function Get-BridgeFingerprints {
 }
 
 function Get-TorBridgeConfig {
-    $result = Invoke-Compose @('exec', '-T', 'tor', 'sh', '-lc', 'test -f /etc/tor/torrc.d/bridges.conf && cat /etc/tor/torrc.d/bridges.conf || true')
-    $lines = @()
+    $includeFingerprints = if ($IncludeBridgeFingerprints) { '1' } else { '0' }
+    $script = @'
+config=/run/tor/bridges.conf
+legacy_config=/etc/tor/torrc.d/bridges.conf
+if [ ! -f "$config" ] && [ -f "$legacy_config" ]; then
+    config="$legacy_config"
+fi
+if [ ! -f "$config" ]; then
+    printf 'bridgeLines=0\nconfiguredBridgeCount=0\n'
+    exit 0
+fi
+
+fingerprints="$(awk '/^[[:space:]]*Bridge[[:space:]]+/ { for (i=1; i<=NF; i++) if ($i ~ /^[A-Fa-f0-9]{40}$/) print toupper($i) }' "$config" | sort -u)"
+bridge_lines="$(grep -E '^[[:space:]]*Bridge[[:space:]]+' "$config" | wc -l | tr -d ' ')"
+configured_count="$(printf '%s\n' "$fingerprints" | sed '/^$/d' | wc -l | tr -d ' ')"
+printf 'bridgeLines=%s\nconfiguredBridgeCount=%s\n' "$bridge_lines" "$configured_count"
+
+if [ "${INCLUDE_BRIDGE_FINGERPRINTS:-0}" = "1" ]; then
+    printf '%s\n' "$fingerprints" | sed '/^$/d' | sed 's/^/fingerprint=/'
+fi
+'@
+    $result = Invoke-Compose @('exec', '-T', '-e', "INCLUDE_BRIDGE_FINGERPRINTS=$includeFingerprints", 'tor', 'sh', '-lc', $script)
+    $configuredBridgeCount = 0
+    $bridgeLines = 0
+    $fingerprints = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     if ($result.output) {
-        $lines = @($result.output -split "`r?`n" | Where-Object { $_ -match '^\s*Bridge\s+' })
+        foreach ($line in @($result.output -split "`r?`n")) {
+            if ($line -match '^configuredBridgeCount=(\d+)$') {
+                $configuredBridgeCount = [int]$Matches[1]
+            } elseif ($line -match '^bridgeLines=(\d+)$') {
+                $bridgeLines = [int]$Matches[1]
+            } elseif ($line -match '^fingerprint=([A-Fa-f0-9]{40})$') {
+                [void]$fingerprints.Add($Matches[1].ToUpperInvariant())
+            }
+        }
     }
-    $fingerprints = Get-BridgeFingerprints -Lines $lines
     return [ordered]@{
         exitCode = $result.exitCode
-        configuredBridgeCount = [int]$fingerprints.Count
-        bridgeLines = [int]$lines.Count
-        fingerprints = if ($IncludeBridgeFingerprints) { $fingerprints } else { @() }
+        configuredBridgeCount = [int]$configuredBridgeCount
+        bridgeLines = [int]$bridgeLines
+        fingerprints = if ($IncludeBridgeFingerprints) { @($fingerprints) } else { @() }
     }
 }
 

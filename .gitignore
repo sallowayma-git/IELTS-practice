@@ -41,6 +41,14 @@ backend/.env.*
 backend/logs/
 backend/node_modules/
 backend/tor/bridges.local.txt
+backend/tor/bridges.age
+backend/tor/bridges.decrypted.txt
+backend/tor/bridge-age-identity.txt
+backend/tor/bridge.identity
+backend/tor/bridge.pub
+backend/tor/*.identity
+backend/tor/*.pub
+backend/tor/*.agekey
 !backend/package-lock.json
 # 忽略可能的系统文件
 .DS_Store
@@ -52,6 +60,8 @@ Thumbs.db
 *9.4*
 *睡着过项目组*
 developer/tests/e2e/reports/static-ci-report.json
+__pycache__/
+*.py[cod]
 # 忽略 E2E 运行产物
 developer/tests/e2e/.pw-browsers/
 developer/tests/e2e/__pycache__/

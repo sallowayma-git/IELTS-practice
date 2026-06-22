@@ -9,7 +9,7 @@ const session = require('express-session');
 
 const { createApp } = require('../src/app');
 const { MemoryAuthStore, createRateLimiter } = require('../src/auth');
-const { MemoryAdminStore, PostgresAdminStore, normalizeTrafficEvent } = require('../src/admin');
+const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeTrafficEvent } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { runMigrations } = require('../src/migrations');
 const { MemoryPracticeRecordStore, extractColumns, mergePracticeRecords, normalizePracticeRecord } = require('../src/practiceRecords');
@@ -18,11 +18,15 @@ const { MemoryTotpStore, PostgresTotpStore } = require('../src/totp');
 test('docker image hardening excludes secrets and runs app as non-root', () => {
     const repoRoot = path.resolve(__dirname, '..', '..');
     const dockerfile = fs.readFileSync(path.join(repoRoot, 'backend', 'Dockerfile'), 'utf8');
+    const torDockerfile = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'Dockerfile'), 'utf8');
     const appSource = fs.readFileSync(path.join(repoRoot, 'backend', 'src', 'app.js'), 'utf8');
     const dockerignore = fs.readFileSync(path.join(repoRoot, '.dockerignore'), 'utf8');
     const gitignore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
     const compose = fs.readFileSync(path.join(repoRoot, 'backend', 'docker-compose.yml'), 'utf8');
+    const encryptedBridgeCompose = fs.readFileSync(path.join(repoRoot, 'backend', 'docker-compose.bridges-encrypted.yml'), 'utf8');
+    const envExample = fs.readFileSync(path.join(repoRoot, 'backend', '.env.example'), 'utf8');
     const bridgesTemplate = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'bridges.txt'), 'utf8');
+    const bridgesPlaceholder = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'bridges.placeholder.txt'), 'utf8');
     const torEntrypoint = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'docker-entrypoint.sh'), 'utf8');
     const siteHealthWatcher = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'watch-site-health.ps1'), 'utf8');
     const bridgeTester = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'test-obfs4-bridges.ps1'), 'utf8');
@@ -32,7 +36,7 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert.match(dockerfile, /^FROM node:24-alpine/m);
     assert.doesNotMatch(dockerfile, /^FROM node:20-alpine/m);
     assert.match(dockerfile, /\nUSER node\s*\n/);
-    for (const pattern of ['.git', 'backend/.env', 'backend/.env.*', 'backend/logs', 'backend/node_modules', 'backend/tor/bridges.local.txt', 'ListeningPractice']) {
+    for (const pattern of ['.git', 'backend/.env', 'backend/.env.*', 'backend/logs', 'backend/node_modules', 'backend/tor/bridges.local.txt', 'backend/tor/bridges.age', 'backend/tor/bridge-age-identity.txt', 'backend/tor/bridge.identity', 'backend/tor/bridge.pub', 'backend/tor/*.identity', 'backend/tor/*.pub', 'backend/tor/*.agekey', 'ListeningPractice']) {
         assert(
             dockerignore.split(/\r?\n/).includes(pattern),
             `.dockerignore must exclude ${pattern}`
@@ -40,16 +44,60 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     }
     assert(gitignore.split(/\r?\n/).includes('backend/logs/'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.local.txt'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.age'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/bridge-age-identity.txt'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/bridge.identity'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/bridge.pub'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/*.identity'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/*.pub'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/*.agekey'));
+    assert(torDockerfile.includes('apt-get install -y --no-install-recommends age ca-certificates obfs4proxy tor'));
     assert(compose.includes('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?'));
     assert(compose.includes('PGPASSWORD: ${POSTGRES_PASSWORD:?'));
+    assert(compose.includes('postgres_data:/var/lib/postgresql/data'));
+    assert(compose.includes('postgres_data:'));
+    assert.equal((compose.match(/restart: unless-stopped/g) || []).length, 3);
     assert(!compose.includes(':-postgres'));
     assert(!compose.includes('POSTGRES_PASSWORD: postgres'));
     assert(!compose.includes('postgres://postgres:postgres@postgres'));
+    assert(!compose.includes('TOR_BRIDGES:'));
     assert(compose.includes('TOR_BRIDGES_LOCAL_FILE'));
+    assert(compose.includes('source: ${TOR_BRIDGES_LOCAL_FILE:-./tor/bridges.placeholder.txt}'));
+    assert(compose.includes('TOR_BRIDGES_ENCRYPTED_FILE'));
+    assert(compose.includes('TOR_BRIDGES_AGE_IDENTITY_FILE'));
     assert(compose.includes('target: /etc/tor/bridges.local.txt'));
+    assert(compose.includes('/run/tor:rw,noexec,nosuid,nodev,size=1m,mode=750'));
+    assert(encryptedBridgeCompose.includes('TOR_BRIDGES_ENCRYPTED_FILE: /run/secrets/tor_bridges_encrypted'));
+    assert(encryptedBridgeCompose.includes('TOR_BRIDGES_AGE_IDENTITY_FILE: /run/secrets/tor_bridge_age_identity'));
+    assert(encryptedBridgeCompose.includes('source: tor_bridges_encrypted'));
+    assert(encryptedBridgeCompose.includes('source: tor_bridge_age_identity'));
+    assert(encryptedBridgeCompose.match(/mode: 0400/g)?.length >= 2);
+    assert(encryptedBridgeCompose.includes('source: ./tor/bridges.placeholder.txt'));
+    assert(encryptedBridgeCompose.includes('target: /etc/tor/bridges.local.txt'));
+    assert(encryptedBridgeCompose.includes('TOR_BRIDGES_ENCRYPTED_LOCAL_FILE:?'));
+    assert(encryptedBridgeCompose.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE:?'));
+    assert(!/^TOR_BRIDGES=/m.test(envExample));
+    assert(envExample.includes('TOR_BRIDGES_ENCRYPTED_FILE='));
+    assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_FILE='));
+    assert(envExample.includes('TOR_BRIDGES_LOCAL_FILE=./tor/bridges.local.txt'));
+    assert(envExample.includes('TOR_BRIDGES_ENCRYPTED_LOCAL_FILE=./tor/bridges.age'));
+    assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE=./tor/bridge-age-identity.txt'));
+    assert(envExample.includes('TRAFFIC_SECRET='));
+    assert(compose.includes('TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesTemplate));
-    assert(torEntrypoint.includes('VALID_BRIDGES_FILE'));
+    assert(bridgesTemplate.includes('encrypt the private bridge'));
+    assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesPlaceholder));
+    assert(bridgesPlaceholder.includes('encrypted mode never mounts a local'));
+    assert(torEntrypoint.includes('RUNTIME_DIR="/run/tor"'));
+    assert(torEntrypoint.includes('BRIDGE_INCLUDE_CONFIG="$TORRC_DIR/bridges-runtime.conf"'));
+    assert(torEntrypoint.includes('BRIDGE_CONFIG="$RUNTIME_DIR/bridges.conf"'));
+    assert(torEntrypoint.includes('VALID_BRIDGES_FILE="$RUNTIME_DIR/bridges.valid"'));
     assert(torEntrypoint.includes('set -f'));
+    assert(torEntrypoint.includes('umask 077'));
+    assert(torEntrypoint.includes('chmod 750 "$TORRC_DIR" "$RUNTIME_DIR"'));
+    assert(torEntrypoint.includes('chmod 600 "$VALID_BRIDGES_FILE"'));
+    assert(torEntrypoint.includes('chmod 640 "$BRIDGE_CONFIG"'));
+    assert(torEntrypoint.includes("printf '%%include %s\\n' \"$BRIDGE_CONFIG\""));
     assert(torEntrypoint.includes('MAX_BRIDGE_LINE_LENGTH=1200'));
     assert(torEntrypoint.includes('is_valid_bridge_endpoint()'));
     assert(torEntrypoint.includes('is_valid_obfs4_bridge()'));
@@ -57,6 +105,13 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(torEntrypoint.includes('[ "${#3}" -eq 40 ]'));
     assert(torEntrypoint.includes('cert='));
     assert(torEntrypoint.includes('if [ -s "$VALID_BRIDGES_FILE" ]'));
+    assert(!torEntrypoint.includes('${TOR_BRIDGES:-}'));
+    assert(!torEntrypoint.includes('TOR_BRIDGES="${'));
+    assert(torEntrypoint.includes('BRIDGE_ENCRYPTED_FILE="${TOR_BRIDGES_ENCRYPTED_FILE:-}"'));
+    assert(torEntrypoint.includes('BRIDGE_AGE_IDENTITY_FILE="${TOR_BRIDGES_AGE_IDENTITY_FILE:-}"'));
+    assert(torEntrypoint.includes('age --decrypt --identity "$BRIDGE_AGE_IDENTITY_FILE"'));
+    assert(torEntrypoint.includes('Failed to decrypt the configured Tor bridge file'));
+    assert(torEntrypoint.includes('rm -f "$DECRYPTED_BRIDGES_FILE"'));
     assert(!/Bridge\\ \*\)\s*printf '%s\\n' "\$bridge"/.test(torEntrypoint));
     assert(siteHealthWatcher.includes('$response.StatusCode -lt 400'));
     assert(!siteHealthWatcher.includes('$response.StatusCode -lt 500'));
@@ -71,10 +126,24 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(siteHealthWatcher.includes('hostnamePresent = [bool]$hostname'));
     assert(siteHealthWatcher.includes("hostname = if ($IncludeOnionHostname) { $hostname } else { '' }"));
     assert(siteHealthWatcher.includes('[switch]$IncludeBridgeFingerprints'));
-    assert(siteHealthWatcher.includes('fingerprints = if ($IncludeBridgeFingerprints) { $fingerprints } else { @() }'));
+    assert(siteHealthWatcher.includes("INCLUDE_BRIDGE_FINGERPRINTS=$includeFingerprints"));
+    assert(siteHealthWatcher.includes('config=/run/tor/bridges.conf'));
+    assert(siteHealthWatcher.includes("configuredBridgeCount=%s"));
+    assert(siteHealthWatcher.includes("sed 's/^/fingerprint=/'"));
+    assert(!siteHealthWatcher.includes('cat /etc/tor/torrc.d/bridges.conf'));
+    assert(!siteHealthWatcher.includes("Where-Object { $_ -match '^\\s*Bridge\\s+' }"));
+    assert(siteHealthWatcher.includes('fingerprints = if ($IncludeBridgeFingerprints) { @($fingerprints) } else { @() }'));
     assert(siteHealthWatcher.includes('seenFingerprints = if ($IncludeBridgeFingerprints) { $seenFingerprints } else { @() }'));
     assert(bridgeTester.includes('[switch]$RevealBridgeLines'));
     assert(bridgeTester.includes('[switch]$RevealBridgeMetadata'));
+    assert(bridgeTester.includes('[string]$EncryptedBridgeFile'));
+    assert(bridgeTester.includes('[string]$AgeIdentityFile'));
+    assert(bridgeTester.includes('Inline -Bridge values can be exposed through shell history or process lists'));
+    assert(bridgeTester.includes('$decryptedBridgeLines = @(& age --decrypt --identity $AgeIdentityFile $EncryptedBridgeFile 2>$null)'));
+    assert(bridgeTester.includes('foreach ($line in $decryptedBridgeLines)'));
+    assert(!bridgeTester.includes('$decryptedBridgeFile = New-TemporaryFile'));
+    assert(!bridgeTester.includes('--output $decryptedBridgeFile.FullName'));
+    assert(bridgeTester.includes("throw 'Failed to decrypt encrypted bridge file.'"));
     assert(bridgeTester.includes('[ValidateRange(10, 600)]'));
     assert(bridgeTester.includes('[ValidateRange(1, 100)]'));
     assert(bridgeTester.includes('[int]$MaxCandidates = 20'));
@@ -92,6 +161,15 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(bridgeTester.includes('error = Protect-BridgeDiagnosticText -Text $ErrorText -Candidate $Candidate'));
     assert(bridgeTester.includes('if ($RevealBridgeMetadata -or $RevealBridgeLines)'));
     assert(!bridgeTester.includes('fingerprint.Substring(0, 8)'));
+    assert(bridgeTester.includes('$candidateFile = New-TemporaryFile'));
+    assert(bridgeTester.includes('[System.IO.File]::WriteAllText'));
+    assert(bridgeTester.includes('--mount $bridgeMount'));
+    assert(bridgeTester.includes('target=/tmp/bridge-candidate.txt,readonly'));
+    assert(bridgeTester.includes("-e 'TOR_BRIDGES_FILE=/tmp/bridge-candidate.txt'"));
+    assert(bridgeTester.includes('Remove-Item -LiteralPath $candidateFile.FullName -Force'));
+    assert(!bridgeTester.includes('Remove-Item -LiteralPath $decryptedBridgeFile.FullName -Force'));
+    assert(!bridgeTester.includes('-e "TOR_BRIDGES=$($Candidate.line)"'));
+    assert(!bridgeTester.includes('TOR_BRIDGES='));
     assert(bridgeTester.includes('Get-CandidateBridges | Select-Object -First $MaxCandidates'));
     assert.match(bridgeTester, /if \(\$RevealBridgeLines\) \{\s*\$result\.line = \$Candidate\.line\s*\}/);
     assert.match(bridgeTester, /\$seen\.Add\(\$item\.line\)/);
@@ -110,6 +188,9 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(appSource.includes("blockedPrefixes: ['/ci-practice-fixtures']"));
     assert(appSource.includes('createStaticBoundaryMiddleware(staticDirectory, staticBoundaryOptions), express.static(staticDirectory'));
     assert(appSource.includes('createStaticBoundaryMiddleware(adminRoot), express.static(adminRoot'));
+    assert(appSource.includes('function normalizeHttpErrorStatus(error, fallback = 500)'));
+    assert(appSource.includes('Number.isInteger(status) && status >= 400 && status < 600 ? status : fallback'));
+    assert(!appSource.includes('const status = isZodError ? 400 : (error.status || error.statusCode || 500)'));
 });
 
 async function createClient(options = {}) {
@@ -542,6 +623,24 @@ test('malformed JSON bodies return a stable validation error', async () => {
         assert.equal(response.response.status, 400);
         assert.equal(response.json.error, 'Malformed request body');
         assert.doesNotMatch(response.text, /Unexpected token|JSON/i);
+    } finally {
+        await client.close();
+    }
+});
+
+test('oversized JSON bodies return a stable payload error', async () => {
+    const client = await createClient();
+    try {
+        const response = await client.request('POST', '/api/auth/register', undefined, {
+            rawBody: JSON.stringify({
+                username: 'large_payload',
+                password: 'StrongPass1',
+                filler: 'x'.repeat(2 * 1024 * 1024)
+            })
+        });
+        assert.equal(response.response.status, 413);
+        assert.equal(response.json.error, 'Request body too large');
+        assert.doesNotMatch(response.text, /entity|PayloadTooLargeError|limit/i);
     } finally {
         await client.close();
     }
@@ -1895,6 +1994,41 @@ test('admin can list users, inspect records, and delete one record', async () =>
     }
 });
 
+test('admin API does not expose internal error messages', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'safe_error_admin', 'StrongPass1');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'safe_error_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        await enableTotpForCurrentSession(client);
+
+        const originalCreateUser = client.adminStore.createUser.bind(client.adminStore);
+        client.adminStore.createUser = async () => {
+            const error = new Error('database failed: SECRET_TOKEN_12345 <script>alert(1)</script>');
+            error.status = 500;
+            error.details = { secret: 'SECRET_TOKEN_12345' };
+            throw error;
+        };
+        const response = await client.request('POST', '/api/admin/users', {
+            username: 'internal_error_user',
+            password: 'StrongPass1',
+            role: 'user'
+        });
+        client.adminStore.createUser = originalCreateUser;
+
+        assert.equal(response.response.status, 500);
+        assert.deepEqual(response.json, { error: 'Request failed' });
+        assert(!JSON.stringify(response.json).includes('SECRET_TOKEN_12345'));
+        assert(!JSON.stringify(response.json).includes('<script>'));
+    } finally {
+        await client.close();
+    }
+});
+
 test('admin routes require TOTP verification in the current session', async () => {
     const client = await createClient();
     try {
@@ -2325,7 +2459,8 @@ test('traffic middleware minimizes untrusted request metadata', async () => {
         assert.equal(normalized.referrer, '/');
 
         assert.equal(normalizeTrafficEvent({ path: 'admin/users?token=secret' }).path, '/admin/users');
-        assert.equal(normalizeTrafficEvent({ path: 'javascript:alert(1)' }).path, '/alert(1)');
+        assert.equal(normalizeTrafficEvent({ path: 'javascript:alert(1)' }).path, '/');
+        assert.equal(normalizeTrafficEvent({ path: 'data:text/html,<script>alert(1)</script>' }).path, '/');
         assert.equal(normalizeTrafficEvent({ path: 'https://example.test/admin?token=secret' }).path, '/admin');
         assert.equal(normalizeTrafficEvent({ path: '\r\n' }).path, '/');
         assert.equal(normalizeTrafficEvent({ sessionId: 'raw-session-id' }).sessionId, null);
@@ -2336,6 +2471,25 @@ test('traffic middleware minimizes untrusted request metadata', async () => {
     } finally {
         await client.close();
     }
+});
+
+test('traffic middleware rejects weak hashing secrets in production', () => {
+    const store = { recordTraffic() {} };
+    assert.throws(
+        () => createTrafficMiddleware({
+            store,
+            enabled: true,
+            nodeEnv: 'production',
+            secret: 'traffic-development-secret'
+        }),
+        /TRAFFIC_SECRET or SESSION_SECRET/
+    );
+    assert.doesNotThrow(() => createTrafficMiddleware({
+        store,
+        enabled: true,
+        nodeEnv: 'production',
+        secret: 'x'.repeat(32)
+    }));
 });
 
 test('Postgres traffic recent events respect the selected day window', async () => {
@@ -2731,7 +2885,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
         assert.match(homeCsp, /script-src 'self'(?:;|$)/);
         assert.match(homeCsp, /script-src-attr 'none'/);
         assert.match(homeCsp, /object-src 'none'/);
-        assert.match(homeCsp, /frame-ancestors 'self'/);
+        assert.match(homeCsp, /frame-ancestors 'none'/);
         assert.doesNotMatch(homeCsp, /script-src 'self' 'unsafe-inline'/);
         assert.match(home.response.headers.get('permissions-policy') || '', /camera=\(\)/);
 

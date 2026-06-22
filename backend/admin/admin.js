@@ -1,4 +1,5 @@
 (function() {
+    const MAX_ADMIN_STATUS_CHARS = 240;
     const MAX_RECORD_DETAIL_PAYLOAD_CHARS = 20000;
     const MAX_RECORD_DETAIL_PAYLOAD_DEPTH = 8;
     const MAX_RECORD_DETAIL_PAYLOAD_NODES = 5000;
@@ -105,12 +106,24 @@
         confirmSubmit: document.getElementById('confirm-submit')
     };
 
+    function sanitizeStatusMessage(value, fallback = '') {
+        const text = String(value ?? fallback)
+            .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const normalized = text || fallback;
+        return normalized.length > MAX_ADMIN_STATUS_CHARS
+            ? `${normalized.slice(0, MAX_ADMIN_STATUS_CHARS - 3)}...`
+            : normalized;
+    }
+
     function setStatus(message, kind = 'info') {
-        nodes.status.textContent = message || '';
+        const safeMessage = sanitizeStatusMessage(message);
+        nodes.status.textContent = safeMessage;
         nodes.status.dataset.kind = kind;
-        if (message) {
+        if (safeMessage) {
             window.setTimeout(() => {
-                if (nodes.status.textContent === message) {
+                if (nodes.status.textContent === safeMessage) {
                     nodes.status.textContent = '';
                     nodes.status.removeAttribute('data-kind');
                 }
@@ -512,6 +525,13 @@
         return false;
     }
 
+    function formatRequestError(response, payload) {
+        if (payload && typeof payload.error === 'string' && payload.error) {
+            return sanitizeStatusMessage(`${payload.error} (${response.status})`);
+        }
+        return sanitizeStatusMessage(`Request failed with ${response.status}`);
+    }
+
     async function request(path, options = {}) {
         const headers = Object.assign({}, options.headers || {});
         const requiresCsrf = options.csrf !== false && options.method && options.method !== 'GET';
@@ -546,8 +566,7 @@
             state.csrfToken = '';
         }
         if (!response.ok) {
-            const detail = payload && payload.details ? ` ${JSON.stringify(payload.details)}` : '';
-            throw new Error(payload && payload.error ? `${payload.error}${detail}` : `Request failed with ${response.status}`);
+            throw new Error(formatRequestError(response, payload));
         }
         storeCsrfTokenFromPayload(payload);
         return payload;

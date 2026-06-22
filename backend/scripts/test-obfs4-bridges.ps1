@@ -1,7 +1,8 @@
 param(
     [string[]]$Bridge = @(),
     [string]$BridgeFile = '',
-    [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env'),
+    [string]$EncryptedBridgeFile = '',
+    [string]$AgeIdentityFile = '',
     [string]$Image = 'backend-tor',
     [ValidateRange(10, 600)]
     [int]$TimeoutSeconds = 75,
@@ -14,8 +15,24 @@ param(
 $ErrorActionPreference = 'Stop'
 $MAX_BRIDGE_LINE_LENGTH = 1200
 $OBFS4_BRIDGE_PATTERN = '^obfs4\s+([^\s]+)\s+([A-Fa-f0-9]{40})\s+.*\bcert=[^\s]+'
+$decryptedBridgeLines = @()
 
-if (-not $BridgeFile) {
+if ($Bridge.Count -gt 0) {
+    Write-Warning 'Inline -Bridge values can be exposed through shell history or process lists. Prefer -BridgeFile or -EncryptedBridgeFile.'
+}
+
+if ($EncryptedBridgeFile) {
+    if (-not $AgeIdentityFile) {
+        throw 'AgeIdentityFile is required when EncryptedBridgeFile is set.'
+    }
+    if (-not (Get-Command age -ErrorAction SilentlyContinue)) {
+        throw 'age command is required to decrypt encrypted bridge files.'
+    }
+    $decryptedBridgeLines = @(& age --decrypt --identity $AgeIdentityFile $EncryptedBridgeFile 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Failed to decrypt encrypted bridge file.'
+    }
+} elseif (-not $BridgeFile) {
     $localBridgeFile = Join-Path $PSScriptRoot '..\tor\bridges.local.txt'
     $templateBridgeFile = Join-Path $PSScriptRoot '..\tor\bridges.txt'
     $BridgeFile = if (Test-Path $localBridgeFile) { $localBridgeFile } else { $templateBridgeFile }
@@ -44,9 +61,6 @@ function Normalize-Bridge {
     $value = ($Line -replace '#.*$', '').Trim()
     if (-not $value) {
         return $null
-    }
-    if ($value.StartsWith('TOR_BRIDGES=')) {
-        $value = $value.Substring('TOR_BRIDGES='.Length).Trim()
     }
     if ($value.StartsWith('Bridge ')) {
         $value = $value.Substring('Bridge '.Length).Trim()
@@ -88,14 +102,10 @@ function Get-CandidateBridges {
             }
         }
     }
-    if (Test-Path $EnvFile) {
-        foreach ($line in Get-Content $EnvFile) {
-            if ($line -like 'TOR_BRIDGES=*') {
-                $candidate = Normalize-Bridge -Line $line
-                if ($candidate) {
-                    $items.Add($candidate)
-                }
-            }
+    foreach ($line in $decryptedBridgeLines) {
+        $candidate = Normalize-Bridge -Line $line
+        if ($candidate) {
+            $items.Add($candidate)
         }
     }
     foreach ($line in $Bridge) {
@@ -180,9 +190,17 @@ function Test-Bridge {
     $suffix = "candidate$Index"
     $container = "ielts-bridge-test-$suffix-$([Guid]::NewGuid().ToString('N').Substring(0, 6))"
     $started = $false
+    $candidateFile = $null
     $logs = ''
     try {
-        $containerId = & docker run -d --name $container --add-host 'app:127.0.0.1' -e 'TOR_BRIDGES_FILE=/tmp/no-bridges.txt' -e "TOR_BRIDGES=$($Candidate.line)" $Image 2>&1
+        $candidateFile = New-TemporaryFile
+        [System.IO.File]::WriteAllText(
+            $candidateFile.FullName,
+            ([string]$Candidate.line + [Environment]::NewLine),
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        $bridgeMount = "type=bind,source=$($candidateFile.FullName),target=/tmp/bridge-candidate.txt,readonly"
+        $containerId = & docker run -d --name $container --add-host 'app:127.0.0.1' --mount $bridgeMount -e 'TOR_BRIDGES_FILE=/tmp/bridge-candidate.txt' $Image 2>&1
         if ($LASTEXITCODE -ne 0) {
             return New-BridgeResult -Candidate $Candidate -Index $Index -Reachable $false -BootstrapPercent 0 -ErrorText ($containerId -join "`n")
         }
@@ -209,6 +227,9 @@ function Test-Bridge {
     } finally {
         if ($started) {
             & docker rm -f $container *> $null
+        }
+        if ($candidateFile -and (Test-Path $candidateFile.FullName)) {
+            Remove-Item -LiteralPath $candidateFile.FullName -Force
         }
     }
 }

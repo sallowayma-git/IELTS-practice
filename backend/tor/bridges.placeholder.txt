@@ -1,0 +1,6 @@
+# Empty bridge placeholder for encrypted bridge deployments.
+#
+# docker-compose.bridges-encrypted.yml binds this file over the default
+# /etc/tor/bridges.local.txt mount so encrypted mode never mounts a local
+# plaintext bridge file into the tor container. Real bridge material must come
+# from the age-encrypted Docker secret in that compose override.

@@ -47,7 +47,7 @@ function createContentSecurityPolicy(req) {
         ["default-src", ["'self'"]],
         ["base-uri", listeningContent ? ["'none'"] : ["'self'"]],
         ["object-src", ["'none'"]],
-        ["frame-ancestors", ["'self'"]],
+        ["frame-ancestors", ["'none'"]],
         ["form-action", formAction],
         ["script-src", scriptSrc],
         ["script-src-attr", legacyExercisePage ? ["'unsafe-inline'"] : ["'none'"]],
@@ -266,6 +266,11 @@ function resolveSessionSecret(options = {}) {
     return secret;
 }
 
+function normalizeHttpErrorStatus(error, fallback = 500) {
+    const status = Number(error?.status ?? error?.statusCode ?? fallback);
+    return Number.isInteger(status) && status >= 400 && status < 600 ? status : fallback;
+}
+
 function createApp(options = {}) {
     const app = express();
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
@@ -374,7 +379,8 @@ function createApp(options = {}) {
     app.use(createTrafficMiddleware({
         store: trafficStore,
         enabled: trafficEnabled,
-        secret: sessionSecret
+        secret: options.trafficSecret || process.env.TRAFFIC_SECRET || sessionSecret,
+        nodeEnv: options.nodeEnv
     }));
 
     app.get('/api/health', (req, res) => {
@@ -473,8 +479,11 @@ function createApp(options = {}) {
         if (error && error.type === 'entity.parse.failed') {
             return res.status(400).json({ error: 'Malformed request body' });
         }
+        if (error && error.type === 'entity.too.large') {
+            return res.status(413).json({ error: 'Request body too large' });
+        }
         const isZodError = error && (error.name === 'ZodError' || Array.isArray(error.issues));
-        const status = isZodError ? 400 : (error.status || error.statusCode || 500);
+        const status = isZodError ? 400 : normalizeHttpErrorStatus(error);
         if (status >= 500) {
             console.error('[backend] request failed:', summarizeErrorForLog(error));
         }

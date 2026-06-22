@@ -2,12 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: ielts-practice-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ielts_practice
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env to a strong value}
     ports:
       - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ielts_practice"]
       interval: 3s
@@ -19,6 +22,7 @@ services:
       context: ..
       dockerfile: backend/Dockerfile
     container_name: ielts-practice-app
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,6 +45,7 @@ services:
       TOTP_VERIFICATION_MAX_AGE_MS: ${TOTP_VERIFICATION_MAX_AGE_MS:-43200000}
       ADMIN_RESET_TOTP: ${ADMIN_RESET_TOTP:-false}
       TRAFFIC_ENABLED: ${TRAFFIC_ENABLED:-true}
+      TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
@@ -61,20 +66,25 @@ services:
       context: .
       dockerfile: tor/Dockerfile
     container_name: ielts-practice-tor
+    restart: unless-stopped
     environment:
-      TOR_BRIDGES: ${TOR_BRIDGES:-}
       TOR_BRIDGES_FILE: ${TOR_BRIDGES_FILE:-/etc/tor/bridges.local.txt}
+      TOR_BRIDGES_ENCRYPTED_FILE: ${TOR_BRIDGES_ENCRYPTED_FILE:-}
+      TOR_BRIDGES_AGE_IDENTITY_FILE: ${TOR_BRIDGES_AGE_IDENTITY_FILE:-}
     depends_on:
       app:
         condition: service_healthy
     volumes:
       - type: bind
-        source: ${TOR_BRIDGES_LOCAL_FILE:-./tor/bridges.txt}
+        source: ${TOR_BRIDGES_LOCAL_FILE:-./tor/bridges.placeholder.txt}
         target: /etc/tor/bridges.local.txt
         read_only: true
         bind:
           create_host_path: false
       - tor_hidden_service:/var/lib/tor/hidden_service
+    tmpfs:
+      - /run/tor:rw,noexec,nosuid,nodev,size=1m,mode=750
 
 volumes:
+  postgres_data:
   tor_hidden_service:

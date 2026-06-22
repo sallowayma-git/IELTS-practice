@@ -102,6 +102,9 @@ function normalizeRequestPath(value) {
     if (!text) {
         return '/';
     }
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(text) && !/^https?:\/\//i.test(text)) {
+        return '/';
+    }
     const sanitizeNormalizedPath = (path) => {
         const cleanPath = stripQueryAndFragment(path, '/')
             .replace(/[\u0000-\u001F\u007F]+/g, ' ')
@@ -1367,10 +1370,15 @@ function regenerateSession(req) {
 }
 
 function sendError(res, error) {
-    return res.status(error.status || 500).json({
-        error: error.message || 'Request failed',
-        details: error.details
-    });
+    const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600
+        ? error.status
+        : 500;
+    const safeError = status >= 500 ? 'Request failed' : (error.message || 'Request failed');
+    const payload = { error: safeError };
+    if (status < 500 && error.details !== undefined) {
+        payload.details = error.details;
+    }
+    return res.status(status).json(payload);
 }
 
 function createAdminRouter(options = {}) {
@@ -1618,9 +1626,18 @@ function hashTrafficIdentifier(value, secret) {
 function createTrafficMiddleware(options = {}) {
     const store = options.store;
     const enabled = options.enabled !== false && store && typeof store.recordTraffic === 'function';
-    const secret = options.secret || 'traffic-development-secret';
     if (!enabled) {
         return (req, res, next) => next();
+    }
+    const secret = options.secret || process.env.TRAFFIC_SECRET || process.env.SESSION_SECRET || 'traffic-development-secret';
+    const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
+    const weakSecret = !secret
+        || secret === 'traffic-development-secret'
+        || secret === 'development-session-secret-change-me'
+        || secret === 'replace-with-a-long-random-session-secret'
+        || String(secret).length < 32;
+    if (production && weakSecret) {
+        throw new Error('TRAFFIC_SECRET or SESSION_SECRET must be set to a non-placeholder value of at least 32 characters in production');
     }
     return (req, res, next) => {
         const startedAt = Date.now();
