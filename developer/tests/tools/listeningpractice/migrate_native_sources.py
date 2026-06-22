@@ -23,17 +23,17 @@ def ensure_inside(child: Path, parent: Path) -> None:
 def iter_topic_dirs(source_root: Path):
     for group in SOURCE_GROUPS:
         group_root = source_root / group
-        if not group_root.exists():
+        if group_root.is_symlink() or not group_root.exists() or not group_root.is_dir():
             continue
         for part_dir in sorted(group_root.iterdir()):
-            if not part_dir.is_dir() or part_dir.name.upper() not in VALID_PARTS:
+            if part_dir.is_symlink() or not part_dir.is_dir() or part_dir.name.upper() not in VALID_PARTS:
                 continue
             part = part_dir.name.upper()
             for frequency_dir in sorted(part_dir.iterdir()):
-                if not frequency_dir.is_dir():
+                if frequency_dir.is_symlink() or not frequency_dir.is_dir():
                     continue
                 for topic_dir in sorted(frequency_dir.iterdir()):
-                    if not topic_dir.is_dir():
+                    if topic_dir.is_symlink() or not topic_dir.is_dir():
                         continue
                     if not any(topic_dir.glob("*.html")):
                         continue
@@ -52,6 +52,11 @@ def resolve_target_dir(target_root: Path, item: dict) -> Path:
     return target_root / item["part"] / item["frequency"] / name
 
 
+def ignore_symlink_entries(dir_path: str, names: list[str]) -> list[str]:
+    base = Path(dir_path)
+    return [name for name in names if (base / name).is_symlink()]
+
+
 def copy_topic(source: Path, target: Path, target_root: Path, replace: bool) -> str:
     ensure_inside(target, target_root)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -60,7 +65,7 @@ def copy_topic(source: Path, target: Path, target_root: Path, replace: bool) -> 
         if not replace:
             return "skipped-existing"
         shutil.rmtree(target)
-    shutil.copytree(source, target)
+    shutil.copytree(source, target, ignore=ignore_symlink_entries)
     return "replaced" if existed else "copied"
 
 

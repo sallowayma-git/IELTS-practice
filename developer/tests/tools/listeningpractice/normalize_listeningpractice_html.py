@@ -26,6 +26,16 @@ def read_text(path: Path) -> str:
         return data.decode("utf-8", errors="replace")
 
 
+def relative_to_root(root: Path, source_path: Path) -> Path:
+    root_resolved = root.resolve()
+    source_resolved = source_path.resolve()
+    return source_resolved.relative_to(root_resolved)
+
+
+def resolve_backup_path(backup_dir: Path, root: Path, source_path: Path) -> Path:
+    return backup_dir / relative_to_root(root, source_path)
+
+
 def strip_html(text: str) -> str:
     if text is None:
         return ""
@@ -80,27 +90,29 @@ def build_topic(title_raw: str, h1_raw: str, filename: str) -> str:
 def update_title(html_text: str, new_title: str) -> tuple[str, bool]:
     if not new_title:
         return html_text, False
+    safe_title = html.escape(new_title, quote=False)
     if TITLE_RE.search(html_text):
-        replaced = TITLE_RE.sub(lambda m: f"<title>{new_title}</title>", html_text, count=1)
+        replaced = TITLE_RE.sub(lambda m: f"<title>{safe_title}</title>", html_text, count=1)
         return replaced, replaced != html_text
     # insert title in head
     head_match = re.search(r"<head[^>]*>", html_text, re.IGNORECASE)
     if head_match:
         insert_at = head_match.end()
-        return html_text[:insert_at] + f"\n    <title>{new_title}</title>" + html_text[insert_at:], True
+        return html_text[:insert_at] + f"\n    <title>{safe_title}</title>" + html_text[insert_at:], True
     return html_text, False
 
 
 def update_h1(html_text: str, new_h1: str) -> tuple[str, bool]:
     if not new_h1:
         return html_text, False
+    safe_h1 = html.escape(new_h1, quote=False)
     if H1_RE.search(html_text):
-        replaced = H1_RE.sub(lambda m: f"<h1>{new_h1}</h1>", html_text, count=1)
+        replaced = H1_RE.sub(lambda m: f"<h1>{safe_h1}</h1>", html_text, count=1)
         return replaced, replaced != html_text
     body_match = re.search(r"<body[^>]*>", html_text, re.IGNORECASE)
     if body_match:
         insert_at = body_match.end()
-        h1_line = f'<h1 style="display:none" data-auto-title="true">{new_h1}</h1>'
+        h1_line = f'<h1 style="display:none" data-auto-title="true">{safe_h1}</h1>'
         updated = html_text[:insert_at] + f"\n    {h1_line}" + html_text[insert_at:]
         return updated, True
     return html_text, False
@@ -257,16 +269,20 @@ def main():
         "inject_from_tags": args.inject_from_tags,
     }
 
-    root = Path(args.root)
+    root = Path(args.root).resolve()
     html_files = sorted(root.rglob("*.html"))
 
     results = []
     for path in html_files:
+        try:
+            relative_to_root(root, path)
+        except ValueError:
+            continue
         result = normalize_file(path, options)
         results.append({k: v for k, v in result.items() if k not in {"updated", "original"}})
         if args.write and result["changed"]:
             if args.backup_dir:
-                backup_path = Path(args.backup_dir) / path
+                backup_path = resolve_backup_path(Path(args.backup_dir), root, path)
                 backup_path.parent.mkdir(parents=True, exist_ok=True)
                 backup_path.write_text(result["original"], encoding="utf-8")
             path.write_text(result["updated"], encoding="utf-8")
