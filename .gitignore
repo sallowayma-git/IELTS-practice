@@ -41,6 +41,7 @@ backend/.env.*
 backend/logs/
 backend/node_modules/
 backend/tor/bridges.local.txt
+backend/tor/webtunnel.local.txt
 backend/tor/bridges.age
 backend/tor/bridges.age.tmp-*
 backend/tor/bridges.decrypted.txt
@@ -50,6 +51,15 @@ backend/tor/bridge.pub
 backend/tor/*.identity
 backend/tor/*.pub
 backend/tor/*.agekey
+backend/tor/transports/
+backend/tor/hidden_service/
+backend/tor/volume-backups/
+*business_tor_hidden_service*
+*.dump
+*.sql
+*.sql.gz
+*.tar
+*.tar.gz
 !backend/package-lock.json
 # 忽略可能的系统文件
 .DS_Store
