@@ -1,10 +1,10 @@
 services:
-  business-proxy:
+  admin-proxy:
     image: nginx:alpine
-    container_name: ielts-practice-business-proxy
+    container_name: ielts-practice-admin-proxy
     restart: unless-stopped
     profiles:
-      - business-onion
+      - admin-onion
     depends_on:
       app:
         condition: service_healthy
@@ -12,34 +12,34 @@ services:
       - "80"
     volumes:
       - type: bind
-        source: ./business-proxy/nginx.conf
+        source: ./admin-proxy/nginx.conf
         target: /etc/nginx/nginx.conf
         read_only: true
         bind:
           create_host_path: false
 
-  business-tor:
+  admin-tor:
     image: backend-tor-webtunnel:local
-    container_name: ielts-practice-business-tor
+    container_name: ielts-practice-admin-tor
     restart: unless-stopped
     profiles:
-      - business-onion
+      - admin-onion
     entrypoint:
       - /bin/sh
-      - /usr/local/bin/business-tor-entrypoint
+      - /usr/local/bin/admin-tor-entrypoint
     depends_on:
-      business-proxy:
+      admin-proxy:
         condition: service_started
     volumes:
       - type: bind
-        source: ./tor/business-torrc
+        source: ./tor/admin-torrc
         target: /etc/tor/torrc
         read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: ./tor/business-entrypoint.sh
-        target: /usr/local/bin/business-tor-entrypoint
+        source: ./tor/admin-entrypoint.sh
+        target: /usr/local/bin/admin-tor-entrypoint
         read_only: true
         bind:
           create_host_path: false
@@ -49,9 +49,15 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - business_tor_hidden_service:/var/lib/tor/hidden_service
+      - type: bind
+        source: ./tor/admin-authorized-clients
+        target: /authorized_clients
+        read_only: true
+        bind:
+          create_host_path: false
+      - admin_tor_hidden_service:/var/lib/tor/admin_hidden_service
     tmpfs:
       - /run/tor:rw,noexec,nosuid,nodev,size=1m,mode=750
 
 volumes:
-  business_tor_hidden_service:
+  admin_tor_hidden_service:

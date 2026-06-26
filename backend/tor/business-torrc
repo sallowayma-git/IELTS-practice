@@ -2,7 +2,5 @@ DataDirectory /var/lib/tor
 HiddenServiceDir /var/lib/tor/hidden_service
 HiddenServiceVersion 3
 HiddenServicePort 80 business-proxy:80
-Socks5Proxy 10.2.202.146:7897
 Log notice stdout
 User debian-tor
-%include /run/tor/business-bridges.conf

@@ -1,0 +1,5 @@
+DataDirectory /var/lib/tor
+User debian-tor
+HiddenServiceDir /var/lib/tor/admin_hidden_service
+HiddenServiceVersion 3
+HiddenServicePort 80 admin-proxy:80

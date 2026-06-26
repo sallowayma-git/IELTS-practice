@@ -1,0 +1,4 @@
+FROM backend-tor:latest
+
+COPY transports/lyrebird /usr/local/bin/lyrebird
+RUN chmod 755 /usr/local/bin/lyrebird

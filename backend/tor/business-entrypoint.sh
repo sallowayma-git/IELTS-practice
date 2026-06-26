@@ -1,63 +1,44 @@
 #!/bin/sh
 set -eu
 
-mkdir -p /var/lib/tor/hidden_service /run/tor
+TOR_USER="${TOR_USER:-debian-tor}"
+BASE_TORRC="/etc/tor/torrc"
+BRIDGES_FILE="/etc/tor/webtunnel.local.txt"
+RUNTIME_TORRC="/run/tor/business-torrc"
 
-tmp=/run/tor/bridges.normalized
-conf=/run/tor/business-bridges.conf
+umask 077
+mkdir -p /run/tor /var/lib/tor /var/lib/tor/hidden_service
+chmod 700 /run/tor /var/lib/tor /var/lib/tor/hidden_service
 
-awk '
-  {
-    line=$0
-    sub(/#.*/, "", line)
-    gsub(/^[ \t]+|[ \t]+$/, "", line)
-    if (line == "") next
-    sub(/^Bridge[ \t]+/, "", line)
-    sub(/^obfs4:obfs4[ \t]+/, "obfs4 ", line)
-    sub(/^obfs4:\/\/obfs4[ \t]+/, "obfs4 ", line)
-    if (line ~ /^(cert=|iat-mode=)/ && current != "") {
-      current=current " " line
-      next
-    }
-    if (current != "") print current
-    current=line
-  }
-  END {
-    if (current != "") print current
-  }
-' /etc/tor/bridges.local.txt > "$tmp"
+if id "$TOR_USER" >/dev/null 2>&1; then
+  chown -R "$TOR_USER:$TOR_USER" /run/tor /var/lib/tor
+fi
+
+if [ ! -s "$BRIDGES_FILE" ]; then
+  echo "WebTunnel bridge file is missing or empty" >&2
+  exit 1
+fi
+
+if ! command -v lyrebird >/dev/null 2>&1; then
+  echo "lyrebird transport binary is missing" >&2
+  exit 1
+fi
 
 {
-  echo "UseBridges 1"
-  echo "ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy"
-  while IFS= read -r bridge; do
-    set -- $bridge
-    [ "${1:-}" = "obfs4" ] || continue
-    printf '%s\n' "${2:-}" | grep -Eq '^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+):[0-9]{1,5}$' || continue
-    printf '%s\n' "${3:-}" | grep -Eq '^[0-9A-Fa-f]{40}$' || continue
-    has_cert=0
-    for arg in "$@"; do
-      case "$arg" in
-        cert=*) has_cert=1 ;;
-      esac
-    done
-    [ "$has_cert" -eq 1 ] || continue
-    printf 'Bridge'
-    for arg in "$@"; do
-      printf ' %s' "$arg"
-    done
-    printf '\n'
-  done < "$tmp"
-} > "$conf"
+  cat "$BASE_TORRC"
+  printf '\nUseBridges 1\n'
+  printf 'ClientTransportPlugin webtunnel exec /usr/local/bin/lyrebird\n'
+  sed '/^[[:space:]]*$/d' "$BRIDGES_FILE" | while IFS= read -r bridge; do
+    case "$bridge" in
+      Bridge*) printf '%s\n' "$bridge" ;;
+      *) printf 'Bridge %s\n' "$bridge" ;;
+    esac
+  done
+} > "$RUNTIME_TORRC"
 
-bridge_count=$(grep -c '^Bridge ' "$conf" || true)
-[ "$bridge_count" -gt 0 ] || {
-  echo "No valid obfs4 bridges found in mounted bridge file" >&2
-  exit 1
-}
+chmod 600 "$RUNTIME_TORRC"
+if id "$TOR_USER" >/dev/null 2>&1; then
+  chown "$TOR_USER:$TOR_USER" "$RUNTIME_TORRC"
+fi
 
-chown -R debian-tor:debian-tor /var/lib/tor /run/tor
-chmod 700 /var/lib/tor/hidden_service
-chmod 600 "$conf"
-
-exec tor -f /etc/tor/torrc
+exec tor -f "$RUNTIME_TORRC"

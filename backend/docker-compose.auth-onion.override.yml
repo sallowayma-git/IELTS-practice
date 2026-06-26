@@ -1,10 +1,10 @@
 services:
-  business-proxy:
+  auth-proxy:
     image: nginx:alpine
-    container_name: ielts-practice-business-proxy
+    container_name: ielts-practice-auth-proxy
     restart: unless-stopped
     profiles:
-      - business-onion
+      - auth-onion
     depends_on:
       app:
         condition: service_healthy
@@ -12,34 +12,34 @@ services:
       - "80"
     volumes:
       - type: bind
-        source: ./business-proxy/nginx.conf
+        source: ./auth-proxy/nginx.conf
         target: /etc/nginx/nginx.conf
         read_only: true
         bind:
           create_host_path: false
 
-  business-tor:
+  auth-tor:
     image: backend-tor-webtunnel:local
-    container_name: ielts-practice-business-tor
+    container_name: ielts-practice-auth-tor
     restart: unless-stopped
     profiles:
-      - business-onion
+      - auth-onion
     entrypoint:
       - /bin/sh
-      - /usr/local/bin/business-tor-entrypoint
+      - /usr/local/bin/auth-tor-entrypoint
     depends_on:
-      business-proxy:
+      auth-proxy:
         condition: service_started
     volumes:
       - type: bind
-        source: ./tor/business-torrc
+        source: ./tor/auth-torrc
         target: /etc/tor/torrc
         read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: ./tor/business-entrypoint.sh
-        target: /usr/local/bin/business-tor-entrypoint
+        source: ./tor/auth-entrypoint-webtunnel.sh
+        target: /usr/local/bin/auth-tor-entrypoint
         read_only: true
         bind:
           create_host_path: false
@@ -49,9 +49,9 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - business_tor_hidden_service:/var/lib/tor/hidden_service
+      - auth_tor_hidden_service:/var/lib/tor/auth_hidden_service
     tmpfs:
       - /run/tor:rw,noexec,nosuid,nodev,size=1m,mode=750
 
 volumes:
-  business_tor_hidden_service:
+  auth_tor_hidden_service:
