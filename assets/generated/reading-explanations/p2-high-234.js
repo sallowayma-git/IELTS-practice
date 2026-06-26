@@ -79,8 +79,7 @@
       "questionRange": {
         "start": 14,
         "end": 19
-      },
-      "text": "题目翻译：为 Paragraph A 选择正确标题\n答案：iii（The widespread rejection of an idea，一个观点被广泛否定）\n解析：定位 Paragraph A 中 “But the plant research community did not accept this... By the late 1980s, most ecologists felt that Schultz and Baldwin's ideas had been discredited”。A段先介绍1983年Schultz和Baldwin提出：受伤植物会释放化学信号提醒邻近植物。但重点很快转向“这个观点不被接受”：实验结果难以重复、批评者质疑其进化稳定性，最后说这个观点被认为已经失信。因此本段核心不是“植物如何交流”，而是早期理论被学界广泛否定。所以选iii。\n题目翻译：为 Paragraph B 选择正确标题\n答案：vi（Evidence leading to renewed belief in a theory，证据使人们重新相信某一理论）\n解析：定位 Paragraph B 中 “A decade later, however, a number of more carefully designed experiments began to yield convincing indications to the contrary”。B段开头的“however”和“to the contrary”非常关键，说明它在反转A段的否定态度。后文举Karban的实验：野生烟草在受损sagebrush附近会增强抗虫能力，其他植物也出现类似VOC诱导的防御反应。这些都是支持植物通过化学物质交流的证据。因此本段主旨是：新的实验证据让人们重新相信植物交流理论，对应vi。\n题目翻译：为 Paragraph C 选择正确标题\n答案：viii（A suggested benefit to the sender of plant communication，植物交流对信号发送者的一个可能好处）\n解析：定位 Paragraph C 中 “Alternatively, VOC-based signaling between plants may have been favored because it enhances the 'extended fitness' of the sender by aiding related plants of the same species”。C段围绕一个问题展开：植物为什么要浪费资源帮助别的植物？其中一个解释是，植物释放VOC本来是为了协调自身内部反应；另一个解释是，它能帮助同种亲缘植物，从而提高发送者的“extended fitness”。题干heading viii中的benefit to the sender精准对应“enhances the extended fitness of the sender”。所以选viii。\n题目翻译：为 Paragraph D 选择正确标题\n答案：i（Sending messages underground，在地下发送信息）\n解析：定位 Paragraph D 中 “distress signals can be passed through the plants' roots” 及 “these networks also served as a channel for warning neighboring plants of the infestation”。D段主要讲地下通信：一是豌豆通过根部传递干旱压力信号；二是根部周围的真菌网络也能传递蚜虫入侵的警告。虽然段中提到pores、fungi、phosphorus and nitrogen，但这些都服务于“地下通道传递信息”这一主旨。因此选i。\n题目翻译：为 Paragraph E 选择正确标题\n答案：iv（One species accelerating growth in another，一个物种促进另一个物种生长）\n解析：定位 Paragraph E 中 “chili plants growing next to fennel plants developed more quickly than seedlings grown with other chili plants”。E段开头讲Gagliano的研究：辣椒在茴香旁边长得更快。这里one species = fennel, another = chili plants, accelerating growth = developed more quickly。后文虽然讨论声音交流、学界怀疑和Karban的评价，但段落的核心例子是通过茴香和辣椒说明可能存在另一种交流方式。因此选iv。\n题目翻译：为 Paragraph F 选择正确标题\n答案：ii（Potential advantages for farmers，对农民的潜在好处）\n解析：定位 Paragraph F 中 “Researchers believe that knowledge of this phenomenon could eventually be applied to agriculture, and lead to the cultivation of hardier crops”。F段开头直接说植物交流研究未来可能用于农业，帮助培育更强健的作物。heading中的“farmers”没有在原文直接出现，但agriculture和crops都指向农业应用，因此是同义概括。后文虽然说仍有很多工作要做，但主旨仍是这一发现未来可能有农业价值。因此选ii。"
+      }
     },
     {
       "sectionTitle": "Questions 20–23 填空题",
@@ -110,8 +109,7 @@
       "questionRange": {
         "start": 20,
         "end": 23
-      },
-      "text": "题目翻译：根据以色列本-古里安大学的Ariel Novoplansky的研究，植物可能通过它们的______发送信息。\n答案：roots\n解析：题干中的“send messages via their...”对应原文Paragraph D中 “distress signals can be passed through the plants' roots”。空格前有their，所以填复数名词roots。\n题目翻译：在一项研究中，Novoplansky的团队种植了一排排豌豆，并在每排第一株植物周围制造了类似______的条件。\n答案：drought\n解析：题干中的“created conditions like...”对应原文 “subjected the first in each row to conditions similar to those experienced in a drought”。空格要填的是这种条件类似什么，原文明确是a drought。注意答案只能填一个词，所以填drought。\n题目翻译：与此同时，苏格兰阿伯丁大学的研究关注的是______的网络，这些网络在土壤下连接植物。\n答案：fungi\n解析：题干中的“networks of...which connect the plants beneath the soil”对应原文 “the labyrinths of hair-like fungi that occur around the roots of most plants” 及后文 “these networks also served as a channel”。原文说这些网络是由根部周围的hair-like fungi构成的。因此填fungi。\n题目翻译：涉及阔豆植物和被称为______的食草昆虫的实验也产生了一些有趣的结果。\n答案：aphids\n解析：题干中的“plant-eating insects called...”对应原文插入解释 “aphids – small herbivorous insects”。herbivorous insects = plant-eating insects。因此填aphids。注意aphids是复数形式，应保留原文形式。"
+      }
     },
     {
       "sectionTitle": "Questions 24–26 研究者配对题",
@@ -136,8 +134,7 @@
       "questionRange": {
         "start": 24,
         "end": 26
-      },
-      "text": "题目翻译：对植物交流的研究有朝一日可能有助于改善我们的食物供应。\n答案：C（David Johnson）\n解析：题干中的“will one day help to improve our food supply”对应原文Paragraph F中的 “applied to agriculture” 和 “cultivation of hardier crops”。真正说这句话的人是Johnson，也就是David Johnson。虽然F段开头是“Researchers believe...”，但后面用引号具体表达农业应用前景的是Johnson。因此选C。\n题目翻译：植物交流可能是旨在帮助单一植物的内部机制的结果。\n答案：A（Richard Karban）\n解析：题干中的“internal mechanisms intended to help a single plant”对应原文Paragraph C中的 “within-plant signaling” 和 “each individual plant uses the signals to coordinate its own physiological responses to protect itself”。也就是说，这种机制本来是单株植物内部用来保护自己的，后来可能被植物间交流“借用”。这句话由Karban表示同意并解释，所以选A。\n题目翻译：近几十年来，人们对植物交流的态度发生了巨大变化。\n答案：B（Ariel Novoplansky）\n解析：题干的“attitudes...have changed greatly in recent decades”对应原文Paragraph F中从 “very weird” 到 “there is no doubt / not strange anymore” 的变化。说这句话的人是Ariel Novoplansky，因此选B。"
+      }
     }
   ]
 }

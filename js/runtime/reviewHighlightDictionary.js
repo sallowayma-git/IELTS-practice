@@ -350,8 +350,6 @@
         activeLookup = null;
     }
 
-    var SCROLLBAR_EDGE_FALLBACK_PX = 14;
-
     function isScrollbarClick(event, bubble) {
         if (!bubble || bubble.style.display === 'none') {
             return false;
@@ -371,25 +369,13 @@
             return false;
         }
         var scrollbarWidth = bubble.offsetWidth - bubble.clientWidth;
-        if (scrollbarWidth <= 0) {
-            if (bubble.scrollHeight <= bubble.clientHeight) {
-                return false;
-            }
-            scrollbarWidth = SCROLLBAR_EDGE_FALLBACK_PX;
-        }
-        if (clientX >= rect.right - scrollbarWidth && clientX <= rect.right) {
+        if (scrollbarWidth > 0 && clientX >= rect.right - scrollbarWidth && clientX <= rect.right) {
             return true;
         }
         var overflowX = style.overflowX;
         if (overflowX === 'auto' || overflowX === 'scroll') {
             var scrollbarHeight = bubble.offsetHeight - bubble.clientHeight;
-            if (scrollbarHeight <= 0) {
-                if (bubble.scrollWidth <= bubble.clientWidth) {
-                    return false;
-                }
-                scrollbarHeight = SCROLLBAR_EDGE_FALLBACK_PX;
-            }
-            if (clientY >= rect.bottom - scrollbarHeight && clientY <= rect.bottom) {
+            if (scrollbarHeight > 0 && clientY >= rect.bottom - scrollbarHeight && clientY <= rect.bottom) {
                 return true;
             }
         }
