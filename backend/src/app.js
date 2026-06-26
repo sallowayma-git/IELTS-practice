@@ -8,6 +8,7 @@ const helmet = require('helmet');
 
 const db = require('./db');
 const { PostgresAuthStore, createAuthRouter, publicUser, requireAuth, requireAdmin } = require('./auth');
+const { PostgresAuthHandoffStore, createAuthHandoffRouter, verifySignedAuthState } = require('./authHandoff');
 const { PostgresAdminStore, createAdminRouter, createTrafficMiddleware } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
 const {
@@ -319,10 +320,11 @@ function requireContentAuth(req, res, next) {
         req.session.user = publicUser(req.session.user);
         return next();
     }
-    const loginUrl = '/?auth=login';
+    const returnTo = encodeURIComponent(req.originalUrl || req.url || '/');
+    const loginUrl = `/auth/business/start?return_to=${returnTo}`;
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Refresh', `3; url=${loginUrl}`);
-    return res.status(403).type('html').send(`<!doctype html>
+    return res.status(401).type('html').send(`<!doctype html>
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
@@ -364,7 +366,7 @@ function requireContentAuth(req, res, next) {
 </head>
 <body>
     <main>
-        <h1>403 Forbidden</h1>
+        <h1>401 Unauthorized</h1>
         <p>题库内容需要登录后访问。页面将在 3 秒后跳转到登录入口。</p>
         <a href="${escapeHtmlAttribute(loginUrl)}">立即前往登录</a>
     </main>
@@ -459,6 +461,7 @@ function createApp(options = {}) {
     const app = express();
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
     const adminRoot = options.adminRoot || path.resolve(__dirname, '..', 'admin');
+    const authRoot = options.authRoot || path.resolve(__dirname, '..', 'auth');
     const pool = options.pool || db.pool;
     const dbClient = options.db || db;
     const cookieName = options.cookieName || 'ielts.sid';
@@ -509,6 +512,8 @@ function createApp(options = {}) {
     const totpStore = options.totpStore || new PostgresTotpStore(dbClient);
     const practiceStore = options.practiceStore || new PostgresPracticeRecordStore(dbClient);
     const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
+    const authHandoffStore = options.authHandoffStore || new PostgresAuthHandoffStore(dbClient);
+    const authHandoffSecret = options.authHandoffSecret || sessionSecret;
     const trafficStore = options.trafficStore || adminStore;
     const requireAdminTotp = options.requireAdminTotp || (
         totpEnabled
@@ -559,8 +564,8 @@ function createApp(options = {}) {
         }
     }
 
-    app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin'], noStoreSensitiveApiMiddleware);
-    app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin'], refreshSessionUser);
+    app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], noStoreSensitiveApiMiddleware);
+    app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], refreshSessionUser);
     app.use(createTrafficMiddleware({
         store: trafficStore,
         enabled: trafficEnabled,
@@ -571,6 +576,17 @@ function createApp(options = {}) {
     app.get('/api/health', (req, res) => {
         res.json({ ok: true });
     });
+    app.use('/auth', createAuthHandoffRouter({
+        authStore,
+        totpStore,
+        ticketStore: authHandoffStore,
+        stateSecret: authHandoffSecret,
+        ticketTtlMs: options.authHandoffTicketTtlMs,
+        authPublicUrl: options.authPublicUrl,
+        businessPublicUrl: options.businessPublicUrl,
+        adminPublicUrl: options.adminPublicUrl,
+        totpVerificationMaxAgeMs
+    }));
     app.use('/api/auth', createAuthRouter({
         store: authStore,
         totpStore,
@@ -629,7 +645,7 @@ function createApp(options = {}) {
                     }
                 }
             }
-            return res.sendFile(path.join(adminRoot, 'login.html'));
+            return res.redirect('/auth/admin/start?return_to=/admin');
         } catch (error) {
             return next(error);
         }
@@ -642,9 +658,11 @@ function createApp(options = {}) {
     });
 
     async function sendProtectedAdminPage(req, res, next, fileName) {
+        const returnTo = encodeURIComponent(req.originalUrl || '/admin');
+        const adminStartUrl = `/auth/admin/start?return_to=${returnTo}`;
         try {
             if (!req.session || !req.session.user) {
-                return res.redirect('/admin/login');
+                return res.redirect(adminStartUrl);
             }
             req.session.user = publicUser(req.session.user);
             if (req.session.user.role !== 'admin') {
@@ -653,10 +671,10 @@ function createApp(options = {}) {
             if (totpEnabled) {
                 const totpStatus = await totpStore.getStatus(req.session.user.id);
                 if (!totpStatus.enabled) {
-                    return res.redirect('/admin/login');
+                    return res.redirect(adminStartUrl);
                 }
                 if (!hasSessionTotpVerification(req, req.session.user, totpVerificationMaxAgeMs)) {
-                    return res.redirect('/admin/login');
+                    return res.redirect(adminStartUrl);
                 }
             }
             return res.sendFile(path.join(adminRoot, fileName));
@@ -675,6 +693,40 @@ function createApp(options = {}) {
         dotfiles: 'deny',
         index: false
     }));
+
+    app.get(['/auth/login', '/auth/login/'], (req, res) => {
+        const stateParam = typeof req.query.state === 'string' ? req.query.state : '';
+        if (stateParam) {
+            const state = verifySignedAuthState(authHandoffSecret, stateParam);
+            if (!state) {
+                return res.status(400).type('text/plain').send('Invalid auth handoff state');
+            }
+            const query = new URLSearchParams({ state: stateParam }).toString();
+            return res.redirect(`/auth/${state.audience}/login?${query}`);
+        }
+        res.sendFile(path.join(authRoot, 'login.html'));
+    });
+    app.get(['/auth/business/login', '/auth/business/login/'], (req, res) => {
+        res.sendFile(path.join(authRoot, 'login.html'));
+    });
+    app.get(['/auth/admin/login', '/auth/admin/login/'], (req, res) => {
+        res.sendFile(path.join(authRoot, 'login.html'));
+    });
+    app.get('/auth/login.js', (req, res) => {
+        res.sendFile(path.join(authRoot, 'login.js'));
+    });
+    app.get('/auth/login.css', (req, res) => {
+        res.sendFile(path.join(authRoot, 'login.css'));
+    });
+    app.get(['/auth/account', '/auth/account/'], requireAuth, (req, res) => {
+        res.sendFile(path.join(authRoot, 'account.html'));
+    });
+    app.get('/auth/account.js', requireAuth, (req, res) => {
+        res.sendFile(path.join(authRoot, 'account.js'));
+    });
+    app.get('/auth/account.css', requireAuth, (req, res) => {
+        res.sendFile(path.join(authRoot, 'account.css'));
+    });
 
     app.get('/', (req, res) => {
         res.sendFile(path.join(repoRoot, 'index.html'));

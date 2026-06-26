@@ -9,6 +9,7 @@ const session = require('express-session');
 
 const { createApp } = require('../src/app');
 const { MemoryAuthStore, PostgresAuthStore, createRateLimiter, normalizeRateLimitKey } = require('../src/auth');
+const { MemoryAuthHandoffStore } = require('../src/authHandoff');
 const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeAdminSearchQuery, normalizeTrafficEvent, serializeRecord } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { runMigrations } = require('../src/migrations');
@@ -43,6 +44,7 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
             `.dockerignore must exclude ${pattern}`
         );
     }
+    assert(dockerignore.split(/\r?\n/).includes('!backend/migrations/*.sql'));
     assert(dockerignore.split(/\r?\n/).includes('backend/tor/bridges.age.tmp-*'));
     assert(gitignore.split(/\r?\n/).includes('backend/logs/'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.local.txt'));
@@ -54,6 +56,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(gitignore.split(/\r?\n/).includes('backend/tor/*.identity'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/*.pub'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/*.agekey'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/admin-authorized-clients/*.auth'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/admin_hidden_service/'));
+    assert(gitignore.split(/\r?\n/).includes('backend/tor/auth_hidden_service/'));
+    assert(gitignore.split(/\r?\n/).includes('*admin_tor_hidden_service*'));
+    assert(gitignore.split(/\r?\n/).includes('*auth_tor_hidden_service*'));
+    assert(gitignore.split(/\r?\n/).includes('!backend/migrations/*.sql'));
     assert(torDockerfile.includes('apt-get install -y --no-install-recommends age ca-certificates obfs4proxy tor'));
     assert(compose.includes('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?'));
     assert(compose.includes('PGPASSWORD: ${POSTGRES_PASSWORD:?'));
@@ -89,6 +97,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE=./tor/bridge-age-identity.txt'));
     assert(envExample.includes('TRAFFIC_SECRET='));
     assert(compose.includes('TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}'));
+    assert(envExample.includes('AUTH_PUBLIC_URL='));
+    assert(envExample.includes('BUSINESS_PUBLIC_URL='));
+    assert(envExample.includes('ADMIN_PUBLIC_URL='));
+    assert(compose.includes('AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:-}'));
+    assert(compose.includes('BUSINESS_PUBLIC_URL: ${BUSINESS_PUBLIC_URL:-}'));
+    assert(compose.includes('ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:-}'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesTemplate));
     assert(bridgesTemplate.includes('encrypt the private bridge'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesPlaceholder));
@@ -290,11 +304,13 @@ async function createClient(options = {}) {
     const totpStore = new MemoryTotpStore();
     const practiceStore = new MemoryPracticeRecordStore();
     const adminStore = new MemoryAdminStore({ authStore, practiceStore, totpStore, sessionStore });
+    const authHandoffStore = new MemoryAuthHandoffStore();
     const app = createApp({
         authStore,
         totpStore,
         practiceStore,
         adminStore,
+        authHandoffStore,
         sessionStore,
         sessionSecret: 'test-session-secret',
         staticRoot: options.staticRoot,
@@ -308,6 +324,10 @@ async function createClient(options = {}) {
         totpEnabled: options.totpEnabled,
         totpEncryptionKey: options.totpEncryptionKey || 'test-totp-key',
         totpVerificationMaxAgeMs: options.totpVerificationMaxAgeMs,
+        authHandoffTicketTtlMs: options.authHandoffTicketTtlMs,
+        authPublicUrl: options.authPublicUrl,
+        businessPublicUrl: options.businessPublicUrl,
+        adminPublicUrl: options.adminPublicUrl,
         totpRecoveryHashRounds: 4
     });
     const server = await new Promise((resolve, reject) => {
@@ -377,6 +397,7 @@ async function createClient(options = {}) {
         sessionStore,
         authStore,
         adminStore,
+        authHandoffStore,
         totpStore,
         practiceStore,
         get csrfToken() {
@@ -487,6 +508,21 @@ function generateTotpToken(secret, epochOffsetMs = 0) {
         options.epoch = Date.now() + epochOffsetMs;
     }
     return otp.generateSync(options);
+}
+
+function parseRedirectLocation(location) {
+    assert(location, 'expected redirect location header');
+    return new URL(location, 'http://example.test');
+}
+
+function assertAuthStartRedirect(location, audience, returnTo) {
+    const url = parseRedirectLocation(location);
+    assert.equal(url.pathname, `/auth/${audience}/start`);
+    assert.equal(url.searchParams.get('return_to'), returnTo);
+}
+
+function getRedirectParam(location, name) {
+    return parseRedirectLocation(location).searchParams.get(name);
 }
 
 async function withDateNowOffset(offsetMs, callback) {
@@ -2100,30 +2136,51 @@ test('admin API rejects anonymous and non-admin users', async () => {
     }
 });
 
-test('admin login page is public while admin dashboard redirects anonymous users', async () => {
+test('admin dashboard redirects anonymous users through auth handoff', async () => {
     const client = await createClient();
     try {
         const dashboard = await client.request('GET', '/admin', undefined, { redirect: 'manual' });
         assert.equal(dashboard.response.status, 302);
-        assert.equal(dashboard.response.headers.get('location'), '/admin/login');
+        assertAuthStartRedirect(dashboard.response.headers.get('location'), 'admin', '/admin');
 
         const accountPage = await client.request('GET', '/admin/account?userId=11111111-1111-4111-8111-111111111111', undefined, { redirect: 'manual' });
         assert.equal(accountPage.response.status, 302);
-        assert.equal(accountPage.response.headers.get('location'), '/admin/login');
+        assertAuthStartRedirect(
+            accountPage.response.headers.get('location'),
+            'admin',
+            '/admin/account?userId=11111111-1111-4111-8111-111111111111'
+        );
 
-        const loginPage = await client.request('GET', '/admin/login');
+        const legacyLoginPage = await client.request('GET', '/admin/login', undefined, { redirect: 'manual' });
+        assert.equal(legacyLoginPage.response.status, 302);
+        assertAuthStartRedirect(legacyLoginPage.response.headers.get('location'), 'admin', '/admin');
+
+        const authLoginPage = await client.request('GET', '/auth/login');
+        assert.equal(authLoginPage.response.status, 200);
+        assert.match(authLoginPage.text, /IELTS Atlas Auth/);
+        assert.match(authLoginPage.text, /id="auth-tabs"/);
+
+        const businessLoginPage = await client.request('GET', '/auth/business/login');
+        assert.equal(businessLoginPage.response.status, 200);
+        const adminLoginPage = await client.request('GET', '/auth/admin/login');
+        assert.equal(adminLoginPage.response.status, 200);
+        assert.doesNotMatch(authLoginPage.text, /js\/bundles\//);
+
+        const authLoginScript = await client.request('GET', '/auth/login.js');
+        assert.equal(authLoginScript.response.status, 200);
+        assert.match(authLoginScript.text, /\/api\/auth\/login/);
+
+        const authLoginStyles = await client.request('GET', '/auth/login.css');
+        assert.equal(authLoginStyles.response.status, 200);
+        assert.match(authLoginStyles.text, /auth-shell/);
+
+        const authAccountPage = await client.request('GET', '/auth/account', undefined, { redirect: 'manual' });
+        assert.equal(authAccountPage.response.status, 401);
+
+        const loginPage = await client.request('GET', '/admin/login.js');
         assert.equal(loginPage.response.status, 200);
-        assert.match(loginPage.text, /Admin Console/);
         assert.doesNotMatch(loginPage.text, /js\/bundles\//);
         assert.doesNotMatch(loginPage.text, /account-view/);
-
-        const loginScript = await client.request('GET', '/admin/login.js');
-        assert.equal(loginScript.response.status, 200);
-        assert.match(loginScript.text, /\/api\/auth\/login/);
-
-        const loginStyles = await client.request('GET', '/admin/login.css');
-        assert.equal(loginStyles.response.status, 200);
-        assert.match(loginStyles.text, /admin-login-shell/);
 
         const api = await client.request('GET', '/api/admin/summary');
         assert.equal(api.response.status, 401);
@@ -2163,6 +2220,241 @@ test('admin shell and business account menu do not link back through the busines
     assert.doesNotMatch(adminIndex, /href=["']\/["'][^>]*>\s*App\s*</);
     assert.doesNotMatch(authOverlay, /remote-auth-account__admin/);
     assert.doesNotMatch(authOverlay, /href\s*=\s*['"]\/admin['"]/);
+});
+
+test('auth handoff creates a one-time business session ticket', async () => {
+    const client = await createClient();
+    try {
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, { redirect: 'manual' });
+        assert.equal(start.response.status, 302);
+        assert.equal(parseRedirectLocation(start.response.headers.get('location')).pathname, '/auth/business/login');
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(state);
+
+        const created = await register(authSession, 'handoff_business', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+        assert.equal(callbackUrl.pathname, '/auth/business/callback');
+        assert(callbackUrl.searchParams.get('ticket'));
+
+        const callback = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(callback.response.status, 302);
+        assert.equal(callback.response.headers.get('location'), '/practice/reading/p1-high-01');
+
+        const me = await targetSession.request('GET', '/api/auth/me');
+        assert.equal(me.response.status, 200);
+        assert.equal(me.json.user.username, 'handoff_business');
+
+        const repeated = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(repeated.response.status, 403);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth login binds signed handoff state to an audience-specific entry', async () => {
+    const client = await createClient();
+    try {
+        const targetSession = client.createSession();
+        const businessStart = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, { redirect: 'manual' });
+        const businessState = getRedirectParam(businessStart.response.headers.get('location'), 'state');
+
+        const genericBusiness = await targetSession.request('GET', `/auth/login?state=${encodeURIComponent(businessState)}`, undefined, { redirect: 'manual' });
+        assert.equal(genericBusiness.response.status, 302);
+        assert.equal(parseRedirectLocation(genericBusiness.response.headers.get('location')).pathname, '/auth/business/login');
+        assert.equal(getRedirectParam(genericBusiness.response.headers.get('location'), 'state'), businessState);
+
+        const anonymousComplete = await targetSession.request('GET', `/auth/complete?state=${encodeURIComponent(businessState)}`, undefined, { redirect: 'manual' });
+        assert.equal(anonymousComplete.response.status, 302);
+        assert.equal(parseRedirectLocation(anonymousComplete.response.headers.get('location')).pathname, '/auth/business/login');
+
+        const adminStart = await targetSession.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
+        const adminState = getRedirectParam(adminStart.response.headers.get('location'), 'state');
+        const genericAdmin = await targetSession.request('GET', `/auth/login?state=${encodeURIComponent(adminState)}`, undefined, { redirect: 'manual' });
+        assert.equal(genericAdmin.response.status, 302);
+        assert.equal(parseRedirectLocation(genericAdmin.response.headers.get('location')).pathname, '/auth/admin/login');
+        assert.equal(getRedirectParam(genericAdmin.response.headers.get('location'), 'state'), adminState);
+
+        const invalid = await targetSession.request('GET', '/auth/login?state=not-a-valid-state', undefined, { redirect: 'manual' });
+        assert.equal(invalid.response.status, 400);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth complete JSON mode returns redirect payloads and structured errors', async () => {
+    const client = await createClient();
+    try {
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/', undefined, { redirect: 'manual' });
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+
+        await register(authSession, 'handoff_json', 'StrongPass1');
+        const mismatch = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}&format=json&audience=admin`);
+        assert.equal(mismatch.response.status, 400);
+        assert.deepEqual(mismatch.json, { error: 'Auth handoff audience mismatch' });
+
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}&format=json&audience=business`);
+        assert.equal(complete.response.status, 200);
+        assert.match(complete.json.redirectTo, /^http:\/\/127\.0\.0\.1:\d+\/auth\/business\/callback\?ticket=/);
+
+        const nonAdminTarget = client.createSession();
+        const nonAdminStart = await nonAdminTarget.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
+        const adminState = getRedirectParam(nonAdminStart.response.headers.get('location'), 'state');
+        const wrongEntry = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(adminState)}&format=json&audience=business`);
+        assert.equal(wrongEntry.response.status, 400);
+        assert.deepEqual(wrongEntry.json, { error: 'Auth handoff audience mismatch' });
+
+        const denied = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(adminState)}&format=json`);
+        assert.equal(denied.response.status, 403);
+        assert.deepEqual(denied.json, { error: 'Admin access required' });
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth handoff rejects unsafe return paths and audience mismatches', async () => {
+    const client = await createClient();
+    try {
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=https%3A%2F%2Fevil.example%2Fadmin', undefined, { redirect: 'manual' });
+        assert.equal(start.response.status, 302);
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(state);
+
+        const created = await register(authSession, 'handoff_guard', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+        assert.equal(callbackUrl.pathname, '/auth/business/callback');
+
+        const wrongAudience = await targetSession.request('GET', `/auth/admin/callback${callbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(wrongAudience.response.status, 403);
+
+        const callback = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(callback.response.status, 302);
+        assert.equal(callback.response.headers.get('location'), '/');
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth callback uses proxy audience headers to rescue misdirected tickets', async () => {
+    const client = await createClient({
+        businessPublicUrl: 'http://business.example',
+        adminPublicUrl: 'http://admin.example'
+    });
+    try {
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, { redirect: 'manual' });
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(state);
+
+        await register(authSession, 'handoff_host_rescue', 'StrongPass1');
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+        assert.equal(callbackUrl.origin, 'http://business.example');
+        assert.equal(callbackUrl.pathname, '/auth/business/callback');
+
+        const misdirected = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, {
+            redirect: 'manual',
+            headers: {
+                'x-ielts-onion-audience': 'admin'
+            }
+        });
+        assert.equal(misdirected.response.status, 302);
+        assert.equal(
+            misdirected.response.headers.get('location'),
+            `http://business.example${callbackUrl.pathname}${callbackUrl.search}`
+        );
+
+        const callback = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, {
+            redirect: 'manual',
+            headers: {
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(callback.response.status, 302);
+        assert.equal(callback.response.headers.get('location'), '/practice/reading/p1-high-01');
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth handoff rejects expired tickets', async () => {
+    const client = await createClient({ authHandoffTicketTtlMs: 10 });
+    try {
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/', undefined, { redirect: 'manual' });
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+
+        await register(authSession, 'handoff_expired', 'StrongPass1');
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+
+        const expired = await withDateNowOffset(1000, () => targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' }));
+        assert.equal(expired.response.status, 403);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin auth handoff requires admin role and TOTP verification', async () => {
+    const client = await createClient();
+    try {
+        const nonAdminTarget = client.createSession();
+        const nonAdminAuth = client.createSession();
+        const nonAdminStart = await nonAdminTarget.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
+        const nonAdminState = getRedirectParam(nonAdminStart.response.headers.get('location'), 'state');
+        await register(nonAdminAuth, 'handoff_non_admin', 'StrongPass1');
+        const nonAdminComplete = await nonAdminAuth.request('GET', `/auth/complete?state=${encodeURIComponent(nonAdminState)}`, undefined, { redirect: 'manual' });
+        assert.equal(nonAdminComplete.response.status, 403);
+
+        await seedAdmin(client, 'handoff_admin', 'StrongPass1');
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
+        assert.equal(start.response.status, 302);
+        assert.equal(parseRedirectLocation(start.response.headers.get('location')).pathname, '/auth/admin/login');
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(state);
+
+        await authSession.csrf();
+        const passwordLogin = await authSession.request('POST', '/api/auth/login', {
+            username: 'handoff_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordLogin.response.status, 200);
+        assert.equal(passwordLogin.json.requiresTotpSetup, true);
+
+        await enableTotpForCurrentSession(authSession);
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+        assert.equal(callbackUrl.pathname, '/auth/admin/callback');
+
+        const callback = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(callback.response.status, 302);
+        assert.equal(callback.response.headers.get('location'), '/admin');
+
+        const adminPage = await targetSession.request('GET', '/admin');
+        assert.equal(adminPage.response.status, 200);
+    } finally {
+        await client.close();
+    }
 });
 
 test('practice API rejects unsafe record identifiers and oversized batches', async () => {
@@ -2690,11 +2982,11 @@ test('admin routes require TOTP verification in the current session', async () =
 
         const blockedAdminPage = await client.request('GET', '/admin', undefined, { redirect: 'manual' });
         assert.equal(blockedAdminPage.response.status, 302);
-        assert.equal(blockedAdminPage.response.headers.get('location'), '/admin/login');
+        assertAuthStartRedirect(blockedAdminPage.response.headers.get('location'), 'admin', '/admin');
 
         const blockedAccountPage = await client.request('GET', `/admin/account?userId=${userId}`, undefined, { redirect: 'manual' });
         assert.equal(blockedAccountPage.response.status, 302);
-        assert.equal(blockedAccountPage.response.headers.get('location'), '/admin/login');
+        assertAuthStartRedirect(blockedAccountPage.response.headers.get('location'), 'admin', `/admin/account?userId=${userId}`);
     } finally {
         await client.close();
     }
@@ -2723,7 +3015,7 @@ test('admin TOTP verification expires and can be renewed in-session', async () =
         assert.equal(expiredSummary.json.error, 'Admin TOTP verification required');
         const expiredAdminPage = await withDateNowOffset(2000, () => client.request('GET', '/admin', undefined, { redirect: 'manual' }));
         assert.equal(expiredAdminPage.response.status, 302);
-        assert.equal(expiredAdminPage.response.headers.get('location'), '/admin/login');
+        assertAuthStartRedirect(expiredAdminPage.response.headers.get('location'), 'admin', '/admin');
 
         await withDateNowOffset(31_000, async () => {
             const renewed = await client.request('POST', '/api/auth/totp/verify', {
@@ -3801,11 +4093,12 @@ test('static hosting serves index and denies dotfiles with security headers', as
             '/Templates/legacy.html'
         ]) {
             const anonymous = await client.request('GET', protectedPath);
-            assert.equal(anonymous.response.status, 403, `${protectedPath} should require login`);
+            const loginUrl = `/auth/business/start?return_to=${encodeURIComponent(protectedPath)}`;
+            assert.equal(anonymous.response.status, 401, `${protectedPath} should require login`);
             assert.match(anonymous.response.headers.get('content-type') || '', /text\/html/);
-            assert.equal(anonymous.response.headers.get('refresh'), '3; url=/?auth=login');
-            assert.match(anonymous.text, /403 Forbidden/);
-            assert.match(anonymous.text, /http-equiv="refresh" content="3; url=\/\?auth=login"/);
+            assert.equal(anonymous.response.headers.get('refresh'), `3; url=${loginUrl}`);
+            assert.match(anonymous.text, /401 Unauthorized/);
+            assert(anonymous.text.includes(`http-equiv="refresh" content="3; url=${loginUrl}"`));
             assert.match(anonymous.text, /立即前往登录/);
             assert.doesNotMatch(anonymous.text, /Unified Reading|Listening Sample|window\.ok|__READING_/);
         }
@@ -3919,8 +4212,8 @@ test('static boundary rechecks optional roots created after an initial miss', as
     const client = await createClient({ staticRoot });
     try {
         const beforeRootExists = await client.request('GET', '/ListeningPractice/linked-secret.txt');
-        assert.equal(beforeRootExists.response.status, 403);
-        assert.equal(beforeRootExists.response.headers.get('refresh'), '3; url=/?auth=login');
+        assert.equal(beforeRootExists.response.status, 401);
+        assert.equal(beforeRootExists.response.headers.get('refresh'), `3; url=/auth/business/start?return_to=${encodeURIComponent('/ListeningPractice/linked-secret.txt')}`);
         assert.doesNotMatch(beforeRootExists.text, /late outside secret/);
 
         const created = await register(client, 'late_static_user', 'StrongPass1');

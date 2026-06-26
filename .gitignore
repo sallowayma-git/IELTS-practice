@@ -54,10 +54,16 @@ backend/tor/*.pub
 backend/tor/*.agekey
 backend/tor/transports/
 backend/tor/hidden_service/
+backend/tor/admin-authorized-clients/*.auth
+backend/tor/admin_hidden_service/
+backend/tor/auth_hidden_service/
 backend/tor/volume-backups/
 *business_tor_hidden_service*
+*admin_tor_hidden_service*
+*auth_tor_hidden_service*
 *.dump
 *.sql
+!backend/migrations/*.sql
 *.sql.gz
 *.tar
 *.tar.gz

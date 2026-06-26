@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>IELTS Atlas Auth</title>
+        <link rel="stylesheet" href="/auth/login.css" />
+    </head>
+    <body>
+        <main class="auth-shell">
+            <section class="auth-panel" aria-labelledby="auth-title">
+                <div class="auth-heading">
+                    <p>IELTS Atlas</p>
+                    <h1 id="auth-title">Sign in</h1>
+                </div>
+
+                <div id="auth-status" class="auth-status" role="status" aria-live="polite">Checking session...</div>
+
+                <div id="auth-tabs" class="auth-tabs">
+                    <button id="login-tab" class="is-active" type="button">Login</button>
+                    <button id="register-tab" type="button">Register</button>
+                </div>
+
+                <form id="password-form" class="auth-form" hidden>
+                    <label>
+                        <span>Username</span>
+                        <input id="username" name="username" autocomplete="username" required />
+                    </label>
+                    <label>
+                        <span>Password</span>
+                        <input id="password" name="password" type="password" autocomplete="current-password" required />
+                    </label>
+                    <button id="password-submit" type="submit">Continue</button>
+                </form>
+
+                <form id="totp-form" class="auth-form" hidden>
+                    <label>
+                        <span>TOTP code or recovery code</span>
+                        <input id="totp-token" name="totpToken" inputmode="numeric" autocomplete="one-time-code" maxlength="64" required />
+                    </label>
+                    <button id="totp-submit" type="submit">Verify</button>
+                </form>
+
+                <section id="totp-setup" class="auth-setup" hidden>
+                    <h2>Set up TOTP</h2>
+                    <p>Scan the QR code with your authenticator, then enter the current code.</p>
+                    <img id="totp-qr" alt="TOTP QR code" />
+                    <code id="totp-secret"></code>
+                    <form id="totp-setup-form" class="auth-form">
+                        <label>
+                            <span>TOTP code</span>
+                            <input id="totp-setup-token" name="setupToken" inputmode="numeric" autocomplete="one-time-code" maxlength="64" required />
+                        </label>
+                        <button id="totp-setup-submit" type="submit">Enable TOTP</button>
+                    </form>
+                </section>
+
+                <section id="recovery" class="auth-recovery" hidden>
+                    <h2>Save recovery codes</h2>
+                    <p>These codes are shown once. Store them before continuing.</p>
+                    <ol id="recovery-codes"></ol>
+                    <button id="recovery-continue" type="button">Continue</button>
+                </section>
+
+                <p class="auth-foot">
+                    <a href="/auth/account">Manage current auth session</a>
+                </p>
+            </section>
+        </main>
+        <script src="/auth/login.js"></script>
+    </body>
+</html>

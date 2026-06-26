@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>IELTS Atlas Account</title>
+        <link rel="stylesheet" href="/auth/account.css" />
+    </head>
+    <body>
+        <main class="account-shell">
+            <header class="account-header">
+                <div>
+                    <p>IELTS Atlas</p>
+                    <h1>Account security</h1>
+                </div>
+                <button id="logout-button" type="button">Logout</button>
+            </header>
+
+            <section class="account-card">
+                <h2 id="profile-name">Loading...</h2>
+                <p id="profile-role">Checking session</p>
+            </section>
+
+            <section class="account-grid">
+                <form id="username-form" class="account-card">
+                    <h2>Change username</h2>
+                    <label>
+                        <span>New username</span>
+                        <input id="username-input" autocomplete="username" required />
+                    </label>
+                    <label>
+                        <span>Current password</span>
+                        <input id="username-password" type="password" autocomplete="current-password" required />
+                    </label>
+                    <button type="submit">Update username</button>
+                    <p id="username-status" class="status"></p>
+                </form>
+
+                <form id="password-form" class="account-card">
+                    <h2>Change password</h2>
+                    <label>
+                        <span>Current password</span>
+                        <input id="current-password" type="password" autocomplete="current-password" required />
+                    </label>
+                    <label>
+                        <span>New password</span>
+                        <input id="new-password" type="password" autocomplete="new-password" minlength="8" required />
+                    </label>
+                    <button type="submit">Update password</button>
+                    <p id="password-status" class="status"></p>
+                </form>
+
+                <section class="account-card" id="totp-card">
+                    <h2>TOTP</h2>
+                    <p id="totp-status" class="status">Checking TOTP status...</p>
+                    <div id="totp-actions"></div>
+                </section>
+            </section>
+        </main>
+        <script src="/auth/account.js"></script>
+    </body>
+</html>
