@@ -556,6 +556,45 @@ async function testDefaultLibraryKeepsListeningWithManifest() {
     recordResult('manifest 存在时默认题库加载内置听力', { loadedCount: loaded.length });
 }
 
+async function testDefaultListeningUsesIndexPathRoot() {
+    const listeningDefault = {
+        id: 'default-listening-custom-root',
+        examId: 'default-listening-custom-root',
+        type: 'listening',
+        title: 'Default Listening With Custom Root',
+        category: 'P3',
+        path: 'P3/default/',
+        filename: 'listening.html'
+    };
+    const { window } = createHarness({
+        storage: { active_exam_index_key: 'exam_index' },
+        completeExamIndex: [],
+        listeningExamIndex: [listeningDefault],
+        listeningManifest: { 'default-listening-custom-root': { examId: 'default-listening-custom-root' } },
+        defaultListeningAvailable: true
+    });
+    window.listeningExamIndex.pathRoot = 'ListeningPractice/vip special/ListeningPractice/';
+
+    const manager = window.LibraryManager.getInstance();
+    const loaded = await manager.loadActiveLibrary(true);
+    const match = loaded.find((exam) => exam && exam.id === 'default-listening-custom-root');
+    const pathMap = await window.storage.get('exam_path_map__exam_index');
+
+    assert(match, 'custom-root listening exam should load');
+    assert.strictEqual(
+        match.path,
+        'ListeningPractice/vip special/ListeningPractice/P3/default/',
+        'default listening paths should use listeningExamIndex.pathRoot'
+    );
+    assert.strictEqual(
+        pathMap.listening.root,
+        'ListeningPractice/vip special/ListeningPractice/',
+        'default listening path map should use listeningExamIndex.pathRoot'
+    );
+
+    recordResult('default listening honors index pathRoot', { path: match.path });
+}
+
 async function testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing() {
     const readingNew = {
         id: 'reading-new-default',
@@ -610,6 +649,7 @@ async function main() {
         await testSanitizesLibraryConfigurationMetadata();
         await testDefaultLibrarySkipsListeningWithoutManifest();
         await testDefaultLibraryKeepsListeningWithManifest();
+        await testDefaultListeningUsesIndexPathRoot();
         await testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing();
         console.log(JSON.stringify({
             status: 'pass',

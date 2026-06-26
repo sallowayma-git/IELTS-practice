@@ -407,6 +407,10 @@
         }
 
         defaultPathRoot(type) {
+            const scriptPathRoot = this.resolveScriptPathRoot(type);
+            if (typeof scriptPathRoot === 'string' && scriptPathRoot.trim()) {
+                return scriptPathRoot.trim();
+            }
             return type === 'reading'
                 ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
                 : 'ListeningPractice/';
