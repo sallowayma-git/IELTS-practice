@@ -11,6 +11,7 @@ backend/.env.*
 !backend/.env.example
 backend/logs
 backend/node_modules
+backend/tor/webtunnel.local.txt
 backend/tor/bridges.local.txt
 backend/tor/bridges.age
 backend/tor/bridges.age.tmp-*
@@ -21,5 +22,17 @@ backend/tor/bridge.pub
 backend/tor/*.identity
 backend/tor/*.pub
 backend/tor/*.agekey
+backend/tor/transports/
+backend/tor/hidden_service/
+backend/tor/admin_hidden_service/
+backend/tor/admin-authorized-clients/*.auth
+backend/tor/volume-backups/
+*business_tor_hidden_service*
+*admin_tor_hidden_service*
+*.dump
+*.sql
+*.sql.gz
+*.tar
+*.tar.gz
 ListeningPractice
 node_modules

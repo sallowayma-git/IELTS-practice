@@ -1,0 +1,57 @@
+services:
+  business-proxy:
+    image: nginx:alpine
+    container_name: ielts-practice-business-proxy
+    restart: unless-stopped
+    profiles:
+      - business-onion
+    depends_on:
+      app:
+        condition: service_healthy
+    expose:
+      - "80"
+    volumes:
+      - type: bind
+        source: ./business-proxy/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+  business-tor:
+    image: backend-tor:latest
+    container_name: ielts-practice-business-tor
+    restart: unless-stopped
+    profiles:
+      - business-onion
+    entrypoint:
+      - /bin/sh
+      - /usr/local/bin/business-tor-entrypoint
+    depends_on:
+      business-proxy:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ./tor/business-torrc
+        target: /etc/tor/torrc
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./tor/business-entrypoint.sh
+        target: /usr/local/bin/business-tor-entrypoint
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./tor/bridges.local.txt
+        target: /etc/tor/bridges.local.txt
+        read_only: true
+        bind:
+          create_host_path: false
+      - business_tor_hidden_service:/var/lib/tor/hidden_service
+    tmpfs:
+      - /run/tor:rw,noexec,nosuid,nodev,size=1m,mode=750
+
+volumes:
+  business_tor_hidden_service:
