@@ -3384,7 +3384,7 @@
       "examId": "p2-high-236",
       "dataKey": "p2-high-236",
       "script": "./p2-high-236.js",
-      "title": "War of the Plants",
+      "title": "War of the Plants 植物的战争",
       "category": "P2",
       "frequency": "高频",
       "difficultyScore": null,

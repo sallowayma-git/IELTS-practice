@@ -51,7 +51,7 @@
     },
     {
       "groupId": "group-3",
-      "kind": "summary_completion",
+      "kind": "matching",
       "questionIds": [
         "q9",
         "q10",
@@ -59,7 +59,8 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Why certain objects are valued?</h4>\n                    <p>\n                    Some researchers argue that we may use ownership of desirable goods to demonstrate our strength and fitness as other <strong>22</strong> <input type=\"text\" id=\"q22_input\" name=\"q9\"> use their attractive physical features. Showing off one's superiority is not a new phenomenon and even in ancient times successful people would have gained <strong>23</strong> <input type=\"text\" id=\"q23_input\" name=\"q10\"> from this. A desire for status could have led to an increase in the worth of prestige goods and to <strong>24</strong> <input type=\"text\" id=\"q24_input\" name=\"q11\"> among people wishing to achieve this status.\n                    </p>\n                    <p>\n                    It is thought that our natural desire to trade provided a basis for organised farming and <strong>25</strong> <input type=\"text\" id=\"q25_input\" name=\"q12\"> development and finally resulted in the complex societies which can be seen today. Whilst we do not value things such as beads nowadays, other items hold the same appeal for us and bring the same status as owning beads did for our <strong>26</strong> <input type=\"text\" id=\"q26_input\" name=\"q13\">.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Why certain objects are valued?</h4>\n                    <p>\n                    Some researchers argue that we may use ownership of desirable goods to demonstrate our strength and fitness as other <strong>22</strong> <span class=\"drop-target-summary\" data-question=\"q9\"></span> use their attractive physical features. Showing off one's superiority is not a new phenomenon and even in ancient times successful people would have gained <strong>23</strong> <span class=\"drop-target-summary\" data-question=\"q10\"></span> from this. A desire for status could have led to an increase in the worth of prestige goods and to <strong>24</strong> <span class=\"drop-target-summary\" data-question=\"q11\"></span> among people wishing to achieve this status.\n                    </p>\n                    <p>\n                    It is thought that our natural desire to trade provided a basis for organised farming and <strong>25</strong> <span class=\"drop-target-summary\" data-question=\"q12\"></span> development and finally resulted in the complex societies which can be seen today. Whilst we do not value things such as beads nowadays, other items hold the same appeal for us and bring the same status as owning beads did for our <strong>26</strong> <span class=\"drop-target-summary\" data-question=\"q13\"></span>.\n                    </p>\n                </div>\n                <div class=\"options-pool\">\n                    <strong>List of Words</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A competitiveness</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C trade</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D settlements</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E stability</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F respect</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G appearance</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"H\">H ancestors</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"I\">I species</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"J\">J city</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false
     }
   ],
   "answerKey": {
@@ -71,11 +72,11 @@
     "q6": "B",
     "q7": "D",
     "q8": "D",
-    "q9": "species",
-    "q10": "respect",
-    "q11": "competition",
-    "q12": "urbanisation",
-    "q13": "ancestors"
+    "q9": "I",
+    "q10": "F",
+    "q11": "A",
+    "q12": "D",
+    "q13": "H"
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/142. P2 - Born to Trade 交易的本能.html",
