@@ -677,7 +677,7 @@
         dom.shell = document.querySelector('.shell');
         dom.left = document.getElementById('left');
         dom.right = document.getElementById('right');
-        dom.divider = document.getElementById('divider');
+        dom.divider = document.querySelector('.shell > #divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
         dom.nav = document.getElementById('question-nav');
@@ -893,6 +893,24 @@
             if (tagName === 'a' && node.getAttribute('target') === '_blank') {
                 node.setAttribute('rel', 'noopener noreferrer');
             }
+        });
+        return template.innerHTML;
+    }
+
+    function sanitizePassageHtml(markup) {
+        const sanitized = sanitizeReadingDatasetHtml(markup);
+        if (!sanitized) {
+            return '';
+        }
+        if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+            return sanitized
+                .replace(/<([a-z][\w:-]*)\b(?=[^>]*\bid\s*=\s*(?:"divider"|'divider'|divider))[^>]*>[\s\S]*?<\/\1>/gi, '')
+                .replace(/<([a-z][\w:-]*)\b(?=[^>]*\bid\s*=\s*(?:"divider"|'divider'|divider))[^>]*\/?>/gi, '');
+        }
+        const template = document.createElement('template');
+        template.innerHTML = sanitized;
+        template.content.querySelectorAll('#divider').forEach((node) => {
+            node.remove();
         });
         return template.innerHTML;
     }
@@ -1135,6 +1153,21 @@
         return card;
     }
 
+    function resolveGroupMarkup(group) {
+        const primary = String(group?.bodyHtml || '').trim();
+        const fallback = String(group?.leadHtml || group?.html || '').trim();
+        const rawMarkup = primary || fallback;
+        const markup = sanitizeReadingDatasetHtml(rawMarkup).trim();
+        if (!markup) {
+            return '';
+        }
+        const hasGroupClass = /class\s*=\s*["'](?:[^"']*\s)?group(?:\s[^"']*)?["']/i.test(markup);
+        if (hasGroupClass) {
+            return markup;
+        }
+        return `<div class="group">${markup}</div>`;
+    }
+
     function createGroupMarkup(group) {
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
         const safeGroupId = escapeHtml(group.groupId || '');
@@ -1143,9 +1176,10 @@
         const allowOptionReuse = typeof allowOptionReuseFlag === 'boolean'
             ? ` data-allow-option-reuse="${allowOptionReuseFlag ? 'true' : 'false'}"`
             : '';
+        const groupMarkup = resolveGroupMarkup(group);
         return `
             <section class="unified-group" data-group-id="${safeGroupId}" data-question-ids="${safeQuestionIds}"${allowOptionReuse}>
-                ${sanitizeReadingDatasetHtml(group.bodyHtml || '')}
+                ${groupMarkup}
             </section>
         `;
     }
@@ -1153,7 +1187,7 @@
     function renderDataset(dataset) {
         clearExplanations();
         const passageHtml = (dataset.passage?.blocks || [])
-            .map((block) => sanitizeReadingDatasetHtml(block?.bodyHtml || block?.html || ''))
+            .map((block) => sanitizePassageHtml(block?.bodyHtml || block?.html || ''))
             .join('\n');
         const groupsHtml = (dataset.questionGroups || [])
             .map((group) => createGroupMarkup(group))
@@ -1670,7 +1704,7 @@
     }
 
     function locateQuestionContainer(groupEl, questionId) {
-        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion, tr, li';
+        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .question-group, tr, li';
         const escaped = escapeSelector(questionId);
         const directByAnchor = groupEl.querySelector(`#${escaped}-anchor`);
         if (directByAnchor) {
@@ -1683,8 +1717,13 @@
         }
         const byData = groupEl.querySelector(`[data-question="${escaped}"]`);
         if (byData) {
-            return byData.closest('.question-item, .match-question-item, .question-row, .summary-completion, .paragraph-wrapper, tr, li')
+            return byData.closest('.question-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .paragraph-wrapper, .question-group, tr, li')
                 || byData.parentElement;
+        }
+        const directByTarget = groupEl.querySelector(`#${escaped}-target`);
+        if (directByTarget) {
+            return directByTarget.closest('.question-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .question-group, p, li')
+                || directByTarget.parentElement;
         }
         const displayNumber = Number(questionNumberFromId(questionId));
         if (Number.isFinite(displayNumber)) {

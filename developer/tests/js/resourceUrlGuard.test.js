@@ -264,8 +264,11 @@ assert(
     unifiedReadingPage.includes('resolved.origin === currentOrigin') &&
     unifiedReadingPage.includes('return !isTrustedReadingHtmlUrl(candidate);') &&
     unifiedReadingPage.includes('compact.startsWith(\'javascript:\')') &&
-    unifiedReadingPage.includes('sanitizeReadingDatasetHtml(group.bodyHtml || \'\')') &&
-    unifiedReadingPage.includes("sanitizeReadingDatasetHtml(block?.bodyHtml || block?.html || '')"),
+    unifiedReadingPage.includes('function sanitizePassageHtml(markup)') &&
+    unifiedReadingPage.includes('function resolveGroupMarkup(group)') &&
+    unifiedReadingPage.includes('sanitizeReadingDatasetHtml(rawMarkup).trim()') &&
+    unifiedReadingPage.includes('const groupMarkup = resolveGroupMarkup(group);') &&
+    unifiedReadingPage.includes("sanitizePassageHtml(block?.bodyHtml || block?.html || '')"),
     'unified reading page must sanitize generated passage and question HTML before inserting it'
 );
 assert(
