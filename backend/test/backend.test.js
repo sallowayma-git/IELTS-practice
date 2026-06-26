@@ -2198,6 +2198,8 @@ test('admin shell and business account menu do not link back through the busines
     const adminAccountPage = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'account.html'), 'utf8');
     const adminAccountScript = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'account.js'), 'utf8');
     const adminProxyConfig = fs.readFileSync(path.join(repoRoot, 'backend', 'admin-proxy', 'nginx.conf'), 'utf8');
+    const businessProxyConfig = fs.readFileSync(path.join(repoRoot, 'backend', 'business-proxy', 'nginx.conf'), 'utf8');
+    const authProxyConfig = fs.readFileSync(path.join(repoRoot, 'backend', 'auth-proxy', 'nginx.conf'), 'utf8');
     const authOverlay = fs.readFileSync(path.join(repoRoot, 'js', 'data', 'authOverlay.js'), 'utf8');
 
     assert(adminScript.includes("window.location.href = '/auth/admin/start?return_to=/admin'"));
@@ -2218,6 +2220,27 @@ test('admin shell and business account menu do not link back through the busines
     assert(adminProxyConfig.includes('location = /admin/account'));
     assert(adminProxyConfig.includes('location = /admin/account.js'));
     assert(adminProxyConfig.includes('location = /admin/account.css'));
+    assert(adminProxyConfig.includes('location = /auth/admin/start'));
+    assert(adminProxyConfig.includes('location = /auth/admin/callback'));
+    assert(adminProxyConfig.includes('location = /auth/business/callback'));
+    assert(adminProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience admin;'));
+    assert(!adminProxyConfig.includes('location = /auth/business/start'));
+    assert(!adminProxyConfig.includes('location = /api/auth/login'));
+    assert(businessProxyConfig.includes('location = /auth/business/start'));
+    assert(businessProxyConfig.includes('location = /auth/business/callback'));
+    assert(businessProxyConfig.includes('location = /auth/admin/callback'));
+    assert(businessProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience business;'));
+    assert(!businessProxyConfig.includes('location = /auth/admin/start'));
+    assert(businessProxyConfig.includes('location = /api/auth/login { return 404; }'));
+    assert(businessProxyConfig.includes('location ^~ /api/auth/totp/ { return 404; }'));
+    assert(authProxyConfig.includes('location = /auth/login'));
+    assert(authProxyConfig.includes('location = /auth/business/login'));
+    assert(authProxyConfig.includes('location = /auth/admin/login'));
+    assert(authProxyConfig.includes('location = /auth/complete'));
+    assert(authProxyConfig.includes('location ^~ /api/auth/'));
+    assert(authProxyConfig.includes('location ^~ /api/admin/ { return 404; }'));
+    assert(authProxyConfig.includes('location ^~ /api/practice-records { return 404; }'));
+    assert(authProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience auth;'));
     assert.doesNotMatch(adminScript, /\/api\/auth\/user/);
     assert.doesNotMatch(adminScript, /window\.location\.href\s*=\s*['"]\/['"]/);
     assert.doesNotMatch(adminIndex, /href=["']\/["'][^>]*>\s*App\s*</);
