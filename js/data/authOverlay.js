@@ -332,15 +332,11 @@
             const settings = createAccountMenuItem('button', 'remote-auth-account__menu-item remote-auth-account__settings', '设置', '管理题库、数据备份和安全');
             settings.type = 'button';
             settings.setAttribute('role', 'menuitem');
-            const adminLink = createAccountMenuItem('a', 'remote-auth-account__menu-item remote-auth-account__admin', 'Admin', '打开管理员后台');
-            adminLink.href = '/admin';
-            adminLink.hidden = true;
-            adminLink.setAttribute('role', 'menuitem');
             const settingsTotp = window.document.getElementById('settings-totp-btn');
             const logout = createAccountMenuItem('button', 'remote-auth-account__menu-item remote-auth-account__logout', '退出', '结束当前登录会话');
             logout.type = 'button';
             logout.setAttribute('role', 'menuitem');
-            accountMenu.append(menuHead, accountHome, practice, settings, adminLink, logout);
+            accountMenu.append(menuHead, accountHome, practice, settings, logout);
             account.append(accountToggle, accountMenu);
             const accountHost = window.document.querySelector('.hero-header__actions') || window.document.body;
             accountHost.appendChild(account);
@@ -825,7 +821,6 @@
             const menuName = account.querySelector('.remote-auth-account__menu-name');
             const menuRole = account.querySelector('.remote-auth-account__menu-role');
             const menuAvatar = account.querySelector('.remote-auth-account__menu-avatar');
-            const adminLink = account.querySelector('.remote-auth-account__admin');
             const settingsTotp = window.document.getElementById('settings-totp-btn');
             const profileName = window.document.getElementById('account-profile-name');
             const profileRole = window.document.getElementById('account-profile-role');
@@ -862,7 +857,6 @@
                 if (profileAvatar) {
                     profileAvatar.textContent = initial;
                 }
-                adminLink.hidden = user.role !== 'admin';
                 if (settingsTotp) {
                     settingsTotp.hidden = false;
                 }
@@ -900,7 +894,6 @@
                 if (profileAvatar) {
                     profileAvatar.textContent = 'U';
                 }
-                adminLink.hidden = true;
                 if (settingsTotp) {
                     settingsTotp.hidden = true;
                 }
