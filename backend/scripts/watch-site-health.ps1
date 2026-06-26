@@ -60,7 +60,7 @@ function Protect-SiteHealthText {
 
     $safe = [string]$Value
     $safe = $safe -replace '(?i)https?://[a-z2-7]{56}\.onion(?::\d+)?[^\s''"<>]*', '[onion-url-hidden]'
-    $safe = $safe -replace '(?i)([?&#](?:access_token|auth|authorization|bridge|cert|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s''"<>]+', '$1[hidden]'
+    $safe = $safe -replace '(?i)([?&#](?:access_token|auth|authorization|bridge|cert|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|state|ticket|totp|totpToken|token)=)[^&#\s''"<>]+', '$1[hidden]'
     $safe = $safe -replace 'obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|,\r\n]*\bcert=\S+[^|,\r\n]*', 'obfs4 [bridge-line-hidden]'
     $safe = $safe -replace 'webtunnel\s+\S+\s+[A-Fa-f0-9]{40}\s+[^|,\r\n]*\burl=\S+[^|,\r\n]*', 'webtunnel [bridge-line-hidden]'
     $safe = $safe -replace 'cert=\S+', 'cert=[hidden]'

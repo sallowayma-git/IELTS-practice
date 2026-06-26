@@ -479,8 +479,8 @@
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
     var MAX_FALLBACK_MESSAGE_TEXT_LENGTH = 500;
-    var FALLBACK_MESSAGE_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
-    var FALLBACK_MESSAGE_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
+    var FALLBACK_MESSAGE_SECRET_QUERY_PATTERN = /([?&](?:access_token|auth|authorization|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|state|ticket|totp|totpToken|token)=)[^&#\s'"<>]+/gi;
+    var FALLBACK_MESSAGE_SECRET_VALUE_PATTERN = /\b((?:access[_-]?token|auth|authorization|code|csrf(?:Token)?|otp|passcode|password|recovery[_-]?code|secret|session(?:Id)?|sid|state|ticket|totp(?:Token)?|token)(?:[_-]?[A-Za-z0-9]*)?)\s*[:=]\s*([^&\s'"<>]+)/gi;
 
     var normalizeFallbackMessageType = function (type) {
       var value = String(type || '').trim().toLowerCase();

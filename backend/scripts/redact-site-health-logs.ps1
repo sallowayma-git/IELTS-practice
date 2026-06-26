@@ -14,7 +14,7 @@ $REDACTION_PATTERNS = @(
     },
     @{
         Name = 'sensitiveQueryValues'
-        Pattern = '(?i)([?&#](?:access_token|auth|authorization|bridge|cert|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|totp|totpToken|token)=)[^&#\s''"<>]+'
+        Pattern = '(?i)([?&#](?:access_token|auth|authorization|bridge|cert|code|csrf|csrfToken|otp|passcode|password|recoveryCode|recovery_code|secret|session|sessionId|sid|state|ticket|totp|totpToken|token)=)[^&#\s''"<>]+'
         Replacement = '$1[hidden]'
     },
     @{

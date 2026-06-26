@@ -270,11 +270,13 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(healthLogRedactor.includes('recoveryCode'));
     assert(healthLogRedactor.includes('recovery_code'));
     assert(healthLogRedactor.includes('totpToken'));
+    assert(healthLogRedactor.includes('state|ticket'));
     assert(healthLogRedactor.includes('passcode'));
     assert(healthLogRedactor.includes('authorization'));
     assert(siteHealthWatcher.includes('recoveryCode'));
     assert(siteHealthWatcher.includes('recovery_code'));
     assert(siteHealthWatcher.includes('totpToken'));
+    assert(siteHealthWatcher.includes('state|ticket'));
     assert(siteHealthWatcher.includes('passcode'));
     assert(siteHealthWatcher.includes('authorization'));
     assert(healthLogRedactor.includes("Replacement = '[onion-url-hidden]'"));
