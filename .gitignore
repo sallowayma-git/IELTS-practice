@@ -26,6 +26,7 @@
 /templates/hp/
 /ielts-writing-assistant/
 /BACKUP/
+/deploy-artifacts/
 
 # 三月 folder rules: ignore all pdfs, but don't ignore the folder itself
 /三月/**/*.pdf
