@@ -615,10 +615,36 @@ function createApp(options = {}) {
         res.status(404).json({ error: 'API route not found' });
     });
 
-    app.get(['/admin', '/admin/'], async (req, res, next) => {
+    app.get('/admin/login', async (req, res, next) => {
+        try {
+            if (req.session && req.session.user) {
+                req.session.user = publicUser(req.session.user);
+                if (req.session.user.role === 'admin') {
+                    if (!totpEnabled) {
+                        return res.redirect('/admin');
+                    }
+                    const totpStatus = await totpStore.getStatus(req.session.user.id);
+                    if (totpStatus.enabled && hasSessionTotpVerification(req, req.session.user, totpVerificationMaxAgeMs)) {
+                        return res.redirect('/admin');
+                    }
+                }
+            }
+            return res.sendFile(path.join(adminRoot, 'login.html'));
+        } catch (error) {
+            return next(error);
+        }
+    });
+    app.get('/admin/login.js', (req, res) => {
+        res.sendFile(path.join(adminRoot, 'login.js'));
+    });
+    app.get('/admin/login.css', (req, res) => {
+        res.sendFile(path.join(adminRoot, 'login.css'));
+    });
+
+    async function sendProtectedAdminPage(req, res, next, fileName) {
         try {
             if (!req.session || !req.session.user) {
-                return res.redirect('/');
+                return res.redirect('/admin/login');
             }
             req.session.user = publicUser(req.session.user);
             if (req.session.user.role !== 'admin') {
@@ -627,16 +653,23 @@ function createApp(options = {}) {
             if (totpEnabled) {
                 const totpStatus = await totpStore.getStatus(req.session.user.id);
                 if (!totpStatus.enabled) {
-                    return res.status(403).type('text/plain').send('Admin TOTP setup required');
+                    return res.redirect('/admin/login');
                 }
                 if (!hasSessionTotpVerification(req, req.session.user, totpVerificationMaxAgeMs)) {
-                    return res.status(403).type('text/plain').send('Admin TOTP verification required');
+                    return res.redirect('/admin/login');
                 }
             }
-            return res.sendFile(path.join(adminRoot, 'index.html'));
+            return res.sendFile(path.join(adminRoot, fileName));
         } catch (error) {
             return next(error);
         }
+    }
+
+    app.get(['/admin', '/admin/'], (req, res, next) => {
+        return sendProtectedAdminPage(req, res, next, 'index.html');
+    });
+    app.get(['/admin/account', '/admin/account/'], (req, res, next) => {
+        return sendProtectedAdminPage(req, res, next, 'account.html');
     });
     app.use('/admin', requireAdmin, requireAdminTotp, createStaticBoundaryMiddleware(adminRoot), express.static(adminRoot, {
         dotfiles: 'deny',

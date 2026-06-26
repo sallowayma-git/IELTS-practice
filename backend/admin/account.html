@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>IELTS Atlas Admin Account</title>
+        <link rel="stylesheet" href="/admin/account.css" />
+    </head>
+    <body>
+        <div class="account-shell">
+            <header class="account-topbar">
+                <div>
+                    <p class="account-kicker">Admin Account Center</p>
+                    <h1 id="account-title">User account</h1>
+                </div>
+                <div class="account-actions">
+                    <a href="/admin">Back to users</a>
+                    <button id="refresh-button" type="button">Refresh</button>
+                    <button id="logout-button" type="button">Logout</button>
+                </div>
+            </header>
+
+            <main class="account-main">
+                <section class="profile-panel" aria-label="User profile">
+                    <div class="profile-avatar" id="profile-avatar" aria-hidden="true">?</div>
+                    <div class="profile-copy">
+                        <p class="account-kicker">Selected learner</p>
+                        <h2 id="profile-username">Loading...</h2>
+                        <div class="profile-meta">
+                            <span id="profile-role">-</span>
+                            <span id="profile-id">-</span>
+                            <span id="profile-created">-</span>
+                            <span id="profile-updated">-</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="metric-grid" aria-label="Learning metrics">
+                    <article>
+                        <span>Completed records</span>
+                        <strong id="metric-records">-</strong>
+                    </article>
+                    <article>
+                        <span>Average score</span>
+                        <strong id="metric-score">-</strong>
+                    </article>
+                    <article>
+                        <span>Accuracy</span>
+                        <strong id="metric-accuracy">-</strong>
+                    </article>
+                    <article>
+                        <span>Study minutes</span>
+                        <strong id="metric-duration">-</strong>
+                    </article>
+                </section>
+
+                <section class="records-panel" aria-label="Completed practice">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="account-kicker">Live practice data</p>
+                            <h2>Completed practice</h2>
+                        </div>
+                        <span id="records-range">0 records</span>
+                    </div>
+
+                    <div class="records-table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Practice</th>
+                                    <th>Type</th>
+                                    <th>Score</th>
+                                    <th>Accuracy</th>
+                                    <th>Duration</th>
+                                    <th>Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="records-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <script src="/admin/account.js"></script>
+    </body>
+</html>

@@ -1,0 +1,193 @@
+:root {
+    color-scheme: light;
+    --bg: #eef2f0;
+    --panel: #ffffff;
+    --text: #111827;
+    --muted: #6b7280;
+    --border: #d9e1da;
+    --accent: #2f6f4e;
+    --accent-dark: #245b40;
+    --danger: #b42318;
+    --danger-bg: #fff1f0;
+    --shadow: 0 18px 42px rgba(17, 24, 39, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    letter-spacing: 0;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+button {
+    min-height: 42px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+button:hover {
+    background: var(--accent-dark);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.admin-login-shell {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    padding: 24px;
+}
+
+.admin-login-panel {
+    width: min(100%, 440px);
+    padding: 30px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+}
+
+.admin-login-heading {
+    margin-bottom: 22px;
+}
+
+.admin-login-heading p {
+    margin: 0 0 4px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.admin-login-heading h1,
+.admin-login-setup h2,
+.admin-login-recovery h2 {
+    margin: 0;
+}
+
+.admin-login-heading h1 {
+    font-size: 26px;
+}
+
+.admin-login-status {
+    min-height: 42px;
+    margin-bottom: 18px;
+    padding: 11px 13px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #f8faf7;
+    color: var(--muted);
+}
+
+.admin-login-status.is-error {
+    border-color: #f1b6b0;
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.admin-login-status.is-success {
+    border-color: #b7d9c4;
+    background: #ecf8f0;
+    color: var(--accent-dark);
+}
+
+.admin-login-form {
+    display: grid;
+    gap: 14px;
+}
+
+.admin-login-form label {
+    display: grid;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-login-form input {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+}
+
+.admin-login-form input:focus {
+    border-color: var(--accent);
+    outline: 3px solid rgba(47, 111, 78, 0.16);
+}
+
+.admin-login-setup,
+.admin-login-recovery {
+    display: grid;
+    gap: 14px;
+}
+
+.admin-login-setup[hidden],
+.admin-login-recovery[hidden],
+.admin-login-form[hidden] {
+    display: none;
+}
+
+.admin-login-setup p,
+.admin-login-recovery p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+#admin-totp-qr {
+    width: 180px;
+    height: 180px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+}
+
+#admin-totp-secret {
+    display: block;
+    overflow-wrap: anywhere;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #f8faf7;
+}
+
+#admin-recovery-codes {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding-left: 22px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+@media (max-width: 540px) {
+    .admin-login-shell {
+        align-items: stretch;
+        padding: 12px;
+    }
+
+    .admin-login-panel {
+        padding: 22px;
+    }
+}

@@ -51,6 +51,13 @@ const analyticsQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(50).optional().default(10)
 });
 
+const exportQuerySchema = z.object({
+    dataset: z.enum(['summary', 'users', 'practice-records', 'traffic']).optional().default('summary'),
+    format: z.enum(['json', 'csv']).optional().default('json'),
+    days: z.coerce.number().int().min(1).max(365).optional().default(30),
+    limit: z.coerce.number().int().min(1).max(10000).optional().default(1000)
+});
+
 const userIdParamSchema = z.string().uuid();
 const TRAFFIC_METHOD_MAX_LENGTH = 16;
 const TRAFFIC_PATH_MAX_LENGTH = 300;
@@ -538,6 +545,168 @@ function serializeTrafficStatus(row) {
     };
 }
 
+function serializeAuthActivity(row) {
+    return {
+        registeredUsers: toInteger(row.registered_users ?? row.registeredUsers),
+        loginRequests: toInteger(row.login_requests ?? row.loginRequests),
+        loginSuccesses: toInteger(row.login_successes ?? row.loginSuccesses),
+        loggedInUsers: toInteger(row.logged_in_users ?? row.loggedInUsers),
+        registerRequests: toInteger(row.register_requests ?? row.registerRequests),
+        registerSuccesses: toInteger(row.register_successes ?? row.registerSuccesses)
+    };
+}
+
+function calculateAccuracy(correctAnswers, totalQuestions, score = null) {
+    const correct = Number(correctAnswers);
+    const total = Number(totalQuestions);
+    if (Number.isFinite(correct) && Number.isFinite(total) && total > 0) {
+        return roundNumber((correct / total) * 100);
+    }
+    const scoreValue = Number(score);
+    return Number.isFinite(scoreValue) ? roundNumber(scoreValue) : null;
+}
+
+function serializePracticeExportRow(row) {
+    const record = serializeRecord(row);
+    return {
+        userId: normalizeAdminRecordText(row.user_id ?? row.userId),
+        username: normalizeAdminRecordText(row.username),
+        role: normalizeRole(row.role),
+        recordId: record.id,
+        sessionId: record.sessionId,
+        examId: record.examId,
+        type: record.type,
+        title: record.title,
+        score: record.score,
+        correctAnswers: record.correctAnswers,
+        totalQuestions: record.totalQuestions,
+        accuracy: calculateAccuracy(record.correctAnswers, record.totalQuestions, record.score),
+        duration: record.duration,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        payload: record.payload
+    };
+}
+
+function serializeSummaryExportRow(summary = {}) {
+    const traffic = summary.traffic || {};
+    return {
+        userCount: toInteger(summary.userCount),
+        adminCount: toInteger(summary.adminCount),
+        registeredUsers: toInteger(traffic.registeredUsers ?? summary.userCount),
+        loginRequests: toInteger(traffic.loginRequests),
+        loginSuccesses: toInteger(traffic.loginSuccesses),
+        loggedInUsers: toInteger(traffic.loggedInUsers),
+        registerRequests: toInteger(traffic.registerRequests),
+        registerSuccesses: toInteger(traffic.registerSuccesses),
+        practiceRecordCount: toInteger(summary.practiceRecordCount),
+        activeUserCount: toInteger(summary.activeUserCount),
+        averageScore: summary.averageScore,
+        totalStudyMinutes: roundNumber(summary.totalStudyMinutes),
+        correctAnswers: toInteger(summary.correctAnswers),
+        totalQuestions: toInteger(summary.totalQuestions),
+        latestRecordAt: summary.latestRecordAt || null,
+        totalRequests: toInteger(traffic.totalRequests),
+        totalPageViews: toInteger(traffic.totalPageViews),
+        uniqueVisitors: toInteger(traffic.uniqueVisitors),
+        requestsToday: toInteger(traffic.requestsToday),
+        pageViewsToday: toInteger(traffic.pageViewsToday)
+    };
+}
+
+const EXPORT_FIELDS = {
+    summary: [
+        'userCount',
+        'adminCount',
+        'registeredUsers',
+        'loginRequests',
+        'loginSuccesses',
+        'loggedInUsers',
+        'registerRequests',
+        'registerSuccesses',
+        'practiceRecordCount',
+        'activeUserCount',
+        'averageScore',
+        'totalStudyMinutes',
+        'correctAnswers',
+        'totalQuestions',
+        'latestRecordAt',
+        'totalRequests',
+        'totalPageViews',
+        'uniqueVisitors',
+        'requestsToday',
+        'pageViewsToday'
+    ],
+    users: [
+        'id',
+        'username',
+        'role',
+        'createdAt',
+        'updatedAt',
+        'recordCount',
+        'latestRecordAt',
+        'averageScore',
+        'totalStudyMinutes',
+        'correctAnswers',
+        'totalQuestions'
+    ],
+    'practice-records': [
+        'userId',
+        'username',
+        'role',
+        'recordId',
+        'sessionId',
+        'examId',
+        'type',
+        'title',
+        'score',
+        'correctAnswers',
+        'totalQuestions',
+        'accuracy',
+        'duration',
+        'createdAt',
+        'updatedAt'
+    ],
+    traffic: [
+        'occurredAt',
+        'method',
+        'path',
+        'routeGroup',
+        'statusCode',
+        'durationMs',
+        'userId'
+    ]
+};
+
+function csvEscape(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    let text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    text = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]+/g, ' ');
+    if (/^[=+\-@]/.test(text)) {
+        text = `'${text}`;
+    }
+    if (/[",\r\n]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+}
+
+function exportRowsToCsv(dataset, rows) {
+    const fields = EXPORT_FIELDS[dataset] || Object.keys(rows[0] || {});
+    const lines = [fields.map(csvEscape).join(',')];
+    for (const row of rows) {
+        lines.push(fields.map((field) => csvEscape(row[field])).join(','));
+    }
+    return `${lines.join('\n')}\n`;
+}
+
+function buildExportFilename(dataset, format) {
+    const stamp = new Date().toISOString().slice(0, 10);
+    return `ielts-${dataset}-${stamp}.${format}`;
+}
+
 function normalizeTrafficEvent(event = {}) {
     const rawPath = normalizeRequestPath(event.path || '/');
     const rawReferrer = normalizeReferrer(event.referrer);
@@ -644,7 +813,12 @@ class PostgresAdminStore {
                 (SELECT count(*)::int FROM traffic_events WHERE route_group = 'page') AS total_page_views,
                 (SELECT count(DISTINCT ip_hash)::int FROM traffic_events WHERE ip_hash IS NOT NULL) AS unique_visitors,
                 (SELECT count(*)::int FROM traffic_events WHERE occurred_at >= date_trunc('day', now())) AS requests_today,
-                (SELECT count(*)::int FROM traffic_events WHERE route_group = 'page' AND occurred_at >= date_trunc('day', now())) AS page_views_today
+                (SELECT count(*)::int FROM traffic_events WHERE route_group = 'page' AND occurred_at >= date_trunc('day', now())) AS page_views_today,
+                (SELECT count(*)::int FROM traffic_events WHERE path IN ('/api/auth/login', '/login')) AS login_requests,
+                (SELECT count(*)::int FROM traffic_events WHERE path IN ('/api/auth/login', '/login') AND status_code >= 200 AND status_code < 300) AS login_successes,
+                (SELECT count(DISTINCT user_id)::int FROM traffic_events WHERE path IN ('/api/auth/login', '/login') AND status_code >= 200 AND status_code < 300 AND user_id IS NOT NULL) AS logged_in_users,
+                (SELECT count(*)::int FROM traffic_events WHERE path IN ('/api/auth/register', '/register')) AS register_requests,
+                (SELECT count(*)::int FROM traffic_events WHERE path IN ('/api/auth/register', '/register') AND status_code >= 200 AND status_code < 300) AS register_successes
         `);
         const row = result.rows[0] || {};
         return {
@@ -662,7 +836,13 @@ class PostgresAdminStore {
                 totalPageViews: toInteger(row.total_page_views),
                 uniqueVisitors: toInteger(row.unique_visitors),
                 requestsToday: toInteger(row.requests_today),
-                pageViewsToday: toInteger(row.page_views_today)
+                pageViewsToday: toInteger(row.page_views_today),
+                registeredUsers: toInteger(row.user_count),
+                loginRequests: toInteger(row.login_requests),
+                loginSuccesses: toInteger(row.login_successes),
+                loggedInUsers: toInteger(row.logged_in_users),
+                registerRequests: toInteger(row.register_requests),
+                registerSuccesses: toInteger(row.register_successes)
             }
         };
     }
@@ -1115,7 +1295,101 @@ class PostgresAdminStore {
             topPaths: topPaths.rows.map(serializeTrafficPath),
             routeGroups: routeGroups.rows.map(serializeTrafficGroup),
             statusCodes: statusCodes.rows.map(serializeTrafficStatus),
-            recent: recent.rows.map(serializeTrafficEvent)
+            recent: recent.rows.map(serializeTrafficEvent),
+            auth: await this.authActivity({ days })
+        };
+    }
+
+    async authActivity(options = {}) {
+        const days = options.days || 30;
+        const result = await this.db.query(
+            `SELECT
+                count(*) FILTER (WHERE path IN ('/api/auth/login', '/login'))::int AS login_requests,
+                count(*) FILTER (WHERE path IN ('/api/auth/login', '/login') AND status_code >= 200 AND status_code < 300)::int AS login_successes,
+                count(DISTINCT user_id) FILTER (WHERE path IN ('/api/auth/login', '/login') AND status_code >= 200 AND status_code < 300 AND user_id IS NOT NULL)::int AS logged_in_users,
+                count(*) FILTER (WHERE path IN ('/api/auth/register', '/register'))::int AS register_requests,
+                count(*) FILTER (WHERE path IN ('/api/auth/register', '/register') AND status_code >= 200 AND status_code < 300)::int AS register_successes,
+                (SELECT count(*)::int FROM users WHERE created_at >= now() - ($1::int * interval '1 day')) AS registered_users
+             FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')`,
+            [days]
+        );
+        return serializeAuthActivity(result.rows[0] || {});
+    }
+
+    async exportData(options = {}) {
+        const dataset = options.dataset || 'summary';
+        const limit = options.limit || 1000;
+        const days = options.days || 30;
+        let rows;
+
+        if (dataset === 'summary') {
+            rows = [serializeSummaryExportRow(await this.summary())];
+        } else if (dataset === 'users') {
+            const result = await this.db.query(
+                `SELECT
+                    u.id,
+                    u.username,
+                    u.role,
+                    u.created_at,
+                    u.updated_at,
+                    count(pr.id)::int AS record_count,
+                    max(pr.updated_at) AS latest_record_at,
+                    avg(pr.score) AS average_score,
+                    coalesce(sum(pr.duration), 0) AS total_duration,
+                    coalesce(sum(pr.correct_answers), 0)::int AS correct_answers,
+                    coalesce(sum(pr.total_questions), 0)::int AS total_questions
+                 FROM users u
+                 LEFT JOIN practice_records pr ON pr.user_id = u.id
+                 GROUP BY u.id
+                 ORDER BY u.created_at DESC, u.username_lower ASC
+                 LIMIT $1`,
+                [limit]
+            );
+            rows = result.rows.map(serializeUser);
+        } else if (dataset === 'practice-records') {
+            const result = await this.db.query(
+                `SELECT
+                    u.id AS user_id,
+                    u.username,
+                    u.role,
+                    pr.id,
+                    pr.session_id,
+                    pr.exam_id,
+                    pr.type,
+                    pr.title,
+                    pr.score,
+                    pr.total_questions,
+                    pr.correct_answers,
+                    pr.duration,
+                    pr.payload,
+                    pr.created_at,
+                    pr.updated_at
+                 FROM practice_records pr
+                 JOIN users u ON u.id = pr.user_id
+                 ORDER BY pr.updated_at DESC, pr.sort_order ASC
+                 LIMIT $1`,
+                [limit]
+            );
+            rows = result.rows.map(serializePracticeExportRow);
+        } else if (dataset === 'traffic') {
+            const result = await this.db.query(
+                `SELECT occurred_at, method, path, route_group, status_code, duration_ms, user_id
+                 FROM traffic_events
+                 WHERE occurred_at >= now() - ($1::int * interval '1 day')
+                 ORDER BY occurred_at DESC
+                 LIMIT $2`,
+                [days, limit]
+            );
+            rows = result.rows.map(serializeTrafficEvent);
+        } else {
+            rows = [];
+        }
+
+        return {
+            dataset,
+            generatedAt: new Date().toISOString(),
+            rows
         };
     }
 }
@@ -1161,7 +1435,10 @@ class MemoryAdminStore {
                 if (!value) return latest;
                 return !latest || Number(new Date(value)) > Number(new Date(latest)) ? value : latest;
             }, null),
-            traffic: this._trafficTotals(this.trafficEvents)
+            traffic: {
+                ...this._trafficTotals(this.trafficEvents),
+                ...this._authStats(this.trafficEvents, users)
+            }
         };
     }
 
@@ -1444,6 +1721,40 @@ class MemoryAdminStore {
         };
     }
 
+    _authStats(events, users) {
+        const isLoginPath = (event) => event.path === '/api/auth/login' || event.path === '/login';
+        const isRegisterPath = (event) => event.path === '/api/auth/register' || event.path === '/register';
+        const loginSuccesses = events.filter((event) => (
+            isLoginPath(event)
+            && event.statusCode >= 200
+            && event.statusCode < 300
+        ));
+        const registerSuccesses = events.filter((event) => (
+            isRegisterPath(event)
+            && event.statusCode >= 200
+            && event.statusCode < 300
+        ));
+        return {
+            registeredUsers: users.length,
+            loginRequests: events.filter(isLoginPath).length,
+            loginSuccesses: loginSuccesses.length,
+            loggedInUsers: new Set(loginSuccesses.map((event) => event.userId).filter(Boolean)).size,
+            registerRequests: events.filter(isRegisterPath).length,
+            registerSuccesses: registerSuccesses.length
+        };
+    }
+
+    async authActivity(options = {}) {
+        const days = options.days || 30;
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        const events = this.trafficEvents.filter((event) => Number(new Date(event.occurredAt)) >= cutoff);
+        const users = this._users().filter((user) => {
+            const createdAt = Number(new Date(user.createdAt || user.created_at || Date.now()));
+            return createdAt >= cutoff;
+        });
+        return this._authStats(events, users);
+    }
+
     async trafficSummary(options = {}) {
         const days = options.days || 14;
         const limit = options.limit || 10;
@@ -1517,7 +1828,66 @@ class MemoryAdminStore {
             statusCodes: Array.from(byStatusClass.entries())
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([statusClass, requests]) => ({ statusClass, requests })),
-            recent: events.slice(-limit).reverse().map(serializeTrafficEvent)
+            recent: events.slice(-limit).reverse().map(serializeTrafficEvent),
+            auth: await this.authActivity({ days })
+        };
+    }
+
+    async exportData(options = {}) {
+        const dataset = options.dataset || 'summary';
+        const limit = options.limit || 1000;
+        const days = options.days || 30;
+        let rows;
+
+        if (dataset === 'summary') {
+            rows = [serializeSummaryExportRow(await this.summary())];
+        } else if (dataset === 'users') {
+            rows = this._users()
+                .sort((a, b) => Number(new Date(b.createdAt || b.created_at || 0)) - Number(new Date(a.createdAt || a.created_at || 0))
+                    || String(a.username || '').localeCompare(String(b.username || '')))
+                .slice(0, limit)
+                .map((user) => buildUserStats(user, this._records(user.id)).user);
+        } else if (dataset === 'practice-records') {
+            const records = [];
+            for (const user of this._users()) {
+                for (const record of this._records(user.id)) {
+                    records.push(serializePracticeExportRow({
+                        user_id: user.id,
+                        username: user.username,
+                        role: user.role,
+                        id: record.id,
+                        session_id: record.sessionId,
+                        exam_id: record.examId,
+                        type: record.type,
+                        title: record.title,
+                        score: record.score,
+                        total_questions: record.totalQuestions,
+                        correct_answers: record.correctAnswers,
+                        duration: record.duration,
+                        payload: record,
+                        created_at: record.createdAt || record.date || null,
+                        updated_at: record.updatedAt || record.date || null
+                    }));
+                }
+            }
+            rows = records
+                .sort((a, b) => Number(new Date(b.updatedAt || 0)) - Number(new Date(a.updatedAt || 0)))
+                .slice(0, limit);
+        } else if (dataset === 'traffic') {
+            const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+            rows = this.trafficEvents
+                .filter((event) => Number(new Date(event.occurredAt)) >= cutoff)
+                .slice(-limit)
+                .reverse()
+                .map(serializeTrafficEvent);
+        } else {
+            rows = [];
+        }
+
+        return {
+            dataset,
+            generatedAt: new Date().toISOString(),
+            rows
         };
     }
 }
@@ -1554,6 +1924,10 @@ function parseTrafficQuery(query) {
 
 function parseAnalyticsQuery(query) {
     return parseQuery(analyticsQuerySchema, query, 'Invalid analytics query');
+}
+
+function parseExportQuery(query) {
+    return parseQuery(exportQuerySchema, query, 'Invalid export query');
 }
 
 function parseUserIdParam(value) {
@@ -1664,6 +2038,22 @@ function createAdminRouter(options = {}) {
     router.get('/analytics', async (req, res, next) => {
         try {
             return res.json(await store.analytics(parseAnalyticsQuery(req.query)));
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.get('/export', async (req, res, next) => {
+        try {
+            const query = parseExportQuery(req.query);
+            const payload = await store.exportData(query);
+            if (query.format === 'csv') {
+                const filename = buildExportFilename(query.dataset, 'csv');
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                res.type('text/csv');
+                return res.send(exportRowsToCsv(query.dataset, payload.rows));
+            }
+            return res.json(payload);
         } catch (error) {
             return next(error);
         }
@@ -1906,10 +2296,12 @@ module.exports = {
     normalizeAdminSearchQuery,
     normalizeTrafficEvent,
     parseAnalyticsQuery,
+    parseExportQuery,
     parseListQuery,
     parseUserIdParam,
     parseTrafficQuery,
     sanitizeAdminRecordPayload,
+    serializePracticeExportRow,
     serializeRecord,
     serializeUser
 };

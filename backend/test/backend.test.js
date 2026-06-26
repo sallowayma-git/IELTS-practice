@@ -338,6 +338,7 @@ async function createClient(options = {}) {
             const response = await fetch(`${baseUrl}${path}`, {
                 method,
                 headers,
+                redirect: options.redirect,
                 body: hasRawBody ? options.rawBody : (body === undefined ? undefined : JSON.stringify(body))
             });
             const setCookie = response.headers.get('set-cookie');
@@ -2079,6 +2080,9 @@ test('admin API rejects anonymous and non-admin users', async () => {
         const anonymous = await client.request('GET', '/api/admin/summary');
         assert.equal(anonymous.response.status, 401);
 
+        const anonymousExport = await client.request('GET', '/api/admin/export?dataset=users');
+        assert.equal(anonymousExport.response.status, 401);
+
         const created = await register(client, 'ordinary_user', 'StrongPass1');
         assert.equal(created.response.status, 201);
         assert.equal(created.json.user.role, 'user');
@@ -2086,11 +2090,79 @@ test('admin API rejects anonymous and non-admin users', async () => {
         const forbidden = await client.request('GET', '/api/admin/summary');
         assert.equal(forbidden.response.status, 403);
 
+        const forbiddenExport = await client.request('GET', '/api/admin/export?dataset=users');
+        assert.equal(forbiddenExport.response.status, 403);
+
         const adminPage = await client.request('GET', '/admin');
         assert.equal(adminPage.response.status, 403);
     } finally {
         await client.close();
     }
+});
+
+test('admin login page is public while admin dashboard redirects anonymous users', async () => {
+    const client = await createClient();
+    try {
+        const dashboard = await client.request('GET', '/admin', undefined, { redirect: 'manual' });
+        assert.equal(dashboard.response.status, 302);
+        assert.equal(dashboard.response.headers.get('location'), '/admin/login');
+
+        const accountPage = await client.request('GET', '/admin/account?userId=11111111-1111-4111-8111-111111111111', undefined, { redirect: 'manual' });
+        assert.equal(accountPage.response.status, 302);
+        assert.equal(accountPage.response.headers.get('location'), '/admin/login');
+
+        const loginPage = await client.request('GET', '/admin/login');
+        assert.equal(loginPage.response.status, 200);
+        assert.match(loginPage.text, /Admin Console/);
+        assert.doesNotMatch(loginPage.text, /js\/bundles\//);
+        assert.doesNotMatch(loginPage.text, /account-view/);
+
+        const loginScript = await client.request('GET', '/admin/login.js');
+        assert.equal(loginScript.response.status, 200);
+        assert.match(loginScript.text, /\/api\/auth\/login/);
+
+        const loginStyles = await client.request('GET', '/admin/login.css');
+        assert.equal(loginStyles.response.status, 200);
+        assert.match(loginStyles.text, /admin-login-shell/);
+
+        const api = await client.request('GET', '/api/admin/summary');
+        assert.equal(api.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin shell and business account menu do not link back through the business home', () => {
+    const repoRoot = path.resolve(__dirname, '..', '..');
+    const adminScript = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'admin.js'), 'utf8');
+    const adminIndex = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'index.html'), 'utf8');
+    const adminAccountPage = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'account.html'), 'utf8');
+    const adminAccountScript = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'account.js'), 'utf8');
+    const adminProxyConfig = fs.readFileSync(path.join(repoRoot, 'backend', 'admin-proxy', 'nginx.conf'), 'utf8');
+    const authOverlay = fs.readFileSync(path.join(repoRoot, 'js', 'data', 'authOverlay.js'), 'utf8');
+
+    assert(adminScript.includes("window.location.href = '/admin/login'"));
+    assert(adminScript.includes("fetch('/api/auth/me'"));
+    assert(adminScript.includes('/api/admin/summary'));
+    assert(adminScript.includes('/api/admin/export?dataset='));
+    assert(adminScript.includes('/admin/account?userId='));
+    assert(adminScript.includes("headers['X-CSRF-Token']"));
+    assert(adminIndex.includes('metric-registered-users'));
+    assert(adminIndex.includes('data-export-dataset="practice-records"'));
+    assert(adminIndex.includes('open-account-center'));
+    assert(adminAccountPage.includes('/admin/account.js'));
+    assert(adminAccountPage.includes('/admin/account.css'));
+    assert.doesNotMatch(adminAccountPage, /js\/bundles\//);
+    assert(adminAccountScript.includes('/api/admin/users/'));
+    assert(adminAccountScript.includes('/practice-records?limit='));
+    assert(adminProxyConfig.includes('location = /admin/account'));
+    assert(adminProxyConfig.includes('location = /admin/account.js'));
+    assert(adminProxyConfig.includes('location = /admin/account.css'));
+    assert.doesNotMatch(adminScript, /\/api\/auth\/user/);
+    assert.doesNotMatch(adminScript, /window\.location\.href\s*=\s*['"]\/['"]/);
+    assert.doesNotMatch(adminIndex, /href=["']\/["'][^>]*>\s*App\s*</);
+    assert.doesNotMatch(authOverlay, /remote-auth-account__admin/);
+    assert.doesNotMatch(authOverlay, /href\s*=\s*['"]\/admin['"]/);
 });
 
 test('practice API rejects unsafe record identifiers and oversized batches', async () => {
@@ -2457,6 +2529,22 @@ test('admin can list users, inspect records, and delete one record', async () =>
 
         const adminPage = await client.request('GET', '/admin');
         assert.equal(adminPage.response.status, 200);
+        assert.match(adminPage.text, /open-account-center/);
+
+        const accountPage = await client.request('GET', `/admin/account?userId=${managedUserId}`);
+        assert.equal(accountPage.response.status, 200);
+        assert.match(accountPage.text, /Admin Account Center/);
+        assert.match(accountPage.text, /\/admin\/account\.js/);
+        assert.doesNotMatch(accountPage.text, /js\/bundles\//);
+
+        const accountScript = await client.request('GET', '/admin/account.js');
+        assert.equal(accountScript.response.status, 200);
+        assert.match(accountScript.text, /\/api\/admin\/users\//);
+        assert.match(accountScript.text, /practice-records\?limit=/);
+
+        const accountStyles = await client.request('GET', '/admin/account.css');
+        assert.equal(accountStyles.response.status, 200);
+        assert.match(accountStyles.text, /account-shell/);
 
         const summary = await client.request('GET', '/api/admin/summary');
         assert.equal(summary.response.status, 200);
@@ -2600,9 +2688,13 @@ test('admin routes require TOTP verification in the current session', async () =
         assert.equal(blockedSummary.response.status, 403);
         assert.equal(blockedSummary.json.error, 'Admin TOTP verification required');
 
-        const blockedAdminPage = await client.request('GET', '/admin');
-        assert.equal(blockedAdminPage.response.status, 403);
-        assert.match(blockedAdminPage.text, /Admin TOTP verification required/);
+        const blockedAdminPage = await client.request('GET', '/admin', undefined, { redirect: 'manual' });
+        assert.equal(blockedAdminPage.response.status, 302);
+        assert.equal(blockedAdminPage.response.headers.get('location'), '/admin/login');
+
+        const blockedAccountPage = await client.request('GET', `/admin/account?userId=${userId}`, undefined, { redirect: 'manual' });
+        assert.equal(blockedAccountPage.response.status, 302);
+        assert.equal(blockedAccountPage.response.headers.get('location'), '/admin/login');
     } finally {
         await client.close();
     }
@@ -2629,9 +2721,9 @@ test('admin TOTP verification expires and can be renewed in-session', async () =
         const expiredSummary = await withDateNowOffset(2000, () => client.request('GET', '/api/admin/summary'));
         assert.equal(expiredSummary.response.status, 403);
         assert.equal(expiredSummary.json.error, 'Admin TOTP verification required');
-        const expiredAdminPage = await withDateNowOffset(2000, () => client.request('GET', '/admin'));
-        assert.equal(expiredAdminPage.response.status, 403);
-        assert.match(expiredAdminPage.text, /Admin TOTP verification required/);
+        const expiredAdminPage = await withDateNowOffset(2000, () => client.request('GET', '/admin', undefined, { redirect: 'manual' }));
+        assert.equal(expiredAdminPage.response.status, 302);
+        assert.equal(expiredAdminPage.response.headers.get('location'), '/admin/login');
 
         await withDateNowOffset(31_000, async () => {
             const renewed = await client.request('POST', '/api/auth/totp/verify', {
@@ -2778,6 +2870,35 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         assert(traffic.json.topPaths.length >= 1);
         assert(traffic.json.routeGroups.length >= 1);
         assert(traffic.json.statusCodes.length >= 1);
+        assert(traffic.json.auth.loginSuccesses >= 1);
+        assert(traffic.json.auth.registerSuccesses >= 1);
+
+        const summaryWithAuth = await client.request('GET', '/api/admin/summary');
+        assert.equal(summaryWithAuth.response.status, 200);
+        assert(summaryWithAuth.json.traffic.registeredUsers >= 3);
+        assert(summaryWithAuth.json.traffic.loginSuccesses >= 1);
+        assert(summaryWithAuth.json.traffic.registerSuccesses >= 1);
+
+        const practiceExport = await client.request('GET', '/api/admin/export?dataset=practice-records&format=json&limit=10');
+        assert.equal(practiceExport.response.status, 200);
+        assert.equal(practiceExport.json.dataset, 'practice-records');
+        const exportedRecord = practiceExport.json.rows.find((row) => row.recordId === 'stats-record-1');
+        assert(exportedRecord);
+        assert.equal(exportedRecord.username, 'stats_user');
+        assert.equal(exportedRecord.title, 'Stats Reading');
+        assert.equal(exportedRecord.duration, 12);
+        assert.equal(exportedRecord.accuracy, 80);
+
+        const usersCsv = await client.request('GET', '/api/admin/export?dataset=users&format=csv&limit=10');
+        assert.equal(usersCsv.response.status, 200);
+        assert.match(usersCsv.response.headers.get('content-type'), /text\/csv/);
+        assert.match(usersCsv.response.headers.get('content-disposition'), /ielts-users-/);
+        assert.match(usersCsv.text, /^id,username,role,createdAt/m);
+        assert.match(usersCsv.text, /stats_user/);
+
+        const invalidExportQuery = await client.request('GET', '/api/admin/export?dataset=secrets');
+        assert.equal(invalidExportQuery.response.status, 400);
+        assert.equal(invalidExportQuery.json.error, 'Invalid export query');
 
         const invalidUsersQuery = await client.request('GET', '/api/admin/users?limit=0');
         assert.equal(invalidUsersQuery.response.status, 400);

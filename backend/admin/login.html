@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>IELTS Atlas Admin Login</title>
+        <link rel="stylesheet" href="/admin/login.css" />
+    </head>
+    <body>
+        <main class="admin-login-shell">
+            <section class="admin-login-panel" aria-labelledby="admin-login-title">
+                <div class="admin-login-heading">
+                    <p>IELTS Atlas</p>
+                    <h1 id="admin-login-title">Admin Console</h1>
+                </div>
+
+                <div id="admin-login-status" class="admin-login-status" role="status" aria-live="polite">
+                    Checking session...
+                </div>
+
+                <form id="admin-password-form" class="admin-login-form" hidden>
+                    <label>
+                        <span>Username</span>
+                        <input id="admin-username" name="username" autocomplete="username" required />
+                    </label>
+                    <label>
+                        <span>Password</span>
+                        <input id="admin-password" name="password" type="password" autocomplete="current-password" required />
+                    </label>
+                    <button id="admin-login-submit" type="submit">Sign In</button>
+                </form>
+
+                <form id="admin-totp-form" class="admin-login-form" hidden>
+                    <label>
+                        <span>TOTP code or recovery code</span>
+                        <input
+                            id="admin-totp-token"
+                            name="totpToken"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            maxlength="64"
+                            required
+                        />
+                    </label>
+                    <button id="admin-totp-submit" type="submit">Verify</button>
+                </form>
+
+                <section id="admin-totp-setup" class="admin-login-setup" hidden>
+                    <h2>Set Up TOTP</h2>
+                    <p>Scan the QR code with your authenticator, then enter the current code.</p>
+                    <img id="admin-totp-qr" alt="TOTP QR code" />
+                    <code id="admin-totp-secret"></code>
+                    <form id="admin-totp-setup-form" class="admin-login-form">
+                        <label>
+                            <span>TOTP code</span>
+                            <input
+                                id="admin-totp-setup-token"
+                                name="setupToken"
+                                inputmode="numeric"
+                                autocomplete="one-time-code"
+                                maxlength="64"
+                                required
+                            />
+                        </label>
+                        <button id="admin-totp-setup-submit" type="submit">Enable TOTP</button>
+                    </form>
+                </section>
+
+                <section id="admin-recovery" class="admin-login-recovery" hidden>
+                    <h2>Save Recovery Codes</h2>
+                    <p>These codes are shown once. Store them before continuing.</p>
+                    <ol id="admin-recovery-codes"></ol>
+                    <button id="admin-recovery-continue" type="button">Continue to Admin</button>
+                </section>
+            </section>
+        </main>
+        <script src="/admin/login.js"></script>
+    </body>
+</html>
