@@ -17,39 +17,39 @@
   "passageNotes": [
     {
       "label": "Paragraph A",
-      "text": "The black-footed ferret (Mustela nigripes) is a small carnivorous mammal, similar in length to a domestic cat, and is the only ferret species native to North America. For at least 100,000 years they lived in an area that extended almost uninterrupted from southern Canada to northern Mexico. But numbers fell dramatically throughout the 19th and 20th centuries, to such an extent that the black-footed ferret was declared ‘possibly extinct’. Then, almost miraculously, it returned from the dead."
+      "text": "黑足鼬（学名 Mustela nigripes）是一种小型食肉哺乳动物，体型与家猫相近，是北美唯一的原生鼬属物种。至少十万年来，它们生活在一个从加拿大南部几乎不间断延伸至墨西哥北部的广阔区域。但在19世纪和20世纪期间，其数量急剧下降，以至于黑足鼬一度被宣布为"可能已灭绝"。然而，奇迹般地，它死而复生了。"
     },
     {
       "label": "Paragraph B",
-      "text": "Within the genus Mustela, the ferret belongs to the subgenus Putorius, of which there are only three extant species: the European polecat; the Siberian polecat; and the black-footed ferret. The European polecat lives in open forests and meadows, and is thought to be the ancestor of the domestic ferret. The Siberian polecat looks more similar to the black-footed ferret, and leads a similar life on open grasslands and semi-desert regions across Russia, China and Siberia."
+      "text": "在鼬属（Mustela）中，黑足鼬隶属于白鼬亚属（Putorius），该亚属现存仅有三个物种：欧洲艾鼬、西伯利亚艾鼬和黑足鼬。欧洲艾鼬栖息于开阔的森林和草地中，被认为是家养白鼬的祖先。西伯利亚艾鼬外形与黑足鼬更为相似，在俄罗斯、中国和西伯利亚的开阔草原及半沙漠地区过着类似的生活。"
     },
     {
       "label": "Paragraph C",
-      "text": "Ferrets probably evolved in Europe between three and four million years ago, and dispersed into North America across an ice-age land bridge at least two million years ago. They then advanced south-eastward to the Great Plains through ice-free passageways. The black-footed ferret’s history in North America is inextricably linked to the creature which became almost its sole prey — the prairie dog. These small rodents are a type of ground squirrel which live in networks of underground tunnels, known as burrows. The black-footed ferret’s short legs and long, slim body make it superbly adapted for life in the burrow systems of its prey."
+      "text": "鼬类可能在三百万至四百万年前起源于欧洲，并在至少两百万年前通过冰河时期形成的陆桥扩散至北美大陆。随后，它们通过无冰通道向东南方向迁徙至大平原地区。黑足鼬在北美的历史与其几乎唯一的猎物——草原犬鼠——密不可分。这些小型啮齿动物属于地松鼠的一种，生活在被称为洞穴的地下隧道网络中。黑足鼬短小的四肢和修长纤细的体型，使其完美适应了在猎物洞穴系统中的生活。"
     },
     {
       "label": "Paragraph D",
-      "text": "Spending virtually all their time underground, black-footed ferrets have always been elusive. Ferrets are never mentioned in accounts of the early explorers or pioneers who crossed the Great Plains by wagon train during the early to mid-1800s. They were, however, occasionally listed in records kept by fur companies in the upper Missouri River basin during that period. Black-footed ferrets were not officially recognized by scientists until 1851, when a description and drawing of one featured in a book by the renowned naturalist John James Audubon and Reverend John Bachman. For over two decades, no other specimens were seen, and scientists even began to question their existence. Then, in 1874, a Dr Elliott Coues issued a request for specimens through the popular magazine The American Sportsman, and was soon rewarded. With these he was able to add to Audubon’s description, and confirm the existence of the black-footed ferret."
+      "text": "黑足鼬几乎终日生活在地下，因此一直难以被发现。在19世纪早期至中期，那些乘篷车穿越大平原的早期探险者或拓荒者的记述中从未提及过鼬类。然而，在同一时期密苏里河上游流域的毛皮公司记录中，偶尔会有黑足鼬的记载。直到1851年，黑足鼬才被科学家正式认可——当时著名博物学家约翰·詹姆斯·奥杜邦和约翰·巴克曼牧师合著的一本书中首次出现了对黑足鼬的描述和绘图。此后二十多年间，再无其他标本被发现，科学家甚至开始质疑这种动物是否存在。随后在1874年，埃利奥特·库斯博士通过流行杂志《美国运动员》发出征集标本的请求，并很快得到了回应。凭借这些标本，他在奥杜邦描述的基础上做了补充，并证实了黑足鼬的存在。"
     },
     {
       "label": "Paragraph E",
-      "text": "In the decades that followed, European settlement across North America changed the landscape dramatically, with vast areas being transformed into crop and grazing land. As agriculture and ranching expanded, the black-footed ferret’s main prey, the prairie dog, became a target for extermination, and was eventually eradicated from 98% of its original range. The result was devastating for black-footed ferret populations throughout the continent. Even today, the prairie dog is still trapped and poisoned, because ranchers believe that it competes with livestock for grass — a notion that belies recent research showing that prairie dogs and cattle feed on different plants."
+      "text": "在随后的数十年中，欧洲移民在北美的定居极大地改变了地貌，大片区域被改造为农田和牧场。随着农业和畜牧业的扩张，黑足鼬的主要猎物——草原犬鼠——成为被消灭的目标，最终在其原有分布范围的98%地区被根除。这对整个大陆的黑足鼬种群造成了毁灭性打击。即使在今天，草原犬鼠仍然遭到捕杀和毒杀，因为牧场主认为它与牲畜争夺牧草——然而这一观念与近期研究相悖，研究表明草原犬鼠和牛吃的其实是不同的植物。"
     },
     {
       "label": "Paragraph F",
-      "text": "As late as the 1950s, black-footed ferrets were still thought to occur in low densities throughout most of their historic range. However, by the 1960s, the only known population was a small colony in south-western South Dakota. In 1967, the US Fish and Wildlife Service classified the black-footed ferret as an endangered species, and in 1974 the South Dakota colony disappeared. Finally, in January 1979, the last ferret in a captive-breeding programme died — making the black-footed ferret the first mammal to be declared extinct in the Northern Hemisphere in the 20th century."
+      "text": "直到20世纪50年代，人们仍认为黑足鼬在其大部分历史分布范围内以较低密度存在。然而，到了60年代，唯一已知的种群是南达科他州西南部的一个小型群体。1967年，美国鱼类与野生动物管理局将黑足鼬列为濒危物种，1974年，南达科他州的那个群体消失了。最终，在1979年1月，圈养繁殖项目中的最后一只黑足鼬死亡——使黑足鼬成为20世纪北半球首个被宣布灭绝的哺乳动物。"
     },
     {
       "label": "Paragraph G",
-      "text": "But that was not the end of the story. In 1981, a farm dog called Shep carried an odd-looking creature to its owner’s ranch house in Meeteetse, Wyoming. The rancher put the carcass in his fridge and alerted state officials. The dog had found a black-footed ferret — which led to efforts again being made to save the species. An intensive search in the region led to the discovery of a 130-strong population. This wild colony thrived for a while, but disaster struck again and the number of animals was drastically reduced by the disease distemper — probably contracted from domestic dogs. In 1985, in a final bid to save the species, the remaining 18 individuals in the colony were trapped for a new captive-breeding programme. This project was successful, and there are now more than 2,000 black-footed ferrets in captivity across the US and Canada."
+      "text": "但故事并没有就此结束。1981年，一只名叫Shep的农场犬叼着一只长相奇特的动物回到了怀俄明州米特斯的牧场主家中。牧场主将尸体放入冰箱，并通知了州政府官员。这只狗发现的竟是一只黑足鼬——由此引发了新一轮拯救该物种的努力。在该地区展开的密集搜索中，人们发现了一个约130只的种群。这个野生群体曾一度兴旺，但灾难再次降临，该群体的数量因犬瘟热——很可能由家养犬传播——而急剧减少。1985年，作为拯救该物种的最后努力，该群体中剩余的18只个体被捕捉，用于开展新的圈养繁殖项目。该项目取得了成功，目前在美国和加拿大的圈养环境中已有超过2000只黑足鼬。"
     },
     {
       "label": "Paragraph H",
-      "text": "A reintroduction programme began in 1991. Before they can be reintroduced into their natural habitat, captive ferrets have to learn to hunt and escape from predators. They are first held in pens on the prairie, where they are fed prairie dog meat. Once the ferrets associate these animals with food, keepers unleash live prey into the pens, and they soon realise that they must hunt or go hungry. Then, to get the ferrets used to living underground, they have to be tempted into the holes with food."
+      "text": "一项重新引入计划于1991年启动。在被重新放归自然栖息地之前，圈养的黑足鼬必须学会捕猎和躲避捕食者。它们首先被放置在草原上的围栏中，喂食草原犬鼠的肉。一旦黑足鼬将这些动物与食物联系起来，饲养员就会在围栏中放入活的猎物，它们很快便意识到必须捕猎，否则就会挨饿。随后，为了让黑足鼬适应地下生活，需要用食物将它们引诱到洞穴中。"
     },
     {
       "label": "Paragraph I",
-      "text": "Reintroduction programmes are now underway across central USA, but there is one location that is key. The Janos area on the US-Mexico border is the obvious place to reactivate the continent’s wild black-footed ferret population, being one of the most important remaining grassland ecosystems in the Americas, and home to an abundance of prairie dogs. At the last report, the future of the black-footed ferret finally looks promising."
+      "text": "重新引入计划目前已在美国中部多个地区展开，但有一个地点至关重要。位于美墨边境的哈诺斯地区是恢复该大陆野生黑足鼬种群的理想地点，因为它拥有美洲最重要的剩余草原生态系统之一，并且草原犬鼠资源丰富。根据最新报告，黑足鼬的未来看起来终于充满了希望。"
     }
   ],
   "questionExplanations": [
@@ -60,48 +60,24 @@
         {
           "questionId": "q1",
           "questionNumber": 14,
-          "text": "题目：shares most characteristics with its relative, the ______\n题干翻译：黑足鼬与它的亲缘动物 共享最多特征。\n答案：Siberian polecat\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：B段：The Siberianpolecatlooksmore similartotheblack-footed ferret,and leadsasimilarlifeonopengrasslandsand semi-desertregions..\n定位句翻译：西伯利亚艾鼬看起来与黑足鼬更相似，并且在 开阔草原和半沙漠地区过着类似的生活。\n详细解释：题干中的sharesmostcharacteristicswith itsrelative对应原文的looksmoresimilar和 leadsasimilarlife。B段提到欧洲艾鼬和西伯 利亚艾鼬，但真正与黑足鼬最相似的是Siberian polecat。",
-          "visualExtraction": {
-            "question": "14",
-            "answer": "Siberian polecat",
-            "locating": "B段：The Siberianpolecatlooksmore similartotheblack-footed ferret,and leadsasimilarlifeonopengrasslandsand semi-desertregions..",
-            "translation": "黑足鼬与它的亲缘动物 共享最多特征。",
-            "detail": "题干中的sharesmostcharacteristicswith itsrelative对应原文的looksmoresimilar和 leadsasimilarlife。B段提到欧洲艾鼬和西伯 利亚艾鼬，但真正与黑足鼬最相似的是Siberian polecat。",
-            "locTranslation": "西伯利亚艾鼬看起来与黑足鼬更相似，并且在 开阔草原和半沙漠地区过着类似的生活。"
-          }
+          "text": "题目翻译：黑足鼬与它的亲缘动物______共享最多特征。\n答案：Siberian polecat\n解析：定位 B 段："The Siberian polecat looks more similar to the black-footed ferret, and leads a similar life on open grasslands and semi-desert regions." 题干中的 shares most characteristics with its relative 对应原文的 looks more similar 和 leads a similar life。B 段提到欧洲艾鼬和西伯利亚艾鼬，但真正与黑足鼬最相似的是 Siberian polecat。"
         },
         {
           "questionId": "q2",
           "questionNumber": 15,
-          "text": "题目：North American ferrets are thought to have originally come from ______\n题干翻译：北美黑足鼬被认为最初来自\n答案：Europe\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：C段：Ferretsprobablyevolvedin Europe betweenthreeandfourmillionyearsago, anddispersedinto North America...\n定位句翻译：鼬类可能在三四百万年前起源于欧洲，后来扩散 到北美。\n详细解释：题干中的originallycomefrom对应原文的 evolvedin Europe。注意这里问的是“北美的 ferrets最初来自哪里”，答案是地点Europe。",
-          "visualExtraction": {
-            "question": "15",
-            "answer": "Europe",
-            "locating": "C段：Ferretsprobablyevolvedin Europe betweenthreeandfourmillionyearsago, anddispersedinto North America...",
-            "locTranslation": "鼬类可能在三四百万年前起源于欧洲，后来扩散 到北美。",
-            "translation": "北美黑足鼬被认为最初来自",
-            "detail": "题干中的originallycomefrom对应原文的 evolvedin Europe。注意这里问的是“北美的 ferrets最初来自哪里”，答案是地点Europe。"
-          }
+          "text": "题目翻译：北美黑足鼬被认为最初来自______。\n答案：Europe\n解析：定位 C 段："Ferrets probably evolved in Europe between three and four million years ago, and dispersed into North America across an ice-age land bridge at least two million years ago." 题干中的 originally come from 对应原文的 evolved in Europe。注意这里问的是"北美的 ferrets 最初来自哪里"，答案是地点 Europe。"
         },
         {
           "questionId": "q3",
           "questionNumber": 16,
-          "text": "题目：The ______ is the black-footed ferret’s primary source of food.\n题干翻译：是黑足鼬的主要食物来源。\n答案：prairie dog\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：C段：...thecreaturewhichbecamealmost its sole prey — the prairie dog.\n定位句翻译：这种动物几乎成了黑足鼬唯一的猎物 草原犬鼠。\n详细解释：题干中的primarysourceoffood对应原文 的 almost its sole prey。所以答案是prairie dog。",
-          "visualExtraction": {
-            "answer": "prairie dog",
-            "question": "16",
-            "translation": "是黑足鼬的主要食物来源。",
-            "locTranslation": "这种动物几乎成了黑足鼬唯一的猎物 草原犬鼠。",
-            "detail": "题干中的primarysourceoffood对应原文 的 almost its sole prey。所以答案是prairie dog。",
-            "locating": "C段：...thecreaturewhichbecamealmost its sole prey — the prairie dog."
-          }
+          "text": "题目翻译：______是黑足鼬的主要食物来源。\n答案：prairie dog\n解析：定位 C 段："...the creature which became almost its sole prey — the prairie dog." 题干中的 primary source of food 对应原文的 almost its sole prey。所以答案是 prairie dog。"
         }
       ],
       "questionRange": {
         "start": 14,
         "end": 16
       },
-      "text": "题目：shares most characteristics with its relative, the ______\n题干翻译：黑足鼬与它的亲缘动物 共享最多特征。\n答案：Siberian polecat\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：B段：The Siberianpolecatlooksmore similartotheblack-footed ferret,and leadsasimilarlifeonopengrasslandsand semi-desertregions..\n定位句翻译：西伯利亚艾鼬看起来与黑足鼬更相似，并且在 开阔草原和半沙漠地区过着类似的生活。\n详细解释：题干中的sharesmostcharacteristicswith itsrelative对应原文的looksmoresimilar和 leadsasimilarlife。B段提到欧洲艾鼬和西伯 利亚艾鼬，但真正与黑足鼬最相似的是Siberian polecat。\n题目：North American ferrets are thought to have originally come from ______\n题干翻译：北美黑足鼬被认为最初来自\n答案：Europe\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：C段：Ferretsprobablyevolvedin Europe betweenthreeandfourmillionyearsago, anddispersedinto North America...\n定位句翻译：鼬类可能在三四百万年前起源于欧洲，后来扩散 到北美。\n详细解释：题干中的originallycomefrom对应原文的 evolvedin Europe。注意这里问的是“北美的 ferrets最初来自哪里”，答案是地点Europe。\n题目：The ______ is the black-footed ferret’s primary source of food.\n题干翻译：是黑足鼬的主要食物来源。\n答案：prairie dog\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：C段：...thecreaturewhichbecamealmost its sole prey — the prairie dog.\n定位句翻译：这种动物几乎成了黑足鼬唯一的猎物 草原犬鼠。\n详细解释：题干中的primarysourceoffood对应原文 的 almost its sole prey。所以答案是prairie dog。"
+      "text": "题目翻译：黑足鼬与它的亲缘动物______共享最多特征。\n答案：Siberian polecat\n解析：定位 B 段："The Siberian polecat looks more similar to the black-footed ferret, and leads a similar life on open grasslands and semi-desert regions." 题干中的 shares most characteristics with its relative 对应原文的 looks more similar 和 leads a similar life。B 段提到欧洲艾鼬和西伯利亚艾鼬，但真正与黑足鼬最相似的是 Siberian polecat。\n题目翻译：北美黑足鼬被认为最初来自______。\n答案：Europe\n解析：定位 C 段："Ferrets probably evolved in Europe between three and four million years ago, and dispersed into North America across an ice-age land bridge at least two million years ago." 题干中的 originally come from 对应原文的 evolved in Europe。注意这里问的是"北美的 ferrets 最初来自哪里"，答案是地点 Europe。\n题目翻译：______是黑足鼬的主要食物来源。\n答案：prairie dog\n解析：定位 C 段："...the creature which became almost its sole prey — the prairie dog." 题干中的 primary source of food 对应原文的 almost its sole prey。所以答案是 prairie dog。"
     },
     {
       "sectionTitle": "Questions 17–22 日期匹配题",
@@ -110,93 +86,39 @@
         {
           "questionId": "q4",
           "questionNumber": 17,
-          "text": "题目：An appeal for evidence was published.\n题干翻译：一则寻求黑足鼬证据的呼吁被发表。\n答案：B\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1874\n定位句：D段：Then,in 1874,a DrElliott Coues issued a request for specimens through thepopularmagazine The American Sportsman...\n定位句翻译：随后，在1874年，Elliott Coues博士通过流行 杂志《美国运动员》发出征集标本的请求。\n详细解释：题干中的anappealforevidence对应原文 的issuedarequestforspecimens。因为标 本可以作为这种动物存在的证据，所以答案是 1874，对应B。",
-          "visualExtraction": {
-            "extra": "1874",
-            "question": "17",
-            "answer": "B",
-            "translation": "一则寻求黑足鼬证据的呼吁被发表。",
-            "locating": "D段：Then,in 1874,a DrElliott Coues issued a request for specimens through thepopularmagazine The American Sportsman...",
-            "locTranslation": "随后，在1874年，Elliott Coues博士通过流行 杂志《美国运动员》发出征集标本的请求。",
-            "detail": "题干中的anappealforevidence对应原文 的issuedarequestforspecimens。因为标 本可以作为这种动物存在的证据，所以答案是 1874，对应B。"
-          }
+          "text": "题目翻译：一则寻求黑足鼬证据的呼吁被发表了。\n答案：B\n解析：定位 D 段："Then, in 1874, a Dr Elliott Coues issued a request for specimens through the popular magazine The American Sportsman..." 题干中的 an appeal for evidence 对应原文的 issued a request for specimens。因为标本可以作为这种动物存在的证据，所以答案是 1874，对应 B。"
         },
         {
           "questionId": "q5",
           "questionNumber": 18,
-          "text": "题目：A scheme for releasing captive-born ferrets was launched.\n题干翻译：将人工繁殖的黑足鼬释放回野外的计划启动了。\n答案：H\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1991\n定位句：H段：Areintroductionprogrammebegan in 1991.\n定位句翻译：一项重新引入计划于1991年开始。\n详细解释：题干中的aschemeforreleasing captive-born...into thewild对应原文的 reintroductionprogramme。reintroduction 指“重新引入自然栖息地”，所以答案是1991， 对应H。",
-          "visualExtraction": {
-            "question": "18",
-            "answer": "H",
-            "extra": "1991",
-            "detail": "题干中的aschemeforreleasing captive-born...into thewild对应原文的 reintroductionprogramme。reintroduction 指“重新引入自然栖息地”，所以答案是1991， 对应H。",
-            "translation": "将人工繁殖的黑足鼬释放回野外的计划启动了。",
-            "locating": "H段：Areintroductionprogrammebegan in 1991.",
-            "locTranslation": "一项重新引入计划于1991年开始。"
-          }
+          "text": "题目翻译：将人工繁殖的黑足鼬释放回野外的计划启动了。\n答案：H\n解析：定位 H 段："A reintroduction programme began in 1991." 题干中的 a scheme for releasing captive-born...into the wild 对应原文的 reintroduction programme。reintroduction 指"重新引入自然栖息地"，所以答案是 1991，对应 H。"
         },
         {
           "questionId": "q6",
           "questionNumber": 19,
-          "text": "题目：first appeared in a scientific work\n题干翻译：黑足鼬首次出现在一部科学作品中。\n答案：A\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1851\n定位句：D段：Black-footedferretswerenot officiallyrecognizedbyscientistsuntil 1851,whenadescriptionanddrawingof onefeatured in a book...\n定位句翻译：直到1851年，黑足鼬才被科学家正式认可， 当时一本书中出现了对它的描述和图画。\n详细解释：题干中的firstappearedinascientificwork 对应原文的a description and drawing.. featuredinabook。虽然原文没有直接说 “scientific work”，但由officially recognized byscientists和自然学家Audubon的书可以 判断。答案是1851，对应A。",
-          "visualExtraction": {
-            "translation": "黑足鼬首次出现在一部科学作品中。",
-            "question": "19",
-            "extra": "1851",
-            "locating": "D段：Black-footedferretswerenot officiallyrecognizedbyscientistsuntil 1851,whenadescriptionanddrawingof onefeatured in a book...",
-            "locTranslation": "直到1851年，黑足鼬才被科学家正式认可， 当时一本书中出现了对它的描述和图画。",
-            "answer": "A",
-            "detail": "题干中的firstappearedinascientificwork 对应原文的a description and drawing.. featuredinabook。虽然原文没有直接说 “scientific work”，但由officially recognized byscientists和自然学家Audubon的书可以 判断。答案是1851，对应A。"
-          }
+          "text": "题目翻译：黑足鼬首次出现在一部科学作品中。\n答案：A\n解析：定位 D 段："Black-footed ferrets were not officially recognized by scientists until 1851, when a description and drawing of one featured in a book by the renowned naturalist John James Audubon and Reverend John Bachman." 题干中的 first appeared in a scientific work 对应原文的 a description and drawing featured in a book。虽然原文没有直接说"scientific work"，但由 officially recognized by scientists 和自然学家 Audubon 的书可以判断。答案是 1851，对应 A。"
         },
         {
           "questionId": "q7",
           "questionNumber": 20,
-          "text": "题目：discovery of a single black-footed ferret led to renewed hope\n题干翻译：一只黑足鼬的发现重新给该物种带来了希望。\n答案：F\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1981\n定位句：G段：In 1981,afarm dog called Shep carried an odd-looking creature... The dog hadfound ablack-footed ferret—which ledtoeffortsagainbeingmadetosavethe species.\n定位句翻译：1981年，一只名叫Shep的农场犬叼回了一只 奇怪的动物...这只狗发现的是黑足鼬，这使得 人们再次努力拯救该物种。\n详细解释：题干中的discoveryofasingleblack- footedferret对应原文中狗发现一只黑足鼬； renewed hope 对应efforts again being madetosavethespecies。答案是1981, 对应F。",
-          "visualExtraction": {
-            "locating": "G段：In 1981,afarm dog called Shep carried an odd-looking creature... The dog hadfound ablack-footed ferret—which ledtoeffortsagainbeingmadetosavethe species.",
-            "question": "20",
-            "extra": "1981",
-            "answer": "F",
-            "detail": "题干中的discoveryofasingleblack- footedferret对应原文中狗发现一只黑足鼬； renewed hope 对应efforts again being madetosavethespecies。答案是1981, 对应F。",
-            "translation": "一只黑足鼬的发现重新给该物种带来了希望。",
-            "locTranslation": "1981年，一只名叫Shep的农场犬叼回了一只 奇怪的动物...这只狗发现的是黑足鼬，这使得 人们再次努力拯救该物种。"
-          }
+          "text": "题目翻译：一只黑足鼬的发现重新给该物种带来了希望。\n答案：F\n解析：定位 G 段："In 1981, a farm dog called Shep carried an odd-looking creature... The dog had found a black-footed ferret — which led to efforts again being made to save the species." 题干中的 discovery of a single black-footed ferret 对应原文中狗发现一只黑足鼬；renewed hope 对应 efforts again being made to save the species。答案是 1981，对应 F。"
         },
         {
           "questionId": "q8",
           "questionNumber": 21,
-          "text": "题目：last wild-born ferrets were taken into captivity\n题干翻译：北美最后一批野生出生的黑足鼬被带入圈养 环境。\n答案：G\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1985\n定位句：G段：In 1985,inafinalbidtosave the species, the remaining 18 individuals inthecolonyweretrappedforanew captive-breeding programme.\n定位句翻译：1985年，为了最后一次拯救该物种，这个群 体中剩下的18只个体被捕捉，用于新的圈养 繁殖项目。\n详细解释：题干中的lastwild-bornblack-footed ferretsweretakenintocaptivity对应原文 的remaining 18 individuals...weretrapped for a new captive-breeding programme. 答案是1985，对应G。",
-          "visualExtraction": {
-            "extra": "1985",
-            "question": "21",
-            "translation": "北美最后一批野生出生的黑足鼬被带入圈养 环境。",
-            "locTranslation": "1985年，为了最后一次拯救该物种，这个群 体中剩下的18只个体被捕捉，用于新的圈养 繁殖项目。",
-            "answer": "G",
-            "locating": "G段：In 1985,inafinalbidtosave the species, the remaining 18 individuals inthecolonyweretrappedforanew captive-breeding programme.",
-            "detail": "题干中的lastwild-bornblack-footed ferretsweretakenintocaptivity对应原文 的remaining 18 individuals...weretrapped for a new captive-breeding programme. 答案是1985，对应G。"
-          }
+          "text": "题目翻译：北美最后一批野生出生的黑足鼬被带入圈养环境。\n答案：G\n解析：定位 G 段："In 1985, in a final bid to save the species, the remaining 18 individuals in the colony were trapped for a new captive-breeding programme." 题干中的 last wild-born black-footed ferrets were taken into captivity 对应原文的 remaining 18 individuals...were trapped for a new captive-breeding programme。答案是 1985，对应 G。"
         },
         {
           "questionId": "q9",
           "questionNumber": 22,
-          "text": "题目：efforts to save were officially announced as failed\n题干翻译：拯救黑足鼬的努力被官方宣布失败。\n答案：E\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1979\n定位句：F段：Finally,in January 1979,thelast ferretinacaptive-breedingprogramme died-making theblack-footed ferretthe firstmammal tobedeclaredextinct...\n定位句翻译：最后，在1979年1月，圈养繁殖项目中的最后 一只黑足鼬死亡，使黑足鼬成为北半球20世纪 第一个被宣布灭绝的哺乳动物。\n详细解释：题干中的effortstosave...wereofficially announcedashavingfailed对应原文的 declaredextinct。这说明当时官方认为拯救 失败了。答案是1979，对应E。",
-          "visualExtraction": {
-            "question": "22 E",
-            "extra": "1979",
-            "translation": "拯救黑足鼬的努力被官方宣布失败。",
-            "locating": "F段：Finally,in January 1979,thelast ferretinacaptive-breedingprogramme died-making theblack-footed ferretthe firstmammal tobedeclaredextinct...",
-            "locTranslation": "最后，在1979年1月，圈养繁殖项目中的最后 一只黑足鼬死亡，使黑足鼬成为北半球20世纪 第一个被宣布灭绝的哺乳动物。",
-            "detail": "题干中的effortstosave...wereofficially announcedashavingfailed对应原文的 declaredextinct。这说明当时官方认为拯救 失败了。答案是1979，对应E。",
-            "answer": "E"
-          }
+          "text": "题目翻译：拯救黑足鼬的努力被官方宣布失败了。\n答案：E\n解析：定位 F 段："Finally, in January 1979, the last ferret in a captive-breeding programme died — making the black-footed ferret the first mammal to be declared extinct..." 题干中的 efforts to save...were officially announced as having failed 对应原文的 declared extinct。这说明当时官方认为拯救失败了。答案是 1979，对应 E。"
         }
       ],
       "questionRange": {
         "start": 17,
         "end": 22
       },
-      "text": "题目：An appeal for evidence was published.\n题干翻译：一则寻求黑足鼬证据的呼吁被发表。\n答案：B\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1874\n定位句：D段：Then,in 1874,a DrElliott Coues issued a request for specimens through thepopularmagazine The American Sportsman...\n定位句翻译：随后，在1874年，Elliott Coues博士通过流行 杂志《美国运动员》发出征集标本的请求。\n详细解释：题干中的anappealforevidence对应原文 的issuedarequestforspecimens。因为标 本可以作为这种动物存在的证据，所以答案是 1874，对应B。\n题目：A scheme for releasing captive-born ferrets was launched.\n题干翻译：将人工繁殖的黑足鼬释放回野外的计划启动了。\n答案：H\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1991\n定位句：H段：Areintroductionprogrammebegan in 1991.\n定位句翻译：一项重新引入计划于1991年开始。\n详细解释：题干中的aschemeforreleasing captive-born...into thewild对应原文的 reintroductionprogramme。reintroduction 指“重新引入自然栖息地”，所以答案是1991， 对应H。\n题目：first appeared in a scientific work\n题干翻译：黑足鼬首次出现在一部科学作品中。\n答案：A\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1851\n定位句：D段：Black-footedferretswerenot officiallyrecognizedbyscientistsuntil 1851,whenadescriptionanddrawingof onefeatured in a book...\n定位句翻译：直到1851年，黑足鼬才被科学家正式认可， 当时一本书中出现了对它的描述和图画。\n详细解释：题干中的firstappearedinascientificwork 对应原文的a description and drawing.. featuredinabook。虽然原文没有直接说 “scientific work”，但由officially recognized byscientists和自然学家Audubon的书可以 判断。答案是1851，对应A。\n题目：discovery of a single black-footed ferret led to renewed hope\n题干翻译：一只黑足鼬的发现重新给该物种带来了希望。\n答案：F\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1981\n定位句：G段：In 1981,afarm dog called Shep carried an odd-looking creature... The dog hadfound ablack-footed ferret—which ledtoeffortsagainbeingmadetosavethe species.\n定位句翻译：1981年，一只名叫Shep的农场犬叼回了一只 奇怪的动物...这只狗发现的是黑足鼬，这使得 人们再次努力拯救该物种。\n详细解释：题干中的discoveryofasingleblack- footedferret对应原文中狗发现一只黑足鼬； renewed hope 对应efforts again being madetosavethespecies。答案是1981, 对应F。\n题目：last wild-born ferrets were taken into captivity\n题干翻译：北美最后一批野生出生的黑足鼬被带入圈养 环境。\n答案：G\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1985\n定位句：G段：In 1985,inafinalbidtosave the species, the remaining 18 individuals inthecolonyweretrappedforanew captive-breeding programme.\n定位句翻译：1985年，为了最后一次拯救该物种，这个群 体中剩下的18只个体被捕捉，用于新的圈养 繁殖项目。\n详细解释：题干中的lastwild-bornblack-footed ferretsweretakenintocaptivity对应原文 的remaining 18 individuals...weretrapped for a new captive-breeding programme. 答案是1985，对应G。\n题目：efforts to save were officially announced as failed\n题干翻译：拯救黑足鼬的努力被官方宣布失败。\n答案：E\n解析来源：PDF 内嵌答案图片视觉提取\n图片表格补充：1979\n定位句：F段：Finally,in January 1979,thelast ferretinacaptive-breedingprogramme died-making theblack-footed ferretthe firstmammal tobedeclaredextinct...\n定位句翻译：最后，在1979年1月，圈养繁殖项目中的最后 一只黑足鼬死亡，使黑足鼬成为北半球20世纪 第一个被宣布灭绝的哺乳动物。\n详细解释：题干中的effortstosave...wereofficially announcedashavingfailed对应原文的 declaredextinct。这说明当时官方认为拯救 失败了。答案是1979，对应E。"
+      "text": "题目翻译：一则寻求黑足鼬证据的呼吁被发表了。\n答案：B\n解析：定位 D 段："Then, in 1874, a Dr Elliott Coues issued a request for specimens through the popular magazine The American Sportsman..." 题干中的 an appeal for evidence 对应原文的 issued a request for specimens。因为标本可以作为这种动物存在的证据，所以答案是 1874，对应 B。\n题目翻译：将人工繁殖的黑足鼬释放回野外的计划启动了。\n答案：H\n解析：定位 H 段："A reintroduction programme began in 1991." 题干中的 a scheme for releasing captive-born...into the wild 对应原文的 reintroduction programme。reintroduction 指"重新引入自然栖息地"，所以答案是 1991，对应 H。\n题目翻译：黑足鼬首次出现在一部科学作品中。\n答案：A\n解析：定位 D 段："Black-footed ferrets were not officially recognized by scientists until 1851, when a description and drawing of one featured in a book by the renowned naturalist John James Audubon and Reverend John Bachman." 题干中的 first appeared in a scientific work 对应原文的 a description and drawing featured in a book。虽然原文没有直接说"scientific work"，但由 officially recognized by scientists 和自然学家 Audubon 的书可以判断。答案是 1851，对应 A。\n题目翻译：一只黑足鼬的发现重新给该物种带来了希望。\n答案：F\n解析：定位 G 段："In 1981, a farm dog called Shep carried an odd-looking creature... The dog had found a black-footed ferret — which led to efforts again being made to save the species." 题干中的 discovery of a single black-footed ferret 对应原文中狗发现一只黑足鼬；renewed hope 对应 efforts again being made to save the species。答案是 1981，对应 F。\n题目翻译：北美最后一批野生出生的黑足鼬被带入圈养环境。\n答案：G\n解析：定位 G 段："In 1985, in a final bid to save the species, the remaining 18 individuals in the colony were trapped for a new captive-breeding programme." 题干中的 last wild-born black-footed ferrets were taken into captivity 对应原文的 remaining 18 individuals...were trapped for a new captive-breeding programme。答案是 1985，对应 G。\n题目翻译：拯救黑足鼬的努力被官方宣布失败了。\n答案：E\n解析：定位 F 段："Finally, in January 1979, the last ferret in a captive-breeding programme died — making the black-footed ferret the first mammal to be declared extinct..." 题干中的 efforts to save...were officially announced as having failed 对应原文的 declared extinct。这说明当时官方认为拯救失败了。答案是 1979，对应 E。"
     },
     {
       "sectionTitle": "Questions 23–26 段落信息匹配题",
@@ -205,61 +127,29 @@
         {
           "questionId": "q10",
           "questionNumber": 23,
-          "text": "题目：reasons for the sharp decrease\n题干翻译：黑足鼬数量急剧下降的原因。\n答案：E\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：E段：European settlement...changed the landscape dramatically... transformed into crop and grazing land.As agriculture andranchingexpanded,theblack-footed ferret'smainprey,theprairie dog,became a targetforextermination...\n定位句翻译：欧洲人在北美定居改变了景观，大面积土地被改 造成农田和牧场。随着农业和畜牧业扩张，黑足 鼬的主要猎物草原犬鼠成为被消灭的目标。\n详细解释：这一段解释了黑足鼬下降的两个核心原因：一 是栖息地被农业和牧场改造；二是主要猎物 prairie dog被大规模消灭。因此对应reasons for the sharp decrease.",
-          "visualExtraction": {
-            "question": "23",
-            "translation": "黑足鼬数量急剧下降的原因。",
-            "answer": "E",
-            "locating": "E段：European settlement...changed the landscape dramatically... transformed into crop and grazing land.As agriculture andranchingexpanded,theblack-footed ferret'smainprey,theprairie dog,became a targetforextermination...",
-            "locTranslation": "欧洲人在北美定居改变了景观，大面积土地被改 造成农田和牧场。随着农业和畜牧业扩张，黑足 鼬的主要猎物草原犬鼠成为被消灭的目标。",
-            "detail": "这一段解释了黑足鼬下降的两个核心原因：一 是栖息地被农业和牧场改造；二是主要猎物 prairie dog被大规模消灭。因此对应reasons for the sharp decrease."
-          }
+          "text": "题目翻译：黑足鼬数量急剧下降的原因。\n答案：E\n解析：定位 E 段："European settlement...changed the landscape dramatically... transformed into crop and grazing land. As agriculture and ranching expanded, the black-footed ferret's main prey, the prairie dog, became a target for extermination..." 该段解释了黑足鼬下降的两个核心原因：一是栖息地被农业和牧场改造；二是主要猎物 prairie dog 被大规模消灭。因此对应 reasons for the sharp decrease。"
         },
         {
           "questionId": "q11",
           "questionNumber": 24,
-          "text": "题目：procedure by which ferrets are taught to survive\n题干翻译：黑足鼬被训练在野外生存的过程。\n答案：H\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：H段：Before they canbe reintroduced... captiveferretshavetolearntohuntand escapefrompredators...theyarefed prairie dog meat...keepers unleash live prey... they have to be tempted into the holes with food.\n定位句翻译：在被重新放归自然前，圈养黑足鼬必须学会捕 猎和躲避捕食者..它们先被喂草原犬鼠肉， 随后饲养员释放活猎物，最后用食物引导它们 进入洞穴。\n详细解释：题干中的procedure对应这一段的训练步骤： 先认识食物，再捕猎活物，再适应地下洞穴 生活。因此答案是H。",
-          "visualExtraction": {
-            "question": "24",
-            "locating": "H段：Before they canbe reintroduced... captiveferretshavetolearntohuntand escapefrompredators...theyarefed prairie dog meat...keepers unleash live prey... they have to be tempted into the holes with food.",
-            "translation": "黑足鼬被训练在野外生存的过程。",
-            "locTranslation": "在被重新放归自然前，圈养黑足鼬必须学会捕 猎和躲避捕食者..它们先被喂草原犬鼠肉， 随后饲养员释放活猎物，最后用食物引导它们 进入洞穴。",
-            "detail": "题干中的procedure对应这一段的训练步骤： 先认识食物，再捕猎活物，再适应地下洞穴 生活。因此答案是H。",
-            "answer": "H"
-          }
+          "text": "题目翻译：黑足鼬被训练在野外生存的过程。\n答案：H\n解析：定位 H 段："Before they can be reintroduced... captive ferrets have to learn to hunt and escape from predators... they are fed prairie dog meat... keepers unleash live prey... they have to be tempted into the holes with food." 题干中的 procedure 对应这一段的训练步骤：先认识食物，再捕猎活物，再适应地下洞穴生活。因此答案是 H。"
         },
         {
           "questionId": "q12",
           "questionNumber": 25,
-          "text": "题目：doubts about whether there was such an animal\n题干翻译：提到人们怀疑是否真的存在黑足鼬这种动物。\n答案：D\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：D段：Forovertwodecades，noother specimens were seen, and scientists even begantoquestiontheirexistence.\n定位句翻译：二十多年里，没有其他标本被发现，科学家甚至 开始怀疑它们是否存在。\n详细解释：题干中的doubtsaboutwhetherthere wassuchananimal对应原文的beganto questiontheirexistence。所以答案是D。",
-          "visualExtraction": {
-            "translation": "提到人们怀疑是否真的存在黑足鼬这种动物。",
-            "question": "25",
-            "locTranslation": "二十多年里，没有其他标本被发现，科学家甚至 开始怀疑它们是否存在。",
-            "detail": "题干中的doubtsaboutwhetherthere wassuchananimal对应原文的beganto questiontheirexistence。所以答案是D。",
-            "locating": "D段：Forovertwodecades，noother specimens were seen, and scientists even begantoquestiontheirexistence.",
-            "answer": "D"
-          }
+          "text": "题目翻译：提到人们怀疑是否真的存在黑足鼬这种动物。\n答案：D\n解析：定位 D 段："For over two decades, no other specimens were seen, and scientists even began to question their existence." 题干中的 doubts about whether there was such an animal 对应原文的 began to question their existence。所以答案是 D。"
         },
         {
           "questionId": "q13",
           "questionNumber": 26,
-          "text": "题目：site ideal for release into the wild\n题干翻译：提到一个非常适合将黑足鼬释放回野外的地点。\n答案：I\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：I段：The Janos area on the US-Mexico border is the obvious place to reactivate thecontinent'swildblack-footed ferret population...\n定位句翻译：美墨边境的Janos地区显然是恢复北美大陆野生 黑足鼬种群的理想地点。\n详细解释：题干中的asitewhichisidealforthe release对应原文的theobviousplace toreactivate...wildblack-footed ferret population。后文还解释原因：这里是重要 草原生态系统，并且有大量草原犬鼠。因此 答案是I。",
-          "visualExtraction": {
-            "question": "26",
-            "locating": "I段：The Janos area on the US-Mexico border is the obvious place to reactivate thecontinent'swildblack-footed ferret population...",
-            "translation": "提到一个非常适合将黑足鼬释放回野外的地点。",
-            "locTranslation": "美墨边境的Janos地区显然是恢复北美大陆野生 黑足鼬种群的理想地点。",
-            "detail": "题干中的asitewhichisidealforthe release对应原文的theobviousplace toreactivate...wildblack-footed ferret population。后文还解释原因：这里是重要 草原生态系统，并且有大量草原犬鼠。因此 答案是I。",
-            "answer": "I"
-          }
+          "text": "题目翻译：提到一个非常适合将黑足鼬释放回野外的地点。\n答案：I\n解析：定位 I 段："The Janos area on the US-Mexico border is the obvious place to reactivate the continent's wild black-footed ferret population..." 题干中的 a site which is ideal for the release 对应原文的 the obvious place to reactivate...wild black-footed ferret population。后文还解释原因：这里是重要的草原生态系统，并且有大量草原犬鼠。因此答案是 I。"
         }
       ],
       "questionRange": {
         "start": 23,
         "end": 26
       },
-      "text": "题目：reasons for the sharp decrease\n题干翻译：黑足鼬数量急剧下降的原因。\n答案：E\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：E段：European settlement...changed the landscape dramatically... transformed into crop and grazing land.As agriculture andranchingexpanded,theblack-footed ferret'smainprey,theprairie dog,became a targetforextermination...\n定位句翻译：欧洲人在北美定居改变了景观，大面积土地被改 造成农田和牧场。随着农业和畜牧业扩张，黑足 鼬的主要猎物草原犬鼠成为被消灭的目标。\n详细解释：这一段解释了黑足鼬下降的两个核心原因：一 是栖息地被农业和牧场改造；二是主要猎物 prairie dog被大规模消灭。因此对应reasons for the sharp decrease.\n题目：procedure by which ferrets are taught to survive\n题干翻译：黑足鼬被训练在野外生存的过程。\n答案：H\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：H段：Before they canbe reintroduced... captiveferretshavetolearntohuntand escapefrompredators...theyarefed prairie dog meat...keepers unleash live prey... they have to be tempted into the holes with food.\n定位句翻译：在被重新放归自然前，圈养黑足鼬必须学会捕 猎和躲避捕食者..它们先被喂草原犬鼠肉， 随后饲养员释放活猎物，最后用食物引导它们 进入洞穴。\n详细解释：题干中的procedure对应这一段的训练步骤： 先认识食物，再捕猎活物，再适应地下洞穴 生活。因此答案是H。\n题目：doubts about whether there was such an animal\n题干翻译：提到人们怀疑是否真的存在黑足鼬这种动物。\n答案：D\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：D段：Forovertwodecades，noother specimens were seen, and scientists even begantoquestiontheirexistence.\n定位句翻译：二十多年里，没有其他标本被发现，科学家甚至 开始怀疑它们是否存在。\n详细解释：题干中的doubtsaboutwhetherthere wassuchananimal对应原文的beganto questiontheirexistence。所以答案是D。\n题目：site ideal for release into the wild\n题干翻译：提到一个非常适合将黑足鼬释放回野外的地点。\n答案：I\n解析来源：PDF 内嵌答案图片视觉提取\n定位句：I段：The Janos area on the US-Mexico border is the obvious place to reactivate thecontinent'swildblack-footed ferret population...\n定位句翻译：美墨边境的Janos地区显然是恢复北美大陆野生 黑足鼬种群的理想地点。\n详细解释：题干中的asitewhichisidealforthe release对应原文的theobviousplace toreactivate...wildblack-footed ferret population。后文还解释原因：这里是重要 草原生态系统，并且有大量草原犬鼠。因此 答案是I。"
+      "text": "题目翻译：黑足鼬数量急剧下降的原因。\n答案：E\n解析：定位 E 段："European settlement...changed the landscape dramatically... transformed into crop and grazing land. As agriculture and ranching expanded, the black-footed ferret's main prey, the prairie dog, became a target for extermination..." 该段解释了黑足鼬下降的两个核心原因：一是栖息地被农业和牧场改造；二是主要猎物 prairie dog 被大规模消灭。因此对应 reasons for the sharp decrease。\n题目翻译：黑足鼬被训练在野外生存的过程。\n答案：H\n解析：定位 H 段："Before they can be reintroduced... captive ferrets have to learn to hunt and escape from predators... they are fed prairie dog meat... keepers unleash live prey... they have to be tempted into the holes with food." 题干中的 procedure 对应这一段的训练步骤：先认识食物，再捕猎活物，再适应地下洞穴生活。因此答案是 H。\n题目翻译：提到人们怀疑是否真的存在黑足鼬这种动物。\n答案：D\n解析：定位 D 段："For over two decades, no other specimens were seen, and scientists even began to question their existence." 题干中的 doubts about whether there was such an animal 对应原文的 began to question their existence。所以答案是 D。\n题目翻译：提到一个非常适合将黑足鼬释放回野外的地点。\n答案：I\n解析：定位 I 段："The Janos area on the US-Mexico border is the obvious place to reactivate the continent's wild black-footed ferret population..." 题干中的 a site which is ideal for the release 对应原文的 the obvious place to reactivate...wild black-footed ferret population。后文还解释原因：这里是重要的草原生态系统，并且有大量草原犬鼠。因此答案是 I。"
     }
   ],
   "audit": {
