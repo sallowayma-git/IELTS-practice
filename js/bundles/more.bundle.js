@@ -5317,17 +5317,49 @@
 
         if (memorizeTrigger) {
             memorizeTrigger.addEventListener('click', handleReadingMemorizeEntry);
+            updateReadingMemorizeTriggerState(memorizeTrigger);
         }
 
+        global.addEventListener('reading-memorize-modechange', function () {
+            updateReadingMemorizeTriggerState(memorizeTrigger);
+        });
+
         moreViewInteractionsConfigured = true;
+    }
+
+    function isReadingMemorizeBrowseMode() {
+        return global.__readingMemorizeBrowseMode === true
+            || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
+    }
+
+    function updateReadingMemorizeTriggerState(trigger) {
+        var button = trigger || document.querySelector('[data-action="open-reading-memorize"]');
+        if (!button) {
+            return;
+        }
+        var active = isReadingMemorizeBrowseMode();
+        var arrow = button.querySelector('.tool-card-arrow');
+        button.classList.toggle('is-reading-memorize-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        if (arrow) {
+            arrow.textContent = active ? '退出' : '进入';
+        }
     }
 
     function handleReadingMemorizeEntry(event) {
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
+        if (isReadingMemorizeBrowseMode()) {
+            if (global.AppActions && typeof global.AppActions.stopReadingMemorize === 'function') {
+                global.AppActions.stopReadingMemorize();
+            }
+            updateReadingMemorizeTriggerState(event ? event.currentTarget : null);
+            return;
+        }
         if (global.AppActions && typeof global.AppActions.startReadingMemorize === 'function') {
             global.AppActions.startReadingMemorize();
+            updateReadingMemorizeTriggerState(event ? event.currentTarget : null);
             return;
         }
         if (typeof global.showMessage === 'function') {

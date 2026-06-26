@@ -2639,6 +2639,17 @@ function filterReadingMemorizeExamsFallback(exams) {
 function clearReadingMemorizeBrowseMode() {
     window.__readingMemorizeBrowseMode = false;
     window.__browseMemorizeFilterMode = null;
+    emitReadingMemorizeBrowseModeChange(false);
+}
+
+function emitReadingMemorizeBrowseModeChange(active) {
+    try {
+        if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+            window.dispatchEvent(new window.CustomEvent('reading-memorize-modechange', {
+                detail: { active: active === true }
+            }));
+        }
+    } catch (_) { }
 }
 
 function selectReadingMemorizeExam(examId) {

@@ -486,6 +486,17 @@
         if (!global.__readingMemorizeBrowseMode && typeof global.__browseMemorizeFilterMode !== 'undefined') {
             global.__browseMemorizeFilterMode = null;
         }
+        notifyReadingMemorizeBrowseModeChange(global.__readingMemorizeBrowseMode);
+    }
+
+    function notifyReadingMemorizeBrowseModeChange(active) {
+        try {
+            if (typeof global.dispatchEvent === 'function' && typeof global.CustomEvent === 'function') {
+                global.dispatchEvent(new global.CustomEvent('reading-memorize-modechange', {
+                    detail: { active: active === true }
+                }));
+            }
+        } catch (_) { }
     }
 
     function navigateToReadingMemorizeBrowse() {
@@ -562,6 +573,58 @@
             }
             return null;
         });
+    }
+
+    function navigateToStandardBrowse() {
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        global.__pendingBrowseFilter = {
+            category: 'all',
+            type: 'all',
+            filterMode: null,
+            path: null
+        };
+
+        if (global.browseController) {
+            try {
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'all';
+                if (typeof global.browseController.setBrowseFilterState === 'function') {
+                    global.browseController.setBrowseFilterState('all', 'all');
+                } else if (typeof global.setBrowseFilterState === 'function') {
+                    global.setBrowseFilterState('all', 'all');
+                }
+                if (typeof global.browseController.renderFilterButtons === 'function') {
+                    global.browseController.renderFilterButtons();
+                }
+            } catch (_) { }
+        } else if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'all');
+        }
+
+        if (global.app && typeof global.app.navigateToView === 'function') {
+            global.app.navigateToView('browse');
+        } else if (typeof global.showView === 'function') {
+            global.showView('browse', false);
+        }
+
+        if (typeof global.resetBrowseViewToAll === 'function') {
+            global.resetBrowseViewToAll();
+        } else if (typeof global.applyBrowseFilter === 'function') {
+            global.applyBrowseFilter('all', 'all', null, null);
+        } else if (typeof global.loadExamList === 'function') {
+            global.loadExamList();
+        }
+    }
+
+    function stopReadingMemorize() {
+        setReadingMemorizeBrowseMode(false);
+        navigateToStandardBrowse();
+        notifyReadingMemorizeBrowseModeChange(false);
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('已退出阅读背题模式。', 'info');
+        }
+        return null;
     }
 
     function startRandomPractice(category, type, filterMode, path) {
@@ -889,6 +952,7 @@
         continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
         startReadingMemorize: startReadingMemorize,
+        stopReadingMemorize: stopReadingMemorize,
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
@@ -901,6 +965,7 @@
     global.openExamWithFallback = openExamWithFallback;
     global.isReadingMemorizeCandidate = isReadingMemorizeCandidate;
     global.startReadingMemorize = startReadingMemorize;
+    global.stopReadingMemorize = stopReadingMemorize;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;
     global.stopEndlessPractice = stopEndlessPractice;

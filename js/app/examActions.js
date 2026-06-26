@@ -482,6 +482,17 @@
     function clearReadingMemorizeBrowseMode() {
         global.__readingMemorizeBrowseMode = false;
         global.__browseMemorizeFilterMode = null;
+        emitReadingMemorizeBrowseModeChange(false);
+    }
+
+    function emitReadingMemorizeBrowseModeChange(active) {
+        try {
+            if (typeof global.dispatchEvent === 'function' && typeof global.CustomEvent === 'function') {
+                global.dispatchEvent(new global.CustomEvent('reading-memorize-modechange', {
+                    detail: { active: active === true }
+                }));
+            }
+        } catch (_) { }
     }
 
     function isReadingMemorizeExam(exam) {

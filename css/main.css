@@ -1234,6 +1234,14 @@ body.no-scroll {
     color: var(--color-brand-primary);
 }
 
+.tool-card.is-reading-memorize-active {
+    border-color: rgba(185, 28, 28, 0.48);
+}
+
+.tool-card.is-reading-memorize-active .tool-card-arrow {
+    color: #b91c1c;
+}
+
 
 .vocab-view-shell {
     --vocab-paper: #f8f1e4;
