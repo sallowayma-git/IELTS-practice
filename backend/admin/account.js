@@ -12,6 +12,7 @@
         userId: new URLSearchParams(window.location.search).get('userId') || '',
         loading: false
     };
+    const ADMIN_AUTH_START = '/auth/admin/start?return_to=/admin/account';
 
     const nodes = {
         status: document.getElementById('status'),
@@ -124,7 +125,7 @@
         const payload = parseAdminResponseJson(text);
         storeCsrfTokenFromPayload(payload);
         if (response.status === 401 || response.status === 403) {
-            window.location.href = '/admin/login';
+            window.location.href = ADMIN_AUTH_START;
             throw new Error('Admin session expired');
         }
         if (!response.ok) {
@@ -141,7 +142,7 @@
         const payload = parseAdminResponseJson(text);
         storeCsrfTokenFromPayload(payload);
         if (!response.ok || !payload || !payload.user || payload.user.role !== 'admin') {
-            window.location.href = '/admin/login';
+            window.location.href = ADMIN_AUTH_START;
             return false;
         }
         return true;
@@ -281,7 +282,7 @@
                 method: 'POST'
             });
         } finally {
-            window.location.href = '/admin/login';
+            window.location.href = ADMIN_AUTH_START;
         }
     }
 

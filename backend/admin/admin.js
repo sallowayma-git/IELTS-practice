@@ -189,7 +189,7 @@
         const payload = parseAdminResponseJson(text);
         storeCsrfTokenFromPayload(payload);
         if (response.status === 401 || response.status === 403) {
-            window.location.href = '/admin/login';
+            window.location.href = '/auth/admin/start?return_to=/admin';
             throw new Error('Admin session expired');
         }
         if (!response.ok) {
@@ -206,7 +206,7 @@
         const payload = parseAdminResponseJson(text);
         storeCsrfTokenFromPayload(payload);
         if (!response.ok || !payload || !payload.user || payload.user.role !== 'admin') {
-            window.location.href = '/admin/login';
+            window.location.href = '/auth/admin/start?return_to=/admin';
             return false;
         }
         state.currentUserId = payload.user.id;
@@ -351,7 +351,7 @@
                 credentials: 'same-origin'
             });
             if (response.status === 401 || response.status === 403) {
-                window.location.href = '/admin/login';
+                window.location.href = '/auth/admin/start?return_to=/admin';
                 throw new Error('Admin session expired');
             }
             if (!response.ok) {
@@ -599,7 +599,7 @@
             nodes.logoutButton.disabled = true;
             try {
                 await request('/api/auth/logout', { method: 'POST' });
-                window.location.href = '/admin/login';
+                window.location.href = '/auth/admin/start?return_to=/admin';
             } catch (error) {
                 nodes.logoutButton.disabled = false;
                 setStatus(error.message, 'error');

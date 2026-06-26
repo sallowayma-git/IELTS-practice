@@ -628,6 +628,7 @@
             if (accountFormsBound) {
                 return;
             }
+            const management = window.document.getElementById('account-management');
             const usernameForm = window.document.getElementById('account-username-form');
             const passwordForm = window.document.getElementById('account-password-form');
             const deleteForm = window.document.getElementById('account-delete-form');
@@ -635,6 +636,14 @@
                 return;
             }
             accountFormsBound = true;
+            if (management) {
+                management.innerHTML = [
+                    '<h3 class="account-view__section-title">Account Management</h3>',
+                    '<p class="account-view__form-status">Security settings are managed in the dedicated auth portal.</p>',
+                    '<a class="btn hero-btn" href="/auth/business/account">Open auth account center</a>'
+                ].join('');
+                return;
+            }
 
             if (usernameForm) {
                 usernameForm.addEventListener('submit', async (event) => {
@@ -737,22 +746,8 @@
         }
 
         function show() {
-            ensureUi();
-            if (typeof clearOverlaySensitiveFields === 'function') {
-                clearOverlaySensitiveFields();
-            }
-            if (setOverlayMode) {
-                setOverlayMode('login');
-            }
-            setRemoteAuthGate(true);
-            overlay.hidden = false;
-            updateAccount(null);
-            window.setTimeout(() => {
-                const username = overlay.querySelector('input[name="username"]');
-                if (username) {
-                    username.focus({ preventScroll: true });
-                }
-            }, 0);
+            const returnTo = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+            window.location.href = `/auth/business/start?return_to=${encodeURIComponent(returnTo)}`;
         }
 
         function hide() {

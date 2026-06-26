@@ -2200,7 +2200,7 @@ test('admin shell and business account menu do not link back through the busines
     const adminProxyConfig = fs.readFileSync(path.join(repoRoot, 'backend', 'admin-proxy', 'nginx.conf'), 'utf8');
     const authOverlay = fs.readFileSync(path.join(repoRoot, 'js', 'data', 'authOverlay.js'), 'utf8');
 
-    assert(adminScript.includes("window.location.href = '/admin/login'"));
+    assert(adminScript.includes("window.location.href = '/auth/admin/start?return_to=/admin'"));
     assert(adminScript.includes("fetch('/api/auth/me'"));
     assert(adminScript.includes('/api/admin/summary'));
     assert(adminScript.includes('/api/admin/export?dataset='));
@@ -2214,6 +2214,7 @@ test('admin shell and business account menu do not link back through the busines
     assert.doesNotMatch(adminAccountPage, /js\/bundles\//);
     assert(adminAccountScript.includes('/api/admin/users/'));
     assert(adminAccountScript.includes('/practice-records?limit='));
+    assert(adminAccountScript.includes('/auth/admin/start?return_to=/admin/account'));
     assert(adminProxyConfig.includes('location = /admin/account'));
     assert(adminProxyConfig.includes('location = /admin/account.js'));
     assert(adminProxyConfig.includes('location = /admin/account.css'));
