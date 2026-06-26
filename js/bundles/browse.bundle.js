@@ -7242,25 +7242,36 @@
             if (!manifestEntry) {
                 return '';
             }
+            const resolvedDataKey = manifestEntry.dataKey || manifestEntry.examId || exam?.id;
+            const practiceMode = options && typeof options.practiceMode === 'string'
+                ? options.practiceMode.trim().toLowerCase()
+                : '';
+            const currentProtocol = (typeof window !== 'undefined' && window.location && window.location.protocol)
+                ? String(window.location.protocol).toLowerCase()
+                : '';
+            const usePrettyRoute = currentProtocol === 'http:' || currentProtocol === 'https:';
+            const encodedExamId = encodeURIComponent(String(exam.id || resolvedDataKey || 'reading'));
+            if (usePrettyRoute) {
+                const suffix = practiceMode === 'memorize' ? '/memorize' : '';
+                const url = `/practice/reading/${encodedExamId}${suffix}`;
+                return typeof this._ensureAbsoluteUrl === 'function'
+                    ? this._ensureAbsoluteUrl(url)
+                    : url;
+            }
             const params = new URLSearchParams();
             if (exam && exam.id) {
                 params.set('examId', String(exam.id));
             }
-            const resolvedDataKey = manifestEntry.dataKey || manifestEntry.examId || exam?.id;
             if (resolvedDataKey) {
                 params.set('dataKey', String(resolvedDataKey));
             }
-            const practiceMode = options && typeof options.practiceMode === 'string'
-                ? options.practiceMode.trim().toLowerCase()
-                : '';
             if (practiceMode === 'memorize') {
                 params.set('practiceMode', 'memorize');
                 params.set('mode', 'memorize');
             }
+            const baseUrl = 'assets/generated/reading-exams/reading-practice-unified.html';
             const query = params.toString();
-            const url = query
-                ? `assets/generated/reading-exams/reading-practice-unified.html?${query}`
-                : 'assets/generated/reading-exams/reading-practice-unified.html';
+            const url = query ? `${baseUrl}?${query}` : baseUrl;
             return typeof this._ensureAbsoluteUrl === 'function'
                 ? this._ensureAbsoluteUrl(url)
                 : url;

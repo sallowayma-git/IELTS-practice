@@ -9184,6 +9184,29 @@ storageManager.ready
         return segments.join('/');
     }
 
+    function supportsPrettyExamRoutes() {
+        try {
+            const protocol = global.location && global.location.protocol
+                ? String(global.location.protocol).toLowerCase()
+                : '';
+            return protocol === 'http:' || protocol === 'https:';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function buildPrettyExamRoute(exam, kind = 'html') {
+        if (!supportsPrettyExamRoutes() || !exam || kind === 'pdf') {
+            return '';
+        }
+        const type = exam.type === 'reading' ? 'reading' : (exam.type === 'listening' ? 'listening' : '');
+        const examId = exam.id || exam.examId || exam.dataKey;
+        if (!type || !examId) {
+            return '';
+        }
+        return `/practice/${type}/${encodeURIComponent(String(examId))}`;
+    }
+
     function buildResourcePath(exam, kind = 'html') {
         if (!exam) {
             return '';
@@ -9192,6 +9215,10 @@ storageManager.ready
             return '';
         }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const prettyRoute = buildPrettyExamRoute(exam, resourceKind);
+        if (prettyRoute && exam.type === 'listening') {
+            return prettyRoute;
+        }
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
                 const runtimeUrl = global.LibraryDiscovery.resolveRuntimeResource(exam, resourceKind);
@@ -9263,6 +9290,7 @@ storageManager.ready
             }
         } catch (_) { }
 
+        addAttempt('route', buildPrettyExamRoute(exam, kind === 'pdf' ? 'pdf' : 'html'));
         addAttempt('map', buildResourcePath(exam, kind));
 
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
@@ -9402,6 +9430,7 @@ storageManager.ready
         mergeRootWithFallback,
         buildOverridePathMap,
         derivePathMapFromIndex,
+        buildPrettyExamRoute,
         getPathMapStorageKey,
         getPathMap,
         setActivePathMap,

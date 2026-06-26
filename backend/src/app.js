@@ -1,12 +1,13 @@
 const path = require('node:path');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const express = require('express');
 const session = require('express-session');
 const connectPgSimple = require('connect-pg-simple');
 const helmet = require('helmet');
 
 const db = require('./db');
-const { PostgresAuthStore, createAuthRouter, publicUser, requireAdmin } = require('./auth');
+const { PostgresAuthStore, createAuthRouter, publicUser, requireAuth, requireAdmin } = require('./auth');
 const { PostgresAdminStore, createAdminRouter, createTrafficMiddleware } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
 const {
@@ -34,7 +35,9 @@ function createDefaultSessionStore(pool) {
 function createContentSecurityPolicy(req) {
     const requestPath = String(req.path || '').toLowerCase();
     const listeningContent = requestPath === '/listeningpractice'
-        || requestPath.startsWith('/listeningpractice/');
+        || requestPath.startsWith('/listeningpractice/')
+        || requestPath === '/practice/listening'
+        || requestPath.startsWith('/practice/listening/');
     const legacyTemplate = requestPath === '/templates'
         || requestPath.startsWith('/templates/');
     const legacyExercisePage = listeningContent || legacyTemplate;
@@ -45,7 +48,7 @@ function createContentSecurityPolicy(req) {
     const formAction = listeningContent ? ["'none'"] : ["'self'"];
     const directives = [
         ["default-src", ["'self'"]],
-        ["base-uri", listeningContent ? ["'none'"] : ["'self'"]],
+        ["base-uri", ["'self'"]],
         ["object-src", ["'none'"]],
         ["frame-ancestors", ["'none'"]],
         ["form-action", formAction],
@@ -63,7 +66,7 @@ function createContentSecurityPolicy(req) {
         ["manifest-src", ["'self'"]]
     ];
     if (listeningContent) {
-        directives.push(["sandbox", ['allow-scripts', 'allow-downloads']]);
+        directives.push(["sandbox", ['allow-scripts', 'allow-downloads', 'allow-same-origin']]);
     }
     return directives
         .map(([name, values]) => `${name} ${values.join(' ')}`)
@@ -271,6 +274,187 @@ function normalizeHttpErrorStatus(error, fallback = 500) {
     return Number.isInteger(status) && status >= 400 && status < 600 ? status : fallback;
 }
 
+function loadGeneratedManifest(filePath, globalKey) {
+    const source = fs.readFileSync(filePath, 'utf8');
+    const sandbox = {};
+    vm.createContext(sandbox);
+    vm.runInContext(source, sandbox, {
+        filename: filePath,
+        timeout: 1000
+    });
+    const manifest = sandbox[globalKey];
+    return manifest && typeof manifest === 'object' ? manifest : {};
+}
+
+function escapeHtmlAttribute(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function injectBaseHref(html, baseHref) {
+    const baseTag = `<base href="${escapeHtmlAttribute(baseHref)}">`;
+    if (/<base\s/i.test(html)) {
+        return html.replace(/<base\b[^>]*>/i, baseTag);
+    }
+    if (/<head(\s[^>]*)?>/i.test(html)) {
+        return html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n    ${baseTag}`);
+    }
+    return `${baseTag}\n${html}`;
+}
+
+function sendHtmlFileWithBase(res, filePath, baseHref, next) {
+    fs.readFile(filePath, 'utf8', (error, html) => {
+        if (error) {
+            return next(error);
+        }
+        res.type('html').send(injectBaseHref(html, baseHref));
+    });
+}
+
+function requireContentAuth(req, res, next) {
+    if (req.session && req.session.user) {
+        req.session.user = publicUser(req.session.user);
+        return next();
+    }
+    const loginUrl = '/?auth=login';
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Refresh', `3; url=${loginUrl}`);
+    return res.status(403).type('html').send(`<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="3; url=${escapeHtmlAttribute(loginUrl)}">
+    <title>需要登录</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #f8fafc;
+            color: #1f2937;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        main {
+            width: min(520px, calc(100vw - 32px));
+            border: 1px solid #d7dde5;
+            border-radius: 8px;
+            background: #fff;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+        h1 {
+            margin: 0 0 12px;
+            font-size: 1.25rem;
+        }
+        p {
+            margin: 0 0 18px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+        a {
+            color: #2563eb;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>403 Forbidden</h1>
+        <p>题库内容需要登录后访问。页面将在 3 秒后跳转到登录入口。</p>
+        <a href="${escapeHtmlAttribute(loginUrl)}">立即前往登录</a>
+    </main>
+</body>
+</html>`);
+}
+
+function encodePublicPathSegments(value) {
+    return String(value || '')
+        .replace(/\\/g, '/')
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => {
+            try {
+                return encodeURIComponent(decodeURIComponent(segment));
+            } catch (_) {
+                return encodeURIComponent(segment);
+            }
+        })
+        .join('/');
+}
+
+function createListeningExamResolver(staticRoot) {
+    const manifestPath = path.join(staticRoot, 'assets', 'generated', 'listening-exams', 'manifest.js');
+    const listeningRoots = [
+        {
+            root: path.resolve(staticRoot, 'ListeningPractice'),
+            publicRoot: '/ListeningPractice'
+        },
+        {
+            root: path.resolve(staticRoot, 'ListeningPractice', 'vip special', 'ListeningPractice'),
+            publicRoot: '/ListeningPractice/vip%20special/ListeningPractice'
+        }
+    ];
+    let cachedManifest = null;
+
+    function getManifest() {
+        if (!cachedManifest) {
+            try {
+                cachedManifest = loadGeneratedManifest(manifestPath, '__LISTENING_EXAM_MANIFEST__');
+            } catch (error) {
+                if (error && error.code === 'ENOENT') {
+                    cachedManifest = {};
+                } else {
+                    throw error;
+                }
+            }
+        }
+        return cachedManifest;
+    }
+
+    return function resolveListeningExam(examId) {
+        const normalizedExamId = String(examId || '').trim();
+        if (!normalizedExamId || !/^[a-z0-9][a-z0-9._-]{0,180}$/i.test(normalizedExamId)) {
+            return null;
+        }
+        const entry = getManifest()[normalizedExamId];
+        if (!entry || entry.type !== 'listening' || entry.hasHtml === false) {
+            return null;
+        }
+        const folder = String(entry.path || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/g, '');
+        const filename = String(entry.filename || '').replace(/\\/g, '/').replace(/^\/+/, '');
+        if (!folder || !filename || !filename.toLowerCase().endsWith('.html')) {
+            return null;
+        }
+        for (const { root: listeningRoot, publicRoot } of listeningRoots) {
+            const targetPath = path.resolve(listeningRoot, folder, filename);
+            if (!isPathInside(listeningRoot, targetPath)) {
+                continue;
+            }
+            try {
+                const rootRealpath = fs.realpathSync(listeningRoot);
+                const targetRealpath = fs.realpathSync(targetPath);
+                if (isPathInside(rootRealpath, targetRealpath)) {
+                    const publicFolder = encodePublicPathSegments(folder);
+                    return {
+                        targetPath: targetRealpath,
+                        baseHref: `${publicRoot}${publicFolder ? `/${publicFolder}` : ''}/`
+                    };
+                }
+            } catch (error) {
+                if (!error || (error.code !== 'ENOENT' && error.code !== 'ENOTDIR')) {
+                    throw error;
+                }
+            }
+        }
+        return null;
+    };
+}
+
 function createApp(options = {}) {
     const app = express();
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
@@ -336,6 +520,7 @@ function createApp(options = {}) {
     const trafficEnabled = options.trafficEnabled !== undefined
         ? Boolean(options.trafficEnabled)
         : parseBoolean(process.env.TRAFFIC_ENABLED, true);
+    const resolveListeningExam = createListeningExamResolver(repoRoot);
 
     async function refreshSessionUser(req, res, next) {
         try {
@@ -460,6 +645,40 @@ function createApp(options = {}) {
 
     app.get('/', (req, res) => {
         res.sendFile(path.join(repoRoot, 'index.html'));
+    });
+
+    const protectedContentRoutes = [
+        '/practice',
+        '/assets/generated/reading-exams',
+        '/assets/generated/reading-explanations',
+        '/assets/generated/listening-exams',
+        '/ListeningPractice',
+        '/listeningpractice',
+        '/templates',
+        '/Templates'
+    ];
+    app.use(protectedContentRoutes, requireContentAuth);
+
+    app.get([
+        '/practice/reading/:examId',
+        '/practice/reading/:examId/',
+        '/practice/reading/:examId/:mode',
+        '/practice/reading/:examId/:mode/'
+    ], (req, res, next) => {
+        const targetPath = path.join(repoRoot, 'assets', 'generated', 'reading-exams', 'reading-practice-unified.html');
+        return sendHtmlFileWithBase(res, targetPath, '/assets/generated/reading-exams/', next);
+    });
+
+    app.get(['/practice/listening/:examId', '/practice/listening/:examId/'], (req, res, next) => {
+        try {
+            const target = resolveListeningExam(req.params.examId);
+            if (!target) {
+                return res.status(404).type('text/plain').send('Not found');
+            }
+            return sendHtmlFileWithBase(res, target.targetPath, target.baseHref, next);
+        } catch (error) {
+            return next(error);
+        }
     });
 
     for (const directory of ['assets', 'css', 'js', 'templates', 'ListeningPractice']) {

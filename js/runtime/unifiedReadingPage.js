@@ -601,11 +601,40 @@
         dom.subtitle.textContent = parts.join(' · ');
     }
 
+    function decodePathSegment(value) {
+        try {
+            return decodeURIComponent(String(value || ''));
+        } catch (_) {
+            return String(value || '');
+        }
+    }
+
+    function extractPrettyReadingRoute() {
+        try {
+            const pathname = global.location && global.location.pathname
+                ? String(global.location.pathname)
+                : '';
+            const match = pathname.match(/\/practice\/reading\/([^/?#]+)(?:\/([^/?#]+))?\/?$/i);
+            if (!match) {
+                return { examId: '', practiceMode: '' };
+            }
+            const examId = decodePathSegment(match[1]).trim();
+            const mode = decodePathSegment(match[2] || '').trim().toLowerCase();
+            return {
+                examId,
+                practiceMode: mode === 'memorize' ? 'memorize' : ''
+            };
+        } catch (_) {
+            return { examId: '', practiceMode: '' };
+        }
+    }
+
     function parseQuery() {
         const params = new URLSearchParams(global.location.search);
-        state.examId = decodeParam(params.get('examId')) || null;
+        const routeState = extractPrettyReadingRoute();
+        state.examId = decodeParam(params.get('examId')) || routeState.examId || null;
         state.dataKey = decodeParam(params.get('dataKey')) || state.examId;
-        applyPracticeMode(params.get('practiceMode') || params.get('mode') || '');
+        applyPracticeMode(params.get('practiceMode') || params.get('mode') || routeState.practiceMode || '');
         const suiteSessionId = decodeParam(params.get('suiteSessionId')) || null;
         if (suiteSessionId) {
             state.suiteSessionId = suiteSessionId;
@@ -662,7 +691,9 @@
             return '';
         }
         try {
-            const baseHref = global.location && global.location.href ? global.location.href : 'http://localhost/assets/generated/reading-exams/';
+            const baseHref = global.document && global.document.baseURI
+                ? global.document.baseURI
+                : (global.location && global.location.href ? global.location.href : 'http://localhost/assets/generated/reading-exams/');
             const resolved = new URL(String(rawUrl), baseHref);
             const protocol = (resolved.protocol || '').toLowerCase();
             const currentDir = new URL('.', baseHref).pathname;

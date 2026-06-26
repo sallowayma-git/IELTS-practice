@@ -1240,6 +1240,15 @@
       var currentUrl = new URL(window.location.href);
       var examId = normalizeListeningExamId(currentUrl.searchParams.get('examId'), '');
       if (examId) return examId;
+      var prettyMatch = currentUrl.pathname.match(/\/practice\/listening\/([^/?#]+)\/?$/i);
+      if (prettyMatch && prettyMatch[1]) {
+        try {
+          examId = normalizeListeningExamId(decodeURIComponent(prettyMatch[1]), '');
+        } catch (e) {
+          examId = normalizeListeningExamId(prettyMatch[1], '');
+        }
+        if (examId) return examId;
+      }
       var rawSrc = String(currentUrl.searchParams.get('src') || '').trim();
       if (rawSrc && rawSrc.length <= MAX_LISTENING_URL_SOURCE_LENGTH) {
         var src = rawSrc;
