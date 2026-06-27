@@ -34,6 +34,10 @@ function hashHandoffToken(token) {
     return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('hex');
 }
 
+function hashVerifier(value) {
+    return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
+}
+
 function createSignedAuthState(secret, payload) {
     const encoded = base64UrlJson(payload);
     return `${encoded}.${signValue(secret, encoded)}`;
@@ -89,6 +93,54 @@ function getRequestBaseUrl(req) {
         return '';
     }
     return `${proto}://${host}`.replace(/\/+$/g, '');
+}
+
+function getVerifierCookieName(audience) {
+    return `ielts.auth_handoff.${audience}`;
+}
+
+function parseCookies(req) {
+    const header = String(req.get('cookie') || '');
+    const cookies = new Map();
+    header.split(';').forEach((part) => {
+        const index = part.indexOf('=');
+        if (index <= 0) return;
+        const name = part.slice(0, index).trim();
+        const value = part.slice(index + 1).trim();
+        if (name) {
+            cookies.set(name, decodeURIComponent(value));
+        }
+    });
+    return cookies;
+}
+
+function setVerifierCookie(req, res, audience, nonce, maxAgeMs) {
+    const proto = String(req.get('x-forwarded-proto') || req.protocol || '').split(',', 1)[0].trim().toLowerCase();
+    res.cookie(getVerifierCookieName(audience), nonce, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: proto === 'https',
+        maxAge: maxAgeMs,
+        path: `/auth/${audience}/callback`
+    });
+}
+
+function clearVerifierCookie(req, res, audience) {
+    const proto = String(req.get('x-forwarded-proto') || req.protocol || '').split(',', 1)[0].trim().toLowerCase();
+    res.clearCookie(getVerifierCookieName(audience), {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: proto === 'https',
+        path: `/auth/${audience}/callback`
+    });
+}
+
+function getVerifierHashFromRequest(req, audience) {
+    const verifier = parseCookies(req).get(getVerifierCookieName(audience));
+    if (!verifier || verifier.length > 256) {
+        return '';
+    }
+    return hashVerifier(verifier);
 }
 
 function sanitizeReturnTo(value, audience = 'business') {
@@ -157,31 +209,33 @@ class PostgresAuthHandoffStore {
         await this.db.query(
             `INSERT INTO auth_handoff_tickets (
                 token_hash, user_id, audience, return_to,
-                admin_totp_verified_at, expires_at
+                admin_totp_verified_at, expires_at, verifier_hash
             )
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             [
                 ticket.tokenHash,
                 ticket.userId,
                 ticket.audience,
                 ticket.returnTo,
                 ticket.adminTotpVerifiedAt || null,
-                ticket.expiresAt
+                ticket.expiresAt,
+                ticket.verifierHash
             ]
         );
     }
 
-    async consumeTicket(tokenHash, audience) {
+    async consumeTicket(tokenHash, audience, verifierHash) {
         const result = await this.db.query(
             `UPDATE auth_handoff_tickets
              SET used_at = now()
              WHERE token_hash = $1
                AND audience = $2
+               AND verifier_hash = $3
                AND used_at IS NULL
                AND expires_at > now()
              RETURNING token_hash, user_id, audience, return_to,
-                       admin_totp_verified_at, expires_at, used_at, created_at`,
-            [tokenHash, audience]
+                       admin_totp_verified_at, expires_at, verifier_hash, used_at, created_at`,
+            [tokenHash, audience, verifierHash]
         );
         return result.rows[0] || null;
     }
@@ -200,9 +254,9 @@ class MemoryAuthHandoffStore {
         });
     }
 
-    async consumeTicket(tokenHash, audience) {
+    async consumeTicket(tokenHash, audience, verifierHash) {
         const ticket = this.tickets.get(tokenHash);
-        if (!ticket || ticket.audience !== audience || ticket.usedAt) {
+        if (!ticket || ticket.audience !== audience || ticket.verifierHash !== verifierHash || ticket.usedAt) {
             return null;
         }
         if (new Date(ticket.expiresAt).getTime() <= Date.now()) {
@@ -216,6 +270,7 @@ class MemoryAuthHandoffStore {
             return_to: ticket.returnTo,
             admin_totp_verified_at: ticket.adminTotpVerifiedAt || null,
             expires_at: ticket.expiresAt,
+            verifier_hash: ticket.verifierHash,
             used_at: ticket.usedAt,
             created_at: ticket.createdAt
         };
@@ -255,13 +310,17 @@ function createAuthHandoffRouter(options = {}) {
             const returnTo = sanitizeReturnTo(req.query.return_to, audience);
             const targetBaseUrl = configuredTargetUrls[audience] || getRequestBaseUrl(req);
             const callbackPath = `/auth/${audience}/callback`;
+            const verifier = crypto.randomBytes(32).toString('base64url');
+            const verifierHash = hashVerifier(verifier);
+            setVerifierCookie(req, res, audience, verifier, MAX_STATE_AGE_MS);
             const state = createSignedAuthState(stateSecret, {
                 audience,
                 returnTo,
                 targetBaseUrl,
                 callbackPath,
                 issuedAt: Date.now(),
-                nonce: crypto.randomBytes(16).toString('base64url')
+                nonce: crypto.randomBytes(16).toString('base64url'),
+                verifierHash
             });
             const loginPath = appendQuery(`${authPublicUrl}/auth/${audience}/login`, { state });
             return res.redirect(loginPath);
@@ -334,7 +393,8 @@ function createAuthHandoffRouter(options = {}) {
                 audience: state.audience,
                 returnTo: sanitizeReturnTo(state.returnTo, state.audience),
                 adminTotpVerifiedAt,
-                expiresAt: new Date(Date.now() + ticketTtlMs).toISOString()
+                expiresAt: new Date(Date.now() + ticketTtlMs).toISOString(),
+                verifierHash: String(state.verifierHash || '')
             });
             const targetBaseUrl = normalizePublicBaseUrl(state.targetBaseUrl);
             const callbackPath = typeof state.callbackPath === 'string' && state.callbackPath.startsWith('/auth/')
@@ -366,10 +426,15 @@ function createAuthHandoffRouter(options = {}) {
                     const callbackUrl = appendQuery(`${configuredTargetUrl}/auth/${audience}/callback`, { ticket: token });
                     return res.redirect(callbackUrl);
                 }
-                const ticket = await ticketStore.consumeTicket(hashHandoffToken(token), audience);
+                const verifierHash = getVerifierHashFromRequest(req, audience);
+                if (!verifierHash) {
+                    return res.status(403).type('text/plain').send('Auth ticket is invalid or expired');
+                }
+                const ticket = await ticketStore.consumeTicket(hashHandoffToken(token), audience, verifierHash);
                 if (!ticket) {
                     return res.status(403).type('text/plain').send('Auth ticket is invalid or expired');
                 }
+                clearVerifierCookie(req, res, audience);
                 const user = await authStore.findById(ticket.user_id);
                 if (!user) {
                     return res.status(401).type('text/plain').send('Authentication required');

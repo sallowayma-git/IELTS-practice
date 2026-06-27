@@ -340,15 +340,48 @@ async function createClient(options = {}) {
     const baseUrl = `http://127.0.0.1:${port}`;
 
     function createSessionClient() {
-        let cookie = '';
+        const cookieJar = new Map();
         let csrfToken = '';
+
+        function getCookieHeader() {
+            return Array.from(cookieJar.entries())
+                .filter(([, value]) => value !== '')
+                .map(([name, value]) => `${name}=${value}`)
+                .join('; ');
+        }
+
+        function splitCombinedSetCookie(value) {
+            return String(value || '')
+                .split(/,(?=\s*[^;,=\s]+=[^;,]*)/g)
+                .map((item) => item.trim())
+                .filter(Boolean);
+        }
+
+        function storeSetCookieHeaders(response) {
+            const setCookies = typeof response.headers.getSetCookie === 'function'
+                ? response.headers.getSetCookie()
+                : splitCombinedSetCookie(response.headers.get('set-cookie'));
+            setCookies.forEach((setCookie) => {
+                const first = String(setCookie || '').split(';', 1)[0];
+                const index = first.indexOf('=');
+                if (index <= 0) return;
+                const name = first.slice(0, index);
+                const value = first.slice(index + 1);
+                if (value === '') {
+                    cookieJar.delete(name);
+                } else {
+                    cookieJar.set(name, value);
+                }
+            });
+        }
 
         async function request(method, path, body, options = {}) {
             const headers = {
                 ...(options.headers || {})
             };
-            if (cookie) {
-                headers.cookie = cookie;
+            const cookieHeader = getCookieHeader();
+            if (cookieHeader) {
+                headers.cookie = cookieHeader;
             }
             if (options.csrf !== false && csrfToken && method !== 'GET') {
                 headers['x-csrf-token'] = csrfToken;
@@ -363,10 +396,7 @@ async function createClient(options = {}) {
                 redirect: options.redirect,
                 body: hasRawBody ? options.rawBody : (body === undefined ? undefined : JSON.stringify(body))
             });
-            const setCookie = response.headers.get('set-cookie');
-            if (setCookie) {
-                cookie = setCookie.split(';')[0];
-            }
+            storeSetCookieHeaders(response);
             const text = await response.text();
             let json = null;
             if (text) {
@@ -2267,6 +2297,10 @@ test('auth handoff creates a one-time business session ticket', async () => {
         const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
         assert.equal(callbackUrl.pathname, '/auth/business/callback');
         assert(callbackUrl.searchParams.get('ticket'));
+
+        const differentBrowser = client.createSession();
+        const crossBrowser = await differentBrowser.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(crossBrowser.response.status, 403);
 
         const callback = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
         assert.equal(callback.response.status, 302);
