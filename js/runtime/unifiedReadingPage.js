@@ -18,6 +18,11 @@
     const MAX_SIMULATION_DRAFT_HIGHLIGHT_TEXT_CHARS = 1000;
     const MAX_SIMULATION_DRAFT_SCROLL_Y = 10000000;
     const SIMULATION_DRAFT_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const READING_TIMER_PREF_KEY = 'ielts_reading_timer_preferences_v1';
+    const TIMER_MODE_VALUES = new Set(['elapsed', 'ielts', 'custom']);
+    const DEFAULT_CUSTOM_TIMER_MINUTES = 60;
+    const MIN_CUSTOM_TIMER_MINUTES = 1;
+    const MAX_CUSTOM_TIMER_MINUTES = 240;
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -92,6 +97,8 @@
         endlessCountdownSeconds: 0,
         endlessCountdownEndTime: null,
         suiteTimerLimitSeconds: null,
+        timerDisplayMode: 'ielts',
+        customTimerMinutes: DEFAULT_CUSTOM_TIMER_MINUTES,
         ready: false,
         submitted: false,
         initTimer: null,
@@ -238,10 +245,113 @@
         return `${minutes}:${seconds}`;
     }
 
+    function clampCustomTimerMinutes(value) {
+        const minutes = Math.round(Number(value));
+        if (!Number.isFinite(minutes)) {
+            return DEFAULT_CUSTOM_TIMER_MINUTES;
+        }
+        return Math.max(MIN_CUSTOM_TIMER_MINUTES, Math.min(MAX_CUSTOM_TIMER_MINUTES, minutes));
+    }
+
+    function readTimerPreferences() {
+        const fallback = {
+            mode: 'ielts',
+            customMinutes: DEFAULT_CUSTOM_TIMER_MINUTES
+        };
+        if (!global.localStorage) {
+            return fallback;
+        }
+        try {
+            const raw = global.localStorage.getItem(READING_TIMER_PREF_KEY);
+            if (!raw) {
+                return fallback;
+            }
+            if (String(raw).length > 4096) {
+                return fallback;
+            }
+            const preferences = JSON.parse(raw);
+            const mode = TIMER_MODE_VALUES.has(preferences?.mode) ? preferences.mode : fallback.mode;
+            return {
+                mode,
+                customMinutes: clampCustomTimerMinutes(preferences?.customMinutes)
+            };
+        } catch (_) {
+            return fallback;
+        }
+    }
+
+    function writeTimerPreferences() {
+        if (!global.localStorage) {
+            return;
+        }
+        try {
+            global.localStorage.setItem(READING_TIMER_PREF_KEY, JSON.stringify({
+                mode: TIMER_MODE_VALUES.has(state.timerDisplayMode) ? state.timerDisplayMode : 'ielts',
+                customMinutes: clampCustomTimerMinutes(state.customTimerMinutes)
+            }));
+        } catch (_) {
+            // Ignore storage failures in restricted browsers.
+        }
+    }
+
+    function resolveTimerDisplayMode() {
+        if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
+            return 'countdown';
+        }
+        return TIMER_MODE_VALUES.has(state.timerDisplayMode) ? state.timerDisplayMode : 'ielts';
+    }
+
+    function resolveTimerDisplaySeconds(mode) {
+        const elapsedSeconds = getPageElapsedSeconds();
+        if (mode === 'elapsed') {
+            return elapsedSeconds;
+        }
+        if (mode === 'custom') {
+            return Math.max(0, clampCustomTimerMinutes(state.customTimerMinutes) * 60 - elapsedSeconds);
+        }
+        const suiteLimit = Number(state.suiteTimerLimitSeconds);
+        const limitSeconds = state.suiteTimerMode === 'countdown' && Number.isFinite(suiteLimit) && suiteLimit > 0
+            ? Math.floor(suiteLimit)
+            : 60 * 60;
+        return Math.max(0, limitSeconds - elapsedSeconds);
+    }
+
+    function formatTimerDisplay(totalSeconds, mode) {
+        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        if (mode === 'elapsed') {
+            return `${formatTimerSeconds(safeSeconds)} elapsed`;
+        }
+        if (safeSeconds <= 0) {
+            return 'Time is up';
+        }
+        if (safeSeconds < 60) {
+            return `${safeSeconds} seconds remaining`;
+        }
+        const minutes = Math.ceil(safeSeconds / 60);
+        return `${minutes} minutes remaining`;
+    }
+
+    function syncTimerSettingsControls() {
+        const mode = TIMER_MODE_VALUES.has(state.timerDisplayMode) ? state.timerDisplayMode : 'ielts';
+        document.querySelectorAll('[data-timer-mode]').forEach((button) => {
+            if (!(button instanceof HTMLElement)) return;
+            button.classList.toggle('active', button.dataset.timerMode === mode);
+        });
+        const input = document.getElementById('timer-custom-minutes');
+        if (input instanceof HTMLInputElement) {
+            input.value = String(clampCustomTimerMinutes(state.customTimerMinutes));
+            input.disabled = mode !== 'custom';
+        }
+        document.querySelectorAll('.timer-custom-control').forEach((control) => {
+            control.classList.toggle('is-visible', mode === 'custom');
+        });
+    }
+
     function renderTimer() {
         const timer = document.getElementById('timer');
         if (!timer) return;
         var displaySeconds;
+        var displayMode = resolveTimerDisplayMode();
         if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
             var remainingMs = state.endlessCountdownEndTime - Date.now();
             displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -251,14 +361,15 @@
                 timer.classList.remove('endless-countdown');
             }
         } else {
-            displaySeconds = getPageElapsedSeconds();
-            if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
-                displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
-            }
+            displaySeconds = resolveTimerDisplaySeconds(displayMode);
         }
-        timer.textContent = formatTimerSeconds(displaySeconds);
+        timer.textContent = formatTimerDisplay(displaySeconds, displayMode);
+        timer.dataset.timerMode = displayMode;
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
+        timer.classList.toggle('timer-mode-elapsed', displayMode === 'elapsed');
+        timer.classList.toggle('timer-mode-countdown', displayMode !== 'elapsed');
+        timer.classList.toggle('timer-expired', displayMode !== 'elapsed' && displaySeconds <= 0);
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
     }
 
@@ -307,6 +418,10 @@
         const settingsBtn = document.getElementById('settings-btn');
         const noteBtn = document.getElementById('note-btn');
         const closeNoteBtn = document.getElementById('close-note');
+        const timerPrefs = readTimerPreferences();
+        state.timerDisplayMode = timerPrefs.mode;
+        state.customTimerMinutes = timerPrefs.customMinutes;
+        syncTimerSettingsControls();
 
         settingsBtn?.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -337,6 +452,26 @@
                 button.classList.add('active');
             });
         });
+        document.querySelectorAll('.settings-option[data-timer-mode]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const nextMode = TIMER_MODE_VALUES.has(button.dataset.timerMode) ? button.dataset.timerMode : 'ielts';
+                state.timerDisplayMode = nextMode;
+                writeTimerPreferences();
+                syncTimerSettingsControls();
+                renderTimer();
+            });
+        });
+        const customMinutesInput = document.getElementById('timer-custom-minutes');
+        if (customMinutesInput instanceof HTMLInputElement) {
+            const updateCustomMinutes = () => {
+                state.customTimerMinutes = clampCustomTimerMinutes(customMinutesInput.value);
+                customMinutesInput.value = String(state.customTimerMinutes);
+                writeTimerPreferences();
+                renderTimer();
+            };
+            customMinutesInput.addEventListener('change', updateCustomMinutes);
+            customMinutesInput.addEventListener('blur', updateCustomMinutes);
+        }
     }
 
     function positionSelectionToolbar(rect) {

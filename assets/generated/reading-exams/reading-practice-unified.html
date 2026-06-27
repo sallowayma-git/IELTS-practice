@@ -936,7 +936,54 @@
             color: inherit;
             font-weight: inherit;
         }
-    </style>
+
+        /* ================= IELTS Reading Stage 1 Layout ================= */
+        #timer {
+            min-width: 140px;
+            border: 0;
+            background: transparent;
+            padding: 0;
+            color: #475569;
+            font-size: 0.84rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        #timer:hover {
+            color: #0f172a;
+        }
+
+        #timer.paused {
+            opacity: 0.65;
+        }
+
+        #timer.timer-expired {
+            color: #dc2626;
+        }
+
+        .timer-custom-control {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+            color: #475569;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .timer-custom-control.is-visible {
+            display: flex;
+        }
+
+        #timer-custom-minutes {
+            width: 78px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font: inherit;
+        }    </style>
 </head>
 
 <body>
@@ -946,7 +993,7 @@
             <p id="exam-subtitle">统一阅读页</p>
         </div>
         <div class="header-controls">
-            <div id="timer" title="点击启停">00:00</div>
+            <div id="timer" title="点击启停">60 minutes remaining</div>
             <button class="header-btn" id="settings-btn" title="Settings" type="button">☰</button>
             <button class="header-btn" id="note-btn" type="button">Note</button>
         </div>
@@ -967,6 +1014,18 @@
                 <button class="settings-option active" data-mode="light">浅色</button>
                 <button class="settings-option" data-mode="dark">深色</button>
             </div>
+        </div>
+        <div class="settings-section">
+            <h3 class="settings-title">Timer mode</h3>
+            <div class="settings-options">
+                <button class="settings-option" data-timer-mode="elapsed">Elapsed</button>
+                <button class="settings-option active" data-timer-mode="ielts">IELTS 60</button>
+                <button class="settings-option" data-timer-mode="custom">Custom</button>
+            </div>
+            <label class="timer-custom-control" for="timer-custom-minutes">
+                <span>Minutes</span>
+                <input id="timer-custom-minutes" type="number" min="1" max="240" step="1" value="60">
+            </label>
         </div>
         <div class="settings-section" id="suite-flow-mode-section" style="display: none;">
             <h3 class="settings-title">套题流程模式</h3>
