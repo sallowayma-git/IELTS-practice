@@ -255,6 +255,51 @@ function createStaticBoundaryMiddleware(root, options = {}) {
 const DEFAULT_SESSION_SECRET = 'development-session-secret-change-me';
 const PLACEHOLDER_SESSION_SECRET = 'replace-with-a-long-random-session-secret';
 
+function normalizePublicBaseUrl(value) {
+    const text = String(value || '').trim().replace(/\/+$/g, '');
+    if (!text) {
+        return '';
+    }
+    try {
+        const url = new URL(text);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            return '';
+        }
+        url.pathname = url.pathname.replace(/\/+$/g, '');
+        url.search = '';
+        url.hash = '';
+        return url.toString().replace(/\/+$/g, '');
+    } catch (_) {
+        return '';
+    }
+}
+
+function getOptionOrEnv(options, optionName, envName) {
+    if (Object.prototype.hasOwnProperty.call(options, optionName)) {
+        return options[optionName];
+    }
+    return process.env[envName];
+}
+
+function resolveAuthPublicUrls(options = {}) {
+    const urls = {
+        authPublicUrl: normalizePublicBaseUrl(getOptionOrEnv(options, 'authPublicUrl', 'AUTH_PUBLIC_URL')),
+        businessPublicUrl: normalizePublicBaseUrl(getOptionOrEnv(options, 'businessPublicUrl', 'BUSINESS_PUBLIC_URL')),
+        adminPublicUrl: normalizePublicBaseUrl(getOptionOrEnv(options, 'adminPublicUrl', 'ADMIN_PUBLIC_URL'))
+    };
+    const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
+    if (production) {
+        const missing = [];
+        if (!urls.authPublicUrl) missing.push('AUTH_PUBLIC_URL');
+        if (!urls.businessPublicUrl) missing.push('BUSINESS_PUBLIC_URL');
+        if (!urls.adminPublicUrl) missing.push('ADMIN_PUBLIC_URL');
+        if (missing.length) {
+            throw new Error(`${missing.join(', ')} must be set to valid http(s) public URLs in production`);
+        }
+    }
+    return urls;
+}
+
 function resolveSessionSecret(options = {}) {
     const secret = options.sessionSecret || process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET;
     const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
@@ -459,6 +504,7 @@ function createListeningExamResolver(staticRoot) {
 
 function createApp(options = {}) {
     const app = express();
+    const authPublicUrls = resolveAuthPublicUrls(options);
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
     const adminRoot = options.adminRoot || path.resolve(__dirname, '..', 'admin');
     const authRoot = options.authRoot || path.resolve(__dirname, '..', 'auth');
@@ -582,9 +628,9 @@ function createApp(options = {}) {
         ticketStore: authHandoffStore,
         stateSecret: authHandoffSecret,
         ticketTtlMs: options.authHandoffTicketTtlMs,
-        authPublicUrl: options.authPublicUrl,
-        businessPublicUrl: options.businessPublicUrl,
-        adminPublicUrl: options.adminPublicUrl,
+        authPublicUrl: authPublicUrls.authPublicUrl,
+        businessPublicUrl: authPublicUrls.businessPublicUrl,
+        adminPublicUrl: authPublicUrls.adminPublicUrl,
         nodeEnv: options.nodeEnv,
         totpVerificationMaxAgeMs
     }));

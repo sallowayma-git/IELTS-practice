@@ -2047,46 +2047,37 @@
                 return { type, data, sourceTag };
             };
 
-            const resolveWindowName = (targetWindow) => {
-                if (!targetWindow) {
-                    return '';
-                }
-                try {
-                    const rawName = typeof targetWindow.name === 'string'
-                        ? targetWindow.name
-                        : '';
-                    return rawName.trim();
-                } catch (_) {
-                    return '';
-                }
-            };
+            const sessionBoundMessageTypes = new Set([
+                'exam_completed',
+                'exam_progress',
+                'SESSION_READY',
+                'PROGRESS_UPDATE',
+                'PRACTICE_COMPLETE',
+                'PRACTICE_RESULT',
+                'PRACTICE_RESET_REQUEST',
+                'SUITE_CLOSE_ATTEMPT',
+                'REVIEW_NAVIGATE',
+                'SUITE_CONFIG_UPDATE',
+                'VOCAB_HIGHLIGHT_SAVE',
+                'SIMULATION_DRAFT_SYNC',
+                'SIMULATION_NAVIGATE',
+                'SIMULATION_SUBMIT'
+            ]);
 
-            const isLikelySameWindowContext = (sourceWindow, expectedWindow) => {
-                if (!sourceWindow || !expectedWindow) {
+            const carriesExpectedSessionToken = (data, expectedSessionId) => {
+                if (!expectedSessionId || !isPlainObject(data)) {
                     return false;
                 }
-                if (sourceWindow === expectedWindow) {
-                    return true;
-                }
-                const sourceName = resolveWindowName(sourceWindow);
-                const expectedName = resolveWindowName(expectedWindow);
-                if (sourceName && expectedName && sourceName === expectedName) {
-                    return true;
-                }
-                try {
-                    const sourceHref = sourceWindow.location && typeof sourceWindow.location.href === 'string'
-                        ? sourceWindow.location.href
-                        : '';
-                    const expectedHref = expectedWindow.location && typeof expectedWindow.location.href === 'string'
-                        ? expectedWindow.location.href
-                        : '';
-                    if (sourceHref && expectedHref && sourceHref === expectedHref && sourceHref !== 'about:blank') {
-                        return true;
-                    }
-                } catch (_) {
-                    // ignore cross-origin href checks
-                }
-                return false;
+                const expected = String(expectedSessionId);
+                const metadata = isPlainObject(data.metadata) ? data.metadata : {};
+                return [
+                    data.channelNonce,
+                    data.sessionToken,
+                    data.sessionId,
+                    metadata.channelNonce,
+                    metadata.sessionToken,
+                    metadata.sessionId
+                ].some((candidate) => typeof candidate === 'string' && candidate.trim() === expected);
             };
 
             const messageHandler = async (event) => {
@@ -2122,7 +2113,7 @@
                 const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
                     ? data.suiteSessionId.trim()
                     : '';
-                const payloadSessionId = data && typeof data.sessionId === 'string'
+                let payloadSessionId = data && typeof data.sessionId === 'string'
                     ? data.sessionId.trim()
                     : '';
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
@@ -2134,7 +2125,9 @@
                     && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
                 );
                 const sourceIsExpectedWindow = sourceWindow === expectedWindow;
-                const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                if (!sourceIsExpectedWindow) {
+                    return;
+                }
                 const isListeningBridgeSource = src === 'listening_record_bridge';
                 const isListeningBridgeProtocolMessage = Boolean(
                     isListeningBridgeSource
@@ -2150,7 +2143,6 @@
                 const allowSandboxedListeningOrigin = Boolean(
                     isOpaqueOrigin
                     && windowInfo.allowOpaqueOrigin
-                    && sourceIsExpectedWindow
                     && isListeningBridgeProtocolMessage
                 );
                 // 校验来源域：常规页面必须同源；file:// 保留兼容；沙盒听力页只接受预期窗口的 bridge 协议消息。
@@ -2164,28 +2156,13 @@
                         return;
                     }
                 }
-                const allowSuiteSourceFallback = Boolean(
-                    !sourceMatched
-                    && payloadExamId
-                    && payloadExamId === expectedExamId
-                    && payloadSuiteSessionId
-                    && activeSuiteSessionId
-                    && payloadSuiteSessionId === activeSuiteSessionId
-                    && isExamInActiveSuite
-                );
-                const allowListeningSourceFallback = Boolean(
-                    !sourceMatched
-                    && isListeningBridgeProtocolMessage
-                    && (
-                        (payloadExamId && payloadExamId === expectedExamId)
-                        || (payloadSessionId && expectedSessionId && payloadSessionId === expectedSessionId)
-                    )
-                );
-                if (!sourceMatched && !allowSuiteSourceFallback && !allowListeningSourceFallback) {
+                const hasExpectedSessionToken = carriesExpectedSessionToken(data, expectedSessionId);
+                if (sessionBoundMessageTypes.has(type) && !hasExpectedSessionToken) {
                     return;
                 }
-                if (windowInfo && sourceWindow !== expectedWindow) {
-                    windowInfo.window = sourceWindow;
+                if (!payloadSessionId && hasExpectedSessionToken) {
+                    data.sessionId = expectedSessionId;
+                    payloadSessionId = expectedSessionId;
                 }
                 const isSuiteFlowPayload = Boolean(
                     (type === 'PRACTICE_COMPLETE'
@@ -2208,6 +2185,7 @@
                             : '';
                         const allowSuiteSessionMismatch = Boolean(
                             isSuiteFlowPayload
+                            && hasExpectedSessionToken
                             && (
                                 (windowSuiteSessionId && windowSuiteSessionId === payloadSuiteSessionId)
                                 || isExamInActiveSuite
@@ -2216,12 +2194,12 @@
                         const allowListeningSessionMismatch = Boolean(
                             isListeningBridgeProtocolMessage
                             && expectedSessionId
-                            && (sourceMatched || allowListeningSourceFallback)
+                            && hasExpectedSessionToken
                         );
                         const allowResetSessionMismatch = Boolean(
                             isPracticeResetRequest
                             && expectedSessionId
-                            && sourceMatched
+                            && hasExpectedSessionToken
                         );
                         if (!allowSuiteSessionMismatch && !allowListeningSessionMismatch && !allowResetSessionMismatch) {
                             return;
@@ -2244,7 +2222,7 @@
                     const allowedLegacy = payloadExamId === 'session';
                     const allowListeningExamMismatch = Boolean(
                         isListeningBridgeProtocolMessage
-                        && (sourceMatched || allowListeningSourceFallback)
+                        && hasExpectedSessionToken
                     );
                     if (!allowedLegacy && !allowListeningExamMismatch) {
                         return;
@@ -3313,6 +3291,8 @@
                 examId: examId,
                 parentOrigin: window.location.origin,
                 sessionId: info.expectedSessionId,
+                channelNonce: info.expectedSessionId,
+                sessionToken: info.expectedSessionId,
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
                 suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,

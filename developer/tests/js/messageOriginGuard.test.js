@@ -111,6 +111,30 @@ for (const relativePath of files) {
     }
 }
 
+for (const relativePath of ['js/app/examSessionMixin.js', 'js/bundles/browse.bundle.js']) {
+    const source = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+    assert(
+        !source.includes('isLikelySameWindowContext')
+            && !source.includes('resolveWindowName')
+            && !source.includes('sourceHref')
+            && !source.includes('expectedHref'),
+        `${relativePath} must not use window.name or readable location.href as postMessage source identity`
+    );
+    assert(
+        !source.includes('windowInfo.window = sourceWindow;'),
+        `${relativePath} must not replace the expected practice window from a postMessage sender`
+    );
+    assert(
+        source.includes('const sourceIsExpectedWindow = sourceWindow === expectedWindow;')
+            && source.includes('if (!sourceIsExpectedWindow)')
+            && source.includes('sessionBoundMessageTypes')
+            && source.includes('carriesExpectedSessionToken')
+            && source.includes('channelNonce: info.expectedSessionId')
+            && source.includes('sessionToken: info.expectedSessionId'),
+        `${relativePath} must require exact source plus the per-window session token for trusted practice messages`
+    );
+}
+
 const templateBaseSource = fs.readFileSync(path.join(repoRoot, 'templates/template_base.html'), 'utf8');
 assert(
     templateBaseSource.includes('isTrustedParentMessage: function (event)') &&

@@ -474,6 +474,9 @@ function createProductionAppWithSecret(sessionSecret, options = {}) {
     const authStore = new MemoryAuthStore({ sessionStore });
     const totpStore = new MemoryTotpStore();
     const practiceStore = new MemoryPracticeRecordStore();
+    const optionOrDefault = (name, fallback) => Object.prototype.hasOwnProperty.call(options, name)
+        ? options[name]
+        : fallback;
     return () => createApp({
         authStore,
         totpStore,
@@ -483,7 +486,10 @@ function createProductionAppWithSecret(sessionSecret, options = {}) {
         sessionSecret,
         nodeEnv: 'production',
         rateLimit: { maxAttempts: 100, windowMs: 60_000 },
-        totpEncryptionKey: options.totpEncryptionKey || '0123456789abcdef0123456789abcdef'
+        totpEncryptionKey: options.totpEncryptionKey || '0123456789abcdef0123456789abcdef',
+        authPublicUrl: optionOrDefault('authPublicUrl', 'http://auth.example'),
+        businessPublicUrl: optionOrDefault('businessPublicUrl', 'http://business.example'),
+        adminPublicUrl: optionOrDefault('adminPublicUrl', 'http://admin.example')
     });
 }
 
@@ -516,6 +522,28 @@ test('production app rejects weak TOTP encryption keys', () => {
         createProductionAppWithSecret('0123456789abcdef0123456789abcdef', {
             totpEncryptionKey: 'fedcba9876543210fedcba9876543210'
         })
+    );
+});
+
+test('production app rejects missing auth handoff public URLs at construction', () => {
+    assert.doesNotThrow(
+        createProductionAppWithSecret('0123456789abcdef0123456789abcdef')
+    );
+    assert.throws(
+        createProductionAppWithSecret('0123456789abcdef0123456789abcdef', { authPublicUrl: '' }),
+        /AUTH_PUBLIC_URL/
+    );
+    assert.throws(
+        createProductionAppWithSecret('0123456789abcdef0123456789abcdef', { businessPublicUrl: '' }),
+        /BUSINESS_PUBLIC_URL/
+    );
+    assert.throws(
+        createProductionAppWithSecret('0123456789abcdef0123456789abcdef', { adminPublicUrl: '' }),
+        /ADMIN_PUBLIC_URL/
+    );
+    assert.throws(
+        createProductionAppWithSecret('0123456789abcdef0123456789abcdef', { businessPublicUrl: 'not-a-url' }),
+        /BUSINESS_PUBLIC_URL/
     );
 });
 
@@ -2388,24 +2416,16 @@ test('auth handoff ignores poisoned forwarded hosts and validates canonical star
     }
 });
 
-test('auth handoff requires explicit public URLs in production', async () => {
+test('auth handoff allows local-development relative redirects without public URLs', async () => {
     const client = await createClient({
-        nodeEnv: 'production',
-        sessionSecret: 'production-test-session-secret-1234567890',
-        totpEncryptionKey: 'production-test-totp-key-1234567890'
+        nodeEnv: 'test'
     });
     try {
         const start = await client.request('GET', '/auth/business/start?return_to=/', undefined, {
-            redirect: 'manual',
-            headers: {
-                host: 'business.local',
-                'x-forwarded-host': 'business.local',
-                'x-forwarded-proto': 'http',
-                'x-ielts-onion-audience': 'business'
-            }
+            redirect: 'manual'
         });
-        assert.equal(start.response.status, 500);
-        assert.match(start.text, /public URLs are not configured/);
+        assert.equal(start.response.status, 302);
+        assert.equal(parseRedirectLocation(start.response.headers.get('location')).pathname, '/auth/business/login');
     } finally {
         await client.close();
     }
