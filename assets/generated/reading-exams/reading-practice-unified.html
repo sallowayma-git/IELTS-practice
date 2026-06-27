@@ -945,85 +945,63 @@
             padding-bottom: 0;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
             background: #f8fafc;
         }
 
         .header {
-            height: 48px;
+            display: flex;
             flex: 0 0 48px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            height: 48px;
             padding: 0 20px;
             background: #ffffff;
-            border-bottom: 1px solid #e2e8f0;
-            box-shadow: none;
+            border-bottom: 1.5px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+            z-index: 1000;
         }
 
-        .header-left,
-        .header-right,
-        .header-content,
-        .header-controls {
+        .header-left {
             display: flex;
             align-items: center;
+            gap: 16px;
             min-width: 0;
         }
 
-        .header-left,
-        .header-content {
-            gap: 16px;
-        }
-
-        .header-right,
-        .header-controls {
-            gap: 10px;
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
             margin-left: auto;
         }
 
-        .header-content {
-            flex-direction: row;
-        }
-
-        .header-content::before {
-            content: "IELTS";
-            color: #dc2626;
-            font-size: 1.05rem;
-            font-weight: 800;
-        }
-
-        .header-content h1 {
-            margin: 0;
-            max-width: min(34vw, 420px);
-            overflow: hidden;
-            color: #0f172a;
-            font-size: 0.94rem;
-            font-weight: 700;
-            line-height: 1.2;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
         .ielts-brand {
-            color: #dc2626;
-            font-size: 1.05rem;
-            font-weight: 800;
+            color: #e31b23;
+            font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+            font-size: 20px;
+            font-weight: 900;
             letter-spacing: 0;
+            line-height: 1;
         }
 
         .candidate-details {
             display: flex;
-            align-items: center;
-            gap: 14px;
+            flex-direction: column;
+            justify-content: center;
             min-width: 0;
-            padding-left: 16px;
-            border-left: 1px solid #e2e8f0;
+            padding-left: 14px;
+            border-left: 1.5px solid #e2e8f0;
+            line-height: 1.25;
         }
 
         .candidate-id {
-            margin: 0;
             max-width: min(34vw, 420px);
             overflow: hidden;
-            color: #0f172a;
-            font-size: 0.94rem;
+            color: #1f2937;
+            font-size: 11px;
             font-weight: 700;
-            line-height: 1.2;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
@@ -1033,81 +1011,90 @@
         }
 
         #timer {
-            min-width: 140px;
             border: 0;
             background: transparent;
+            margin: 0;
             padding: 0;
-            color: #475569;
-            font-size: 0.84rem;
-            font-weight: 600;
+            color: #4b5563;
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 1.25;
             text-align: left;
             cursor: pointer;
+            transition: color 0.15s ease, opacity 0.2s ease;
         }
 
         #timer:hover {
-            color: #0f172a;
+            color: #1f2937;
         }
 
         #timer.paused {
-            opacity: 0.65;
+            opacity: 0.5;
         }
 
         #timer.timer-expired {
             color: #dc2626;
         }
 
-        .header-icon,
-        .header-btn {
-            color: #64748b;
-        }
-
         .header-icon {
             display: inline-flex;
             flex: 0 0 auto;
+            color: #4b5563;
+            cursor: pointer;
+            transition: color 0.15s ease;
+        }
+
+        .header-icon:hover {
+            color: #1f2937;
         }
 
         .header-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 34px;
-            height: 34px;
+            width: 40px;
+            height: 40px;
             border: 0;
-            border-radius: 6px;
+            border-radius: 8px;
             background: transparent;
             padding: 0;
+            color: #4b5563;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
         }
 
         .header-btn:hover {
-            background: #f1f5f9;
-            color: #0f172a;
+            background: #f3f4f6;
+            color: #1f2937;
         }
 
         #settings-btn {
             font-size: 0;
+            padding: 0;
         }
 
-        #settings-btn::before {
-            content: "\2630";
-            font-size: 1rem;
-            line-height: 1;
+        #settings-btn svg {
+            width: 21px;
+            height: 21px;
         }
 
         .sub-header-bar {
             display: flex;
             flex: 0 0 auto;
-            align-items: center;
-            gap: 16px;
+            flex-direction: column;
+            gap: 1px;
             min-height: 38px;
             padding: 8px 20px;
             background: #f1f5f9;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1.5px solid #e2e8f0;
+            z-index: 990;
         }
 
         #sub-header-part {
             color: #0f172a;
-            font-size: 0.86rem;
-            font-weight: 800;
+            font-size: 13.5px;
+            font-weight: 700;
+            line-height: 1.25;
             white-space: nowrap;
         }
 
@@ -1115,7 +1102,7 @@
             min-width: 0;
             overflow: hidden;
             color: #475569;
-            font-size: 0.84rem;
+            font-size: 12px;
             font-weight: 500;
             line-height: 1.35;
             text-overflow: ellipsis;
@@ -1288,109 +1275,184 @@
             background: #f8fafc;
         }
 
-        .nav-submit-circle-btn {
+        .nav-submit-rect-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 38px;
-            height: 38px;
+            height: 36px;
+            min-width: 72px;
             border: 0;
-            border-radius: 50%;
-            background: #0f172a;
-            color: #ffffff;
-            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16);
-            cursor: pointer;
-            transition: background-color 0.15s ease, transform 0.1s ease;
-        }
-
-        .nav-submit-circle-btn:hover {
-            background: #1e293b;
-        }
-
-        .nav-submit-circle-btn:active {
-            transform: scale(0.95);
-        }
-
-        .nav-submit-circle-btn.exit-mode {
-            width: auto;
-            min-width: 58px;
-            border-radius: 999px;
-            background: #dc2626;
-            padding: 0 14px;
-            font-size: 0.82rem;
-            font-weight: 800;
-        }
-
-        .nav-submit-circle-btn.exit-mode:hover {
-            background: #b91c1c;
-        }
-
-        .nav-submit-circle-btn.exit-mode svg {
-            display: none;
-        }
-
-        .nav-submit-circle-btn.exit-mode::after {
-            content: "Exit";
-        }
-
-        .floating-nav-box {
-            position: fixed;
-            right: 24px;
-            bottom: 88px;
-            display: flex;
-            align-items: center;
-            gap: 2px;
             border-radius: 6px;
-            background: #0f172a;
-            padding: 4px;
-            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
-            z-index: 1999;
-        }
-
-        .float-nav-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 0;
-            border-radius: 4px;
-            background: transparent;
-            padding: 8px;
-            color: #cbd5e1;
-            cursor: pointer;
-        }
-
-        .float-nav-btn:hover {
-            background: #1e293b;
+            background-color: #0f172a;
+            padding: 0 20px;
             color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+            cursor: pointer;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
         }
 
-        .float-nav-btn:disabled {
-            background: transparent !important;
-            color: #475569;
+        .nav-submit-rect-btn:hover {
+            background-color: #1e293b;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+        }
+
+        .nav-submit-rect-btn:active {
+            transform: scale(0.97);
+        }
+
+        .nav-submit-rect-btn:disabled {
+            background-color: #cbd5e1;
+            color: #94a3b8;
+            box-shadow: none;
             cursor: not-allowed;
         }
 
-        .timer-custom-control {
-            display: none;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            margin-top: 10px;
+        .nav-submit-rect-btn.exit-mode {
+            background-color: #dc2626;
+            color: #ffffff;
+        }
+
+        .nav-submit-rect-btn.exit-mode:hover {
+            background-color: #b91c1c;
+        }
+
+        body.dark-mode .header {
+            background-color: #1e293b;
+            border-bottom-color: #334155;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        body.dark-mode .ielts-brand {
+            color: #fca5a5;
+        }
+
+        body.dark-mode .candidate-details {
+            border-left-color: #334155;
+        }
+
+        body.dark-mode .candidate-id {
+            color: #f8fafc;
+        }
+
+        body.dark-mode #timer {
+            background: transparent;
+            color: #cbd5e1;
+        }
+
+        body.dark-mode #timer:hover {
+            color: #f8fafc;
+        }
+
+        body.dark-mode .header-icon,
+        body.dark-mode .header-btn {
+            background: transparent;
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .header-icon:hover,
+        body.dark-mode .header-btn:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-mode .sub-header-bar {
+            background-color: #0f172a;
+            border-bottom-color: #334155;
+        }
+
+        body.dark-mode #sub-header-part,
+        body.dark-mode .part-nav-section.active .part-nav-name {
+            color: #f8fafc;
+        }
+
+        body.dark-mode .part-nav-name.inactive,
+        body.dark-mode .part-nav-section:not(.active) .part-nav-name {
+            color: #94a3b8;
+        }
+
+        body.dark-mode #sub-header-instruction {
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .practice-nav {
+            background-color: #1e293b;
+            border-top-color: #334155;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        body.dark-mode .part-nav-section {
+            border-right-color: #334155;
+        }
+
+        body.dark-mode .part-nav-status {
+            color: #94a3b8;
+        }
+
+        body.dark-mode .q-bar-segment {
+            background-color: #334155;
+        }
+
+        body.dark-mode .q-bar-segment.answered {
+            background-color: #3b82f6;
+        }
+
+        body.dark-mode .q-item {
+            color: #64748b;
+        }
+
+        body.dark-mode .q-item:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-mode .q-item.answered,
+        body.dark-mode .q-item.correct,
+        body.dark-mode .q-item.incorrect {
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .q-item.active {
+            border-color: #3b82f6 !important;
+            color: #3b82f6 !important;
+        }
+
+        body.dark-mode .nav-action-btn {
+            border-color: #475569;
+            background-color: transparent;
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .nav-action-btn:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-mode .nav-submit-rect-btn {
+            background-color: #f8fafc;
+            color: #0f172a;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .nav-submit-rect-btn:hover {
+            background-color: #e2e8f0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        body.dark-mode .nav-submit-rect-btn:disabled {
+            background-color: #334155;
             color: #475569;
-            font-size: 0.8rem;
-            font-weight: 700;
+            box-shadow: none;
         }
 
-        .timer-custom-control.is-visible {
-            display: flex;
+        body.dark-mode .nav-submit-rect-btn.exit-mode {
+            background-color: #dc2626;
+            color: #ffffff;
         }
 
-        #timer-custom-minutes {
-            width: 78px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            padding: 6px 8px;
-            font: inherit;
+        body.dark-mode .nav-submit-rect-btn.exit-mode:hover {
+            background-color: #b91c1c;
         }
 
         @media (max-width: 1200px) {
@@ -1439,10 +1501,6 @@
                 width: 100%;
                 justify-content: flex-end;
             }
-
-            .floating-nav-box {
-                bottom: 124px;
-            }
         }
 
         @media (max-width: 768px) {
@@ -1477,25 +1535,42 @@
                 flex: 1 1 100%;
                 height: 42px;
             }
-
-            .floating-nav-box {
-                right: 12px;
-                bottom: 160px;
-            }
         }
     </style>
 </head>
 
 <body>
     <header class="header">
-        <div class="header-content">
-            <h1 id="exam-title">IELTS Reading Practice</h1>
-            <p id="exam-subtitle">Unified reading page</p>
+        <div class="header-left">
+            <div class="ielts-brand">IELTS</div>
+            <div class="candidate-details">
+                <div class="candidate-id" id="candidate-id" hidden></div>
+                <div id="timer" title="Click to pause or resume">60 minutes remaining</div>
+            </div>
+            <div style="display: none;">
+                <h1 id="exam-title">IELTS Reading Practice</h1>
+                <p id="exam-subtitle">Unified reading page</p>
+            </div>
         </div>
-        <div class="header-controls">
-            <div id="timer" title="Click to pause or resume">60 minutes remaining</div>
-            <button class="header-btn" id="settings-btn" title="Settings" type="button" aria-label="Settings">Menu</button>
-            <button class="header-btn" id="note-btn" type="button">Note</button>
+        <div class="header-right">
+            <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+            </svg>
+            <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <button class="header-btn" id="settings-btn" title="Settings" type="button" aria-label="Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <button class="header-btn" id="note-btn" type="button" style="display: none;">Note</button>
         </div>
     </header>
 
@@ -1520,18 +1595,6 @@
                 <button class="settings-option" data-mode="dark">Dark</button>
             </div>
         </div>
-        <div class="settings-section">
-            <h3 class="settings-title">Timer mode</h3>
-            <div class="settings-options">
-                <button class="settings-option" data-timer-mode="elapsed">Elapsed</button>
-                <button class="settings-option active" data-timer-mode="ielts">IELTS 60</button>
-                <button class="settings-option" data-timer-mode="custom">Custom</button>
-            </div>
-            <label class="timer-custom-control" for="timer-custom-minutes">
-                <span>Minutes</span>
-                <input id="timer-custom-minutes" type="number" min="1" max="240" step="1" value="60">
-            </label>
-        </div>
         <div class="settings-section" id="suite-flow-mode-section" style="display: none;">
             <h3 class="settings-title">Suite flow</h3>
             <div class="settings-options">
@@ -1553,20 +1616,6 @@
         <section class="pane" id="right">
             <div id="question-groups"></div>
             <div id="results"></div>
-            <div id="floating-passage-nav" class="floating-nav-box">
-                <button id="float-prev-btn" class="float-nav-btn" type="button" title="Previous passage" aria-label="Previous passage">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="19" y1="12" x2="5" y2="12"></line>
-                        <polyline points="12 19 5 12 12 5"></polyline>
-                    </svg>
-                </button>
-                <button id="float-next-btn" class="float-nav-btn" type="button" title="Next passage" aria-label="Next passage">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                        <polyline points="12 5 19 12 12 19"></polyline>
-                    </svg>
-                </button>
-            </div>
         </section>
     </div>
 
@@ -1601,11 +1650,7 @@
         <div class="nav-controls-right">
             <button id="exit-btn" class="nav-action-btn" type="button" title="Exit" style="display: none;">Exit</button>
             <button id="reset-btn" class="nav-action-btn" type="button">Reset</button>
-            <button id="submit-btn" class="nav-submit-circle-btn" type="button" title="Submit" aria-label="Submit">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-            </button>
+            <button id="submit-btn" class="nav-submit-rect-btn" type="button">Submit</button>
         </div>
     </div>
 

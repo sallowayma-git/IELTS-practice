@@ -1063,6 +1063,71 @@
                         </div>
                     </div>
 
+                    <div class="hero-panel hero-section reading-candidate-code-panel">
+                        <h3>Reading 顶栏编号</h3>
+                        <p class="hero-panel__muted">
+                            控制 Reading 答题页 IELTS 顶栏显示的 6 位 code，仅用于界面展示。
+                        </p>
+                        <div class="reading-candidate-code-settings">
+                            <label class="reading-candidate-code-option">
+                                <input
+                                    type="radio"
+                                    name="reading-candidate-code-mode"
+                                    value="auto"
+                                    checked
+                                />
+                                <span>
+                                    <strong>自动生成</strong>
+                                    <small>按当前练习 session 使用 upstream main 的 hash 逻辑生成。</small>
+                                </span>
+                            </label>
+                            <label class="reading-candidate-code-option">
+                                <input
+                                    type="radio"
+                                    name="reading-candidate-code-mode"
+                                    value="custom"
+                                />
+                                <span>
+                                    <strong>自定义</strong>
+                                    <small>固定显示你设置的 6 位数字。</small>
+                                </span>
+                            </label>
+                            <div class="reading-candidate-code-controls">
+                                <input
+                                    id="reading-candidate-code-input"
+                                    class="reading-candidate-code-input"
+                                    type="text"
+                                    inputmode="numeric"
+                                    pattern="[0-9]{6}"
+                                    maxlength="6"
+                                    placeholder="例如 797618"
+                                    aria-label="Reading 顶栏 6 位 code"
+                                    disabled
+                                />
+                                <button
+                                    class="btn hero-btn"
+                                    id="reading-candidate-code-random-btn"
+                                    type="button"
+                                >
+                                    随机生成
+                                </button>
+                                <button
+                                    class="btn hero-btn"
+                                    id="reading-candidate-code-save-btn"
+                                    type="button"
+                                >
+                                    保存
+                                </button>
+                            </div>
+                            <div
+                                class="reading-candidate-code-status"
+                                id="reading-candidate-code-status"
+                                role="status"
+                                aria-live="polite"
+                            ></div>
+                        </div>
+                    </div>
+
                     <div class="hero-panel hero-section">
                         <h3>📊 系统信息</h3>
                         <div class="hero-surface settings-system-info">

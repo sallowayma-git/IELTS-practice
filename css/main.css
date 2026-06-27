@@ -5332,6 +5332,104 @@ body.no-scroll {
     flex-wrap: wrap;
 }
 
+.reading-candidate-code-settings {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-md);
+    width: min(100%, 720px);
+    margin: 0 auto;
+}
+
+.reading-candidate-code-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: rgba(255, 255, 255, 0.58);
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.reading-candidate-code-option input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--color-primary);
+}
+
+.reading-candidate-code-option span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.reading-candidate-code-option strong {
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+
+.reading-candidate-code-option small {
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.reading-candidate-code-controls {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.reading-candidate-code-input {
+    width: 160px;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: center;
+}
+
+.reading-candidate-code-input:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
+.reading-candidate-code-status {
+    min-height: 20px;
+    color: var(--color-text-secondary);
+    font-size: 0.86rem;
+    text-align: center;
+}
+
+.reading-candidate-code-status[data-state="error"] {
+    color: var(--color-danger, #dc2626);
+}
+
+.reading-candidate-code-status[data-state="success"] {
+    color: var(--color-success, #15803d);
+}
+
+body.bloom-dark-mode .reading-candidate-code-option,
+body.blue-dark-mode .reading-candidate-code-option {
+    background: rgba(15, 23, 42, 0.58);
+}
+
+body.bloom-dark-mode .reading-candidate-code-input,
+body.blue-dark-mode .reading-candidate-code-input {
+    background: rgba(15, 23, 42, 0.72);
+    color: #f8fafc;
+}
+
 /* 小屏幕设备进一步优化 */
 @media (max-width: 480px) {
     .container {
