@@ -938,6 +938,100 @@
         }
 
         /* ================= IELTS Reading Stage 1 Layout ================= */
+        body {
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            padding-bottom: 0;
+            display: flex;
+            flex-direction: column;
+            background: #f8fafc;
+        }
+
+        .header {
+            height: 48px;
+            flex: 0 0 48px;
+            padding: 0 20px;
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: none;
+        }
+
+        .header-left,
+        .header-right,
+        .header-content,
+        .header-controls {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .header-left,
+        .header-content {
+            gap: 16px;
+        }
+
+        .header-right,
+        .header-controls {
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .header-content {
+            flex-direction: row;
+        }
+
+        .header-content::before {
+            content: "IELTS";
+            color: #dc2626;
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+
+        .header-content h1 {
+            margin: 0;
+            max-width: min(34vw, 420px);
+            overflow: hidden;
+            color: #0f172a;
+            font-size: 0.94rem;
+            font-weight: 700;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ielts-brand {
+            color: #dc2626;
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .candidate-details {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+            padding-left: 16px;
+            border-left: 1px solid #e2e8f0;
+        }
+
+        .candidate-id {
+            margin: 0;
+            max-width: min(34vw, 420px);
+            overflow: hidden;
+            color: #0f172a;
+            font-size: 0.94rem;
+            font-weight: 700;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #exam-subtitle {
+            display: none;
+        }
+
         #timer {
             min-width: 140px;
             border: 0;
@@ -983,25 +1077,203 @@
             border-radius: 6px;
             padding: 6px 8px;
             font: inherit;
-        }    </style>
+        }
+
+        .header-icon,
+        .header-btn {
+            color: #64748b;
+        }
+
+        .header-icon {
+            display: inline-flex;
+            flex: 0 0 auto;
+        }
+
+        .header-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            padding: 0;
+        }
+
+        .header-btn:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        #settings-btn {
+            font-size: 0;
+        }
+
+        #settings-btn::before {
+            content: "\2630";
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .sub-header-bar {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 16px;
+            min-height: 38px;
+            padding: 8px 20px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        #sub-header-part {
+            color: #0f172a;
+            font-size: 0.86rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        #sub-header-instruction {
+            min-width: 0;
+            overflow: hidden;
+            color: #475569;
+            font-size: 0.84rem;
+            font-weight: 500;
+            line-height: 1.35;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .shell {
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+        }
+
+        .pane {
+            min-height: 0;
+        }
+
+        .practice-nav {
+            position: relative;
+            bottom: auto;
+            left: auto;
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 12px clamp(10px, 1vw, 20px);
+            min-height: 72px;
+            padding: 10px 20px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.06);
+            z-index: 2000;
+        }
+
+        .nav-controls-right {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .nav-action-btn {
+            height: 34px;
+            border: 1px solid #d7dde5;
+            border-radius: 6px;
+            background: #ffffff;
+            padding: 0 12px;
+            color: #334155;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .nav-action-btn:hover {
+            background: #f8fafc;
+        }
+
+        @media (max-width: 980px) {
+            .shell {
+                display: flex;
+                flex-direction: column;
+            }
+
+            #divider {
+                display: none;
+            }
+
+            .pane {
+                flex: 1 1 0;
+            }
+
+            .practice-nav {
+                flex-wrap: wrap;
+                min-height: 108px;
+                align-items: flex-start;
+            }
+
+            .nav-controls-right {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding-inline: 12px;
+            }
+
+            .candidate-details {
+                gap: 8px;
+                padding-left: 10px;
+            }
+
+            .candidate-id {
+                max-width: 30vw;
+                font-size: 0.82rem;
+            }
+
+            #timer {
+                min-width: 104px;
+                font-size: 0.74rem;
+            }
+
+            .sub-header-bar {
+                padding-inline: 12px;
+            }
+
+            .practice-nav {
+                padding: 8px 10px;
+            }
+        }
+
+    </style>
 </head>
 
 <body>
     <header class="header">
         <div class="header-content">
-            <h1 id="exam-title">IELTS 阅读练习</h1>
-            <p id="exam-subtitle">统一阅读页</p>
+            <h1 id="exam-title">IELTS Reading Practice</h1>
+            <p id="exam-subtitle">Unified reading page</p>
         </div>
         <div class="header-controls">
-            <div id="timer" title="点击启停">60 minutes remaining</div>
-            <button class="header-btn" id="settings-btn" title="Settings" type="button">☰</button>
+            <div id="timer" title="Click to pause or resume">60 minutes remaining</div>
+            <button class="header-btn" id="settings-btn" title="Settings" type="button" aria-label="Settings">Menu</button>
             <button class="header-btn" id="note-btn" type="button">Note</button>
         </div>
     </header>
 
+    <div class="sub-header-bar">
+        <div id="sub-header-part">Part 1</div>
+        <div id="sub-header-instruction">Read the text and answer the questions.</div>
+    </div>
+
     <div id="settings-panel">
         <div class="settings-section">
-            <h3 class="settings-title">字号调整</h3>
+            <h3 class="settings-title">Font size</h3>
             <div class="settings-options">
                 <button class="settings-option active" data-size="normal">A</button>
                 <button class="settings-option" data-size="large" style="font-size: 1.1rem;">A</button>
@@ -1009,10 +1281,10 @@
             </div>
         </div>
         <div class="settings-section">
-            <h3 class="settings-title">背景颜色</h3>
+            <h3 class="settings-title">Theme</h3>
             <div class="settings-options">
-                <button class="settings-option active" data-mode="light">浅色</button>
-                <button class="settings-option" data-mode="dark">深色</button>
+                <button class="settings-option active" data-mode="light">Light</button>
+                <button class="settings-option" data-mode="dark">Dark</button>
             </div>
         </div>
         <div class="settings-section">
@@ -1028,10 +1300,10 @@
             </label>
         </div>
         <div class="settings-section" id="suite-flow-mode-section" style="display: none;">
-            <h3 class="settings-title">套题流程模式</h3>
+            <h3 class="settings-title">Suite flow</h3>
             <div class="settings-options">
-                <button class="settings-option" data-suite-flow-mode="auto">自动跳转下一篇</button>
-                <button class="settings-option" data-suite-flow-mode="manual">提交后停留回看</button>
+                <button class="settings-option" data-suite-flow-mode="auto">Auto next</button>
+                <button class="settings-option" data-suite-flow-mode="manual">Review first</button>
             </div>
         </div>
     </div>
@@ -1044,7 +1316,7 @@
 
     <div class="shell">
         <section class="pane" id="left"></section>
-        <div id="divider" role="separator" aria-orientation="vertical" aria-label="调整原文和题目宽度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"></div>
+        <div id="divider" role="separator" aria-orientation="vertical" aria-label="Resize passage and questions" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"></div>
         <section class="pane" id="right">
             <div id="question-groups"></div>
             <div id="results"></div>

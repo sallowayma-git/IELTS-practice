@@ -1347,6 +1347,7 @@
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
+        updateRedesignedSubHeader();
     }
 
     function resolveAllowOptionReuse(group) {
@@ -1403,7 +1404,63 @@
         return String(questionId).replace(/^q/i, '');
     }
 
+    function getQuestionRangeText() {
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        const labels = order
+            .map((questionId) => parseQuestionNumber(displayLabel(questionId)))
+            .filter((value) => Number.isFinite(value));
+        if (!labels.length) {
+            return '';
+        }
+        return `${Math.min(...labels)}-${Math.max(...labels)}`;
+    }
+
+    function resolveCurrentPartKey() {
+        const category = String(state.dataset?.meta?.category || '').trim().toUpperCase();
+        if (category === 'P2' || category === 'PART 2') {
+            return 'p2';
+        }
+        if (category === 'P3' || category === 'PART 3') {
+            return 'p3';
+        }
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        const numbers = order
+            .map((questionId) => questionNumberFromId(questionId))
+            .filter((value) => Number.isFinite(value));
+        if (!numbers.length) {
+            return 'p1';
+        }
+        const minQuestion = Math.min(...numbers);
+        if (minQuestion >= 27) {
+            return 'p3';
+        }
+        if (minQuestion >= 14) {
+            return 'p2';
+        }
+        return 'p1';
+    }
+
+    function updateRedesignedSubHeader() {
+        const partEl = document.getElementById('sub-header-part');
+        const instructionEl = document.getElementById('sub-header-instruction');
+        if (!partEl && !instructionEl) {
+            return;
+        }
+        const currentPart = resolveCurrentPartKey();
+        const partLabel = currentPart === 'p3' ? 'Part 3' : currentPart === 'p2' ? 'Part 2' : 'Part 1';
+        const rangeText = getQuestionRangeText();
+        if (partEl) {
+            partEl.textContent = partLabel;
+        }
+        if (instructionEl) {
+            instructionEl.textContent = rangeText
+                ? `Read the text and answer questions ${rangeText}.`
+                : 'Read the text and answer the questions.';
+        }
+    }
+
     function buildQuestionNav() {
+        updateRedesignedSubHeader();
         if (!dom.nav) return;
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
         dom.nav.innerHTML = order.map((questionId) => {
