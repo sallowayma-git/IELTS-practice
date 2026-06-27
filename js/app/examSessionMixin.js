@@ -3453,8 +3453,8 @@
         },
 
         async retainExamWindowAfterCompletion(examId, sourceWindow, data = {}) {
-            const windowInfo = this.ensureExamWindowSession(examId, sourceWindow);
-            windowInfo.window = sourceWindow || windowInfo.window || null;
+            const windowInfo = this.ensureExamWindowSession(examId);
+            windowInfo.window = windowInfo.window || null;
             windowInfo.status = 'completed';
             windowInfo.completedAt = Date.now();
             windowInfo.lastCompletedSessionId = data && data.sessionId ? String(data.sessionId) : windowInfo.expectedSessionId;

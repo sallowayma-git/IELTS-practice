@@ -3,11 +3,13 @@ import fs from 'fs';
 import path from 'path';
 import assert from 'assert';
 import { fileURLToPath } from 'url';
+import { test } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
+test('postMessage origin guard tests pass', () => {
 const files = [
     'js/core/practiceRecorder.js',
     'js/presentation/app-actions.js',
@@ -121,7 +123,8 @@ for (const relativePath of ['js/app/examSessionMixin.js', 'js/bundles/browse.bun
         `${relativePath} must not use window.name or readable location.href as postMessage source identity`
     );
     assert(
-        !source.includes('windowInfo.window = sourceWindow;'),
+        !/windowInfo\.window\s*=\s*sourceWindow/.test(source)
+            && !source.includes('ensureExamWindowSession(examId, sourceWindow)'),
         `${relativePath} must not replace the expected practice window from a postMessage sender`
     );
     assert(
@@ -133,6 +136,59 @@ for (const relativePath of ['js/app/examSessionMixin.js', 'js/bundles/browse.bun
             && source.includes('sessionToken: info.expectedSessionId'),
         `${relativePath} must require exact source plus the per-window session token for trusted practice messages`
     );
+}
+
+function assertNoUnsafeWildcardPostMessage(relativePath, source) {
+    for (const match of source.matchAll(/postMessage\s*\([\s\S]{0,400}?,\s*['"]\*['"]/g)) {
+        const snippet = match[0];
+        const allowedSandboxForward = snippet.includes('frame.contentWindow.postMessage(event.data');
+        assert(
+            allowedSandboxForward,
+            `${relativePath} must not use wildcard postMessage target outside the sandbox frame bridge`
+        );
+    }
+    source.split(/\r?\n/).forEach((line, index) => {
+        const hasWildcardTarget = /postMessage\s*\([^;]*(?:'[^']*'|"[^"]*")\s*,\s*['"]\*['"]/.test(line);
+        if (!hasWildcardTarget) {
+            return;
+        }
+        const allowedSandboxForward = line.includes("frame.contentWindow.postMessage(event.data, '*')")
+            || line.includes('frame.contentWindow.postMessage(event.data, "*")');
+        assert(
+            allowedSandboxForward,
+            `${relativePath}:${index + 1} must not use wildcard postMessage target outside the sandbox frame bridge`
+        );
+    });
+}
+
+const vipBundleRoot = path.join(repoRoot, 'ListeningPractice', 'vip special', 'js', 'bundles');
+if (fs.existsSync(vipBundleRoot)) {
+    for (const filename of fs.readdirSync(vipBundleRoot)) {
+        if (!filename.endsWith('.js')) {
+            continue;
+        }
+        const relativePath = path.join('ListeningPractice', 'vip special', 'js', 'bundles', filename);
+        const source = fs.readFileSync(path.join(vipBundleRoot, filename), 'utf8');
+        assertNoUnsafeWildcardPostMessage(relativePath, source);
+        assert(
+            !source.includes('isLikelySameWindowContext')
+                && !source.includes('resolveWindowName')
+                && !source.includes('sourceHref')
+                && !source.includes('expectedHref')
+                && !/windowInfo\.window\s*=\s*sourceWindow/.test(source),
+            `${relativePath} must not use stale window source rebinding or name/href identity fallback`
+        );
+        if (filename === 'browse.bundle.js') {
+            assert(
+                source.includes('const sourceIsExpectedWindow = sourceWindow === expectedWindow;')
+                    && source.includes('sessionBoundMessageTypes')
+                    && source.includes('carriesExpectedSessionToken')
+                    && source.includes('channelNonce: info.expectedSessionId')
+                    && source.includes('sessionToken: info.expectedSessionId'),
+                `${relativePath} must contain the exact source and channel nonce practice-message guard`
+            );
+        }
+    }
 }
 
 const templateBaseSource = fs.readFileSync(path.join(repoRoot, 'templates/template_base.html'), 'utf8');
@@ -170,7 +226,4 @@ assert(
     'analysis-of-fear fixture must validate parent postMessage origin and avoid wildcard targetOrigin on HTTP(S)'
 );
 
-console.log(JSON.stringify({
-    status: 'pass',
-    detail: 'postMessage origin guard tests passed'
-}, null, 2));
+});
