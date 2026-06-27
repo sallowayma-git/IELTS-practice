@@ -1171,6 +1171,122 @@
             z-index: 2000;
         }
 
+        .part-nav-section {
+            display: flex;
+            flex: 1 1 0;
+            align-items: center;
+            gap: clamp(6px, 0.8vw, 12px);
+            min-width: 0;
+            height: 48px;
+            padding-right: clamp(10px, 1.2vw, 20px);
+            border-right: 1px solid #e2e8f0;
+        }
+
+        .part-nav-section.active .part-nav-name {
+            color: #0f172a;
+        }
+
+        .part-nav-info {
+            flex: 0 0 auto;
+            min-width: 54px;
+        }
+
+        .part-nav-name {
+            color: #0f172a;
+            font-size: 0.78rem;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .part-nav-name.inactive {
+            color: #94a3b8;
+        }
+
+        .part-nav-status {
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 600;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .part-nav-questions {
+            display: flex;
+            flex: 1 1 auto;
+            align-items: center;
+            justify-content: space-between;
+            gap: clamp(2px, 0.35vw, 6px);
+            min-width: 0;
+        }
+
+        .q-column {
+            display: flex;
+            flex: 1 1 0;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            min-width: 12px;
+            max-width: 22px;
+        }
+
+        .q-bar-segment {
+            width: 100%;
+            height: 3px;
+            border-radius: 999px;
+            background: #e2e8f0;
+        }
+
+        .q-bar-segment.answered {
+            background: #2563eb;
+        }
+
+        .q-bar-segment.correct {
+            background: #16a34a;
+        }
+
+        .q-bar-segment.incorrect {
+            background: #dc2626;
+        }
+
+        .q-item {
+            width: 100%;
+            min-width: 0;
+            height: 22px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            padding: 0;
+            color: #64748b;
+            font-size: 0.74rem;
+            font-weight: 700;
+            line-height: 20px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .q-item:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .q-item.answered,
+        .q-item.correct,
+        .q-item.incorrect {
+            color: #334155;
+        }
+
+        .q-item.active {
+            border-color: #2563eb !important;
+            background: transparent !important;
+            color: #2563eb !important;
+        }
+
+        .q-item.disabled {
+            color: #94a3b8;
+            cursor: default;
+        }
+
         .nav-controls-right {
             display: flex;
             flex: 0 0 auto;
@@ -1215,6 +1331,12 @@
                 align-items: flex-start;
             }
 
+            .part-nav-section {
+                flex: 1 1 calc(33.33% - 10px);
+                border-right: 0;
+                padding-right: 0;
+            }
+
             .nav-controls-right {
                 width: 100%;
                 justify-content: flex-end;
@@ -1247,6 +1369,11 @@
 
             .practice-nav {
                 padding: 8px 10px;
+            }
+
+            .part-nav-section {
+                flex: 1 1 100%;
+                height: 42px;
             }
         }
 
@@ -1330,8 +1457,27 @@
     </div>
 
     <div class="practice-nav">
-        <div class="title">题目导航</div>
-        <div class="questions" id="question-nav"></div>
+        <div class="part-nav-section" id="part-section-1">
+            <div class="part-nav-info">
+                <div class="part-nav-name">Part 1</div>
+                <div class="part-nav-status" id="part1-status-text">0 of 13</div>
+            </div>
+            <div class="part-nav-questions" id="part1-questions"></div>
+        </div>
+        <div class="part-nav-section" id="part-section-2">
+            <div class="part-nav-info">
+                <div class="part-nav-name">Part 2</div>
+                <div class="part-nav-status" id="part2-status-text">0 of 13</div>
+            </div>
+            <div class="part-nav-questions" id="part2-questions"></div>
+        </div>
+        <div class="part-nav-section" id="part-section-3">
+            <div class="part-nav-info">
+                <div class="part-nav-name">Part 3</div>
+                <div class="part-nav-status" id="part3-status-text">0 of 14</div>
+            </div>
+            <div class="part-nav-questions" id="part3-questions"></div>
+        </div>
         <div class="controls">
             <button id="exit-btn" type="button" title="退出" style="margin-right: 8px; display: none;">Exit</button>
             <button id="reset-btn" type="button">Reset</button>

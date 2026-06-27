@@ -99,6 +99,7 @@
         suiteTimerLimitSeconds: null,
         timerDisplayMode: 'ielts',
         customTimerMinutes: DEFAULT_CUSTOM_TIMER_MINUTES,
+        currentActiveQuestionId: '',
         ready: false,
         submitted: false,
         initTimer: null,
@@ -127,6 +128,8 @@
         groups: null,
         results: null,
         nav: null,
+        partQuestions: [],
+        partStatuses: [],
         submitBtn: null,
         resetBtn: null,
         exitBtn: null
@@ -1459,8 +1462,115 @@
         }
     }
 
+    function getPartDefinitions() {
+        return [
+            { key: 'p1', start: 1, end: 13, total: 13 },
+            { key: 'p2', start: 14, end: 26, total: 13 },
+            { key: 'p3', start: 27, end: 40, total: 14 }
+        ];
+    }
+
+    function buildPlaceholderPartQuestions(part) {
+        return Array.from({ length: part.total }, (_, index) => {
+            const label = String(part.start + index);
+            return {
+                qId: `q${label}`,
+                label,
+                status: ''
+            };
+        });
+    }
+
+    function buildCurrentPartQuestions() {
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        return order.map((questionId) => {
+            const status = navStatus.get(questionId) || (hasAnswer(questionId) ? 'answered' : '');
+            const safeStatus = ['answered', 'correct', 'incorrect'].includes(status) ? status : '';
+            return {
+                qId: questionId,
+                label: displayLabel(questionId),
+                status: safeStatus
+            };
+        });
+    }
+
+    function getPartQuestionStates() {
+        const currentPart = resolveCurrentPartKey();
+        const currentQuestions = buildCurrentPartQuestions();
+        const definitions = getPartDefinitions();
+        const info = {};
+        definitions.forEach((part) => {
+            const questions = part.key === currentPart ? currentQuestions : buildPlaceholderPartQuestions(part);
+            const answeredCount = questions.filter((question) => {
+                return question.status === 'answered' || question.status === 'correct' || question.status === 'incorrect';
+            }).length;
+            info[part.key] = {
+                questions,
+                answeredCount,
+                total: part.key === currentPart && questions.length ? questions.length : part.total
+            };
+        });
+        return { info, currentPart };
+    }
+
+    function updatePartSectionState(currentPart) {
+        getPartDefinitions().forEach((part) => {
+            const section = document.getElementById(`part-section-${part.key.slice(1)}`);
+            if (section) {
+                section.classList.toggle('active', part.key === currentPart);
+            }
+            const name = section?.querySelector('.part-nav-name');
+            if (name) {
+                name.classList.toggle('inactive', !state.suiteSessionId && part.key !== currentPart);
+            }
+        });
+    }
+
+    function updateActiveQuestionHighlight(questionId) {
+        state.currentActiveQuestionId = questionId || state.currentActiveQuestionId || '';
+        document.querySelectorAll('.q-item[data-question-id]').forEach((item) => {
+            item.classList.toggle('active', Boolean(state.currentActiveQuestionId) && item.dataset.questionId === state.currentActiveQuestionId);
+        });
+    }
+
+    function renderPartQuestions(partKey, questions, isCurrent) {
+        return questions.map((question) => {
+            const status = ['answered', 'correct', 'incorrect'].includes(question.status) ? question.status : '';
+            const active = isCurrent && question.qId === state.currentActiveQuestionId ? ' active' : '';
+            const disabled = isCurrent ? '' : ' disabled';
+            return [
+                `<div class="q-column" data-question-id="${escapeHtml(question.qId)}" data-part="${escapeHtml(partKey)}">`,
+                `<div class="q-bar-segment ${escapeHtml(status)}"></div>`,
+                `<button class="q-item ${escapeHtml(status)}${active}${disabled}" data-question-id="${escapeHtml(question.qId)}" type="button">${escapeHtml(question.label)}</button>`,
+                '</div>'
+            ].join('');
+        }).join('');
+    }
+
     function buildQuestionNav() {
         updateRedesignedSubHeader();
+        const currentOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        if (!state.currentActiveQuestionId && currentOrder.length) {
+            state.currentActiveQuestionId = currentOrder[0];
+        }
+        const hasPartNav = Array.isArray(dom.partQuestions) && dom.partQuestions.some(Boolean);
+        if (hasPartNav) {
+            const { info, currentPart } = getPartQuestionStates();
+            getPartDefinitions().forEach((part, index) => {
+                const status = dom.partStatuses[index];
+                const container = dom.partQuestions[index];
+                const partInfo = info[part.key];
+                if (status && partInfo) {
+                    status.textContent = `${partInfo.answeredCount} of ${partInfo.total}`;
+                }
+                if (container && partInfo) {
+                    container.innerHTML = renderPartQuestions(part.key, partInfo.questions, part.key === currentPart);
+                }
+            });
+            updatePartSectionState(currentPart);
+            updateActiveQuestionHighlight(state.currentActiveQuestionId);
+            return;
+        }
         if (!dom.nav) return;
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
         dom.nav.innerHTML = order.map((questionId) => {
@@ -1828,19 +1938,61 @@
     }
 
     function navClickHandler(event) {
-        const button = event.target.closest('.q-item[data-question-id]');
-        if (!button) return;
-        const questionId = button.dataset.questionId;
+        const targetElement = event.target instanceof Element ? event.target : null;
+        const column = targetElement?.closest('.q-column[data-question-id]');
+        const button = targetElement?.closest('.q-item[data-question-id]');
+        if (!column && !button) return;
+        const questionId = column?.dataset.questionId || button?.dataset.questionId || '';
+        const partKey = column?.dataset.part || '';
+        const currentPart = resolveCurrentPartKey();
+        if (partKey && partKey !== currentPart) {
+            if (!state.simulationMode || !state.simulationCtx) {
+                return;
+            }
+            const partIndex = { p1: 0, p2: 1, p3: 2 };
+            const currentIndex = partIndex[currentPart];
+            const targetIndex = partIndex[partKey];
+            if (!Number.isFinite(currentIndex) || !Number.isFinite(targetIndex)) {
+                return;
+            }
+            if (targetIndex === currentIndex + 1 && state.simulationCtx.canNext) {
+                dispatchSimulationNavigate('next');
+            } else if (targetIndex === currentIndex - 1 && state.simulationCtx.canPrev) {
+                dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
+            }
+            return;
+        }
         const target = findQuestionAnchor(questionId);
         if (target && typeof global.scrollToElement === 'function') {
             global.scrollToElement(target);
+            updateActiveQuestionHighlight(questionId);
             return;
         }
         target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        updateActiveQuestionHighlight(questionId);
     }
 
     function attachNavListeners() {
         dom.nav?.addEventListener('click', navClickHandler);
+        dom.partQuestions?.forEach((container) => {
+            container?.addEventListener('click', navClickHandler);
+        });
+        dom.right?.addEventListener('focusin', (event) => {
+            const target = event.target instanceof HTMLElement ? event.target : null;
+            const control = target?.closest('input, select, textarea');
+            const name = control?.getAttribute('name') || '';
+            if (!name) {
+                return;
+            }
+            const normalizedName = normalizeQuestionId(name);
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            const matched = order.find((questionId) => {
+                return normalizeQuestionId(questionId) === normalizedName;
+            });
+            if (matched) {
+                updateActiveQuestionHighlight(matched);
+            }
+        });
     }
 
     function attachMemorizeLocatorListeners() {
