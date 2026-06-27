@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
@@ -96,6 +97,9 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(envExample.includes('TOR_BRIDGES_ENCRYPTED_LOCAL_FILE=./tor/bridges.age'));
     assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE=./tor/bridge-age-identity.txt'));
     assert(envExample.includes('TRAFFIC_SECRET='));
+    assert(envExample.includes('AUTH_HANDOFF_STATE_SECRET='));
+    assert(envExample.includes('TRUSTED_PROXY_IPS='));
+    assert(compose.includes('TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}'));
     assert(compose.includes('TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}'));
     assert(envExample.includes('AUTH_PUBLIC_URL=http://replace-with-auth-onion.onion'));
     assert(envExample.includes('BUSINESS_PUBLIC_URL=http://replace-with-business-onion.onion'));
@@ -314,7 +318,9 @@ async function createClient(options = {}) {
         adminStore,
         authHandoffStore,
         sessionStore,
-        sessionSecret: options.sessionSecret || 'test-session-secret',
+        sessionSecret: options.sessionSecret || 'test-session-secret-0123456789abcdef',
+        trustedProxyIps: options.trustedProxyIps,
+        trustedProxyCidrs: options.trustedProxyCidrs,
         nodeEnv: options.nodeEnv,
         staticRoot: options.staticRoot,
         cookieSecure: options.cookieSecure,
@@ -324,6 +330,7 @@ async function createClient(options = {}) {
         adminRateLimit: options.adminRateLimit,
         csrfRateLimit: options.csrfRateLimit,
         totpRateLimit: options.totpRateLimit,
+        authHandoffSecret: options.authHandoffSecret,
         totpEnabled: options.totpEnabled,
         totpEncryptionKey: options.totpEncryptionKey || 'test-totp-key',
         totpVerificationMaxAgeMs: options.totpVerificationMaxAgeMs,
@@ -429,6 +436,7 @@ async function createClient(options = {}) {
     return {
         sessionStore,
         authStore,
+        baseUrl,
         adminStore,
         authHandoffStore,
         totpStore,
@@ -443,6 +451,44 @@ async function createClient(options = {}) {
             return new Promise((resolve, reject) => {
                 server.close((error) => error ? reject(error) : resolve());
             });
+function rawHttpRequest(baseUrl, method, requestPath, options = {}) {
+    const target = new URL(requestPath, baseUrl);
+    return new Promise((resolve, reject) => {
+        const req = http.request({
+            hostname: target.hostname,
+            port: target.port,
+            path: `${target.pathname}${target.search}`,
+            method,
+            headers: options.headers || {}
+        }, (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                const headers = new Headers();
+                for (const [name, value] of Object.entries(res.headers)) {
+                    if (Array.isArray(value)) {
+                        value.forEach((item) => headers.append(name, item));
+                    } else if (value !== undefined) {
+                        headers.set(name, value);
+                    }
+                }
+                resolve({
+                    response: {
+                        status: res.statusCode,
+                        headers
+                    },
+                    text: Buffer.concat(chunks).toString('utf8')
+                });
+            });
+        });
+        req.on('error', reject);
+        if (options.body !== undefined) {
+            req.write(options.body);
+        }
+        req.end();
+    });
+}
+
         }
     };
 }
@@ -487,9 +533,18 @@ function createProductionAppWithSecret(sessionSecret, options = {}) {
         nodeEnv: 'production',
         rateLimit: { maxAttempts: 100, windowMs: 60_000 },
         totpEncryptionKey: options.totpEncryptionKey || '0123456789abcdef0123456789abcdef',
-        authPublicUrl: optionOrDefault('authPublicUrl', 'http://auth.example'),
-        businessPublicUrl: optionOrDefault('businessPublicUrl', 'http://business.example'),
-        adminPublicUrl: optionOrDefault('adminPublicUrl', 'http://admin.example')
+        authHandoffSecret: optionOrDefault('authHandoffSecret', undefined),
+        trustProxy: optionOrDefault('trustProxy', false),
+        trustedProxyIps: optionOrDefault('trustedProxyIps', undefined),
+        authPublicUrl: optionOrDefault('authPublicUrl', 'https://auth.example'),
+        businessPublicUrl: optionOrDefault('businessPublicUrl', 'https://business.example'),
+        adminPublicUrl: optionOrDefault('adminPublicUrl', 'https://admin.example')
+const VALID_ONION_HOSTS = {
+    auth: `${'a'.repeat(56)}.onion`,
+    business: `${'b'.repeat(56)}.onion`,
+    admin: `${'c'.repeat(56)}.onion`
+};
+
     });
 }
 
@@ -544,6 +599,46 @@ test('production app rejects missing auth handoff public URLs at construction', 
     assert.throws(
         createProductionAppWithSecret('0123456789abcdef0123456789abcdef', { businessPublicUrl: 'not-a-url' }),
         /BUSINESS_PUBLIC_URL/
+test('production app validates public URL modes, handoff secrets, and trusted proxy config at construction', () => {
+    const strongSecret = '0123456789abcdef0123456789abcdef';
+    assert.doesNotThrow(createProductionAppWithSecret(strongSecret));
+    assert.doesNotThrow(createProductionAppWithSecret(strongSecret, {
+        authPublicUrl: `http://${VALID_ONION_HOSTS.auth}`,
+        businessPublicUrl: `http://${VALID_ONION_HOSTS.business}`,
+        adminPublicUrl: `http://${VALID_ONION_HOSTS.admin}`
+    }));
+    assert.throws(
+        createProductionAppWithSecret(strongSecret, {
+            authPublicUrl: 'http://auth.example',
+            businessPublicUrl: 'http://business.example',
+            adminPublicUrl: 'http://admin.example'
+        }),
+        /HTTPS|onion/
+    );
+    assert.throws(
+        createProductionAppWithSecret(strongSecret, {
+            authPublicUrl: 'https://auth.example',
+            businessPublicUrl: `http://${VALID_ONION_HOSTS.business}`,
+            adminPublicUrl: `http://${VALID_ONION_HOSTS.admin}`
+        }),
+        /same production public URL mode/
+    );
+    assert.throws(
+        createProductionAppWithSecret(strongSecret, { authHandoffSecret: 'short-handoff-secret' }),
+        /AUTH_HANDOFF_STATE_SECRET|SESSION_SECRET/
+    );
+    assert.throws(
+        createProductionAppWithSecret(strongSecret, { trustProxy: true }),
+        /TRUSTED_PROXY/
+    );
+    assert.doesNotThrow(
+        createProductionAppWithSecret(strongSecret, {
+            trustProxy: true,
+            trustedProxyIps: '10.0.0.10'
+        })
+    );
+});
+
     );
 });
 
@@ -905,6 +1000,71 @@ test('logout clears secure session cookies with matching attributes', async () =
         assert.match(clearedCookie, /SameSite=Lax/);
     } finally {
         await client.close();
+test('production public URL policy controls session and handoff cookie Secure attributes', async () => {
+    const strongSecret = '0123456789abcdef0123456789abcdef';
+    const httpsClient = await createClient({
+        nodeEnv: 'production',
+        sessionSecret: strongSecret,
+        totpEncryptionKey: strongSecret,
+        authPublicUrl: 'https://auth.example',
+        businessPublicUrl: 'https://business.example',
+        adminPublicUrl: 'https://admin.example',
+        trustProxy: true,
+        trustedProxyIps: 'loopback'
+    });
+    try {
+        const httpsHeaders = {
+            host: 'business.local',
+            'x-forwarded-host': 'business.local',
+            'x-forwarded-proto': 'https',
+            'x-ielts-onion-audience': 'business'
+        };
+        const csrf = await httpsClient.request('GET', '/api/auth/csrf', undefined, { headers: httpsHeaders });
+        assert.equal(csrf.response.status, 200);
+        assert.match(csrf.response.headers.get('set-cookie') || '', /Secure/);
+
+        const start = await rawHttpRequest(httpsClient.baseUrl, 'GET', '/auth/business/start?return_to=/', {
+            headers: httpsHeaders
+        });
+        assert.equal(start.response.status, 302);
+        const handoffCookie = start.response.headers.get('set-cookie') || '';
+        assert.match(handoffCookie, /ielts\.auth_handoff\.business=/);
+        assert.match(handoffCookie, /Secure/);
+    } finally {
+        await httpsClient.close();
+    }
+
+    const onionClient = await createClient({
+        nodeEnv: 'production',
+        sessionSecret: strongSecret,
+        totpEncryptionKey: strongSecret,
+        authPublicUrl: `http://${VALID_ONION_HOSTS.auth}`,
+        businessPublicUrl: `http://${VALID_ONION_HOSTS.business}`,
+        adminPublicUrl: `http://${VALID_ONION_HOSTS.admin}`
+    });
+    try {
+        const onionHeaders = {
+            host: 'business.local',
+            'x-forwarded-host': 'business.local',
+            'x-forwarded-proto': 'http',
+            'x-ielts-onion-audience': 'business'
+        };
+        const csrf = await onionClient.request('GET', '/api/auth/csrf', undefined, { headers: onionHeaders });
+        assert.equal(csrf.response.status, 200);
+        assert.doesNotMatch(csrf.response.headers.get('set-cookie') || '', /Secure/);
+
+        const start = await rawHttpRequest(onionClient.baseUrl, 'GET', '/auth/business/start?return_to=/', {
+            headers: onionHeaders
+        });
+        assert.equal(start.response.status, 302);
+        const handoffCookie = start.response.headers.get('set-cookie') || '';
+        assert.match(handoffCookie, /ielts\.auth_handoff\.business=/);
+        assert.doesNotMatch(handoffCookie, /Secure/);
+    } finally {
+        await onionClient.close();
+    }
+});
+
     }
 });
 

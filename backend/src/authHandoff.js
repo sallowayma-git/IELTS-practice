@@ -178,23 +178,21 @@ function parseCookies(req) {
     return cookies;
 }
 
-function setVerifierCookie(req, res, audience, nonce, maxAgeMs) {
-    const proto = String(req.get('x-forwarded-proto') || req.protocol || '').split(',', 1)[0].trim().toLowerCase();
+function setVerifierCookie(res, audience, nonce, maxAgeMs, secure) {
     res.cookie(getVerifierCookieName(audience), nonce, {
         httpOnly: true,
         sameSite: 'lax',
-        secure: proto === 'https',
+        secure: Boolean(secure),
         maxAge: maxAgeMs,
         path: `/auth/${audience}/callback`
     });
 }
 
-function clearVerifierCookie(req, res, audience) {
-    const proto = String(req.get('x-forwarded-proto') || req.protocol || '').split(',', 1)[0].trim().toLowerCase();
+function clearVerifierCookie(res, audience, secure) {
     res.clearCookie(getVerifierCookieName(audience), {
         httpOnly: true,
         sameSite: 'lax',
-        secure: proto === 'https',
+        secure: Boolean(secure),
         path: `/auth/${audience}/callback`
     });
 }
@@ -358,6 +356,7 @@ function createAuthHandoffRouter(options = {}) {
     };
     const localDevelopment = isLocalDevelopment(options);
     const totpVerificationMaxAgeMs = options.totpVerificationMaxAgeMs;
+    const verifierCookieSecure = Boolean(options.cookieSecure);
 
     function requireConfig(res) {
         if (!stateSecret || !authStore || !ticketStore) {
@@ -390,7 +389,7 @@ function createAuthHandoffRouter(options = {}) {
             const callbackPath = `/auth/${audience}/callback`;
             const verifier = crypto.randomBytes(32).toString('base64url');
             const verifierHash = hashVerifier(verifier);
-            setVerifierCookie(req, res, audience, verifier, MAX_STATE_AGE_MS);
+            setVerifierCookie(res, audience, verifier, MAX_STATE_AGE_MS, verifierCookieSecure);
             const state = createSignedAuthState(stateSecret, {
                 audience,
                 returnTo,
@@ -515,7 +514,7 @@ function createAuthHandoffRouter(options = {}) {
                 if (!ticket) {
                     return res.status(403).type('text/plain').send('Auth ticket is invalid or expired');
                 }
-                clearVerifierCookie(req, res, audience);
+                clearVerifierCookie(res, audience, verifierCookieSecure);
                 const user = await authStore.findById(ticket.user_id);
                 if (!user) {
                     return res.status(401).type('text/plain').send('Authentication required');

@@ -254,6 +254,20 @@ function createStaticBoundaryMiddleware(root, options = {}) {
 
 const DEFAULT_SESSION_SECRET = 'development-session-secret-change-me';
 const PLACEHOLDER_SESSION_SECRET = 'replace-with-a-long-random-session-secret';
+const ONION_HOSTNAME_PATTERN = /^[a-z2-7]{56}\.onion$/i;
+const BOOLEAN_TRUE_STRINGS = new Set(['1', 'true', 'yes', 'on']);
+const BOOLEAN_FALSE_STRINGS = new Set(['0', 'false', 'no', 'off']);
+
+function isProduction(options = {}) {
+    return (options.nodeEnv || process.env.NODE_ENV) === 'production';
+}
+
+function isWeakSecret(secret) {
+    return !secret
+        || secret === DEFAULT_SESSION_SECRET
+        || secret === PLACEHOLDER_SESSION_SECRET
+        || String(secret).length < 32;
+}
 
 function normalizePublicBaseUrl(value) {
     const text = String(value || '').trim().replace(/\/+$/g, '');
@@ -287,8 +301,7 @@ function resolveAuthPublicUrls(options = {}) {
         businessPublicUrl: normalizePublicBaseUrl(getOptionOrEnv(options, 'businessPublicUrl', 'BUSINESS_PUBLIC_URL')),
         adminPublicUrl: normalizePublicBaseUrl(getOptionOrEnv(options, 'adminPublicUrl', 'ADMIN_PUBLIC_URL'))
     };
-    const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
-    if (production) {
+    if (isProduction(options)) {
         const missing = [];
         if (!urls.authPublicUrl) missing.push('AUTH_PUBLIC_URL');
         if (!urls.businessPublicUrl) missing.push('BUSINESS_PUBLIC_URL');
@@ -302,17 +315,141 @@ function resolveAuthPublicUrls(options = {}) {
 
 function resolveSessionSecret(options = {}) {
     const secret = options.sessionSecret || process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET;
-    const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
-    const weakSecret = !secret
-        || secret === DEFAULT_SESSION_SECRET
-        || secret === PLACEHOLDER_SESSION_SECRET
-        || String(secret).length < 32;
 
-    if (production && weakSecret) {
+    if (isProduction(options) && isWeakSecret(secret)) {
         throw new Error('SESSION_SECRET must be set to a non-placeholder value of at least 32 characters in production');
     }
 
     return secret;
+}
+
+function getPublicUrlEntries(urls) {
+    return [
+        ['AUTH_PUBLIC_URL', urls.authPublicUrl],
+        ['BUSINESS_PUBLIC_URL', urls.businessPublicUrl],
+        ['ADMIN_PUBLIC_URL', urls.adminPublicUrl]
+    ].filter(([, value]) => value);
+}
+
+function isValidOnionHostname(hostname) {
+    return ONION_HOSTNAME_PATTERN.test(String(hostname || '').toLowerCase());
+}
+
+function classifyPublicUrl(urlText) {
+    try {
+        const url = new URL(urlText);
+        if (url.protocol === 'https:') {
+            return 'https';
+        }
+        if (url.protocol === 'http:' && isValidOnionHostname(url.hostname)) {
+            return 'onion-http';
+        }
+        if (url.protocol === 'http:') {
+            return 'clearnet-http';
+        }
+    } catch (_) {
+        return 'invalid';
+    }
+    return 'invalid';
+}
+
+function resolvePublicUrlPolicy(urls, options = {}) {
+    const entries = getPublicUrlEntries(urls);
+    const profiles = entries.map(([name, value]) => [name, classifyPublicUrl(value)]);
+    const hasHttps = profiles.some(([, profile]) => profile === 'https');
+    if (!isProduction(options)) {
+        return {
+            profile: hasHttps ? 'https' : 'development',
+            cookieSecure: hasHttps ? true : null
+        };
+    }
+
+    const unsafe = profiles.filter(([, profile]) => profile !== 'https' && profile !== 'onion-http');
+    if (unsafe.length) {
+        throw new Error(`${unsafe.map(([name]) => name).join(', ')} must use HTTPS or a valid http://*.onion public URL in production`);
+    }
+    if (profiles.every(([, profile]) => profile === 'https')) {
+        return { profile: 'https', cookieSecure: true };
+    }
+    if (profiles.every(([, profile]) => profile === 'onion-http')) {
+        return { profile: 'onion-http', cookieSecure: false };
+    }
+    throw new Error('AUTH_PUBLIC_URL, BUSINESS_PUBLIC_URL, and ADMIN_PUBLIC_URL must all use the same production public URL mode: HTTPS or valid http://*.onion');
+}
+
+function resolveCookieSecure(options = {}, publicUrlPolicy = { cookieSecure: null }) {
+    if (publicUrlPolicy.cookieSecure !== null && publicUrlPolicy.cookieSecure !== undefined) {
+        return publicUrlPolicy.cookieSecure;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'cookieSecure')) {
+        return Boolean(options.cookieSecure);
+    }
+    return parseBoolean(process.env.COOKIE_SECURE, false);
+}
+
+function resolveAuthHandoffSecret(options = {}, sessionSecret, urls = {}) {
+    const configured = getOptionOrEnv(options, 'authHandoffSecret', 'AUTH_HANDOFF_STATE_SECRET');
+    const secret = configured || sessionSecret;
+    const publicUrlConfigured = getPublicUrlEntries(urls).length > 0;
+    if ((isProduction(options) || publicUrlConfigured) && isWeakSecret(secret)) {
+        throw new Error('AUTH_HANDOFF_STATE_SECRET or SESSION_SECRET must be set to a non-placeholder value of at least 32 characters when auth handoff public URLs are configured');
+    }
+    return secret;
+}
+
+function parseTrustedProxyEntries(value) {
+    if (Array.isArray(value)) {
+        return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+    }
+    return String(value || '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+}
+
+function isBooleanLikeString(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return BOOLEAN_TRUE_STRINGS.has(normalized) || BOOLEAN_FALSE_STRINGS.has(normalized);
+}
+
+function resolveTrustedProxyEntries(options = {}) {
+    if (Object.prototype.hasOwnProperty.call(options, 'trustedProxyIps')) {
+        return parseTrustedProxyEntries(options.trustedProxyIps);
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'trustedProxyCidrs')) {
+        return parseTrustedProxyEntries(options.trustedProxyCidrs);
+    }
+    return parseTrustedProxyEntries(process.env.TRUSTED_PROXY_IPS || process.env.TRUSTED_PROXY_CIDRS || '');
+}
+
+function resolveTrustProxy(options = {}) {
+    const raw = Object.prototype.hasOwnProperty.call(options, 'trustProxy')
+        ? options.trustProxy
+        : process.env.TRUST_PROXY;
+    const trustedEntries = resolveTrustedProxyEntries(options);
+
+    if (Array.isArray(raw)) {
+        const entries = parseTrustedProxyEntries(raw);
+        return entries.length === 1 ? entries[0] : entries;
+    }
+    if (typeof raw === 'string' && raw.trim() && !isBooleanLikeString(raw)) {
+        const entries = parseTrustedProxyEntries(raw);
+        return entries.length === 1 ? entries[0] : entries;
+    }
+
+    const enabled = typeof raw === 'boolean'
+        ? raw
+        : parseBoolean(raw, false);
+    if (!enabled) {
+        return false;
+    }
+    if (trustedEntries.length) {
+        return trustedEntries.length === 1 ? trustedEntries[0] : trustedEntries;
+    }
+    if (isProduction(options)) {
+        throw new Error('TRUST_PROXY=true requires TRUSTED_PROXY_IPS or TRUSTED_PROXY_CIDRS in production');
+    }
+    return 'loopback';
 }
 
 function normalizeHttpErrorStatus(error, fallback = 500) {
@@ -511,12 +648,8 @@ function createApp(options = {}) {
     const pool = options.pool || db.pool;
     const dbClient = options.db || db;
     const cookieName = options.cookieName || 'ielts.sid';
-    const cookieSecure = options.cookieSecure !== undefined
-        ? options.cookieSecure
-        : parseBoolean(process.env.COOKIE_SECURE, false);
-    const trustProxy = options.trustProxy !== undefined
-        ? options.trustProxy
-        : parseBoolean(process.env.TRUST_PROXY, false);
+    const cookieSecure = resolveCookieSecure(options, publicUrlPolicy);
+    const trustProxy = resolveTrustProxy(options);
     const sessionSecret = resolveSessionSecret(options);
     const totpEnabled = options.totpEnabled !== undefined
         ? Boolean(options.totpEnabled)
@@ -559,7 +692,7 @@ function createApp(options = {}) {
     const practiceStore = options.practiceStore || new PostgresPracticeRecordStore(dbClient);
     const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
     const authHandoffStore = options.authHandoffStore || new PostgresAuthHandoffStore(dbClient);
-    const authHandoffSecret = options.authHandoffSecret || sessionSecret;
+    const authHandoffSecret = resolveAuthHandoffSecret(options, sessionSecret, authPublicUrls);
     const trafficStore = options.trafficStore || adminStore;
     const requireAdminTotp = options.requireAdminTotp || (
         totpEnabled
@@ -602,6 +735,7 @@ function createApp(options = {}) {
             }
 
             await refreshStoredUser('user');
+    const publicUrlPolicy = resolvePublicUrlPolicy(authPublicUrls, options);
             await refreshStoredUser('pendingTotpLogin');
             await refreshStoredUser('pendingTotpSetup');
             return next();
@@ -728,6 +862,7 @@ function createApp(options = {}) {
         } catch (error) {
             return next(error);
         }
+        cookieSecure,
     }
 
     app.get(['/admin', '/admin/'], (req, res, next) => {
