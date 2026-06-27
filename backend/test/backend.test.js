@@ -2255,14 +2255,24 @@ test('admin shell and business account menu do not link back through the busines
     assert(adminProxyConfig.includes('location = /auth/admin/callback'));
     assert(adminProxyConfig.includes('location = /auth/business/callback'));
     assert(adminProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience admin;'));
-
+    assert(adminProxyConfig.includes('proxy_set_header Host admin.local;'));
+    assert(adminProxyConfig.includes('proxy_set_header X-Forwarded-Host admin.local;'));
+    assert(adminProxyConfig.includes('proxy_set_header X-Forwarded-Proto http;'));
+    assert(!adminProxyConfig.includes('proxy_set_header Host $host;'));
+    assert(!adminProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
+    assert(!adminProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert(!adminProxyConfig.includes('location = /auth/business/start'));
     assert(!adminProxyConfig.includes('location = /api/auth/login'));
     assert(businessProxyConfig.includes('location = /auth/business/start'));
     assert(businessProxyConfig.includes('location = /auth/business/callback'));
     assert(businessProxyConfig.includes('location = /auth/admin/callback'));
     assert(businessProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience business;'));
-
+    assert(businessProxyConfig.includes('proxy_set_header Host business.local;'));
+    assert(businessProxyConfig.includes('proxy_set_header X-Forwarded-Host business.local;'));
+    assert(businessProxyConfig.includes('proxy_set_header X-Forwarded-Proto http;'));
+    assert(!businessProxyConfig.includes('proxy_set_header Host $host;'));
+    assert(!businessProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
+    assert(!businessProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert(!businessProxyConfig.includes('location = /auth/admin/start'));
     assert(businessProxyConfig.includes('location = /api/auth/login { return 404; }'));
     assert(businessProxyConfig.includes('location ^~ /api/auth/totp/ { return 404; }'));
@@ -2274,7 +2284,12 @@ test('admin shell and business account menu do not link back through the busines
     assert(authProxyConfig.includes('location ^~ /api/admin/ { return 404; }'));
     assert(authProxyConfig.includes('location ^~ /api/practice-records { return 404; }'));
     assert(authProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience auth;'));
-
+    assert(authProxyConfig.includes('proxy_set_header Host auth.local;'));
+    assert(authProxyConfig.includes('proxy_set_header X-Forwarded-Host auth.local;'));
+    assert(authProxyConfig.includes('proxy_set_header X-Forwarded-Proto http;'));
+    assert(!authProxyConfig.includes('proxy_set_header Host $host;'));
+    assert(!authProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
+    assert(!authProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert.doesNotMatch(adminScript, /\/api\/auth\/user/);
     assert.doesNotMatch(adminScript, /window\.location\.href\s*=\s*['"]\/['"]/);
     assert.doesNotMatch(adminIndex, /href=["']\/["'][^>]*>\s*App\s*</);
