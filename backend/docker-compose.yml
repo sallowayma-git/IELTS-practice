@@ -67,8 +67,8 @@ services:
 
   tor:
     build:
-      context: .
-      dockerfile: tor/Dockerfile
+      context: ./tor
+      dockerfile: Dockerfile
     container_name: ielts-practice-tor
     restart: unless-stopped
     environment:

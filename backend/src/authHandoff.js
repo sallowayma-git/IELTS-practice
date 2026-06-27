@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const { publicUser } = require('./auth');
-const { hasSessionTotpVerification, markSessionTotpVerified } = require('./totp');
+const { getSessionTotpVerification, markSessionTotpVerified } = require('./totp');
 
 const DEFAULT_TICKET_TTL_MS = 60_000;
 const MAX_RETURN_TO_LENGTH = 300;
@@ -458,13 +458,14 @@ function createAuthHandoffRouter(options = {}) {
                 const status = totpStore && typeof totpStore.getStatus === 'function'
                     ? await totpStore.getStatus(user.id)
                     : { enabled: false };
-                if (!status.enabled || !hasSessionTotpVerification(req, user, totpVerificationMaxAgeMs)) {
+                const totpVerification = getSessionTotpVerification(req, user, totpVerificationMaxAgeMs);
+                if (!status.enabled || !totpVerification) {
                     if (wantsJson) {
                         return res.status(403).json({ error: 'Admin TOTP verification required' });
                     }
                     return res.status(403).type('text/plain').send('Admin TOTP verification required');
                 }
-                adminTotpVerifiedAt = new Date().toISOString();
+                adminTotpVerifiedAt = new Date(totpVerification.verifiedAt).toISOString();
             }
             const token = crypto.randomBytes(32).toString('base64url');
             await ticketStore.createTicket({
@@ -526,7 +527,7 @@ function createAuthHandoffRouter(options = {}) {
                 await regenerateSession(req);
                 req.session.user = safeUser;
                 if (audience === 'admin' && ticket.admin_totp_verified_at) {
-                    markSessionTotpVerified(req, safeUser);
+                    markSessionTotpVerified(req, safeUser, Date.parse(ticket.admin_totp_verified_at));
                 }
                 return res.redirect(sanitizeReturnTo(ticket.return_to, audience));
             } catch (error) {

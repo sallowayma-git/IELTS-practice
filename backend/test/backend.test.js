@@ -23,6 +23,8 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     const torDockerfile = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', 'Dockerfile'), 'utf8');
     const appSource = fs.readFileSync(path.join(repoRoot, 'backend', 'src', 'app.js'), 'utf8');
     const dockerignore = fs.readFileSync(path.join(repoRoot, '.dockerignore'), 'utf8');
+    const backendDockerignore = fs.readFileSync(path.join(repoRoot, 'backend', '.dockerignore'), 'utf8');
+    const torDockerignore = fs.readFileSync(path.join(repoRoot, 'backend', 'tor', '.dockerignore'), 'utf8');
     const gitignore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
     const compose = fs.readFileSync(path.join(repoRoot, 'backend', 'docker-compose.yml'), 'utf8');
     const encryptedBridgeCompose = fs.readFileSync(path.join(repoRoot, 'backend', 'docker-compose.bridges-encrypted.yml'), 'utf8');
@@ -47,6 +49,18 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     }
     assert(dockerignore.split(/\r?\n/).includes('!backend/migrations/*.sql'));
     assert(dockerignore.split(/\r?\n/).includes('backend/tor/bridges.age.tmp-*'));
+    for (const pattern of ['.env', '.env.*', 'logs', 'node_modules', 'tor/bridges.local.txt', 'tor/webtunnel.local.txt', 'tor/hidden_service', 'tor/admin_hidden_service', 'tor/auth_hidden_service', 'tor/admin-authorized-clients/*.auth', '*.dump', '*.sql', '!migrations/*.sql']) {
+        assert(
+            backendDockerignore.split(/\r?\n/).includes(pattern),
+            `backend/.dockerignore must exclude ${pattern}`
+        );
+    }
+    for (const pattern of ['*.local.txt', 'bridges.age', 'bridges.age.tmp-*', 'bridge-age-identity.txt', '*.identity', '*.pub', '*.agekey', 'hidden_service', 'admin_hidden_service', 'auth_hidden_service', 'admin-authorized-clients/*.auth']) {
+        assert(
+            torDockerignore.split(/\r?\n/).includes(pattern),
+            `backend/tor/.dockerignore must exclude ${pattern}`
+        );
+    }
     assert(gitignore.split(/\r?\n/).includes('backend/logs/'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.local.txt'));
     assert(gitignore.split(/\r?\n/).includes('backend/tor/bridges.age'));
@@ -64,6 +78,9 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(gitignore.split(/\r?\n/).includes('*auth_tor_hidden_service*'));
     assert(gitignore.split(/\r?\n/).includes('!backend/migrations/*.sql'));
     assert(torDockerfile.includes('apt-get install -y --no-install-recommends age ca-certificates obfs4proxy tor'));
+    assert(torDockerfile.includes('COPY torrc /etc/tor/torrc'));
+    assert(torDockerfile.includes('COPY bridges.txt /etc/tor/bridges.txt'));
+    assert(!torDockerfile.includes('COPY tor/torrc'));
     assert(compose.includes('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?'));
     assert(compose.includes('PGPASSWORD: ${POSTGRES_PASSWORD:?'));
     assert(compose.includes('postgres_data:/var/lib/postgresql/data'));
@@ -97,10 +114,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(envExample.includes('TOR_BRIDGES_ENCRYPTED_LOCAL_FILE=./tor/bridges.age'));
     assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE=./tor/bridge-age-identity.txt'));
     assert(envExample.includes('TRAFFIC_SECRET='));
+    assert(compose.includes('TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}'));
     assert(envExample.includes('AUTH_HANDOFF_STATE_SECRET='));
     assert(envExample.includes('TRUSTED_PROXY_IPS='));
     assert(compose.includes('TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}'));
-    assert(compose.includes('TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}'));
+    assert(compose.includes('context: ./tor'));
+    assert(compose.includes('dockerfile: Dockerfile'));
     assert(envExample.includes('AUTH_PUBLIC_URL=http://replace-with-auth-onion.onion'));
     assert(envExample.includes('BUSINESS_PUBLIC_URL=http://replace-with-business-onion.onion'));
     assert(envExample.includes('ADMIN_PUBLIC_URL=http://replace-with-admin-onion.onion'));
@@ -319,22 +338,22 @@ async function createClient(options = {}) {
         authHandoffStore,
         sessionStore,
         sessionSecret: options.sessionSecret || 'test-session-secret-0123456789abcdef',
-        trustedProxyIps: options.trustedProxyIps,
-        trustedProxyCidrs: options.trustedProxyCidrs,
         nodeEnv: options.nodeEnv,
         staticRoot: options.staticRoot,
         cookieSecure: options.cookieSecure,
         trustProxy: options.trustProxy,
+        trustedProxyIps: options.trustedProxyIps,
+        trustedProxyCidrs: options.trustedProxyCidrs,
         bcrypt: options.bcrypt,
         rateLimit: options.rateLimit || { maxAttempts: 100, windowMs: 60_000 },
         adminRateLimit: options.adminRateLimit,
         csrfRateLimit: options.csrfRateLimit,
         totpRateLimit: options.totpRateLimit,
-        authHandoffSecret: options.authHandoffSecret,
         totpEnabled: options.totpEnabled,
         totpEncryptionKey: options.totpEncryptionKey || 'test-totp-key',
         totpVerificationMaxAgeMs: options.totpVerificationMaxAgeMs,
         authHandoffTicketTtlMs: options.authHandoffTicketTtlMs,
+        authHandoffSecret: options.authHandoffSecret,
         authPublicUrl: options.authPublicUrl,
         businessPublicUrl: options.businessPublicUrl,
         adminPublicUrl: options.adminPublicUrl,
@@ -436,11 +455,11 @@ async function createClient(options = {}) {
     return {
         sessionStore,
         authStore,
-        baseUrl,
         adminStore,
         authHandoffStore,
         totpStore,
         practiceStore,
+        baseUrl,
         get csrfToken() {
             return primarySession.csrfToken;
         },
@@ -451,6 +470,10 @@ async function createClient(options = {}) {
             return new Promise((resolve, reject) => {
                 server.close((error) => error ? reject(error) : resolve());
             });
+        }
+    };
+}
+
 function rawHttpRequest(baseUrl, method, requestPath, options = {}) {
     const target = new URL(requestPath, baseUrl);
     return new Promise((resolve, reject) => {
@@ -487,10 +510,6 @@ function rawHttpRequest(baseUrl, method, requestPath, options = {}) {
         }
         req.end();
     });
-}
-
-        }
-    };
 }
 
 function getResponseSessionCookie(result) {
@@ -539,14 +558,14 @@ function createProductionAppWithSecret(sessionSecret, options = {}) {
         authPublicUrl: optionOrDefault('authPublicUrl', 'https://auth.example'),
         businessPublicUrl: optionOrDefault('businessPublicUrl', 'https://business.example'),
         adminPublicUrl: optionOrDefault('adminPublicUrl', 'https://admin.example')
+    });
+}
+
 const VALID_ONION_HOSTS = {
     auth: `${'a'.repeat(56)}.onion`,
     business: `${'b'.repeat(56)}.onion`,
     admin: `${'c'.repeat(56)}.onion`
 };
-
-    });
-}
 
 test('production app rejects missing or placeholder session secrets', () => {
     assert.throws(
@@ -599,6 +618,9 @@ test('production app rejects missing auth handoff public URLs at construction', 
     assert.throws(
         createProductionAppWithSecret('0123456789abcdef0123456789abcdef', { businessPublicUrl: 'not-a-url' }),
         /BUSINESS_PUBLIC_URL/
+    );
+});
+
 test('production app validates public URL modes, handoff secrets, and trusted proxy config at construction', () => {
     const strongSecret = '0123456789abcdef0123456789abcdef';
     assert.doesNotThrow(createProductionAppWithSecret(strongSecret));
@@ -636,9 +658,6 @@ test('production app validates public URL modes, handoff secrets, and trusted pr
             trustProxy: true,
             trustedProxyIps: '10.0.0.10'
         })
-    );
-});
-
     );
 });
 
@@ -1000,6 +1019,9 @@ test('logout clears secure session cookies with matching attributes', async () =
         assert.match(clearedCookie, /SameSite=Lax/);
     } finally {
         await client.close();
+    }
+});
+
 test('production public URL policy controls session and handoff cookie Secure attributes', async () => {
     const strongSecret = '0123456789abcdef0123456789abcdef';
     const httpsClient = await createClient({
@@ -1062,9 +1084,6 @@ test('production public URL policy controls session and handoff cookie Secure at
         assert.doesNotMatch(handoffCookie, /Secure/);
     } finally {
         await onionClient.close();
-    }
-});
-
     }
 });
 
@@ -1684,6 +1703,90 @@ test('auth registration rate limit applies across usernames from one IP', async 
         });
         assert.equal(limited.response.status, 429);
         assert.equal(limited.json.error, 'Too many requests, please try again later');
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth and CSRF rate limits ignore X-Forwarded-For from untrusted clients', async () => {
+    const authClient = await createClient({
+        trustProxy: true,
+        trustedProxyIps: '10.0.0.10',
+        rateLimit: { maxAttempts: 1, windowMs: 60_000 }
+    });
+    try {
+        await authClient.csrf();
+        const firstFailure = await authClient.request('POST', '/api/auth/login', {
+            username: 'xff_auth_one',
+            password: 'WrongPass1'
+        }, {
+            headers: { 'x-forwarded-for': '198.51.100.10' }
+        });
+        assert.equal(firstFailure.response.status, 401);
+
+        const limited = await authClient.request('POST', '/api/auth/login', {
+            username: 'xff_auth_two',
+            password: 'WrongPass1'
+        }, {
+            headers: { 'x-forwarded-for': '203.0.113.20' }
+        });
+        assert.equal(limited.response.status, 429);
+    } finally {
+        await authClient.close();
+    }
+
+    const csrfClient = await createClient({
+        trustProxy: true,
+        trustedProxyIps: '10.0.0.10',
+        csrfRateLimit: { maxAttempts: 1, windowMs: 60_000 }
+    });
+    try {
+        const first = await csrfClient.request('GET', '/api/auth/csrf', undefined, {
+            headers: { 'x-forwarded-for': '198.51.100.11' }
+        });
+        assert.equal(first.response.status, 200);
+        const limited = await csrfClient.request('GET', '/api/auth/csrf', undefined, {
+            headers: { 'x-forwarded-for': '203.0.113.21' }
+        });
+        assert.equal(limited.response.status, 429);
+    } finally {
+        await csrfClient.close();
+    }
+});
+
+test('TOTP rate limits ignore X-Forwarded-For from untrusted clients', async () => {
+    const client = await createClient({
+        trustProxy: true,
+        trustedProxyIps: '10.0.0.10',
+        totpRateLimit: { maxAttempts: 1, windowMs: 60_000 }
+    });
+    try {
+        await register(client, 'xff_totp_user', 'StrongPass1');
+        await enableTotpForCurrentSession(client);
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const passwordLogin = await client.request('POST', '/api/auth/login', {
+            username: 'xff_totp_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordLogin.response.status, 200);
+        assert.equal(passwordLogin.json.requiresTotp, true);
+
+        const firstFailure = await client.request('POST', '/api/auth/totp/login', {
+            token: '000000'
+        }, {
+            headers: { 'x-forwarded-for': '198.51.100.12' }
+        });
+        assert.equal(firstFailure.response.status, 401);
+
+        const limited = await client.request('POST', '/api/auth/totp/login', {
+            token: '000000'
+        }, {
+            headers: { 'x-forwarded-for': '203.0.113.22' }
+        });
+        assert.equal(limited.response.status, 429);
     } finally {
         await client.close();
     }
@@ -2445,8 +2548,10 @@ test('admin shell and business account menu do not link back through the busines
     assert(adminProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience admin;'));
     assert(adminProxyConfig.includes('proxy_set_header Host admin.local;'));
     assert(adminProxyConfig.includes('proxy_set_header X-Forwarded-Host admin.local;'));
+    assert(adminProxyConfig.includes('proxy_set_header X-Forwarded-For $remote_addr;'));
     assert(adminProxyConfig.includes('proxy_set_header X-Forwarded-Proto http;'));
     assert(!adminProxyConfig.includes('proxy_set_header Host $host;'));
+    assert(!adminProxyConfig.includes('$proxy_add_x_forwarded_for'));
     assert(!adminProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
     assert(!adminProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert(!adminProxyConfig.includes('location = /auth/business/start'));
@@ -2457,8 +2562,10 @@ test('admin shell and business account menu do not link back through the busines
     assert(businessProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience business;'));
     assert(businessProxyConfig.includes('proxy_set_header Host business.local;'));
     assert(businessProxyConfig.includes('proxy_set_header X-Forwarded-Host business.local;'));
+    assert(businessProxyConfig.includes('proxy_set_header X-Forwarded-For $remote_addr;'));
     assert(businessProxyConfig.includes('proxy_set_header X-Forwarded-Proto http;'));
     assert(!businessProxyConfig.includes('proxy_set_header Host $host;'));
+    assert(!businessProxyConfig.includes('$proxy_add_x_forwarded_for'));
     assert(!businessProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
     assert(!businessProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert(!businessProxyConfig.includes('location = /auth/admin/start'));
@@ -2474,8 +2581,10 @@ test('admin shell and business account menu do not link back through the busines
     assert(authProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience auth;'));
     assert(authProxyConfig.includes('proxy_set_header Host auth.local;'));
     assert(authProxyConfig.includes('proxy_set_header X-Forwarded-Host auth.local;'));
+    assert(authProxyConfig.includes('proxy_set_header X-Forwarded-For $remote_addr;'));
     assert(authProxyConfig.includes('proxy_set_header X-Forwarded-Proto http;'));
     assert(!authProxyConfig.includes('proxy_set_header Host $host;'));
+    assert(!authProxyConfig.includes('$proxy_add_x_forwarded_for'));
     assert(!authProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
     assert(!authProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert.doesNotMatch(adminScript, /\/api\/auth\/user/);
@@ -2795,6 +2904,45 @@ test('admin auth handoff requires admin role and TOTP verification', async () =>
 
         const adminPage = await targetSession.request('GET', '/admin');
         assert.equal(adminPage.response.status, 200);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin auth handoff preserves existing TOTP freshness without extending it', async () => {
+    const client = await createClient({ totpVerificationMaxAgeMs: 1000 });
+    try {
+        await seedAdmin(client, 'handoff_freshness_admin', 'StrongPass1');
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
+        assert.equal(start.response.status, 302);
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(state);
+
+        await authSession.csrf();
+        const passwordLogin = await authSession.request('POST', '/api/auth/login', {
+            username: 'handoff_freshness_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordLogin.response.status, 200);
+        assert.equal(passwordLogin.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(authSession);
+
+        const complete = await withDateNowOffset(500, () => authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' }));
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+
+        const callback = await withDateNowOffset(800, () => targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' }));
+        assert.equal(callback.response.status, 302);
+        assert.equal(callback.response.headers.get('location'), '/admin');
+
+        const stillFresh = await withDateNowOffset(900, () => targetSession.request('GET', '/api/admin/summary'));
+        assert.equal(stillFresh.response.status, 200);
+
+        const expired = await withDateNowOffset(1500, () => targetSession.request('GET', '/api/admin/summary'));
+        assert.equal(expired.response.status, 403);
+        assert.equal(expired.json.error, 'Admin TOTP verification required');
     } finally {
         await client.close();
     }
@@ -3269,6 +3417,44 @@ test('admin sensitive mutations are rate limited', async () => {
         const readOnly = await client.request('GET', '/api/admin/users?q=limited_admin_target');
         assert.equal(readOnly.response.status, 200);
         assert.equal(readOnly.json.users.length, 1);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin mutation rate limits ignore X-Forwarded-For from untrusted clients', async () => {
+    const client = await createClient({
+        trustProxy: true,
+        trustedProxyIps: '10.0.0.10',
+        adminRateLimit: { maxAttempts: 1, windowMs: 60_000 }
+    });
+    try {
+        await seedAdmin(client, 'xff_limited_admin', 'StrongPass1');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'xff_limited_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(client);
+
+        const created = await client.request('POST', '/api/admin/users', {
+            username: 'xff_limited_admin_target',
+            password: 'StrongPass1',
+            role: 'user'
+        }, {
+            headers: { 'x-forwarded-for': '198.51.100.13' }
+        });
+        assert.equal(created.response.status, 201);
+
+        const limited = await client.request('PATCH', `/api/admin/users/${created.json.user.id}`, {
+            password: 'StrongerPass2'
+        }, {
+            headers: { 'x-forwarded-for': '203.0.113.23' }
+        });
+        assert.equal(limited.response.status, 429);
+        assert.equal(limited.json.error, 'Too many requests, please try again later');
     } finally {
         await client.close();
     }
@@ -4446,6 +4632,24 @@ test('static hosting serves index and denies dotfiles with security headers', as
             assert.doesNotMatch(anonymous.text, /Unified Reading|Listening Sample|window\.ok|__READING_/);
         }
 
+        const encodedGenerated = await client.request('GET', '/assets/%67enerated/reading-exams/p1-high-01.js');
+        assert.equal(encodedGenerated.response.status, 401);
+        assert.doesNotMatch(encodedGenerated.text, /__READING_EXAM_DATA__/);
+
+        const normalizedTraversal = await client.request('GET', '/assets/generated/reading-exams/%2e%2e/reading-explanations/p1-high-01.js');
+        assert.notEqual(normalizedTraversal.response.status, 200);
+        assert.doesNotMatch(normalizedTraversal.text, /__READING_/);
+
+        for (const rejectedPath of [
+            '/assets/generated%2Freading-exams/p1-high-01.js',
+            '/assets/generated/reading-exams/%252e%252e%252freading-explanations/p1-high-01.js',
+            '/assets/generated/reading-exams/%2e%2e%5creading-explanations%5cp1-high-01.js'
+        ]) {
+            const rejected = await client.request('GET', rejectedPath);
+            assert.equal(rejected.response.status, 400, `${rejectedPath} should be rejected before static serving`);
+            assert.doesNotMatch(rejected.text, /__READING_/);
+        }
+
         const created = await register(client, 'static_content_user', 'StrongPass1');
         assert.equal(created.response.status, 201);
 
@@ -4513,7 +4717,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
         assert.equal(missingPrettyListening.response.status, 404);
 
         const unsafePrettyListening = await client.request('GET', '/practice/listening/%2e%2e%2fsecret');
-        assert.equal(unsafePrettyListening.response.status, 404);
+        assert.equal(unsafePrettyListening.response.status, 400);
 
         const legacyTemplate = await client.request('GET', '/templates/legacy.html');
         assert.equal(legacyTemplate.response.status, 200);
@@ -4537,7 +4741,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
         assert.doesNotMatch(encodedCiFixture.text, /debugPracticeEnhancer/);
 
         const encodedSlashCiFixture = await client.request('GET', '/templates/%63i-practice-fixtures%2Fdebug.html');
-        assert.equal(encodedSlashCiFixture.response.status, 404);
+        assert.equal(encodedSlashCiFixture.response.status, 400);
         assert.doesNotMatch(encodedSlashCiFixture.text, /debugPracticeEnhancer/);
     } finally {
         await client.close();

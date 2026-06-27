@@ -6,6 +6,7 @@ const { z } = require('zod');
 const {
     ensureCsrfToken,
     createRateLimiter,
+    getCanonicalClientIp,
     isPasswordWithinBcryptByteLimit,
     publicUser,
     requireAuth,
@@ -442,30 +443,41 @@ function getPendingSetupSecret(setup, config) {
     return null;
 }
 
-function markSessionTotpVerified(req, user) {
+function markSessionTotpVerified(req, user, verifiedAt = Date.now()) {
     const safeUser = publicUser(user);
-    if (!req.session || !safeUser?.id) {
+    const timestamp = Number(verifiedAt);
+    if (!req.session || !safeUser?.id || !Number.isFinite(timestamp) || timestamp <= 0) {
         return;
     }
     req.session[TOTP_SESSION_MARKER_KEY] = {
         userId: safeUser.id,
-        verifiedAt: Date.now()
+        verifiedAt: timestamp
     };
 }
 
-function hasSessionTotpVerification(req, user, maxAgeMs = DEFAULT_TOTP_VERIFICATION_MAX_AGE_MS) {
+function getSessionTotpVerification(req, user, maxAgeMs = DEFAULT_TOTP_VERIFICATION_MAX_AGE_MS) {
     const safeUser = publicUser(user);
     const marker = req.session && req.session[TOTP_SESSION_MARKER_KEY];
     const verifiedAt = Number(marker?.verifiedAt);
     const markerAge = Date.now() - verifiedAt;
-    return Boolean(
+    if (
         safeUser?.id
         && marker?.userId === safeUser.id
         && Number.isFinite(verifiedAt)
         && verifiedAt > 0
         && markerAge >= 0
         && markerAge <= maxAgeMs
-    );
+    ) {
+        return {
+            userId: marker.userId,
+            verifiedAt
+        };
+    }
+    return null;
+}
+
+function hasSessionTotpVerification(req, user, maxAgeMs = DEFAULT_TOTP_VERIFICATION_MAX_AGE_MS) {
+    return Boolean(getSessionTotpVerification(req, user, maxAgeMs));
 }
 
 function createRequireAdminTotp(store, options = {}) {
@@ -570,7 +582,8 @@ function createTotpRouter(options = {}) {
             if (!user) {
                 return res.status(401).json({ error: 'Authentication required' });
             }
-            checkRateLimit(`totp-setup-start:${req.ip}:${user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`totp-setup-start:${clientIp}:${user.id}`);
             const status = await store.getStatus(user.id);
             if (status.enabled) {
                 return res.status(409).json({ error: 'TOTP is already enabled' });
@@ -617,7 +630,8 @@ function createTotpRouter(options = {}) {
                 delete req.session.pendingTotpSetup;
                 return res.status(400).json({ error: 'TOTP setup was not started' });
             }
-            checkRateLimit(`totp-setup:${req.ip}:${user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`totp-setup:${clientIp}:${user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
             const result = parsed.success
                 ? verifyTotpTokenWithReplayWindow(parsed.data.token, setupSecret, config)
@@ -663,7 +677,8 @@ function createTotpRouter(options = {}) {
                 delete req.session.pendingTotpLogin;
                 return res.status(401).json({ error: 'TOTP login expired' });
             }
-            checkRateLimit(`totp-login:${req.ip}:${pending.user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`totp-login:${clientIp}:${pending.user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
             if (!parsed.success || !(await verifyStoredToken(pending.user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
@@ -683,7 +698,8 @@ function createTotpRouter(options = {}) {
             if (!status.enabled) {
                 return res.status(400).json({ error: 'TOTP is not enabled' });
             }
-            checkRateLimit(`totp-verify:${req.ip}:${user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`totp-verify:${clientIp}:${user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
             if (!parsed.success || !(await verifyStoredToken(user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
@@ -706,7 +722,8 @@ function createTotpRouter(options = {}) {
             if (!status.enabled) {
                 return res.status(400).json({ error: 'TOTP is not enabled' });
             }
-            checkRateLimit(`totp-recovery-codes:${req.ip}:${req.session.user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`totp-recovery-codes:${clientIp}:${req.session.user.id}`);
             const parsed = tokenSchema.safeParse(req.body || {});
             if (!parsed.success || !(await verifyStoredToken(req.session.user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
@@ -742,7 +759,8 @@ function createTotpRouter(options = {}) {
             if (!parsed.success) {
                 return res.status(400).json({ error: 'Password and TOTP code are required' });
             }
-            checkRateLimit(`totp-disable:${req.ip}:${user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`totp-disable:${clientIp}:${user.id}`);
             const account = await authStore.findByUsernameLower(user.username.toLowerCase());
             const passwordOk = account
                 && isPasswordWithinBcryptByteLimit(parsed.data.password)
@@ -776,6 +794,7 @@ module.exports = {
     decryptSecret,
     encryptSecret,
     generateRecoveryCodes,
+    getSessionTotpVerification,
     getTotpConfig,
     hasSessionTotpVerification,
     isRecoveryCodeToken,

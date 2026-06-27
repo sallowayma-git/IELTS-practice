@@ -104,6 +104,21 @@ function normalizeRateLimitKey(key) {
     return `sha256:${crypto.createHash('sha256').update(normalized).digest('hex')}`;
 }
 
+function getCanonicalClientIp(req) {
+    const candidates = [
+        req && req.ip,
+        req && req.socket && req.socket.remoteAddress,
+        req && req.connection && req.connection.remoteAddress
+    ];
+    for (const candidate of candidates) {
+        const value = normalizeRateLimitKey(candidate);
+        if (value !== 'unknown') {
+            return value;
+        }
+    }
+    return 'unknown';
+}
+
 function createRateLimiter(options = {}) {
     const windowMs = options.windowMs || 10 * 60 * 1000;
     const maxAttempts = options.maxAttempts || 20;
@@ -503,7 +518,8 @@ function createAuthRouter(options = {}) {
 
     router.get('/csrf', (req, res, next) => {
         try {
-            checkCsrfRateLimit(`csrf-ip:${req.ip}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkCsrfRateLimit(`csrf-ip:${clientIp}`);
             return res.json({ csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);
@@ -525,8 +541,9 @@ function createAuthRouter(options = {}) {
             }
             const username = normalizeUsername(parsed.data.username);
             const usernameLower = username.toLowerCase();
-            checkRateLimit(`register-ip:${req.ip}`);
-            checkRateLimit(`register:${req.ip}:${usernameLower}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`register-ip:${clientIp}`);
+            checkRateLimit(`register:${clientIp}:${usernameLower}`);
 
             const passwordCheck = validatePasswordStrength(parsed.data.password);
             if (!passwordCheck.valid) {
@@ -561,8 +578,9 @@ function createAuthRouter(options = {}) {
             }
             const username = normalizeUsername(parsed.data.username);
             const usernameLower = username.toLowerCase();
-            checkRateLimit(`login-ip:${req.ip}`);
-            checkRateLimit(`login:${req.ip}:${usernameLower}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`login-ip:${clientIp}`);
+            checkRateLimit(`login:${clientIp}:${usernameLower}`);
             if (!isPasswordWithinBcryptByteLimit(parsed.data.password)) {
                 await bcryptImpl.compare(parsed.data.password, DUMMY_PASSWORD_HASH);
                 return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
@@ -632,7 +650,8 @@ function createAuthRouter(options = {}) {
             if (!parsed.success) {
                 return sendValidationError(res, parsed, 'Invalid account update payload');
             }
-            checkRateLimit(`account-username:${req.ip}:${req.session.user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`account-username:${clientIp}:${req.session.user.id}`);
             const currentUser = await getCurrentStoredUser(store, req.session.user);
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
@@ -682,7 +701,8 @@ function createAuthRouter(options = {}) {
             if (!parsed.success) {
                 return sendValidationError(res, parsed, 'Invalid password update payload');
             }
-            checkRateLimit(`account-password:${req.ip}:${req.session.user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`account-password:${clientIp}:${req.session.user.id}`);
             const currentUser = await getCurrentStoredUser(store, req.session.user);
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
@@ -725,7 +745,8 @@ function createAuthRouter(options = {}) {
             if (!parsed.success) {
                 return sendValidationError(res, parsed, 'Invalid account deletion payload');
             }
-            checkRateLimit(`account-delete:${req.ip}:${req.session.user.id}`);
+            const clientIp = getCanonicalClientIp(req);
+            checkRateLimit(`account-delete:${clientIp}:${req.session.user.id}`);
             const currentUser = await getCurrentStoredUser(store, req.session.user);
             if (!currentUser) {
                 return res.status(401).json({ error: 'Authentication required' });
@@ -771,6 +792,7 @@ module.exports = {
     createAuthRouter,
     createRateLimiter,
     ensureCsrfToken,
+    getCanonicalClientIp,
     isPasswordWithinBcryptByteLimit,
     normalizeRateLimitKey,
     normalizeUsername,

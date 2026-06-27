@@ -6,6 +6,7 @@ const {
     USERNAME_PATTERN,
     ensureCsrfToken,
     createRateLimiter,
+    getCanonicalClientIp,
     normalizeUsername,
     publicUser,
     requireAdmin,
@@ -1986,7 +1987,7 @@ function createAdminRouter(options = {}) {
 
     function checkAdminMutationRateLimit(req, action) {
         const adminId = req.session?.user?.id || 'unknown';
-        const ip = req.ip || 'unknown';
+        const ip = getCanonicalClientIp(req);
         checkRateLimit(`admin-mutation-ip:${ip}`);
         checkRateLimit(`admin-mutation-user:${adminId}`);
         checkRateLimit(`admin-mutation-action:${action}:${ip}:${adminId}`);
@@ -2231,7 +2232,7 @@ function classifyRouteGroup(pathname) {
 
 function hashVisitor(req, secret) {
     const source = [
-        req.ip || '',
+        getCanonicalClientIp(req),
         normalizeUserAgent(req.get('user-agent')) || '',
         normalizeTrafficLanguage(req.get('accept-language')) || ''
     ].join('|');

@@ -556,6 +556,103 @@ function requireContentAuth(req, res, next) {
 </html>`);
 }
 
+const PROTECTED_CONTENT_ROUTES = [
+    '/practice',
+    '/assets/generated/reading-exams',
+    '/assets/generated/reading-explanations',
+    '/assets/generated/listening-exams',
+    '/ListeningPractice',
+    '/listeningpractice',
+    '/templates',
+    '/Templates'
+];
+
+const PROTECTED_CONTENT_PREFIXES = PROTECTED_CONTENT_ROUTES
+    .map((entry) => entry.toLowerCase())
+    .filter((entry, index, entries) => entries.indexOf(entry) === index);
+
+function isProtectedContentPath(value) {
+    const pathText = String(value || '/').toLowerCase();
+    return PROTECTED_CONTENT_PREFIXES.some((prefix) => {
+        return pathText === prefix || pathText.startsWith(`${prefix}/`);
+    });
+}
+
+function hasProtectedContentMarker(variants) {
+    return variants.some((variant) => {
+        const normalized = String(variant || '')
+            .replace(/\\/g, '/')
+            .toLowerCase();
+        return PROTECTED_CONTENT_PREFIXES.some((prefix) => {
+            return normalized === prefix
+                || normalized.startsWith(`${prefix}/`)
+                || normalized.includes(`${prefix}/`);
+        });
+    });
+}
+
+function canonicalizeProtectedRequestPath(req) {
+    const rawPath = String(req.originalUrl || req.url || '/').split(/[?#]/, 1)[0] || '/';
+    const variants = [rawPath];
+    let current = rawPath;
+    let hadEncodedSeparator = false;
+    let hadEncodedDot = false;
+    let invalid = false;
+
+    for (let pass = 0; pass < 4; pass += 1) {
+        if (/%(?:2f|5c)/i.test(current)) {
+            hadEncodedSeparator = true;
+        }
+        if (/%2e/i.test(current)) {
+            hadEncodedDot = true;
+        }
+        let decoded;
+        try {
+            decoded = decodeURIComponent(current);
+        } catch (_) {
+            invalid = true;
+            break;
+        }
+        if (decoded === current) {
+            break;
+        }
+        variants.push(decoded);
+        current = decoded;
+    }
+
+    const slashPath = current.replace(/\\/g, '/');
+    const withLeadingSlash = slashPath.startsWith('/') ? slashPath : `/${slashPath}`;
+    const rawSegments = withLeadingSlash.split('/').filter(Boolean);
+    const hasTraversal = rawSegments.some((segment) => segment === '..');
+    const hasBackslash = variants.some((variant) => String(variant || '').includes('\\'));
+    const hasNul = variants.some((variant) => String(variant || '').includes('\0'));
+    const canonicalPath = path.posix.normalize(withLeadingSlash).replace(/\/+$/g, '') || '/';
+    const protectedIntent = hasProtectedContentMarker(variants);
+
+    return {
+        canonicalPath,
+        invalid: invalid || hasNul,
+        protected: protectedIntent || isProtectedContentPath(canonicalPath),
+        reject: hadEncodedSeparator || hadEncodedDot || hasTraversal || hasBackslash
+    };
+}
+
+function createCanonicalProtectedContentMiddleware(authMiddleware) {
+    return function canonicalProtectedContentMiddleware(req, res, next) {
+        const result = canonicalizeProtectedRequestPath(req);
+        if (result.invalid) {
+            return res.status(400).type('text/plain').send('Invalid path');
+        }
+        if (!result.protected) {
+            return next();
+        }
+        if (result.reject) {
+            return res.status(400).type('text/plain').send('Invalid protected path');
+        }
+        return authMiddleware(req, res, next);
+    };
+}
+
 function encodePublicPathSegments(value) {
     return String(value || '')
         .replace(/\\/g, '/')
@@ -642,6 +739,7 @@ function createListeningExamResolver(staticRoot) {
 function createApp(options = {}) {
     const app = express();
     const authPublicUrls = resolveAuthPublicUrls(options);
+    const publicUrlPolicy = resolvePublicUrlPolicy(authPublicUrls, options);
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
     const adminRoot = options.adminRoot || path.resolve(__dirname, '..', 'admin');
     const authRoot = options.authRoot || path.resolve(__dirname, '..', 'auth');
@@ -735,7 +833,6 @@ function createApp(options = {}) {
             }
 
             await refreshStoredUser('user');
-    const publicUrlPolicy = resolvePublicUrlPolicy(authPublicUrls, options);
             await refreshStoredUser('pendingTotpLogin');
             await refreshStoredUser('pendingTotpSetup');
             return next();
@@ -765,6 +862,7 @@ function createApp(options = {}) {
         authPublicUrl: authPublicUrls.authPublicUrl,
         businessPublicUrl: authPublicUrls.businessPublicUrl,
         adminPublicUrl: authPublicUrls.adminPublicUrl,
+        cookieSecure,
         nodeEnv: options.nodeEnv,
         totpVerificationMaxAgeMs
     }));
@@ -862,7 +960,6 @@ function createApp(options = {}) {
         } catch (error) {
             return next(error);
         }
-        cookieSecure,
     }
 
     app.get(['/admin', '/admin/'], (req, res, next) => {
@@ -914,17 +1011,8 @@ function createApp(options = {}) {
         res.sendFile(path.join(repoRoot, 'index.html'));
     });
 
-    const protectedContentRoutes = [
-        '/practice',
-        '/assets/generated/reading-exams',
-        '/assets/generated/reading-explanations',
-        '/assets/generated/listening-exams',
-        '/ListeningPractice',
-        '/listeningpractice',
-        '/templates',
-        '/Templates'
-    ];
-    app.use(protectedContentRoutes, requireContentAuth);
+    app.use(createCanonicalProtectedContentMiddleware(requireContentAuth));
+    app.use(PROTECTED_CONTENT_ROUTES, requireContentAuth);
 
     app.get([
         '/practice/reading/:examId',
