@@ -130,6 +130,8 @@
         nav: null,
         partQuestions: [],
         partStatuses: [],
+        floatingPrevBtn: null,
+        floatingNextBtn: null,
         submitBtn: null,
         resetBtn: null,
         exitBtn: null
@@ -508,15 +510,43 @@
         const leftPane = dom.left;
         const rightPane = document.getElementById('right');
         const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
-        const highlightNode = container instanceof HTMLElement
+        let highlightNode = container instanceof HTMLElement
             ? (container.matches('.hl') ? container : container.closest('.hl'))
             : null;
-        if (!isInAllowedPane && !highlightNode) {
+
+        let hasHighlight = !!highlightNode;
+        let finalHighlightNode = highlightNode;
+        if (!hasHighlight && range) {
+            const containerElement = container instanceof HTMLElement ? container : container?.parentElement;
+            if (containerElement) {
+                const highlights = containerElement.querySelectorAll('.hl');
+                for (let index = 0; index < highlights.length; index += 1) {
+                    const candidate = highlights[index];
+                    let intersects = false;
+                    if (typeof range.intersectsNode === 'function') {
+                        intersects = range.intersectsNode(candidate);
+                    } else if (typeof selection.containsNode === 'function') {
+                        intersects = selection.containsNode(candidate, true);
+                    }
+                    if (intersects) {
+                        hasHighlight = true;
+                        finalHighlightNode = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!isInAllowedPane && !hasHighlight) {
             toolbar.style.display = 'none';
             return;
         }
         interaction.lastRange = range.cloneRange();
-        interaction.currentHighlightNode = highlightNode || null;
+        interaction.currentHighlightNode = finalHighlightNode || null;
+        const removeButton = document.getElementById('btnUH');
+        if (removeButton) {
+            removeButton.style.display = hasHighlight ? '' : 'none';
+        }
         positionSelectionToolbar(range.getBoundingClientRect());
     }
 
@@ -819,6 +849,18 @@
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
         dom.nav = document.getElementById('question-nav');
+        dom.partQuestions = [
+            document.getElementById('part1-questions'),
+            document.getElementById('part2-questions'),
+            document.getElementById('part3-questions')
+        ];
+        dom.partStatuses = [
+            document.getElementById('part1-status-text'),
+            document.getElementById('part2-status-text'),
+            document.getElementById('part3-status-text')
+        ];
+        dom.floatingPrevBtn = document.getElementById('float-prev-btn');
+        dom.floatingNextBtn = document.getElementById('float-next-btn');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
         dom.exitBtn = document.getElementById('exit-btn');
@@ -1547,6 +1589,16 @@
         }).join('');
     }
 
+    function syncFloatingNavigationState() {
+        const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
+        if (dom.floatingPrevBtn) {
+            dom.floatingPrevBtn.disabled = !(state.simulationMode && ctx && ctx.canPrev);
+        }
+        if (dom.floatingNextBtn) {
+            dom.floatingNextBtn.disabled = !(state.simulationMode && ctx && ctx.canNext);
+        }
+    }
+
     function buildQuestionNav() {
         updateRedesignedSubHeader();
         const currentOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
@@ -1568,6 +1620,7 @@
                 }
             });
             updatePartSectionState(currentPart);
+            syncFloatingNavigationState();
             updateActiveQuestionHighlight(state.currentActiveQuestionId);
             return;
         }
@@ -1991,6 +2044,19 @@
             });
             if (matched) {
                 updateActiveQuestionHighlight(matched);
+            }
+        });
+    }
+
+    function attachFloatingNavListeners() {
+        dom.floatingPrevBtn?.addEventListener('click', () => {
+            if (state.simulationMode && state.simulationCtx?.canPrev) {
+                dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
+            }
+        });
+        dom.floatingNextBtn?.addEventListener('click', () => {
+            if (state.simulationMode && state.simulationCtx?.canNext) {
+                dispatchSimulationNavigate('next', buildSubmissionSnapshot());
             }
         });
     }
@@ -3309,13 +3375,15 @@
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
-                dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
+                dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn')
+                    ? (dom.submitBtn.getAttribute('aria-label') || dom.submitBtn.title || 'Submit')
+                    : (dom.submitBtn.textContent || 'Submit');
             }
             dom.submitBtn.disabled = state.readOnly;
             if (state.readOnly) {
-                dom.submitBtn.textContent = '回顾模式';
+                setPrimaryButtonLabel(dom.submitBtn, 'Review mode');
             } else {
-                dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel;
+                setPrimaryButtonLabel(dom.submitBtn, dom.submitBtn.dataset.defaultLabel);
             }
         }
         if (dom.resetBtn) {
@@ -3367,9 +3435,31 @@
         }
     }
 
+    function setPrimaryButtonLabel(button, label) {
+        if (!button) {
+            return;
+        }
+        const text = String(label || '').trim() || 'Submit';
+        if (button.classList.contains('nav-submit-circle-btn')) {
+            button.title = text;
+            button.setAttribute('aria-label', text);
+            return;
+        }
+        button.textContent = text;
+    }
+
+    function syncSubmitButtonVariant(variant = '') {
+        if (!dom.submitBtn) {
+            return;
+        }
+        dom.submitBtn.classList.toggle('exit-mode', variant === 'exit');
+    }
+
     function syncPrimaryActionButtons() {
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
+            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn')
+                ? (dom.submitBtn.getAttribute('aria-label') || dom.submitBtn.title || 'Submit')
+                : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
             dom.submitBtn.dataset.defaultType = dom.submitBtn.getAttribute('type') || '';
@@ -3383,17 +3473,19 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
+        syncSubmitButtonVariant('');
         if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                dom.submitBtn.textContent = 'Exit';
+                setPrimaryButtonLabel(dom.submitBtn, 'Exit memorize mode');
+                syncSubmitButtonVariant('exit');
                 dom.submitBtn.disabled = false;
             }
             if (dom.resetBtn) {
                 dom.resetBtn.style.display = '';
                 dom.resetBtn.setAttribute('type', 'button');
-                dom.resetBtn.textContent = '重置测试';
+                dom.resetBtn.textContent = 'Reset test';
                 dom.resetBtn.disabled = false;
             }
             return;
@@ -3412,7 +3504,7 @@
                     dom.submitBtn.setAttribute('type', dom.submitBtn.dataset.defaultType);
                 }
                 if (!state.readOnly || canResetSubmittedSingle) {
-                    dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel || 'Submit';
+                    setPrimaryButtonLabel(dom.submitBtn, dom.submitBtn.dataset.defaultLabel || 'Submit');
                 }
                 dom.submitBtn.disabled = state.readOnly;
             }
@@ -3426,20 +3518,22 @@
                 }
                 dom.resetBtn.disabled = state.readOnly && !canResetSubmittedSingle;
             }
+            syncFloatingNavigationState();
             return;
         }
         if (dom.resetBtn) {
             dom.resetBtn.style.display = '';
             dom.resetBtn.setAttribute('type', 'button');
-            dom.resetBtn.textContent = '上一题';
+            dom.resetBtn.textContent = 'Previous passage';
             dom.resetBtn.disabled = state.readOnly || !ctx.canPrev;
         }
         if (dom.submitBtn) {
             dom.submitBtn.style.display = '';
             dom.submitBtn.setAttribute('type', 'button');
-            dom.submitBtn.textContent = ctx.isLast ? 'Submit' : '下一题';
+            setPrimaryButtonLabel(dom.submitBtn, ctx.isLast ? 'Submit' : 'Next passage');
             dom.submitBtn.disabled = state.readOnly;
         }
+            syncFloatingNavigationState();
     }
 
     function ensureReviewNavStyle() {
@@ -4755,6 +4849,7 @@
         renderDataset(dataset);
         buildQuestionNav();
         attachNavListeners();
+        attachFloatingNavListeners();
         attachMemorizeLocatorListeners();
         attachDragDrop();
         attachPaneResizer();
