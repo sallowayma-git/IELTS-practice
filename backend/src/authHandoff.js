@@ -6,6 +6,11 @@ const DEFAULT_TICKET_TTL_MS = 60_000;
 const MAX_RETURN_TO_LENGTH = 300;
 const MAX_STATE_AGE_MS = 10 * 60_000;
 const AUDIENCES = new Set(['business', 'admin']);
+const CANONICAL_PROXY_HOSTS = {
+    business: 'business.local',
+    admin: 'admin.local',
+    auth: 'auth.local'
+};
 
 function base64UrlJson(value) {
     return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -86,13 +91,72 @@ function normalizePublicBaseUrl(value) {
     }
 }
 
-function getRequestBaseUrl(req) {
-    const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',', 1)[0].trim() || 'http';
-    const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',', 1)[0].trim();
-    if (!host) {
+function getUrlHost(value) {
+    try {
+        const url = new URL(value);
+        return url.host.toLowerCase();
+    } catch (_) {
         return '';
     }
-    return `${proto}://${host}`.replace(/\/+$/g, '');
+}
+
+function getHeaderHost(value) {
+    const first = String(value || '').split(',', 1)[0].trim();
+    if (!first || /[\s/\\]/.test(first)) {
+        return '';
+    }
+    try {
+        return new URL(`http://${first}`).host.toLowerCase();
+    } catch (_) {
+        return '';
+    }
+}
+
+function getRequestHosts(req) {
+    return {
+        host: getHeaderHost(req.get('host')),
+        forwardedHost: getHeaderHost(req.get('x-forwarded-host'))
+    };
+}
+
+function getAllowedHosts(audience, configuredTargetUrls) {
+    const hosts = new Set([CANONICAL_PROXY_HOSTS[audience]]);
+    const publicHost = getUrlHost(configuredTargetUrls[audience]);
+    if (publicHost) {
+        hosts.add(publicHost);
+    }
+    return hosts;
+}
+
+function isLocalLoopbackHost(host) {
+    const text = String(host || '').toLowerCase();
+    return text === 'localhost'
+        || text.startsWith('localhost:')
+        || text === '127.0.0.1'
+        || text.startsWith('127.0.0.1:')
+        || text === '[::1]'
+        || text.startsWith('[::1]:');
+}
+
+function validateExactAllowedHost(req, audience, configuredTargetUrls, options = {}) {
+    const allowedHosts = getAllowedHosts(audience, configuredTargetUrls);
+    const { host, forwardedHost } = getRequestHosts(req);
+    if (host && !allowedHosts.has(host) && !(options.allowLocalLoopbackHost && isLocalLoopbackHost(host))) {
+        return false;
+    }
+    if (forwardedHost && !allowedHosts.has(forwardedHost)) {
+        return false;
+    }
+    const proxyAudience = parseProxyAudience(req.get('x-ielts-onion-audience'));
+    if (proxyAudience && proxyAudience !== audience) {
+        return false;
+    }
+    return true;
+}
+
+function isLocalDevelopment(options = {}) {
+    const nodeEnv = options.nodeEnv || process.env.NODE_ENV || 'development';
+    return nodeEnv !== 'production';
 }
 
 function getVerifierCookieName(audience) {
@@ -292,6 +356,7 @@ function createAuthHandoffRouter(options = {}) {
         business: normalizePublicBaseUrl(options.businessPublicUrl || process.env.BUSINESS_PUBLIC_URL || ''),
         admin: normalizePublicBaseUrl(options.adminPublicUrl || process.env.ADMIN_PUBLIC_URL || '')
     };
+    const localDevelopment = isLocalDevelopment(options);
     const totpVerificationMaxAgeMs = options.totpVerificationMaxAgeMs;
 
     function requireConfig(res) {
@@ -299,7 +364,15 @@ function createAuthHandoffRouter(options = {}) {
             res.status(500).type('text/plain').send('Auth handoff is not configured');
             return false;
         }
+        if (!localDevelopment && (!authPublicUrl || !configuredTargetUrls.business || !configuredTargetUrls.admin)) {
+            res.status(500).type('text/plain').send('Auth handoff public URLs are not configured');
+            return false;
+        }
         return true;
+    }
+
+    function rejectInvalidHost(res) {
+        res.status(400).type('text/plain').send('Invalid auth handoff host');
     }
 
     function createStartHandler(audience) {
@@ -307,8 +380,13 @@ function createAuthHandoffRouter(options = {}) {
             if (!requireConfig(res)) {
                 return;
             }
+            if ((configuredTargetUrls[audience] || !localDevelopment) && !validateExactAllowedHost(req, audience, configuredTargetUrls, {
+                allowLocalLoopbackHost: localDevelopment
+            })) {
+                return rejectInvalidHost(res);
+            }
             const returnTo = sanitizeReturnTo(req.query.return_to, audience);
-            const targetBaseUrl = configuredTargetUrls[audience] || getRequestBaseUrl(req);
+            const targetBaseUrl = configuredTargetUrls[audience];
             const callbackPath = `/auth/${audience}/callback`;
             const verifier = crypto.randomBytes(32).toString('base64url');
             const verifierHash = hashVerifier(verifier);
@@ -338,6 +416,9 @@ function createAuthHandoffRouter(options = {}) {
             const wantsJson = req.query.format === 'json';
             if (!requireConfig(res)) {
                 return;
+            }
+            if (!localDevelopment && !validateExactAllowedHost(req, 'auth', { auth: authPublicUrl })) {
+                return rejectInvalidHost(res);
             }
             const state = verifySignedAuthState(stateSecret, req.query.state);
             if (!state) {

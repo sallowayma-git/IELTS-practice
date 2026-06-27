@@ -46,9 +46,9 @@ services:
       ADMIN_RESET_TOTP: ${ADMIN_RESET_TOTP:-false}
       TRAFFIC_ENABLED: ${TRAFFIC_ENABLED:-true}
       TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}
-      AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:-}
-      BUSINESS_PUBLIC_URL: ${BUSINESS_PUBLIC_URL:-}
-      ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:-}
+      AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:?Set AUTH_PUBLIC_URL to the public auth origin}
+      BUSINESS_PUBLIC_URL: ${BUSINESS_PUBLIC_URL:?Set BUSINESS_PUBLIC_URL to the public business origin}
+      ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:?Set ADMIN_PUBLIC_URL to the public admin origin}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

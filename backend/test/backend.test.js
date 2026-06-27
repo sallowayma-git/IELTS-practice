@@ -97,12 +97,12 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(envExample.includes('TOR_BRIDGES_AGE_IDENTITY_LOCAL_FILE=./tor/bridge-age-identity.txt'));
     assert(envExample.includes('TRAFFIC_SECRET='));
     assert(compose.includes('TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}'));
-    assert(envExample.includes('AUTH_PUBLIC_URL='));
-    assert(envExample.includes('BUSINESS_PUBLIC_URL='));
-    assert(envExample.includes('ADMIN_PUBLIC_URL='));
-    assert(compose.includes('AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:-}'));
-    assert(compose.includes('BUSINESS_PUBLIC_URL: ${BUSINESS_PUBLIC_URL:-}'));
-    assert(compose.includes('ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:-}'));
+    assert(envExample.includes('AUTH_PUBLIC_URL=http://replace-with-auth-onion.onion'));
+    assert(envExample.includes('BUSINESS_PUBLIC_URL=http://replace-with-business-onion.onion'));
+    assert(envExample.includes('ADMIN_PUBLIC_URL=http://replace-with-admin-onion.onion'));
+    assert(compose.includes('AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:?Set AUTH_PUBLIC_URL to the public auth origin}'));
+    assert(compose.includes('BUSINESS_PUBLIC_URL: ${BUSINESS_PUBLIC_URL:?Set BUSINESS_PUBLIC_URL to the public business origin}'));
+    assert(compose.includes('ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:?Set ADMIN_PUBLIC_URL to the public admin origin}'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesTemplate));
     assert(bridgesTemplate.includes('encrypt the private bridge'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesPlaceholder));
@@ -314,7 +314,8 @@ async function createClient(options = {}) {
         adminStore,
         authHandoffStore,
         sessionStore,
-        sessionSecret: 'test-session-secret',
+        sessionSecret: options.sessionSecret || 'test-session-secret',
+        nodeEnv: options.nodeEnv,
         staticRoot: options.staticRoot,
         cookieSecure: options.cookieSecure,
         trustProxy: options.trustProxy,
@@ -2254,12 +2255,14 @@ test('admin shell and business account menu do not link back through the busines
     assert(adminProxyConfig.includes('location = /auth/admin/callback'));
     assert(adminProxyConfig.includes('location = /auth/business/callback'));
     assert(adminProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience admin;'));
+
     assert(!adminProxyConfig.includes('location = /auth/business/start'));
     assert(!adminProxyConfig.includes('location = /api/auth/login'));
     assert(businessProxyConfig.includes('location = /auth/business/start'));
     assert(businessProxyConfig.includes('location = /auth/business/callback'));
     assert(businessProxyConfig.includes('location = /auth/admin/callback'));
     assert(businessProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience business;'));
+
     assert(!businessProxyConfig.includes('location = /auth/admin/start'));
     assert(businessProxyConfig.includes('location = /api/auth/login { return 404; }'));
     assert(businessProxyConfig.includes('location ^~ /api/auth/totp/ { return 404; }'));
@@ -2271,6 +2274,7 @@ test('admin shell and business account menu do not link back through the busines
     assert(authProxyConfig.includes('location ^~ /api/admin/ { return 404; }'));
     assert(authProxyConfig.includes('location ^~ /api/practice-records { return 404; }'));
     assert(authProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience auth;'));
+
     assert.doesNotMatch(adminScript, /\/api\/auth\/user/);
     assert.doesNotMatch(adminScript, /window\.location\.href\s*=\s*['"]\/['"]/);
     assert.doesNotMatch(adminIndex, /href=["']\/["'][^>]*>\s*App\s*</);
@@ -2283,7 +2287,15 @@ test('auth handoff creates a one-time business session ticket', async () => {
     try {
         const targetSession = client.createSession();
         const authSession = client.createSession();
-        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, { redirect: 'manual' });
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'business.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
         assert.equal(start.response.status, 302);
         assert.equal(parseRedirectLocation(start.response.headers.get('location')).pathname, '/auth/business/login');
         const state = getRedirectParam(start.response.headers.get('location'), 'state');
@@ -2312,6 +2324,73 @@ test('auth handoff creates a one-time business session ticket', async () => {
 
         const repeated = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
         assert.equal(repeated.response.status, 403);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth handoff ignores poisoned forwarded hosts and validates canonical start hosts', async () => {
+    const client = await createClient({
+        authPublicUrl: 'http://auth.example',
+        businessPublicUrl: 'http://business.example',
+        adminPublicUrl: 'http://admin.example'
+    });
+    try {
+        const poisoned = await client.request('GET', '/auth/business/start?return_to=/', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'evil.example',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(poisoned.response.status, 400);
+
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'business.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(start.response.status, 302);
+        assert.equal(parseRedirectLocation(start.response.headers.get('location')).origin, 'http://auth.example');
+        const state = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(state);
+
+        await register(authSession, 'handoff_poison_guard', 'StrongPass1');
+        const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
+        assert.equal(complete.response.status, 302);
+        const callbackUrl = parseRedirectLocation(complete.response.headers.get('location'));
+        assert.equal(callbackUrl.origin, 'http://business.example');
+        assert.equal(callbackUrl.pathname, '/auth/business/callback');
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth handoff requires explicit public URLs in production', async () => {
+    const client = await createClient({
+        nodeEnv: 'production',
+        sessionSecret: 'production-test-session-secret-1234567890',
+        totpEncryptionKey: 'production-test-totp-key-1234567890'
+    });
+    try {
+        const start = await client.request('GET', '/auth/business/start?return_to=/', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'business.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(start.response.status, 500);
+        assert.match(start.text, /public URLs are not configured/);
     } finally {
         await client.close();
     }
@@ -2362,7 +2441,7 @@ test('auth complete JSON mode returns redirect payloads and structured errors', 
 
         const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}&format=json&audience=business`);
         assert.equal(complete.response.status, 200);
-        assert.match(complete.json.redirectTo, /^http:\/\/127\.0\.0\.1:\d+\/auth\/business\/callback\?ticket=/);
+        assert.match(complete.json.redirectTo, /^\/auth\/business\/callback\?ticket=/);
 
         const nonAdminTarget = client.createSession();
         const nonAdminStart = await nonAdminTarget.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
@@ -2410,13 +2489,22 @@ test('auth handoff rejects unsafe return paths and audience mismatches', async (
 
 test('auth callback uses proxy audience headers to rescue misdirected tickets', async () => {
     const client = await createClient({
+        authPublicUrl: 'http://auth.example',
         businessPublicUrl: 'http://business.example',
         adminPublicUrl: 'http://admin.example'
     });
     try {
         const targetSession = client.createSession();
         const authSession = client.createSession();
-        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, { redirect: 'manual' });
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'business.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
         const state = getRedirectParam(start.response.headers.get('location'), 'state');
         assert(state);
 

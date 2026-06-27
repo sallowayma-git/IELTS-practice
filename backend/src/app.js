@@ -585,6 +585,7 @@ function createApp(options = {}) {
         authPublicUrl: options.authPublicUrl,
         businessPublicUrl: options.businessPublicUrl,
         adminPublicUrl: options.adminPublicUrl,
+        nodeEnv: options.nodeEnv,
         totpVerificationMaxAgeMs
     }));
     app.use('/api/auth', createAuthRouter({
