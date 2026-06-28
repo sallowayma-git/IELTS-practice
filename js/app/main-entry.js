@@ -833,8 +833,8 @@
     function init() {
         setStorageNamespace();
         initializeNavigationShell();
-        setupReadingCandidateCodeSettings();
         setupSettingsLayoutNavigation();
+        setupReadingCandidateCodeSettings();
         setupPracticeTimerSettings();
 
         if (STRICT_ON_DEMAND) {
