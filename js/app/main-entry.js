@@ -182,6 +182,149 @@
         syncFromStorage();
     }
 
+    function setupSettingsLayoutNavigation() {
+        var view = document.getElementById('settings-view');
+        if (!view || view.querySelector('.settings-layout')) {
+            return;
+        }
+        var group = view.querySelector('.hero-settings-group');
+        if (!group) {
+            return;
+        }
+
+        var definitions = [
+            { id: 'settings-system-management', label: 'System', selector: '.system-management-panel' },
+            { id: 'settings-data-management', label: 'Data', selector: '.data-management-panel' },
+            { id: 'settings-security', label: 'Security', selector: '.settings-security-panel' },
+            { id: 'settings-reading-display', label: 'Reading Display', selector: '.reading-candidate-code-panel' },
+            { id: 'settings-practice-timer', label: 'Practice Timer', selector: '.practice-timer-settings-panel' },
+            { id: 'settings-system-info', label: 'System Info', selector: null }
+        ];
+
+        var panels = Array.prototype.slice.call(group.children)
+            .filter(function filterElement(node) { return node && node.nodeType === 1; });
+        var usedPanels = [];
+        var layout = document.createElement('div');
+        var sidebar = document.createElement('nav');
+        var content = document.createElement('div');
+        var sectionButtons = new Map();
+        var sectionElements = [];
+        var scrollFrame = null;
+        var manualActiveTarget = '';
+        var manualActiveUntil = 0;
+        layout.className = 'settings-layout';
+        sidebar.className = 'settings-sidebar';
+        sidebar.setAttribute('aria-label', 'Settings sections');
+        content.className = 'settings-content';
+
+        function markActive(button) {
+            if (!button) {
+                return;
+            }
+            Array.prototype.slice.call(sidebar.querySelectorAll('.settings-sidebar__item'))
+                .forEach(function syncButton(item) {
+                    var active = item === button;
+                    item.classList.toggle('is-active', active);
+                    item.setAttribute('aria-current', active ? 'true' : 'false');
+                });
+            try {
+                button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            } catch (_) { }
+        }
+
+        function syncActiveSectionFromScroll() {
+            if (scrollFrame) {
+                return;
+            }
+            scrollFrame = global.requestAnimationFrame(function updateActiveSection() {
+                scrollFrame = null;
+                if (manualActiveTarget && Date.now() < manualActiveUntil) {
+                    var manualButton = sectionButtons.get(manualActiveTarget);
+                    if (manualButton) {
+                        markActive(manualButton);
+                        return;
+                    }
+                }
+                manualActiveTarget = '';
+                var headerOffset = 96;
+                try {
+                    var rootStyles = global.getComputedStyle(document.documentElement);
+                    var declaredHeader = parseFloat(rootStyles.getPropertyValue('--header-height'));
+                    if (Number.isFinite(declaredHeader) && declaredHeader > 0) {
+                        headerOffset = declaredHeader;
+                    }
+                } catch (_) { }
+                var anchorY = headerOffset + 120;
+                var activeSection = sectionElements[0] || null;
+                sectionElements.forEach(function resolveVisibleSection(section) {
+                    var rect = section.getBoundingClientRect();
+                    if (rect.top <= anchorY && rect.bottom > anchorY) {
+                        activeSection = section;
+                        return;
+                    }
+                    if (rect.top <= anchorY) {
+                        activeSection = section;
+                    }
+                });
+                if (activeSection) {
+                    markActive(sectionButtons.get(activeSection.id));
+                }
+            });
+        }
+
+        function resolvePanel(definition, index) {
+            var panel = definition.selector ? group.querySelector(definition.selector) : null;
+            if (!panel && index === definitions.length - 1) {
+                panel = panels.find(function findUnused(candidate) {
+                    return usedPanels.indexOf(candidate) === -1;
+                });
+            }
+            return panel;
+        }
+
+        definitions.forEach(function buildSection(definition, index) {
+            var panel = resolvePanel(definition, index);
+            if (!panel) {
+                return;
+            }
+            usedPanels.push(panel);
+            panel.id = definition.id;
+            panel.classList.add('settings-section-card');
+            Array.prototype.slice.call(panel.querySelectorAll('.hero-settings-actions'))
+                .forEach(function markActionGrid(actions) {
+                    actions.classList.add('settings-action-grid');
+                });
+
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'settings-sidebar__item';
+            button.dataset.settingsTarget = definition.id;
+            button.textContent = definition.label;
+            button.addEventListener('click', function onSidebarClick() {
+                manualActiveTarget = definition.id;
+                manualActiveUntil = Date.now() + 900;
+                markActive(button);
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            sidebar.appendChild(button);
+            content.appendChild(panel);
+            sectionButtons.set(definition.id, button);
+            sectionElements.push(panel);
+        });
+
+        layout.appendChild(sidebar);
+        layout.appendChild(content);
+        group.replaceWith(layout);
+
+        var firstButton = sidebar.querySelector('.settings-sidebar__item');
+        if (firstButton) {
+            markActive(firstButton);
+        }
+        global.addEventListener('scroll', syncActiveSectionFromScroll, { passive: true });
+        global.addEventListener('resize', syncActiveSectionFromScroll, { passive: true });
+        syncActiveSectionFromScroll();
+    }
+
     var browseGroupPromise = null;
     var stateCorePromise = null;
     var sessionSuitePromise = null;
@@ -608,6 +751,7 @@
         setStorageNamespace();
         initializeNavigationShell();
         setupReadingCandidateCodeSettings();
+        setupSettingsLayoutNavigation();
 
         if (STRICT_ON_DEMAND) {
             setTimeout(function () {

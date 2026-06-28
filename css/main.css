@@ -8454,3 +8454,221 @@ body > .remote-auth-account {
         width: calc(100vw - 20px);
     }
 }
+
+/* Product-style settings workspace */
+#settings-view {
+    max-width: 1280px;
+    margin-inline: auto;
+}
+
+#settings-view .settings-page-header {
+    align-items: flex-start;
+    margin-bottom: var(--space-lg);
+}
+
+#settings-view .settings-layout {
+    display: grid;
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+    gap: var(--space-xl);
+    align-items: start;
+}
+
+#settings-view .settings-sidebar {
+    position: sticky;
+    top: calc(var(--header-height, 72px) + var(--space-md));
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-lg);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(14px);
+}
+
+#settings-view .settings-sidebar__item {
+    width: 100%;
+    min-height: 40px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 12px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+#settings-view .settings-sidebar__item:hover {
+    background: rgba(15, 23, 42, 0.06);
+    color: var(--color-text);
+}
+
+#settings-view .settings-sidebar__item.is-active {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff !important;
+    box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
+}
+
+#settings-view .settings-sidebar__item.is-active:hover {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    color: #ffffff !important;
+}
+
+#settings-view .settings-content {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--space-lg);
+    min-width: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+#settings-view .settings-section-card {
+    grid-column: 1 / -1;
+    scroll-margin-top: calc(var(--header-height, 72px) + var(--space-lg));
+    display: grid;
+    gap: var(--space-md);
+    min-width: 0;
+    margin: 0 !important;
+    padding: clamp(18px, 2vw, 28px) !important;
+    border: 1px solid var(--bloom-border) !important;
+    border-radius: var(--border-radius-lg) !important;
+    background: var(--bloom-surface-strong) !important;
+    background-image: var(--bloom-sheen), linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 241, 232, 0.9)) !important;
+    box-shadow: var(--bloom-shadow) !important;
+    backdrop-filter: blur(16px);
+}
+
+#settings-view .settings-section-card__header,
+#settings-view .settings-section-card > h3,
+#settings-view .settings-section-card > .hero-panel__muted {
+    max-width: 760px;
+}
+
+#settings-view .settings-section-card h3 {
+    margin: 0;
+    font-size: clamp(1.05rem, 1.4vw, 1.3rem);
+}
+
+#settings-view .settings-action-grid,
+#settings-view .hero-settings-actions {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-sm);
+    justify-content: stretch !important;
+    width: 100%;
+}
+
+#settings-view .settings-action-grid .btn,
+#settings-view .hero-settings-actions .btn {
+    width: 100%;
+    min-width: 0;
+}
+
+#settings-view .reading-candidate-code-settings {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+}
+
+#settings-view .reading-candidate-code-controls,
+#settings-view .reading-candidate-code-status {
+    grid-column: 1 / -1;
+}
+
+#settings-view .practice-timer-settings {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
+    align-items: stretch;
+}
+
+#settings-view .practice-timer-card {
+    padding: clamp(16px, 1.8vw, 24px);
+}
+
+#settings-view .practice-timer-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+#settings-view .practice-timer-field {
+    grid-column: span 3;
+}
+
+#settings-view .practice-timer-check {
+    grid-column: 1 / -1;
+}
+
+#settings-view .practice-timer-save {
+    justify-self: end;
+}
+
+body.bloom-dark-mode #settings-view .settings-sidebar,
+body.blue-dark-mode #settings-view .settings-sidebar {
+    background: rgba(15, 23, 42, 0.68);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
+body.bloom-dark-mode #settings-view .settings-sidebar__item:hover,
+body.blue-dark-mode #settings-view .settings-sidebar__item:hover {
+    background: rgba(148, 163, 184, 0.14);
+    color: #f8fafc;
+}
+
+body.bloom-dark-mode #settings-view .settings-sidebar__item,
+body.blue-dark-mode #settings-view .settings-sidebar__item {
+    color: #cbd5e1;
+}
+
+body.bloom-dark-mode #settings-view .settings-sidebar__item.is-active,
+body.blue-dark-mode #settings-view .settings-sidebar__item.is-active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff !important;
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.32);
+}
+
+@media (max-width: 980px) {
+    #settings-view .settings-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #settings-view .settings-sidebar {
+        position: static;
+        grid-auto-flow: column;
+        grid-auto-columns: max-content;
+        overflow-x: auto;
+    }
+
+    #settings-view .settings-sidebar__item {
+        white-space: nowrap;
+        text-align: center;
+    }
+}
+
+@media (max-width: 760px) {
+    #settings-view .settings-content,
+    #settings-view .reading-candidate-code-settings,
+    #settings-view .practice-timer-settings,
+    #settings-view .practice-timer-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #settings-view .practice-timer-field,
+    #settings-view .practice-timer-check {
+        grid-column: 1;
+    }
+
+    #settings-view .practice-timer-save {
+        justify-self: stretch;
+    }
+}
