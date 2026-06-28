@@ -1,0 +1,932 @@
+(function initListeningUnifiedWrapper(global) {
+    'use strict';
+
+    var BRIDGE_SCRIPT_URL = '/js/bundles/listening-record-bridge.bundle.js';
+    var ADAPTER_STYLE_ID = 'listening-unified-wrapper-adapter-style';
+    var TIMER_INTERVAL_MS = 1000;
+    var CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
+    var CANDIDATE_CODE_PATTERN = /^\d{6}$/;
+    var state = {
+        examId: '',
+        sourceUrl: '',
+        sessionId: '',
+        suiteSessionId: '',
+        startTime: Date.now(),
+        pausedAtMs: null,
+        pausedOffsetMs: 0,
+        running: true,
+        expiryHandled: false,
+        bridgeInjected: false,
+        bridgeReady: false,
+        pendingMessages: [],
+        parentWindow: null,
+        timerInterval: null,
+        lastTimerText: ''
+    };
+
+    function sameOrigin() {
+        return global.location && global.location.origin && global.location.origin !== 'null'
+            ? global.location.origin
+            : '*';
+    }
+
+    function normalizeSafeId(value, fallback) {
+        var text = String(value || '').trim();
+        return /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,180}$/.test(text) ? text : fallback;
+    }
+
+    function getRoot() {
+        return global.document.getElementById('listening-wrapper-root');
+    }
+
+    function getFrame() {
+        return global.document.getElementById('listening-practice-frame');
+    }
+
+    function getFrameWindow() {
+        var frame = getFrame();
+        return frame && frame.contentWindow ? frame.contentWindow : null;
+    }
+
+    function getFrameDocument() {
+        var frame = getFrame();
+        try {
+            return frame && frame.contentDocument ? frame.contentDocument : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function setStatus(message, hidden) {
+        var status = global.document.getElementById('listening-wrapper-status');
+        if (!status) return;
+        status.textContent = message || '';
+        status.hidden = Boolean(hidden);
+    }
+
+    function resolveSourceUrl(rawSourceUrl) {
+        try {
+            var parsed = new URL(String(rawSourceUrl || ''), global.location.href);
+            if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === global.location.origin) {
+                if (state.examId) {
+                    parsed.searchParams.set('examId', state.examId);
+                }
+                return parsed.href;
+            }
+        } catch (_) { }
+        return '';
+    }
+
+    function updateClockPause(running) {
+        var nextRunning = running !== false;
+        var now = Date.now();
+        if (!nextRunning && state.running) {
+            state.pausedAtMs = now;
+        }
+        if (nextRunning && !state.running && Number.isFinite(state.pausedAtMs)) {
+            state.pausedOffsetMs += Math.max(0, now - state.pausedAtMs);
+            state.pausedAtMs = null;
+        }
+        state.running = nextRunning;
+    }
+
+    function elapsedSeconds() {
+        var end = state.running ? Date.now() : (Number.isFinite(state.pausedAtMs) ? state.pausedAtMs : Date.now());
+        return Math.max(0, Math.floor((end - state.startTime - Math.max(0, state.pausedOffsetMs || 0)) / 1000));
+    }
+
+    function formatSeconds(totalSeconds) {
+        var safe = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        var minutes = String(Math.floor(safe / 60)).padStart(2, '0');
+        var seconds = String(safe % 60).padStart(2, '0');
+        return minutes + ':' + seconds;
+    }
+
+    function hashCandidateCode(sourceId) {
+        var source = String(sourceId || '');
+        var hash = 0;
+        for (var index = 0; index < source.length; index += 1) {
+            hash = ((hash << 5) - hash) + source.charCodeAt(index);
+            hash |= 0;
+        }
+        return String(Math.abs(hash) % 900000 + 100000);
+    }
+
+    function readCandidateCodePreferences() {
+        try {
+            var raw = global.localStorage && global.localStorage.getItem(CANDIDATE_CODE_PREF_KEY);
+            var parsed = raw ? JSON.parse(raw) : null;
+            var mode = parsed && parsed.mode === 'custom' ? 'custom' : 'auto';
+            var customCode = parsed && typeof parsed.customCode === 'string'
+                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
+                : '';
+            return {
+                mode: mode,
+                customCode: CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
+            };
+        } catch (_) {
+            return { mode: 'auto', customCode: '' };
+        }
+    }
+
+    function resolveCandidateCode() {
+        var preferences = readCandidateCodePreferences();
+        if (preferences.mode === 'custom' && preferences.customCode) {
+            return preferences.customCode;
+        }
+        return hashCandidateCode([
+            state.sessionId,
+            state.suiteSessionId,
+            state.examId,
+            state.sourceUrl
+        ].filter(Boolean).join(':') || 'listening-practice');
+    }
+
+    function syncCandidateCode(doc) {
+        var candidateId = doc && doc.getElementById('candidate-id');
+        if (!candidateId) return;
+        candidateId.textContent = resolveCandidateCode();
+        candidateId.hidden = false;
+    }
+
+    function ensureWrapperTimer(doc) {
+        var timer = doc && doc.getElementById('timer');
+        if (!timer) return null;
+        if (timer.dataset.wrapperTimer === 'true') {
+            attachTimerMutationGuard(timer);
+            return timer;
+        }
+        var stableTimer = timer.cloneNode(false);
+        stableTimer.id = 'timer';
+        stableTimer.className = timer.className || '';
+        stableTimer.textContent = state.lastTimerText || timer.textContent || '00:00';
+        stableTimer.title = 'Click to pause or resume';
+        stableTimer.dataset.wrapperTimer = 'true';
+        timer.removeAttribute('id');
+        timer.hidden = true;
+        timer.setAttribute('aria-hidden', 'true');
+        timer.classList.add('listening-wrapper-hidden-control');
+        if (timer.parentNode) {
+            timer.parentNode.insertBefore(stableTimer, timer.nextSibling);
+        }
+        attachTimerMutationGuard(stableTimer);
+        return stableTimer;
+    }
+
+    function attachTimerMutationGuard(timer) {
+        if (!timer || timer.dataset.wrapperTimerGuard === 'true' || typeof global.MutationObserver !== 'function') {
+            return;
+        }
+        timer.dataset.wrapperTimerGuard = 'true';
+        var restoring = false;
+        var observer = new global.MutationObserver(function restoreTimerText() {
+            if (restoring || !state.lastTimerText || timer.textContent === state.lastTimerText) {
+                return;
+            }
+            restoring = true;
+            timer.textContent = state.lastTimerText;
+            restoring = false;
+        });
+        observer.observe(timer, { childList: true, characterData: true, subtree: true });
+    }
+
+    function readTimerPreferences() {
+        var manager = global.PracticeTimerPreferences;
+        if (manager && typeof manager.read === 'function') {
+            return manager.read('listening');
+        }
+        return {
+            mode: 'elapsed',
+            countdownMinutes: 60,
+            limitEnabled: false,
+            limitMinutes: 60,
+            expiryAction: 'warn'
+        };
+    }
+
+    function minutesToSeconds(value) {
+        var manager = global.PracticeTimerPreferences;
+        if (manager && typeof manager.minutesToSeconds === 'function') {
+            return manager.minutesToSeconds(value);
+        }
+        var number = Number(value);
+        var minutes = Number.isFinite(number) ? Math.min(240, Math.max(1, Math.round(number))) : 60;
+        return minutes * 60;
+    }
+
+    function findFinishButton(doc) {
+        return doc && (
+            doc.getElementById('finish-btn')
+            || doc.querySelector('[data-action="finish"], [data-action="submit"], .finish-btn, .submit-btn')
+        );
+    }
+
+    function setLocked(doc, locked) {
+        if (!doc || !doc.body) return;
+        doc.body.classList.toggle('listening-timer-locked', Boolean(locked));
+        Array.prototype.slice.call(doc.querySelectorAll('input, textarea, select')).forEach(function disableControl(control) {
+            control.disabled = Boolean(locked);
+        });
+        Array.prototype.slice.call(doc.querySelectorAll('[draggable="true"], .drag-item, .draggable-word, .card')).forEach(function lockDrag(item) {
+            item.setAttribute('draggable', locked ? 'false' : 'true');
+            item.classList.toggle('drag-item-locked', Boolean(locked));
+        });
+    }
+
+    function handleExpired(doc, preferences) {
+        if (state.expiryHandled) return;
+        state.expiryHandled = true;
+        if (preferences.expiryAction === 'auto-submit') {
+            var button = findFinishButton(doc);
+            if (button && typeof button.click === 'function') {
+                button.click();
+            }
+            return;
+        }
+        if (preferences.expiryAction === 'lock') {
+            setLocked(doc, true);
+        }
+    }
+
+    function setActiveListeningPart(doc, partNumber) {
+        updateListeningSubHeader(doc, partNumber);
+        Array.prototype.slice.call(doc.querySelectorAll('.listening-part-nav-section'))
+            .forEach(function syncPart(section) {
+                var active = Number(section.dataset.part) === Number(partNumber);
+                section.classList.toggle('active', active);
+                var name = section.querySelector('.part-nav-name');
+                if (name) {
+                    name.classList.toggle('inactive', !active);
+                }
+            });
+    }
+
+    function getQuestionNumber(item) {
+        var raw = item && (item.dataset.qnum || item.dataset.question || item.textContent);
+        var match = String(raw || '').match(/\d{1,2}/);
+        return match ? Number(match[0]) : 0;
+    }
+
+    function resolveQuestionPart(number) {
+        if (number >= 31) return 4;
+        if (number >= 21) return 3;
+        if (number >= 11) return 2;
+        return 1;
+    }
+
+    function partQuestionRange(partNumber) {
+        var part = Math.min(4, Math.max(1, Number(partNumber) || 1));
+        var start = ((part - 1) * 10) + 1;
+        return { start: start, end: start + 9 };
+    }
+
+    function resolveDefaultListeningPart() {
+        var source = [state.examId, state.sourceUrl].join(' ').toLowerCase();
+        var match = source.match(/(?:^|[^a-z0-9])(?:p|part)[-_ ]?([1-4])(?:[^a-z0-9]|$)/i);
+        return match ? Number(match[1]) : 1;
+    }
+
+    function updateListeningSubHeader(doc, partNumber) {
+        var part = Math.min(4, Math.max(1, Number(partNumber) || 1));
+        var range = partQuestionRange(part);
+        var partEl = doc.getElementById('sub-header-part');
+        var instructionEl = doc.getElementById('sub-header-instruction');
+        if (partEl) {
+            partEl.textContent = 'Part ' + part;
+        }
+        if (instructionEl) {
+            instructionEl.textContent = 'Listen the recording and answer questions ' + range.start + '-' + range.end + '.';
+        }
+    }
+
+    function ensureSubHeader(doc) {
+        var subHeader = doc.getElementById('listening-sub-header-bar');
+        if (!subHeader) {
+            var header = doc.querySelector('.header');
+            if (!header || !header.parentNode) return;
+            subHeader = doc.createElement('div');
+            subHeader.id = 'listening-sub-header-bar';
+            subHeader.className = 'sub-header-bar listening-sub-header-bar';
+            subHeader.innerHTML = '<div id="sub-header-part">Part 1</div><div id="sub-header-instruction">Listen the recording and answer questions 1-10.</div>';
+            header.parentNode.insertBefore(subHeader, header.nextSibling);
+        }
+        updateListeningSubHeader(doc, resolveDefaultListeningPart());
+    }
+
+    function ensureHeaderLayout(doc) {
+        var header = doc.querySelector('.header');
+        if (!header) {
+            return;
+        }
+        if (header.dataset.wrapperHeaderReady === 'true') {
+            var existingTimer = ensureWrapperTimer(doc);
+            var existingDetails = header.querySelector('.candidate-details');
+            if (existingTimer && existingDetails && existingTimer.parentNode !== existingDetails) {
+                existingDetails.appendChild(existingTimer);
+            }
+            syncCandidateCode(doc);
+            return;
+        }
+        header.dataset.wrapperHeaderReady = 'true';
+        var title = header.querySelector('h1');
+        var controls = header.querySelector('.header-controls') || doc.createElement('div');
+        var timer = ensureWrapperTimer(doc);
+
+        var left = doc.createElement('div');
+        left.className = 'header-left listening-header-left';
+        var brand = doc.createElement('div');
+        brand.className = 'ielts-brand';
+        brand.textContent = 'IELTS';
+        var details = doc.createElement('div');
+        details.className = 'candidate-details';
+        var candidateId = doc.getElementById('candidate-id') || doc.createElement('div');
+        candidateId.id = 'candidate-id';
+        candidateId.className = 'candidate-id';
+        candidateId.hidden = false;
+        details.appendChild(candidateId);
+        if (timer) {
+            timer.title = 'Click to pause or resume';
+            details.appendChild(timer);
+        }
+        if (title) {
+            var hiddenTitle = doc.createElement('div');
+            hiddenTitle.className = 'listening-title-hidden';
+            title.classList.add('listening-header-title');
+            hiddenTitle.appendChild(title);
+            left.appendChild(hiddenTitle);
+        }
+        left.appendChild(brand);
+        left.appendChild(details);
+
+        controls.classList.add('header-controls');
+        controls.classList.add('header-right');
+        var settingsButton = doc.getElementById('settings-btn');
+        if (!controls.querySelector('.listening-header-icon')) {
+            var wifiIcon = doc.createElement('span');
+            wifiIcon.className = 'header-icon listening-header-icon';
+            wifiIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>';
+            var bellIcon = doc.createElement('span');
+            bellIcon.className = 'header-icon listening-header-icon';
+            bellIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>';
+            controls.insertBefore(wifiIcon, settingsButton || controls.firstChild);
+            controls.insertBefore(bellIcon, settingsButton || controls.firstChild);
+        }
+        if (settingsButton) {
+            settingsButton.classList.add('header-btn');
+            settingsButton.setAttribute('type', 'button');
+            settingsButton.setAttribute('aria-label', 'Settings');
+            settingsButton.title = 'Settings';
+            settingsButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>';
+        }
+
+        header.textContent = '';
+        header.appendChild(left);
+        header.appendChild(controls);
+        syncCandidateCode(doc);
+    }
+
+    function ensureSettingsActions(doc) {
+        var panel = doc.getElementById('settings-panel');
+        if (!panel) return;
+        var saveButton = doc.getElementById('save-btn');
+        var transcriptButton = doc.getElementById('toggle-transcript-btn');
+        if (saveButton) {
+            saveButton.hidden = true;
+            saveButton.setAttribute('aria-hidden', 'true');
+            saveButton.setAttribute('tabindex', '-1');
+            saveButton.classList.add('listening-wrapper-hidden-control');
+            saveButton.classList.remove('settings-option', 'listening-menu-action', 'nav-action-btn');
+            saveButton.style.display = 'none';
+        }
+        if (!transcriptButton) return;
+
+        var actionGroup = panel.querySelector('.listening-wrapper-actions');
+        if (!actionGroup) {
+            actionGroup = doc.createElement('div');
+            actionGroup.className = 'settings-section listening-wrapper-actions';
+            actionGroup.innerHTML = '<h3 class="settings-title">Actions</h3><div class="settings-options listening-wrapper-action-options"></div>';
+            panel.appendChild(actionGroup);
+        }
+        var options = actionGroup.querySelector('.listening-wrapper-action-options') || actionGroup;
+        if (transcriptButton) {
+            transcriptButton.hidden = false;
+            transcriptButton.classList.add('settings-option', 'listening-menu-action');
+            transcriptButton.textContent = 'Transcript';
+            options.appendChild(transcriptButton);
+        }
+    }
+
+    function normalizeSettingsPanel(doc) {
+        var panel = doc.getElementById('settings-panel');
+        if (!panel) return;
+        Array.prototype.slice.call(panel.children).forEach(function normalizeSection(section) {
+            if (section && section.nodeType === 1 && !section.classList.contains('listening-wrapper-actions')) {
+                section.classList.add('settings-section');
+            }
+        });
+        Array.prototype.slice.call(panel.querySelectorAll('.settings-title')).forEach(function normalizeTitle(title) {
+            if (/front\s*size/i.test(title.textContent || '')) {
+                title.textContent = 'Font size';
+            }
+        });
+        Array.prototype.slice.call(panel.querySelectorAll('[data-size]')).forEach(function normalizeFontButton(button) {
+            button.classList.add('settings-option');
+            button.textContent = 'A';
+            if (button.dataset.size === 'large') {
+                button.style.fontSize = '1.1rem';
+            } else if (button.dataset.size === 'xlarge') {
+                button.style.fontSize = '1.25rem';
+            } else {
+                button.style.fontSize = '';
+            }
+        });
+    }
+
+    function ensureBottomActions(doc) {
+        var bottom = doc.querySelector('.bottom-bar');
+        if (!bottom) return;
+        bottom.classList.add('practice-nav');
+        bottom.classList.add('listening-practice-nav');
+        var actions = bottom.querySelector('.bb-center') || doc.createElement('div');
+        actions.classList.remove('bb-center');
+        actions.classList.add('nav-controls-right');
+        actions.classList.add('listening-nav-actions');
+        var resetButton = doc.getElementById('clear-btn');
+        var submitButton = doc.getElementById('finish-btn');
+        var notesButton = doc.getElementById('toggle-notes-btn');
+        if (resetButton) {
+            resetButton.textContent = 'Reset';
+            resetButton.classList.add('nav-action-btn');
+            actions.appendChild(resetButton);
+        }
+        if (submitButton) {
+            if (/^\s*finish\s*$/i.test(submitButton.textContent || '')) {
+                submitButton.textContent = 'Submit';
+            }
+            submitButton.classList.add('nav-submit-rect-btn');
+            actions.appendChild(submitButton);
+        }
+        if (notesButton) {
+            notesButton.textContent = 'Notes';
+            notesButton.classList.add('nav-action-btn');
+            actions.appendChild(notesButton);
+        }
+        if (!actions.parentNode) {
+            bottom.appendChild(actions);
+        }
+    }
+
+    function syncQuestionColumnState(column, item) {
+        if (!column || !item) return;
+        var bar = column.querySelector('.q-bar-segment');
+        var statuses = ['answered', 'correct', 'incorrect'];
+        var status = '';
+        var active = item.classList.contains('active') || item.classList.contains('current') || item.getAttribute('aria-current') === 'true';
+        statuses.forEach(function detectStatus(candidate) {
+            if (!status && item.classList.contains(candidate)) {
+                status = candidate;
+            }
+        });
+        column.classList.toggle('is-active', active);
+        item.classList.toggle('active', active);
+        statuses.forEach(function syncStatus(candidate) {
+            if (bar) {
+                bar.classList.toggle(candidate, status === candidate);
+            }
+            item.classList.toggle(candidate, status === candidate);
+        });
+        item.classList.add('q-item');
+    }
+
+    function ensureQuestionColumn(doc, item, partNumber) {
+        var questionNumber = getQuestionNumber(item);
+        var column = item.closest('.q-column.listening-question-column');
+        if (!column) {
+            column = doc.createElement('div');
+            column.className = 'q-column listening-question-column';
+            var parent = item.parentNode;
+            if (parent) {
+                parent.insertBefore(column, item);
+            }
+            var bar = doc.createElement('div');
+            bar.className = 'q-bar-segment';
+            column.appendChild(bar);
+            column.appendChild(item);
+        }
+        column.dataset.questionId = String(questionNumber || item.dataset.questionId || item.dataset.qnum || item.textContent || '');
+        column.dataset.part = 'p' + partNumber;
+        item.dataset.questionId = column.dataset.questionId;
+        item.setAttribute('type', item.getAttribute('type') || 'button');
+        syncQuestionColumnState(column, item);
+        return column;
+    }
+
+    function createPlaceholderQuestion(doc, questionNumber, partNumber) {
+        var column = doc.createElement('div');
+        column.className = 'q-column listening-question-column listening-placeholder-column';
+        column.dataset.questionId = String(questionNumber);
+        column.dataset.part = 'p' + partNumber;
+        var bar = doc.createElement('div');
+        bar.className = 'q-bar-segment';
+        var button = doc.createElement('button');
+        button.type = 'button';
+        button.className = 'q-nav-item q-item disabled listening-placeholder-q';
+        button.dataset.questionId = String(questionNumber);
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+        button.textContent = String(questionNumber);
+        column.appendChild(bar);
+        column.appendChild(button);
+        return column;
+    }
+
+    function removePlaceholderQuestions(nav) {
+        Array.prototype.slice.call(nav.querySelectorAll('.listening-placeholder-column')).forEach(function removePlaceholder(column) {
+            column.remove();
+        });
+    }
+
+    function fillMissingPartQuestions(doc, nav) {
+        for (var part = 1; part <= 4; part += 1) {
+            var target = nav.querySelector('.listening-part-nav-section[data-part="' + part + '"] .part-nav-questions');
+            if (!target) continue;
+            var range = partQuestionRange(part);
+            for (var questionNumber = range.start; questionNumber <= range.end; questionNumber += 1) {
+                var exists = Array.prototype.slice.call(target.querySelectorAll('.q-nav-item:not(.listening-placeholder-q)')).some(function hasQuestion(item) {
+                    return getQuestionNumber(item) === questionNumber;
+                });
+                if (!exists) {
+                    target.appendChild(createPlaceholderQuestion(doc, questionNumber, part));
+                }
+            }
+        }
+    }
+
+    function ensurePartNavigation(doc) {
+        var nav = doc.getElementById('q-nav-container');
+        if (!nav) return;
+        nav.classList.add('listening-part-nav');
+        removePlaceholderQuestions(nav);
+
+        for (var part = 1; part <= 4; part += 1) {
+            if (!nav.querySelector('.listening-part-nav-section[data-part="' + part + '"]')) {
+                var section = doc.createElement('div');
+                section.className = 'part-nav-section listening-part-nav-section';
+                section.dataset.part = String(part);
+                section.innerHTML = '<div class="part-nav-info"><div class="part-nav-name">Part ' + part + '</div><div class="part-nav-status">0 of 10</div></div><div class="part-nav-questions"></div>';
+                nav.appendChild(section);
+            }
+        }
+
+        Array.prototype.slice.call(nav.querySelectorAll('.q-nav-item')).forEach(function placeQuestion(item) {
+            var questionNumber = getQuestionNumber(item);
+            var partNumber = resolveQuestionPart(questionNumber);
+            var target = nav.querySelector('.listening-part-nav-section[data-part="' + partNumber + '"] .part-nav-questions');
+            var column = ensureQuestionColumn(doc, item, partNumber);
+            if (target && column.parentNode !== target) {
+                target.appendChild(column);
+            }
+            if (!item.dataset.wrapperPartBound) {
+                item.dataset.wrapperPartBound = 'true';
+                item.addEventListener('click', function activatePart() {
+                    setActiveListeningPart(doc, partNumber);
+                    Array.prototype.slice.call(nav.querySelectorAll('.q-nav-item')).forEach(function syncActiveQuestion(otherItem) {
+                        otherItem.classList.toggle('active', otherItem === item);
+                        syncQuestionColumnState(otherItem.closest('.q-column.listening-question-column'), otherItem);
+                    });
+                });
+            }
+        });
+        fillMissingPartQuestions(doc, nav);
+
+        Array.prototype.slice.call(nav.querySelectorAll('.listening-part-nav-section'))
+            .forEach(function updatePart(section) {
+                var questions = Array.prototype.slice.call(section.querySelectorAll('.q-nav-item:not(.listening-placeholder-q)'));
+                var answered = questions.filter(function isAnswered(item) {
+                    return item.classList.contains('answered')
+                        || item.classList.contains('correct')
+                        || item.classList.contains('incorrect');
+                }).length;
+                var status = section.querySelector('.part-nav-status');
+                if (status) {
+                    status.textContent = answered + ' of ' + (questions.length || 10);
+                }
+                section.classList.toggle('is-empty', questions.length === 0);
+            });
+
+        var activeItem = nav.querySelector('.q-nav-item.active, .q-nav-item.current, .q-nav-item[aria-current="true"]');
+        if (activeItem) {
+            setActiveListeningPart(doc, resolveQuestionPart(getQuestionNumber(activeItem)));
+        } else if (!nav.querySelector('.listening-part-nav-section.active')) {
+            setActiveListeningPart(doc, resolveDefaultListeningPart());
+        }
+    }
+
+    function ensureListeningLayout(doc) {
+        ensureHeaderLayout(doc);
+        ensureSubHeader(doc);
+        normalizeSettingsPanel(doc);
+        ensureSettingsActions(doc);
+        ensureBottomActions(doc);
+        ensurePartNavigation(doc);
+    }
+
+    function updateTimerDisplay() {
+        var doc = getFrameDocument();
+        if (!doc) return;
+        ensurePartNavigation(doc);
+        var timer = ensureWrapperTimer(doc);
+        if (!timer) return;
+        var preferences = readTimerPreferences();
+        var elapsed = elapsedSeconds();
+        var displaySeconds = elapsed;
+        if (preferences.mode === 'countdown') {
+            displaySeconds = Math.max(0, minutesToSeconds(preferences.countdownMinutes) - elapsed);
+        }
+        var limitExpired = preferences.limitEnabled && elapsed >= minutesToSeconds(preferences.limitMinutes);
+        var countdownExpired = preferences.mode === 'countdown' && displaySeconds <= 0;
+        var expired = Boolean(limitExpired || countdownExpired);
+        var nextTimerText = formatSeconds(displaySeconds);
+        if (timer.textContent !== nextTimerText) {
+            timer.textContent = nextTimerText;
+            state.lastTimerText = nextTimerText;
+        }
+        timer.classList.toggle('timer-expired', expired);
+        timer.classList.toggle('paused', !state.running);
+        timer.dataset.timerMode = preferences.mode;
+        timer.dataset.expiryAction = preferences.expiryAction;
+        if (expired) {
+            handleExpired(doc, preferences);
+        }
+    }
+
+    function ensureAdapterStyle(doc) {
+        if (!doc || doc.getElementById(ADAPTER_STYLE_ID)) return;
+        var style = doc.createElement('style');
+        style.id = ADAPTER_STYLE_ID;
+        style.textContent = [
+            'body.listening-unified-ui { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; background: #f8fafc; padding-bottom: 0; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif; }',
+            'body.listening-unified-ui .shell { flex: 1 1 auto; height: auto; min-height: 0; overflow: auto; background: #f8fafc; }',
+            'body.listening-unified-ui .header { display: flex !important; flex: 0 0 48px !important; align-items: center !important; justify-content: space-between !important; gap: 16px !important; height: 48px !important; min-height: 48px !important; max-height: 48px !important; padding: 0 20px !important; background: #ffffff !important; border-bottom: 1.5px solid #e2e8f0 !important; box-shadow: 0 1px 3px rgba(0,0,0,.02) !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; z-index: 1000; }',
+            'body.listening-unified-ui .header-left, body.listening-unified-ui .listening-header-left { display: flex !important; align-items: center !important; gap: 16px !important; min-width: 0 !important; }',
+            'body.listening-unified-ui .header-right, body.listening-unified-ui .header-controls { display: flex !important; align-items: center !important; gap: 14px !important; margin-left: auto !important; }',
+            'body.listening-unified-ui .ielts-brand { color: #e31b23 !important; font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif !important; font-size: 20px !important; font-weight: 900 !important; letter-spacing: 0 !important; line-height: 1 !important; }',
+            'body.listening-unified-ui .candidate-details { display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 0 !important; padding-left: 14px !important; border-left: 1.5px solid #e2e8f0 !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; line-height: 1.25 !important; }',
+            'body.listening-unified-ui .candidate-id { max-width: min(34vw, 420px) !important; overflow: hidden !important; color: #1f2937 !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; font-size: 11px !important; font-variant-numeric: tabular-nums !important; font-weight: 700 !important; text-overflow: ellipsis !important; white-space: nowrap !important; }',
+            'body.listening-unified-ui .listening-title-hidden { display: none !important; }',
+            'body.listening-unified-ui .listening-header-title { display: none !important; }',
+            'body.listening-unified-ui .header-icon, body.listening-unified-ui .listening-header-icon { display: inline-flex; flex: 0 0 auto; width: auto; height: auto; color: #4b5563; cursor: pointer; transition: color .15s ease; }',
+            'body.listening-unified-ui .header-icon:hover, body.listening-unified-ui .listening-header-icon:hover { color: #1f2937; }',
+            'body.listening-unified-ui .header-icon svg, body.listening-unified-ui .listening-header-icon svg { width: 18px; height: 18px; }',
+            'body.listening-unified-ui #settings-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; min-width: 40px; border: 0; border-radius: 8px; background: transparent; padding: 0; color: #4b5563; font-size: 0; cursor: pointer; transition: background .15s ease, color .15s ease; }',
+            'body.listening-unified-ui #settings-btn:hover { background: #f3f4f6; color: #1f2937; }',
+            'body.listening-unified-ui #settings-btn svg { width: 21px; height: 21px; }',
+            'body.listening-unified-ui #settings-panel { width: 260px; top: 60px; right: 20px; padding: 16px; border-radius: 8px; background: var(--panel, var(--panel-color, #ffffff)); border: 1px solid var(--line, var(--border-color, #d7dde5)); box-shadow: 0 10px 25px rgba(0,0,0,.1); }',
+            'body.listening-unified-ui #settings-panel .settings-section, body.listening-unified-ui #settings-panel .settings-group { margin-bottom: 16px; padding: 0; }',
+            'body.listening-unified-ui #settings-panel .settings-section:last-child, body.listening-unified-ui #settings-panel .settings-group:last-child { margin-bottom: 0; }',
+            'body.listening-unified-ui #settings-panel .settings-title { margin: 0 0 8px; color: var(--muted, #64748b); font-size: .9rem; font-weight: 600; line-height: 1.3; }',
+            'body.listening-unified-ui #settings-panel .settings-options { display: flex; gap: 8px; }',
+            'body.listening-unified-ui #settings-panel .settings-option { flex: 1 1 0; min-height: 34px; border: 1px solid var(--line, var(--border-color, #d7dde5)); border-radius: 4px; background: var(--panel-alt, var(--bg-color, #edf2f9)); padding: 8px; color: var(--text, var(--text-color, #1f2937)); text-align: center; cursor: pointer; }',
+            'body.listening-unified-ui #settings-panel .settings-option.active { border-color: var(--accent, #2563eb); background: var(--accent, #2563eb); color: #ffffff; }',
+            'body.listening-unified-ui .listening-wrapper-action-options { display: flex; gap: 8px; }',
+            'body.listening-unified-ui .listening-menu-action { width: 100%; min-height: 34px; border-radius: 4px; }',
+            'body.listening-unified-ui #save-btn, body.listening-unified-ui .listening-wrapper-hidden-control { display: none !important; visibility: hidden !important; pointer-events: none !important; }',
+            'body.listening-unified-ui #sticky-header { flex: 0 0 auto; padding-top: 10px; }',
+            'body.listening-unified-ui .audio-player-wrapper { padding-bottom: 12px; }',
+            'body.listening-unified-ui .sub-header-bar { display: flex !important; flex: 0 0 auto !important; flex-direction: column !important; gap: 1px !important; min-height: 38px !important; padding: 8px 20px !important; background: #f1f5f9 !important; border-bottom: 1.5px solid #e2e8f0 !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; z-index: 990; }',
+            'body.listening-unified-ui #sub-header-part { color: #0f172a !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; font-size: 13.5px !important; font-weight: 700 !important; line-height: 1.25 !important; white-space: nowrap !important; }',
+            'body.listening-unified-ui #sub-header-instruction { min-width: 0 !important; overflow: hidden !important; color: #475569 !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; font-size: 12px !important; font-weight: 500 !important; line-height: 1.35 !important; text-overflow: ellipsis !important; white-space: nowrap !important; }',
+            'body.listening-unified-ui #timer { border: 0 !important; background: transparent !important; margin: 0 !important; min-width: 0 !important; padding: 0 !important; color: #4b5563 !important; font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif !important; font-size: 11px !important; font-variant-numeric: tabular-nums !important; font-weight: 500 !important; line-height: 1.25 !important; text-align: left !important; cursor: pointer; transition: color .15s ease, opacity .2s ease; }',
+            'body.listening-unified-ui #timer:hover { color: #1f2937; }',
+            'body.listening-unified-ui #timer.timer-expired { color: #dc2626; }',
+            'body.listening-unified-ui #timer.paused { opacity: .5; }',
+            'body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { --listening-nav-divider-gap: clamp(10px,1.2vw,20px); position: relative !important; bottom: auto !important; left: auto !important; display: flex !important; flex: 0 0 56px !important; align-items: center !important; gap: 10px clamp(8px,.8vw,16px) !important; min-height: 56px !important; height: 56px !important; max-height: 56px !important; padding: 6px 20px !important; overflow: hidden !important; background: #ffffff !important; border-top: 1px solid #e2e8f0 !important; box-shadow: 0 -2px 10px rgba(15,23,42,.06) !important; z-index: 2000; }',
+            'body.listening-unified-ui .bottom-bar .bb-left { display: contents; }',
+            'body.listening-unified-ui .q-nav-container.listening-part-nav { display: flex; flex: 1 1 auto; align-items: center; gap: 0; width: auto; min-width: 0; }',
+            'body.listening-unified-ui .listening-part-nav-section, body.listening-unified-ui .part-nav-section.listening-part-nav-section { display: flex !important; flex: 1 1 0 !important; align-items: center !important; gap: clamp(6px,.8vw,12px) !important; min-width: 0 !important; height: 44px !important; min-height: 44px !important; padding: 0 var(--listening-nav-divider-gap) 0 0 !important; border: 0 !important; border-right: 1px solid #e2e8f0 !important; border-radius: 0 !important; background: transparent !important; color: #64748b !important; }',
+            'body.listening-unified-ui .listening-part-nav-section[data-part="2"], body.listening-unified-ui .listening-part-nav-section[data-part="3"], body.listening-unified-ui .listening-part-nav-section[data-part="4"] { padding-left: var(--listening-nav-divider-gap) !important; }',
+            'body.listening-unified-ui .listening-part-nav-section.active .part-nav-name { color: #0f172a; }',
+            'body.listening-unified-ui .listening-part-nav-section.is-empty { opacity: .55; }',
+            'body.listening-unified-ui .part-nav-info { flex: 0 0 auto; min-width: 54px; display: block; }',
+            'body.listening-unified-ui .part-nav-name { color: #0f172a; font-size: .78rem; font-weight: 800; line-height: 1.2; white-space: nowrap; }',
+            'body.listening-unified-ui .part-nav-name.inactive, body.listening-unified-ui .listening-part-nav-section:not(.active) .part-nav-name { color: #94a3b8; }',
+            'body.listening-unified-ui .part-nav-status { color: #64748b; font-size: .7rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }',
+            'body.listening-unified-ui .part-nav-questions { display: grid; flex: 1 1 auto; grid-template-columns: repeat(10, minmax(12px, 22px)); align-items: center; justify-content: space-between; gap: clamp(2px,.35vw,6px); min-width: 0; }',
+            'body.listening-unified-ui .q-column { display: flex; width: 100%; min-width: 12px; max-width: 22px; flex-direction: column; align-items: center; gap: 3px; }',
+            'body.listening-unified-ui .q-bar-segment { width: 100%; height: 3px; border-radius: 999px; background: #e2e8f0; }',
+            'body.listening-unified-ui .q-bar-segment.answered { background: #2563eb; }',
+            'body.listening-unified-ui .q-bar-segment.correct { background: #16a34a; }',
+            'body.listening-unified-ui .q-bar-segment.incorrect { background: #dc2626; }',
+            'body.listening-unified-ui .q-nav-item, body.listening-unified-ui .q-item { width: 100%; min-width: 0; height: 22px; border: 1px solid transparent; border-radius: 4px; background: transparent; padding: 0; color: #64748b; font-size: .74rem; font-weight: 700; line-height: 20px; text-align: center; cursor: pointer; }',
+            'body.listening-unified-ui .q-nav-item:hover, body.listening-unified-ui .q-item:hover { background: #f1f5f9; color: #0f172a; }',
+            'body.listening-unified-ui .q-nav-item.answered, body.listening-unified-ui .q-nav-item.correct, body.listening-unified-ui .q-nav-item.incorrect { color: #334155; }',
+            'body.listening-unified-ui .q-column.is-active .q-nav-item, body.listening-unified-ui .q-nav-item.active, body.listening-unified-ui .q-nav-item.current, body.listening-unified-ui .q-nav-item[aria-current="true"] { border-color: #2563eb !important; background: transparent !important; color: #2563eb !important; }',
+            'body.listening-unified-ui .nav-controls-right.listening-nav-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; margin-left: auto; }',
+            'body.listening-unified-ui .nav-action-btn { height: 34px; border: 1px solid #d7dde5; border-radius: 6px; background: #ffffff; padding: 0 12px; color: #334155; font-size: .82rem; font-weight: 700; cursor: pointer; }',
+            'body.listening-unified-ui .nav-action-btn:hover { background: #f8fafc; }',
+            'body.listening-unified-ui .nav-submit-rect-btn, body.listening-unified-ui #finish-btn { display: inline-flex; align-items: center; justify-content: center; height: 36px; min-width: 72px; border: 0; border-radius: 6px; background-color: #0f172a; padding: 0 20px; color: #ffffff; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(15,23,42,.15); cursor: pointer; transition: background-color .15s ease, box-shadow .15s ease, transform .1s ease; }',
+            'body.listening-unified-ui .nav-submit-rect-btn:hover, body.listening-unified-ui #finish-btn:hover { background-color: #1e293b; box-shadow: 0 4px 10px rgba(15,23,42,.2); }',
+            'body.listening-unified-ui.listening-timer-locked input, body.listening-unified-ui.listening-timer-locked textarea, body.listening-unified-ui.listening-timer-locked select { opacity: .72; cursor: not-allowed; }',
+            'body.dark-mode.listening-unified-ui .header { background-color: #1e293b; border-bottom-color: #334155; box-shadow: 0 1px 3px rgba(0,0,0,.2); }',
+            'body.dark-mode.listening-unified-ui .ielts-brand { color: #fca5a5; }',
+            'body.dark-mode.listening-unified-ui .candidate-details { border-left-color: #334155; }',
+            'body.dark-mode.listening-unified-ui .candidate-id { color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui #timer { background: transparent; color: #cbd5e1; }',
+            'body.dark-mode.listening-unified-ui #timer:hover { color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui .sub-header-bar { background-color: #0f172a; border-bottom-color: #334155; }',
+            'body.dark-mode.listening-unified-ui #sub-header-part { color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui #sub-header-instruction { color: #cbd5e1; }',
+            'body.dark-mode.listening-unified-ui .header-icon, body.dark-mode.listening-unified-ui .header-btn, body.dark-mode.listening-unified-ui #settings-btn { background: transparent; color: #cbd5e1; }',
+            'body.dark-mode.listening-unified-ui .header-icon:hover, body.dark-mode.listening-unified-ui .header-btn:hover, body.dark-mode.listening-unified-ui #settings-btn:hover { background-color: #334155; color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui .bottom-bar.listening-practice-nav, body.dark-mode.listening-unified-ui .practice-nav.listening-practice-nav { background-color: #1e293b; border-top-color: #334155; box-shadow: 0 -2px 10px rgba(0,0,0,.2); }',
+            'body.dark-mode.listening-unified-ui .listening-part-nav-section { border-right-color: #334155; }',
+            'body.dark-mode.listening-unified-ui .listening-part-nav-section.active .part-nav-name { color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui .part-nav-name.inactive, body.dark-mode.listening-unified-ui .listening-part-nav-section:not(.active) .part-nav-name { color: #94a3b8; }',
+            'body.dark-mode.listening-unified-ui .part-nav-status { color: #94a3b8; }',
+            'body.dark-mode.listening-unified-ui .q-bar-segment { background-color: #334155; }',
+            'body.dark-mode.listening-unified-ui .q-bar-segment.answered { background-color: #3b82f6; }',
+            'body.dark-mode.listening-unified-ui .q-nav-item, body.dark-mode.listening-unified-ui .q-item { color: #64748b; }',
+            'body.dark-mode.listening-unified-ui .q-nav-item:hover, body.dark-mode.listening-unified-ui .q-item:hover { background-color: #334155; color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui .q-nav-item.answered, body.dark-mode.listening-unified-ui .q-nav-item.correct, body.dark-mode.listening-unified-ui .q-nav-item.incorrect { color: #e2e8f0; }',
+            'body.dark-mode.listening-unified-ui .q-column.is-active .q-nav-item, body.dark-mode.listening-unified-ui .q-nav-item.active, body.dark-mode.listening-unified-ui .q-nav-item.current, body.dark-mode.listening-unified-ui .q-nav-item[aria-current="true"] { border-color: #3b82f6 !important; color: #3b82f6 !important; }',
+            'body.dark-mode.listening-unified-ui .nav-action-btn { border-color: #475569; background-color: transparent; color: #cbd5e1; }',
+            'body.dark-mode.listening-unified-ui .nav-action-btn:hover { background-color: #334155; color: #f8fafc; }',
+            'body.dark-mode.listening-unified-ui .nav-submit-rect-btn, body.dark-mode.listening-unified-ui #finish-btn { background-color: #f8fafc; color: #0f172a; box-shadow: 0 2px 6px rgba(0,0,0,.3); }',
+            'body.dark-mode.listening-unified-ui .nav-submit-rect-btn:hover, body.dark-mode.listening-unified-ui #finish-btn:hover { background-color: #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,.4); }',
+            '@media (max-width: 1200px) { body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { --listening-nav-divider-gap: 10px; gap: 10px; padding-inline: 14px; } body.listening-unified-ui .listening-part-nav-section { gap: 6px; } body.listening-unified-ui .part-nav-info { min-width: 46px; } }',
+            '@media (max-width: 980px) { body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { flex: 0 0 auto; flex-wrap: wrap; height: auto; max-height: none; overflow: visible; } body.listening-unified-ui .q-nav-container.listening-part-nav { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; order: 1; } body.listening-unified-ui .listening-part-nav-section { border-right: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; } body.listening-unified-ui .nav-controls-right.listening-nav-actions { order: 2; width: 100%; justify-content: flex-end; } }',
+            '@media (max-width: 768px) { body.listening-unified-ui .header { padding-inline: 12px !important; } body.listening-unified-ui .candidate-details { gap: 8px !important; padding-left: 10px !important; } body.listening-unified-ui .candidate-id { max-width: 30vw !important; font-size: 13.12px !important; } body.listening-unified-ui #timer { min-width: 104px !important; font-size: 11.84px !important; } body.listening-unified-ui .sub-header-bar { padding-inline: 12px !important; } }',
+            '@media (max-width: 680px) { body.listening-unified-ui .header-right, body.listening-unified-ui .header-controls { gap: 8px; } body.listening-unified-ui .q-nav-container.listening-part-nav { grid-template-columns: minmax(0,1fr); } body.listening-unified-ui .nav-controls-right.listening-nav-actions { justify-content: stretch; } body.listening-unified-ui .nav-controls-right.listening-nav-actions button { flex: 1 1 0; min-width: 0; } }'
+        ].join('\n');
+        (doc.head || doc.documentElement).appendChild(style);
+    }
+
+    function adaptFrameUi() {
+        var doc = getFrameDocument();
+        if (!doc || !doc.body) return;
+        doc.body.classList.add('listening-unified-ui');
+        ensureAdapterStyle(doc);
+        ensureListeningLayout(doc);
+        var timer = doc.getElementById('timer');
+        if (timer && !timer.dataset.wrapperTimerBound) {
+            timer.dataset.wrapperTimerBound = 'true';
+            timer.title = 'Click to pause or resume timer display';
+            timer.addEventListener('click', function toggleTimer() {
+                updateClockPause(!state.running);
+                updateTimerDisplay();
+            });
+        }
+        updateTimerDisplay();
+        if (!state.timerInterval) {
+            state.timerInterval = global.setInterval(updateTimerDisplay, TIMER_INTERVAL_MS);
+        }
+    }
+
+    function iframeBridgeReady() {
+        var win = getFrameWindow();
+        return !!(win && (win.__listeningBridgeGetState || win.__listeningBridgeComplete));
+    }
+
+    function forwardToIframe(message) {
+        var win = getFrameWindow();
+        if (!win || !message) {
+            state.pendingMessages.push(message);
+            return;
+        }
+        try {
+            win.postMessage(message, sameOrigin());
+        } catch (_) {
+            state.pendingMessages.push(message);
+        }
+    }
+
+    function flushPendingMessages() {
+        var pending = state.pendingMessages.splice(0);
+        pending.forEach(forwardToIframe);
+    }
+
+    function injectBridge(scriptUrl) {
+        var doc = getFrameDocument();
+        if (!doc || (!doc.head && !doc.body) || state.bridgeInjected || iframeBridgeReady()) {
+            return;
+        }
+        state.bridgeInjected = true;
+        var script = doc.createElement('script');
+        script.defer = true;
+        script.dataset.listeningRecordBridge = 'true';
+        script.src = scriptUrl || BRIDGE_SCRIPT_URL;
+        script.onload = function onBridgeLoad() {
+            state.bridgeReady = true;
+            flushPendingMessages();
+            adaptFrameUi();
+        };
+        script.onerror = function onBridgeError() {
+            state.bridgeInjected = false;
+            setStatus('Listening bridge failed to load.', false);
+        };
+        (doc.head || doc.body).appendChild(script);
+    }
+
+    function forwardToParent(message) {
+        var target = state.parentWindow || global.opener;
+        if (!target || typeof target.postMessage !== 'function') {
+            return;
+        }
+        try {
+            target.postMessage(message, sameOrigin());
+        } catch (_) { }
+    }
+
+    function handleParentMessage(message, source) {
+        if (source && source !== global && typeof source.postMessage === 'function') {
+            state.parentWindow = source;
+        }
+        var type = message && message.type;
+        if (type === 'INIT_SESSION' || type === 'init_exam_session') {
+            var payload = message.data || message;
+            state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
+            state.sessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
+            state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
+            state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
+        }
+        forwardToIframe(message);
+    }
+
+    function handleMessage(event) {
+        if (!event || !event.data || (event.origin && event.origin !== global.location.origin)) {
+            return;
+        }
+        var frameWindow = getFrameWindow();
+        if (event.source && frameWindow && event.source === frameWindow) {
+            forwardToParent(event.data);
+            return;
+        }
+        handleParentMessage(event.data, event.source);
+    }
+
+    function exposeCompatibilityApi() {
+        global.__listeningBridgeGetState = function getListeningWrapperState() {
+            var win = getFrameWindow();
+            if (win && typeof win.__listeningBridgeGetState === 'function') {
+                try {
+                    return win.__listeningBridgeGetState();
+                } catch (_) { }
+            }
+            return {
+                sessionId: state.sessionId,
+                examId: state.examId,
+                suiteSessionId: state.suiteSessionId || null,
+                initialized: state.bridgeReady,
+                pageType: 'listening',
+                type: 'listening',
+                source: 'listening_unified_wrapper'
+            };
+        };
+        global.__listeningBridgeComplete = function completeListeningWrapper(options) {
+            var win = getFrameWindow();
+            if (win && typeof win.__listeningBridgeComplete === 'function') {
+                return win.__listeningBridgeComplete(options || {});
+            }
+            var doc = getFrameDocument();
+            var button = findFinishButton(doc);
+            if (button && typeof button.click === 'function') {
+                button.click();
+                return true;
+            }
+            return false;
+        };
+        global.__listeningWrapperInjectBridge = function injectListeningBridge(scriptUrl) {
+            injectBridge(scriptUrl || BRIDGE_SCRIPT_URL);
+            return iframeBridgeReady();
+        };
+    }
+
+    function init() {
+        var root = getRoot();
+        var frame = getFrame();
+        if (!root || !frame) {
+            return;
+        }
+        state.examId = normalizeSafeId(root.dataset.examId, 'listening-unknown');
+        state.sourceUrl = resolveSourceUrl(root.dataset.sourceUrl);
+        exposeCompatibilityApi();
+        global.addEventListener('message', handleMessage);
+        if (!state.sourceUrl) {
+            setStatus('Listening source is unavailable.', false);
+            return;
+        }
+        frame.addEventListener('load', function onFrameLoad() {
+            setStatus('', true);
+            state.bridgeInjected = false;
+            injectBridge(BRIDGE_SCRIPT_URL);
+            adaptFrameUi();
+        });
+        frame.src = state.sourceUrl;
+    }
+
+    if (global.document.readyState === 'loading') {
+        global.document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})(typeof window !== 'undefined' ? window : globalThis);

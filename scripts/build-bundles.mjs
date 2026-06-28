@@ -119,6 +119,10 @@ const defaultBundles = {
         'js/app/spellingErrorCollector.js',
         'js/listeningRecordBridge.js'
     ],
+    'js/bundles/listening-wrapper.bundle.js': [
+        'js/utils/practiceTimerPreferences.js',
+        'js/listeningUnifiedWrapper.js'
+    ],
     'js/bundles/more.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',
         'js/utils/vocabDataIO.js',

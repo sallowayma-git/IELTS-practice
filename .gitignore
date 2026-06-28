@@ -18,7 +18,8 @@
 
 # ListeningPractice 题源仅允许本地存在，禁止纳入 Git
 /ListeningPractice/
-/assets/generated/listening-exams/
+/assets/generated/listening-exams/*
+!/assets/generated/listening-exams/listening-practice-unified.html
 /睡着过项目组(9.4)[134篇]/
 /IELTS/
 /.claude/
