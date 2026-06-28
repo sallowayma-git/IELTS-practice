@@ -17,7 +17,62 @@
 
 
 # ListeningPractice 题源仅允许本地存在，禁止纳入 Git
-/ListeningPractice/
+/ListeningPractice/*
+!/ListeningPractice/vip special/
+/ListeningPractice/vip special/*
+!/ListeningPractice/vip special/index.html
+!/ListeningPractice/vip special/assets/
+/ListeningPractice/vip special/assets/*
+!/ListeningPractice/vip special/assets/data/
+/ListeningPractice/vip special/assets/data/*
+!/ListeningPractice/vip special/assets/data/path-map.json
+!/ListeningPractice/vip special/assets/data/vocabulary.json
+!/ListeningPractice/vip special/assets/fonts/
+/ListeningPractice/vip special/assets/fonts/*
+!/ListeningPractice/vip special/assets/fonts/wenkai-regular.woff2
+!/ListeningPractice/vip special/assets/images/
+/ListeningPractice/vip special/assets/images/*
+!/ListeningPractice/vip special/assets/images/favicon.ico
+!/ListeningPractice/vip special/assets/images/favicon.svg
+!/ListeningPractice/vip special/assets/scripts/
+/ListeningPractice/vip special/assets/scripts/*
+!/ListeningPractice/vip special/assets/scripts/complete-exam-data.js
+!/ListeningPractice/vip special/assets/scripts/generate_reading_explanations.py
+!/ListeningPractice/vip special/assets/scripts/generate_reading_explanations_with_agent.py
+!/ListeningPractice/vip special/assets/vendor/
+/ListeningPractice/vip special/assets/vendor/*
+!/ListeningPractice/vip special/assets/vendor/three.min.js
+!/ListeningPractice/vip special/assets/wordlists/
+/ListeningPractice/vip special/assets/wordlists/*
+!/ListeningPractice/vip special/assets/wordlists/cet4.json
+!/ListeningPractice/vip special/assets/wordlists/ielts_core.bundle.js
+!/ListeningPractice/vip special/assets/wordlists/ielts_core.json
+!/ListeningPractice/vip special/css/
+/ListeningPractice/vip special/css/*
+!/ListeningPractice/vip special/css/heroui-bridge.css
+!/ListeningPractice/vip special/css/main.css
+!/ListeningPractice/vip special/css/onboarding.css
+!/ListeningPractice/vip special/js/
+/ListeningPractice/vip special/js/*
+!/ListeningPractice/vip special/js/bundles/
+/ListeningPractice/vip special/js/bundles/*
+!/ListeningPractice/vip special/js/bundles/browse.bundle.js
+!/ListeningPractice/vip special/js/bundles/core-foundation.bundle.js
+!/ListeningPractice/vip special/js/bundles/diagnostics.bundle.js
+!/ListeningPractice/vip special/js/bundles/legacy-app.bundle.js
+!/ListeningPractice/vip special/js/bundles/listening-record-bridge.bundle.js
+!/ListeningPractice/vip special/js/bundles/more.bundle.js
+!/ListeningPractice/vip special/js/bundles/practice.bundle.js
+!/ListeningPractice/vip special/js/bundles/practice-page-enhancer.bundle.js
+!/ListeningPractice/vip special/js/bundles/reading-page.bundle.js
+!/ListeningPractice/vip special/js/bundles/runtime-entry.bundle.js
+!/ListeningPractice/vip special/js/bundles/session.bundle.js
+!/ListeningPractice/vip special/js/bundles/settings.bundle.js
+!/ListeningPractice/vip special/js/bundles/theme.bundle.js
+!/ListeningPractice/vip special/js/bundles/ui-shell.bundle.js
+!/ListeningPractice/vip special/scripts/
+/ListeningPractice/vip special/scripts/*
+!/ListeningPractice/vip special/scripts/build-bundles.mjs
 /assets/generated/listening-exams/*
 !/assets/generated/listening-exams/listening-practice-unified.html
 /睡着过项目组(9.4)[134篇]/

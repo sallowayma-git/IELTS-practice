@@ -1,0 +1,16 @@
+{
+  "reading": {
+    "root": "三月/",
+    "exceptions": {
+      "special-cases": []
+    }
+  },
+  "listening": {
+    "root": "ListeningPractice/",
+    "exceptions": {
+      "special-cases": []
+    }
+  },
+  "version": "1.0",
+  "lastUpdated": "2026-03-06T15:00:00Z"
+}

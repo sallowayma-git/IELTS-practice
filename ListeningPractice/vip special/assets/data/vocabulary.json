@@ -1,0 +1,1394 @@
+[
+  {
+    "word": "meticulous",
+    "meaning": "一丝不苟的"
+  },
+  {
+    "word": "resilient",
+    "meaning": "有韧性的"
+  },
+  {
+    "word": "articulate",
+    "meaning": "善于表达的"
+  },
+  {
+    "word": "pragmatic",
+    "meaning": "务实的"
+  },
+  {
+    "word": "immerse",
+    "meaning": "沉浸"
+  },
+  {
+    "word": "synthesize",
+    "meaning": "综合"
+  },
+  {
+    "word": "discern",
+    "meaning": "辨别"
+  },
+  {
+    "word": "alleviate",
+    "meaning": "缓解"
+  },
+  {
+    "word": "coherent",
+    "meaning": "连贯的"
+  },
+  {
+    "word": "scrutinize",
+    "meaning": "仔细审查"
+  },
+  {
+    "word": "fortify",
+    "meaning": "强化"
+  },
+  {
+    "word": "contemplate",
+    "meaning": "深思"
+  },
+  {
+    "word": "mitigate",
+    "meaning": "减轻"
+  },
+  {
+    "word": "propel",
+    "meaning": "推动"
+  },
+  {
+    "word": "elaborate",
+    "meaning": "详尽阐述"
+  },
+  {
+    "word": "culminate",
+    "meaning": "达到顶点"
+  },
+  {
+    "word": "bolster",
+    "meaning": "支撑"
+  },
+  {
+    "word": "artistry",
+    "meaning": "艺术技巧"
+  },
+  {
+    "word": "vigilant",
+    "meaning": "警觉的"
+  },
+  {
+    "word": "versatile",
+    "meaning": "多才多艺的"
+  },
+  {
+    "word": "abundant",
+    "meaning": "丰富的"
+  },
+  {
+    "word": "accessible",
+    "meaning": "可获得的"
+  },
+  {
+    "word": "accommodate",
+    "meaning": "容纳"
+  },
+  {
+    "word": "accumulate",
+    "meaning": "积累"
+  },
+  {
+    "word": "adept",
+    "meaning": "熟练的"
+  },
+  {
+    "word": "advocate",
+    "meaning": "提倡"
+  },
+  {
+    "word": "affluent",
+    "meaning": "富裕的"
+  },
+  {
+    "word": "aggregate",
+    "meaning": "总计"
+  },
+  {
+    "word": "allocate",
+    "meaning": "分配"
+  },
+  {
+    "word": "ambiguous",
+    "meaning": "模糊不清的"
+  },
+  {
+    "word": "ambitious",
+    "meaning": "雄心勃勃的"
+  },
+  {
+    "word": "amend",
+    "meaning": "修订"
+  },
+  {
+    "word": "anomaly",
+    "meaning": "异常"
+  },
+  {
+    "word": "anonymous",
+    "meaning": "匿名的"
+  },
+  {
+    "word": "anticipate",
+    "meaning": "预期"
+  },
+  {
+    "word": "apprehend",
+    "meaning": "理解"
+  },
+  {
+    "word": "archaic",
+    "meaning": "古老的"
+  },
+  {
+    "word": "arduous",
+    "meaning": "艰巨的"
+  },
+  {
+    "word": "aspiration",
+    "meaning": "抱负"
+  },
+  {
+    "word": "attain",
+    "meaning": "达到"
+  },
+  {
+    "word": "attribute",
+    "meaning": "归因于"
+  },
+  {
+    "word": "autonomy",
+    "meaning": "自治"
+  },
+  {
+    "word": "benign",
+    "meaning": "良性的"
+  },
+  {
+    "word": "bias",
+    "meaning": "偏见"
+  },
+  {
+    "word": "brisk",
+    "meaning": "轻快的"
+  },
+  {
+    "word": "candid",
+    "meaning": "坦率的"
+  },
+  {
+    "word": "catalyst",
+    "meaning": "催化剂"
+  },
+  {
+    "word": "cease",
+    "meaning": "停止"
+  },
+  {
+    "word": "cohesive",
+    "meaning": "有凝聚力的"
+  },
+  {
+    "word": "coincide",
+    "meaning": "同时发生"
+  },
+  {
+    "word": "commence",
+    "meaning": "开始"
+  },
+  {
+    "word": "commodity",
+    "meaning": "商品"
+  },
+  {
+    "word": "compatible",
+    "meaning": "兼容的"
+  },
+  {
+    "word": "compelling",
+    "meaning": "令人信服的"
+  },
+  {
+    "word": "compile",
+    "meaning": "汇编"
+  },
+  {
+    "word": "complacent",
+    "meaning": "自满的"
+  },
+  {
+    "word": "complement",
+    "meaning": "补充"
+  },
+  {
+    "word": "comprehensive",
+    "meaning": "全面的"
+  },
+  {
+    "word": "compulsory",
+    "meaning": "强制的"
+  },
+  {
+    "word": "concede",
+    "meaning": "承认"
+  },
+  {
+    "word": "concise",
+    "meaning": "简明的"
+  },
+  {
+    "word": "concrete",
+    "meaning": "具体的"
+  },
+  {
+    "word": "condense",
+    "meaning": "浓缩"
+  },
+  {
+    "word": "confer",
+    "meaning": "授予"
+  },
+  {
+    "word": "conform",
+    "meaning": "遵从"
+  },
+  {
+    "word": "consent",
+    "meaning": "同意"
+  },
+  {
+    "word": "conserve",
+    "meaning": "保存"
+  },
+  {
+    "word": "considerable",
+    "meaning": "相当大的"
+  },
+  {
+    "word": "consistent",
+    "meaning": "一致的"
+  },
+  {
+    "word": "constrain",
+    "meaning": "限制"
+  },
+  {
+    "word": "constructive",
+    "meaning": "建设性的"
+  },
+  {
+    "word": "contend",
+    "meaning": "争论"
+  },
+  {
+    "word": "contradict",
+    "meaning": "反驳"
+  },
+  {
+    "word": "contrary",
+    "meaning": "相反的"
+  },
+  {
+    "word": "controversial",
+    "meaning": "有争议的"
+  },
+  {
+    "word": "conventional",
+    "meaning": "传统的"
+  },
+  {
+    "word": "conversely",
+    "meaning": "相反地"
+  },
+  {
+    "word": "coordinate",
+    "meaning": "协调"
+  },
+  {
+    "word": "correlate",
+    "meaning": "关联"
+  },
+  {
+    "word": "counterpart",
+    "meaning": "对应者"
+  },
+  {
+    "word": "credible",
+    "meaning": "可信的"
+  },
+  {
+    "word": "criterion",
+    "meaning": "标准"
+  },
+  {
+    "word": "cumulative",
+    "meaning": "累积的"
+  },
+  {
+    "word": "curriculum",
+    "meaning": "课程"
+  },
+  {
+    "word": "deduce",
+    "meaning": "推断"
+  },
+  {
+    "word": "deficit",
+    "meaning": "赤字"
+  },
+  {
+    "word": "delegate",
+    "meaning": "委派"
+  },
+  {
+    "word": "deliberate",
+    "meaning": "深思熟虑的"
+  },
+  {
+    "word": "denote",
+    "meaning": "表示"
+  },
+  {
+    "word": "depict",
+    "meaning": "描绘"
+  },
+  {
+    "word": "deplete",
+    "meaning": "耗尽"
+  },
+  {
+    "word": "derive",
+    "meaning": "源于"
+  },
+  {
+    "word": "deteriorate",
+    "meaning": "恶化"
+  },
+  {
+    "word": "detrimental",
+    "meaning": "有害的"
+  },
+  {
+    "word": "deviate",
+    "meaning": "偏离"
+  },
+  {
+    "word": "devise",
+    "meaning": "设计"
+  },
+  {
+    "word": "diagnose",
+    "meaning": "诊断"
+  },
+  {
+    "word": "dimension",
+    "meaning": "尺寸"
+  },
+  {
+    "word": "diminish",
+    "meaning": "减少"
+  },
+  {
+    "word": "disclose",
+    "meaning": "透露"
+  },
+  {
+    "word": "discrete",
+    "meaning": "离散的"
+  },
+  {
+    "word": "discretion",
+    "meaning": "自行决定权"
+  },
+  {
+    "word": "disparity",
+    "meaning": "差异"
+  },
+  {
+    "word": "disseminate",
+    "meaning": "传播"
+  },
+  {
+    "word": "distort",
+    "meaning": "歪曲"
+  },
+  {
+    "word": "distinguish",
+    "meaning": "区分"
+  },
+  {
+    "word": "divergent",
+    "meaning": "分歧的"
+  },
+  {
+    "word": "domain",
+    "meaning": "领域"
+  },
+  {
+    "word": "domestic",
+    "meaning": "国内的"
+  },
+  {
+    "word": "dominate",
+    "meaning": "主导"
+  },
+  {
+    "word": "drought",
+    "meaning": "干旱"
+  },
+  {
+    "word": "durable",
+    "meaning": "耐用的"
+  },
+  {
+    "word": "ecology",
+    "meaning": "生态"
+  },
+  {
+    "word": "efficient",
+    "meaning": "高效的"
+  },
+  {
+    "word": "elevate",
+    "meaning": "提升"
+  },
+  {
+    "word": "eligible",
+    "meaning": "有资格的"
+  },
+  {
+    "word": "eliminate",
+    "meaning": "消除"
+  },
+  {
+    "word": "embrace",
+    "meaning": "拥抱"
+  },
+  {
+    "word": "empirical",
+    "meaning": "经验的"
+  },
+  {
+    "word": "endeavor",
+    "meaning": "努力"
+  },
+  {
+    "word": "endow",
+    "meaning": "赋予"
+  },
+  {
+    "word": "enforce",
+    "meaning": "执行"
+  },
+  {
+    "word": "enhance",
+    "meaning": "增强"
+  },
+  {
+    "word": "enrich",
+    "meaning": "丰富"
+  },
+  {
+    "word": "entail",
+    "meaning": "需要"
+  },
+  {
+    "word": "entrepreneur",
+    "meaning": "企业家"
+  },
+  {
+    "word": "envisage",
+    "meaning": "设想"
+  },
+  {
+    "word": "epidemic",
+    "meaning": "流行病"
+  },
+  {
+    "word": "equilibrium",
+    "meaning": "平衡"
+  },
+  {
+    "word": "equivalent",
+    "meaning": "相等的"
+  },
+  {
+    "word": "erode",
+    "meaning": "侵蚀"
+  },
+  {
+    "word": "escalate",
+    "meaning": "升级"
+  },
+  {
+    "word": "establish",
+    "meaning": "建立"
+  },
+  {
+    "word": "evaluate",
+    "meaning": "评估"
+  },
+  {
+    "word": "evident",
+    "meaning": "明显的"
+  },
+  {
+    "word": "evoke",
+    "meaning": "唤起"
+  },
+  {
+    "word": "evolve",
+    "meaning": "进化"
+  },
+  {
+    "word": "exceed",
+    "meaning": "超过"
+  },
+  {
+    "word": "excel",
+    "meaning": "擅长"
+  },
+  {
+    "word": "exclude",
+    "meaning": "排除"
+  },
+  {
+    "word": "exhibit",
+    "meaning": "展示"
+  },
+  {
+    "word": "exotic",
+    "meaning": "异国的"
+  },
+  {
+    "word": "expand",
+    "meaning": "扩展"
+  },
+  {
+    "word": "exploit",
+    "meaning": "开发"
+  },
+  {
+    "word": "expose",
+    "meaning": "暴露"
+  },
+  {
+    "word": "extinct",
+    "meaning": "灭绝的"
+  },
+  {
+    "word": "facilitate",
+    "meaning": "促进"
+  },
+  {
+    "word": "feasible",
+    "meaning": "可行的"
+  },
+  {
+    "word": "fluctuate",
+    "meaning": "波动"
+  },
+  {
+    "word": "forthcoming",
+    "meaning": "即将到来的"
+  },
+  {
+    "word": "foster",
+    "meaning": "培养"
+  },
+  {
+    "word": "fragment",
+    "meaning": "碎片"
+  },
+  {
+    "word": "framework",
+    "meaning": "框架"
+  },
+  {
+    "word": "fundamental",
+    "meaning": "基本的"
+  },
+  {
+    "word": "generate",
+    "meaning": "产生"
+  },
+  {
+    "word": "genuine",
+    "meaning": "真正的"
+  },
+  {
+    "word": "habitat",
+    "meaning": "栖息地"
+  },
+  {
+    "word": "heritage",
+    "meaning": "遗产"
+  },
+  {
+    "word": "hinder",
+    "meaning": "阻碍"
+  },
+  {
+    "word": "homogeneous",
+    "meaning": "同质的"
+  },
+  {
+    "word": "hypothesis",
+    "meaning": "假设"
+  },
+  {
+    "word": "identical",
+    "meaning": "完全相同的"
+  },
+  {
+    "word": "illustrate",
+    "meaning": "说明"
+  },
+  {
+    "word": "impartial",
+    "meaning": "公正的"
+  },
+  {
+    "word": "implement",
+    "meaning": "实施"
+  },
+  {
+    "word": "implicit",
+    "meaning": "含蓄的"
+  },
+  {
+    "word": "imply",
+    "meaning": "暗示"
+  },
+  {
+    "word": "incentive",
+    "meaning": "激励"
+  },
+  {
+    "word": "incline",
+    "meaning": "倾向"
+  },
+  {
+    "word": "incorporate",
+    "meaning": "合并"
+  },
+  {
+    "word": "indefinite",
+    "meaning": "不确定的"
+  },
+  {
+    "word": "inevitable",
+    "meaning": "不可避免的"
+  },
+  {
+    "word": "infer",
+    "meaning": "推断"
+  },
+  {
+    "word": "inflation",
+    "meaning": "通货膨胀"
+  },
+  {
+    "word": "infrastructure",
+    "meaning": "基础设施"
+  },
+  {
+    "word": "inhibit",
+    "meaning": "抑制"
+  },
+  {
+    "word": "initial",
+    "meaning": "最初的"
+  },
+  {
+    "word": "innovate",
+    "meaning": "创新"
+  },
+  {
+    "word": "insight",
+    "meaning": "洞察力"
+  },
+  {
+    "word": "inspect",
+    "meaning": "检查"
+  },
+  {
+    "word": "integrate",
+    "meaning": "整合"
+  },
+  {
+    "word": "integrity",
+    "meaning": "正直"
+  },
+  {
+    "word": "intense",
+    "meaning": "强烈的"
+  },
+  {
+    "word": "intervene",
+    "meaning": "干预"
+  },
+  {
+    "word": "intrinsic",
+    "meaning": "内在的"
+  },
+  {
+    "word": "invade",
+    "meaning": "侵入"
+  },
+  {
+    "word": "inventory",
+    "meaning": "库存"
+  },
+  {
+    "word": "investigate",
+    "meaning": "调查"
+  },
+  {
+    "word": "invoke",
+    "meaning": "援引"
+  },
+  {
+    "word": "isolate",
+    "meaning": "隔离"
+  },
+  {
+    "word": "jeopardize",
+    "meaning": "危及"
+  },
+  {
+    "word": "jurisdiction",
+    "meaning": "司法权"
+  },
+  {
+    "word": "justify",
+    "meaning": "证明合理"
+  },
+  {
+    "word": "laborious",
+    "meaning": "费力的"
+  },
+  {
+    "word": "legislation",
+    "meaning": "立法"
+  },
+  {
+    "word": "leisure",
+    "meaning": "休闲"
+  },
+  {
+    "word": "literacy",
+    "meaning": "读写能力"
+  },
+  {
+    "word": "lucrative",
+    "meaning": "有利可图的"
+  },
+  {
+    "word": "magnitude",
+    "meaning": "规模"
+  },
+  {
+    "word": "mainstream",
+    "meaning": "主流"
+  },
+  {
+    "word": "manipulate",
+    "meaning": "操纵"
+  },
+  {
+    "word": "mandatory",
+    "meaning": "强制性的"
+  },
+  {
+    "word": "marginal",
+    "meaning": "边缘的"
+  },
+  {
+    "word": "metaphor",
+    "meaning": "隐喻"
+  },
+  {
+    "word": "methodology",
+    "meaning": "方法论"
+  },
+  {
+    "word": "migrate",
+    "meaning": "迁移"
+  },
+  {
+    "word": "minimize",
+    "meaning": "最小化"
+  },
+  {
+    "word": "momentum",
+    "meaning": "动量"
+  },
+  {
+    "word": "monitor",
+    "meaning": "监测"
+  },
+  {
+    "word": "morale",
+    "meaning": "士气"
+  },
+  {
+    "word": "municipal",
+    "meaning": "市政的"
+  },
+  {
+    "word": "negligible",
+    "meaning": "可以忽略的"
+  },
+  {
+    "word": "notorious",
+    "meaning": "臭名昭著的"
+  },
+  {
+    "word": "notion",
+    "meaning": "概念"
+  },
+  {
+    "word": "nurture",
+    "meaning": "养育"
+  },
+  {
+    "word": "obesity",
+    "meaning": "肥胖"
+  },
+  {
+    "word": "objective",
+    "meaning": "客观的"
+  },
+  {
+    "word": "obligation",
+    "meaning": "义务"
+  },
+  {
+    "word": "obscure",
+    "meaning": "晦涩的"
+  },
+  {
+    "word": "obsolete",
+    "meaning": "过时的"
+  },
+  {
+    "word": "obtain",
+    "meaning": "获得"
+  },
+  {
+    "word": "ongoing",
+    "meaning": "持续的"
+  },
+  {
+    "word": "optimize",
+    "meaning": "优化"
+  },
+  {
+    "word": "orientation",
+    "meaning": "方向"
+  },
+  {
+    "word": "outbreak",
+    "meaning": "爆发"
+  },
+  {
+    "word": "overlook",
+    "meaning": "忽视"
+  },
+  {
+    "word": "paradigm",
+    "meaning": "范例"
+  },
+  {
+    "word": "parameter",
+    "meaning": "参数"
+  },
+  {
+    "word": "participate",
+    "meaning": "参与"
+  },
+  {
+    "word": "perceive",
+    "meaning": "察觉"
+  },
+  {
+    "word": "perennial",
+    "meaning": "长期的"
+  },
+  {
+    "word": "permit",
+    "meaning": "许可"
+  },
+  {
+    "word": "persist",
+    "meaning": "坚持"
+  },
+  {
+    "word": "perspective",
+    "meaning": "视角"
+  },
+  {
+    "word": "pervasive",
+    "meaning": "普遍的"
+  },
+  {
+    "word": "phenomenon",
+    "meaning": "现象"
+  },
+  {
+    "word": "plausible",
+    "meaning": "似乎合理的"
+  },
+  {
+    "word": "portion",
+    "meaning": "部分"
+  },
+  {
+    "word": "postpone",
+    "meaning": "推迟"
+  },
+  {
+    "word": "practitioner",
+    "meaning": "从业者"
+  },
+  {
+    "word": "precedent",
+    "meaning": "先例"
+  },
+  {
+    "word": "precise",
+    "meaning": "精确的"
+  },
+  {
+    "word": "predominant",
+    "meaning": "占主导的"
+  },
+  {
+    "word": "preliminary",
+    "meaning": "初步的"
+  },
+  {
+    "word": "prescribe",
+    "meaning": "开处方"
+  },
+  {
+    "word": "prestige",
+    "meaning": "声望"
+  },
+  {
+    "word": "prevail",
+    "meaning": "盛行"
+  },
+  {
+    "word": "primary",
+    "meaning": "主要的"
+  },
+  {
+    "word": "principal",
+    "meaning": "首要的"
+  },
+  {
+    "word": "priority",
+    "meaning": "优先权"
+  },
+  {
+    "word": "privilege",
+    "meaning": "特权"
+  },
+  {
+    "word": "probability",
+    "meaning": "概率"
+  },
+  {
+    "word": "proceed",
+    "meaning": "继续进行"
+  },
+  {
+    "word": "proclaim",
+    "meaning": "宣告"
+  },
+  {
+    "word": "procure",
+    "meaning": "采购"
+  },
+  {
+    "word": "profound",
+    "meaning": "深刻的"
+  },
+  {
+    "word": "prohibit",
+    "meaning": "禁止"
+  },
+  {
+    "word": "proliferate",
+    "meaning": "激增"
+  },
+  {
+    "word": "prominent",
+    "meaning": "突出的"
+  },
+  {
+    "word": "proportion",
+    "meaning": "比例"
+  },
+  {
+    "word": "prosper",
+    "meaning": "繁荣"
+  },
+  {
+    "word": "protocol",
+    "meaning": "协议"
+  },
+  {
+    "word": "provoke",
+    "meaning": "激起"
+  },
+  {
+    "word": "qualitative",
+    "meaning": "定性的"
+  },
+  {
+    "word": "quantitative",
+    "meaning": "定量的"
+  },
+  {
+    "word": "radical",
+    "meaning": "激进的"
+  },
+  {
+    "word": "rationale",
+    "meaning": "基本原理"
+  },
+  {
+    "word": "realm",
+    "meaning": "领域"
+  },
+  {
+    "word": "reassure",
+    "meaning": "安抚"
+  },
+  {
+    "word": "recession",
+    "meaning": "经济衰退"
+  },
+  {
+    "word": "reciprocal",
+    "meaning": "互惠的"
+  },
+  {
+    "word": "redundant",
+    "meaning": "多余的"
+  },
+  {
+    "word": "referendum",
+    "meaning": "公投"
+  },
+  {
+    "word": "refine",
+    "meaning": "精炼"
+  },
+  {
+    "word": "regime",
+    "meaning": "政权"
+  },
+  {
+    "word": "reinforce",
+    "meaning": "加强"
+  },
+  {
+    "word": "reluctant",
+    "meaning": "不情愿的"
+  },
+  {
+    "word": "remedy",
+    "meaning": "补救措施"
+  },
+  {
+    "word": "renowned",
+    "meaning": "著名的"
+  },
+  {
+    "word": "replicate",
+    "meaning": "复制"
+  },
+  {
+    "word": "resourceful",
+    "meaning": "足智多谋的"
+  },
+  {
+    "word": "restrain",
+    "meaning": "抑制"
+  },
+  {
+    "word": "retain",
+    "meaning": "保留"
+  },
+  {
+    "word": "retrieve",
+    "meaning": "取回"
+  },
+  {
+    "word": "revenue",
+    "meaning": "收入"
+  },
+  {
+    "word": "rigorous",
+    "meaning": "严格的"
+  },
+  {
+    "word": "salient",
+    "meaning": "显著的"
+  },
+  {
+    "word": "saturate",
+    "meaning": "浸透"
+  },
+  {
+    "word": "scarce",
+    "meaning": "稀缺的"
+  },
+  {
+    "word": "scenario",
+    "meaning": "情景"
+  },
+  {
+    "word": "sector",
+    "meaning": "部门"
+  },
+  {
+    "word": "sedentary",
+    "meaning": "久坐的"
+  },
+  {
+    "word": "segment",
+    "meaning": "段"
+  },
+  {
+    "word": "seize",
+    "meaning": "抓住"
+  },
+  {
+    "word": "sentiment",
+    "meaning": "情绪"
+  },
+  {
+    "word": "sequence",
+    "meaning": "序列"
+  },
+  {
+    "word": "signify",
+    "meaning": "意味着"
+  },
+  {
+    "word": "simulate",
+    "meaning": "模拟"
+  },
+  {
+    "word": "skeptical",
+    "meaning": "怀疑的"
+  },
+  {
+    "word": "solitary",
+    "meaning": "独自的"
+  },
+  {
+    "word": "sophisticated",
+    "meaning": "复杂精巧的"
+  },
+  {
+    "word": "spectrum",
+    "meaning": "范围"
+  },
+  {
+    "word": "speculate",
+    "meaning": "推测"
+  },
+  {
+    "word": "spontaneous",
+    "meaning": "自发的"
+  },
+  {
+    "word": "stable",
+    "meaning": "稳定的"
+  },
+  {
+    "word": "strategy",
+    "meaning": "策略"
+  },
+  {
+    "word": "stringent",
+    "meaning": "严格的"
+  },
+  {
+    "word": "subsequent",
+    "meaning": "随后的"
+  },
+  {
+    "word": "subsidy",
+    "meaning": "补贴"
+  },
+  {
+    "word": "substantial",
+    "meaning": "大量的"
+  },
+  {
+    "word": "subtle",
+    "meaning": "微妙的"
+  },
+  {
+    "word": "sufficient",
+    "meaning": "足够的"
+  },
+  {
+    "word": "summit",
+    "meaning": "峰会"
+  },
+  {
+    "word": "supplement",
+    "meaning": "补充"
+  },
+  {
+    "word": "suppress",
+    "meaning": "镇压"
+  },
+  {
+    "word": "sustainable",
+    "meaning": "可持续的"
+  },
+  {
+    "word": "tangible",
+    "meaning": "有形的"
+  },
+  {
+    "word": "tedious",
+    "meaning": "乏味的"
+  },
+  {
+    "word": "tentative",
+    "meaning": "试探性的"
+  },
+  {
+    "word": "terminate",
+    "meaning": "终止"
+  },
+  {
+    "word": "thrive",
+    "meaning": "兴旺"
+  },
+  {
+    "word": "trace",
+    "meaning": "追踪"
+  },
+  {
+    "word": "transient",
+    "meaning": "短暂的"
+  },
+  {
+    "word": "transmit",
+    "meaning": "传送"
+  },
+  {
+    "word": "transparent",
+    "meaning": "透明的"
+  },
+  {
+    "word": "traverse",
+    "meaning": "穿越"
+  },
+  {
+    "word": "trigger",
+    "meaning": "触发"
+  },
+  {
+    "word": "ultimate",
+    "meaning": "最终的"
+  },
+  {
+    "word": "undermine",
+    "meaning": "削弱"
+  },
+  {
+    "word": "underpin",
+    "meaning": "支撑"
+  },
+  {
+    "word": "undertake",
+    "meaning": "承担"
+  },
+  {
+    "word": "unequivocal",
+    "meaning": "明确无误的"
+  },
+  {
+    "word": "unprecedented",
+    "meaning": "前所未有的"
+  },
+  {
+    "word": "unveil",
+    "meaning": "揭幕"
+  },
+  {
+    "word": "utilitarian",
+    "meaning": "实用的"
+  },
+  {
+    "word": "validate",
+    "meaning": "验证"
+  },
+  {
+    "word": "vanish",
+    "meaning": "消失"
+  },
+  {
+    "word": "variable",
+    "meaning": "变量"
+  },
+  {
+    "word": "viable",
+    "meaning": "可行的"
+  },
+  {
+    "word": "vibrant",
+    "meaning": "充满活力的"
+  },
+  {
+    "word": "vicinity",
+    "meaning": "附近"
+  },
+  {
+    "word": "vigorous",
+    "meaning": "精力充沛的"
+  },
+  {
+    "word": "vulnerable",
+    "meaning": "脆弱的"
+  },
+  {
+    "word": "wane",
+    "meaning": "衰落"
+  },
+  {
+    "word": "welfare",
+    "meaning": "福利"
+  },
+  {
+    "word": "worthwhile",
+    "meaning": "值得的"
+  },
+  {
+    "word": "yield",
+    "meaning": "产生"
+  },
+  {
+    "word": "zenith",
+    "meaning": "顶点"
+  }
+]
