@@ -8455,6 +8455,112 @@ body > .remote-auth-account {
     }
 }
 
+.practice-timer-settings {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: var(--space-md);
+    width: min(100%, 960px);
+    margin: 0 auto;
+}
+
+.practice-timer-card {
+    display: grid;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: rgba(255, 255, 255, 0.58);
+    color: var(--color-text);
+}
+
+.practice-timer-card__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.practice-timer-card__header h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.practice-timer-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-sm);
+}
+
+.practice-timer-field {
+    display: grid;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    font-size: 0.84rem;
+    text-align: left;
+}
+
+.practice-timer-field select,
+.practice-timer-field input[type="number"] {
+    min-height: 42px;
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--color-text);
+    font: inherit;
+    padding: 0 12px;
+}
+
+.practice-timer-check {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    color: var(--color-text);
+}
+
+.practice-timer-check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+}
+
+.practice-timer-status {
+    min-height: 18px;
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+}
+
+.practice-timer-status[data-state="error"] {
+    color: var(--color-danger, #dc2626);
+}
+
+.practice-timer-status[data-state="success"] {
+    color: var(--color-success, #15803d);
+}
+
+.practice-timer-save {
+    justify-self: center;
+}
+
+body.bloom-dark-mode .practice-timer-card,
+body.blue-dark-mode .practice-timer-card {
+    background: rgba(15, 23, 42, 0.58);
+}
+
+body.bloom-dark-mode .practice-timer-field select,
+body.bloom-dark-mode .practice-timer-field input[type="number"],
+body.blue-dark-mode .practice-timer-field select,
+body.blue-dark-mode .practice-timer-field input[type="number"] {
+    background: rgba(15, 23, 42, 0.72);
+    color: #f8fafc;
+}
+
+@media (max-width: 760px) {
+    .practice-timer-settings,
+    .practice-timer-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 /* Product-style settings workspace */
 #settings-view {
     max-width: 1280px;

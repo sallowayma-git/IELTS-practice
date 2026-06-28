@@ -654,6 +654,89 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 })(window);
 
 
+/* ===== js/utils/practiceTimerPreferences.js ===== */
+(function initPracticeTimerPreferences(global) {
+    'use strict';
+
+    var READING_KEY = 'ielts_reading_timer_preferences_v2';
+    var LISTENING_KEY = 'ielts_listening_timer_preferences_v1';
+    var VERSION = 1;
+    var DEFAULTS = {
+        version: VERSION,
+        mode: 'elapsed',
+        countdownMinutes: 60,
+        limitEnabled: false,
+        limitMinutes: 60,
+        expiryAction: 'warn'
+    };
+    var VALID_MODES = { elapsed: true, countdown: true };
+    var VALID_ACTIONS = { warn: true, 'auto-submit': true, lock: true };
+    var MAX_MINUTES = 240;
+    var MIN_MINUTES = 1;
+
+    function clampMinutes(value, fallback) {
+        var number = Number(value);
+        if (!Number.isFinite(number)) {
+            number = fallback;
+        }
+        return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Math.round(number)));
+    }
+
+    function normalize(raw) {
+        var source = raw && typeof raw === 'object' ? raw : {};
+        var mode = VALID_MODES[source.mode] ? source.mode : DEFAULTS.mode;
+        var expiryAction = VALID_ACTIONS[source.expiryAction] ? source.expiryAction : DEFAULTS.expiryAction;
+        return {
+            version: VERSION,
+            mode: mode,
+            countdownMinutes: clampMinutes(source.countdownMinutes, DEFAULTS.countdownMinutes),
+            limitEnabled: Boolean(source.limitEnabled),
+            limitMinutes: clampMinutes(source.limitMinutes, DEFAULTS.limitMinutes),
+            expiryAction: expiryAction
+        };
+    }
+
+    function keyFor(scope) {
+        return String(scope || '').toLowerCase() === 'listening' ? LISTENING_KEY : READING_KEY;
+    }
+
+    function read(scope) {
+        try {
+            var raw = global.localStorage && global.localStorage.getItem(keyFor(scope));
+            return normalize(raw ? JSON.parse(raw) : null);
+        } catch (_) {
+            return normalize(null);
+        }
+    }
+
+    function save(scope, preferences) {
+        var next = normalize(preferences);
+        try {
+            if (global.localStorage) {
+                global.localStorage.setItem(keyFor(scope), JSON.stringify(next));
+            }
+        } catch (_) { }
+        return next;
+    }
+
+    function minutesToSeconds(value) {
+        return clampMinutes(value, DEFAULTS.countdownMinutes) * 60;
+    }
+
+    global.PracticeTimerPreferences = {
+        VERSION: VERSION,
+        READING_KEY: READING_KEY,
+        LISTENING_KEY: LISTENING_KEY,
+        DEFAULTS: Object.freeze(Object.assign({}, DEFAULTS)),
+        normalize: normalize,
+        read: read,
+        save: save,
+        keyFor: keyFor,
+        minutesToSeconds: minutesToSeconds
+    };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/services/overviewStats.js ===== */
 (function (global) {
     'use strict';
@@ -1493,6 +1576,89 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         syncFromStorage();
     }
 
+    function setPracticeTimerStatus(element, message, state) {
+        if (!element) {
+            return;
+        }
+        element.textContent = message || '';
+        if (state) {
+            element.dataset.state = state;
+        } else {
+            delete element.dataset.state;
+        }
+    }
+
+    function setupPracticeTimerSettings() {
+        var manager = global.PracticeTimerPreferences;
+        if (!manager || typeof manager.read !== 'function' || typeof manager.save !== 'function') {
+            return;
+        }
+
+        Array.prototype.slice.call(document.querySelectorAll('.practice-timer-card[data-timer-scope]'))
+            .forEach(function bindTimerCard(card) {
+                var scope = String(card.dataset.timerScope || '').toLowerCase() === 'listening'
+                    ? 'listening'
+                    : 'reading';
+                var status = card.querySelector('.practice-timer-status');
+                var saveButton = card.querySelector('[data-timer-save]');
+                var fields = {
+                    mode: card.querySelector('[data-timer-field="mode"]'),
+                    countdownMinutes: card.querySelector('[data-timer-field="countdownMinutes"]'),
+                    limitEnabled: card.querySelector('[data-timer-field="limitEnabled"]'),
+                    limitMinutes: card.querySelector('[data-timer-field="limitMinutes"]'),
+                    expiryAction: card.querySelector('[data-timer-field="expiryAction"]')
+                };
+                if (!saveButton || !fields.mode || !fields.countdownMinutes || !fields.limitEnabled || !fields.limitMinutes || !fields.expiryAction) {
+                    return;
+                }
+
+                function syncLimitState() {
+                    fields.limitMinutes.disabled = !fields.limitEnabled.checked;
+                }
+
+                function apply(preferences) {
+                    var normalized = manager.normalize(preferences);
+                    fields.mode.value = normalized.mode;
+                    fields.countdownMinutes.value = String(normalized.countdownMinutes);
+                    fields.limitEnabled.checked = Boolean(normalized.limitEnabled);
+                    fields.limitMinutes.value = String(normalized.limitMinutes);
+                    fields.expiryAction.value = normalized.expiryAction;
+                    syncLimitState();
+                    setPracticeTimerStatus(status, 'Saved', '');
+                }
+
+                function collect() {
+                    return manager.normalize({
+                        mode: fields.mode.value,
+                        countdownMinutes: fields.countdownMinutes.value,
+                        limitEnabled: fields.limitEnabled.checked,
+                        limitMinutes: fields.limitMinutes.value,
+                        expiryAction: fields.expiryAction.value
+                    });
+                }
+
+                fields.limitEnabled.addEventListener('change', function onLimitToggle() {
+                    syncLimitState();
+                    setPracticeTimerStatus(status, '', '');
+                });
+                [fields.mode, fields.countdownMinutes, fields.limitMinutes, fields.expiryAction].forEach(function bindField(field) {
+                    field.addEventListener('input', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                    field.addEventListener('change', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                });
+                saveButton.addEventListener('click', function saveTimerPreferences() {
+                    var saved = manager.save(scope, collect());
+                    apply(saved);
+                    setPracticeTimerStatus(status, 'Saved', 'success');
+                });
+
+                apply(manager.read(scope));
+            });
+    }
+
     function setupSettingsLayoutNavigation() {
         var view = document.getElementById('settings-view');
         if (!view || view.querySelector('.settings-layout')) {
@@ -2061,8 +2227,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     function init() {
         setStorageNamespace();
         initializeNavigationShell();
-        setupReadingCandidateCodeSettings();
         setupSettingsLayoutNavigation();
+        setupReadingCandidateCodeSettings();
+        setupPracticeTimerSettings();
 
         if (STRICT_ON_DEMAND) {
             setTimeout(function () {
@@ -3172,6 +3339,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     if (global.AppLazyLoader && typeof global.AppLazyLoader.markProvided === "function") {
         global.AppLazyLoader.markProvided([
     "js/utils/dom.js",
+    "js/utils/practiceTimerPreferences.js",
     "js/services/overviewStats.js",
     "js/views/overviewView.js",
     "js/presentation/navigation-controller.js",

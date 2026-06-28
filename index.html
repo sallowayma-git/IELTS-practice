@@ -1128,6 +1128,88 @@
                         </div>
                     </div>
 
+                    <div class="hero-panel hero-section practice-timer-settings-panel">
+                        <h3>Practice Timer</h3>
+                        <p class="hero-panel__muted">
+                            Reading and Listening keep separate timer preferences. These settings only affect practice-page timer display and time-limit UI actions.
+                        </p>
+                        <div class="practice-timer-settings">
+                            <section class="practice-timer-card" data-timer-scope="reading">
+                                <div class="practice-timer-card__header">
+                                    <h4>Reading Timer</h4>
+                                    <span id="reading-timer-status" class="practice-timer-status" role="status" aria-live="polite"></span>
+                                </div>
+                                <div class="practice-timer-grid">
+                                    <label class="practice-timer-field">
+                                        <span>Mode</span>
+                                        <select data-timer-field="mode">
+                                            <option value="elapsed">Elapsed</option>
+                                            <option value="countdown">Countdown</option>
+                                        </select>
+                                    </label>
+                                    <label class="practice-timer-field">
+                                        <span>Countdown minutes</span>
+                                        <input type="number" min="1" max="240" step="1" data-timer-field="countdownMinutes" />
+                                    </label>
+                                    <label class="practice-timer-field practice-timer-check">
+                                        <input type="checkbox" data-timer-field="limitEnabled" />
+                                        <span>Enable max time limit</span>
+                                    </label>
+                                    <label class="practice-timer-field">
+                                        <span>Max time minutes</span>
+                                        <input type="number" min="1" max="240" step="1" data-timer-field="limitMinutes" />
+                                    </label>
+                                    <label class="practice-timer-field">
+                                        <span>When time is up</span>
+                                        <select data-timer-field="expiryAction">
+                                            <option value="warn">Warn only</option>
+                                            <option value="auto-submit">Auto submit</option>
+                                            <option value="lock">Lock answers</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <button class="btn hero-btn practice-timer-save" type="button" data-timer-save>Save Reading</button>
+                            </section>
+
+                            <section class="practice-timer-card" data-timer-scope="listening">
+                                <div class="practice-timer-card__header">
+                                    <h4>Listening Timer</h4>
+                                    <span id="listening-timer-status" class="practice-timer-status" role="status" aria-live="polite"></span>
+                                </div>
+                                <div class="practice-timer-grid">
+                                    <label class="practice-timer-field">
+                                        <span>Mode</span>
+                                        <select data-timer-field="mode">
+                                            <option value="elapsed">Elapsed</option>
+                                            <option value="countdown">Countdown</option>
+                                        </select>
+                                    </label>
+                                    <label class="practice-timer-field">
+                                        <span>Countdown minutes</span>
+                                        <input type="number" min="1" max="240" step="1" data-timer-field="countdownMinutes" />
+                                    </label>
+                                    <label class="practice-timer-field practice-timer-check">
+                                        <input type="checkbox" data-timer-field="limitEnabled" />
+                                        <span>Enable max time limit</span>
+                                    </label>
+                                    <label class="practice-timer-field">
+                                        <span>Max time minutes</span>
+                                        <input type="number" min="1" max="240" step="1" data-timer-field="limitMinutes" />
+                                    </label>
+                                    <label class="practice-timer-field">
+                                        <span>When time is up</span>
+                                        <select data-timer-field="expiryAction">
+                                            <option value="warn">Warn only</option>
+                                            <option value="auto-submit">Auto submit</option>
+                                            <option value="lock">Lock answers</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <button class="btn hero-btn practice-timer-save" type="button" data-timer-save>Save Listening</button>
+                            </section>
+                        </div>
+                    </div>
+
                     <div class="hero-panel hero-section">
                         <h3>📊 系统信息</h3>
                         <div class="hero-surface settings-system-info">

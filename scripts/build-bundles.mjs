@@ -42,6 +42,7 @@ const defaultBundles = {
     ],
     'js/bundles/ui-shell.bundle.js': [
         'js/utils/dom.js',
+        'js/utils/practiceTimerPreferences.js',
         'js/services/overviewStats.js',
         'js/views/overviewView.js',
         'js/presentation/navigation-controller.js',
@@ -98,6 +99,7 @@ const defaultBundles = {
         'js/runtime/readingExamRegistry.js',
         'js/runtime/readingExplanationRegistry.js',
         'js/runtime/readingHighlightShared.js',
+        'js/utils/practiceTimerPreferences.js',
         'js/utils/answerSanitizer.js',
         'js/utils/answerMatchCore.js',
         'assets/wordlists/ielts_core.bundle.js',

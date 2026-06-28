@@ -182,6 +182,89 @@
         syncFromStorage();
     }
 
+    function setPracticeTimerStatus(element, message, state) {
+        if (!element) {
+            return;
+        }
+        element.textContent = message || '';
+        if (state) {
+            element.dataset.state = state;
+        } else {
+            delete element.dataset.state;
+        }
+    }
+
+    function setupPracticeTimerSettings() {
+        var manager = global.PracticeTimerPreferences;
+        if (!manager || typeof manager.read !== 'function' || typeof manager.save !== 'function') {
+            return;
+        }
+
+        Array.prototype.slice.call(document.querySelectorAll('.practice-timer-card[data-timer-scope]'))
+            .forEach(function bindTimerCard(card) {
+                var scope = String(card.dataset.timerScope || '').toLowerCase() === 'listening'
+                    ? 'listening'
+                    : 'reading';
+                var status = card.querySelector('.practice-timer-status');
+                var saveButton = card.querySelector('[data-timer-save]');
+                var fields = {
+                    mode: card.querySelector('[data-timer-field="mode"]'),
+                    countdownMinutes: card.querySelector('[data-timer-field="countdownMinutes"]'),
+                    limitEnabled: card.querySelector('[data-timer-field="limitEnabled"]'),
+                    limitMinutes: card.querySelector('[data-timer-field="limitMinutes"]'),
+                    expiryAction: card.querySelector('[data-timer-field="expiryAction"]')
+                };
+                if (!saveButton || !fields.mode || !fields.countdownMinutes || !fields.limitEnabled || !fields.limitMinutes || !fields.expiryAction) {
+                    return;
+                }
+
+                function syncLimitState() {
+                    fields.limitMinutes.disabled = !fields.limitEnabled.checked;
+                }
+
+                function apply(preferences) {
+                    var normalized = manager.normalize(preferences);
+                    fields.mode.value = normalized.mode;
+                    fields.countdownMinutes.value = String(normalized.countdownMinutes);
+                    fields.limitEnabled.checked = Boolean(normalized.limitEnabled);
+                    fields.limitMinutes.value = String(normalized.limitMinutes);
+                    fields.expiryAction.value = normalized.expiryAction;
+                    syncLimitState();
+                    setPracticeTimerStatus(status, 'Saved', '');
+                }
+
+                function collect() {
+                    return manager.normalize({
+                        mode: fields.mode.value,
+                        countdownMinutes: fields.countdownMinutes.value,
+                        limitEnabled: fields.limitEnabled.checked,
+                        limitMinutes: fields.limitMinutes.value,
+                        expiryAction: fields.expiryAction.value
+                    });
+                }
+
+                fields.limitEnabled.addEventListener('change', function onLimitToggle() {
+                    syncLimitState();
+                    setPracticeTimerStatus(status, '', '');
+                });
+                [fields.mode, fields.countdownMinutes, fields.limitMinutes, fields.expiryAction].forEach(function bindField(field) {
+                    field.addEventListener('input', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                    field.addEventListener('change', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                });
+                saveButton.addEventListener('click', function saveTimerPreferences() {
+                    var saved = manager.save(scope, collect());
+                    apply(saved);
+                    setPracticeTimerStatus(status, 'Saved', 'success');
+                });
+
+                apply(manager.read(scope));
+            });
+    }
+
     function setupSettingsLayoutNavigation() {
         var view = document.getElementById('settings-view');
         if (!view || view.querySelector('.settings-layout')) {
@@ -752,6 +835,7 @@
         initializeNavigationShell();
         setupReadingCandidateCodeSettings();
         setupSettingsLayoutNavigation();
+        setupPracticeTimerSettings();
 
         if (STRICT_ON_DEMAND) {
             setTimeout(function () {
