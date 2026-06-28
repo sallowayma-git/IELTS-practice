@@ -33,6 +33,45 @@
         return `${prefix}_${Date.now()}_${randomIdSuffix()}`;
     }
 
+    function createListeningShortRouteId(examId, includeHash = false) {
+        const normalized = String(examId || '').trim().toLowerCase();
+        const match = normalized.match(/^listening-(p[1-4])-(very|high|medium|low)-(\d{1,4})(?:-|$)/i);
+        if (!match) {
+            return '';
+        }
+        const base = `${match[1].toLowerCase()}-${match[2].toLowerCase()}-${match[3].padStart(3, '0')}`;
+        if (!includeHash) {
+            return base;
+        }
+        const hashMatch = normalized.match(/-([a-f0-9]{8})$/i);
+        return hashMatch ? `${base}-${hashMatch[1].toLowerCase()}` : '';
+    }
+
+    function resolveListeningRouteId(examId, manifest) {
+        const canonicalId = String(examId || '').trim();
+        const baseRouteId = createListeningShortRouteId(canonicalId);
+        if (!baseRouteId) {
+            return canonicalId;
+        }
+        if (!manifest || typeof manifest !== 'object') {
+            return baseRouteId;
+        }
+        let matches = 0;
+        Object.entries(manifest).forEach(([key, entry]) => {
+            const candidateId = String(entry?.examId || entry?.dataKey || key || '').trim();
+            if (createListeningShortRouteId(candidateId) === baseRouteId) {
+                matches += 1;
+            }
+        });
+        if (matches <= 0) {
+            return canonicalId;
+        }
+        if (matches === 1) {
+            return baseRouteId;
+        }
+        return createListeningShortRouteId(canonicalId, true) || canonicalId;
+    }
+
     function summarizeExamSessionErrorForLog(error) {
         if (!error || typeof error !== 'object') {
             return { name: typeof error };
@@ -492,6 +531,28 @@
                 : url;
         },
 
+        _buildUnifiedListeningUrl(exam) {
+            if (!this._isListeningLibraryExam(exam) || !exam || !exam.id) {
+                return '';
+            }
+            const currentProtocol = (typeof window !== 'undefined' && window.location && window.location.protocol)
+                ? String(window.location.protocol).toLowerCase()
+                : '';
+            if (currentProtocol !== 'http:' && currentProtocol !== 'https:') {
+                return '';
+            }
+            const manifest = (typeof window !== 'undefined' && window.__LISTENING_EXAM_MANIFEST__)
+                ? window.__LISTENING_EXAM_MANIFEST__
+                : null;
+            const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
+            const canonicalExamId = String(manifestEntry?.examId || manifestEntry?.dataKey || exam.id);
+            const routeId = resolveListeningRouteId(canonicalExamId, manifest);
+            const url = `/practice/listening/${encodeURIComponent(routeId)}`;
+            return typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(url)
+                : url;
+        },
+
         _buildReadingPdfUrl(exam) {
             if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
                 return '';
@@ -712,6 +773,11 @@
             }
 
             // 使用全局的路径构建器以确保阅读/听力路径正确
+            const listeningLaunchUrl = this._buildUnifiedListeningUrl(exam);
+            if (listeningLaunchUrl) {
+                return listeningLaunchUrl;
+            }
+
             if (typeof window.buildResourcePath === 'function') {
                 return window.buildResourcePath(exam, 'html');
             }
@@ -1291,6 +1357,24 @@
                             return;
                         }
                     } catch (_) { }
+
+                    if (isListeningExam) {
+                        const wrapperRoot = typeof doc.getElementById === 'function'
+                            ? doc.getElementById('listening-wrapper-root')
+                            : null;
+                        const isListeningWrapper = Boolean(
+                            wrapperRoot
+                            || (doc.documentElement && doc.documentElement.dataset && doc.documentElement.dataset.listeningWrapper === 'true')
+                        );
+                        if (isListeningWrapper) {
+                            if (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete) {
+                                this.initializePracticeSession(examWindow, examId);
+                                return;
+                            }
+                            setTimeout(checkAndInject, 200);
+                            return;
+                        }
+                    }
 
                     const host = doc.head || doc.body;
                     const bridgeDatasetAttr = `data-${bridgeDatasetKey.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`;
@@ -2164,6 +2248,11 @@
                     data.sessionId = expectedSessionId;
                     payloadSessionId = expectedSessionId;
                 }
+                const allowSuiteSourceFallback = Boolean(
+                    payloadSuiteSessionId
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                );
                 const isSuiteFlowPayload = Boolean(
                     (type === 'PRACTICE_COMPLETE'
                         || type === 'PRACTICE_RESULT'
@@ -2171,9 +2260,7 @@
                         || type === 'SIMULATION_NAVIGATE'
                         || type === 'SIMULATION_SUBMIT'
                         || type === 'SESSION_READY')
-                    && payloadSuiteSessionId
-                    && activeSuiteSessionId
-                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && allowSuiteSourceFallback
                     && payloadExamId
                     && payloadExamId === expectedExamId
                 );
@@ -2188,7 +2275,7 @@
                             && hasExpectedSessionToken
                             && (
                                 (windowSuiteSessionId && windowSuiteSessionId === payloadSuiteSessionId)
-                                || isExamInActiveSuite
+                                || (allowSuiteSourceFallback && isExamInActiveSuite)
                             )
                         );
                         const allowListeningSessionMismatch = Boolean(

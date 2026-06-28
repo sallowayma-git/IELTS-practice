@@ -35,13 +35,15 @@ function createDefaultSessionStore(pool) {
 
 function createContentSecurityPolicy(req) {
     const requestPath = String(req.path || '').toLowerCase();
-    const listeningContent = requestPath === '/listeningpractice'
-        || requestPath.startsWith('/listeningpractice/')
-        || requestPath === '/practice/listening'
+    const listeningWrapper = requestPath === '/practice/listening'
         || requestPath.startsWith('/practice/listening/');
+    const rawListeningContent = requestPath === '/listeningpractice'
+        || requestPath.startsWith('/listeningpractice/')
+        || requestPath === '/ListeningPractice'.toLowerCase();
+    const listeningContent = rawListeningContent || listeningWrapper;
     const legacyTemplate = requestPath === '/templates'
         || requestPath.startsWith('/templates/');
-    const legacyExercisePage = listeningContent || legacyTemplate;
+    const legacyExercisePage = rawListeningContent || legacyTemplate;
     const scriptSrc = legacyExercisePage
         ? ["'self'", "'unsafe-inline'"]
         : ["'self'"];
@@ -51,7 +53,7 @@ function createContentSecurityPolicy(req) {
         ["default-src", ["'self'"]],
         ["base-uri", ["'self'"]],
         ["object-src", ["'none'"]],
-        ["frame-ancestors", ["'none'"]],
+        ["frame-ancestors", rawListeningContent ? ["'self'"] : ["'none'"]],
         ["form-action", formAction],
         ["script-src", scriptSrc],
         ["script-src-attr", legacyExercisePage ? ["'unsafe-inline'"] : ["'none'"]],
@@ -61,12 +63,12 @@ function createContentSecurityPolicy(req) {
         ["font-src", ["'self'", 'data:']],
         ["media-src", ["'self'", 'data:', 'blob:']],
         ["connect-src", connectSrc],
-        ["frame-src", listeningContent ? ["'none'"] : ["'self'"]],
-        ["child-src", listeningContent ? ["'none'"] : ["'self'", 'blob:']],
+        ["frame-src", listeningWrapper ? ["'self'"] : (rawListeningContent ? ["'none'"] : ["'self'"])],
+        ["child-src", listeningWrapper ? ["'self'"] : (rawListeningContent ? ["'none'"] : ["'self'", 'blob:'])],
         ["worker-src", ["'self'", 'blob:']],
         ["manifest-src", ["'self'"]]
     ];
-    if (listeningContent) {
+    if (rawListeningContent) {
         directives.push(["sandbox", ['allow-scripts', 'allow-downloads', 'allow-same-origin']]);
     }
     return directives
@@ -469,6 +471,54 @@ function loadGeneratedManifest(filePath, globalKey) {
     return manifest && typeof manifest === 'object' ? manifest : {};
 }
 
+function createListeningShortRouteId(examId, includeHash = false) {
+    const normalized = String(examId || '').trim().toLowerCase();
+    const match = normalized.match(/^listening-(p[1-4])-(very|high|medium|low)-(\d{1,4})(?:-|$)/i);
+    if (!match) {
+        return '';
+    }
+    const base = `${match[1].toLowerCase()}-${match[2].toLowerCase()}-${match[3].padStart(3, '0')}`;
+    if (!includeHash) {
+        return base;
+    }
+    const hashMatch = normalized.match(/-([a-f0-9]{8})$/i);
+    return hashMatch ? `${base}-${hashMatch[1].toLowerCase()}` : '';
+}
+
+function buildListeningManifestLookup(manifest) {
+    const lookup = new Map();
+    const baseAliases = new Map();
+    const entries = Object.entries(manifest || {});
+    for (const [key, entry] of entries) {
+        const canonicalId = String(entry?.examId || entry?.dataKey || key || '').trim();
+        if (!canonicalId) {
+            continue;
+        }
+        lookup.set(canonicalId.toLowerCase(), canonicalId);
+        const baseAlias = createListeningShortRouteId(canonicalId);
+        if (!baseAlias) {
+            continue;
+        }
+        if (!baseAliases.has(baseAlias)) {
+            baseAliases.set(baseAlias, []);
+        }
+        baseAliases.get(baseAlias).push(canonicalId);
+    }
+    for (const [baseAlias, ids] of baseAliases.entries()) {
+        if (ids.length === 1) {
+            lookup.set(baseAlias, ids[0]);
+            continue;
+        }
+        for (const canonicalId of ids) {
+            const hashedAlias = createListeningShortRouteId(canonicalId, true);
+            if (hashedAlias) {
+                lookup.set(hashedAlias, canonicalId);
+            }
+        }
+    }
+    return lookup;
+}
+
 function escapeHtmlAttribute(value) {
     return String(value || '')
         .replace(/&/g, '&amp;')
@@ -494,6 +544,25 @@ function sendHtmlFileWithBase(res, filePath, baseHref, next) {
             return next(error);
         }
         res.type('html').send(injectBaseHref(html, baseHref));
+    });
+}
+
+function injectListeningWrapperData(html, data) {
+    const examId = escapeHtmlAttribute(data.examId || '');
+    const sourceUrl = escapeHtmlAttribute(data.sourceUrl || '');
+    const baseHref = escapeHtmlAttribute(data.baseHref || '');
+    return html
+        .replace(/data-exam-id="[^"]*"/, `data-exam-id="${examId}"`)
+        .replace(/data-source-url="[^"]*"/, `data-source-url="${sourceUrl}"`)
+        .replace(/data-base-href="[^"]*"/, `data-base-href="${baseHref}"`);
+}
+
+function sendListeningWrapper(res, filePath, data, next) {
+    fs.readFile(filePath, 'utf8', (error, html) => {
+        if (error) {
+            return next(error);
+        }
+        res.type('html').send(injectListeningWrapperData(html, data || {}));
     });
 }
 
@@ -681,6 +750,7 @@ function createListeningExamResolver(staticRoot) {
         }
     ];
     let cachedManifest = null;
+    let cachedLookup = null;
 
     function getManifest() {
         if (!cachedManifest) {
@@ -697,15 +767,25 @@ function createListeningExamResolver(staticRoot) {
         return cachedManifest;
     }
 
+    function getLookup() {
+        if (!cachedLookup) {
+            cachedLookup = buildListeningManifestLookup(getManifest());
+        }
+        return cachedLookup;
+    }
+
     return function resolveListeningExam(examId) {
         const normalizedExamId = String(examId || '').trim();
         if (!normalizedExamId || !/^[a-z0-9][a-z0-9._-]{0,180}$/i.test(normalizedExamId)) {
             return null;
         }
-        const entry = getManifest()[normalizedExamId];
+        const manifest = getManifest();
+        const canonicalExamId = getLookup().get(normalizedExamId.toLowerCase()) || normalizedExamId;
+        const entry = manifest[canonicalExamId];
         if (!entry || entry.type !== 'listening' || entry.hasHtml === false) {
             return null;
         }
+        const resolvedExamId = String(entry.examId || entry.dataKey || canonicalExamId).trim();
         const folder = String(entry.path || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/g, '');
         const filename = String(entry.filename || '').replace(/\\/g, '/').replace(/^\/+/, '');
         if (!folder || !filename || !filename.toLowerCase().endsWith('.html')) {
@@ -721,9 +801,13 @@ function createListeningExamResolver(staticRoot) {
                 const targetRealpath = fs.realpathSync(targetPath);
                 if (isPathInside(rootRealpath, targetRealpath)) {
                     const publicFolder = encodePublicPathSegments(folder);
+                    const publicFilename = encodePublicPathSegments(filename);
+                    const baseHref = `${publicRoot}${publicFolder ? `/${publicFolder}` : ''}/`;
                     return {
+                        examId: resolvedExamId,
                         targetPath: targetRealpath,
-                        baseHref: `${publicRoot}${publicFolder ? `/${publicFolder}` : ''}/`
+                        baseHref,
+                        sourceUrl: `${baseHref}${publicFilename}`
                     };
                 }
             } catch (error) {
@@ -1030,7 +1114,12 @@ function createApp(options = {}) {
             if (!target) {
                 return res.status(404).type('text/plain').send('Not found');
             }
-            return sendHtmlFileWithBase(res, target.targetPath, target.baseHref, next);
+            const wrapperPath = path.join(repoRoot, 'assets', 'generated', 'listening-exams', 'listening-practice-unified.html');
+            return sendListeningWrapper(res, wrapperPath, {
+                examId: target.examId || req.params.examId,
+                sourceUrl: target.sourceUrl,
+                baseHref: target.baseHref
+            }, next);
         } catch (error) {
             return next(error);
         }

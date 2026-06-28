@@ -216,6 +216,60 @@ function testReadingLaunchHost() {
     assert.strictEqual(listening, null);
 }
 
+function testListeningPrettyUrlHost() {
+    const windowStub = {
+        location: { protocol: 'https:' },
+        __LISTENING_EXAM_MANIFEST__: {
+            'listening-p1-high-007-sample-title-aaaaaaaa': {
+                examId: 'listening-p1-high-007-sample-title-aaaaaaaa',
+                type: 'listening'
+            },
+            'listening-p2-low-023-red-hill-11111111': {
+                examId: 'listening-p2-low-023-red-hill-11111111',
+                type: 'listening'
+            },
+            'listening-p2-low-023-stanley-island-22222222': {
+                examId: 'listening-p2-low-023-stanley-island-22222222',
+                type: 'listening'
+            }
+        }
+    };
+    const context = vm.createContext({ window: windowStub, globalThis: windowStub, console, URLSearchParams });
+    loadScript('js/app/examSessionMixin.js', context);
+
+    const mixin = windowStub.ExamSystemAppMixins && windowStub.ExamSystemAppMixins.examSession;
+    assert(mixin && typeof mixin._buildUnifiedListeningUrl === 'function', 'examSessionMixin 搴旀毚闇?_buildUnifiedListeningUrl');
+    const host = {
+        _ensureAbsoluteUrl(url) {
+            return url;
+        },
+        _isListeningLibraryExam: mixin._isListeningLibraryExam,
+        _buildUnifiedListeningUrl: mixin._buildUnifiedListeningUrl
+    };
+
+    assert.strictEqual(
+        host._buildUnifiedListeningUrl({
+            id: 'listening-p1-high-007-sample-title-aaaaaaaa',
+            type: 'listening'
+        }),
+        '/practice/listening/p1-high-007'
+    );
+    assert.strictEqual(
+        host._buildUnifiedListeningUrl({
+            id: 'listening-p2-low-023-stanley-island-22222222',
+            type: 'listening'
+        }),
+        '/practice/listening/p2-low-023-22222222'
+    );
+    assert.strictEqual(
+        host._buildUnifiedListeningUrl({
+            id: 'custom-listening-import-abc123',
+            type: 'listening'
+        }),
+        '/practice/listening/custom-listening-import-abc123'
+    );
+}
+
 function testMainOpenExamDoesNotFallbackToRawHtml() {
     const source = fs.readFileSync(path.join(repoRoot, 'js/main.js'), 'utf8').replace(/\r\n/g, '\n');
     const match = source.match(/function openExam\s*\([^)]*\)\s*\{([\s\S]*?)\n\}\n\nfunction viewPDF/);
@@ -251,6 +305,7 @@ async function main() {
     testIndexCssConvergence();
     testBuildBundlesNoDeletedScriptRefs();
     testReadingLaunchHost();
+    testListeningPrettyUrlHost();
     testMainOpenExamDoesNotFallbackToRawHtml();
     testExamActionsResolveActionExamIds();
     testCompatPatchRegistry();
