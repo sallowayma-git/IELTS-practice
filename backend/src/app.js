@@ -986,6 +986,8 @@ function createApp(options = {}) {
         businessPublicUrl: authPublicUrls.businessPublicUrl,
         adminPublicUrl: authPublicUrls.adminPublicUrl,
         cookieSecure,
+        sessionCookieName: cookieName,
+        clearSessionCookieOptions,
         nodeEnv: options.nodeEnv,
         totpVerificationMaxAgeMs
     }));
@@ -1098,6 +1100,13 @@ function createApp(options = {}) {
     }));
 
     app.get(['/auth/login', '/auth/login/'], (req, res) => {
+        const proxyAudience = String(req.get('x-ielts-onion-audience') || '').trim().toLowerCase();
+        if (proxyAudience === 'business') {
+            return res.redirect('/auth/business/start?return_to=/');
+        }
+        if (proxyAudience === 'admin') {
+            return res.redirect('/auth/admin/start?return_to=/admin');
+        }
         const stateParam = typeof req.query.state === 'string' ? req.query.state : '';
         if (stateParam) {
             const state = verifySignedAuthState(authHandoffSecret, stateParam);

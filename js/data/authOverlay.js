@@ -524,7 +524,8 @@
                     updateAccount(null);
                     hideTotpPanel();
                     window.dispatchEvent(new CustomEvent('remote-auth-changed', { detail: { user: null } }));
-                    show();
+                    const returnTo = getCurrentReturnTo();
+                    window.location.href = `/auth/business/logout?return_to=${encodeURIComponent(returnTo)}`;
                 } catch (requestError) {
                     showMessage(formatRemoteAuthError(requestError), 'error');
                 } finally {
@@ -745,8 +746,16 @@
             }
         }
 
-        function show() {
+        function getCurrentReturnTo() {
             const returnTo = `${window.location.pathname || '/'}${window.location.search || ''}${window.location.hash || ''}`;
+            if (/^/(?:auth|admin|api/admin)(?:/|$)/i.test(returnTo)) {
+                return '/';
+            }
+            return returnTo || '/';
+        }
+
+        function show() {
+            const returnTo = getCurrentReturnTo();
             window.location.href = `/auth/business/start?return_to=${encodeURIComponent(returnTo)}`;
         }
 

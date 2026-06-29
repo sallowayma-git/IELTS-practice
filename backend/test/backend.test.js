@@ -2707,6 +2707,20 @@ test('admin dashboard redirects anonymous users through auth handoff', async () 
         assert.match(authLoginPage.text, /IELTS Atlas Auth/);
         assert.match(authLoginPage.text, /id="auth-tabs"/);
 
+        const businessLegacyLoginPage = await client.request('GET', '/auth/login', undefined, {
+            redirect: 'manual',
+            headers: { 'x-ielts-onion-audience': 'business' }
+        });
+        assert.equal(businessLegacyLoginPage.response.status, 302);
+        assert.equal(businessLegacyLoginPage.response.headers.get('location'), '/auth/business/start?return_to=/');
+
+        const adminLegacyLoginPage = await client.request('GET', '/auth/login', undefined, {
+            redirect: 'manual',
+            headers: { 'x-ielts-onion-audience': 'admin' }
+        });
+        assert.equal(adminLegacyLoginPage.response.status, 302);
+        assert.equal(adminLegacyLoginPage.response.headers.get('location'), '/auth/admin/start?return_to=/admin');
+
         const businessLoginPage = await client.request('GET', '/auth/business/login');
         assert.equal(businessLoginPage.response.status, 200);
         const adminLoginPage = await client.request('GET', '/auth/admin/login');
@@ -2748,6 +2762,7 @@ test('admin shell and business account menu do not link back through the busines
     const authOverlay = fs.readFileSync(path.join(repoRoot, 'js', 'data', 'authOverlay.js'), 'utf8');
 
     assert(adminScript.includes("window.location.href = '/auth/admin/start?return_to=/admin'"));
+    assert(adminScript.includes("window.location.href = '/auth/admin/logout?return_to=/admin'"));
     assert(adminScript.includes("fetch('/api/auth/me'"));
     assert(adminScript.includes('/api/admin/summary'));
     assert(adminScript.includes('/api/admin/export?dataset='));
@@ -2762,11 +2777,13 @@ test('admin shell and business account menu do not link back through the busines
     assert(adminAccountScript.includes('/api/admin/users/'));
     assert(adminAccountScript.includes('/practice-records?limit='));
     assert(adminAccountScript.includes('/auth/admin/start?return_to=/admin/account'));
+    assert(adminAccountScript.includes('/auth/admin/logout?return_to=/admin/account'));
     assert(adminProxyConfig.includes('location = /admin/account'));
     assert(adminProxyConfig.includes('location = /admin/account.js'));
     assert(adminProxyConfig.includes('location = /admin/account.css'));
     assert(adminProxyConfig.includes('location = /auth/admin/start'));
     assert(adminProxyConfig.includes('location = /auth/admin/callback'));
+    assert(adminProxyConfig.includes('location = /auth/admin/logout'));
     assert(adminProxyConfig.includes('location = /auth/business/callback'));
     assert(adminProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience admin;'));
     assert(adminProxyConfig.includes('proxy_set_header Host admin.local;'));
@@ -2781,6 +2798,7 @@ test('admin shell and business account menu do not link back through the busines
     assert(!adminProxyConfig.includes('location = /api/auth/login'));
     assert(businessProxyConfig.includes('location = /auth/business/start'));
     assert(businessProxyConfig.includes('location = /auth/business/callback'));
+    assert(businessProxyConfig.includes('location = /auth/business/logout'));
     assert(businessProxyConfig.includes('location = /auth/admin/callback'));
     assert(businessProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience business;'));
     assert(businessProxyConfig.includes('proxy_set_header Host business.local;'));
@@ -2792,12 +2810,16 @@ test('admin shell and business account menu do not link back through the busines
     assert(!businessProxyConfig.includes('proxy_set_header X-Forwarded-Host $host;'));
     assert(!businessProxyConfig.includes('proxy_set_header X-Forwarded-Proto $scheme;'));
     assert(!businessProxyConfig.includes('location = /auth/admin/start'));
+    assert(!businessProxyConfig.includes('location = /auth/business/account'));
     assert(businessProxyConfig.includes('location = /api/auth/login { return 404; }'));
+    assert(businessProxyConfig.includes('location = /auth/login { return 302 /auth/business/start?return_to=/; }'));
     assert(businessProxyConfig.includes('location ^~ /api/auth/totp/ { return 404; }'));
     assert(authProxyConfig.includes('location = /auth/login'));
     assert(authProxyConfig.includes('location = /auth/business/login'));
     assert(authProxyConfig.includes('location = /auth/admin/login'));
     assert(authProxyConfig.includes('location = /auth/complete'));
+    assert(authProxyConfig.includes('location = /auth/business/logout'));
+    assert(authProxyConfig.includes('location = /auth/admin/logout'));
     assert(authProxyConfig.includes('location ^~ /api/auth/'));
     assert(authProxyConfig.includes('location ^~ /api/admin/ { return 404; }'));
     assert(authProxyConfig.includes('location ^~ /api/practice-records { return 404; }'));
@@ -2815,6 +2837,7 @@ test('admin shell and business account menu do not link back through the busines
     assert.doesNotMatch(adminIndex, /href=["']\/["'][^>]*>\s*App\s*</);
     assert.doesNotMatch(authOverlay, /remote-auth-account__admin/);
     assert.doesNotMatch(authOverlay, /href\s*=\s*['"]\/admin['"]/);
+    assert(authOverlay.includes('/auth/business/logout?return_to='));
 });
 
 test('auth handoff creates a one-time business session ticket', async () => {
@@ -2859,6 +2882,73 @@ test('auth handoff creates a one-time business session ticket', async () => {
 
         const repeated = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
         assert.equal(repeated.response.status, 403);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth logout handoff clears the shared auth session before returning to the target entry', async () => {
+    const client = await createClient();
+    try {
+        const targetSession = client.createSession();
+        const authSession = client.createSession();
+        const start = await targetSession.request('GET', '/auth/business/start?return_to=/practice/reading/p1-high-01', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'business.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(start.response.status, 302);
+        const loginState = getRedirectParam(start.response.headers.get('location'), 'state');
+        assert(loginState);
+
+        const created = await register(authSession, 'handoff_logout_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const beforeLogout = await authSession.request('GET', '/api/auth/me');
+        assert.equal(beforeLogout.response.status, 200);
+
+        const logoutStart = await targetSession.request('GET', '/auth/business/logout?return_to=/practice/reading/p1-high-01', undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'business.local',
+                'x-forwarded-host': 'business.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(logoutStart.response.status, 302);
+        const logoutUrl = parseRedirectLocation(logoutStart.response.headers.get('location'));
+        assert.equal(logoutUrl.pathname, '/auth/business/logout');
+        const logoutState = logoutUrl.searchParams.get('state');
+        assert(logoutState);
+
+        const invalidLogout = await authSession.request('GET', '/auth/business/logout?state=invalid', undefined, { redirect: 'manual' });
+        assert.equal(invalidLogout.response.status, 400);
+
+        const authLogout = await authSession.request('GET', `${logoutUrl.pathname}${logoutUrl.search}`, undefined, {
+            redirect: 'manual',
+            headers: {
+                host: 'auth.local',
+                'x-forwarded-host': 'auth.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'auth'
+            }
+        });
+        assert.equal(authLogout.response.status, 302);
+        assert.equal(authLogout.response.headers.get('location'), '/practice/reading/p1-high-01');
+
+        const afterLogout = await authSession.request('GET', '/api/auth/me');
+        assert.equal(afterLogout.response.status, 401);
+
+        const completeAfterLogout = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(loginState)}&format=json`);
+        assert.equal(completeAfterLogout.response.status, 401);
+        assert.deepEqual(completeAfterLogout.json, {
+            error: 'Authentication required',
+            loginUrl: `/auth/business/login?state=${encodeURIComponent(loginState)}`
+        });
     } finally {
         await client.close();
     }

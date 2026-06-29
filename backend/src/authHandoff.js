@@ -262,6 +262,19 @@ function regenerateSession(req) {
     });
 }
 
+function destroySession(req) {
+    return new Promise((resolve, reject) => {
+        if (!req.session || typeof req.session.destroy !== 'function') {
+            resolve();
+            return;
+        }
+        req.session.destroy((error) => {
+            if (error) reject(error);
+            else resolve();
+        });
+    });
+}
+
 class PostgresAuthHandoffStore {
     constructor(db) {
         this.db = db;
@@ -357,6 +370,8 @@ function createAuthHandoffRouter(options = {}) {
     const localDevelopment = isLocalDevelopment(options);
     const totpVerificationMaxAgeMs = options.totpVerificationMaxAgeMs;
     const verifierCookieSecure = Boolean(options.cookieSecure);
+    const sessionCookieName = options.sessionCookieName || 'ielts.sid';
+    const clearSessionCookieOptions = options.clearSessionCookieOptions || {};
 
     function requireConfig(res) {
         if (!stateSecret || !authStore || !ticketStore) {
@@ -406,9 +421,53 @@ function createAuthHandoffRouter(options = {}) {
 
     router.get('/business/start', createStartHandler('business'));
     router.get('/admin/start', createStartHandler('admin'));
-    router.get('/business/account', (req, res) => {
-        return res.redirect(`${authPublicUrl}/auth/account`);
-    });
+
+    function createLogoutHandler(audience) {
+        return async (req, res, next) => {
+            try {
+                if (!requireConfig(res)) {
+                    return;
+                }
+                const stateParam = String(req.query.state || '').trim();
+                if (stateParam) {
+                    if (!localDevelopment && !validateExactAllowedHost(req, 'auth', { auth: authPublicUrl })) {
+                        return rejectInvalidHost(res);
+                    }
+                    const state = verifySignedAuthState(stateSecret, stateParam);
+                    if (!state || state.intent !== 'logout' || state.audience !== audience) {
+                        return res.status(400).type('text/plain').send('Invalid auth logout state');
+                    }
+                    await destroySession(req);
+                    res.clearCookie(sessionCookieName, clearSessionCookieOptions);
+                    const targetBaseUrl = normalizePublicBaseUrl(state.targetBaseUrl) || configuredTargetUrls[audience] || '';
+                    return res.redirect(`${targetBaseUrl}${sanitizeReturnTo(state.returnTo, audience)}`);
+                }
+
+                if ((configuredTargetUrls[audience] || !localDevelopment) && !validateExactAllowedHost(req, audience, configuredTargetUrls, {
+                    allowLocalLoopbackHost: localDevelopment
+                })) {
+                    return rejectInvalidHost(res);
+                }
+                const returnTo = sanitizeReturnTo(req.query.return_to, audience);
+                await destroySession(req);
+                res.clearCookie(sessionCookieName, clearSessionCookieOptions);
+                const state = createSignedAuthState(stateSecret, {
+                    audience,
+                    intent: 'logout',
+                    returnTo,
+                    targetBaseUrl: configuredTargetUrls[audience],
+                    issuedAt: Date.now(),
+                    nonce: crypto.randomBytes(16).toString('base64url')
+                });
+                return res.redirect(appendQuery(`${authPublicUrl}/auth/${audience}/logout`, { state }));
+            } catch (error) {
+                return next(error);
+            }
+        };
+    }
+
+    router.get('/business/logout', createLogoutHandler('business'));
+    router.get('/admin/logout', createLogoutHandler('admin'));
 
     router.get('/complete', async (req, res, next) => {
         try {

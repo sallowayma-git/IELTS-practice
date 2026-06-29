@@ -13,6 +13,7 @@
         loading: false
     };
     const ADMIN_AUTH_START = '/auth/admin/start?return_to=/admin/account';
+    const ADMIN_AUTH_LOGOUT = '/auth/admin/logout?return_to=/admin/account';
 
     const nodes = {
         status: document.getElementById('status'),
@@ -282,7 +283,7 @@
                 method: 'POST'
             });
         } finally {
-            window.location.href = ADMIN_AUTH_START;
+            window.location.href = ADMIN_AUTH_LOGOUT;
         }
     }
 

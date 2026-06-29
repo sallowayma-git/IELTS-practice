@@ -701,7 +701,7 @@
             nodes.logoutButton.disabled = true;
             try {
                 await request('/api/auth/logout', { method: 'POST' });
-                window.location.href = '/auth/admin/start?return_to=/admin';
+                window.location.href = '/auth/admin/logout?return_to=/admin';
             } catch (error) {
                 nodes.logoutButton.disabled = false;
                 setStatus(error.message, 'error');
