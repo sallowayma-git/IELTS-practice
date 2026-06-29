@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 const { test } = require('node:test');
 const bcrypt = require('bcryptjs');
 const otp = require('otplib');
@@ -698,6 +699,129 @@ function assertAuthStartRedirect(location, audience, returnTo) {
 
 function getRedirectParam(location, name) {
     return parseRedirectLocation(location).searchParams.get(name);
+}
+
+function createUnsignedAuthState(payload = {}) {
+    return `${Buffer.from(JSON.stringify({
+        audience: payload.audience || 'business',
+        returnTo: payload.returnTo || '/',
+        issuedAt: Date.now()
+    }), 'utf8').toString('base64url')}.test-signature`;
+}
+
+function createJsonResponse(status, payload = {}) {
+    return {
+        status,
+        ok: status >= 200 && status < 300,
+        text: async () => JSON.stringify(payload)
+    };
+}
+
+function createAuthLoginScriptHarness(options = {}) {
+    const ids = [
+        'auth-title',
+        'auth-status',
+        'auth-tabs',
+        'login-tab',
+        'register-tab',
+        'password-form',
+        'username',
+        'password',
+        'password-submit',
+        'totp-form',
+        'totp-token',
+        'totp-submit',
+        'totp-setup',
+        'totp-setup-form',
+        'totp-qr',
+        'totp-secret',
+        'totp-setup-token',
+        'totp-setup-submit',
+        'recovery',
+        'recovery-codes',
+        'recovery-continue'
+    ];
+    const elements = new Map();
+    const createElement = (id) => ({
+        id,
+        hidden: false,
+        textContent: '',
+        value: '',
+        src: '',
+        disabled: false,
+        minLength: 0,
+        listeners: {},
+        classList: {
+            toggle() {}
+        },
+        addEventListener(type, handler) {
+            this.listeners[type] = handler;
+        },
+        appendChild() {},
+        focus() {}
+    });
+    ids.forEach((id) => elements.set(id, createElement(id)));
+
+    const calls = [];
+    const assigned = [];
+    const replaced = [];
+    const fetchImpl = async (requestPath, fetchOptions) => {
+        calls.push(String(requestPath));
+        if (typeof options.fetch === 'function') {
+            return options.fetch(requestPath, fetchOptions);
+        }
+        return createJsonResponse(404, { error: 'Not found' });
+    };
+    const document = {
+        readyState: 'complete',
+        getElementById(id) {
+            if (!elements.has(id)) {
+                elements.set(id, createElement(id));
+            }
+            return elements.get(id);
+        },
+        createElement(tagName) {
+            return createElement(tagName);
+        },
+        addEventListener() {}
+    };
+    const window = {
+        location: {
+            pathname: options.pathname || '/auth/login',
+            search: options.search || '',
+            assign(url) {
+                assigned.push(String(url));
+            },
+            replace(url) {
+                replaced.push(String(url));
+            }
+        },
+        fetch: fetchImpl
+    };
+    const context = {
+        Buffer,
+        URLSearchParams,
+        atob(value) {
+            return Buffer.from(String(value), 'base64').toString('binary');
+        },
+        document,
+        fetch: fetchImpl,
+        window
+    };
+    vm.createContext(context);
+    const source = fs.readFileSync(path.resolve(__dirname, '..', 'auth', 'login.js'), 'utf8');
+    vm.runInContext(source, context, { filename: 'backend/auth/login.js' });
+    return {
+        assigned,
+        calls,
+        elements,
+        replaced,
+        async flush() {
+            for (let index = 0; index < 6; index += 1) {
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+        }
+    };
 }
 
 async function withDateNowOffset(offsetMs, callback) {
@@ -2827,6 +2951,82 @@ test('auth login binds signed handoff state to an audience-specific entry', asyn
     } finally {
         await client.close();
     }
+});
+
+test('auth login page lets admin flow switch away from an existing learner auth session', async () => {
+    const adminState = createUnsignedAuthState({ audience: 'admin', returnTo: '/admin' });
+    const harness = createAuthLoginScriptHarness({
+        pathname: '/auth/admin/login',
+        search: `?state=${encodeURIComponent(adminState)}`,
+        fetch: async (requestPath) => {
+            if (requestPath === '/api/auth/csrf') {
+                return createJsonResponse(200, { csrfToken: 'csrf-token' });
+            }
+            if (requestPath === '/api/auth/me') {
+                return createJsonResponse(200, {
+                    user: {
+                        id: '11111111-1111-4111-8111-111111111111',
+                        username: 'learner',
+                        role: 'user'
+                    },
+                    csrfToken: 'csrf-token'
+                });
+            }
+            if (String(requestPath).startsWith('/auth/complete')) {
+                return createJsonResponse(403, { error: 'Admin access required' });
+            }
+            return createJsonResponse(404, { error: 'Not found' });
+        }
+    });
+    await harness.flush();
+
+    assert(!harness.calls.some((requestPath) => requestPath.startsWith('/auth/complete')));
+    assert.equal(harness.elements.get('password-form').hidden, false);
+    assert.equal(harness.elements.get('auth-tabs').hidden, true);
+    assert.match(harness.elements.get('auth-status').textContent, /not an administrator/i);
+    assert.deepEqual(harness.assigned, []);
+});
+
+test('auth login page does not redeem admin handoff after learner credentials', async () => {
+    const adminState = createUnsignedAuthState({ audience: 'admin', returnTo: '/admin' });
+    const harness = createAuthLoginScriptHarness({
+        pathname: '/auth/admin/login',
+        search: `?state=${encodeURIComponent(adminState)}`,
+        fetch: async (requestPath) => {
+            if (requestPath === '/api/auth/csrf') {
+                return createJsonResponse(200, { csrfToken: 'csrf-token' });
+            }
+            if (requestPath === '/api/auth/me') {
+                return createJsonResponse(401, { error: 'Authentication required' });
+            }
+            if (requestPath === '/api/auth/login') {
+                return createJsonResponse(200, {
+                    user: {
+                        id: '22222222-2222-4222-8222-222222222222',
+                        username: 'learner',
+                        role: 'user'
+                    },
+                    csrfToken: 'csrf-token'
+                });
+            }
+            if (String(requestPath).startsWith('/auth/complete')) {
+                return createJsonResponse(403, { error: 'Admin access required' });
+            }
+            return createJsonResponse(404, { error: 'Not found' });
+        }
+    });
+    await harness.flush();
+    harness.elements.get('username').value = 'learner';
+    harness.elements.get('password').value = 'StrongPass1';
+    await harness.elements.get('password-form').listeners.submit({
+        preventDefault() {}
+    });
+    await harness.flush();
+
+    assert(harness.calls.includes('/api/auth/login'));
+    assert(!harness.calls.some((requestPath) => requestPath.startsWith('/auth/complete')));
+    assert.match(harness.elements.get('auth-status').textContent, /not an administrator/i);
+    assert.deepEqual(harness.assigned, []);
 });
 
 test('auth complete JSON mode returns redirect payloads and structured errors', async () => {

@@ -97,9 +97,30 @@
         return true;
     }
 
+    function isAdminFlow() {
+        return expectedAudience === 'admin' || handoff?.audience === 'admin';
+    }
+
+    function requireAdminForCurrentFlow(user) {
+        if (!isAdminFlow()) {
+            return true;
+        }
+        if (user && user.role === 'admin') {
+            return true;
+        }
+        nodes.username.value = '';
+        nodes.password.value = '';
+        setMode('login', 'Use an administrator account to continue to the admin onion.');
+        setStatus('The current auth session is not an administrator. Sign in with an admin account.', 'error');
+        return false;
+    }
+
     function setMode(mode, message) {
+        if (isAdminFlow() && mode === 'register') {
+            mode = 'login';
+        }
         state.mode = mode;
-        setVisible(nodes.tabs, mode === 'login' || mode === 'register');
+        setVisible(nodes.tabs, (mode === 'login' || mode === 'register') && !isAdminFlow());
         setVisible(nodes.passwordForm, mode === 'login' || mode === 'register');
         setVisible(nodes.totpForm, mode === 'totp-login');
         setVisible(nodes.setupPanel, mode === 'setup');
@@ -189,8 +210,8 @@
                 return;
             }
             if (result.response.status === 403 && handoff?.audience === 'admin') {
-                setMode('login', 'Admin access requires the admin onion and a verified admin TOTP session. Start business login again from the business site if you are signing in as a learner.');
-                setStatus('Admin access required for this login flow.', 'error');
+                setMode('login', 'Use an administrator account and complete TOTP to continue to the admin onion.');
+                setStatus(result.payload?.error || 'Admin verification required for this login flow.', 'error');
                 return;
             }
             if (!result.response.ok) {
@@ -235,6 +256,9 @@
         if (!result.response.ok || !result.payload?.user) {
             throw requestError(result, 'Session check failed.');
         }
+        if (!requireAdminForCurrentFlow(result.payload.user)) {
+            return;
+        }
         setStatus('Session active. Continuing...', 'success');
         await completeHandoff();
     }
@@ -268,6 +292,9 @@
                 await beginSetup();
                 return;
             }
+            if (!requireAdminForCurrentFlow(result.payload.user)) {
+                return;
+            }
             await completeHandoff();
         } catch (error) {
             setStatus(error.message, 'error');
@@ -290,6 +317,9 @@
             });
             if (!result.response.ok) {
                 throw requestError(result, 'TOTP verification failed.');
+            }
+            if (!requireAdminForCurrentFlow(result.payload?.user)) {
+                return;
             }
             await completeHandoff();
         } catch (error) {
