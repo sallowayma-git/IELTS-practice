@@ -21,6 +21,10 @@
         dashboard: {
             loading: false
         },
+        siteContent: {
+            loading: false,
+            content: null
+        },
         confirmResolver: null
     };
 
@@ -60,6 +64,17 @@
         metricActiveUsers: document.getElementById('metric-active-users'),
         metricAverageScore: document.getElementById('metric-average-score'),
         metricStudyMinutes: document.getElementById('metric-study-minutes'),
+        contentSaveButton: document.getElementById('content-save-button'),
+        loginNoticeEnabled: document.getElementById('login-notice-enabled'),
+        loginNoticeTitle: document.getElementById('login-notice-title'),
+        loginNoticeBody: document.getElementById('login-notice-body'),
+        loginNoticeCtaLabel: document.getElementById('login-notice-cta-label'),
+        loginNoticeCtaHref: document.getElementById('login-notice-cta-href'),
+        homeBannerEnabled: document.getElementById('home-banner-enabled'),
+        homeBannerTitle: document.getElementById('home-banner-title'),
+        homeBannerBody: document.getElementById('home-banner-body'),
+        homeBannerCtaLabel: document.getElementById('home-banner-cta-label'),
+        homeBannerCtaHref: document.getElementById('home-banner-cta-href'),
         exportButtons: Array.from(document.querySelectorAll('[data-export-dataset]')),
         confirmDialog: document.getElementById('confirm-dialog'),
         confirmTitle: document.getElementById('confirm-title'),
@@ -334,6 +349,89 @@
         }
     }
 
+    function normalizeContentItem(item = {}) {
+        return {
+            enabled: Boolean(item.enabled),
+            title: typeof item.title === 'string' ? item.title : '',
+            body: typeof item.body === 'string' ? item.body : '',
+            ctaLabel: typeof item.ctaLabel === 'string' ? item.ctaLabel : '',
+            ctaHref: typeof item.ctaHref === 'string' ? item.ctaHref : ''
+        };
+    }
+
+    function isSafeContentPath(value) {
+        const text = String(value || '').trim();
+        if (!text) return true;
+        return text.startsWith('/')
+            && !text.startsWith('//')
+            && !text.includes('\\')
+            && !/^\/(?:api|admin|auth\/admin)(?:\/|$)/i.test(text)
+            && !/[\u0000-\u001F\u007F]/.test(text);
+    }
+
+    function renderSiteContent(content = {}) {
+        const loginNotice = normalizeContentItem(content.loginNotice);
+        const homeBanner = normalizeContentItem(content.homeBanner);
+        nodes.loginNoticeEnabled.checked = loginNotice.enabled;
+        nodes.loginNoticeTitle.value = loginNotice.title;
+        nodes.loginNoticeBody.value = loginNotice.body;
+        nodes.loginNoticeCtaLabel.value = loginNotice.ctaLabel;
+        nodes.loginNoticeCtaHref.value = loginNotice.ctaHref;
+        nodes.homeBannerEnabled.checked = homeBanner.enabled;
+        nodes.homeBannerTitle.value = homeBanner.title;
+        nodes.homeBannerBody.value = homeBanner.body;
+        nodes.homeBannerCtaLabel.value = homeBanner.ctaLabel;
+        nodes.homeBannerCtaHref.value = homeBanner.ctaHref;
+    }
+
+    function collectSiteContent() {
+        const loginHref = nodes.loginNoticeCtaHref.value.trim();
+        const bannerHref = nodes.homeBannerCtaHref.value.trim();
+        if (!isSafeContentPath(loginHref) || !isSafeContentPath(bannerHref)) {
+            throw new Error('Button path must be an internal path and cannot target admin or API routes.');
+        }
+        return {
+            loginNotice: {
+                enabled: nodes.loginNoticeEnabled.checked,
+                title: nodes.loginNoticeTitle.value.trim(),
+                body: nodes.loginNoticeBody.value.trim(),
+                ctaLabel: nodes.loginNoticeCtaLabel.value.trim(),
+                ctaHref: loginHref
+            },
+            homeBanner: {
+                enabled: nodes.homeBannerEnabled.checked,
+                title: nodes.homeBannerTitle.value.trim(),
+                body: nodes.homeBannerBody.value.trim(),
+                ctaLabel: nodes.homeBannerCtaLabel.value.trim(),
+                ctaHref: bannerHref
+            }
+        };
+    }
+
+    async function loadSiteContent() {
+        state.siteContent.loading = true;
+        try {
+            const payload = await request('/api/admin/site-content', { csrf: false });
+            state.siteContent.content = payload.content || {};
+            renderSiteContent(state.siteContent.content);
+        } finally {
+            state.siteContent.loading = false;
+        }
+    }
+
+    async function saveSiteContent() {
+        const body = collectSiteContent();
+        await withButtonBusy(nodes.contentSaveButton, 'Saving...', async () => {
+            const payload = await request('/api/admin/site-content', {
+                method: 'PATCH',
+                body
+            });
+            state.siteContent.content = payload.content || {};
+            renderSiteContent(state.siteContent.content);
+            setStatus('Business content updated');
+        });
+    }
+
     function getDownloadFilename(response, fallback) {
         const disposition = response.headers.get('content-disposition') || '';
         const match = disposition.match(/filename="?([^";]+)"?/i);
@@ -535,6 +633,7 @@
         nodes.refreshButton.addEventListener('click', () => {
             withButtonBusy(nodes.refreshButton, 'Refreshing...', async () => {
                 await loadDashboard();
+                await loadSiteContent();
                 await loadUsers();
             }).catch((error) => setStatus(error.message, 'error'));
         });
@@ -542,6 +641,9 @@
             button.addEventListener('click', () => {
                 downloadExport(button.dataset.exportDataset, button).catch((error) => setStatus(error.message, 'error'));
             });
+        });
+        nodes.contentSaveButton.addEventListener('click', () => {
+            saveSiteContent().catch((error) => setStatus(error.message, 'error'));
         });
         nodes.newUserButton.addEventListener('click', openUserDialog);
         nodes.closeUserDialog.addEventListener('click', closeUserDialog);
@@ -613,6 +715,7 @@
         const ok = await loadAuth();
         if (!ok) return;
         await loadDashboard();
+        await loadSiteContent();
         await loadUsers();
     }
 
@@ -624,6 +727,7 @@
             request,
             loadAuth,
             loadDashboard,
+            loadSiteContent,
             loadUsers,
             downloadExport,
             confirmAction,

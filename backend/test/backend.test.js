@@ -2537,6 +2537,28 @@ test('site content API requires admin TOTP for writes and publishes sanitized pu
     }
 });
 
+test('site content UI renders with text nodes and admin edit controls', () => {
+    const repoRoot = path.resolve(__dirname, '..', '..');
+    const indexSource = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    const scriptSource = fs.readFileSync(path.join(repoRoot, 'js', 'siteContent.js'), 'utf8');
+    const adminIndex = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'index.html'), 'utf8');
+    const adminScript = fs.readFileSync(path.join(repoRoot, 'backend', 'admin', 'admin.js'), 'utf8');
+
+    assert(indexSource.includes('id="site-announcement-host"'));
+    assert(indexSource.includes('js/siteContent.js'));
+    assert(scriptSource.includes('textContent ='));
+    assert(!scriptSource.includes('innerHTML'));
+    assert(scriptSource.includes("fetchJson('/api/site-content')"));
+    assert(scriptSource.includes("fetchJson('/api/auth/me')"));
+    assert(scriptSource.includes("!text.startsWith('//')"));
+    assert(scriptSource.includes("!text.includes('\\\\')"));
+    assert(scriptSource.includes("^\\/(?:api|admin|auth\\/admin)(?:\\/|$)"));
+    assert(adminIndex.includes('id="content-panel"'));
+    assert(adminIndex.includes('id="content-save-button"'));
+    assert(adminScript.includes("request('/api/admin/site-content'"));
+    assert(adminScript.includes("request('/api/admin/site-content',"));
+});
+
 test('admin dashboard redirects anonymous users through auth handoff', async () => {
     const client = await createClient();
     try {

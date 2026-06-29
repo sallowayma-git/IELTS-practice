@@ -16,6 +16,7 @@
                 <nav class="sidebar-nav">
                     <a class="is-active" href="/admin" aria-current="page">Users</a>
                     <a href="#analytics-panel">Analytics</a>
+                    <a href="#content-panel">Content</a>
                 </nav>
             </aside>
 
@@ -78,6 +79,80 @@
                             <article>
                                 <span>Total study minutes</span>
                                 <strong id="metric-study-minutes">-</strong>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section id="content-panel" class="content-panel" aria-label="Business site content">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="admin-kicker">Business Content</p>
+                                <h2>Login Notice and Home Banner</h2>
+                            </div>
+                            <button id="content-save-button" type="button">Save content</button>
+                        </div>
+
+                        <div class="content-grid">
+                            <article class="content-card">
+                                <div class="content-card__heading">
+                                    <div>
+                                        <h3>Post-login notice</h3>
+                                        <p>Shown to signed-in business users after login or refresh.</p>
+                                    </div>
+                                    <label class="switch-field">
+                                        <input id="login-notice-enabled" type="checkbox" />
+                                        <span>Enabled</span>
+                                    </label>
+                                </div>
+                                <label>
+                                    <span>Title</span>
+                                    <input id="login-notice-title" maxlength="120" placeholder="Welcome back" />
+                                </label>
+                                <label>
+                                    <span>Message</span>
+                                    <textarea id="login-notice-body" maxlength="1000" rows="5" placeholder="Message for users after login"></textarea>
+                                </label>
+                                <div class="content-card__row">
+                                    <label>
+                                        <span>Button label</span>
+                                        <input id="login-notice-cta-label" maxlength="60" placeholder="Continue" />
+                                    </label>
+                                    <label>
+                                        <span>Button path</span>
+                                        <input id="login-notice-cta-href" maxlength="240" placeholder="/ or empty" />
+                                    </label>
+                                </div>
+                            </article>
+
+                            <article class="content-card">
+                                <div class="content-card__heading">
+                                    <div>
+                                        <h3>Home announcement banner</h3>
+                                        <p>Shown near the top of the business home page.</p>
+                                    </div>
+                                    <label class="switch-field">
+                                        <input id="home-banner-enabled" type="checkbox" />
+                                        <span>Enabled</span>
+                                    </label>
+                                </div>
+                                <label>
+                                    <span>Title</span>
+                                    <input id="home-banner-title" maxlength="120" placeholder="Announcement" />
+                                </label>
+                                <label>
+                                    <span>Message</span>
+                                    <textarea id="home-banner-body" maxlength="1000" rows="5" placeholder="Announcement text"></textarea>
+                                </label>
+                                <div class="content-card__row">
+                                    <label>
+                                        <span>Button label</span>
+                                        <input id="home-banner-cta-label" maxlength="60" placeholder="Optional" />
+                                    </label>
+                                    <label>
+                                        <span>Button path</span>
+                                        <input id="home-banner-cta-href" maxlength="240" placeholder="/browse or empty" />
+                                    </label>
+                                </div>
                             </article>
                         </div>
                     </section>

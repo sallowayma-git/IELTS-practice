@@ -204,6 +204,7 @@ h2 {
 .users-panel,
 .details-panel,
 .analytics-panel,
+.content-panel,
 .dialog,
 .status {
     border: 1px solid var(--border);
@@ -214,12 +215,14 @@ h2 {
 
 .users-panel,
 .details-panel,
-.analytics-panel {
+.analytics-panel,
+.content-panel {
     min-width: 0;
     overflow: hidden;
 }
 
-.analytics-panel {
+.analytics-panel,
+.content-panel {
     display: grid;
     gap: 14px;
     padding: 16px;
@@ -242,6 +245,92 @@ h2 {
 .export-actions button {
     padding: 0 12px;
     font-weight: 700;
+}
+
+#content-save-button {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+    font-weight: 800;
+    padding: 0 14px;
+}
+
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.content-card {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--soft);
+    padding: 14px;
+}
+
+.content-card__heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.content-card__heading h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+}
+
+.content-card__heading p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.content-card label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.content-card label span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.content-card input,
+.content-card textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+    padding: 9px 10px;
+    resize: vertical;
+}
+
+.content-card__row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+}
+
+.switch-field {
+    display: inline-flex !important;
+    grid-template-columns: none !important;
+    align-items: center;
+    gap: 8px !important;
+    min-height: 32px;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.switch-field input {
+    width: 18px;
+    height: 18px;
 }
 
 .metric-grid {
@@ -574,6 +663,10 @@ tr.is-selected {
         grid-template-columns: 1fr;
     }
 
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
     .metric-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -593,6 +686,11 @@ tr.is-selected {
 
     .panel-heading {
         display: grid;
+    }
+
+    .content-card__heading,
+    .content-card__row {
+        grid-template-columns: 1fr;
     }
 
     .topbar-actions,
