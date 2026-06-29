@@ -222,7 +222,7 @@ function sanitizeReturnTo(value, audience = 'business') {
     if (text.length > MAX_RETURN_TO_LENGTH) {
         text = text.slice(0, MAX_RETURN_TO_LENGTH);
     }
-    if (audience === 'business' && /^\/(?:admin|api\/admin)(?:\/|$)/i.test(text)) {
+    if (audience === 'business' && /^\/(?:admin|api\/admin|auth)(?:\/|$)/i.test(text)) {
         return '/';
     }
     if (audience === 'admin' && !/^\/admin(?:\/|$|\?)/i.test(text)) {
@@ -447,6 +447,12 @@ function createAuthHandoffRouter(options = {}) {
                 }
                 return res.status(401).type('text/plain').send('Authentication required');
             }
+            if (state.audience === 'business' && user.role === 'admin') {
+                if (wantsJson) {
+                    return res.status(403).json({ error: 'Business account required' });
+                }
+                return res.status(403).type('text/plain').send('Business account required');
+            }
             let adminTotpVerifiedAt = null;
             if (state.audience === 'admin') {
                 if (user.role !== 'admin') {
@@ -521,6 +527,9 @@ function createAuthHandoffRouter(options = {}) {
                     return res.status(401).type('text/plain').send('Authentication required');
                 }
                 const safeUser = publicUser(user);
+                if (audience === 'business' && safeUser.role === 'admin') {
+                    return res.status(403).type('text/plain').send('Business account required');
+                }
                 if (audience === 'admin' && safeUser.role !== 'admin') {
                     return res.status(403).type('text/plain').send('Admin access required');
                 }

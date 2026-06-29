@@ -2989,10 +2989,11 @@ test('auth login page lets admin flow switch away from an existing learner auth 
 
 test('auth login page does not redeem admin handoff after learner credentials', async () => {
     const adminState = createUnsignedAuthState({ audience: 'admin', returnTo: '/admin' });
+    const loginBodies = [];
     const harness = createAuthLoginScriptHarness({
         pathname: '/auth/admin/login',
         search: `?state=${encodeURIComponent(adminState)}`,
-        fetch: async (requestPath) => {
+        fetch: async (requestPath, fetchOptions = {}) => {
             if (requestPath === '/api/auth/csrf') {
                 return createJsonResponse(200, { csrfToken: 'csrf-token' });
             }
@@ -3000,6 +3001,7 @@ test('auth login page does not redeem admin handoff after learner credentials', 
                 return createJsonResponse(401, { error: 'Authentication required' });
             }
             if (requestPath === '/api/auth/login') {
+                loginBodies.push(JSON.parse(fetchOptions.body || '{}'));
                 return createJsonResponse(200, {
                     user: {
                         id: '22222222-2222-4222-8222-222222222222',
@@ -3024,9 +3026,53 @@ test('auth login page does not redeem admin handoff after learner credentials', 
     await harness.flush();
 
     assert(harness.calls.includes('/api/auth/login'));
+    assert.equal(loginBodies[0]?.authState, adminState);
     assert(!harness.calls.some((requestPath) => requestPath.startsWith('/auth/complete')));
     assert.match(harness.elements.get('auth-status').textContent, /not an administrator/i);
     assert.deepEqual(harness.assigned, []);
+});
+
+test('auth API enforces account type for signed business and admin flows', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'flow_admin', 'StrongPass1');
+        const businessTarget = client.createSession();
+        const businessAuth = client.createSession();
+        const businessStart = await businessTarget.request('GET', '/auth/business/start?return_to=/', undefined, { redirect: 'manual' });
+        const businessState = getRedirectParam(businessStart.response.headers.get('location'), 'state');
+        await businessAuth.csrf();
+        const adminInBusinessFlow = await businessAuth.request('POST', '/api/auth/login', {
+            username: 'flow_admin',
+            password: 'StrongPass1',
+            authState: businessState
+        });
+        assert.equal(adminInBusinessFlow.response.status, 403);
+        assert.deepEqual(adminInBusinessFlow.json, { error: 'Use the admin login entrance' });
+
+        const learnerAuth = client.createSession();
+        await register(learnerAuth, 'flow_learner', 'StrongPass1');
+        const adminTarget = client.createSession();
+        const adminStart = await adminTarget.request('GET', '/auth/admin/start?return_to=/admin', undefined, { redirect: 'manual' });
+        const adminState = getRedirectParam(adminStart.response.headers.get('location'), 'state');
+        const learnerInAdminFlow = await learnerAuth.request('POST', '/api/auth/login', {
+            username: 'flow_learner',
+            password: 'StrongPass1',
+            authState: adminState
+        });
+        assert.equal(learnerInAdminFlow.response.status, 403);
+        assert.deepEqual(learnerInAdminFlow.json, { error: 'Admin account required' });
+
+        const adminRegister = await learnerAuth.request('POST', '/api/auth/register', {
+            username: 'flow_admin_register',
+            password: 'StrongPass1',
+            authState: adminState
+        });
+        assert.equal(adminRegister.response.status, 403);
+        assert.deepEqual(adminRegister.json, { error: 'Admin accounts cannot be registered here' });
+        assert.equal(await client.authStore.findByUsernameLower('flow_admin_register'), null);
+    } finally {
+        await client.close();
+    }
 });
 
 test('auth complete JSON mode returns redirect payloads and structured errors', async () => {
@@ -3085,6 +3131,19 @@ test('auth handoff rejects unsafe return paths and audience mismatches', async (
         const callback = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
         assert.equal(callback.response.status, 302);
         assert.equal(callback.response.headers.get('location'), '/');
+
+        const authPathTarget = client.createSession();
+        const authPathStart = await authPathTarget.request('GET', '/auth/business/start?return_to=/auth/account', undefined, { redirect: 'manual' });
+        assert.equal(authPathStart.response.status, 302);
+        const authPathState = getRedirectParam(authPathStart.response.headers.get('location'), 'state');
+        assert(authPathState);
+        const authPathComplete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(authPathState)}`, undefined, { redirect: 'manual' });
+        assert.equal(authPathComplete.response.status, 302);
+        const authPathCallbackUrl = parseRedirectLocation(authPathComplete.response.headers.get('location'));
+        assert.equal(authPathCallbackUrl.pathname, '/auth/business/callback');
+        const authPathCallback = await authPathTarget.request('GET', `${authPathCallbackUrl.pathname}${authPathCallbackUrl.search}`, undefined, { redirect: 'manual' });
+        assert.equal(authPathCallback.response.status, 302);
+        assert.equal(authPathCallback.response.headers.get('location'), '/');
     } finally {
         await client.close();
     }

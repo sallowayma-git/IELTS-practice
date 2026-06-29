@@ -15,6 +15,10 @@ const credentialsSchema = z.object({
     password: z.string().min(1).max(128)
 });
 
+const credentialsWithAuthStateSchema = credentialsSchema.extend({
+    authState: z.string().trim().min(1).max(4096).optional()
+});
+
 const updateUsernameSchema = z.object({
     username: z.string().trim().min(3).max(32).regex(USERNAME_PATTERN),
     password: z.string().min(1).max(128)
@@ -266,6 +270,32 @@ function authMutationError(message, status = 409) {
     return error;
 }
 
+function resolveAuthRequestAudience(req, resolveAuthState) {
+    const rawState = typeof req.body?.authState === 'string'
+        ? req.body.authState.trim()
+        : '';
+    if (!rawState) {
+        return '';
+    }
+    if (typeof resolveAuthState !== 'function') {
+        return null;
+    }
+    const state = resolveAuthState(rawState);
+    return state && (state.audience === 'business' || state.audience === 'admin')
+        ? state.audience
+        : null;
+}
+
+function rejectUserForAudience(res, user, audience) {
+    if (audience === 'business' && user?.role === 'admin') {
+        return res.status(403).json({ error: 'Use the admin login entrance' });
+    }
+    if (audience === 'admin' && user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin account required' });
+    }
+    return null;
+}
+
 class PostgresAuthStore {
     constructor(db) {
         this.db = db;
@@ -510,6 +540,9 @@ function createAuthRouter(options = {}) {
     const onDeleteUser = typeof options.onDeleteUser === 'function'
         ? options.onDeleteUser
         : async () => {};
+    const resolveAuthState = typeof options.resolveAuthState === 'function'
+        ? options.resolveAuthState
+        : null;
     const totpEnabled = options.totpEnabled !== undefined
         ? Boolean(options.totpEnabled)
         : parseBoolean(process.env.TOTP_ENABLED, true);
@@ -535,9 +568,16 @@ function createAuthRouter(options = {}) {
 
     router.post('/register', verifyCsrfToken, async (req, res, next) => {
         try {
-            const parsed = credentialsSchema.safeParse(req.body || {});
+            const parsed = credentialsWithAuthStateSchema.safeParse(req.body || {});
             if (!parsed.success) {
                 return res.status(400).json({ error: INVALID_CREDENTIAL_FORMAT_ERROR });
+            }
+            const audience = resolveAuthRequestAudience(req, resolveAuthState);
+            if (audience === null) {
+                return res.status(400).json({ error: 'Invalid auth handoff state' });
+            }
+            if (audience === 'admin') {
+                return res.status(403).json({ error: 'Admin accounts cannot be registered here' });
             }
             const username = normalizeUsername(parsed.data.username);
             const usernameLower = username.toLowerCase();
@@ -572,9 +612,13 @@ function createAuthRouter(options = {}) {
 
     router.post('/login', verifyCsrfToken, async (req, res, next) => {
         try {
-            const parsed = credentialsSchema.safeParse(req.body || {});
+            const parsed = credentialsWithAuthStateSchema.safeParse(req.body || {});
             if (!parsed.success) {
                 return res.status(400).json({ error: INVALID_CREDENTIAL_FORMAT_ERROR });
+            }
+            const audience = resolveAuthRequestAudience(req, resolveAuthState);
+            if (audience === null) {
+                return res.status(400).json({ error: 'Invalid auth handoff state' });
             }
             const username = normalizeUsername(parsed.data.username);
             const usernameLower = username.toLowerCase();
@@ -597,6 +641,10 @@ function createAuthRouter(options = {}) {
             }
 
             const safeUser = publicUser(user);
+            const audienceRejection = rejectUserForAudience(res, safeUser, audience);
+            if (audienceRejection) {
+                return audienceRejection;
+            }
             if (totpEnabled && totpStore && typeof totpStore.getStatus === 'function') {
                 const status = await totpStore.getStatus(user.id);
                 if (status.enabled) {

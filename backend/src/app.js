@@ -998,6 +998,7 @@ function createApp(options = {}) {
         rateLimit: options.rateLimit,
         csrfRateLimit: options.csrfRateLimit,
         totpEnabled,
+        resolveAuthState: (state) => verifySignedAuthState(authHandoffSecret, state),
         onDeleteUser: async (userId) => {
             if (practiceStore && typeof practiceStore.clear === 'function') {
                 await practiceStore.clear(userId);

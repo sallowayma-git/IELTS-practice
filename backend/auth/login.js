@@ -180,6 +180,12 @@
         return new Error(result?.payload?.error || fallback || 'Request failed');
     }
 
+    function withHandoffState(payload) {
+        return handoffState
+            ? Object.assign({}, payload, { authState: handoffState })
+            : payload;
+    }
+
     async function loadCsrf() {
         const result = await request('/api/auth/csrf', { csrf: false });
         if (!result.response.ok || !result.payload?.csrfToken) {
@@ -274,10 +280,10 @@
             const endpoint = state.mode === 'register' ? '/api/auth/register' : '/api/auth/login';
             const result = await request(endpoint, {
                 method: 'POST',
-                body: {
+                body: withHandoffState({
                     username: nodes.username.value,
                     password: nodes.password.value
-                }
+                })
             });
             if (!result.response.ok) {
                 throw requestError(result, state.mode === 'register' ? 'Registration failed.' : 'Login failed.');
