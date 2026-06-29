@@ -2460,6 +2460,83 @@ test('admin API rejects anonymous and non-admin users', async () => {
     }
 });
 
+test('site content API requires admin TOTP for writes and publishes sanitized public content', async () => {
+    const client = await createClient();
+    try {
+        const defaults = await client.request('GET', '/api/site-content');
+        assert.equal(defaults.response.status, 200);
+        assert.equal(defaults.response.headers.get('cache-control'), 'no-store');
+        assert.equal(defaults.json.content.loginNotice.enabled, false);
+        assert.equal(defaults.json.content.homeBanner.enabled, false);
+
+        const anonymousAdminRead = await client.request('GET', '/api/admin/site-content');
+        assert.equal(anonymousAdminRead.response.status, 401);
+
+        await seedAdmin(client, 'content_admin', 'StrongPass1');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'content_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+
+        const blockedBeforeTotp = await client.request('PATCH', '/api/admin/site-content', {
+            homeBanner: { enabled: true }
+        });
+        assert.equal(blockedBeforeTotp.response.status, 401);
+
+        await enableTotpForCurrentSession(client);
+
+        const blockedWithoutCsrf = await client.request('PATCH', '/api/admin/site-content', {
+            homeBanner: { enabled: true }
+        }, { csrf: false });
+        assert.equal(blockedWithoutCsrf.response.status, 403);
+
+        const invalidShape = await client.request('PATCH', '/api/admin/site-content', {
+            homeBanner: { enabled: true, html: '<img src=x onerror=alert(1)>' }
+        });
+        assert.equal(invalidShape.response.status, 400);
+
+        const update = await client.request('PATCH', '/api/admin/site-content', {
+            loginNotice: {
+                enabled: true,
+                title: '  <b>Welcome</b>  ',
+                body: 'Signed in content',
+                ctaLabel: 'Continue',
+                ctaHref: '//evil.example/path'
+            },
+            homeBanner: {
+                enabled: true,
+                title: 'Maintenance <script>alert(1)</script>',
+                body: 'Safe plain-text announcement',
+                ctaLabel: 'Details',
+                ctaHref: '/more?from=banner'
+            }
+        });
+        assert.equal(update.response.status, 200);
+        assert.equal(update.json.content.loginNotice.title, '<b>Welcome</b>');
+        assert.equal(update.json.content.loginNotice.ctaHref, '');
+        assert.equal(update.json.content.homeBanner.ctaHref, '/more?from=banner');
+
+        const backslashRedirect = await client.request('PATCH', '/api/admin/site-content', {
+            homeBanner: {
+                ctaHref: '/\\evil.example/path'
+            }
+        });
+        assert.equal(backslashRedirect.response.status, 200);
+        assert.equal(backslashRedirect.json.content.homeBanner.ctaHref, '');
+
+        const published = await client.request('GET', '/api/site-content');
+        assert.equal(published.response.status, 200);
+        assert.equal(published.json.content.loginNotice.ctaHref, '');
+        assert.equal(published.json.content.homeBanner.title, 'Maintenance <script>alert(1)</script>');
+        assert.equal(published.json.content.homeBanner.ctaHref, '');
+    } finally {
+        await client.close();
+    }
+});
+
 test('admin dashboard redirects anonymous users through auth handoff', async () => {
     const client = await createClient();
     try {

@@ -937,6 +937,45 @@ function createApp(options = {}) {
     app.get('/api/health', (req, res) => {
         res.json({ ok: true });
     });
+
+    function publicSiteContentItem(item = {}) {
+        if (!item || !item.enabled) {
+            return {
+                enabled: false,
+                title: '',
+                body: '',
+                ctaLabel: '',
+                ctaHref: ''
+            };
+        }
+        return {
+            enabled: true,
+            title: typeof item.title === 'string' ? item.title : '',
+            body: typeof item.body === 'string' ? item.body : '',
+            ctaLabel: typeof item.ctaLabel === 'string' ? item.ctaLabel : '',
+            ctaHref: typeof item.ctaHref === 'string' ? item.ctaHref : ''
+        };
+    }
+
+    function publicSiteContent(content = {}) {
+        return {
+            loginNotice: publicSiteContentItem(content.loginNotice),
+            homeBanner: publicSiteContentItem(content.homeBanner)
+        };
+    }
+
+    app.get('/api/site-content', async (req, res, next) => {
+        try {
+            const content = typeof adminStore.getSiteContent === 'function'
+                ? await adminStore.getSiteContent()
+                : {};
+            res.setHeader('Cache-Control', 'no-store');
+            return res.json({ content: publicSiteContent(content) });
+        } catch (error) {
+            return next(error);
+        }
+    });
+
     app.use('/auth', createAuthHandoffRouter({
         authStore,
         totpStore,

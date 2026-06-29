@@ -82,6 +82,46 @@ const ADMIN_RECORD_CIRCULAR_VALUE = '[circular]';
 const ADMIN_RECORD_MAX_DEPTH_VALUE = '[max-depth]';
 const ADMIN_RECORD_ACCESSOR_VALUE = '[accessor]';
 const ADMIN_RECORD_UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const SITE_CONTENT_KEYS = ['loginNotice', 'homeBanner'];
+const SITE_CONTENT_DB_KEYS = {
+    loginNotice: 'login_notice',
+    homeBanner: 'home_banner'
+};
+const SITE_CONTENT_API_KEYS = {
+    login_notice: 'loginNotice',
+    home_banner: 'homeBanner'
+};
+const DEFAULT_SITE_CONTENT = Object.freeze({
+    loginNotice: Object.freeze({
+        enabled: false,
+        title: 'Welcome back',
+        body: 'You are signed in. Your practice records will sync with this account.',
+        ctaLabel: 'Continue',
+        ctaHref: ''
+    }),
+    homeBanner: Object.freeze({
+        enabled: false,
+        title: 'Announcement',
+        body: 'Use this space for important study updates.',
+        ctaLabel: '',
+        ctaHref: ''
+    })
+});
+
+const siteContentItemSchema = z.object({
+    enabled: z.boolean().optional(),
+    title: z.string().trim().max(120).optional(),
+    body: z.string().trim().max(1000).optional(),
+    ctaLabel: z.string().trim().max(60).optional(),
+    ctaHref: z.string().trim().max(240).optional()
+}).strict();
+
+const siteContentUpdateSchema = z.object({
+    loginNotice: siteContentItemSchema.optional(),
+    homeBanner: siteContentItemSchema.optional()
+}).strict().refine((value) => SITE_CONTENT_KEYS.some((key) => value[key] !== undefined), {
+    message: 'No site content changes supplied'
+});
 
 function toInteger(value) {
     const number = Number(value);
@@ -111,6 +151,78 @@ function truncateText(value, maxLength, fallback = '') {
         truncated = truncated.slice(0, -1);
     }
     return truncated;
+}
+
+function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
+function isSafeSiteContentHref(value) {
+    const text = String(value || '').trim();
+    if (!text) {
+        return true;
+    }
+    if (!text.startsWith('/') || text.startsWith('//')) {
+        return false;
+    }
+    if (text.includes('\\')) {
+        return false;
+    }
+    if (/[\u0000-\u001F\u007F]/.test(text)) {
+        return false;
+    }
+    if (/^\/(?:api|admin|auth\/admin)(?:\/|$)/i.test(text)) {
+        return false;
+    }
+    return true;
+}
+
+function normalizeSiteContentItem(kind, value = {}) {
+    const base = DEFAULT_SITE_CONTENT[kind] || {};
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const ctaHref = truncateText(source.ctaHref, 240);
+    return {
+        enabled: Boolean(source.enabled),
+        title: truncateText(source.title, 120, base.title),
+        body: truncateText(source.body, 1000, base.body),
+        ctaLabel: truncateText(source.ctaLabel, 60, base.ctaLabel),
+        ctaHref: isSafeSiteContentHref(ctaHref) ? ctaHref : ''
+    };
+}
+
+function normalizeSiteContent(value = {}) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+        loginNotice: normalizeSiteContentItem('loginNotice', {
+            ...DEFAULT_SITE_CONTENT.loginNotice,
+            ...(source.loginNotice || {})
+        }),
+        homeBanner: normalizeSiteContentItem('homeBanner', {
+            ...DEFAULT_SITE_CONTENT.homeBanner,
+            ...(source.homeBanner || {})
+        })
+    };
+}
+
+function mergeSiteContent(current, changes) {
+    const next = normalizeSiteContent(current);
+    SITE_CONTENT_KEYS.forEach((key) => {
+        if (changes && changes[key] !== undefined) {
+            next[key] = normalizeSiteContentItem(key, {
+                ...next[key],
+                ...changes[key]
+            });
+        }
+    });
+    return next;
+}
+
+function serializeSiteContentRow(row) {
+    const apiKey = SITE_CONTENT_API_KEYS[row?.key];
+    if (!apiKey) {
+        return null;
+    }
+    return [apiKey, row.payload || {}];
 }
 
 function parseMemorySessionValue(raw) {
@@ -1184,6 +1296,45 @@ class PostgresAdminStore {
         return result.rowCount || 0;
     }
 
+    async getSiteContent() {
+        const result = await this.db.query(
+            'SELECT key, payload FROM site_content_settings WHERE key = ANY($1::text[])',
+            [Object.values(SITE_CONTENT_DB_KEYS)]
+        );
+        const content = cloneJson(DEFAULT_SITE_CONTENT);
+        for (const row of result.rows) {
+            const entry = serializeSiteContentRow(row);
+            if (entry) {
+                const [apiKey, payload] = entry;
+                content[apiKey] = payload;
+            }
+        }
+        return normalizeSiteContent(content);
+    }
+
+    async updateSiteContent(changes = {}) {
+        const current = await this.getSiteContent();
+        const next = mergeSiteContent(current, changes);
+        const writeContent = async (client) => {
+            for (const apiKey of SITE_CONTENT_KEYS) {
+                await client.query(
+                    `INSERT INTO site_content_settings (key, payload, updated_at)
+                     VALUES ($1, $2::jsonb, now())
+                     ON CONFLICT (key) DO UPDATE
+                     SET payload = EXCLUDED.payload,
+                         updated_at = now()`,
+                    [SITE_CONTENT_DB_KEYS[apiKey], JSON.stringify(next[apiKey])]
+                );
+            }
+        };
+        if (typeof this.db.withTransaction === 'function') {
+            await this.db.withTransaction(writeContent);
+        } else {
+            await writeContent(this.db);
+        }
+        return this.getSiteContent();
+    }
+
     async recordTraffic(event) {
         const safeEvent = normalizeTrafficEvent(event);
         await this.db.query(
@@ -1403,6 +1554,7 @@ class MemoryAdminStore {
         this.sessionStore = options.sessionStore;
         this.maxTrafficEvents = Math.max(1, toInteger(options.maxTrafficEvents || DEFAULT_MEMORY_TRAFFIC_MAX_EVENTS));
         this.trafficEvents = [];
+        this.siteContent = normalizeSiteContent(options.siteContent || DEFAULT_SITE_CONTENT);
     }
 
     _users() {
@@ -1698,6 +1850,15 @@ class MemoryAdminStore {
             return 0;
         }
         return this.practiceStore.deleteById(userId, recordId);
+    }
+
+    async getSiteContent() {
+        return cloneJson(normalizeSiteContent(this.siteContent));
+    }
+
+    async updateSiteContent(changes = {}) {
+        this.siteContent = mergeSiteContent(this.siteContent, changes);
+        return this.getSiteContent();
     }
 
     async recordTraffic(event) {
@@ -2040,6 +2201,34 @@ function createAdminRouter(options = {}) {
         try {
             return res.json(await store.analytics(parseAnalyticsQuery(req.query)));
         } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.get('/site-content', async (req, res, next) => {
+        try {
+            if (typeof store.getSiteContent !== 'function') {
+                return res.json({ content: normalizeSiteContent(DEFAULT_SITE_CONTENT) });
+            }
+            return res.json({ content: await store.getSiteContent() });
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.patch('/site-content', verifyCsrfToken, async (req, res, next) => {
+        try {
+            checkAdminMutationRateLimit(req, 'update-site-content');
+            const parsed = siteContentUpdateSchema.safeParse(req.body || {});
+            if (!parsed.success) {
+                return res.status(400).json({ error: 'Invalid site content payload', details: parsed.error.flatten() });
+            }
+            if (typeof store.updateSiteContent !== 'function') {
+                return res.status(500).json({ error: 'Site content store is unavailable' });
+            }
+            return res.json({ content: await store.updateSiteContent(parsed.data) });
+        } catch (error) {
+            if (error.status) return sendError(res, error);
             return next(error);
         }
     });
