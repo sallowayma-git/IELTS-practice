@@ -170,35 +170,6 @@
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
-        async updateUsername(username, password) {
-            const payload = await this.request('/api/auth/account/username', {
-                method: 'PATCH',
-                body: { username, password }
-            });
-            this.user = payload.user || this.user;
-            this.storeCsrfTokenFromPayload(payload);
-            return payload;
-        }
-
-        async updatePassword(currentPassword, newPassword) {
-            const payload = await this.request('/api/auth/account/password', {
-                method: 'PATCH',
-                body: { currentPassword, newPassword }
-            });
-            this.user = payload.user || this.user;
-            this.storeCsrfTokenFromPayload(payload);
-            return payload;
-        }
-
-        async deleteAccount(password, confirm) {
-            const payload = await this.request('/api/auth/account', {
-                method: 'DELETE',
-                body: { password, confirm }
-            });
-            this.clearAuthState();
-            return payload;
-        }
-
         async logout() {
             let payload;
             try {
