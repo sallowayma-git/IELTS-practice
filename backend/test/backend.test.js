@@ -2741,7 +2741,11 @@ test('admin dashboard redirects anonymous users through auth handoff', async () 
         assert.match(authLoginStyles.text, /auth-shell/);
 
         const authAccountPage = await client.request('GET', '/auth/account', undefined, { redirect: 'manual' });
-        assert.equal(authAccountPage.response.status, 401);
+        assert.equal(authAccountPage.response.status, 404);
+        const authAccountScript = await client.request('GET', '/auth/account.js', undefined, { redirect: 'manual' });
+        assert.equal(authAccountScript.response.status, 404);
+        const authAccountStyles = await client.request('GET', '/auth/account.css', undefined, { redirect: 'manual' });
+        assert.equal(authAccountStyles.response.status, 404);
 
         const loginPage = await client.request('GET', '/admin/login.js');
         assert.equal(loginPage.response.status, 200);

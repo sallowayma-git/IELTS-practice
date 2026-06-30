@@ -1130,14 +1130,8 @@ function createApp(options = {}) {
     app.get('/auth/login.css', (req, res) => {
         res.sendFile(path.join(authRoot, 'login.css'));
     });
-    app.get(['/auth/account', '/auth/account/'], requireAuth, (req, res) => {
-        res.sendFile(path.join(authRoot, 'account.html'));
-    });
-    app.get('/auth/account.js', requireAuth, (req, res) => {
-        res.sendFile(path.join(authRoot, 'account.js'));
-    });
-    app.get('/auth/account.css', requireAuth, (req, res) => {
-        res.sendFile(path.join(authRoot, 'account.css'));
+    app.get(['/auth/account', '/auth/account/', '/auth/account.js', '/auth/account.css'], (req, res) => {
+        res.status(404).type('text/plain').send('Not found');
     });
 
     app.get('/', (req, res) => {
