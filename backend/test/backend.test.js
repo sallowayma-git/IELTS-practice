@@ -739,7 +739,10 @@ function createAuthLoginScriptHarness(options = {}) {
         'totp-setup-submit',
         'recovery',
         'recovery-codes',
-        'recovery-continue'
+        'recovery-continue',
+        'session-conflict',
+        'session-conflict-message',
+        'session-conflict-restart'
     ];
     const elements = new Map();
     const createElement = (id) => ({
@@ -3082,7 +3085,9 @@ test('auth login page lets admin flow switch away from an existing learner auth 
     assert(!harness.calls.some((requestPath) => requestPath.startsWith('/auth/complete')));
     assert.equal(harness.elements.get('password-form').hidden, false);
     assert.equal(harness.elements.get('auth-tabs').hidden, true);
-    assert.match(harness.elements.get('auth-status').textContent, /not an administrator/i);
+    assert.equal(harness.elements.get('session-conflict').hidden, false);
+    assert.match(harness.elements.get('auth-status').textContent, /administrator account is required/i);
+    assert.match(harness.elements.get('session-conflict-message').textContent, /administrator account/i);
     assert.deepEqual(harness.assigned, []);
 });
 
@@ -3101,14 +3106,7 @@ test('auth login page does not redeem admin handoff after learner credentials', 
             }
             if (requestPath === '/api/auth/login') {
                 loginBodies.push(JSON.parse(fetchOptions.body || '{}'));
-                return createJsonResponse(200, {
-                    user: {
-                        id: '22222222-2222-4222-8222-222222222222',
-                        username: 'learner',
-                        role: 'user'
-                    },
-                    csrfToken: 'csrf-token'
-                });
+                return createJsonResponse(403, { error: 'Admin account required' });
             }
             if (String(requestPath).startsWith('/auth/complete')) {
                 return createJsonResponse(403, { error: 'Admin access required' });
@@ -3127,8 +3125,81 @@ test('auth login page does not redeem admin handoff after learner credentials', 
     assert(harness.calls.includes('/api/auth/login'));
     assert.equal(loginBodies[0]?.authState, adminState);
     assert(!harness.calls.some((requestPath) => requestPath.startsWith('/auth/complete')));
-    assert.match(harness.elements.get('auth-status').textContent, /not an administrator/i);
+    assert.equal(harness.elements.get('password-form').hidden, false);
+    assert.equal(harness.elements.get('session-conflict').hidden, true);
+    assert.match(harness.elements.get('auth-status').textContent, /403: Admin account required/i);
     assert.deepEqual(harness.assigned, []);
+});
+
+test('auth login page lets business flow switch away from an existing admin auth session', async () => {
+    const businessState = createUnsignedAuthState({ audience: 'business', returnTo: '/' });
+    const harness = createAuthLoginScriptHarness({
+        pathname: '/auth/business/login',
+        search: `?state=${encodeURIComponent(businessState)}`,
+        fetch: async (requestPath) => {
+            if (requestPath === '/api/auth/csrf') {
+                return createJsonResponse(200, { csrfToken: 'csrf-token' });
+            }
+            if (requestPath === '/api/auth/me') {
+                return createJsonResponse(200, {
+                    user: {
+                        id: '33333333-3333-4333-8333-333333333333',
+                        username: 'admin',
+                        role: 'admin'
+                    },
+                    csrfToken: 'csrf-token'
+                });
+            }
+            if (String(requestPath).startsWith('/auth/complete')) {
+                return createJsonResponse(403, { error: 'Business account required' });
+            }
+            return createJsonResponse(404, { error: 'Not found' });
+        }
+    });
+    await harness.flush();
+
+    assert(!harness.calls.some((requestPath) => requestPath.startsWith('/auth/complete')));
+    assert.equal(harness.elements.get('password-form').hidden, false);
+    assert.equal(harness.elements.get('auth-tabs').hidden, false);
+    assert.equal(harness.elements.get('session-conflict').hidden, false);
+    assert.match(harness.elements.get('auth-status').textContent, /learner account is required/i);
+    assert.match(harness.elements.get('session-conflict-message').textContent, /learner account/i);
+    assert.deepEqual(harness.assigned, []);
+});
+
+test('auth login session conflict restart logs out and returns to the same flow', async () => {
+    const adminState = createUnsignedAuthState({ audience: 'admin', returnTo: '/admin' });
+    const calls = [];
+    const harness = createAuthLoginScriptHarness({
+        pathname: '/auth/admin/login',
+        search: `?state=${encodeURIComponent(adminState)}`,
+        fetch: async (requestPath, fetchOptions = {}) => {
+            calls.push({ requestPath: String(requestPath), method: fetchOptions.method || 'GET' });
+            if (requestPath === '/api/auth/csrf') {
+                return createJsonResponse(200, { csrfToken: 'csrf-token' });
+            }
+            if (requestPath === '/api/auth/me') {
+                return createJsonResponse(200, {
+                    user: {
+                        id: '44444444-4444-4444-8444-444444444444',
+                        username: 'learner',
+                        role: 'user'
+                    },
+                    csrfToken: 'csrf-token'
+                });
+            }
+            if (requestPath === '/api/auth/logout') {
+                return createJsonResponse(200, { ok: true });
+            }
+            return createJsonResponse(404, { error: 'Not found' });
+        }
+    });
+    await harness.flush();
+    await harness.elements.get('session-conflict-restart').listeners.click();
+    await harness.flush();
+
+    assert(calls.some((call) => call.requestPath === '/api/auth/logout' && call.method === 'POST'));
+    assert.deepEqual(harness.assigned, [`/auth/admin/login?state=${encodeURIComponent(adminState)}`]);
 });
 
 test('auth API enforces account type for signed business and admin flows', async () => {

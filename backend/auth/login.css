@@ -128,6 +128,18 @@ button:disabled {
     color: #fff;
 }
 
+.auth-secondary-button {
+    border-color: var(--border);
+    background: #f8faf7;
+    color: var(--text);
+}
+
+.auth-secondary-button:hover {
+    border-color: var(--accent);
+    background: #ecf8f0;
+    color: var(--accent-dark);
+}
+
 .auth-form {
     display: grid;
     gap: 14px;
@@ -157,13 +169,15 @@ button:disabled {
 }
 
 .auth-setup,
-.auth-recovery {
+.auth-recovery,
+.auth-session-conflict {
     display: grid;
     gap: 14px;
 }
 
 .auth-setup[hidden],
 .auth-recovery[hidden],
+.auth-session-conflict[hidden],
 .auth-form[hidden],
 .auth-tabs[hidden] {
     display: none;
@@ -171,10 +185,19 @@ button:disabled {
 
 .auth-setup p,
 .auth-recovery p,
+.auth-session-conflict p,
 .auth-foot {
     margin: 0;
     color: var(--muted);
     line-height: 1.5;
+}
+
+.auth-session-conflict {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #f1d7a8;
+    border-radius: 6px;
+    background: #fff9ed;
 }
 
 .auth-foot {

@@ -29,7 +29,10 @@
         setupSubmit: document.getElementById('totp-setup-submit'),
         recoveryPanel: document.getElementById('recovery'),
         recoveryCodes: document.getElementById('recovery-codes'),
-        recoveryContinue: document.getElementById('recovery-continue')
+        recoveryContinue: document.getElementById('recovery-continue'),
+        sessionConflictPanel: document.getElementById('session-conflict'),
+        sessionConflictMessage: document.getElementById('session-conflict-message'),
+        sessionConflictRestart: document.getElementById('session-conflict-restart')
     };
 
     function setStatus(message, kind) {
@@ -101,17 +104,52 @@
         return expectedAudience === 'admin' || handoff?.audience === 'admin';
     }
 
-    function requireAdminForCurrentFlow(user) {
-        if (!isAdminFlow()) {
-            return true;
+    function getFlowAudience() {
+        return expectedAudience || handoff?.audience || '';
+    }
+
+    function getAudienceConflict(user) {
+        const audience = getFlowAudience();
+        if (audience === 'business' && user?.role === 'admin') {
+            return {
+                message: 'A learner account is required for this business login flow.',
+                detail: 'The current auth session is an administrator account. Sign in below with a learner account, or sign out of the current auth session first.'
+            };
         }
-        if (user && user.role === 'admin') {
-            return true;
+        if (audience === 'admin' && user?.role !== 'admin') {
+            return {
+                message: 'An administrator account is required for this admin login flow.',
+                detail: 'The current auth session is not an administrator. Sign in below with an administrator account, or sign out of the current auth session first.'
+            };
         }
+        return null;
+    }
+
+    function getCurrentLoginPath() {
+        const audience = getFlowAudience();
+        if (audience && handoffState) {
+            return `/auth/${audience}/login?state=${encodeURIComponent(handoffState)}`;
+        }
+        if (audience) {
+            return `/auth/${audience}/login`;
+        }
+        return '/auth/login';
+    }
+
+    function showSessionSwitchNotice(conflict) {
         nodes.username.value = '';
         nodes.password.value = '';
-        setMode('login', 'Use an administrator account to continue to the admin onion.');
-        setStatus('The current auth session is not an administrator. Sign in with an admin account.', 'error');
+        nodes.sessionConflictMessage.textContent = conflict?.detail || 'Sign out of the current auth session, then start this login flow again.';
+        setMode('login', conflict?.message || 'Sign in with an account allowed for this login flow.');
+        setVisible(nodes.sessionConflictPanel, true);
+    }
+
+    function requireAccountForCurrentFlow(user) {
+        const conflict = getAudienceConflict(user);
+        if (!conflict) {
+            return true;
+        }
+        showSessionSwitchNotice(conflict);
         return false;
     }
 
@@ -125,6 +163,7 @@
         setVisible(nodes.totpForm, mode === 'totp-login');
         setVisible(nodes.setupPanel, mode === 'setup');
         setVisible(nodes.recoveryPanel, mode === 'recovery');
+        setVisible(nodes.sessionConflictPanel, mode === 'session-conflict');
         nodes.loginTab.classList.toggle('is-active', mode === 'login');
         nodes.registerTab.classList.toggle('is-active', mode === 'register');
         nodes.title.textContent = {
@@ -132,7 +171,8 @@
             register: 'Create account',
             'totp-login': 'Verify TOTP',
             setup: 'Set up TOTP',
-            recovery: 'Save recovery codes'
+            recovery: 'Save recovery codes',
+            'session-conflict': 'Session conflict'
         }[mode] || 'Sign in';
         nodes.passwordSubmit.textContent = mode === 'register' ? 'Create account' : 'Sign in';
         nodes.password.autocomplete = mode === 'register' ? 'new-password' : 'current-password';
@@ -177,7 +217,12 @@
     }
 
     function requestError(result, fallback) {
-        return new Error(result?.payload?.error || fallback || 'Request failed');
+        const message = result?.payload?.error || fallback || 'Request failed';
+        const status = result?.response?.status;
+        if ((status === 401 || status === 403) && !String(message).startsWith(`${status}:`)) {
+            return new Error(`${status}: ${message}`);
+        }
+        return new Error(message);
     }
 
     function withHandoffState(payload) {
@@ -216,8 +261,13 @@
                 return;
             }
             if (result.response.status === 403 && handoff?.audience === 'admin') {
-                setMode('login', 'Use an administrator account and complete TOTP to continue to the admin onion.');
-                setStatus(result.payload?.error || 'Admin verification required for this login flow.', 'error');
+                setMode('login');
+                setStatus(`403: ${result.payload?.error || 'Admin verification required for this login flow.'}`, 'error');
+                return;
+            }
+            if (result.response.status === 403) {
+                setMode('login');
+                setStatus(`403: ${result.payload?.error || 'Account type does not match this login flow.'}`, 'error');
                 return;
             }
             if (!result.response.ok) {
@@ -263,7 +313,7 @@
         if (!result.response.ok || !result.payload?.user) {
             throw requestError(result, 'Session check failed.');
         }
-        if (!requireAdminForCurrentFlow(result.payload.user)) {
+        if (!requireAccountForCurrentFlow(result.payload.user)) {
             return;
         }
         setStatus('Session active. Continuing...', 'success');
@@ -299,7 +349,7 @@
                 await beginSetup();
                 return;
             }
-            if (!requireAdminForCurrentFlow(result.payload.user)) {
+            if (!requireAccountForCurrentFlow(result.payload.user)) {
                 return;
             }
             await completeHandoff();
@@ -325,7 +375,7 @@
             if (!result.response.ok) {
                 throw requestError(result, 'TOTP verification failed.');
             }
-            if (!requireAdminForCurrentFlow(result.payload?.user)) {
+            if (!requireAccountForCurrentFlow(result.payload?.user)) {
                 return;
             }
             await completeHandoff();
@@ -365,6 +415,15 @@
         nodes.passwordForm.addEventListener('submit', handlePasswordSubmit);
         nodes.totpForm.addEventListener('submit', handleTotpSubmit);
         nodes.setupForm.addEventListener('submit', handleSetupSubmit);
+        nodes.sessionConflictRestart.addEventListener('click', async () => {
+            nodes.sessionConflictRestart.disabled = true;
+            setStatus('Signing out of the current auth session...');
+            try {
+                await request('/api/auth/logout', { method: 'POST' });
+            } finally {
+                window.location.assign(getCurrentLoginPath());
+            }
+        });
         nodes.recoveryContinue.addEventListener('click', () => {
             completeHandoff().catch((error) => setStatus(error.message || 'Unable to complete auth handoff.', 'error'));
         });
