@@ -1,6 +1,7 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
 const express = require('express');
 const session = require('express-session');
 const connectPgSimple = require('connect-pg-simple');
@@ -19,9 +20,40 @@ const {
     resolveTotpVerificationMaxAgeMs
 } = require('./totp');
 
+const SESSION_VERIFIER_COOKIE_NAME = 'ielts.sv';
+const SESSION_VERIFIER_HASH_KEY = 'sessionVerifierHash';
+const SESSION_VERIFIER_ISSUED_AT_KEY = 'sessionVerifierIssuedAt';
+const SESSION_VERIFIER_PROTECTED_PATHS = ['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'];
+
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
     return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+function parseCookieHeader(header) {
+    const cookies = new Map();
+    String(header || '').split(';').forEach((part) => {
+        const index = part.indexOf('=');
+        if (index <= 0) return;
+        const name = part.slice(0, index).trim();
+        const value = part.slice(index + 1).trim();
+        if (!name) return;
+        try {
+            cookies.set(name, decodeURIComponent(value));
+        } catch (_) {
+            cookies.set(name, value);
+        }
+    });
+    return cookies;
+}
+
+function safeStringEqual(left, right) {
+    if (typeof left !== 'string' || typeof right !== 'string' || !left || !right) {
+        return false;
+    }
+    const leftBuffer = Buffer.from(left, 'utf8');
+    const rightBuffer = Buffer.from(right, 'utf8');
+    return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function createDefaultSessionStore(pool) {
@@ -830,6 +862,7 @@ function createApp(options = {}) {
     const pool = options.pool || db.pool;
     const dbClient = options.db || db;
     const cookieName = options.cookieName || 'ielts.sid';
+    const sessionVerifierCookieName = options.sessionVerifierCookieName || SESSION_VERIFIER_COOKIE_NAME;
     const cookieSecure = resolveCookieSecure(options, publicUrlPolicy);
     const trustProxy = resolveTrustProxy(options);
     const sessionSecret = resolveSessionSecret(options);
@@ -851,6 +884,16 @@ function createApp(options = {}) {
         secure: sessionCookieOptions.secure,
         path: '/'
     };
+    const sessionVerifierCookieOptions = {
+        ...sessionCookieOptions,
+        path: '/'
+    };
+    const clearSessionVerifierCookieOptions = {
+        httpOnly: sessionVerifierCookieOptions.httpOnly,
+        sameSite: sessionVerifierCookieOptions.sameSite,
+        secure: sessionVerifierCookieOptions.secure,
+        path: '/'
+    };
 
     app.disable('x-powered-by');
     app.set('trust proxy', trustProxy);
@@ -868,6 +911,57 @@ function createApp(options = {}) {
         store: options.sessionStore || createDefaultSessionStore(pool),
         cookie: sessionCookieOptions
     }));
+
+    function hashSessionVerifier(verifier) {
+        return crypto.createHmac('sha256', sessionSecret).update(String(verifier || '')).digest('hex');
+    }
+
+    function getSessionVerifierCookie(req) {
+        const value = parseCookieHeader(req.get('cookie')).get(sessionVerifierCookieName);
+        return typeof value === 'string' && value.length <= 256 ? value : '';
+    }
+
+    function hasValidSessionVerifier(req) {
+        const expected = req.session && req.session[SESSION_VERIFIER_HASH_KEY];
+        const actual = getSessionVerifierCookie(req);
+        return safeStringEqual(expected, actual ? hashSessionVerifier(actual) : '');
+    }
+
+    function issueSessionVerifier(req, res) {
+        if (!req.session || !req.session.user) {
+            return;
+        }
+        const verifier = crypto.randomBytes(32).toString('base64url');
+        req.session[SESSION_VERIFIER_HASH_KEY] = hashSessionVerifier(verifier);
+        req.session[SESSION_VERIFIER_ISSUED_AT_KEY] = Date.now();
+        res.cookie(sessionVerifierCookieName, verifier, sessionVerifierCookieOptions);
+    }
+
+    function requireSessionVerifier(req, res, next) {
+        if (!req.session || !req.session.user) {
+            return next();
+        }
+        if (hasValidSessionVerifier(req)) {
+            return next();
+        }
+        res.clearCookie(cookieName, clearSessionCookieOptions);
+        res.clearCookie(sessionVerifierCookieName, clearSessionVerifierCookieOptions);
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    function attachSessionVerifierIssuer(req, res, next) {
+        const end = res.end;
+        res.end = function endWithSessionVerifier(...args) {
+            if (!res.headersSent
+                && req.session
+                && req.session.user
+                && !hasValidSessionVerifier(req)) {
+                issueSessionVerifier(req, res);
+            }
+            return end.apply(this, args);
+        };
+        return next();
+    }
 
     const authStore = options.authStore || new PostgresAuthStore(dbClient);
     const totpStore = options.totpStore || new PostgresTotpStore(dbClient);
@@ -927,6 +1021,8 @@ function createApp(options = {}) {
 
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], noStoreSensitiveApiMiddleware);
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], refreshSessionUser);
+    app.use(SESSION_VERIFIER_PROTECTED_PATHS, requireSessionVerifier);
+    app.use(SESSION_VERIFIER_PROTECTED_PATHS, attachSessionVerifierIssuer);
     app.use(createTrafficMiddleware({
         store: trafficStore,
         enabled: trafficEnabled,
@@ -988,6 +1084,8 @@ function createApp(options = {}) {
         cookieSecure,
         sessionCookieName: cookieName,
         clearSessionCookieOptions,
+        sessionVerifierCookieName,
+        clearSessionVerifierCookieOptions,
         nodeEnv: options.nodeEnv,
         totpVerificationMaxAgeMs
     }));
@@ -996,6 +1094,8 @@ function createApp(options = {}) {
         totpStore,
         cookieName,
         clearCookieOptions: clearSessionCookieOptions,
+        sessionVerifierCookieName,
+        clearSessionVerifierCookieOptions,
         bcrypt: options.bcrypt,
         rateLimit: options.rateLimit,
         csrfRateLimit: options.csrfRateLimit,

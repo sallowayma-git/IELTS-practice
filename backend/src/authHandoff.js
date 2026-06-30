@@ -372,6 +372,15 @@ function createAuthHandoffRouter(options = {}) {
     const verifierCookieSecure = Boolean(options.cookieSecure);
     const sessionCookieName = options.sessionCookieName || 'ielts.sid';
     const clearSessionCookieOptions = options.clearSessionCookieOptions || {};
+    const sessionVerifierCookieName = options.sessionVerifierCookieName || '';
+    const clearSessionVerifierCookieOptions = options.clearSessionVerifierCookieOptions || clearSessionCookieOptions;
+
+    function clearLocalSessionCookies(res) {
+        res.clearCookie(sessionCookieName, clearSessionCookieOptions);
+        if (sessionVerifierCookieName) {
+            res.clearCookie(sessionVerifierCookieName, clearSessionVerifierCookieOptions);
+        }
+    }
 
     function requireConfig(res) {
         if (!stateSecret || !authStore || !ticketStore) {
@@ -438,7 +447,7 @@ function createAuthHandoffRouter(options = {}) {
                         return res.status(400).type('text/plain').send('Invalid auth logout state');
                     }
                     await destroySession(req);
-                    res.clearCookie(sessionCookieName, clearSessionCookieOptions);
+                    clearLocalSessionCookies(res);
                     const targetBaseUrl = normalizePublicBaseUrl(state.targetBaseUrl) || configuredTargetUrls[audience] || '';
                     return res.redirect(`${targetBaseUrl}${sanitizeReturnTo(state.returnTo, audience)}`);
                 }
@@ -450,7 +459,7 @@ function createAuthHandoffRouter(options = {}) {
                 }
                 const returnTo = sanitizeReturnTo(req.query.return_to, audience);
                 await destroySession(req);
-                res.clearCookie(sessionCookieName, clearSessionCookieOptions);
+                clearLocalSessionCookies(res);
                 const state = createSignedAuthState(stateSecret, {
                     audience,
                     intent: 'logout',

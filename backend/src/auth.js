@@ -548,6 +548,15 @@ function createAuthRouter(options = {}) {
         : parseBoolean(process.env.TOTP_ENABLED, true);
     const sessionCookieName = options.cookieName || 'ielts.sid';
     const clearCookieOptions = options.clearCookieOptions || {};
+    const sessionVerifierCookieName = options.sessionVerifierCookieName || '';
+    const clearSessionVerifierCookieOptions = options.clearSessionVerifierCookieOptions || clearCookieOptions;
+
+    function clearSessionCookies(res) {
+        res.clearCookie(sessionCookieName, clearCookieOptions);
+        if (sessionVerifierCookieName) {
+            res.clearCookie(sessionVerifierCookieName, clearSessionVerifierCookieOptions);
+        }
+    }
 
     router.get('/csrf', (req, res, next) => {
         try {
@@ -685,7 +694,7 @@ function createAuthRouter(options = {}) {
     router.post('/logout', verifyCsrfToken, async (req, res, next) => {
         try {
             await destroySession(req);
-            res.clearCookie(sessionCookieName, clearCookieOptions);
+            clearSessionCookies(res);
             return res.json({ ok: true });
         } catch (error) {
             return next(error);
@@ -823,7 +832,7 @@ function createAuthRouter(options = {}) {
             }
             await onDeleteUser(currentUser.id, deletedUser);
             await destroySession(req);
-            res.clearCookie(sessionCookieName, clearCookieOptions);
+            clearSessionCookies(res);
             return res.json({ ok: true, deleted: true });
         } catch (error) {
             return next(error);

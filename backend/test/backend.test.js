@@ -455,6 +455,17 @@ async function createClient(options = {}) {
             get csrfToken() {
                 return csrfToken;
             },
+            getCookie(name) {
+                return cookieJar.get(name) || '';
+            },
+            setCookie(name, value) {
+                if (value === '') {
+                    cookieJar.delete(name);
+                } else {
+                    cookieJar.set(name, value);
+                }
+            },
+            getCookieHeader,
             request,
             async csrf() {
                 return request('GET', '/api/auth/csrf');
@@ -475,6 +486,9 @@ async function createClient(options = {}) {
         get csrfToken() {
             return primarySession.csrfToken;
         },
+        getCookie: primarySession.getCookie,
+        setCookie: primarySession.setCookie,
+        getCookieHeader: primarySession.getCookieHeader,
         request: primarySession.request,
         csrf: primarySession.csrf,
         createSession: createSessionClient,
@@ -525,7 +539,11 @@ function rawHttpRequest(baseUrl, method, requestPath, options = {}) {
 }
 
 function getResponseSessionCookie(result) {
-    return result.response.headers.get('set-cookie')?.split(';')[0] || '';
+    return String(result.response.headers.get('set-cookie') || '')
+        .split(/,(?=\s*[^;,=\s]+=[^;,]*)/g)
+        .map((item) => item.trim())
+        .find((item) => item.startsWith('ielts.sid='))
+        ?.split(';', 1)[0] || '';
 }
 
 function getStoredSessions(sessionStore) {
@@ -1017,6 +1035,7 @@ test('login, logout, and authenticated practice API access', async () => {
         assert.equal(logout.response.status, 200);
         const logoutCookie = logout.response.headers.get('set-cookie') || '';
         assert.match(logoutCookie, /ielts\.sid=;/);
+        assert.match(logoutCookie, /ielts\.sv=;/);
         assert.match(logoutCookie, /HttpOnly/);
         assert.match(logoutCookie, /SameSite=Lax/);
 
@@ -1043,6 +1062,40 @@ test('login, logout, and authenticated practice API access', async () => {
 
         const afterLogout = await client.request('GET', '/api/practice-records');
         assert.equal(afterLogout.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('authenticated APIs require the session verifier companion cookie', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'verifier_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const sessionCookie = client.getCookie('ielts.sid');
+        const verifierCookie = client.getCookie('ielts.sv');
+        assert(sessionCookie);
+        assert(verifierCookie);
+
+        const sidOnlyReplay = client.createSession();
+        sidOnlyReplay.setCookie('ielts.sid', sessionCookie);
+        const replayMe = await sidOnlyReplay.request('GET', '/api/auth/me');
+        assert.equal(replayMe.response.status, 401);
+        const replayRecords = await sidOnlyReplay.request('GET', '/api/practice-records');
+        assert.equal(replayRecords.response.status, 401);
+
+        const fullCookieReplay = client.createSession();
+        fullCookieReplay.setCookie('ielts.sid', sessionCookie);
+        fullCookieReplay.setCookie('ielts.sv', verifierCookie);
+        const fullReplayMe = await fullCookieReplay.request('GET', '/api/auth/me');
+        assert.equal(fullReplayMe.response.status, 200);
+        const fullReplayRecords = await fullCookieReplay.request('GET', '/api/practice-records');
+        assert.equal(fullReplayRecords.response.status, 200);
+
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+        const fullReplayAfterLogout = await fullCookieReplay.request('GET', '/api/auth/me');
+        assert.equal(fullReplayAfterLogout.response.status, 401);
     } finally {
         await client.close();
     }
@@ -1152,6 +1205,7 @@ test('logout clears secure session cookies with matching attributes', async () =
         assert.equal(logout.response.status, 200);
         const clearedCookie = logout.response.headers.get('set-cookie') || '';
         assert.match(clearedCookie, /ielts\.sid=;/);
+        assert.match(clearedCookie, /ielts\.sv=;/);
         assert.match(clearedCookie, /HttpOnly/);
         assert.match(clearedCookie, /Secure/);
         assert.match(clearedCookie, /SameSite=Lax/);
