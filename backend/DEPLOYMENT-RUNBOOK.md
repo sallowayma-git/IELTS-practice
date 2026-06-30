@@ -13,6 +13,9 @@ admin, and auth onion deployment.
 - Do not modify UFW, SSH, netplan, router, or host firewall rules.
 - Do not print `.env`, bridge lines, client auth files, hidden service private
   keys, or database contents.
+- Production split-onion deployment must not start the base `tor` service from
+  `backend/docker-compose.yml`. That service is legacy/dev only and must require
+  the explicit `--profile legacy-onion` profile.
 
 ## Proxy And Tor Recreate Rule
 
@@ -47,6 +50,34 @@ If only app code or static assets changed:
    - host ports still only `127.0.0.1:3000`
 
 Proxy/Tor recreation is not required for app-only changes.
+
+## Legacy Base Tor Service
+
+The base `tor` service in `backend/docker-compose.yml` is not part of the
+production split-onion deployment. It is retained only for legacy/dev use and is
+gated behind the explicit `legacy-onion` profile.
+
+Default compose service checks must not include `tor`:
+
+```sh
+docker compose --env-file backend/.env \
+  -f backend/docker-compose.yml \
+  config --services
+```
+
+Expected default services include `postgres` and `app`, but not `tor`.
+
+To inspect or run the legacy service manually, opt in explicitly:
+
+```sh
+docker compose --profile legacy-onion \
+  --env-file backend/.env \
+  -f backend/docker-compose.yml \
+  config --services
+```
+
+The split business, admin, and auth onion services are separate and continue to
+use their own `business-onion`, `admin-onion`, and `auth-onion` profiles.
 
 ## Proxy Deployment
 
