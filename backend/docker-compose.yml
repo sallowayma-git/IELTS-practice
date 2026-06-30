@@ -66,6 +66,8 @@ services:
       retries: 20
 
   tor:
+    profiles:
+      - legacy-onion
     build:
       context: ./tor
       dockerfile: Dockerfile

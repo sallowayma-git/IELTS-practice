@@ -38,6 +38,8 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     const bridgeEncryptor = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'encrypt-tor-bridges.ps1'), 'utf8');
     const healthLogRedactor = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'redact-site-health-logs.ps1'), 'utf8');
     const smokePostgres = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'smoke-postgres.mjs'), 'utf8');
+    const backendPackage = JSON.parse(fs.readFileSync(path.join(repoRoot, 'backend', 'package.json'), 'utf8'));
+    const composeProfileCheck = fs.readFileSync(path.join(repoRoot, 'backend', 'scripts', 'check-compose-profiles.mjs'), 'utf8');
 
     assert.match(dockerfile, /^FROM node:24-alpine/m);
     assert.doesNotMatch(dockerfile, /^FROM node:20-alpine/m);
@@ -127,6 +129,15 @@ test('docker image hardening excludes secrets and runs app as non-root', () => {
     assert(compose.includes('AUTH_PUBLIC_URL: ${AUTH_PUBLIC_URL:?Set AUTH_PUBLIC_URL to the public auth origin}'));
     assert(compose.includes('BUSINESS_PUBLIC_URL: ${BUSINESS_PUBLIC_URL:?Set BUSINESS_PUBLIC_URL to the public business origin}'));
     assert(compose.includes('ADMIN_PUBLIC_URL: ${ADMIN_PUBLIC_URL:?Set ADMIN_PUBLIC_URL to the public admin origin}'));
+    assert(compose.includes('  tor:\n    profiles:\n      - legacy-onion\n    build:'));
+    assert.equal(backendPackage.scripts['test:compose-profiles'], 'node scripts/check-compose-profiles.mjs');
+    assert(composeProfileCheck.includes("'config'"));
+    assert(composeProfileCheck.includes("'--services'"));
+    assert(composeProfileCheck.includes("'--profile', 'legacy-onion'"));
+    assert(composeProfileCheck.includes("assertServiceState(defaultServices, 'tor', false"));
+    assert(composeProfileCheck.includes("assertServiceState(legacyServices, 'tor', true"));
+    assert(!composeProfileCheck.includes("'up'"));
+    assert(!composeProfileCheck.includes("'run'"));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesTemplate));
     assert(bridgesTemplate.includes('encrypt the private bridge'));
     assert(!/obfs4\s+\S+\s+[A-Fa-f0-9]{40}\s+cert=/.test(bridgesPlaceholder));

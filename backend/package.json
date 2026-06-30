@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
+    "test:compose-profiles": "node scripts/check-compose-profiles.mjs",
     "migrate": "node scripts/migrate.mjs",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "smoke:postgres": "node scripts/smoke-postgres.mjs"
