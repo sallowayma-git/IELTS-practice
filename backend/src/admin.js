@@ -2154,6 +2154,12 @@ function createAdminRouter(options = {}) {
         checkRateLimit(`admin-mutation-action:${action}:${ip}:${adminId}`);
     }
 
+    function rotateSessionVerifier(req) {
+        if (typeof req.rotateSessionVerifier === 'function') {
+            req.rotateSessionVerifier();
+        }
+    }
+
     router.use(requireAuth);
     router.use(async (req, res, next) => {
         try {
@@ -2226,7 +2232,9 @@ function createAdminRouter(options = {}) {
             if (typeof store.updateSiteContent !== 'function') {
                 return res.status(500).json({ error: 'Site content store is unavailable' });
             }
-            return res.json({ content: await store.updateSiteContent(parsed.data) });
+            const content = await store.updateSiteContent(parsed.data);
+            rotateSessionVerifier(req);
+            return res.json({ content });
         } catch (error) {
             if (error.status) return sendError(res, error);
             return next(error);
@@ -2268,6 +2276,7 @@ function createAdminRouter(options = {}) {
             validateNewPassword(parsed.data.password);
             try {
                 const user = await store.createUser(parsed.data);
+                rotateSessionVerifier(req);
                 return res.status(201).json({ user });
             } catch (error) {
                 if (error && error.code === '23505') {
@@ -2331,6 +2340,7 @@ function createAdminRouter(options = {}) {
                 }
                 return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
             }
+            rotateSessionVerifier(req);
             return res.json({ user });
         } catch (error) {
             if (error.status) return sendError(res, error);
@@ -2356,6 +2366,7 @@ function createAdminRouter(options = {}) {
             if (!user) {
                 return res.status(404).json({ error: 'User not found' });
             }
+            rotateSessionVerifier(req);
             return res.json({ deleted: Boolean(user), user });
         } catch (error) {
             return next(error);
@@ -2389,6 +2400,7 @@ function createAdminRouter(options = {}) {
             if (!removed) {
                 return res.status(404).json({ error: 'Record not found' });
             }
+            rotateSessionVerifier(req);
             return res.json({ removed });
         } catch (error) {
             return next(error);

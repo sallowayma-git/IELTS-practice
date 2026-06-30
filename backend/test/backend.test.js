@@ -4210,6 +4210,43 @@ test('admin TOTP verification expires and can be renewed in-session', async () =
     }
 });
 
+test('admin mutations rotate the session verifier for copied cookie jars', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'rotating_admin', 'StrongPass1');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'rotating_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(client);
+
+        const staleReplay = createFullCookieReplay(client);
+        const staleBefore = await staleReplay.request('GET', '/api/admin/summary');
+        assert.equal(staleBefore.response.status, 200);
+        const oldVerifier = client.getCookie('ielts.sv');
+
+        const updated = await client.request('PATCH', '/api/admin/site-content', {
+            homeBanner: {
+                enabled: true,
+                title: 'Verifier rotation',
+                body: 'Admin mutations rotate session verifiers.'
+            }
+        });
+        assert.equal(updated.response.status, 200);
+        assert.equal(updated.json.content.homeBanner.enabled, true);
+        assert.notEqual(client.getCookie('ielts.sv'), oldVerifier);
+
+        const staleAfter = await staleReplay.request('GET', '/api/admin/summary');
+        assert.equal(staleAfter.response.status, 401);
+        const currentAfter = await client.request('GET', '/api/admin/summary');
+        assert.equal(currentAfter.response.status, 200);
+    } finally {
+        await client.close();
+    }
+});
 
 test('admin can manage users and inspect learning and traffic stats', async () => {
     const client = await createClient();
