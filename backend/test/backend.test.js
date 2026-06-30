@@ -889,6 +889,13 @@ async function enableTotpForCurrentSession(client) {
     };
 }
 
+function createFullCookieReplay(client) {
+    const replay = client.createSession();
+    replay.setCookie('ielts.sid', client.getCookie('ielts.sid'));
+    replay.setCookie('ielts.sv', client.getCookie('ielts.sv'));
+    return replay;
+}
+
 test('auth registration rejects weak and duplicate credentials', async () => {
     const client = await createClient();
     try {
@@ -911,7 +918,7 @@ test('auth registration rejects weak and duplicate credentials', async () => {
         assert.equal(tooLong.json.error, 'Password strength is insufficient');
         assert(tooLong.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
 
-        const multibytePassword = `Aa1${'界'.repeat(24)}`;
+        const multibytePassword = `Aa1${'鐣?.repeat(24)}`;
         assert(Buffer.byteLength(multibytePassword, 'utf8') > 72);
         const tooLongMultibyte = await client.request('POST', '/api/auth/register', {
             username: 'long_utf8_user',
@@ -1096,6 +1103,35 @@ test('authenticated APIs require the session verifier companion cookie', async (
         assert.equal(logout.response.status, 200);
         const fullReplayAfterLogout = await fullCookieReplay.request('GET', '/api/auth/me');
         assert.equal(fullReplayAfterLogout.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('TOTP verification rotates the session verifier for copied cookie jars', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'verifier_totp_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const { secret } = await enableTotpForCurrentSession(client);
+
+        const staleReplay = createFullCookieReplay(client);
+        const staleBefore = await staleReplay.request('GET', '/api/auth/me');
+        assert.equal(staleBefore.response.status, 200);
+        const oldVerifier = client.getCookie('ielts.sv');
+
+        await withDateNowOffset(61_000, async () => {
+            const verified = await client.request('POST', '/api/auth/totp/verify', {
+                token: generateTotpToken(secret)
+            });
+            assert.equal(verified.response.status, 200);
+        });
+        assert.notEqual(client.getCookie('ielts.sv'), oldVerifier);
+
+        const staleAfter = await staleReplay.request('GET', '/api/auth/me');
+        assert.equal(staleAfter.response.status, 401);
+        const currentAfter = await client.request('GET', '/api/auth/me');
+        assert.equal(currentAfter.response.status, 200);
     } finally {
         await client.close();
     }
@@ -2360,12 +2396,19 @@ test('TOTP recovery codes are one-time and can be regenerated', async () => {
         const missingToken = await client.request('POST', '/api/auth/totp/recovery-codes');
         assert.equal(missingToken.response.status, 401);
 
+        const staleReplay = createFullCookieReplay(client);
+        const oldVerifier = client.getCookie('ielts.sv');
         const regenerated = await withDateNowOffset(31_000, () => client.request('POST', '/api/auth/totp/recovery-codes', {
             token: generateTotpToken(secret)
         }));
         assert.equal(regenerated.response.status, 200);
         assert.equal(regenerated.json.recoveryCodes.length, 10);
         assert.equal(regenerated.json.status.recoveryCodesRemaining, 10);
+        assert.notEqual(client.getCookie('ielts.sv'), oldVerifier);
+        const staleAfterRegenerate = await staleReplay.request('GET', '/api/auth/me');
+        assert.equal(staleAfterRegenerate.response.status, 401);
+        const currentAfterRegenerate = await client.request('GET', '/api/auth/me');
+        assert.equal(currentAfterRegenerate.response.status, 200);
     } finally {
         await client.close();
     }
@@ -3755,15 +3798,15 @@ test('practice record normalization clamps numeric statistics', () => {
 test('practice record metadata truncation preserves valid Unicode', () => {
     const normalized = normalizePracticeRecord({
         id: 'unicode-metadata-record',
-        title: `${'a'.repeat(499)}😀tail`,
-        type: `${'b'.repeat(63)}😀tail`
+        title: `${'a'.repeat(499)}馃榾tail`,
+        type: `${'b'.repeat(63)}馃榾tail`
     });
 
     assert.equal(normalized.title, 'a'.repeat(499));
     assert.equal(normalized.type, 'b'.repeat(63));
     assert.doesNotThrow(() => normalizePracticeRecord({
         id: 'unicode-metadata-record-2',
-        title: `${'a'.repeat(498)}😀tail`
+        title: `${'a'.repeat(498)}馃榾tail`
     }));
 });
 
@@ -4166,6 +4209,7 @@ test('admin TOTP verification expires and can be renewed in-session', async () =
         await client.close();
     }
 });
+
 
 test('admin can manage users and inspect learning and traffic stats', async () => {
     const client = await createClient();
@@ -4625,7 +4669,7 @@ test('memory auth session deletion skips oversized serialized sessions', async (
 });
 
 test('admin search query normalization preserves valid Unicode', () => {
-    const splitSurrogate = normalizeAdminSearchQuery(`${'A'.repeat(79)}😀tail`);
+    const splitSurrogate = normalizeAdminSearchQuery(`${'A'.repeat(79)}馃榾tail`);
     assert.equal(splitSurrogate, 'a'.repeat(79));
     assert(!/[\uD800-\uDFFF]/.test(splitSurrogate));
 
@@ -4695,7 +4739,7 @@ test('traffic middleware minimizes untrusted request metadata', async () => {
             '123e4567-e89b-12d3-a456-426614174000'
         );
         const surrogateBoundary = normalizeTrafficEvent({
-            routeGroup: `${'r'.repeat(31)}😀tail`
+            routeGroup: `${'r'.repeat(31)}馃榾tail`
         });
         assert.equal(surrogateBoundary.routeGroup, 'r'.repeat(31));
         assert(!/[\uD800-\uDFFF]/.test(surrogateBoundary.routeGroup));
@@ -5260,7 +5304,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
             assert.equal(anonymous.response.headers.get('refresh'), `3; url=${loginUrl}`);
             assert.match(anonymous.text, /401 Unauthorized/);
             assert(anonymous.text.includes(`http-equiv="refresh" content="3; url=${loginUrl}"`));
-            assert.match(anonymous.text, /立即前往登录/);
+            assert.match(anonymous.text, /绔嬪嵆鍓嶅線鐧诲綍/);
             assert.doesNotMatch(anonymous.text, /Unified Reading|Listening Sample|window\.ok|__READING_/);
         }
 

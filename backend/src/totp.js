@@ -560,6 +560,12 @@ function createTotpRouter(options = {}) {
         return safeUser;
     }
 
+    function rotateSessionVerifier(req) {
+        if (typeof req.rotateSessionVerifier === 'function') {
+            req.rotateSessionVerifier();
+        }
+    }
+
     router.get('/status', requireAuth, async (req, res, next) => {
         try {
             return res.json({ status: await store.getStatus(req.session.user.id) });
@@ -705,6 +711,7 @@ function createTotpRouter(options = {}) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
             markSessionTotpVerified(req, user);
+            rotateSessionVerifier(req);
             return res.json({
                 user,
                 status: await store.getStatus(user.id),
@@ -736,6 +743,7 @@ function createTotpRouter(options = {}) {
                 config.recoveryHashRounds
             );
             await store.replaceRecoveryCodes(req.session.user.id, recoveryCodeHashes);
+            rotateSessionVerifier(req);
             return res.json({
                 recoveryCodes,
                 status: await store.getStatus(req.session.user.id)

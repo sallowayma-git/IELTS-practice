@@ -23,6 +23,7 @@ const {
 const SESSION_VERIFIER_COOKIE_NAME = 'ielts.sv';
 const SESSION_VERIFIER_HASH_KEY = 'sessionVerifierHash';
 const SESSION_VERIFIER_ISSUED_AT_KEY = 'sessionVerifierIssuedAt';
+const SESSION_VERIFIER_ROTATE_KEY = Symbol('sessionVerifierRotate');
 const SESSION_VERIFIER_PROTECTED_PATHS = ['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'];
 
 function parseBoolean(value, fallback = false) {
@@ -937,6 +938,13 @@ function createApp(options = {}) {
         res.cookie(sessionVerifierCookieName, verifier, sessionVerifierCookieOptions);
     }
 
+    function attachSessionVerifierControls(req, res, next) {
+        req.rotateSessionVerifier = () => {
+            req[SESSION_VERIFIER_ROTATE_KEY] = true;
+        };
+        return next();
+    }
+
     function requireSessionVerifier(req, res, next) {
         if (!req.session || !req.session.user) {
             return next();
@@ -952,11 +960,13 @@ function createApp(options = {}) {
     function attachSessionVerifierIssuer(req, res, next) {
         const end = res.end;
         res.end = function endWithSessionVerifier(...args) {
+            const shouldRotate = Boolean(req[SESSION_VERIFIER_ROTATE_KEY]);
             if (!res.headersSent
                 && req.session
                 && req.session.user
-                && !hasValidSessionVerifier(req)) {
+                && (shouldRotate || !hasValidSessionVerifier(req))) {
                 issueSessionVerifier(req, res);
+                req[SESSION_VERIFIER_ROTATE_KEY] = false;
             }
             return end.apply(this, args);
         };
@@ -1021,6 +1031,7 @@ function createApp(options = {}) {
 
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], noStoreSensitiveApiMiddleware);
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], refreshSessionUser);
+    app.use(SESSION_VERIFIER_PROTECTED_PATHS, attachSessionVerifierControls);
     app.use(SESSION_VERIFIER_PROTECTED_PATHS, requireSessionVerifier);
     app.use(SESSION_VERIFIER_PROTECTED_PATHS, attachSessionVerifierIssuer);
     app.use(createTrafficMiddleware({
