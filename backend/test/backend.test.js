@@ -918,7 +918,7 @@ test('auth registration rejects weak and duplicate credentials', async () => {
         assert.equal(tooLong.json.error, 'Password strength is insufficient');
         assert(tooLong.json.details.includes('Password must not exceed 72 UTF-8 bytes'));
 
-        const multibytePassword = `Aa1${'鐣?.repeat(24)}`;
+        const multibytePassword = `Aa1${'界'.repeat(24)}`;
         assert(Buffer.byteLength(multibytePassword, 'utf8') > 72);
         const tooLongMultibyte = await client.request('POST', '/api/auth/register', {
             username: 'long_utf8_user',
@@ -3798,15 +3798,15 @@ test('practice record normalization clamps numeric statistics', () => {
 test('practice record metadata truncation preserves valid Unicode', () => {
     const normalized = normalizePracticeRecord({
         id: 'unicode-metadata-record',
-        title: `${'a'.repeat(499)}馃榾tail`,
-        type: `${'b'.repeat(63)}馃榾tail`
+        title: `${'a'.repeat(499)}😀tail`,
+        type: `${'b'.repeat(63)}😀tail`
     });
 
     assert.equal(normalized.title, 'a'.repeat(499));
     assert.equal(normalized.type, 'b'.repeat(63));
     assert.doesNotThrow(() => normalizePracticeRecord({
         id: 'unicode-metadata-record-2',
-        title: `${'a'.repeat(498)}馃榾tail`
+        title: `${'a'.repeat(498)}😀tail`
     }));
 });
 
@@ -4669,7 +4669,7 @@ test('memory auth session deletion skips oversized serialized sessions', async (
 });
 
 test('admin search query normalization preserves valid Unicode', () => {
-    const splitSurrogate = normalizeAdminSearchQuery(`${'A'.repeat(79)}馃榾tail`);
+    const splitSurrogate = normalizeAdminSearchQuery(`${'A'.repeat(79)}😀tail`);
     assert.equal(splitSurrogate, 'a'.repeat(79));
     assert(!/[\uD800-\uDFFF]/.test(splitSurrogate));
 
@@ -4739,7 +4739,7 @@ test('traffic middleware minimizes untrusted request metadata', async () => {
             '123e4567-e89b-12d3-a456-426614174000'
         );
         const surrogateBoundary = normalizeTrafficEvent({
-            routeGroup: `${'r'.repeat(31)}馃榾tail`
+            routeGroup: `${'r'.repeat(31)}😀tail`
         });
         assert.equal(surrogateBoundary.routeGroup, 'r'.repeat(31));
         assert(!/[\uD800-\uDFFF]/.test(surrogateBoundary.routeGroup));
@@ -5304,7 +5304,7 @@ test('static hosting serves index and denies dotfiles with security headers', as
             assert.equal(anonymous.response.headers.get('refresh'), `3; url=${loginUrl}`);
             assert.match(anonymous.text, /401 Unauthorized/);
             assert(anonymous.text.includes(`http-equiv="refresh" content="3; url=${loginUrl}"`));
-            assert.match(anonymous.text, /绔嬪嵆鍓嶅線鐧诲綍/);
+            assert.match(anonymous.text, /立即前往登录/);
             assert.doesNotMatch(anonymous.text, /Unified Reading|Listening Sample|window\.ok|__READING_/);
         }
 
