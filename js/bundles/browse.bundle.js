@@ -40,17 +40,33 @@
         if (!record || typeof record !== 'object') {
             return 0;
         }
-        var candidates = [
-            record.date, record.startTime, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
-            record.completedAt, record.startedAt
-        ];
         var rd = record.realData || {};
         var metadata = record.metadata || {};
-        candidates.push(
-            rd.date, rd.startTime, rd.endTime, rd.timestamp, rd.createdAt, rd.completedAt,
-            metadata.startedAt, metadata.completedAt, metadata.createdAt
-        );
 
+        // 优先取“练习发生时间”：date/completedAt/startTime/endTime 才代表用户真正做题的时刻。
+        // updatedAt/createdAt 是落库/迁移时间，每次重新保存都会被刷新为当下，会让历史记录全部塌缩到今天，
+        // 因此只在缺失练习时间字段时才作为兜底，避免污染热力图的按日聚合。
+        var practiceTimeCandidates = [
+            record.date, record.completedAt, record.startTime, record.endTime, record.startedAt,
+            rd.date, rd.completedAt, rd.startTime, rd.endTime,
+            metadata.completedAt, metadata.startedAt
+        ];
+        var maxTs = pickMaxTimestamp(practiceTimeCandidates);
+        if (maxTs > 0) {
+            return maxTs;
+        }
+
+        // 兜底：拿不到练习发生时间时，再回退到 record.timestamp / createdAt / updatedAt 等记账字段，
+        // 以便旧数据（仅含 timestamp）仍能参与聚合。
+        var fallbackCandidates = [
+            record.timestamp, record.createdAt, record.updatedAt,
+            rd.timestamp, rd.createdAt,
+            metadata.createdAt
+        ];
+        return pickMaxTimestamp(fallbackCandidates);
+    }
+
+    function pickMaxTimestamp(candidates) {
         var maxTs = 0;
         for (var i = 0; i < candidates.length; i += 1) {
             var candidate = candidates[i];
@@ -1097,7 +1113,8 @@
         this.records = [];
         this.exams = [];
         this.examType = 'all';
-        this.activeWidget = options.defaultWidget || 'heatmap';
+        // 优先沿用用户上次选中的组件；显式传入 defaultWidget 时只作为兜底。
+        this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap';
         this.heatmapMonth = normalizePracticeHeatmapMonth(options.defaultHeatmapMonth || new Date());
         this.bound = false;
         this.resizeHandler = null;
@@ -1154,6 +1171,7 @@
     PracticePriorityRenderer.prototype.setWidget = function setWidget(widget) {
         if (!widget) return;
         this.activeWidget = widget;
+        persistPracticeWidget(widget);
         this.render();
     };
 
@@ -1528,6 +1546,36 @@
     function addPracticeHeatmapMonths(value, offset) {
         var month = normalizePracticeHeatmapMonth(value);
         return new Date(month.getFullYear(), month.getMonth() + offset, 1);
+    }
+
+    // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达）持久化，
+    // 刷新或重开页面后沿用用户上次的选中组件，而不是总回到默认的热力图。
+    var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';
+    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar'];
+
+    function loadPersistedPracticeWidget() {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) {
+                return null;
+            }
+            var value = localStorage.getItem(PRACTICE_WIDGET_PREFERENCE_KEY);
+            return SUPPORTED_PRACTICE_WIDGETS.indexOf(value) >= 0 ? value : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function persistPracticeWidget(widget) {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) {
+                return;
+            }
+            if (SUPPORTED_PRACTICE_WIDGETS.indexOf(widget) >= 0) {
+                localStorage.setItem(PRACTICE_WIDGET_PREFERENCE_KEY, widget);
+            }
+        } catch (_) {
+            /* 持久化失败不影响渲染 */
+        }
     }
 
     function resolvePracticeHeatmapLevel(count, avg) {
