@@ -102,7 +102,11 @@ try {
     assertContains(css, '.practice-radar-summary', '雷达摘要样式应存在');
     record('自定义卡片 CSS 守卫');
 
-    assertContains(source, "this.activeWidget = options.defaultWidget || 'heatmap'", '自定义卡片默认组件应为热力图');
+    assertContains(source, "this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap'", '自定义卡片应优先沿用持久化的选中组件，缺失时才回退默认热力图');
+    assertContains(source, 'function loadPersistedPracticeWidget()', '自定义卡片应提供读取持久化组件的函数');
+    assertContains(source, 'function persistPracticeWidget(widget)', '自定义卡片应提供写入持久化组件的函数');
+    assertContains(source, "persistPracticeWidget(widget);", '切换组件时应写回持久化，刷新后才能保持选中');
+    assertContains(source, "var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';", '持久化组件应使用固定的 localStorage 键');
     assertContains(source, 'function calculatePracticeHeatmapData(records, monthDate)', '热力图数据聚合函数应存在');
     assertContains(source, 'aggregatePracticeHeatmapSets(records, monthStart)', '热力图应按套数聚合练习记录');
     assertContains(source, "event.target.closest('[data-practice-heatmap-month]')", '月份按钮事件应单独绑定');
@@ -143,6 +147,40 @@ try {
     assert(mayFirst.level > mayTwelfth.level, '做题量更多的日期颜色等级应更深');
     record('热力图月份聚合回归守卫');
 
+    // 回归守卫：记录被重新保存后 updatedAt/createdAt/metadata.createdAt 会刷新为“今天”，
+    // 热力图必须仍按真正的练习发生时间（date/startTime/endTime）按日聚合，而不是塌缩到今天。
+    const today = new Date();
+    const todayIso = today.toISOString();
+    const todayKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    const historicalMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const historicalDate = new Date(historicalMonth.getFullYear(), historicalMonth.getMonth(), 10, 9, 0, 0);
+    const historicalIso = historicalDate.toISOString();
+    const historicalKey = historicalDate.getFullYear() + '-' + String(historicalDate.getMonth() + 1).padStart(2, '0') + '-' + String(historicalDate.getDate()).padStart(2, '0');
+    const refreshedHeatmap = calculatePracticeHeatmapData([
+        {
+            id: 'refreshed1',
+            date: historicalIso,
+            startTime: historicalIso,
+            endTime: historicalIso,
+            updatedAt: todayIso,
+            createdAt: todayIso,
+            metadata: { createdAt: todayIso, completedAt: historicalIso },
+            realData: { totalQuestions: 6 }
+        },
+        {
+            id: 'refreshed2',
+            date: historicalIso,
+            updatedAt: todayIso,
+            metadata: { createdAt: todayIso }
+        }
+    ], historicalMonth);
+    const refreshedCell = refreshedHeatmap.cells.find((cell) => cell.dateKey === historicalKey);
+    const todayCell = refreshedHeatmap.cells.find((cell) => cell.dateKey === todayKey);
+    assert.strictEqual(refreshedHeatmap.total, 2, '热力图应按练习发生时间统计历史记录，而非被 updatedAt 带到今天');
+    assert.strictEqual(refreshedCell && refreshedCell.count, 2, '历史练习记录应聚合到其真正的练习日期');
+    assert.ok(!todayCell || todayCell.count === 0, '刷新后的记账时间 updatedAt/createdAt 不得污染今天的热力块');
+    record('热力图时间字段优先级回归守卫');
+
     assert.strictEqual(typeof calculateReadingRadarData, 'function', '雷达聚合函数应可被测试提取');
     const radarData = calculateReadingRadarData([{
         id: 'radar_question_type_regression',
@@ -170,7 +208,11 @@ try {
     record('雷达题型映射回归守卫');
 
     [
-        "this.activeWidget = options.defaultWidget || 'heatmap'",
+        "this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap'",
+        'function loadPersistedPracticeWidget()',
+        'function persistPracticeWidget(widget)',
+        'persistPracticeWidget(widget);',
+        "var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';",
         'function calculatePracticeHeatmapData(records, monthDate)',
         'aggregatePracticeHeatmapSets(records, monthStart)',
         'averageSetsPerActiveDay',
