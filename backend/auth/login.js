@@ -225,7 +225,8 @@
             }
             return;
         }
-        window.location.assign('/auth/account');
+        setMode('login', 'Start from the business or admin site to continue.');
+        setStatus('Auth session is active, but no destination was provided.', 'success');
     }
 
     async function beginSetup() {

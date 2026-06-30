@@ -2706,6 +2706,7 @@ test('admin dashboard redirects anonymous users through auth handoff', async () 
         assert.equal(authLoginPage.response.status, 200);
         assert.match(authLoginPage.text, /IELTS Atlas Auth/);
         assert.match(authLoginPage.text, /id="auth-tabs"/);
+        assert.doesNotMatch(authLoginPage.text, /Manage current auth session|\/auth\/account/);
 
         const businessLegacyLoginPage = await client.request('GET', '/auth/login', undefined, {
             redirect: 'manual',
@@ -2730,6 +2731,7 @@ test('admin dashboard redirects anonymous users through auth handoff', async () 
         const authLoginScript = await client.request('GET', '/auth/login.js');
         assert.equal(authLoginScript.response.status, 200);
         assert.match(authLoginScript.text, /\/api\/auth\/login/);
+        assert.doesNotMatch(authLoginScript.text, /window\.location\.assign\(['"]\/auth\/account['"]\)|\/auth\/account/);
 
         const authLoginStyles = await client.request('GET', '/auth/login.css');
         assert.equal(authLoginStyles.response.status, 200);
@@ -2821,6 +2823,10 @@ test('admin shell and business account menu do not link back through the busines
     assert(authProxyConfig.includes('location = /auth/complete'));
     assert(authProxyConfig.includes('location = /auth/business/logout'));
     assert(authProxyConfig.includes('location = /auth/admin/logout'));
+    assert(!authProxyConfig.includes('location = /auth/account'));
+    assert(!authProxyConfig.includes('location = /auth/account/'));
+    assert(!authProxyConfig.includes('location = /auth/account.js'));
+    assert(!authProxyConfig.includes('location = /auth/account.css'));
     assert(authProxyConfig.includes('location ^~ /api/auth/'));
     assert(authProxyConfig.includes('location ^~ /api/admin/ { return 404; }'));
     assert(authProxyConfig.includes('location ^~ /api/practice-records { return 404; }'));
