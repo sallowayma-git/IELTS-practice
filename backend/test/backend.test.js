@@ -2834,7 +2834,14 @@ test('admin shell and business account menu do not link back through the busines
     assert(!authProxyConfig.includes('location = /auth/account/'));
     assert(!authProxyConfig.includes('location = /auth/account.js'));
     assert(!authProxyConfig.includes('location = /auth/account.css'));
-    assert(authProxyConfig.includes('location ^~ /api/auth/'));
+    assert(authProxyConfig.includes('location = /api/auth/account { return 404; }'));
+    assert(authProxyConfig.includes('location ^~ /api/auth/account/ { return 404; }'));
+    assert(authProxyConfig.includes('location = /api/auth/totp/disable { return 404; }'));
+    assert(authProxyConfig.includes('location ^~ /api/auth/ { proxy_pass http://ielts_app; }'));
+    const authApiAllowIndex = authProxyConfig.indexOf('location ^~ /api/auth/ { proxy_pass http://ielts_app; }');
+    assert(authProxyConfig.indexOf('location = /api/auth/account { return 404; }') < authApiAllowIndex);
+    assert(authProxyConfig.indexOf('location ^~ /api/auth/account/ { return 404; }') < authApiAllowIndex);
+    assert(authProxyConfig.indexOf('location = /api/auth/totp/disable { return 404; }') < authApiAllowIndex);
     assert(authProxyConfig.includes('location ^~ /api/admin/ { return 404; }'));
     assert(authProxyConfig.includes('location ^~ /api/practice-records { return 404; }'));
     assert(authProxyConfig.includes('proxy_set_header X-Ielts-Onion-Audience auth;'));
