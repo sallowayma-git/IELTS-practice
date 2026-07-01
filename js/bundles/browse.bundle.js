@@ -10240,6 +10240,7 @@
                 }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
+                // 注意：数据已落库，UI 同步失败不应传播为"保存失败"，否则会误导用户并可能诱发重复提交。
                 try {
                     if (typeof window.syncPracticeRecords === 'function') {
                         await window.syncPracticeRecords({ forceRender: true });
@@ -10248,8 +10249,7 @@
                         this.setState('practice.records', Array.isArray(latest) ? latest : []);
                     }
                 } catch (syncErr) {
-                    console.error('[DataCollection] 刷新练习记录失败:', syncErr);
-                    throw syncErr;
+                    console.error('[DataCollection] 刷新练习记录失败（数据已保存，不影响落库结果）:', syncErr);
                 }
 
                 // P1/P4：落库后同步保存错词到词表（multi-suite 在 finalizeMultiSuiteRecord 内处理）
