@@ -49,16 +49,8 @@ class ScoreStorage {
         }
     }
 
-    getPracticeCoreContracts() {
-        return window.PracticeCore && window.PracticeCore.contracts;
-    }
-
-    getPracticeCoreStore() {
-        return window.PracticeCore && window.PracticeCore.store;
-    }
-
     normalizePracticeType(rawType) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
             return coreContracts.normalizePracticeType(rawType);
         }
@@ -70,7 +62,7 @@ class ScoreStorage {
     }
 
     inferPracticeType(recordData = {}) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.inferPracticeType === 'function') {
             return coreContracts.inferPracticeType(recordData);
         }
@@ -85,7 +77,7 @@ class ScoreStorage {
     }
 
     resolveRecordDate(recordData = {}, now = new Date().toISOString()) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.resolveRecordDate === 'function') {
             return coreContracts.resolveRecordDate(recordData, now);
         }
@@ -135,7 +127,7 @@ class ScoreStorage {
     }
 
     buildMetadata(recordData = {}, type) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.buildMetadata === 'function') {
             return coreContracts.buildMetadata(recordData, type);
         }
@@ -157,30 +149,6 @@ class ScoreStorage {
     ensureNumber(value, fallback = 0) {
         const num = Number(value);
         return Number.isFinite(num) ? num : fallback;
-    }
-
-    parseTimeMs(value) {
-        if (value == null) {
-            return null;
-        }
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            return value;
-        }
-        const parsed = new Date(value).getTime();
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    resolveTrustedDurationSeconds(source = {}) {
-        const startMs = this.parseTimeMs(source.startTime);
-        const endMs = this.parseTimeMs(source.endTime);
-        if (
-            startMs != null
-            && endMs != null
-            && endMs >= startMs
-        ) {
-            return Math.floor((endMs - startMs) / 1000);
-        }
-        return 0;
     }
 
     deriveTotalQuestionCount(recordData = {}, fallbackLength = 0) {
@@ -628,7 +596,7 @@ class ScoreStorage {
             // 验证记录数据
             this.validateRecord(standardizedRecord);
 
-            const practiceCoreStore = this.getPracticeCoreStore();
+            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
             if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
                 const savedRecord = await practiceCoreStore.savePracticeRecord(standardizedRecord, {
                     currentVersion: this.currentVersion,
@@ -848,7 +816,7 @@ class ScoreStorage {
      * 标准化记录格式
      */
     standardizeRecord(recordData) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.standardizeRecord === 'function') {
             return coreContracts.standardizeRecord(recordData, {
                 currentVersion: this.currentVersion,
@@ -927,27 +895,10 @@ class ScoreStorage {
 
         const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
             ? new Date(recordData.startTime).toISOString()
-            : null;
+            : recordDate;
         const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
             ? new Date(recordData.endTime).toISOString()
-            : null;
-        const normalizedDuration = this.resolveTrustedDurationSeconds({
-            duration: recordData.duration,
-            durationSeconds: recordData.durationSeconds,
-            duration_seconds: recordData.duration_seconds,
-            elapsedSeconds: recordData.elapsedSeconds,
-            elapsed_seconds: recordData.elapsed_seconds,
-            timeSpent: recordData.timeSpent,
-            time_spent: recordData.time_spent,
-            realDuration: recordData.realData?.duration,
-            realDurationSeconds: recordData.realData?.durationSeconds,
-            realElapsedSeconds: recordData.realData?.elapsedSeconds,
-            realTimeSpent: recordData.realData?.timeSpent,
-            scoreDuration: recordData.scoreInfo?.duration || recordData.realData?.scoreInfo?.duration,
-            scoreTimeSpent: recordData.scoreInfo?.timeSpent || recordData.realData?.scoreInfo?.timeSpent,
-            startTime,
-            endTime
-        });
+            : recordDate;
         const resolvedTitle = recordData.title
             || metadata.examTitle
             || metadata.title
@@ -958,6 +909,30 @@ class ScoreStorage {
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? this.clonePlainObject(comparisonSource)
             : null;
+        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
+            ? this.clonePlainObject(recordData.questionTypeMap)
+            : (recordData.realData?.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object'
+                ? this.clonePlainObject(recordData.realData.questionTypeMap)
+                : {});
+        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
+            ? this.clonePlainObject(recordData.questionTypePerformance)
+            : (recordData.realData?.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object'
+                ? this.clonePlainObject(recordData.realData.questionTypePerformance)
+                : {});
+        const highlights = Array.isArray(recordData.highlights)
+            ? recordData.highlights.slice()
+            : (Array.isArray(recordData.rawData?.highlights)
+                ? recordData.rawData.highlights.slice()
+                : (Array.isArray(recordData.realData?.highlights)
+                    ? recordData.realData.highlights.slice()
+                    : []));
+        const scrollY = Number.isFinite(Number(recordData.scrollY))
+            ? Number(recordData.scrollY)
+            : (Number.isFinite(Number(recordData.rawData?.scrollY))
+                ? Number(recordData.rawData.scrollY)
+                : (Number.isFinite(Number(recordData.realData?.scrollY))
+                    ? Number(recordData.realData.scrollY)
+                    : 0));
 
         return {
             // 基础信息
@@ -970,7 +945,7 @@ class ScoreStorage {
             // 时间信息
             startTime,
             endTime,
-            duration: normalizedDuration,
+            duration: this.ensureNumber(recordData.duration, 0),
             date: recordDate,
 
             // 成绩信息
@@ -984,7 +959,8 @@ class ScoreStorage {
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
 
             // 元数据
             metadata,
@@ -992,6 +968,8 @@ class ScoreStorage {
             suiteMode: Boolean(recordData.suiteMode || (frequency && frequency.toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries: normalizedSuiteEntries,
+            highlights,
+            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -999,7 +977,6 @@ class ScoreStorage {
                 : (detailSource ? { details: detailSource } : null),
             realData: recordData.realData
                 ? Object.assign({}, recordData.realData, {
-                    duration: normalizedDuration,
                     answers: recordData.realData.answers || answerMap,
                     correctAnswers: recordData.realData.correctAnswers || normalizedCorrectMap,
                     scoreInfo: Object.assign({}, recordData.realData.scoreInfo || {}, {
@@ -1007,9 +984,13 @@ class ScoreStorage {
                     }),
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
+                        : (normalizedComparison || null),
+                    questionTypeMap,
+                    questionTypePerformance,
+                    highlights,
+                    scrollY
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
             answerComparison: normalizedComparison,
 
             // 系统信息
@@ -1023,7 +1004,7 @@ class ScoreStorage {
      * 标准化答案格式
      */
     standardizeAnswers(answers) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.buildAnswerArray === 'function') {
             return coreContracts.buildAnswerArray(answers);
         }
@@ -1145,7 +1126,7 @@ class ScoreStorage {
     }
 
     deriveCorrectMapFromDetails(details) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.deriveCorrectMapFromDetails === 'function') {
             return coreContracts.deriveCorrectMapFromDetails(details);
         }
@@ -1168,7 +1149,7 @@ class ScoreStorage {
     }
 
     buildAnswerDetailsFromMaps(answerMap = {}, correctMap = {}) {
-        const coreContracts = this.getPracticeCoreContracts();
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.buildAnswerDetails === 'function') {
             return coreContracts.buildAnswerDetails(answerMap, correctMap);
         }
@@ -1519,6 +1500,8 @@ class ScoreStorage {
                     r.startTime = new Date(rd.startTime).toISOString();
                 } else if (rd.startTime) {
                     r.startTime = new Date(rd.startTime).toISOString();
+                } else if (r.date) {
+                    r.startTime = new Date(r.date).toISOString();
                 }
             }
             if (!r.endTime) {
@@ -1526,34 +1509,44 @@ class ScoreStorage {
                     r.endTime = new Date(rd.endTime).toISOString();
                 } else if (rd.endTime) {
                     r.endTime = new Date(rd.endTime).toISOString();
+                } else if (r.startTime && (r.duration || rd.duration)) {
+                    const base = new Date(r.startTime).getTime();
+                    const seconds = (Number(r.duration || rd.duration) || 0);
+                    r.endTime = new Date(base + seconds * 1000).toISOString();
                 }
             }
-            if (!r.startTime) {
-                r.startTime = null;
-            }
-            if (!r.endTime) {
-                r.endTime = null;
-            }
 
-            // 用时归一（秒）: 只信 start/end 时间线
-            const durationScoreInfo = r.scoreInfo || rd.scoreInfo || {};
-            r.duration = this.resolveTrustedDurationSeconds({
-                duration: r.duration,
-                durationSeconds: r.durationSeconds,
-                duration_seconds: r.duration_seconds,
-                elapsedSeconds: r.elapsedSeconds,
-                elapsed_seconds: r.elapsed_seconds,
-                timeSpent: r.timeSpent,
-                time_spent: r.time_spent,
-                realDuration: rd.duration,
-                realDurationSeconds: rd.durationSeconds,
-                realElapsedSeconds: rd.elapsedSeconds,
-                realTimeSpent: rd.timeSpent,
-                scoreDuration: durationScoreInfo.duration,
-                scoreTimeSpent: durationScoreInfo.timeSpent,
-                startTime: r.startTime,
-                endTime: r.endTime
-            });
+            // 用时归一（秒）: consider multiple possible fields; prefer positive seconds
+            if (!(typeof r.duration === 'number' && isFinite(r.duration) && r.duration > 0)) {
+                const sInfo = r.scoreInfo || rd.scoreInfo || {};
+                const candidates = [
+                    r.duration, rd.duration, r.durationSeconds, r.duration_seconds,
+                    r.elapsedSeconds, r.elapsed_seconds, r.timeSpent, r.time_spent,
+                    rd.durationSeconds, rd.elapsedSeconds, rd.timeSpent,
+                    sInfo.duration, sInfo.timeSpent
+                ];
+                let picked;
+                for (const v of candidates) {
+                    const n = Number(v);
+                    if (Number.isFinite(n) && n > 0) { picked = n; break; }
+                }
+                if (picked !== undefined) {
+                    r.duration = Math.floor(picked);
+                } else if (r.startTime && r.endTime) {
+                    r.duration = Math.max(0, Math.floor((new Date(r.endTime) - new Date(r.startTime)) / 1000));
+                } else if (Array.isArray(rd.interactions) && rd.interactions.length) {
+                    // Derive from interactions timestamp span
+                    try {
+                        const ts = rd.interactions.map(x => x && Number(x.timestamp)).filter(n => Number.isFinite(n));
+                        if (ts.length) {
+                            const span = Math.max(...ts) - Math.min(...ts);
+                            if (Number.isFinite(span) && span > 0) r.duration = Math.floor(span / 1000);
+                        }
+                    } catch(_) {}
+                } else {
+                    r.duration = 0;
+                }
+            }
 
             // scoreInfo 归一
             const sInfo = r.scoreInfo || rd.scoreInfo || {};

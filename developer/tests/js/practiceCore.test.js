@@ -66,6 +66,7 @@ async function testProtocolNormalization(PracticeCore) {
 }
 
 async function testCompletionIngestion(PracticeCore) {
+    const highlights = [{ id: 'hl-1', scope: 'left', text: 'highlight' }];
     const record = PracticeCore.ingestor.fromCompletion({
         type: 'practice_complete',
         data: {
@@ -76,6 +77,8 @@ async function testCompletionIngestion(PracticeCore) {
             answers: { 1: 'A', 2: 'B' },
             correctAnswers: { 1: 'A', 2: 'C' },
             scoreInfo: { correct: 1, total: 2, accuracy: 0.5, percentage: 50 },
+            highlights,
+            scrollY: 360,
             metadata: { category: 'P1', frequency: 'high', type: 'reading' }
         }
     }, {
@@ -97,7 +100,32 @@ async function testCompletionIngestion(PracticeCore) {
     assert.strictEqual(record.answers.length, 2);
     assert.strictEqual(record.correctAnswerMap.q1, 'A');
     assert.strictEqual(record.metadata.category, 'P1');
+    assert.deepStrictEqual(record.highlights, highlights, '单题记录应保留回顾高亮');
+    assert.strictEqual(record.scrollY, 360, '单题记录应保留滚动位置');
     recordResult('PracticeCore 完成负载入站', true, { id: record.id, metadata: record.metadata });
+}
+
+async function testAnswerComparisonKeepsListeningCandidates(PracticeCore) {
+    const comparison = PracticeCore.contracts.normalizeAnswerComparison({
+        q12: {
+            userAnswer: { value: 'acommodation' },
+            correctAnswer: 'accommodation / lodging',
+            acceptedAnswers: ['accommodation', { text: 'lodging' }, 'ACCOMMODATION'],
+            canonicalAnswer: { label: 'accommodation' },
+            isCorrect: false
+        }
+    });
+    const q12 = JSON.parse(JSON.stringify(comparison.q12));
+
+    assert.deepStrictEqual(q12, {
+        questionId: 'q12',
+        userAnswer: 'acommodation',
+        correctAnswer: 'accommodation / lodging',
+        isCorrect: false,
+        acceptedAnswers: ['accommodation', 'lodging'],
+        canonicalAnswer: 'accommodation'
+    });
+    recordResult('PracticeCore 答案比较保留听力候选答案', true, q12);
 }
 
 async function testStoreWritePath(PracticeCore, practiceState, metaState) {
@@ -176,6 +204,7 @@ async function main() {
     try {
         await testProtocolNormalization(PracticeCore);
         await testCompletionIngestion(PracticeCore);
+        await testAnswerComparisonKeepsListeningCandidates(PracticeCore);
         await testStoreWritePath(PracticeCore, practiceState, metaState);
 
         const summary = {

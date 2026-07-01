@@ -56,6 +56,14 @@
                     tier: 3,
                     condition: (stats) => stats.totalPracticed >= 100
                 },
+                {
+                    id: 'practice_platinum',
+                    title: '千锤百炼',
+                    description: '累计完成 200 次练习',
+                    icon: '🏅',
+                    tier: 3,
+                    condition: (stats) => stats.totalPracticed >= 200
+                },
 
                 // --- Streak Milestones ---
                 {
@@ -82,8 +90,24 @@
                     tier: 3,
                     condition: (stats) => stats.streakDays >= 30
                 },
+                {
+                    id: 'streak_platinum',
+                    title: '长期主义',
+                    description: '连续学习 60 天',
+                    icon: '🗓️',
+                    tier: 3,
+                    condition: (stats) => stats.streakDays >= 60
+                },
 
                 // --- Category Mastery: Listening ---
+                {
+                    id: 'listening_first',
+                    title: '开耳第一篇',
+                    description: '完成 1 篇听力练习',
+                    icon: '🎧',
+                    tier: 1,
+                    condition: (stats) => stats.listeningCount >= 1
+                },
                 {
                     id: 'listening_bronze',
                     title: '顺风耳 (铜)',
@@ -111,6 +135,14 @@
 
                 // --- Category Mastery: Reading ---
                 {
+                    id: 'reading_first',
+                    title: '开卷第一篇',
+                    description: '完成 1 篇阅读练习',
+                    icon: '📖',
+                    tier: 1,
+                    condition: (stats) => stats.readingCount >= 1
+                },
+                {
                     id: 'reading_bronze',
                     title: '火眼金睛 (铜)',
                     description: '累计完成 10 篇阅读练习',
@@ -133,6 +165,100 @@
                     icon: '👁️',
                     tier: 3,
                     condition: (stats) => stats.readingCount >= 100
+                },
+
+                // --- Balanced Practice ---
+                {
+                    id: 'balanced_foundation',
+                    title: '双线推进',
+                    description: '阅读与听力各完成 10 篇',
+                    icon: '⚖️',
+                    tier: 2,
+                    condition: (stats) => stats.readingCount >= 10 && stats.listeningCount >= 10
+                },
+                {
+                    id: 'balanced_advanced',
+                    title: '均衡进阶',
+                    description: '阅读与听力各完成 30 篇',
+                    icon: '🧭',
+                    tier: 3,
+                    condition: (stats) => stats.readingCount >= 30 && stats.listeningCount >= 30
+                },
+
+                // --- Focus Time ---
+                {
+                    id: 'time_focus_60',
+                    title: '专注一小时',
+                    description: '累计学习 60 分钟',
+                    icon: '⏱️',
+                    tier: 1,
+                    condition: (stats) => stats.totalStudyMinutes >= 60
+                },
+                {
+                    id: 'time_focus_300',
+                    title: '沉浸五小时',
+                    description: '累计学习 300 分钟',
+                    icon: '⏳',
+                    tier: 2,
+                    condition: (stats) => stats.totalStudyMinutes >= 300
+                },
+                {
+                    id: 'time_focus_1000',
+                    title: '深度备考',
+                    description: '累计学习 1000 分钟',
+                    icon: '⌛',
+                    tier: 3,
+                    condition: (stats) => stats.totalStudyMinutes >= 1000
+                },
+
+                // --- Accuracy Milestones ---
+                {
+                    id: 'accuracy_stable',
+                    title: '稳中有进',
+                    description: '10 次练习后平均正确率 70%+',
+                    icon: '📈',
+                    tier: 2,
+                    condition: (stats) => stats.totalPracticed >= 10 && stats.averageAccuracy >= 0.7
+                },
+                {
+                    id: 'accuracy_elite',
+                    title: '高分稳定',
+                    description: '20 次练习后平均正确率 85%+',
+                    icon: '💎',
+                    tier: 3,
+                    condition: (stats) => stats.totalPracticed >= 20 && stats.averageAccuracy >= 0.85
+                },
+                {
+                    id: 'perfect_three',
+                    title: '三次满分',
+                    description: '累计 3 次练习获得满分',
+                    icon: '🎯',
+                    tier: 2,
+                    condition: (stats) => stats.perfectCount >= 3
+                },
+                {
+                    id: 'perfect_ten',
+                    title: '十全十美',
+                    description: '累计 10 次练习获得满分',
+                    icon: '🏆',
+                    tier: 3,
+                    condition: (stats) => stats.perfectCount >= 10
+                },
+                {
+                    id: 'speed_three',
+                    title: '快速稳定',
+                    description: '3 次 5 分钟内完成高分练习',
+                    icon: '⚡',
+                    tier: 2,
+                    condition: (stats) => stats.speedHighScoreCount >= 3
+                },
+                {
+                    id: 'speed_ten',
+                    title: '闪电节奏',
+                    description: '10 次 5 分钟内完成高分练习',
+                    icon: '🌩️',
+                    tier: 3,
+                    condition: (stats) => stats.speedHighScoreCount >= 10
                 },
 
                 // --- Special Achievements ---
@@ -378,6 +504,9 @@
             let listeningFromRecords = 0;
             let readingFromRecords = 0;
             let totalFromRecords = 0;
+            let totalAccuracyFromRecords = 0;
+            let accuracyRecordCount = 0;
+            let totalDurationFromRecords = 0;
 
             records.forEach((record) => {
                 if (!record || typeof record !== 'object') {
@@ -393,26 +522,43 @@
                     readingFromRecords += 1;
                 }
 
-                this._applyRecordToDerivedStats(derived, {
-                    accuracy: this._normalizeAccuracy(record),
-                    duration: this._getRecordDuration(record)
-                });
+                const accuracy = this._normalizeAccuracy(record);
+                const duration = this._getRecordDuration(record);
+                totalAccuracyFromRecords += accuracy;
+                accuracyRecordCount += 1;
+                totalDurationFromRecords += duration;
+                this._applyRecordToDerivedStats(derived, { accuracy, duration });
             });
 
             derived.totalPracticed = Math.max(Number(derived.totalPracticed) || 0, totalFromRecords);
             derived.listeningCount = Math.max(Number(derived.listeningCount) || 0, listeningFromRecords);
             derived.readingCount = Math.max(Number(derived.readingCount) || 0, readingFromRecords);
+            derived.totalStudyMinutes = Math.max(
+                Number(derived.totalStudyMinutes) || 0,
+                totalDurationFromRecords / 60
+            );
+            if (accuracyRecordCount > 0) {
+                derived.averageAccuracy = Math.max(
+                    Number(derived.averageAccuracy) || 0,
+                    totalAccuracyFromRecords / accuracyRecordCount
+                );
+            }
         }
 
         _buildDerivedStats(rawStats) {
             const stats = rawStats && typeof rawStats === 'object' ? rawStats : {};
+            const averageScore = Number(stats.averageScore) || 0;
             return {
                 totalPracticed: Number(stats.totalPractices) || 0,
                 streakDays: Number(stats.streakDays) || 0,
+                totalStudyMinutes: (Number(stats.totalTimeSpent) || 0) / 60,
+                averageAccuracy: averageScore > 1 && averageScore <= 100 ? averageScore / 100 : averageScore,
                 listeningCount: this._getCategoryPracticeCount(stats, 'listening'),
                 readingCount: this._getCategoryPracticeCount(stats, 'reading'),
                 hasPerfectAccuracy: false,
-                hasSpeedDemon: false
+                hasSpeedDemon: false,
+                perfectCount: 0,
+                speedHighScoreCount: 0
             };
         }
 
@@ -426,9 +572,11 @@
 
             if (accuracy >= 1) {
                 derived.hasPerfectAccuracy = true;
+                derived.perfectCount = (Number(derived.perfectCount) || 0) + 1;
             }
             if (duration > 0 && duration <= 300 && accuracy > 0.8) {
                 derived.hasSpeedDemon = true;
+                derived.speedHighScoreCount = (Number(derived.speedHighScoreCount) || 0) + 1;
             }
         }
 

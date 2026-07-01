@@ -12,7 +12,11 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
 const SHUI_ROOT = path.join(REPO_ROOT, '睡着过项目组', '2. 所有文章(11.20)[192篇]');
 const IELTS_ROOT = path.join(REPO_ROOT, 'IELTS');
-const INDEX_SCRIPT = path.join(REPO_ROOT, 'assets', 'scripts', 'complete-exam-data.js');
+const INDEX_SCRIPT = path.join(REPO_ROOT, 'assets', 'generated', 'reading-exams', 'manifest.js');
+const DEFAULT_PATH_ROOT = {
+    reading: '三月/',
+    listening: 'ListeningPractice/'
+};
 const SOURCE_DIR = path.join(REPO_ROOT, 'developer', 'reading-exams');
 const GENERATED_DIR = path.join(REPO_ROOT, 'assets', 'generated', 'reading-exams');
 const CROSSWALK_FILE = path.join(REPO_ROOT, 'developer', 'tests', 'fixtures', 'reading-crosswalk.json');
@@ -125,15 +129,36 @@ function resetGeneratedDir(dirPath, preserveFileNames = new Set()) {
     }
 }
 
+function buildGeneratedPreserveFileNames(readingIndex) {
+    const preserveFileNames = new Set(['reading-practice-unified.html']);
+    for (const entry of Array.isArray(readingIndex) ? readingIndex : []) {
+        if (!entry || typeof entry.script !== 'string' || !entry.script.trim()) {
+            continue;
+        }
+        preserveFileNames.add(path.basename(entry.script));
+    }
+    return preserveFileNames;
+}
+
 function loadReadingIndex() {
-    const context = { window: {} };
+    const context = {};
+    context.window = context;
+    context.globalThis = context;
     vm.createContext(context);
     vm.runInContext(readFile(INDEX_SCRIPT), context, { filename: INDEX_SCRIPT });
-    const items = context.window.completeExamIndex;
+    const manifest = context.__READING_EXAM_MANIFEST__;
+    const items = manifest && typeof manifest === 'object'
+        ? Object.keys(manifest).map((id) => Object.assign({ id: manifest[id].examId || id }, manifest[id]))
+        : (typeof context.getReadingExamIndex === 'function'
+            ? context.getReadingExamIndex()
+            : context.__READING_EXAM_INDEX__);
     if (!Array.isArray(items)) {
-        throw new Error('无法从 complete-exam-data.js 读取阅读索引');
+        throw new Error('无法从 reading-exams manifest.js 读取阅读索引');
     }
-    return items;
+    return {
+        items,
+        pathRoot: context.__READING_EXAM_PATH_ROOT__ || (context.getReadingExamIndex && context.getReadingExamIndex.pathRoot) || DEFAULT_PATH_ROOT
+    };
 }
 
 function loadCrosswalkOverrides() {
@@ -1147,18 +1172,108 @@ function buildSourceRecord(examEntry, pilotRow) {
     };
 }
 
-function buildManifest(sourceRecords) {
+function buildManifest(readingIndex, sourceRecords) {
+    const sourceById = new Map(sourceRecords.map((record) => [record.examId, record]));
     const manifest = {};
+    for (const entry of readingIndex) {
+        const examId = entry.examId || entry.id;
+        if (!examId) {
+            continue;
+        }
+        const record = sourceById.get(examId);
+        manifest[examId] = {
+            examId,
+            dataKey: record ? examId : (entry.dataKey ?? null),
+            script: record ? `./${examId}.js` : (entry.script ?? null),
+            title: record ? record.meta.title : (entry.title || ''),
+            category: record ? record.meta.category : (entry.category || ''),
+            frequency: entry.frequency || '',
+            difficultyScore: entry.difficultyScore ?? null,
+            path: entry.path || '',
+            filename: entry.filename || '',
+            hasHtml: record ? true : entry.hasHtml === true,
+            hasPdf: entry.hasPdf === true,
+            pdfFilename: entry.pdfFilename || '',
+            sourceKind: entry.sourceKind || (record || entry.script ? 'generated-reading' : 'pdf-only')
+        };
+    }
     for (const record of sourceRecords) {
+        if (manifest[record.examId]) {
+            continue;
+        }
         manifest[record.examId] = {
             examId: record.examId,
             dataKey: record.examId,
             script: `./${record.examId}.js`,
             title: record.meta.title,
-            category: record.meta.category
+            category: record.meta.category,
+            frequency: '',
+            difficultyScore: null,
+            path: '',
+            filename: '',
+            hasHtml: true,
+            hasPdf: false,
+            pdfFilename: '',
+            sourceKind: 'generated-reading'
         };
     }
     return manifest;
+}
+
+function buildManifestScript(manifest, pathRoot = DEFAULT_PATH_ROOT) {
+    return [
+        '(function registerReadingExamManifest(global) {',
+        "  'use strict';",
+        `  const PATH_ROOT = ${JSON.stringify(pathRoot, null, 2).replace(/\n/g, '\n  ')};`,
+        `  const manifest = ${JSON.stringify(manifest, null, 2).replace(/\n/g, '\n  ')};`,
+        '',
+        '  function clonePathRoot() {',
+        '    return Object.assign({}, PATH_ROOT);',
+        '  }',
+        '',
+        '  function cloneIndexEntry(entry) {',
+        '    return Object.assign({}, entry);',
+        '  }',
+        '',
+        '  function buildReadingExamIndex() {',
+        '    const index = Object.keys(manifest).map(function mapEntry(id) {',
+        '      const entry = manifest[id] || {};',
+        '      return {',
+        '        id: entry.examId || id,',
+        "        title: entry.title || '',",
+        "        category: entry.category || '',",
+        "        frequency: entry.frequency || '',",
+        '        difficultyScore: entry.difficultyScore,',
+        "        path: entry.path || '',",
+        "        filename: entry.filename || '',",
+        '        hasHtml: entry.hasHtml === true,',
+        '        hasPdf: entry.hasPdf === true,',
+        "        pdfFilename: entry.pdfFilename || '',",
+        "        sourceKind: entry.sourceKind || (entry.script ? 'generated-reading' : 'pdf-only'),",
+        "        type: 'reading'",
+        '      };',
+        '    });',
+        '    index.pathRoot = clonePathRoot();',
+        '    return index;',
+        '  }',
+        '',
+        '  function getReadingExamIndex() {',
+        '    const index = global.__READING_EXAM_INDEX__;',
+        '    const cloned = Array.isArray(index) ? index.map(cloneIndexEntry) : buildReadingExamIndex();',
+        '    cloned.pathRoot = clonePathRoot();',
+        '    return cloned;',
+        '  }',
+        '',
+        '  global.__READING_EXAM_MANIFEST__ = manifest;',
+        '  global.__READING_EXAM_INDEX__ = buildReadingExamIndex();',
+        '  global.__READING_EXAM_INDEX__.pathRoot = clonePathRoot();',
+        '  global.__READING_EXAM_PATH_ROOT__ = clonePathRoot();',
+        '  global.getReadingExamIndex = getReadingExamIndex;',
+        '  global.getReadingExamIndex.pathRoot = clonePathRoot();',
+        '  global.completeExamIndex = getReadingExamIndex();',
+        '})(typeof window !== "undefined" ? window : globalThis);',
+        ''
+    ].join('\n');
 }
 
 function buildWrapper(record) {
@@ -1307,10 +1422,11 @@ function buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, fail
 
 function main() {
     const existingSourceRecords = loadBaselineSourceRecords();
+    const readingIndexData = loadReadingIndex();
+    const readingIndex = readingIndexData.items;
     resetGeneratedDir(SOURCE_DIR);
-    resetGeneratedDir(GENERATED_DIR, new Set(['reading-practice-unified.html']));
+    resetGeneratedDir(GENERATED_DIR, buildGeneratedPreserveFileNames(readingIndex));
 
-    const readingIndex = loadReadingIndex();
     const overrides = loadCrosswalkOverrides();
     const crosswalk = buildCrosswalk(readingIndex, overrides);
     writeJson(CROSSWALK_FILE, crosswalk);
@@ -1353,16 +1469,10 @@ function main() {
 
     writeSchemaFile();
 
-    const manifest = buildManifest(sourceRecords);
+    const manifest = buildManifest(readingIndex, sourceRecords);
     writeText(
         path.join(GENERATED_DIR, 'manifest.js'),
-        [
-            '(function registerReadingExamManifest(global) {',
-            "  'use strict';",
-            `  global.__READING_EXAM_MANIFEST__ = ${JSON.stringify(manifest, null, 2)};`,
-            '})(typeof window !== "undefined" ? window : globalThis);',
-            ''
-        ].join('\n')
+        buildManifestScript(manifest, readingIndexData.pathRoot)
     );
 
     const migrationReport = {

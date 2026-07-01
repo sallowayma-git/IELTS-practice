@@ -33,8 +33,11 @@
             background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
             color: var(--text);
             height: 100vh;
+            height: 100dvh;
             overflow: hidden;
-            padding-bottom: 72px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
         .header {
@@ -88,35 +91,72 @@
         }
 
         .shell {
-            display: flex;
-            height: calc(100vh - 67px - 72px);
+            --reading-left-pane-width: clamp(360px, 50%, calc(100% - 360px));
+            --reading-divider-width: 10px;
+            display: grid;
+            grid-template-columns:
+                minmax(280px, var(--reading-left-pane-width))
+                var(--reading-divider-width)
+                minmax(320px, 1fr);
+            flex: 1;
+            min-height: 0;
             width: 100%;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .pane {
             overflow: auto;
             background: var(--panel);
             padding: 22px;
+            min-width: 0;
         }
 
         #left {
-            width: 50%;
-            min-width: 320px;
+            min-width: 0;
         }
 
         #divider {
-            flex: 0 0 8px;
             background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
             border-left: 1px solid var(--line);
             border-right: 1px solid var(--line);
             cursor: ew-resize;
+            position: relative;
+            touch-action: none;
+            user-select: none;
+            outline: none;
+        }
+
+        #divider::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 48px;
+            border-radius: 999px;
+            background: rgba(100, 116, 139, 0.55);
+            box-shadow: -3px 0 0 rgba(100, 116, 139, 0.28), 3px 0 0 rgba(100, 116, 139, 0.28);
+            transform: translate(-50%, -50%);
+        }
+
+        #divider:hover,
+        #divider:focus-visible,
+        #divider.is-dragging {
+            background: linear-gradient(180deg, #dbeafe 0%, #93c5fd 100%);
+            border-color: #60a5fa;
+        }
+
+        body.reading-pane-resizing,
+        body.reading-pane-resizing * {
+            cursor: ew-resize !important;
+            user-select: none !important;
         }
 
         #right {
-            flex: 1;
-            min-width: 320px;
+            min-width: 0;
             background: var(--panel-alt);
-            padding: 16px 20px;
+            padding: 12px 14px;
         }
 
         #left p,
@@ -126,22 +166,81 @@
         }
 
         .unified-group {
-            margin-bottom: 18px;
+            margin-bottom: 16px;
         }
 
         .group {
             background: var(--panel);
             border: 1px solid var(--line);
-            border-radius: 12px;
+            border-radius: 8px;
             box-shadow: var(--shadow);
-            padding: 24px 32px;
-            margin-bottom: 24px;
+            padding: 18px 22px;
+            margin-bottom: 0;
         }
 
         .question-item,
         .match-question-item,
         .choice-item {
             margin-bottom: 12px;
+        }
+
+        .tfng-item {
+            margin: 0 0 14px;
+        }
+
+        .tfng-item:last-child {
+            margin-bottom: 0;
+        }
+
+        #right .tfng-item > p {
+            margin: 0 0 6px;
+            line-height: 1.45;
+        }
+
+        .tfng-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            margin: 0;
+        }
+
+        .tfng-options label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin: 0;
+            cursor: pointer;
+            line-height: 1.35;
+        }
+
+        .tfng-options input[type="radio"] {
+            flex-shrink: 0;
+            margin: 2px 0 0;
+        }
+
+        .matching-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 4px;
+        }
+
+        .matching-table thead th {
+            padding: 0 3px 4px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .matching-table tbody td {
+            padding: 2px 3px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .matching-table tbody td:first-child {
+            padding: 3px 10px 3px 0;
+            text-align: left;
+            line-height: 1.35;
         }
 
         .paragraph-dropzone,
@@ -360,6 +459,7 @@
             .shell {
                 display: block;
                 height: auto;
+                overflow: visible;
             }
 
             #left,
@@ -373,14 +473,43 @@
             }
 
             .practice-nav {
-                flex-wrap: wrap;
-                align-items: flex-start;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 12px 15px;
+                padding: 12px 20px;
             }
 
-            .practice-nav .controls {
-                margin-left: 0;
-                width: 100%;
+            .practice-nav .nav-controls-right {
+                margin-left: auto;
+                width: auto;
                 justify-content: flex-end;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .practice-nav {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .part-nav-section {
+                border-right: none;
+                border-bottom: 1px solid var(--line);
+                padding-right: 0;
+                padding-bottom: 8px;
+                height: auto;
+                width: 100%;
+                justify-content: space-between;
+            }
+            .part-nav-section:last-of-type {
+                border-bottom: none;
+            }
+            .nav-controls-right {
+                margin-left: 0;
+                justify-content: flex-end;
+                width: 100%;
+                padding-top: 10px;
+                border-top: 1px solid var(--line);
             }
         }
 
@@ -416,7 +545,72 @@
             animation: endless-pulse-dark 1s ease-in-out infinite;
         }
 
-        @keyframes endless-pulse-dark {
+                /* Countdown warning styles */
+        #timer.countdown-warn-10 {
+            background: rgba(239, 68, 68, 0.15);
+            color: #dc2626;
+            animation: countdown-pulse-10 1.2s ease-in-out infinite;
+            font-weight: 700;
+        }
+
+        @keyframes countdown-pulse-10 {
+            0%, 100% { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
+            50% { background: rgba(239, 68, 68, 0.24); color: #b91c1c; }
+        }
+
+        #timer.countdown-warn-5 {
+            background: rgba(185, 28, 28, 0.22);
+            color: #991b1b;
+            animation: countdown-pulse-5 0.7s ease-in-out infinite;
+            font-weight: 700;
+        }
+
+        @keyframes countdown-pulse-5 {
+            0%, 100% { background: rgba(185, 28, 28, 0.18); color: #991b1b; }
+            50% { background: rgba(185, 28, 28, 0.36); color: #7f1d1d; }
+        }
+
+        #timer.countdown-expired {
+            background: rgba(185, 28, 28, 0.30);
+            color: #7f1d1d;
+            font-weight: 700;
+            animation: none;
+        }
+
+        body.dark-mode #timer.countdown-warn-10 {
+            background: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+        }
+
+        @keyframes countdown-pulse-10-dark {
+            0%, 100% { background: rgba(239, 68, 68, 0.25); }
+            50% { background: rgba(239, 68, 68, 0.38); }
+        }
+
+        body.dark-mode #timer.countdown-warn-10 {
+            animation: countdown-pulse-10-dark 1.2s ease-in-out infinite;
+        }
+
+        body.dark-mode #timer.countdown-warn-5 {
+            background: rgba(185, 28, 28, 0.32);
+            color: #fca5a5;
+        }
+
+        @keyframes countdown-pulse-5-dark {
+            0%, 100% { background: rgba(185, 28, 28, 0.30); }
+            50% { background: rgba(185, 28, 28, 0.46); }
+        }
+
+        body.dark-mode #timer.countdown-warn-5 {
+            animation: countdown-pulse-5-dark 0.7s ease-in-out infinite;
+        }
+
+        body.dark-mode #timer.countdown-expired {
+            background: rgba(185, 28, 28, 0.38);
+            color: #fca5a5;
+        }
+
+@keyframes endless-pulse-dark {
             0%, 100% { background: rgba(239, 68, 68, 0.25); }
             50% { background: rgba(239, 68, 68, 0.35); }
         }
@@ -840,29 +1034,651 @@
             color: inherit;
             font-weight: inherit;
         }
+
+        /* ================= IELTS Redesign Custom Styles ================= */
+        body {
+            padding-bottom: 0;
+        }
+
+        .shell {
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+        }
+
+        /* Top Header */
+        .header {
+            height: 48px;
+            flex-shrink: 0;
+            padding: 0 20px;
+            background: #ffffff;
+            border-bottom: 1.5px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .ielts-brand {
+            font-size: 20px;
+            font-weight: 900;
+            color: #e31b23;
+            font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+            letter-spacing: -0.5px;
+        }
+
+        .candidate-details {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            line-height: 1.25;
+            border-left: 1.5px solid #e2e8f0;
+            padding-left: 14px;
+        }
+
+        .candidate-id {
+            font-size: 11px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        #timer {
+            font-size: 11px;
+            color: #4b5563;
+            border: none;
+            padding: 0;
+            background: transparent;
+            margin: 0;
+            font-weight: 500;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+
+        #timer:hover {
+            color: #1f2937;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .header-icon {
+            color: #4b5563;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+
+        .header-icon:hover {
+            color: #1f2937;
+        }
+
+        .header-btn {
+            border: none;
+            background: transparent;
+            padding: 4px;
+            cursor: pointer;
+            color: #4b5563;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .header-btn:hover {
+            background: #f3f4f6;
+            color: #1f2937;
+        }
+
+        /* Sub Header Bar */
+        .sub-header-bar {
+            flex-shrink: 0;
+            background: #f1f5f9;
+            border-bottom: 1.5px solid #e2e8f0;
+            padding: 8px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            z-index: 990;
+        }
+
+        #sub-header-part {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        #sub-header-instruction {
+            font-size: 12px;
+            color: #475569;
+        }
+
+        /* Font size override classes */
+        html.font-small {
+            font-size: 14px !important;
+        }
+
+        html.font-normal {
+            font-size: 16px !important;
+        }
+
+        html.font-large {
+            font-size: 18px !important;
+        }
+
+        /* Bottom Navigation Bar */
+        .practice-nav {
+            min-height: 72px;
+            height: auto;
+            flex-shrink: 0;
+            padding: 10px 20px;
+            background: #ffffff;
+            border-top: 1.5px solid #e2e8f0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.02);
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex-wrap: nowrap;
+            gap: 12px clamp(10px, 1vw, 20px);
+            z-index: 2000;
+            position: relative;
+        }
+
+        @media (max-width: 1200px) {
+            .part-nav-section:not(.active) .part-nav-questions {
+                display: none;
+            }
+            .part-nav-section:not(.active) {
+                flex: 0 0 auto;
+                padding-right: 12px;
+                gap: 0;
+                border-right: none;
+            }
+        }
+
+        .part-nav-section {
+            display: flex;
+            align-items: center;
+            flex: 1 1 0;
+            min-width: 0;
+            gap: clamp(6px, 0.8vw, 12px);
+            padding-right: clamp(10px, 1.2vw, 20px);
+            border-right: 1.5px solid var(--line);
+            height: 48px;
+        }
+
+        .part-nav-section:last-of-type {
+            border-right: none;
+        }
+
+        .part-nav-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 60px;
+        }
+
+        .part-nav-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .part-nav-status {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 1px;
+        }
+
+        .part-nav-questions {
+            display: flex;
+            align-items: center;
+            flex: 1 1 auto;
+            min-width: 0;
+            justify-content: space-between;
+            gap: clamp(2px, 0.35vw, 6px);
+        }
+
+        .q-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1 1 0;
+            min-width: 12px;
+            max-width: 20px;
+            gap: 3px;
+        }
+
+        .q-bar-segment {
+            width: 100%;
+            height: 3px;
+            border-radius: 1px;
+            background-color: #e2e8f0;
+            transition: background-color 0.2s;
+        }
+
+        .q-bar-segment.answered {
+            background-color: #2563eb;
+        }
+
+        .q-bar-segment.correct {
+            background-color: #16a34a;
+        }
+
+        .q-bar-segment.incorrect {
+            background-color: #dc2626;
+        }
+
+        .q-item {
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            font-size: 11.5px;
+            color: #94a3b8;
+            cursor: pointer;
+            min-width: 0;
+            width: 100%;
+            height: 20px;
+            line-height: 18px;
+            text-align: center;
+            border-radius: 3px;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .q-item:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .q-item.answered,
+        .q-item.correct,
+        .q-item.incorrect {
+            color: #334155;
+        }
+
+        .q-item.active {
+            border: 1.5px solid #2563eb !important;
+            color: #2563eb !important;
+            font-weight: 700;
+            background-color: transparent !important;
+        }
+
+        .q-item.disabled {
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .nav-controls-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            flex: 0 0 auto;
+            gap: 10px;
+        }
+
+        .nav-icon-btn {
+            border: none;
+            background: transparent;
+            padding: 6px;
+            cursor: pointer;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .nav-icon-btn:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .nav-submit-rect-btn {
+            height: 36px;
+            padding: 0 20px;
+            border-radius: 6px;
+            background-color: #0f172a;
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+        }
+
+        .nav-submit-rect-btn:hover {
+            background-color: #1e293b;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+        }
+
+        .nav-submit-rect-btn:active {
+            transform: scale(0.97);
+        }
+
+        .nav-submit-rect-btn:disabled {
+            background-color: #cbd5e1;
+            color: #94a3b8;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #reset-btn, #exit-btn {
+            height: 36px;
+            padding: 0 16px;
+            border-radius: 6px;
+            background-color: transparent;
+            color: #475569;
+            border: 1.5px solid #cbd5e1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+        }
+
+        #reset-btn:hover, #exit-btn:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        #reset-btn:active, #exit-btn:active {
+            transform: scale(0.97);
+        }
+
+        #reset-btn:disabled, #exit-btn:disabled {
+            color: #cbd5e1;
+            border-color: #e2e8f0;
+            cursor: not-allowed;
+            background-color: transparent;
+        }
+
+        .part-nav-name.inactive {
+            color: #94a3b8 !important;
+        }
+
+        /* Floating Navigation Box */
+        .floating-nav-box {
+            position: fixed;
+            right: 24px;
+            bottom: 86px;
+            background-color: #0f172a;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 4px;
+            gap: 2px;
+            z-index: 3000;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+        }
+
+        .float-nav-btn {
+            border: none;
+            background: transparent;
+            color: #cbd5e1;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.15s, color 0.15s;
+        }
+
+        .float-nav-btn:hover {
+            background-color: #1e293b;
+            color: #ffffff;
+        }
+
+        .float-nav-btn:disabled {
+            color: #475569;
+            cursor: not-allowed;
+            background-color: transparent !important;
+        }
+
+        /* Dark Mode Overrides */
+        body.dark-mode {
+            background: #020617;
+        }
+
+        body.dark-mode .header {
+            background-color: #1e293b;
+            border-bottom-color: #334155;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        body.dark-mode .ielts-brand {
+            color: #fca5a5;
+        }
+
+        body.dark-mode .candidate-details {
+            border-left-color: #334155;
+        }
+
+        body.dark-mode .candidate-id {
+            color: #f8fafc;
+        }
+
+        body.dark-mode #timer {
+            color: #cbd5e1;
+        }
+
+        body.dark-mode #timer:hover {
+            color: #f8fafc;
+        }
+
+        body.dark-mode .header-icon {
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .header-icon:hover {
+            color: #f8fafc;
+        }
+
+        body.dark-mode .header-btn:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-mode .sub-header-bar {
+            background-color: #0f172a;
+            border-bottom-color: #334155;
+        }
+
+        body.dark-mode #sub-header-part {
+            color: #f8fafc;
+        }
+
+        body.dark-mode #sub-header-instruction {
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .practice-nav {
+            background-color: #1e293b;
+            border-top-color: #334155;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+        }
+
+        body.dark-mode .part-nav-section {
+            border-right-color: #334155;
+        }
+
+        body.dark-mode .part-nav-name {
+            color: #f8fafc;
+        }
+
+        body.dark-mode .part-nav-status {
+            color: #94a3b8;
+        }
+
+        body.dark-mode .q-bar-segment {
+            background-color: #334155;
+        }
+
+        body.dark-mode .q-bar-segment.answered {
+            background-color: #3b82f6;
+        }
+
+        body.dark-mode .q-item {
+            color: #64748b;
+        }
+
+        body.dark-mode .q-item:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-mode .q-item.answered,
+        body.dark-mode .q-item.correct,
+        body.dark-mode .q-item.incorrect {
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .q-item.active {
+            border-color: #3b82f6 !important;
+            color: #3b82f6 !important;
+        }
+
+        body.dark-mode .nav-icon-btn {
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .nav-icon-btn:hover {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        body.dark-mode .nav-submit-rect-btn {
+            background-color: #f8fafc;
+            color: #0f172a;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        body.dark-mode .nav-submit-rect-btn:hover {
+            background-color: #e2e8f0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        body.dark-mode .nav-submit-rect-btn:disabled {
+            background-color: #334155;
+            color: #475569;
+            box-shadow: none;
+        }
+
+        body.dark-mode #reset-btn, body.dark-mode #exit-btn {
+            color: #cbd5e1;
+            border-color: #475569;
+            background-color: transparent;
+        }
+
+        body.dark-mode #reset-btn:hover, body.dark-mode #exit-btn:hover {
+            background-color: #334155;
+            color: #f8fafc;
+            border-color: #64748b;
+        }
+
+        body.dark-mode #reset-btn:disabled, body.dark-mode #exit-btn:disabled {
+            color: #475569;
+            border-color: #334155;
+            background-color: transparent;
+        }
+
+        body.dark-mode .part-nav-name.inactive {
+            color: #64748b !important;
+        }
+
+        #floating-passage-nav {
+            display: none !important;
+        }
+
+        body[data-suite-mode="true"] #floating-passage-nav {
+            display: flex !important;
+        }
+
+        body.dark-mode .floating-nav-box {
+            background-color: #334155;
+        }
+
+        body.dark-mode .float-nav-btn {
+            color: #cbd5e1;
+        }
+
+        body.dark-mode .float-nav-btn:hover {
+            background-color: #475569;
+            color: #f8fafc;
+        }
     </style>
 </head>
 
 <body>
     <header class="header">
-        <div class="header-content">
-            <h1 id="exam-title">IELTS 阅读练习</h1>
-            <p id="exam-subtitle">统一阅读页</p>
+        <div class="header-left">
+            <div class="ielts-brand">IELTS</div>
+            <div class="candidate-details">
+                <div class="candidate-id" id="candidate-id" hidden></div>
+                <div id="timer" title="点击启停">60 minutes remaining</div>
+            </div>
+            <!-- Keep hidden fields for compatibility -->
+            <div style="display: none;">
+                <h1 id="exam-title">IELTS 阅读练习</h1>
+                <p id="exam-subtitle">统一阅读页</p>
+            </div>
         </div>
-        <div class="header-controls">
-            <div id="timer" title="点击启停">00:00</div>
-            <button class="header-btn" id="settings-btn" title="Settings" type="button">☰</button>
-            <button class="header-btn" id="note-btn" type="button">Note</button>
+        <div class="header-right">
+            <!-- Wifi SVG -->
+            <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+            </svg>
+            <!-- Bell SVG -->
+            <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <!-- Hamburger Settings Menu -->
+            <button class="header-btn" id="settings-btn" title="Settings" type="button">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <button class="header-btn" id="note-btn" type="button" style="display: none;">Note</button>
         </div>
     </header>
+
+    <div class="sub-header-bar">
+        <div id="sub-header-part">Part 1</div>
+        <div id="sub-header-instruction">Read the text and answer questions.</div>
+    </div>
 
     <div id="settings-panel">
         <div class="settings-section">
             <h3 class="settings-title">字号调整</h3>
             <div class="settings-options">
-                <button class="settings-option active" data-size="normal">A</button>
-                <button class="settings-option" data-size="large" style="font-size: 1.1rem;">A</button>
-                <button class="settings-option" data-size="xlarge" style="font-size: 1.25rem;">A</button>
+                <button class="settings-option" data-size="small">小</button>
+                <button class="settings-option active" data-size="normal">中</button>
+                <button class="settings-option" data-size="large">大</button>
             </div>
         </div>
         <div class="settings-section">
@@ -870,13 +1686,6 @@
             <div class="settings-options">
                 <button class="settings-option active" data-mode="light">浅色</button>
                 <button class="settings-option" data-mode="dark">深色</button>
-            </div>
-        </div>
-        <div class="settings-section" id="suite-flow-mode-section" style="display: none;">
-            <h3 class="settings-title">套题流程模式</h3>
-            <div class="settings-options">
-                <button class="settings-option" data-suite-flow-mode="auto">自动跳转下一篇</button>
-                <button class="settings-option" data-suite-flow-mode="manual">提交后停留回看</button>
             </div>
         </div>
     </div>
@@ -889,35 +1698,66 @@
 
     <div class="shell">
         <section class="pane" id="left"></section>
-        <div id="divider"></div>
+        <div id="divider" role="separator" aria-orientation="vertical" aria-label="调整原文 and 题目宽度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"></div>
         <section class="pane" id="right">
             <div id="question-groups"></div>
             <div id="results"></div>
+            
+            <div id="floating-passage-nav" class="floating-nav-box">
+                <button id="float-prev-btn" class="float-nav-btn" type="button" title="上一篇">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                </button>
+                <button id="float-next-btn" class="float-nav-btn" type="button" title="下一篇">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </button>
+            </div>
         </section>
     </div>
 
     <div id="selbar">
-        <button type="button" id="btnHL" data-role="highlight">Highlight</button>
-        <button type="button" id="btnUH" data-role="remove-highlight">Remove</button>
         <button type="button" id="btnNote" data-role="note">Note</button>
+        <button type="button" id="btnUH" data-role="remove-highlight">Remove</button>
+        <button type="button" id="btnHL" data-role="highlight">Highlight</button>
     </div>
 
     <div class="practice-nav">
-        <div class="title">题目导航</div>
-        <div class="questions" id="question-nav"></div>
-        <div class="controls">
-            <button id="exit-btn" type="button" title="退出" style="margin-right: 8px; display: none;">Exit</button>
-            <button id="reset-btn" type="button">Reset</button>
-            <button id="submit-btn" class="primary" type="button">Submit</button>
+        <div class="part-nav-section" id="part-section-1">
+            <div class="part-nav-info">
+                <div class="part-nav-name">Part 1</div>
+                <div class="part-nav-status" id="part1-status-text">0 of 13</div>
+            </div>
+            <div class="part-nav-questions" id="part1-questions"></div>
+        </div>
+        <div class="part-nav-section" id="part-section-2">
+            <div class="part-nav-info">
+                <div class="part-nav-name">Part 2</div>
+                <div class="part-nav-status" id="part2-status-text">0 of 13</div>
+            </div>
+            <div class="part-nav-questions" id="part2-questions"></div>
+        </div>
+        <div class="part-nav-section" id="part-section-3">
+            <div class="part-nav-info">
+                <div class="part-nav-name">Part 3</div>
+                <div class="part-nav-status" id="part3-status-text">0 of 14</div>
+            </div>
+            <div class="part-nav-questions" id="part3-questions"></div>
+        </div>
+
+        <div class="nav-controls-right">
+            <button id="exit-btn" type="button" style="display: none;">Exit</button>
+            <button id="reset-btn" type="button" style="display: none;">Reset</button>
+            <button id="submit-btn" class="nav-submit-rect-btn" type="button">Submit</button>
         </div>
     </div>
 
-    <script src="../../../js/runtime/readingExamRegistry.js"></script>
-    <script src="../../../js/runtime/readingExplanationRegistry.js"></script>
-    <script src="../../../js/runtime/readingHighlightShared.js"></script>
     <script src="./manifest.js"></script>
-    <script src="../../../js/utils/answerMatchCore.js"></script>
-    <script src="../../../js/runtime/unifiedReadingPage.js"></script>
+    <script src="../../../js/bundles/reading-page.bundle.js"></script>
 </body>
 
 </html>

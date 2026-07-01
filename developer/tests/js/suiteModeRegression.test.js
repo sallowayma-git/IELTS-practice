@@ -172,6 +172,45 @@ async function run() {
         throw new Error('mixin 加载失败');
     }
 
+    // Case 0: 单题历史回顾必须从记录根层或 realData 回灌高亮
+    {
+        const app = createApp(windowStub);
+        const rootHighlights = [{ id: 'hl-root', scope: 'left', text: 'root highlight' }];
+        const realDataHighlights = [{ id: 'hl-real', scope: 'groups', text: 'realData highlight' }];
+
+        const rootEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p1',
+            title: 'Single P1',
+            answers: { q1: 'A' },
+            correctAnswerMap: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            highlights: rootHighlights,
+            scrollY: 120,
+            metadata: { examId: 'reading-p1', examTitle: 'Single P1' }
+        })[0];
+
+        assert.deepStrictEqual(plain(rootEntry.highlights), rootHighlights, '单题根层 highlights 必须进入 replay entry');
+        assert.strictEqual(rootEntry.scrollY, 120, '单题根层 scrollY 必须进入 replay entry');
+
+        const legacyEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p2',
+            title: 'Single P2',
+            answers: { q1: 'B' },
+            correctAnswerMap: { q1: 'B' },
+            answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            realData: {
+                highlights: realDataHighlights,
+                scrollY: 240
+            },
+            metadata: { examId: 'reading-p2', examTitle: 'Single P2' }
+        })[0];
+
+        assert.deepStrictEqual(plain(legacyEntry.highlights), realDataHighlights, '单题 legacy realData.highlights 必须进入 replay entry');
+        assert.strictEqual(legacyEntry.scrollY, 240, '单题 legacy realData.scrollY 必须进入 replay entry');
+    }
+
     // Case 1: P1 提交后自动跳转 P2，发送 SIMULATION_CONTEXT
     {
         const app = createApp(windowStub);
@@ -339,12 +378,14 @@ async function run() {
         session.draftsByExam['reading-p2'] = {
             answers: { q1: 'B' },
             highlights: p2Highlights,
+            noteText: 'P2 draft note',
             scrollY: 288,
             updatedAt: Date.now()
         };
 
         const p2Replay = app._buildSuiteReplayEntry(session, 'reading-p2');
         assert.deepStrictEqual(p2Replay.highlights, p2Highlights, '回顾态 replay 必须从 P2 draft 回灌高亮');
+        assert.strictEqual(p2Replay.noteText, 'P2 draft note', '回顾态 replay 必须从 P2 draft 回灌笔记正文');
         assert.strictEqual(p2Replay.scrollY, 288, '回顾态 replay 必须从 P2 draft 回灌滚动位置');
 
         let savedRecord = null;
@@ -356,6 +397,7 @@ async function run() {
         await app.finalizeSuiteRecord(session);
         const p2Entry = savedRecord.suiteEntries.find(entry => entry.examId === 'reading-p2');
         assert.deepStrictEqual(p2Entry.highlights, p2Highlights, '最终记录也必须保留 draft 中的 P2 高亮');
+        assert.strictEqual(p2Entry.noteText, 'P2 draft note', '最终记录也必须保留 draft 中的 P2 笔记正文');
         assert.strictEqual(p2Entry.scrollY, 288, '最终记录也必须保留 draft 中的 P2 滚动位置');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(p2Entry.rawData || {}, 'highlights'), false, '最终 entry.rawData 不应重复持久化高亮');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecord.metadata || {}, 'suiteEntries'), false, 'metadata 不应重复持久化 suiteEntries');
@@ -617,6 +659,57 @@ async function run() {
         assert.strictEqual(routedPayload.data.direction, 'prev', '路由方向必须正确');
     }
 
+    // Case 2.4.1: inline simulation 草稿必须按 payload.examId 分区保存
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_inline_draft_route');
+        session.currentIndex = 0;
+        session.activeExamId = 'reading-p1';
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const examWindow = createStubWindow('ielts-suite-mode-tab');
+        app.setupExamWindowCommunication(examWindow, 'reading-p1', session.sequence[0].exam, {
+            suiteSessionId: session.id,
+            suiteFlowMode: 'simulation',
+            sequenceIndex: 0,
+            sequenceTotal: 3
+        });
+
+        const info = app.ensureExamWindowSession('reading-p1', examWindow);
+        info.expectedSessionId = 'expected_inline_session';
+        info.suiteSessionId = session.id;
+        app.examWindows.set('reading-p1', info);
+
+        const handler = app.messageHandlers.get('reading-p1');
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'SIMULATION_DRAFT_SYNC',
+                data: {
+                    examId: 'reading-p2',
+                    suiteSessionId: session.id,
+                    sessionId: 'stale_inline_session',
+                    draft: {
+                        answers: { q1: 'P2 answer' },
+                        highlights: [{ scope: 'left', text: 'P2 highlight' }],
+                        noteText: 'P2 note',
+                        scrollY: 222,
+                        updatedAt: 2000
+                    },
+                    draftUpdatedAt: 2000,
+                    source: 'practice_page'
+                },
+                source: 'practice_page'
+            }
+        });
+
+        assert.strictEqual(session.draftsByExam['reading-p1'], undefined, 'P2 草稿不能误写到 P1');
+        assert.deepStrictEqual(session.draftsByExam['reading-p2'].answers, { q1: 'P2 answer' }, 'P2 草稿应按 payload.examId 保存');
+        assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应保存');
+    }
+
     // Case 2.5: activeExamId 漂移但 currentIndex 正确时，导航应自愈继续
     {
         const app = createApp(windowStub);
@@ -671,6 +764,77 @@ async function run() {
 
         assert.strictEqual(handled, true, '最后一篇提交应成功');
         assert.strictEqual(finalizeCount, 1, '最后一篇提交后应立即 finalize');
+    }
+
+    // Case 3.0.1: inline simulation 整套提交应一次 finalize 并保留三篇草稿态
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_inline_submit');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        let finalizeCount = 0;
+        app.finalizeSuiteRecord = async (handledSession) => {
+            finalizeCount += 1;
+            assert.strictEqual(handledSession, session, '应 finalize 当前套题 session');
+        };
+
+        const handled = await app.handleSuitePracticeComplete('reading-p1', {
+            suiteSessionId: session.id,
+            suiteSubmission: true,
+            duration: 3600,
+            suiteEntries: [
+                {
+                    examId: 'reading-p1',
+                    title: 'Passage 1',
+                    category: 'P1',
+                    duration: 1200,
+                    answers: { q1: 'A' },
+                    answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                    highlights: [{ scope: 'left', text: 'P1 highlight' }],
+                    noteText: 'P1 note',
+                    scrollY: 111,
+                    updatedAt: 1001
+                },
+                {
+                    examId: 'reading-p2',
+                    title: 'Passage 2',
+                    category: 'P2',
+                    duration: 1100,
+                    answers: { q1: 'B' },
+                    answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                    highlights: [{ scope: 'groups', text: 'P2 highlight' }],
+                    noteText: 'P2 note',
+                    scrollY: 222,
+                    updatedAt: 1002
+                },
+                {
+                    examId: 'reading-p3',
+                    title: 'Passage 3',
+                    category: 'P3',
+                    duration: 1300,
+                    answers: { q1: 'C' },
+                    answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                    highlights: [{ scope: 'left', text: 'P3 highlight' }],
+                    noteText: 'P3 note',
+                    scrollY: 333,
+                    updatedAt: 1003
+                }
+            ]
+        }, session.windowRef);
+
+        assert.strictEqual(handled, true, 'inline 整套提交应被处理');
+        assert.strictEqual(finalizeCount, 1, 'inline 整套提交只 finalize 一次');
+        assert.strictEqual(session.currentIndex, 3, '整套提交后 currentIndex 应到末尾');
+        assert.strictEqual(session.results.length, 3, '整套提交应填充三篇 result');
+        assert.deepStrictEqual(plain(session.results.map(item => item.examId)), ['reading-p1', 'reading-p2', 'reading-p3'], 'result 顺序应跟 sequence 一致');
+        assert.strictEqual(session.draftsByExam['reading-p1'].noteText, 'P1 note', 'P1 noteText 应入 draft');
+        assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应入 draft');
+        assert.strictEqual(session.draftsByExam['reading-p3'].scrollY, 333, 'P3 scrollY 应入 draft');
+        assert.deepStrictEqual(plain(session.draftsByExam['reading-p2'].highlights), [{ scope: 'groups', text: 'P2 highlight' }], 'P2 高亮应隔离保存');
     }
 
     // Case 3.1: 如果最后一篇已有导航快照，最终提交仍应覆盖并 finalize
@@ -766,6 +930,8 @@ async function run() {
         assert(ctxMsg, '应收到 SIMULATION_CONTEXT');
         assert.strictEqual(ctxMsg.data.currentIndex, 0, 'currentIndex 应为 0');
         assert.strictEqual(ctxMsg.data.total, 3, 'total 应为 3');
+        assert.strictEqual(Array.isArray(ctxMsg.data.suiteSequence), true, 'SIMULATION_CONTEXT 应包含 suiteSequence');
+        assert.deepStrictEqual(ctxMsg.data.suiteSequence.map(item => item.examId), ['reading-p1', 'reading-p2', 'reading-p3'], 'suiteSequence 应包含三篇 examId');
         assert.strictEqual(ctxMsg.data.isLast, false, 'P1 不是最后一篇');
         assert.strictEqual(ctxMsg.data.canPrev, false, 'P1 不能向前');
         assert.strictEqual(ctxMsg.data.canNext, true, 'P1 可以向后');
@@ -777,6 +943,22 @@ async function run() {
         const ctxP3 = targetWindow._messages.filter(m => m && m.type === 'SIMULATION_CONTEXT')[1];
         assert.strictEqual(ctxP3.data.isLast, true, 'P3 应标记为最后一篇');
         assert.strictEqual(ctxP3.data.canNext, false, 'P3 不能向后导航');
+    }
+
+    // Case 6.1: INIT_SESSION payload 应携带三篇 suiteSequence
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_init_sequence');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        const initWindow = createStubWindow('init-window');
+        const windowInfo = app.ensureExamWindowSession('reading-p1', initWindow);
+        windowInfo.suiteSessionId = session.id;
+        windowInfo.suiteFlowMode = 'simulation';
+        const payload = app._buildExamInitPayload('reading-p1', windowInfo);
+        assert.strictEqual(Array.isArray(payload.suiteSequence), true, 'INIT_SESSION 应包含 suiteSequence');
+        assert.deepStrictEqual(payload.suiteSequence.map(item => item.examId), ['reading-p1', 'reading-p2', 'reading-p3'], 'INIT suiteSequence 应覆盖三篇');
+        assert.deepStrictEqual(payload.suiteSequence.map(item => item.category), ['P1', 'P2', 'P3'], 'INIT suiteSequence 应带 category');
     }
 
     // Case 8: handleSessionReady 应触发首篇模拟上下文下发
@@ -848,6 +1030,475 @@ async function run() {
 
         assert.strictEqual(handled, true, '错篇提交应被处理为忽略');
         assert.strictEqual(session.results.length, 0, '错篇提交不得写入 session.results');
+    }
+
+    // Case 9: 听力桥的临时 examId/sessionId 不得阻断父应用当前题源落库
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('custom-listening-window');
+        const examId = 'custom-listening-teacher-pack';
+        const expectedSessionId = 'custom-listening-teacher-pack_expected';
+        let captured = null;
+
+        app.handlePracticeComplete = async (handledExamId, data) => {
+            captured = { examId: handledExamId, data };
+        };
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Teacher Pack Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '听力题源应注册 message handler');
+
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_COMPLETE',
+                source: 'listening_record_bridge',
+                data: {
+                    source: 'listening_record_bridge',
+                    examId: 'listening-unknown',
+                    sessionId: 'listening-unknown_123',
+                    practiceType: 'listening',
+                    pageType: 'listening',
+                    answers: { q1: 'acommodation' },
+                    correctAnswers: { q1: 'accommodation' },
+                    answerComparison: {
+                        q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+                    },
+                    scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+                }
+            }
+        });
+
+        assert(captured, '听力桥 PRACTICE_COMPLETE 不应被临时 examId/sessionId 静默丢弃');
+        assert.strictEqual(captured.examId, examId, '父应用应使用当前打开的题源 examId');
+        assert.strictEqual(captured.data.examId, examId, 'payload examId 应被纠正为父应用题源');
+        assert.strictEqual(captured.data.sessionId, expectedSessionId, 'payload sessionId 应被纠正为父应用会话');
+    }
+
+    // Case 10: 任意目录听力完成后必须进入 PracticeRecorder，并保存错词
+    {
+        const app = createApp(windowStub);
+        const examId = 'custom-listening-arbitrary-folder';
+        const savedCompletions = [];
+        const savedErrors = [];
+        let status = null;
+
+        app.components.practiceRecorder = {
+            handleSessionCompleted: async (payload) => {
+                savedCompletions.push(payload);
+                return { id: 'record-custom-listening', examId };
+            }
+        };
+        app.updateExamStatus = (handledExamId, nextStatus) => {
+            status = { examId: handledExamId, status: nextStatus };
+        };
+        app.showRealCompletionNotification = () => {};
+        app.cleanupExamSession = async () => {};
+        app.setState = () => {};
+
+        const previousCollector = windowStub.spellingErrorCollector;
+        windowStub.spellingErrorCollector = {
+            detectSource: () => 'other',
+            detectErrors: () => [{
+                word: 'accommodation',
+                userInput: 'acommodation',
+                questionId: 'q1',
+                suiteId: null,
+                examId,
+                timestamp: 1710000000000,
+                errorCount: 1,
+                source: 'other'
+            }],
+            saveErrors: async (errors) => {
+                savedErrors.push(...errors);
+                return true;
+            }
+        };
+
+        await app.handlePracticeComplete(examId, {
+            examId,
+            sessionId: `${examId}_session`,
+            practiceType: 'listening',
+            pageType: 'listening',
+            answers: { q1: 'acommodation' },
+            correctAnswers: { q1: 'accommodation' },
+            answerComparison: {
+                q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+            },
+            scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+        });
+
+        windowStub.spellingErrorCollector = previousCollector;
+
+        assert.strictEqual(savedCompletions.length, 1, '听力完成应调用 PracticeRecorder 落库');
+        assert.strictEqual(savedCompletions[0].examId, examId, '落库 payload 应保留当前听力 examId');
+        assert.strictEqual(savedErrors.length, 1, '任意目录听力错词应保存到词表链路');
+        assert.strictEqual(savedErrors[0].word, 'accommodation', '错词应来自 answerComparison');
+        assert.deepStrictEqual(status, { examId, status: 'completed' }, '完成后应更新题源状态');
+    }
+
+    // Case 10b: 听力桥自带错词也必须归一到父页面当前题源，不能写入临时 listening-unknown
+    {
+        const app = createApp(windowStub);
+        const examId = 'listening-p1-normalized-errors';
+        const savedErrors = [];
+
+        app.components.practiceRecorder = {
+            handleSessionCompleted: async () => ({ id: 'record-normalized-errors', examId })
+        };
+        app.updateExamStatus = () => {};
+        app.showRealCompletionNotification = () => {};
+        app.cleanupExamSession = async () => {};
+        app.setState = () => {};
+
+        const previousCollector = windowStub.spellingErrorCollector;
+        windowStub.spellingErrorCollector = {
+            detectSource: () => 'p1',
+            detectErrors: () => [],
+            saveErrors: async (errors) => {
+                savedErrors.push(...errors);
+                return true;
+            }
+        };
+
+        await app.handlePracticeComplete(examId, {
+            examId,
+            sessionId: `${examId}_session`,
+            practiceType: 'listening',
+            pageType: 'listening',
+            answers: { q1: 'acommodation' },
+            correctAnswers: { q1: 'accommodation' },
+            answerComparison: {
+                q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+            },
+            scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' },
+            spellingErrors: [{
+                word: 'accommodation',
+                userInput: 'acommodation',
+                questionId: 'q1',
+                suiteId: null,
+                examId: 'listening-unknown',
+                timestamp: 1710000000000,
+                errorCount: 1,
+                source: 'other'
+            }]
+        });
+
+        windowStub.spellingErrorCollector = previousCollector;
+
+        assert.strictEqual(savedErrors.length, 1, '听力桥自带错词应继续保存');
+        assert.strictEqual(savedErrors[0].examId, examId, '错词 examId 必须归一到父页面题源');
+        assert.strictEqual(savedErrors[0].source, 'p1', 'P1 听力错词 source 必须归一，避免写到 other 词表');
+    }
+
+    // Case 11: 听力桥 bootstrap ready 不得提前结束父子握手
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('custom-listening-handshake-window');
+        const examId = 'custom-listening-handshake';
+        const expectedSessionId = 'custom-listening-handshake_expected';
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Handshake Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+        examWindow._messages.length = 0;
+
+        const timer = setInterval(() => {}, 10000);
+        app._handshakeTimers = new Map([[examId, timer]]);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '听力题源应注册 message handler');
+
+        try {
+            await handler({
+                source: examWindow,
+                origin: 'http://localhost',
+                data: {
+                    type: 'SESSION_READY',
+                    source: 'listening_record_bridge',
+                    data: {
+                        source: 'listening_record_bridge',
+                        examId: 'listening-unknown',
+                        sessionId: 'listening-unknown_123',
+                        pageType: 'listening',
+                        type: 'listening',
+                        initialized: false
+                    }
+                }
+            });
+
+            const preInitInfo = app.examWindows.get(examId);
+            assert.strictEqual(app._handshakeTimers.has(examId), true, 'pre-init ready 不得停止 INIT 重试');
+            assert.strictEqual(preInitInfo.dataCollectorReady, undefined, 'pre-init ready 不得标记 collector ready');
+            assert(examWindow._messages.some(message => message && message.type === 'INIT_SESSION'), 'pre-init ready 后应补发 INIT_SESSION');
+
+            await handler({
+                source: examWindow,
+                origin: 'http://localhost',
+                data: {
+                    type: 'SESSION_READY',
+                    source: 'listening_record_bridge',
+                    data: {
+                        source: 'listening_record_bridge',
+                        examId,
+                        sessionId: expectedSessionId,
+                        pageType: 'listening',
+                        type: 'listening',
+                        initialized: true
+                    }
+                }
+            });
+
+            assert.strictEqual(app._handshakeTimers.has(examId), false, 'initialized ready 才能停止 INIT 重试');
+            assert.strictEqual(app.examWindows.get(examId).dataCollectorReady, true, 'initialized ready 应标记 collector ready');
+        } finally {
+            clearInterval(timer);
+        }
+    }
+
+    // Case 12: 听力完成早于 initialized ready 时，也必须先补建 recorder session 再落库
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('custom-listening-complete-first-window');
+        const examId = 'custom-listening-complete-first';
+        const expectedSessionId = 'custom-listening-complete-first_expected';
+        const calls = [];
+        let status = null;
+
+        app.components.practiceRecorder = {
+            activeSessions: new Map(),
+            startPracticeSession(handledExamId, examData) {
+                calls.push({ type: 'startPracticeSession', examId: handledExamId, examData });
+                this.activeSessions.set(handledExamId, {
+                    examId: handledExamId,
+                    sessionId: `${handledExamId}_generated`,
+                    metadata: {},
+                    progress: { totalQuestions: examData.totalQuestions || 0 },
+                    answers: {}
+                });
+                return this.activeSessions.get(handledExamId);
+            },
+            handleSessionStarted(payload) {
+                calls.push({ type: 'handleSessionStarted', payload });
+                assert(this.activeSessions.has(payload.examId), '补建 session 必须先于 handleSessionStarted');
+                const session = this.activeSessions.get(payload.examId);
+                session.sessionId = payload.sessionId;
+                session.metadata = { ...session.metadata, ...payload.metadata };
+                this.activeSessions.set(payload.examId, session);
+            },
+            async handleSessionCompleted(payload) {
+                calls.push({ type: 'handleSessionCompleted', payload });
+                assert(this.activeSessions.has(payload.examId), '真实 recorder 没有 active session 会拒绝落库');
+                const session = this.activeSessions.get(payload.examId);
+                assert.strictEqual(session.sessionId, payload.sessionId, '完成 payload 必须使用父页面 expectedSessionId');
+                return { id: `record_${payload.sessionId}`, examId: payload.examId, sessionId: payload.sessionId };
+            }
+        };
+        app.updateExamStatus = (handledExamId, nextStatus) => {
+            status = { examId: handledExamId, status: nextStatus };
+        };
+        app.showRealCompletionNotification = () => {};
+        app.cleanupExamSession = async () => {};
+        app.setState = () => {};
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Complete First Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '听力题源应注册 message handler');
+
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_COMPLETE',
+                source: 'listening_record_bridge',
+                data: {
+                    source: 'listening_record_bridge',
+                    examId: 'listening-unknown',
+                    sessionId: 'listening-unknown_early',
+                    practiceType: 'listening',
+                    pageType: 'listening',
+                    title: 'Complete First Listening',
+                    answers: { q1: 'acommodation' },
+                    correctAnswers: { q1: 'accommodation' },
+                    answerComparison: {
+                        q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+                    },
+                    scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+                }
+            }
+        });
+
+        assert.deepStrictEqual(
+            calls.map(call => call.type),
+            ['startPracticeSession', 'handleSessionStarted', 'handleSessionCompleted'],
+            'complete-before-ready 必须先建会话、再同步 sessionId、最后落库'
+        );
+        assert.strictEqual(calls[2].payload.examId, examId, '完成 payload examId 应被纠正为父页面当前题源');
+        assert.strictEqual(calls[2].payload.sessionId, expectedSessionId, '完成 payload sessionId 应被纠正为父页面会话');
+        assert.deepStrictEqual(status, { examId, status: 'completed' }, '完成后应更新题源状态');
+    }
+
+    // Case 13: 统一阅读提交后 reset 必须复用父页通信链路并重建 recorder session
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('unified-reading-retake-window');
+        const examId = 'reading-retake-unified';
+        const firstSessionId = 'reading-retake-first-session';
+        const resetSessionId = 'reading-retake-reset-session';
+        const completions = [];
+        const recorderStarts = [];
+        const resetStarts = [];
+        const statuses = [];
+        let cleanupCount = 0;
+        let restartCount = 0;
+
+        app.generateSessionId = () => resetSessionId;
+        app.components.practiceRecorder = {
+            activeSessions: new Map(),
+            async handleSessionCompleted(payload) {
+                completions.push(payload);
+                this.activeSessions.delete(payload.examId);
+                return { id: `record_${payload.sessionId}`, examId: payload.examId, sessionId: payload.sessionId };
+            },
+            handleSessionStarted(payload) {
+                recorderStarts.push(payload);
+                const session = this.activeSessions.get(payload.examId) || {
+                    examId: payload.examId,
+                    metadata: {},
+                    progress: {},
+                    answers: {}
+                };
+                session.sessionId = payload.sessionId;
+                session.metadata = { ...session.metadata, ...payload.metadata };
+                this.activeSessions.set(payload.examId, session);
+            }
+        };
+        app.startPracticeSession = async (handledExamId) => {
+            resetStarts.push(handledExamId);
+            app.components.practiceRecorder.activeSessions.set(handledExamId, {
+                examId: handledExamId,
+                sessionId: 'temporary-reset-session',
+                metadata: {},
+                progress: {},
+                answers: {}
+            });
+        };
+        app.cleanupExamSession = async () => {
+            cleanupCount += 1;
+        };
+        app.restartExamHandshake = (targetWindow, handledExamId) => {
+            restartCount += 1;
+            assert.strictEqual(targetWindow, examWindow, 'reset 应复用当前统一阅读窗口');
+            assert.strictEqual(handledExamId, examId, 'reset 握手应使用当前题源');
+        };
+        app.updateExamStatus = (handledExamId, status) => {
+            statuses.push({ examId: handledExamId, status });
+        };
+        app.showRealCompletionNotification = () => {};
+        app.setState = () => {};
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Unified Retake Reading',
+            type: 'reading'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = firstSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '统一阅读题源应注册 message handler');
+
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_COMPLETE',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    sessionId: firstSessionId,
+                    answers: { q1: 'A' },
+                    answerComparison: {
+                        q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true }
+                    },
+                    scoreInfo: { correct: 1, total: 1, totalQuestions: 1, accuracy: 1, percentage: 100 },
+                    metadata: {
+                        type: 'reading',
+                        examType: 'reading',
+                        practiceMode: 'single',
+                        renderMode: 'unified-reading'
+                    }
+                }
+            }
+        });
+
+        assert.strictEqual(cleanupCount, 0, '统一阅读提交后不得清掉父页消息 handler');
+        assert.strictEqual(app.messageHandlers.has(examId), true, '统一阅读完成后应保留 message handler 等待 reset');
+        assert.strictEqual(app.examWindows.get(examId).status, 'completed', '统一阅读完成后应标记窗口完成态');
+        assert.strictEqual(completions.length, 1, '统一阅读完成应正常进入 recorder');
+
+        examWindow._messages.length = 0;
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_RESET_REQUEST',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    sessionId: firstSessionId,
+                    reason: 'retake-after-submit',
+                    fromPracticeMode: 'single',
+                    targetPracticeMode: 'single',
+                    normalUrl: 'file:///reading-practice-unified.html?examId=reading-retake-unified'
+                }
+            }
+        });
+
+        const resetInfo = app.examWindows.get(examId);
+        assert.strictEqual(resetInfo.expectedSessionId, resetSessionId, 'reset 必须生成新的 expectedSessionId');
+        assert.strictEqual(resetInfo.status, 'active', 'reset 后窗口应回到 active');
+        assert.deepStrictEqual(resetStarts, [examId], 'reset 后必须补建练习会话');
+        assert.strictEqual(recorderStarts.length, 1, 'reset 后必须同步 recorder sessionId');
+        assert.strictEqual(recorderStarts[0].sessionId, resetSessionId, 'recorder sessionId 必须使用 reset 后的新 session');
+        assert.strictEqual(
+            app.components.practiceRecorder.activeSessions.get(examId).sessionId,
+            resetSessionId,
+            'reset 后 active recorder session 必须可被下一次提交使用'
+        );
+        assert(
+            examWindow._messages.some(message => message && message.type === 'INIT_SESSION' && message.data && message.data.sessionId === resetSessionId),
+            'reset 后必须向子页发送新的 INIT_SESSION'
+        );
+        assert.strictEqual(restartCount, 1, 'reset 后必须重启握手');
+        assert(statuses.some(item => item.examId === examId && item.status === 'in-progress'), 'reset 后题源状态应回到 in-progress');
     }
 
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));

@@ -78,7 +78,7 @@
 
     var ICON_SVG_CONTENT = {
         chart: '<rect x="4" y="11" width="3" height="8" rx="1"></rect><rect x="10.5" y="7" width="3" height="12" rx="1"></rect><rect x="17" y="4" width="3" height="15" rx="1"></rect>',
-        book: '<path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H20v15H7.5A2.5 2.5 0 0 0 5 20.5V5.5z"></path><path d="M5 5.5V20.5A2.5 2.5 0 0 1 2.5 18V7.5A2.5 2.5 0 0 1 5 5z"></path>',
+        book: '<path d="M4.5 20V8.2a2.7 2.7 0 0 1 2.7-2.7H10"></path><path d="M19.5 20V8.2a2.7 2.7 0 0 0-2.7-2.7H14"></path><path d="M7.2 16.8H10a2 2 0 0 1 2 2V6.5a2 2 0 0 0-2-2H7.2a2.7 2.7 0 0 0-2.7 2.7v11.6a2 2 0 0 1 2-2Z"></path><path d="M16.8 16.8H14a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2h2.8a2.7 2.7 0 0 1 2.7 2.7v11.6a2 2 0 0 0-2-2Z"></path><path d="M9 9.5h1.3M13.7 9.5H15"></path>',
         note: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 15l2.4 2.4 5.8-5.8"></path>',
         spark: '<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3z"></path>',
         gear: '<circle cx="12" cy="12" r="3"></circle><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"></path>',

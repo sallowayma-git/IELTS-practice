@@ -66,6 +66,7 @@
 
         var clockTrigger = moreView.querySelector('[data-action="open-clock"]');
         var vocabTrigger = moreView.querySelector('[data-action="open-vocab"]');
+        var memorizeTrigger = moreView.querySelector('[data-action="open-reading-memorize"]');
         var closeTrigger = overlay.querySelector('[data-action="close-clock"]');
         var overlayInner = overlay.querySelector('[data-clock-role="overlay-inner"]');
         var viewStack = overlay.querySelector('[data-clock-role="view-stack"]');
@@ -138,7 +139,26 @@
             vocabTrigger.addEventListener('click', handleVocabEntry);
         }
 
+        if (memorizeTrigger) {
+            memorizeTrigger.addEventListener('click', handleReadingMemorizeEntry);
+        }
+
         moreViewInteractionsConfigured = true;
+    }
+
+    function handleReadingMemorizeEntry(event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        if (global.AppActions && typeof global.AppActions.startReadingMemorize === 'function') {
+            global.AppActions.startReadingMemorize();
+            return;
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('阅读背题入口未就绪，请稍后重试。', 'warning');
+        } else if (typeof global.alert === 'function') {
+            global.alert('阅读背题入口未就绪，请稍后重试。');
+        }
     }
 
     function handleVocabEntry(event) {

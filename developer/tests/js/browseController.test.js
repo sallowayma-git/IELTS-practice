@@ -8,7 +8,13 @@
  * 3. 筛选逻辑
  */
 
-const assert = require('assert');
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 模拟 DOM 环境
 global.window = {
@@ -47,8 +53,6 @@ global.document = {
 };
 
 // 加载 browseController
-const fs = require('fs');
-const path = require('path');
 const controllerPath = path.join(__dirname, '../../../js/app/browseController.js');
 const controllerCode = fs.readFileSync(controllerPath, 'utf-8');
 
@@ -364,6 +368,50 @@ function testInvalidModeHandling() {
     console.log('  ✓ 无效模式处理正确');
 }
 
+function testListeningEntranceFollowsActiveLibrary() {
+    console.log('测试: 听力入口跟随活动题库可用性');
+
+    const buttons = [];
+    const mockContainer = {
+        innerHTML: '',
+        classList: {
+            contains: () => true,
+            add: () => { }
+        },
+        appendChild: (btn) => {
+            buttons.push(btn);
+        },
+        querySelectorAll: () => buttons
+    };
+
+    global.document.getElementById = (id) => {
+        if (id === 'type-filter-buttons') {
+            return mockContainer;
+        }
+        return null;
+    };
+
+    window.hasActiveListeningLibrary = () => false;
+    const controller = new window.BrowseController();
+    controller.buttonContainer = mockContainer;
+    buttons.length = 0;
+    controller.renderFilterButtons();
+    assert.strictEqual(buttons.length, 2, '无听力题库时默认筛选只应显示全部/阅读');
+    assert(!buttons.some((button) => button.dataset.filterType === 'listening'), '无听力题库时不应渲染听力按钮');
+
+    controller.setMode('frequency-p1');
+    assert.strictEqual(controller.currentMode, 'default', '无听力题库时不能进入听力频率模式');
+
+    window.hasActiveListeningLibrary = () => true;
+    buttons.length = 0;
+    controller.renderFilterButtons();
+    assert.strictEqual(buttons.length, 3, '导入听力题库后默认筛选应恢复听力入口');
+    assert(buttons.some((button) => button.dataset.filterType === 'listening'), '导入听力题库后应渲染听力按钮');
+
+    delete window.hasActiveListeningLibrary;
+    console.log('  ✓ 听力入口跟随活动题库状态');
+}
+
 // 运行所有测试
 function runTests() {
     console.log('\n=== BrowseController 单元测试 ===\n');
@@ -378,6 +426,7 @@ function runTests() {
         testFrequencyFiltering();
         testP4AllButtonLogic();
         testFilterButtonStates();
+        testListeningEntranceFollowsActiveLibrary();
         testInvalidModeHandling();
 
         console.log('\n✅ 所有测试通过\n');

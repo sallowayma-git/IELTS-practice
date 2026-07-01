@@ -40,6 +40,31 @@ global.console = {
     info: () => {}
 };
 
+global.__EMBEDDED_WORDLISTS__ = {
+    ielts_core: [
+        {
+            word: 'accommodation',
+            meaning: 'n. 住宿',
+            example: 'The hotel provides comfortable accommodation.'
+        },
+        {
+            word: 'receive',
+            meaning: 'v. 收到；接收',
+            example: 'Students receive feedback after the test.'
+        },
+        {
+            word: 'environment',
+            meaning: 'n. 环境',
+            example: 'The environment affects learning.'
+        },
+        {
+            word: 'garden',
+            meaning: 'n. 花园；庭院',
+            example: 'The garden is quiet.'
+        }
+    ]
+};
+
 // Mock存储系统
 const mockStorage = new Map();
 global.storage = {
@@ -113,6 +138,27 @@ async function runTests() {
         assert.ok(errorWords.includes('receive'), '应该包含receive');
         
         results.push({ name: '错误检测', status: 'pass' });
+
+        // 测试1b: 听力候选答案和短语错词字段
+        console.log('测试1b: 听力候选答案和短语错词字段');
+        const candidateErrors = collector.detectErrors({
+            q20: {
+                userAnswer: 'green gardon',
+                correctAnswer: 'green garden',
+                acceptedAnswers: ['green garden', 'green gardens'],
+                canonicalAnswer: 'green garden',
+                isCorrect: false
+            }
+        }, 'set-candidate', testData.examId);
+
+        assert.strictEqual(candidateErrors.length, 1, '应该检测短语中的单个拼写错误');
+        assert.strictEqual(candidateErrors[0].word, 'garden', '应该抓取正确 token');
+        assert.strictEqual(candidateErrors[0].userInput, 'gardon', '应该记录用户错拼 token');
+        assert.deepStrictEqual(candidateErrors[0].acceptedAnswers, ['green garden', 'green gardens']);
+        assert.strictEqual(candidateErrors[0].canonicalAnswer, 'green garden');
+        assert.strictEqual(candidateErrors[0].metadata.comparisonMode, 'phrase-token');
+
+        results.push({ name: '听力候选答案和短语错词字段', status: 'pass' });
         
         // 测试2: 单词过滤
         console.log('测试2: 单词过滤');
@@ -164,8 +210,22 @@ async function runTests() {
         const p1List = await collector.loadVocabList('p1');
         assert.ok(p1List, 'P1词表应该存在');
         assert.strictEqual(p1List.words.length, 2, 'P1词表应该有2个单词');
+        const savedAccommodationInitial = p1List.words.find(
+            w => w.word.toLowerCase() === 'accommodation'
+        );
+        assert.ok(savedAccommodationInitial, '应该保存accommodation');
+        assert.strictEqual(savedAccommodationInitial.meaning, 'n. 住宿', '错词落库时应该补全核心词库中文释义');
+        assert.strictEqual(savedAccommodationInitial.example, 'The hotel provides comfortable accommodation.');
+        assert.ok(savedAccommodationInitial.note.includes('你曾拼写为: accomodation'), '错拼信息应该进入note而不是meaning');
+        assert.strictEqual(savedAccommodationInitial.source, 'p1');
+        assert.strictEqual(savedAccommodationInitial.interval, 1, '错词应带默认间隔字段');
+        assert.strictEqual(savedAccommodationInitial.repetitions, 0, '错词应带默认重复字段');
+        assert.strictEqual(savedAccommodationInitial.intraCycles, 0, '错词应带轮内循环字段');
+        assert.strictEqual(savedAccommodationInitial.correctCount, 0, '错词应带正确次数字段');
+        assert.strictEqual(savedAccommodationInitial.lastReviewed, null, '新错词不应伪造复习时间');
+        assert.strictEqual(savedAccommodationInitial.nextReview, null, '新错词应作为新词进入背诵队列');
         
-        results.push({ name: '词表保存', status: 'pass' });
+        results.push({ name: '词表保存并补全背诵字段', status: 'pass' });
         
         // 测试6: 重复单词处理
         console.log('测试6: 重复单词处理');
@@ -269,6 +329,18 @@ async function runTests() {
         assert.strictEqual(p1ListAfter.words.length, 0, 'P1词表应该仍然为空');
         
         results.push({ name: 'P4词表独立性', status: 'pass' });
+
+        // 测试13: 候选答案字段保存到错词词表
+        console.log('测试13: 候选答案字段保存到错词词表');
+        await collector.saveErrors(candidateErrors);
+        const p1CandidateList = await collector.loadVocabList('p1');
+        const savedGarden = p1CandidateList.words.find(w => w.word === 'garden');
+        assert.ok(savedGarden, '应该保存短语 token 错词');
+        assert.deepStrictEqual(savedGarden.acceptedAnswers, ['green garden', 'green gardens']);
+        assert.strictEqual(savedGarden.canonicalAnswer, 'green garden');
+        assert.strictEqual(savedGarden.reasonCode, candidateErrors[0].reasonCode);
+
+        results.push({ name: '候选答案字段保存到错词词表', status: 'pass' });
         
     } catch (error) {
         results.push({

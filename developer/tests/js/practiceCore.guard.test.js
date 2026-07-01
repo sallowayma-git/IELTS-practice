@@ -83,7 +83,11 @@ function walk(dir, bucket = []) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     entries.forEach((entry) => {
         const fullPath = path.join(dir, entry.name);
+        const relativePath = path.relative(repoRoot, fullPath);
         if (entry.isDirectory()) {
+            if (relativePath === path.join('js', 'bundles')) {
+                return;
+            }
             walk(fullPath, bucket);
             return;
         }

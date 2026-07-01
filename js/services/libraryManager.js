@@ -9,6 +9,96 @@
         return Array.isArray(value) ? value.slice() : [];
     }
 
+    function normalizeSlashPath(value) {
+        return String(value || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
+    }
+
+    function hasProtocolPath(value) {
+        return /^(?:[a-z]+:)?\/\//i.test(String(value || '')) || /^[A-Za-z]:\\/.test(String(value || ''));
+    }
+
+    function countIndexTypes(index) {
+        const counts = { total: 0, reading: 0, listening: 0 };
+        (Array.isArray(index) ? index : []).forEach((exam) => {
+            if (!exam || typeof exam !== 'object') {
+                return;
+            }
+            counts.total += 1;
+            if (exam.type === 'reading') {
+                counts.reading += 1;
+            } else if (exam.type === 'listening') {
+                counts.listening += 1;
+            }
+        });
+        return counts;
+    }
+
+    function hasListeningEntries(index) {
+        return (Array.isArray(index) ? index : []).some((exam) => {
+            return exam && exam.type === 'listening';
+        });
+    }
+
+    function hasBuiltInListeningManifest() {
+        const manifest = global.__LISTENING_EXAM_MANIFEST__;
+        return !!(
+            manifest
+            && typeof manifest === 'object'
+            && Object.keys(manifest).length > 0
+        );
+    }
+
+    function isBuiltInListeningLibraryAvailable() {
+        if (global.__defaultListeningLibraryAvailable === true) {
+            return true;
+        }
+        if (global.__defaultListeningLibraryAvailable === false) {
+            return false;
+        }
+        return hasBuiltInListeningManifest()
+            && Array.isArray(global.listeningExamIndex)
+            && global.listeningExamIndex.length > 0;
+    }
+
+    function getActiveExamIndexSnapshot() {
+        try {
+            if (typeof global.getExamIndexState === 'function') {
+                return global.getExamIndexState();
+            }
+        } catch (_) { }
+        return Array.isArray(global.examIndex) ? global.examIndex : [];
+    }
+
+    function hasActiveListeningLibrary(index) {
+        return hasListeningEntries(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+    }
+
+    function refreshListeningAvailabilityUI(index) {
+        if (typeof global.refreshListeningAvailabilityUI === 'function') {
+            try {
+                global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+                return;
+            } catch (error) {
+                console.warn('[LibraryManager] 刷新听力入口状态失败:', error);
+            }
+        }
+        const listeningAvailable = hasActiveListeningLibrary(index);
+        try {
+            const container = global.document && global.document.getElementById('type-filter-buttons');
+            const listeningButtons = container
+                ? container.querySelectorAll('[data-filter-type="listening"], [data-filter-id="listening"]')
+                : [];
+            Array.prototype.forEach.call(listeningButtons, (button) => {
+                button.hidden = !listeningAvailable;
+                button.setAttribute('aria-hidden', listeningAvailable ? 'false' : 'true');
+                if (!listeningAvailable) {
+                    button.classList.remove('active');
+                    button.setAttribute('aria-pressed', 'false');
+                }
+            });
+        } catch (_) { }
+    }
+
     class LibraryManager {
         constructor(options = {}) {
             this.options = options || {};
@@ -62,6 +152,12 @@
                 : null;
         }
 
+        async deletePathMapForConfiguration(key) {
+            return this.resourceCore && typeof this.resourceCore.deletePathMapForConfiguration === 'function'
+                ? this.resourceCore.deletePathMapForConfiguration(key)
+                : false;
+        }
+
         setActivePathMap(map) {
             return this.resourceCore && typeof this.resourceCore.setActivePathMap === 'function'
                 ? this.resourceCore.setActivePathMap(map)
@@ -84,16 +180,17 @@
             return global.storage.get('exam_index_configurations', []);
         }
 
-        async saveLibraryConfiguration(name, key, examCount) {
+        async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
             try {
                 let configs = await global.storage.get('exam_index_configurations', []);
                 if (!Array.isArray(configs)) {
                     configs = [];
                 }
-                const entry = { name, key, examCount, timestamp: Date.now() };
+                const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+                const entry = Object.assign({}, safeMetadata, { name, key, examCount, timestamp: Date.now() });
                 const existingIndex = configs.findIndex((item) => item && item.key === key);
                 if (existingIndex >= 0) {
-                    configs[existingIndex] = entry;
+                    configs[existingIndex] = Object.assign({}, configs[existingIndex], entry);
                 } else {
                     configs.push(entry);
                 }
@@ -103,13 +200,43 @@
             }
         }
 
+        getDefaultReadingIndex() {
+            if (typeof global.getReadingExamIndex === 'function') {
+                try {
+                    const index = global.getReadingExamIndex();
+                    if (Array.isArray(index)) {
+                        return index.map((exam) => Object.assign({}, exam, { type: 'reading' }));
+                    }
+                } catch (error) {
+                    console.warn('[LibraryManager] 读取阅读题库 manifest 失败:', error);
+                }
+            }
+            if (Array.isArray(global.__READING_EXAM_INDEX__)) {
+                return global.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }));
+            }
+            return [];
+        }
+
+        getReadingPathRoot() {
+            if (global.__READING_EXAM_PATH_ROOT__ && typeof global.__READING_EXAM_PATH_ROOT__ === 'object') {
+                return global.__READING_EXAM_PATH_ROOT__;
+            }
+            if (typeof global.getReadingExamIndex === 'function' && global.getReadingExamIndex.pathRoot) {
+                return global.getReadingExamIndex.pathRoot;
+            }
+            if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.pathRoot) {
+                return global.__READING_EXAM_INDEX__.pathRoot;
+            }
+            return null;
+        }
+
         resolveScriptPathRoot(type) {
             const defaultRoot = type === 'reading'
                 ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
                 : 'ListeningPractice/';
             try {
                 if (type === 'reading') {
-                    const rootMeta = global.completeExamIndex && global.completeExamIndex.pathRoot;
+                    const rootMeta = this.getReadingPathRoot();
                     if (typeof rootMeta === 'string' && rootMeta.trim()) {
                         return rootMeta.trim();
                     }
@@ -122,7 +249,7 @@
                     if (typeof rootMeta === 'string' && rootMeta.trim()) {
                         return rootMeta.trim();
                     }
-                    const completeRoot = global.completeExamIndex && global.completeExamIndex.pathRoot;
+                    const completeRoot = this.getReadingPathRoot();
                     if (completeRoot && typeof completeRoot === 'object' && typeof completeRoot.listening === 'string') {
                         return completeRoot.listening.trim();
                     }
@@ -131,12 +258,45 @@
             return defaultRoot;
         }
 
+        defaultPathRoot(type) {
+            return type === 'reading'
+                ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
+                : 'ListeningPractice/';
+        }
+
+        absolutizeDefaultExamPath(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return exam;
+            }
+            const next = Object.assign({}, exam);
+            const type = next.type === 'reading' ? 'reading' : (next.type === 'listening' ? 'listening' : '');
+            const path = normalizeSlashPath(next.path || '');
+            if (!type || !path || hasProtocolPath(path) || next.sourceKind === 'file-picker') {
+                return next;
+            }
+
+            const root = normalizeSlashPath(this.defaultPathRoot(type)).replace(/\/+$/, '');
+            if (root && !path.toLowerCase().startsWith((root + '/').toLowerCase())) {
+                if (type === 'listening' && /^P[1-4]\//i.test(path)) {
+                    next.path = root + '/' + path;
+                }
+            }
+            return next;
+        }
+
+        normalizeIndexForCustomConfig(index) {
+            return Array.isArray(index)
+                ? index.map((exam) => this.absolutizeDefaultExamPath(exam))
+                : [];
+        }
+
         finishLibraryLoading(startTime) {
             const loadTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() - startTime : 0;
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('题库装载完成', 75);
             }
             try { global.updateOverview && global.updateOverview(); } catch (_) { }
+            refreshListeningAvailabilityUI();
             try { global.refreshBrowseProgressFromRecords && global.refreshBrowseProgressFromRecords(); } catch (_) { }
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -186,18 +346,18 @@
 
             try {
                 if (global.ensureExamDataScripts) {
-                    await global.ensureExamDataScripts();
+                    try {
+                        await global.ensureExamDataScripts();
+                    } catch (loadError) {
+                        console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', loadError);
+                    }
                 }
                 if (typeof global.reportBootStage === 'function') {
                     global.reportBootStage('解析题库数据', 55);
                 }
 
-                const readingExams = Array.isArray(global.completeExamIndex)
-                    ? global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-                    : [];
-                const listeningExams = Array.isArray(global.listeningExamIndex)
-                    ? global.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
-                    : [];
+                const readingExams = this.getDefaultReadingIndex();
+                const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
                     if (global.setExamIndexState) {
@@ -308,6 +468,211 @@
             }
         }
 
+        resolveDefaultTypeIndex(type) {
+            if (type === 'reading') {
+                return this.normalizeIndexForCustomConfig(this.getDefaultReadingIndex());
+            }
+            if (
+                type === 'listening'
+                && isBuiltInListeningLibraryAvailable()
+                && Array.isArray(global.listeningExamIndex)
+            ) {
+                return this.normalizeIndexForCustomConfig(
+                    global.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
+                );
+            }
+            return [];
+        }
+
+        async resolveBaseLibraryIndex(activeKey) {
+            let currentIndex = [];
+            const key = typeof activeKey === 'string' && activeKey.trim() ? activeKey.trim() : 'exam_index';
+            try {
+                currentIndex = await this.fetchLibraryDataset(key);
+            } catch (_) {
+                currentIndex = [];
+            }
+            if (!Array.isArray(currentIndex) || currentIndex.length === 0) {
+                try {
+                    currentIndex = global.getExamIndexState ? global.getExamIndexState() : [];
+                } catch (_) {
+                    currentIndex = [];
+                }
+            }
+            if ((!Array.isArray(currentIndex) || currentIndex.length === 0) && key === 'exam_index') {
+                const reading = this.resolveDefaultTypeIndex('reading');
+                const listening = this.resolveDefaultTypeIndex('listening');
+                currentIndex = reading.concat(listening);
+            }
+            return this.normalizeIndexForCustomConfig(currentIndex);
+        }
+
+        async buildImportBaseIndex(activeKey, type, mode) {
+            const base = await this.resolveBaseLibraryIndex(activeKey);
+            const otherType = type === 'reading' ? 'listening' : 'reading';
+            let next = base.slice();
+
+            if (!next.some((exam) => exam && exam.type === otherType)) {
+                next = next.concat(this.resolveDefaultTypeIndex(otherType));
+            }
+
+            if (mode === 'incremental' && !next.some((exam) => exam && exam.type === type)) {
+                next = next.concat(this.resolveDefaultTypeIndex(type));
+            }
+
+            return this.normalizeIndexForCustomConfig(next);
+        }
+
+        async buildUniqueImportedConfigKey(prefix = 'exam_index') {
+            let configs = [];
+            try {
+                configs = await this.getLibraryConfigurations();
+            } catch (_) {
+                configs = [];
+            }
+            const used = new Set((Array.isArray(configs) ? configs : []).map((config) => {
+                if (typeof config === 'string') {
+                    return config.trim();
+                }
+                return config && typeof config.key === 'string' ? config.key.trim() : '';
+            }).filter(Boolean));
+            const now = Date.now();
+            for (let index = 0; index < 100; index += 1) {
+                const key = index === 0 ? `${prefix}_${now}` : `${prefix}_${now}_${index}`;
+                if (used.has(key)) {
+                    continue;
+                }
+                try {
+                    const stored = global.storage && typeof global.storage.get === 'function'
+                        ? await global.storage.get(key)
+                        : null;
+                    if (!stored) {
+                        return key;
+                    }
+                } catch (_) {
+                    return key;
+                }
+            }
+            return `${prefix}_${now}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        buildImportedConfigName(type, mode, label) {
+            const typeLabel = type === 'reading' ? '阅读' : '听力';
+            const modeLabel = mode === 'incremental' ? '增量' : '全量';
+            const suffix = label && String(label).trim()
+                ? ` · ${String(label).trim()}`
+                : '';
+            return `${typeLabel}${modeLabel}${suffix}-${new Date().toLocaleString()}`;
+        }
+
+        mergeLibraryEntries(currentIndex, additions, type, mode) {
+            const discovery = global.LibraryDiscovery;
+            if (discovery && typeof discovery.mergeExamIndexes === 'function') {
+                return discovery.mergeExamIndexes(currentIndex, additions, { type, mode });
+            }
+            const base = Array.isArray(currentIndex) ? currentIndex.slice() : [];
+            const incoming = Array.isArray(additions) ? additions.slice() : [];
+            const targetBase = mode === 'full'
+                ? base.filter((exam) => !exam || exam.type !== type)
+                : base;
+            const keys = new Map();
+            const makeKey = (exam) => String(
+                (exam && (exam.importKey || exam.sourcePath || [exam.type, exam.path, exam.filename, exam.title].join('|'))) || ''
+            ).toLowerCase();
+            targetBase.forEach((exam, index) => {
+                const key = makeKey(exam);
+                if (key) {
+                    keys.set(key, index);
+                }
+            });
+            let added = 0;
+            let updated = 0;
+            incoming.forEach((exam) => {
+                const key = makeKey(exam);
+                if (key && keys.has(key)) {
+                    targetBase[keys.get(key)] = exam;
+                    updated += 1;
+                    return;
+                }
+                if (key) {
+                    keys.set(key, targetBase.length);
+                }
+                targetBase.push(exam);
+                added += 1;
+            });
+            return { index: targetBase, added, updated, skipped: Math.max(0, incoming.length - added - updated) };
+        }
+
+        async createImportedLibraryConfiguration(options = {}) {
+            const type = options.type === 'reading' ? 'reading' : (options.type === 'listening' ? 'listening' : '');
+            const mode = options.mode === 'incremental' ? 'incremental' : 'full';
+            const additions = Array.isArray(options.additions) ? options.additions.slice() : [];
+            if (!type) {
+                throw new Error('未知的题库类型');
+            }
+            if (!additions.length) {
+                throw new Error('没有可导入的题源');
+            }
+
+            const activeKey = await this.getActiveLibraryConfigurationKey();
+            const baseIndex = await this.buildImportBaseIndex(activeKey, type, mode);
+            const mergeResult = this.mergeLibraryEntries(baseIndex, additions, type, mode);
+            const newIndex = this.normalizeIndexForCustomConfig(mergeResult.index);
+            if (typeof global.assignExamSequenceNumbers === 'function') {
+                try { global.assignExamSequenceNumbers(newIndex); } catch (_) { }
+            }
+
+            const key = options.key || await this.buildUniqueImportedConfigKey('exam_index');
+            const name = options.name || this.buildImportedConfigName(type, mode, options.label);
+            const counts = countIndexTypes(newIndex);
+            const sourceReport = options.discoveryResult && options.discoveryResult.report
+                ? options.discoveryResult.report
+                : null;
+            const metadata = {
+                counts,
+                sourceType: 'file-picker',
+                lastImport: {
+                    type,
+                    mode,
+                    accepted: additions.length,
+                    rejected: sourceReport ? Number(sourceReport.rejected) || 0 : 0,
+                    createdFrom: activeKey || 'exam_index',
+                    label: options.label || '',
+                    timestamp: Date.now()
+                }
+            };
+
+            await global.storage.set(key, newIndex);
+            const pathFallback = await this.loadPathMapForConfiguration(activeKey || 'exam_index');
+            const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
+                ? this.resourceCore.derivePathMapFromIndex(newIndex, pathFallback || this.DEFAULT_PATH_MAP)
+                : (pathFallback || null);
+            await this.savePathMapForConfiguration(key, newIndex, {
+                overrideMap: pathMap,
+                setActive: options.activate !== false
+            });
+            await this.saveLibraryConfiguration(name, key, newIndex.length, metadata);
+
+            let applied = true;
+            if (options.activate !== false) {
+                applied = await this.applyLibraryConfiguration(key, newIndex, { skipConfigRefresh: false });
+            }
+
+            return {
+                key,
+                name,
+                index: newIndex,
+                counts,
+                merge: {
+                    added: Number(mergeResult.added) || 0,
+                    updated: Number(mergeResult.updated) || 0,
+                    skipped: Number(mergeResult.skipped) || 0
+                },
+                activeKey,
+                applied
+            };
+        }
+
         async applyLibraryConfiguration(key, dataset, options = {}) {
             const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
             if (!Array.isArray(exams) || exams.length === 0) {
@@ -326,6 +691,7 @@
             if (global.setExamIndexState) {
                 global.setExamIndexState(exams);
             }
+            refreshListeningAvailabilityUI(exams);
             if (typeof global.setBrowseFilterState === 'function') {
                 global.setBrowseFilterState('all', 'all');
             }
@@ -369,6 +735,71 @@
             }
 
             return true;
+        }
+
+        async deleteLibraryConfiguration(key) {
+            const configKey = typeof key === 'string' ? key.trim() : '';
+            if (!configKey) {
+                return { deleted: false, reason: 'invalid-key' };
+            }
+            if (configKey === 'exam_index') {
+                return { deleted: false, reason: 'default-config' };
+            }
+
+            const activeKey = await this.getActiveLibraryConfigurationKey();
+            if (activeKey === configKey) {
+                return { deleted: false, reason: 'active-config' };
+            }
+
+            let configs = await this.getLibraryConfigurations();
+            configs = Array.isArray(configs) ? configs : [];
+            let found = false;
+            const nextConfigs = [];
+
+            configs.forEach((config) => {
+                if (!config) {
+                    return;
+                }
+                if (typeof config === 'string') {
+                    const itemKey = config.trim();
+                    if (!itemKey) {
+                        return;
+                    }
+                    if (itemKey === configKey) {
+                        found = true;
+                        return;
+                    }
+                    nextConfigs.push(config);
+                    return;
+                }
+
+                const itemKey = typeof config.key === 'string' ? config.key.trim() : '';
+                if (!itemKey) {
+                    return;
+                }
+                if (itemKey === configKey) {
+                    found = true;
+                    return;
+                }
+                nextConfigs.push(config);
+            });
+
+            if (!found) {
+                return { deleted: false, reason: 'not-found' };
+            }
+
+            if (!global.storage || typeof global.storage.remove !== 'function') {
+                return { deleted: false, reason: 'storage-remove-unavailable' };
+            }
+            await global.storage.remove(configKey);
+            await this.deletePathMapForConfiguration(configKey);
+            await global.storage.set('exam_index_configurations', nextConfigs);
+
+            return {
+                deleted: true,
+                key: configKey,
+                remaining: nextConfigs.length
+            };
         }
 
         async loadLibrary(keyOrForceReload) {
@@ -422,8 +853,25 @@
         buildOverridePathMap(metadata, fallback) {
             return getInstance().buildOverridePathMap(metadata, fallback);
         },
+        hasListeningEntries(index) {
+            return hasListeningEntries(index);
+        },
+        hasActiveListeningLibrary(index) {
+            return hasActiveListeningLibrary(index);
+        },
+        isBuiltInListeningLibraryAvailable() {
+            return isBuiltInListeningLibraryAvailable();
+        },
+        createImportedLibraryConfiguration(options) {
+            return getInstance().createImportedLibraryConfiguration(options);
+        },
+        deleteLibraryConfiguration(key) {
+            return getInstance().deleteLibraryConfiguration(key);
+        },
     };
 
+    global.hasActiveListeningLibrary = hasActiveListeningLibrary;
+    global.isBuiltInListeningLibraryAvailable = isBuiltInListeningLibraryAvailable;
     global.switchLibraryConfig = switchLibraryConfig;
     global.loadLibrary = loadLibrary;
 })(typeof window !== 'undefined' ? window : globalThis);
