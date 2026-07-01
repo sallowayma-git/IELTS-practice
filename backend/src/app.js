@@ -8,7 +8,7 @@ const connectPgSimple = require('connect-pg-simple');
 const helmet = require('helmet');
 
 const db = require('./db');
-const { PostgresAuthStore, createAuthRouter, publicUser, requireAuth, requireAdmin } = require('./auth');
+const { PostgresAuthStore, createAuthRouter, getUserSecurityEpoch, publicUser, requireAuth, requireAdmin } = require('./auth');
 const { PostgresAuthHandoffStore, createAuthHandoffRouter, verifySignedAuthState } = require('./authHandoff');
 const {
     PostgresAuthSessionStore,
@@ -1043,6 +1043,13 @@ function createApp(options = {}) {
         if (!req.session || !safeUser?.id || !authSessionStore || typeof authSessionStore.createSession !== 'function') {
             return null;
         }
+        const storedUser = authStore && typeof authStore.findById === 'function'
+            ? await authStore.findById(safeUser.id)
+            : null;
+        if (authStore && typeof authStore.findById === 'function' && !storedUser) {
+            return null;
+        }
+        const securityEpoch = getUserSecurityEpoch(storedUser || user || safeUser);
         const audience = inferAuthSessionAudience(req, safeUser, options.audience);
         const handle = createAuthSessionHandle();
         const id = createAuthSessionId();
@@ -1056,6 +1063,7 @@ function createApp(options = {}) {
             userId: safeUser.id,
             audience,
             expiresAt,
+            securityEpoch,
             lastVerifierRotatedAt: req.session[SESSION_VERIFIER_ISSUED_AT_KEY]
                 ? new Date(Number(req.session[SESSION_VERIFIER_ISSUED_AT_KEY])).toISOString()
                 : null,
@@ -1067,7 +1075,8 @@ function createApp(options = {}) {
             id,
             handle,
             audience: created?.audience || audience,
-            userId: safeUser.id
+            userId: safeUser.id,
+            securityEpoch
         };
         return req.session[AUTH_SESSION_KEY];
     }
@@ -1105,6 +1114,18 @@ function createApp(options = {}) {
                 await destroyInvalidAuthSession(req, res);
                 return res.status(401).json({ error: 'Authentication required' });
             }
+            const currentSecurityEpoch = Number.isInteger(req.currentUserSecurityEpoch)
+                ? req.currentUserSecurityEpoch
+                : getUserSecurityEpoch(authStore && typeof authStore.findById === 'function'
+                    ? await authStore.findById(active.user_id)
+                    : null);
+            if (getUserSecurityEpoch(active) !== currentSecurityEpoch) {
+                if (typeof authSessionStore.revokeSession === 'function') {
+                    await authSessionStore.revokeSession(active.id);
+                }
+                await destroyInvalidAuthSession(req, res);
+                return res.status(401).json({ error: 'Authentication required' });
+            }
             const expectedAudience = getProxyAudience(req);
             if (expectedAudience && active.audience !== expectedAudience) {
                 await destroyInvalidAuthSession(req, res);
@@ -1114,7 +1135,8 @@ function createApp(options = {}) {
                 id: active.id,
                 handle: current.handle,
                 audience: active.audience,
-                userId: active.user_id
+                userId: active.user_id,
+                securityEpoch: currentSecurityEpoch
             };
             return next();
         } catch (error) {
@@ -1138,6 +1160,10 @@ function createApp(options = {}) {
                 if (!user) {
                     delete req.session[key];
                     return;
+                }
+                const securityEpoch = getUserSecurityEpoch(user);
+                if (key === 'user') {
+                    req.currentUserSecurityEpoch = securityEpoch;
                 }
                 const refreshedUser = publicUser(user);
                 if (key === 'user') {

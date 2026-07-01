@@ -28,17 +28,18 @@ class PostgresAuthSessionStore {
         const result = await this.db.query(
             `INSERT INTO auth_sessions (
                 id, session_handle_hash, user_id, audience, expires_at,
-                last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash
+                security_epoch, last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash
             )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING id, user_id, audience, created_at, last_seen_at, revoked_at, expires_at,
-                       last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash`,
+                       security_epoch, last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash`,
             [
                 session.id,
                 session.handleHash,
                 session.userId,
                 session.audience,
                 session.expiresAt,
+                Number.isInteger(session.securityEpoch) ? session.securityEpoch : 0,
                 session.lastVerifierRotatedAt || null,
                 session.totpVerifiedAt || null,
                 session.userAgentSummary || null,
@@ -57,7 +58,7 @@ class PostgresAuthSessionStore {
                AND revoked_at IS NULL
                AND expires_at > now()
              RETURNING id, user_id, audience, created_at, last_seen_at, revoked_at, expires_at,
-                       last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash`,
+                       security_epoch, last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash`,
             [id, handleHash]
         );
         return result.rows[0] || null;
@@ -72,7 +73,7 @@ class PostgresAuthSessionStore {
              SET revoked_at = COALESCE(revoked_at, now())
              WHERE id = $1
              RETURNING id, user_id, audience, created_at, last_seen_at, revoked_at, expires_at,
-                       last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash`,
+                       security_epoch, last_verifier_rotated_at, totp_verified_at, user_agent_summary, ip_hash`,
             [id]
         );
         return result.rows[0] || null;
@@ -95,6 +96,7 @@ class MemoryAuthSessionStore {
             last_seen_at: now,
             revoked_at: null,
             expires_at: session.expiresAt,
+            security_epoch: Number.isInteger(session.securityEpoch) ? session.securityEpoch : 0,
             last_verifier_rotated_at: session.lastVerifierRotatedAt || null,
             totp_verified_at: session.totpVerifiedAt || null,
             user_agent_summary: session.userAgentSummary || null,

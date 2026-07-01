@@ -43,6 +43,11 @@ function publicUser(user) {
     };
 }
 
+function getUserSecurityEpoch(user) {
+    const value = Number(user?.security_epoch ?? user?.securityEpoch ?? 0);
+    return Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
 function normalizeUsername(username) {
     return String(username || '').trim();
 }
@@ -331,7 +336,7 @@ class PostgresAuthStore {
 
     async findByUsernameLower(usernameLower) {
         const result = await this.db.query(
-            'SELECT id, username, username_lower, password_hash, role FROM users WHERE username_lower = $1',
+            'SELECT id, username, username_lower, password_hash, role, security_epoch FROM users WHERE username_lower = $1',
             [usernameLower]
         );
         return result.rows[0] || null;
@@ -339,7 +344,7 @@ class PostgresAuthStore {
 
     async findById(userId) {
         const result = await this.db.query(
-            'SELECT id, username, username_lower, password_hash, role FROM users WHERE id = $1',
+            'SELECT id, username, username_lower, password_hash, role, security_epoch FROM users WHERE id = $1',
             [userId]
         );
         return result.rows[0] || null;
@@ -349,7 +354,7 @@ class PostgresAuthStore {
         const result = await this.db.query(
             `INSERT INTO users (username, username_lower, password_hash)
              VALUES ($1, $2, $3)
-             RETURNING id, username, username_lower, password_hash, role`,
+             RETURNING id, username, username_lower, password_hash, role, security_epoch`,
             [username, usernameLower, passwordHash]
         );
         return result.rows[0];
@@ -360,7 +365,7 @@ class PostgresAuthStore {
             `UPDATE users
              SET username = $2, username_lower = $3
              WHERE id = $1
-             RETURNING id, username, username_lower, password_hash, role`,
+             RETURNING id, username, username_lower, password_hash, role, security_epoch`,
             [userId, username, usernameLower]
         );
         return result.rows[0] || null;
@@ -371,10 +376,21 @@ class PostgresAuthStore {
             `UPDATE users
              SET password_hash = $2
              WHERE id = $1
-             RETURNING id, username, username_lower, password_hash, role`,
+             RETURNING id, username, username_lower, password_hash, role, security_epoch`,
             [userId, passwordHash]
         );
         return result.rows[0] || null;
+    }
+
+    async bumpSecurityEpoch(userId, client = this.db) {
+        const result = await client.query(
+            `UPDATE users
+             SET security_epoch = security_epoch + 1
+             WHERE id = $1
+             RETURNING security_epoch`,
+            [userId]
+        );
+        return getUserSecurityEpoch(result.rows[0]);
     }
 
     async countAdmins() {
@@ -455,7 +471,8 @@ class MemoryAuthStore {
             username,
             username_lower: usernameLower,
             password_hash: passwordHash,
-            role: 'user'
+            role: 'user',
+            security_epoch: 0
         };
         this.users.set(usernameLower, user);
         return user;
@@ -483,6 +500,13 @@ class MemoryAuthStore {
         if (!existing) return null;
         existing.password_hash = passwordHash;
         return existing;
+    }
+
+    async bumpSecurityEpoch(userId) {
+        const existing = await this.findById(userId);
+        if (!existing) return 0;
+        existing.security_epoch = getUserSecurityEpoch(existing) + 1;
+        return existing.security_epoch;
     }
 
     async countAdmins() {
@@ -776,6 +800,9 @@ function createAuthRouter(options = {}) {
             if (!updatedUser) {
                 return res.status(404).json({ error: 'User not found' });
             }
+            if (typeof store.bumpSecurityEpoch === 'function') {
+                await store.bumpSecurityEpoch(currentUser.id);
+            }
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
@@ -822,6 +849,9 @@ function createAuthRouter(options = {}) {
             const updatedUser = await store.updatePassword(currentUser.id, passwordHash);
             if (!updatedUser) {
                 return res.status(404).json({ error: 'User not found' });
+            }
+            if (typeof store.bumpSecurityEpoch === 'function') {
+                await store.bumpSecurityEpoch(currentUser.id);
             }
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
@@ -894,6 +924,7 @@ module.exports = {
     createRateLimiter,
     ensureCsrfToken,
     getCanonicalClientIp,
+    getUserSecurityEpoch,
     isPasswordWithinBcryptByteLimit,
     normalizeRateLimitKey,
     normalizeUsername,

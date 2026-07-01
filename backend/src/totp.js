@@ -569,6 +569,12 @@ function createTotpRouter(options = {}) {
         return safeUser;
     }
 
+    async function bumpUserSecurityEpoch(userId) {
+        if (authStore && typeof authStore.bumpSecurityEpoch === 'function') {
+            await authStore.bumpSecurityEpoch(userId);
+        }
+    }
+
     function rotateSessionVerifier(req) {
         if (typeof req.rotateSessionVerifier === 'function') {
             req.rotateSessionVerifier();
@@ -669,6 +675,7 @@ function createTotpRouter(options = {}) {
                 recoveryCodeHashes,
                 result.timeStep
             );
+            await bumpUserSecurityEpoch(user.id);
             const safeUser = await rotateAuthenticatedSession(req, user, {
                 revokeOtherSessions: true,
                 totpVerified: true,
@@ -759,10 +766,16 @@ function createTotpRouter(options = {}) {
                 config.recoveryHashRounds
             );
             await store.replaceRecoveryCodes(req.session.user.id, recoveryCodeHashes);
-            rotateSessionVerifier(req);
+            await bumpUserSecurityEpoch(req.session.user.id);
+            const safeUser = await rotateAuthenticatedSession(req, req.session.user, {
+                revokeOtherSessions: true,
+                totpVerified: true
+            });
             return res.json({
                 recoveryCodes,
-                status: await store.getStatus(req.session.user.id)
+                user: safeUser,
+                status: await store.getStatus(safeUser.id),
+                csrfToken: ensureCsrfToken(req)
             });
         } catch (error) {
             return next(error);
@@ -796,6 +809,7 @@ function createTotpRouter(options = {}) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
             await store.disable(user.id);
+            await bumpUserSecurityEpoch(user.id);
             const safeUser = await rotateAuthenticatedSession(req, user, { revokeOtherSessions: true });
             return res.json({
                 user: safeUser,

@@ -1153,6 +1153,9 @@ class PostgresAdminStore {
             params.push(nextPasswordHash);
             updates.push(`password_hash = $${params.length}`);
         }
+        if (changes.role !== undefined || changes.password !== undefined) {
+            updates.push('security_epoch = security_epoch + 1');
+        }
         if (!updates.length) {
             return this.getUser(userId);
         }
@@ -1743,6 +1746,7 @@ class MemoryAdminStore {
             username_lower: usernameLower,
             password_hash: await hashPassword(password, 4),
             role: normalizeRole(role),
+            security_epoch: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -1761,6 +1765,9 @@ class MemoryAdminStore {
             user.role = nextRole;
         }
         if (changes.password !== undefined) user.password_hash = await hashPassword(changes.password, 4);
+        if (changes.role !== undefined || changes.password !== undefined) {
+            user.security_epoch = Number.isInteger(Number(user.security_epoch)) ? Number(user.security_epoch) + 1 : 1;
+        }
         user.updatedAt = new Date().toISOString();
         return serializeUser(user);
     }

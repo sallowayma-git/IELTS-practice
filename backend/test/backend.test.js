@@ -1136,6 +1136,41 @@ test('authenticated APIs require an active server-side auth session registry ent
     }
 });
 
+test('security epoch invalidates copied full cookie jars after account security changes', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'epoch_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const staleReplay = createFullCookieReplay(client);
+        const activeBefore = Array.from(client.authSessionStore.sessions.values())
+            .filter((record) => record.user_id === created.json.user.id && !record.revoked_at);
+        assert.equal(activeBefore.length, 1);
+        assert.equal(activeBefore[0].security_epoch, 0);
+
+        const replayBefore = await staleReplay.request('GET', '/api/auth/me');
+        assert.equal(replayBefore.response.status, 200);
+
+        await client.authStore.bumpSecurityEpoch(created.json.user.id);
+
+        const currentAfterBump = await client.request('GET', '/api/auth/me');
+        assert.equal(currentAfterBump.response.status, 401);
+        const replayAfterBump = await staleReplay.request('GET', '/api/auth/me');
+        assert.equal(replayAfterBump.response.status, 401);
+
+        await client.csrf();
+        const newLogin = await client.request('POST', '/api/auth/login', {
+            username: 'epoch_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(newLogin.response.status, 200);
+        const activeAfter = Array.from(client.authSessionStore.sessions.values())
+            .filter((record) => record.user_id === created.json.user.id && !record.revoked_at);
+        assert(activeAfter.some((record) => record.security_epoch === 1));
+    } finally {
+        await client.close();
+    }
+});
+
 test('auth session registry rejects copied sessions on the wrong onion audience', async () => {
     const client = await createClient();
     try {
