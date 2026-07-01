@@ -208,13 +208,13 @@
 /* ===== js/app/spellingErrorCollector.js ===== */
 /**
  * SpellingErrorCollector - 拼写错误收集组件
- * 
+ *
  * 功能：
  * 1. 检测听力填空题中的单词拼写错误
  * 2. 收集错误单词并存储到词表
  * 3. 管理多个词表（P1、P4、综合）
  * 4. 支持错误次数统计和去重
- * 
+ *
  * 数据结构：
  * - SpellingError: 单个拼写错误记录
  * - VocabularyList: 词表结构
@@ -265,10 +265,10 @@
     class SpellingErrorCollector {
         constructor() {
             console.log('[SpellingErrorCollector] 初始化拼写错误收集器');
-            
+
             // 错误缓存，用于临时存储检测到的错误
             this.errorCache = new Map();
-            
+
             // 词表存储键配置
             this.storageKeys = {
                 p1: 'vocab_list_p1_errors',
@@ -279,10 +279,10 @@
 
             this.lexiconCache = null;
             this.lexiconLoadingPromise = null;
-            
+
             // 初始化完成标志
             this.initialized = false;
-            
+
             // 执行初始化
             this.init();
         }
@@ -296,13 +296,13 @@
                 if (window.storage && window.storage.ready) {
                     await window.storage.ready;
                 }
-                
+
                 // 设置命名空间
                 if (window.storage && typeof window.storage.setNamespace === 'function') {
                     window.storage.setNamespace('exam_system');
                     console.log('[SpellingErrorCollector] 存储命名空间已设置');
                 }
-                
+
                 this.initialized = true;
                 console.log('[SpellingErrorCollector] 初始化完成');
             } catch (error) {
@@ -319,14 +319,14 @@
             if (this.initialized) {
                 return;
             }
-            
+
             // 等待初始化完成
             let attempts = 0;
             while (!this.initialized && attempts < 50) {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 attempts++;
             }
-            
+
             if (!this.initialized) {
                 throw new Error('SpellingErrorCollector 初始化超时');
             }
@@ -341,28 +341,28 @@
             if (!examId || typeof examId !== 'string') {
                 return 'other';
             }
-            
+
             const lowerExamId = examId.toLowerCase();
-            
+
             // 检测P1
             if (lowerExamId.includes('p1') || lowerExamId.includes('part1') || lowerExamId.includes('part-1')) {
                 return 'p1';
             }
-            
+
             // 检测P4
             if (lowerExamId.includes('p4') || lowerExamId.includes('part4') || lowerExamId.includes('part-4')) {
                 return 'p4';
             }
-            
+
             // 检测路径中的P1/P4
             if (lowerExamId.includes('100 p1') || lowerExamId.includes('100p1')) {
                 return 'p1';
             }
-            
+
             if (lowerExamId.includes('100 p4') || lowerExamId.includes('100p4')) {
                 return 'p4';
             }
-            
+
             return 'other';
         }
 
@@ -379,7 +379,7 @@
                 master: '综合拼写错误词表',
                 custom: '自定义词表'
             };
-            
+
             return {
                 id: listId,
                 name: names[listId] || names[source] || '词表',
@@ -669,22 +669,22 @@
         async loadVocabList(listId) {
             try {
                 await this.ensureInitialized();
-                
+
                 const storageKey = this.storageKeys[listId] || listId;
-                
+
                 if (!window.storage) {
                     console.warn('[SpellingErrorCollector] 存储系统不可用');
                     return null;
                 }
-                
+
                 const list = await window.storage.get(storageKey);
                 const normalizedList = this.normalizeVocabListShape(list, listId, listId);
-                
+
                 if (normalizedList) {
                     console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${normalizedList.words.length}`);
                     return normalizedList;
                 }
-                
+
                 console.log(`[SpellingErrorCollector] 词表不存在: ${listId}`);
                 return null;
             } catch (error) {
@@ -701,12 +701,12 @@
         async saveVocabList(vocabList) {
             try {
                 await this.ensureInitialized();
-                
+
                 if (!vocabList || !vocabList.id) {
                     console.error('[SpellingErrorCollector] 无效的词表对象');
                     return false;
                 }
-                
+
                 if (!Array.isArray(vocabList.words)) {
                     vocabList.words = [];
                 }
@@ -717,17 +717,17 @@
                 vocabList.stats = vocabList.stats || {};
                 vocabList.stats.totalWords = vocabList.words.length;
                 vocabList.updatedAt = Date.now();
-                
+
                 const storageKey = this.storageKeys[vocabList.id] || vocabList.id;
-                
+
                 if (!window.storage) {
                     console.warn('[SpellingErrorCollector] 存储系统不可用');
                     return false;
                 }
-                
+
                 await window.storage.set(storageKey, vocabList);
                 console.log(`[SpellingErrorCollector] 保存词表成功: ${vocabList.id}, 单词数: ${vocabList.words.length}`);
-                
+
                 return true;
             } catch (error) {
                 console.error('[SpellingErrorCollector] 保存词表失败:', error);
@@ -1037,55 +1037,55 @@
             if (!text || typeof text !== 'string') {
                 return false;
             }
-            
+
             const trimmed = text.trim();
-            
+
             // 空字符串
             if (!trimmed) {
                 return false;
             }
-            
+
             // 排除纯数字
             if (/^\d+$/.test(trimmed)) {
                 return false;
             }
-            
+
             // 排除日期格式 (如 "2023-01-01", "01/01/2023")
             if (/^\d{1,4}[-/]\d{1,2}[-/]\d{1,4}$/.test(trimmed)) {
                 return false;
             }
-            
+
             // 排除时间格式 (如 "10:30", "10:30:45")
             if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
                 return false;
             }
-            
+
             // 排除长短语（超过3个单词）
             const words = trimmed.split(/\s+/);
             if (words.length > 3) {
                 return false;
             }
-            
+
             // 排除包含特殊符号的文本（但允许连字符和撇号）
             if (/[^a-zA-Z\s'-]/.test(trimmed)) {
                 return false;
             }
-            
+
             // 排除过短的文本（少于2个字符）
             if (trimmed.length < 2) {
                 return false;
             }
-            
+
             // 排除过长的文本（超过50个字符，可能是句子）
             if (trimmed.length > 50) {
                 return false;
             }
-            
+
             // 必须包含至少一个字母
             if (!/[a-zA-Z]/.test(trimmed)) {
                 return false;
             }
-            
+
             // 通过所有检查，认为是单词
             return true;
         }
@@ -1215,7 +1215,7 @@
          * 计算两个字符串的Levenshtein编辑距离
          * 编辑距离表示将一个字符串转换为另一个字符串所需的最少单字符编辑操作次数
          * 操作包括：插入、删除、替换
-         * 
+         *
          * @param {string} a - 第一个字符串
          * @param {string} b - 第二个字符串
          * @returns {number} 编辑距离
@@ -1224,24 +1224,24 @@
             // 边界情况
             if (!a) return b ? b.length : 0;
             if (!b) return a.length;
-            
+
             const aLen = a.length;
             const bLen = b.length;
-            
+
             // 创建距离矩阵
             // matrix[i][j] 表示 a[0..i-1] 转换为 b[0..j-1] 的编辑距离
             const matrix = [];
-            
+
             // 初始化第一列（从空字符串到b的前缀）
             for (let i = 0; i <= bLen; i++) {
                 matrix[i] = [i];
             }
-            
+
             // 初始化第一行（从空字符串到a的前缀）
             for (let j = 0; j <= aLen; j++) {
                 matrix[0][j] = j;
             }
-            
+
             // 填充矩阵
             for (let i = 1; i <= bLen; i++) {
                 for (let j = 1; j <= aLen; j++) {
@@ -1258,7 +1258,7 @@
                     }
                 }
             }
-            
+
             // 返回右下角的值，即完整字符串的编辑距离
             return matrix[bLen][aLen];
         }
@@ -1307,27 +1307,27 @@
          */
         async saveErrors(errors) {
             console.log('[SpellingErrorCollector] 开始保存拼写错误');
-            
+
             if (!errors || !Array.isArray(errors) || errors.length === 0) {
                 console.log('[SpellingErrorCollector] 没有错误需要保存');
                 return true;
             }
-            
+
             try {
                 await this.ensureInitialized();
                 await this.ensureCoreLexicon();
-                
+
                 // 按来源分组错误
                 const errorsBySource = this.groupErrorsBySource(errors);
-                
+
                 // 保存到各个来源的词表
                 for (const [source, sourceErrors] of Object.entries(errorsBySource)) {
                     await this.saveErrorsToList(source, sourceErrors);
                 }
-                
+
                 // 同步到综合词表
                 await this.syncToMasterList(errors);
-                
+
                 console.log(`[SpellingErrorCollector] 保存完成，共保存 ${errors.length} 个错误`);
                 return true;
             } catch (error) {
@@ -1343,7 +1343,7 @@
          */
         groupErrorsBySource(errors) {
             const grouped = {};
-            
+
             for (const error of errors) {
                 const source = error.source || 'other';
                 if (!grouped[source]) {
@@ -1351,7 +1351,7 @@
                 }
                 grouped[source].push(error);
             }
-            
+
             return grouped;
         }
 
@@ -1365,21 +1365,21 @@
             if (!errors || errors.length === 0) {
                 return true;
             }
-            
+
             const listId = source; // 'p1' 或 'p4'
-            
+
             // 加载现有词表
             let vocabList = await this.loadVocabList(listId);
-            
+
             // 如果词表不存在，创建新词表
             if (!vocabList) {
                 vocabList = this.createEmptyList(listId, source);
                 console.log(`[SpellingErrorCollector] 创建新词表: ${listId}`);
             }
-            
+
             // 合并错误到词表
             this.mergeErrorsToList(vocabList, errors);
-            
+
             // 保存词表
             return await this.saveVocabList(vocabList);
         }
@@ -1397,17 +1397,17 @@
                 }
                 // 标准化单词（小写）
                 const normalizedWord = error.word.toLowerCase().trim();
-                
+
                 // 查找是否已存在该单词
-                const existingIndex = vocabList.words.findIndex(w => 
+                const existingIndex = vocabList.words.findIndex(w =>
                     w && typeof w.word === 'string' && w.word.toLowerCase().trim() === normalizedWord
                 );
-                
+
                 if (existingIndex !== -1) {
                     // 单词已存在，更新错误次数和最新信息
                     const existing = vocabList.words[existingIndex];
                     vocabList.words[existingIndex] = this.buildVocabEntryFromError(error, existing, vocabList.source);
-                    
+
                     console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${vocabList.words[existingIndex].errorCount}`);
                 } else {
                     // 新单词，添加到词表
@@ -1416,7 +1416,7 @@
                         continue;
                     }
                     vocabList.words.push(entry);
-                    
+
                     console.log(`[SpellingErrorCollector] 添加新单词: ${error.word}`);
                 }
             }
@@ -1432,23 +1432,23 @@
             if (!errors || errors.length === 0) {
                 return true;
             }
-            
+
             console.log('[SpellingErrorCollector] 同步到综合词表');
-            
+
             const listId = 'master';
-            
+
             // 加载综合词表
             let masterList = await this.loadVocabList(listId);
-            
+
             // 如果不存在，创建新词表
             if (!masterList) {
                 masterList = this.createEmptyList(listId, 'all');
                 console.log('[SpellingErrorCollector] 创建综合词表');
             }
-            
+
             // 合并所有错误
             this.mergeErrorsToList(masterList, errors);
-            
+
             // 保存综合词表
             return await this.saveVocabList(masterList);
         }
@@ -1462,20 +1462,20 @@
         async removeWord(listId, word) {
             try {
                 const vocabList = await this.loadVocabList(listId);
-                
+
                 if (!vocabList) {
                     console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
                     return false;
                 }
-                
+
                 const normalizedWord = word.toLowerCase().trim();
                 const originalLength = vocabList.words.length;
-                
+
                 // 过滤掉要移除的单词
-                vocabList.words = vocabList.words.filter(w => 
+                vocabList.words = vocabList.words.filter(w =>
                     w.word.toLowerCase().trim() !== normalizedWord
                 );
-                
+
                 if (vocabList.words.length < originalLength) {
                     await this.saveVocabList(vocabList);
                     console.log(`[SpellingErrorCollector] 从词表 ${listId} 移除单词: ${word}`);
@@ -1498,18 +1498,18 @@
         async clearList(listId) {
             try {
                 const vocabList = await this.loadVocabList(listId);
-                
+
                 if (!vocabList) {
                     console.warn(`[SpellingErrorCollector] 词表不存在: ${listId}`);
                     return false;
                 }
-                
+
                 vocabList.words = [];
                 vocabList.updatedAt = Date.now();
-                
+
                 await this.saveVocabList(vocabList);
                 console.log(`[SpellingErrorCollector] 清空词表: ${listId}`);
-                
+
                 return true;
             } catch (error) {
                 console.error('[SpellingErrorCollector] 清空词表失败:', error);
@@ -1520,7 +1520,7 @@
 
     // 导出到全局
     window.SpellingErrorCollector = SpellingErrorCollector;
-    
+
     // 创建全局实例
     if (!window.spellingErrorCollector) {
         window.spellingErrorCollector = new SpellingErrorCollector();

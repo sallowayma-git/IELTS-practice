@@ -5,6 +5,32 @@
         return Array.isArray(value) ? value.slice() : [];
     }
 
+    function cloneValue(value) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof global.structuredClone === 'function') {
+            try {
+                return global.structuredClone(value);
+            } catch (_) { }
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            if (Array.isArray(value)) {
+                return value.map((item) => cloneValue(item));
+            }
+            if (value && typeof value === 'object') {
+                return Object.assign({}, value);
+            }
+            return value;
+        }
+    }
+
+    function clonePracticeRecords(records) {
+        return Array.isArray(records) ? records.map((record) => cloneValue(record)) : [];
+    }
+
     function cloneSet(value) {
         if (value instanceof Set) {
             return new Set(value);
@@ -122,21 +148,6 @@
         }
     }
 
-    function enrichPracticeRecordForUI(record) {
-        if (!record || typeof record !== 'object') {
-            return record;
-        }
-        if (global.DataConsistencyManager) {
-            try {
-                const manager = new global.DataConsistencyManager();
-                return manager.enrichRecordData(record);
-            } catch (error) {
-                console.warn('[AppStateService] enrichPracticeRecordForUI failed:', error);
-            }
-        }
-        return record;
-    }
-
     function assignExamSequenceNumbers(exams) {
         if (!Array.isArray(exams)) {
             return [];
@@ -161,7 +172,7 @@
 
             this.state = {
                 examIndex: cloneArray(global.examIndex),
-                practiceRecords: cloneArray(global.practiceRecords),
+                practiceRecords: [],
                 filteredExams: Array.isArray(global.filteredExams) ? global.filteredExams : [],
                 browseFilter: normalizeFilter(global.__browseFilter),
                 bulkDeleteMode: !!global.bulkDeleteMode,
@@ -235,7 +246,7 @@
                     app.state.exam.filteredExams = this.state.filteredExams;
                 }
                 if (app.state.practice) {
-                    app.state.practice.records = this.state.practiceRecords;
+                    app.state.practice.records = clonePracticeRecords(this.state.practiceRecords);
                     app.state.practice.selectedRecords = this.state.selectedRecords;
                     app.state.practice.bulkDeleteMode = this.state.bulkDeleteMode;
                 }
@@ -315,24 +326,24 @@
         }
 
         getPracticeRecords() {
-            return this.state.practiceRecords;
+            return clonePracticeRecords(this.state.practiceRecords);
         }
 
         setPracticeRecords(records, options = {}) {
-            const normalized = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
+            const normalized = clonePracticeRecords(records);
             this.state.practiceRecords = normalized;
             if (options.syncApp !== false) {
                 this.applyToApp();
             }
-            emit(this.listeners, 'practiceRecords', this.state.practiceRecords);
+            emit(this.listeners, 'practiceRecords', clonePracticeRecords(this.state.practiceRecords));
             if (typeof global.updateBrowseAnchorsFromRecords === 'function') {
                 try {
-                    global.updateBrowseAnchorsFromRecords(this.state.practiceRecords);
+                    global.updateBrowseAnchorsFromRecords(clonePracticeRecords(this.state.practiceRecords));
                 } catch (error) {
                     console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', error);
                 }
             }
-            return this.state.practiceRecords;
+            return clonePracticeRecords(this.state.practiceRecords);
         }
 
         getFilteredExams() {

@@ -728,7 +728,7 @@ class VirtualScroller {
 
         this.initialize();
     }
-    
+
     /**
      * 初始化虚拟滚动器
      */
@@ -738,13 +738,13 @@ class VirtualScroller {
             itemHeight: this.itemHeight,
             containerHeight: this.containerHeight
         });
-        
+
         this.setupScrollContainer();
         this.calculateVisibleRange();
         this.renderVisible();
         this.setupScrollListener();
     }
-    
+
     /**
      * 设置滚动容器
      */
@@ -773,7 +773,7 @@ class VirtualScroller {
         this.container.innerHTML = '';
         this.container.appendChild(this.viewport);
     }
-    
+
     /**
      * 计算可见范围
      */
@@ -794,7 +794,7 @@ class VirtualScroller {
 
         this.scrollTop = scrollTop;
     }
-    
+
     /**
      * 渲染可见元素
      */
@@ -833,7 +833,7 @@ class VirtualScroller {
                 this.renderedItems.delete(index);
             }
         });
-        
+
         // 渲染可见的元素
         for (let i = this.visibleStart; i <= this.visibleEnd; i++) {
             let element = this.renderedItems.get(i);
@@ -847,7 +847,7 @@ class VirtualScroller {
             }
         }
     }
-    
+
     /**
      * 设置滚动监听器
      */
@@ -909,7 +909,7 @@ class VirtualScroller {
     recalculate() {
         this.recalculateLayout();
     }
-    
+
     /**
      * 滚动到指定索引
      */
@@ -917,7 +917,7 @@ class VirtualScroller {
         const targetScrollTop = index * this.itemHeight;
         this.container.scrollTop = targetScrollTop;
     }
-    
+
     /**
      * 获取容器高度
      */
@@ -926,7 +926,7 @@ class VirtualScroller {
         const height = parseFloat(computedStyle.height);
         return height > 0 ? height : 600; // 默认600px
     }
-    
+
     /**
      * 销毁虚拟滚动器
      */
@@ -1022,7 +1022,7 @@ class PerformanceOptimizer {
         this.cache = new Map();
         this.cacheTTL = new Map();
         this.observers = new Map();
-        
+
         // 性能监控
         this.performanceMetrics = {
             renderTime: [],
@@ -1030,44 +1030,44 @@ class PerformanceOptimizer {
             cacheHits: 0,
             cacheMisses: 0
         };
-        
+
         this.initialize();
     }
-    
+
     /**
      * 初始化性能优化器
      */
     initialize() {
         console.log('[PerformanceOptimizer] 初始化性能优化器');
-        
+
         // 设置缓存清理定时器
         setInterval(() => {
             this.cleanExpiredCache();
         }, 60000); // 每分钟清理一次过期缓存
-        
+
         // 监控性能指标
         this.setupPerformanceMonitoring();
     }
-    
+
     /**
      * 设置缓存
      */
     setCache(key, value, options = {}) {
         const ttl = options.ttl || 300000; // 默认5分钟
-        
+
         this.cache.set(key, value);
         this.cacheTTL.set(key, Date.now() + ttl);
-        
+
         console.log(`[PerformanceOptimizer] 缓存已设置: ${key}`);
     }
-    
+
     /**
      * 获取缓存
      */
     getCache(key) {
         const now = Date.now();
         const expiry = this.cacheTTL.get(key);
-        
+
         if (expiry && now > expiry) {
             // 缓存已过期
             this.cache.delete(key);
@@ -1075,23 +1075,23 @@ class PerformanceOptimizer {
             this.performanceMetrics.cacheMisses++;
             return null;
         }
-        
+
         if (this.cache.has(key)) {
             this.performanceMetrics.cacheHits++;
             return this.cache.get(key);
         }
-        
+
         this.performanceMetrics.cacheMisses++;
         return null;
     }
-    
+
     /**
      * 清理过期缓存
      */
     cleanExpiredCache() {
         const now = Date.now();
         let cleanedCount = 0;
-        
+
         this.cacheTTL.forEach((expiry, key) => {
             if (now > expiry) {
                 this.cache.delete(key);
@@ -1099,12 +1099,12 @@ class PerformanceOptimizer {
                 cleanedCount++;
             }
         });
-        
+
         if (cleanedCount > 0) {
             console.log(`[PerformanceOptimizer] 清理了 ${cleanedCount} 个过期缓存项`);
         }
     }
-    
+
     /**
      * 批量处理大数据
      */
@@ -1112,28 +1112,28 @@ class PerformanceOptimizer {
         return new Promise((resolve) => {
             let index = 0;
             const results = [];
-            
+
             const processBatch = () => {
                 const endIndex = Math.min(index + batchSize, items.length);
-                
+
                 for (let i = index; i < endIndex; i++) {
                     const result = processor(items[i], i);
                     results.push(result);
                 }
-                
+
                 index = endIndex;
-                
+
                 if (index < items.length) {
                     setTimeout(processBatch, delay);
                 } else {
                     resolve(results);
                 }
             };
-            
+
             processBatch();
         });
     }
-    
+
     /**
      * 防抖函数
      */
@@ -1148,7 +1148,7 @@ class PerformanceOptimizer {
             timeout = setTimeout(later, wait);
         };
     }
-    
+
     /**
      * 节流函数
      */
@@ -1162,7 +1162,7 @@ class PerformanceOptimizer {
             }
         };
     }
-    
+
     /**
      * 预加载图片
      */
@@ -1175,33 +1175,33 @@ class PerformanceOptimizer {
                 img.src = url;
             });
         });
-        
+
         return Promise.allSettled(promises);
     }
-    
+
     /**
      * 创建虚拟滚动器
      */
     createVirtualScroller(container, items, renderer, options) {
         return new VirtualScroller(container, items, renderer, options);
     }
-    
+
     /**
      * 优化渲染性能
      */
     optimizeRender(renderFunc) {
         return (...args) => {
             const startTime = performance.now();
-            
+
             // 使用requestAnimationFrame优化渲染
             requestAnimationFrame(() => {
                 renderFunc(...args);
-                
+
                 const endTime = performance.now();
                 const renderTime = endTime - startTime;
-                
+
                 this.performanceMetrics.renderTime.push(renderTime);
-                
+
                 // 只保留最近100次的性能数据
                 if (this.performanceMetrics.renderTime.length > 100) {
                     this.performanceMetrics.renderTime.shift();
@@ -1209,7 +1209,7 @@ class PerformanceOptimizer {
             });
         };
     }
-    
+
     /**
      * 设置性能监控
      */
@@ -1223,25 +1223,25 @@ class PerformanceOptimizer {
                     }
                 }
             });
-            
+
             observer.observe({ entryTypes: ['measure'] });
             this.observers.set('performance', observer);
         }
     }
-    
+
     /**
      * 获取性能统计
      */
     getPerformanceStats() {
         const renderTimes = this.performanceMetrics.renderTime;
-        const avgRenderTime = renderTimes.length > 0 
-            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length 
+        const avgRenderTime = renderTimes.length > 0
+            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length
             : 0;
-            
+
         const cacheHitRate = this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses > 0
             ? (this.performanceMetrics.cacheHits / (this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses)) * 100
             : 0;
-            
+
         return {
             averageRenderTime: avgRenderTime.toFixed(2),
             cacheHitRate: cacheHitRate.toFixed(2),
@@ -1250,7 +1250,7 @@ class PerformanceOptimizer {
             totalCacheMisses: this.performanceMetrics.cacheMisses
         };
     }
-    
+
     /**
      * 记录加载时间 - 向后兼容API修复
      */
@@ -1425,10 +1425,51 @@ class DataConsistencyManager {
         };
     }
 
+    cloneRecordData(value) {
+        if (value == null || typeof value !== 'object') {
+            return value;
+        }
+        if (typeof structuredClone === 'function') {
+            try {
+                return structuredClone(value);
+            } catch (_) {
+                // Fall through to plain JSON cloning for file:// compatible data.
+            }
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            if (Array.isArray(value)) {
+                return value.map(item => this.cloneRecordData(item));
+            }
+            const clone = {};
+            Object.keys(value).forEach(key => {
+                clone[key] = this.cloneRecordData(value[key]);
+            });
+            return clone;
+        }
+    }
+
+    isAnswerMap(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    getCorrectAnswerMap(record) {
+        if (!record || typeof record !== 'object') {
+            return {};
+        }
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.resolveRecordCorrectAnswerMap === 'function') {
+            return coreContracts.resolveRecordCorrectAnswerMap(record);
+        }
+        throw new Error('DataConsistencyManager requires PracticeCore.contracts.resolveRecordCorrectAnswerMap');
+    }
+
     /**
      * 验证记录数据完整性
      */
     validateRecordData(record) {
+        const target = record && typeof record === 'object' ? record : {};
         const validation = {
             isValid: true,
             errors: [],
@@ -1439,7 +1480,7 @@ class DataConsistencyManager {
 
         // 检查必需字段
         this.validationRules.requiredFields.forEach(field => {
-            if (!record[field]) {
+            if (!target[field]) {
                 validation.errors.push(`缺少必需字段: ${field}`);
                 validation.missingFields.push(field);
                 validation.isValid = false;
@@ -1447,8 +1488,8 @@ class DataConsistencyManager {
         });
 
         // 检查答案数据
-        if (record.answers) {
-            const answerValidation = this.validateAnswers(record.answers);
+        if (this.isAnswerMap(target.answers)) {
+            const answerValidation = this.validateAnswers(target.answers);
             if (!answerValidation.isValid) {
                 validation.warnings.push('用户答案数据存在问题');
                 validation.dataQuality = 'fair';
@@ -1456,8 +1497,9 @@ class DataConsistencyManager {
         }
 
         // 检查正确答案数据
-        if (record.correctAnswers) {
-            const correctAnswerValidation = this.validateAnswers(record.correctAnswers);
+        const correctAnswerMap = this.getCorrectAnswerMap(target);
+        if (Object.keys(correctAnswerMap).length > 0) {
+            const correctAnswerValidation = this.validateAnswers(correctAnswerMap);
             if (!correctAnswerValidation.isValid) {
                 validation.warnings.push('正确答案数据存在问题');
             }
@@ -1467,7 +1509,7 @@ class DataConsistencyManager {
         }
 
         // 检查答案比较数据
-        if (!record.answerComparison && record.answers && record.correctAnswers) {
+        if (!target.answerComparison && target.answers && Object.keys(correctAnswerMap).length > 0) {
             validation.warnings.push('缺少答案比较数据，将自动生成');
         }
 
@@ -1488,24 +1530,25 @@ class DataConsistencyManager {
      * 补充缺失的数据
      */
     enrichRecordData(record) {
-        console.log('[DataConsistencyManager] 开始数据补充:', record.id);
-        
-        const enriched = { ...record };
+        console.log('[DataConsistencyManager] 开始数据补充:', record && record.id);
+
+        const enriched = this.cloneRecordData(record) || {};
+        const numericCorrectCount = typeof enriched.correctAnswers === 'number'
+            ? enriched.correctAnswers
+            : null;
 
         // 标准化答案格式
-        if (enriched.answers) {
+        if (this.isAnswerMap(enriched.answers)) {
             enriched.answers = this.standardizeAnswerFormat(enriched.answers);
         }
 
-        if (enriched.correctAnswers) {
-            enriched.correctAnswers = this.standardizeAnswerFormat(enriched.correctAnswers);
-        }
+        const correctAnswerMap = this.getCorrectAnswerMap(enriched);
 
         // 生成缺失的答案比较数据
-        if (!enriched.answerComparison && enriched.answers) {
+        if (!enriched.answerComparison && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
             enriched.answerComparison = this.generateAnswerComparison(
-                enriched.answers, 
-                enriched.correctAnswers || {}
+                enriched.answers,
+                correctAnswerMap
             );
             console.log('[DataConsistencyManager] 生成答案比较数据');
         }
@@ -1524,16 +1567,16 @@ class DataConsistencyManager {
         if (typeof enriched.score !== 'number') {
             if (enriched.scoreInfo && typeof enriched.scoreInfo.correct === 'number') {
                 enriched.score = enriched.scoreInfo.correct;
-            } else if (typeof enriched.correctAnswers === 'number') {
-                enriched.score = enriched.correctAnswers;
+            } else if (typeof numericCorrectCount === 'number') {
+                enriched.score = numericCorrectCount;
             }
         }
         if (typeof enriched.totalQuestions !== 'number') {
             if (enriched.scoreInfo && typeof enriched.scoreInfo.total === 'number') {
                 enriched.totalQuestions = enriched.scoreInfo.total;
-            } else if (enriched.answers) {
+            } else if (this.isAnswerMap(enriched.answers)) {
                 enriched.totalQuestions = Object.keys(enriched.answers).length;
-            } else if (enriched.realData && enriched.realData.answers) {
+            } else if (enriched.realData && this.isAnswerMap(enriched.realData.answers)) {
                 enriched.totalQuestions = Object.keys(enriched.realData.answers).length;
             }
         }
@@ -1581,14 +1624,20 @@ class DataConsistencyManager {
         // 确保realData结构的兼容性
         if (!enriched.realData) {
             enriched.realData = {
-                answers: enriched.answers || {},
-                correctAnswers: enriched.correctAnswers || {},
+                answers: this.isAnswerMap(enriched.answers) ? enriched.answers : {},
+                correctAnswers: correctAnswerMap,
+                correctAnswerMap: correctAnswerMap,
                 answerComparison: enriched.answerComparison || {},
                 scoreInfo: enriched.scoreInfo || null
             };
         } else {
             // 更新realData以包含新数据
-            enriched.realData.correctAnswers = enriched.correctAnswers || enriched.realData.correctAnswers || {};
+            enriched.realData.correctAnswers = Object.keys(correctAnswerMap).length > 0
+                ? correctAnswerMap
+                : (this.isAnswerMap(enriched.realData.correctAnswers) ? enriched.realData.correctAnswers : {});
+            enriched.realData.correctAnswerMap = Object.keys(correctAnswerMap).length > 0
+                ? correctAnswerMap
+                : (this.isAnswerMap(enriched.realData.correctAnswerMap) ? enriched.realData.correctAnswerMap : {});
             enriched.realData.answerComparison = enriched.answerComparison || enriched.realData.answerComparison || {};
         }
 
@@ -1601,7 +1650,7 @@ class DataConsistencyManager {
      */
     standardizeAnswerFormat(answers) {
         const standardized = {};
-        
+
         Object.keys(answers).forEach(key => {
             let normalizedKey = key;
             let value = answers[key];
@@ -1616,12 +1665,12 @@ class DataConsistencyManager {
             // 标准化值
             if (value !== null && value !== undefined) {
                 value = String(value).trim();
-                
+
                 // 标准化常见答案格式
                 if (value.toLowerCase() === 'true') value = 'TRUE';
                 if (value.toLowerCase() === 'false') value = 'FALSE';
                 if (value.toLowerCase() === 'not given') value = 'NOT GIVEN';
-                
+
                 standardized[normalizedKey] = value;
             }
         });
@@ -1649,12 +1698,12 @@ class DataConsistencyManager {
 
         Object.keys(answers).forEach(key => {
             validation.answerCount++;
-            
+
             // 检查键名格式
             if (!key.match(/^q\d+$/) && !key.match(/^question\d+$/)) {
                 validation.invalidKeys.push(key);
             }
-            
+
             // 检查值
             const value = answers[key];
             if (!value || String(value).trim() === '') {
@@ -1679,7 +1728,7 @@ class DataConsistencyManager {
      */
     generateAnswerComparison(userAnswers, correctAnswers) {
         const comparison = {};
-        
+
         // 获取所有问题键
         const allKeys = new Set([
             ...Object.keys(userAnswers || {}),
@@ -1689,7 +1738,7 @@ class DataConsistencyManager {
         allKeys.forEach(key => {
             const userAnswer = userAnswers[key];
             const correctAnswer = correctAnswers[key];
-            
+
             comparison[key] = {
                 userAnswer: userAnswer || null,
                 correctAnswer: correctAnswer || null,
@@ -1715,7 +1764,7 @@ class DataConsistencyManager {
         });
 
         const accuracy = total > 0 ? correct / total : 0;
-        
+
         return {
             correct: correct,
             total: total,
@@ -1743,16 +1792,17 @@ class DataConsistencyManager {
      */
     fixDataInconsistencies(records) {
         console.log('[DataConsistencyManager] 开始修复数据不一致问题');
-        
+
         const fixed = records.map(record => {
-            const validation = this.validateRecordData(record);
-            
-            if (!validation.isValid || validation.dataQuality === 'poor') {
+            const projection = this.cloneRecordData(record);
+            const validation = this.validateRecordData(projection);
+
+            if (!validation.isValid || validation.dataQuality !== 'good') {
                 console.log(`[DataConsistencyManager] 修复记录: ${record.id}`);
-                return this.enrichRecordData(record);
+                return this.enrichRecordData(projection);
             }
-            
-            return record;
+
+            return projection;
         });
 
         console.log('[DataConsistencyManager] 数据修复完成');
@@ -1763,15 +1813,17 @@ class DataConsistencyManager {
      * 确保弹窗和导出数据一致性
      */
     ensureConsistency(record) {
+        const projection = this.cloneRecordData(record);
+
         // 验证数据
-        const validation = this.validateRecordData(record);
-        
+        const validation = this.validateRecordData(projection);
+
         // 如果数据有问题，进行修复
         if (!validation.isValid || validation.dataQuality !== 'good') {
-            return this.enrichRecordData(record);
+            return this.enrichRecordData(projection);
         }
-        
-        return record;
+
+        return projection;
     }
 
     /**
@@ -1798,23 +1850,23 @@ class DataConsistencyManager {
 
         list.forEach(record => {
             const validation = this.validateRecordData(record);
-            
+
             if (validation.isValid) {
                 report.validRecords++;
             }
-            
-            if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+
+            if (this.getCorrectAnswerMap(record) && Object.keys(this.getCorrectAnswerMap(record)).length > 0) {
                 report.recordsWithCorrectAnswers++;
             }
-            
+
             if (record.answerComparison) {
                 report.recordsWithComparison++;
             }
-            
-            if (record.answers) {
+
+            if (this.isAnswerMap(record.answers)) {
                 totalAnswers += Object.keys(record.answers).length;
             }
-            
+
             report.qualityDistribution[validation.dataQuality]++;
         });
 

@@ -7,6 +7,7 @@ class BackupRestoreTest {
     constructor() {
         this.testResults = [];
         this.simpleStorage = window.simpleStorageWrapper;
+        this.practiceRecordAPI = window.PracticeRecordAPI;
         this.dataBackupManager = window.DataBackupManager ? new DataBackupManager() : null;
         this.testData = {
             originalPracticeRecords: [],
@@ -14,6 +15,31 @@ class BackupRestoreTest {
             originalBackups: [],
             testBackups: []
         };
+    }
+
+    getPracticeRecordAPI(requiredMethods = []) {
+        const api = this.practiceRecordAPI || window.PracticeRecordAPI;
+        if (!api) {
+            throw new Error('PracticeRecordAPI不可用');
+        }
+        requiredMethods.forEach(method => {
+            if (typeof api[method] !== 'function') {
+                throw new Error(`PracticeRecordAPI.${method}不可用`);
+            }
+        });
+        return api;
+    }
+
+    async replacePracticeRecords(records) {
+        const api = this.getPracticeRecordAPI(['replace']);
+        await api.replace(Array.isArray(records) ? records : [], { updateStats: true });
+        return true;
+    }
+
+    async savePracticeRecord(record) {
+        const api = this.getPracticeRecordAPI(['saveRecord']);
+        await api.saveRecord(record, { updateStats: true });
+        return true;
     }
 
     // 运行所有备份恢复测试
@@ -252,7 +278,7 @@ class BackupRestoreTest {
                 date: '2024-01-10'
             };
 
-            await this.simpleStorage.addPracticeRecord(newTestRecord);
+            await this.savePracticeRecord(newTestRecord);
             await this.simpleStorage.setUserSetting('restore_test_setting', 'test_value');
 
             const practiceRecordsModified = await this.simpleStorage.getPracticeRecords();
@@ -359,7 +385,7 @@ class BackupRestoreTest {
             const originalRecords = await this.simpleStorage.getPracticeRecords();
             const originalSettings = await this.simpleStorage.getUserSettings();
 
-            await this.simpleStorage.savePracticeRecords(largeDataSet.practice_records);
+            await this.replacePracticeRecords(largeDataSet.practice_records);
             await this.simpleStorage.saveUserSettings(largeDataSet.user_settings);
 
             // 尝试创建大数据备份
@@ -367,7 +393,7 @@ class BackupRestoreTest {
             const largeBackupCreated = largeBackupId !== null;
 
             // 清理大数据
-            await this.simpleStorage.savePracticeRecords(originalRecords);
+            await this.replacePracticeRecords(originalRecords);
             await this.simpleStorage.saveUserSettings(originalSettings);
 
             // 如果大数据备份创建成功，删除它
@@ -463,7 +489,7 @@ class BackupRestoreTest {
             };
 
             // 保存测试数据
-            await this.simpleStorage.savePracticeRecords(standardTestData.practice_records);
+            await this.replacePracticeRecords(standardTestData.practice_records);
             await this.simpleStorage.saveUserSettings(standardTestData.user_settings);
 
             // 创建备份
@@ -475,7 +501,7 @@ class BackupRestoreTest {
             }
 
             // 修改数据
-            await this.simpleStorage.addPracticeRecord({
+            await this.savePracticeRecord({
                 id: 'integrity_test_modified',
                 title: '修改后的记录',
                 type: 'reading',
@@ -516,7 +542,7 @@ class BackupRestoreTest {
 
         try {
             // 恢复原始练习记录
-            await this.simpleStorage.savePracticeRecords(this.testData.originalPracticeRecords);
+            await this.replacePracticeRecords(this.testData.originalPracticeRecords);
 
             // 恢复原始用户设置
             await this.simpleStorage.saveUserSettings(this.testData.originalUserSettings);

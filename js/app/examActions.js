@@ -1354,7 +1354,9 @@
             }
         } catch (_) { }
         try {
-            var records = (global.storage && storage.get) ? (await storage.get('practice_records', [])) : (global.getPracticeRecordsState ? global.getPracticeRecordsState() : []);
+            var records = global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function'
+                ? await global.PracticeRecordAPI.list()
+                : (global.getPracticeRecordsState ? global.getPracticeRecordsState() : []);
             var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';

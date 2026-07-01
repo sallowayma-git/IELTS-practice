@@ -1,7 +1,7 @@
 # 忽略特定的文件夹
 /.kiro/
 
-# 构建产物 — 为保证 fresh checkout 可直接静态运行，js/bundles/*.bundle.js 需纳入版本控制
+# 构建产物由 scripts/build-bundles.mjs 生成，运行时依赖这些 bundle，必须纳入版本控制
 /.qoder/
 /.vscode/
 /documents/

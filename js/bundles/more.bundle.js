@@ -413,10 +413,10 @@
     function calculateEaseFactor(oldEF, quality) {
         const q = Math.max(0, Math.min(5, Number(quality) || 0));
         const ef = oldEF || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
-        
+
         // SM-2 公式：EF' = EF + (0.1 - (5 - q) × (0.08 + (5 - q) × 0.02))
         const newEF = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-        
+
         // 限制在 [1.3, 2.5] 范围内
         return Math.max(
             SM2_CONSTANTS.MIN_EASE_FACTOR,
@@ -471,16 +471,16 @@
         }
 
         // SM-2 字段
-        const easeFactor = typeof word.easeFactor === 'number' 
-            ? word.easeFactor 
+        const easeFactor = typeof word.easeFactor === 'number'
+            ? word.easeFactor
             : null; // 新词没有EF，将根据首次判断设置
-        
-        const interval = typeof word.interval === 'number' 
-            ? word.interval 
+
+        const interval = typeof word.interval === 'number'
+            ? word.interval
             : SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
-        
-        const repetitions = typeof word.repetitions === 'number' 
-            ? word.repetitions 
+
+        const repetitions = typeof word.repetitions === 'number'
+            ? word.repetitions
             : 0;
 
         // 轮内循环状态
@@ -510,7 +510,7 @@
         }
 
         const initialEF = INITIAL_EASE_FACTORS[initialQuality] || INITIAL_EASE_FACTORS.good;
-        
+
         return {
             ...normalized,
             easeFactor: initialEF,
@@ -563,8 +563,8 @@
             return setInitialEaseFactor(normalized, quality);
         }
 
-        const q = QUALITY_RATINGS[quality] !== undefined 
-            ? QUALITY_RATINGS[quality] 
+        const q = QUALITY_RATINGS[quality] !== undefined
+            ? QUALITY_RATINGS[quality]
             : (quality === true || quality === 'correct' ? QUALITY_RATINGS.good : QUALITY_RATINGS.wrong);
 
         const reviewedAt = toDate(referenceTime, new Date()).toISOString();
@@ -696,10 +696,10 @@
         normalizeWord,
         setInitialEaseFactor,
         adjustIntraCycleEF,
-        
+
         // 任务生成
         pickDailyTask,
-        
+
         // 向后兼容（已废弃）
         promote,
         demote,
@@ -860,16 +860,16 @@
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
         const source = typeof entry.source === 'string' ? entry.source.trim() : '';
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
-        
+
         // SM-2 字段
         const easeFactor = typeof entry.easeFactor === 'number' && Number.isFinite(entry.easeFactor)
             ? Math.min(3.0, Math.max(1.3, entry.easeFactor))
             : null; // 新词没有EF
-        
+
         const interval = typeof entry.interval === 'number' && Number.isFinite(entry.interval) && entry.interval >= 0
             ? Math.floor(entry.interval)
             : 1;
-        
+
         const repetitions = typeof entry.repetitions === 'number' && Number.isFinite(entry.repetitions) && entry.repetitions >= 0
             ? Math.floor(entry.repetitions)
             : 0;
@@ -881,7 +881,7 @@
 
         const correctCountValue = Number(entry.correctCount);
         const correctCount = Number.isFinite(correctCountValue) && correctCountValue >= 0 ? Math.floor(correctCountValue) : 0;
-        
+
         const lastReviewed = entry.lastReviewed && !Number.isNaN(new Date(entry.lastReviewed).getTime())
             ? new Date(entry.lastReviewed).toISOString()
             : null;
@@ -901,14 +901,14 @@
             meaning: baseMeaning,
             example,
             note,
-            
+
             // SM-2 字段
             easeFactor,
             interval,
             repetitions,
             intraCycles,
             correctCount,
-            
+
             lastReviewed,
             nextReview,
             createdAt,
@@ -1430,7 +1430,7 @@
 
         // 拼写错误词表格式: { word, userInput, questionId, examId, timestamp, errorCount, source }
         // VocabStore 格式: { id, word, meaning, example, note, easeFactor, interval, repetitions, ... }
-        
+
         const word = typeof error.word === 'string' ? error.word.trim() : '';
         if (!word) {
             return null;
@@ -1446,7 +1446,7 @@
         if (errorCount > 1) {
             spellingNote += ` (错误${errorCount}次)`;
         }
-        
+
         const sourceParts = [];
         if (examId) {
             sourceParts.push(`来源: ${examId}`);
@@ -1591,7 +1591,7 @@
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
             state.listCache.delete(listId);
-            
+
             // 保存激活的词表 ID
             await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
 
@@ -1627,14 +1627,14 @@
         try {
             const listConfig = VOCAB_LISTS[listId];
             const storedData = await read(listConfig.storageKey, null);
-            
+
             // 检查是否为拼写错误词表格式
             if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
                 return storedData.words.length;
             } else if (Array.isArray(storedData)) {
                 return storedData.length;
             }
-            
+
             return 0;
         } catch (error) {
             console.error('[VocabStore] getListWordCount 失败:', error);
@@ -1780,7 +1780,7 @@
 /* ===== js/app/vocabListSwitcher.js ===== */
 /**
  * VocabListSwitcher - 词表切换器组件
- * 
+ *
  * 功能：
  * - 在单词背诵界面右上角显示词表切换菜单
  * - 支持切换不同来源的词表（P1、P4、综合、自定义）
@@ -1795,13 +1795,13 @@
             if (!vocabStore) {
                 throw new Error('[VocabListSwitcher] vocabStore is required');
             }
-            
+
             this.vocabStore = vocabStore;
             this.container = null;
             this.dropdownVisible = false;
             this.currentListId = null;
             this.previousListId = null; // 用于错误回退
-            
+
             // 绑定事件处理器
             this.handleMenuButtonClick = this.handleMenuButtonClick.bind(this);
             this.handleListOptionClick = this.handleListOptionClick.bind(this);
@@ -1819,7 +1819,7 @@
             }
 
             this.container = container;
-            
+
             // 获取当前激活的词表 ID
             this.currentListId = this.vocabStore.getActiveListId();
             this.previousListId = this.currentListId;
@@ -1860,7 +1860,7 @@
         renderListOptions() {
             const lists = this.vocabStore.VOCAB_LISTS;
             const availableLists = this.vocabStore.getAvailableLists();
-            
+
             if (!availableLists || availableLists.length === 0) {
                 return '<div class="list-option-empty">暂无可用词表</div>';
             }
@@ -1868,10 +1868,10 @@
             return availableLists.map(list => {
                 const isActive = list.id === this.currentListId;
                 const activeClass = isActive ? 'active' : '';
-                
+
                 return `
-                    <div class="list-option ${activeClass}" 
-                         data-list-id="${list.id}" 
+                    <div class="list-option ${activeClass}"
+                         data-list-id="${list.id}"
                          role="menuitem"
                          tabindex="0">
                         <span class="list-icon">${list.icon}</span>
@@ -1893,7 +1893,7 @@
 
             const lists = this.vocabStore.VOCAB_LISTS;
             const currentList = lists[this.currentListId];
-            
+
             if (!currentList) {
                 console.warn('[VocabListSwitcher] Current list not found:', this.currentListId);
                 return;
@@ -1986,7 +1986,7 @@
          */
         handleDocumentClick(event) {
             if (!this.container) return;
-            
+
             // 如果点击的是切换器内部元素，不关闭
             if (this.container.contains(event.target)) {
                 return;
@@ -2094,10 +2094,10 @@
 
             } catch (error) {
                 console.error('[VocabListSwitcher] 切换词表失败:', error);
-                
+
                 // 回退到上一个词表
                 await this.rollbackToPreviousList();
-                
+
                 // 显示错误提示
                 this.showErrorMessage('词表加载失败，请重试');
             }
@@ -2210,11 +2210,11 @@
         showEmptyListMessage(listId) {
             const lists = this.vocabStore.VOCAB_LISTS;
             const list = lists[listId];
-            
+
             if (!list) return;
 
             const message = `词表「${list.name}」暂无单词`;
-            
+
             // 显示提示消息
             this.showToast(message, 'info');
 
@@ -3700,37 +3700,37 @@
         }
         const answer = input.value.trim();
         const word = state.session.currentWord;
-        
+
         if (!answer) {
             return;
         }
-        
+
         state.session.typedAnswer = answer;
-        
+
         // 检查拼写是否正确
         const isCorrect = answer.toLowerCase() === word.word.toLowerCase();
-        
+
         if (isCorrect) {
             // 拼写正确，使用认识质量
             const recognitionQuality = state.session.recognitionQuality || 'good';
             applyResult(recognitionQuality, { answer, spellingCorrect: true });
             return;
         }
-        
+
         // 拼写错误，增加尝试次数
         state.session.spellingAttempts = (state.session.spellingAttempts || 0) + 1;
         const maxAttempts = 3;
-        
+
         if (state.session.spellingAttempts >= maxAttempts) {
             // 达到最大尝试次数，标记为错误
             applyResult('wrong', { answer, spellingCorrect: false, attemptsExhausted: true });
             return;
         }
-        
+
         // 还有机会，重新渲染
         state.session.typedAnswer = '';
         render();
-        
+
         // 显示错误提示
         if (typeof window.showToast === 'function') {
             window.showToast(`拼写错误，还有 ${maxAttempts - state.session.spellingAttempts} 次机会`, 'warning');
@@ -3747,14 +3747,14 @@
             return;
         }
         const now = new Date();
-        
+
         // 基础质量评分（来自认识判断）
         const recognitionQuality = session.recognitionQuality || 'good';
         const spellingAttempts = session.spellingAttempts || 0;
         const skipped = options.skipped || false;
         const isIntraReview = word.__intraReview === true;
         const cycleType = word.__cycleType || 'normal';
-        
+
         // 确定最终质量（考虑拼写错误）
         let finalQuality = recognitionQuality;
         if (skipped) {
@@ -3764,7 +3764,7 @@
         } else if (spellingAttempts === 1 && recognitionQuality === 'easy') {
             finalQuality = 'good'; // 简单但拼写错误降为一般
         }
-        
+
         // 处理新词或轮内循环
         let patch;
         if (!word.easeFactor) {
@@ -3777,14 +3777,14 @@
             // 正常复习：使用标准SM-2算法
             patch = state.scheduler.scheduleAfterResult(word, finalQuality, now);
         }
-        
+
         // 判断是否需要继续轮内循环或安排验证
         const intraCycles = patch.intraCycles || 0;
         const maxCycles = state.scheduler.SM2_CONSTANTS.MAX_INTRA_CYCLES;
-        
+
         let needsContinueIntra = false;
         let needsEasyVerification = false;
-        
+
         if (cycleType === 'easy_verification') {
             // easy验证阶段
             if (finalQuality === 'easy') {
@@ -3818,22 +3818,22 @@
                 patch = state.scheduler.scheduleAfterResult(patch, finalQuality, now);
             }
         }
-        
+
         // 安排后续复习
         if (needsEasyVerification) {
             scheduleIntraReview(patch, 'easy_verification');
         } else if (needsContinueIntra) {
             scheduleIntraReview(patch, 'normal');
         }
-        
+
         // 保存到数据库（除非是临时的轮内状态）
         const shouldSave = !needsContinueIntra && !needsEasyVerification;
         let updated = patch;
-        
+
         if (shouldSave) {
             updated = await state.store.updateWord(word.id, patch) || patch;
         }
-        
+
         session.currentWord = updated;
         session.lastAnswer = {
             recognitionQuality,
@@ -3853,7 +3853,7 @@
         session.meaningVisible = true;
         state.ui.sidePanelManual = null;
         session.typedAnswer = '';
-        
+
         // 更新统计（只有正式完成的才计入）
         if (shouldSave) {
             if (finalQuality === 'hard' && spellingAttempts >= 2) {
@@ -3865,13 +3865,13 @@
             }
             session.progress.completed += 1;
         }
-        
+
         render();
     }
 
     function scheduleIntraReview(word, cycleType = 'normal') {
         let insertPosition;
-        
+
         if (cycleType === 'easy_verification') {
             // easy验证：插入到第 20-30 个位置
             insertPosition = Math.min(
@@ -3885,14 +3885,14 @@
                 Math.floor(Math.random() * 6) + 3  // 3-8 随机
             );
         }
-        
+
         const clone = {
             ...word,
             __intraReview: true,
             __cycleType: cycleType,
             __insertedAt: Date.now()
         };
-        
+
         state.session.activeQueue.splice(insertPosition, 0, clone);
     }
 
@@ -3909,7 +3909,7 @@
         if (!word || session.stage !== 'feedback') {
             return;
         }
-        
+
         // 如果用户重新评分，更新调度
         if (session.lastAnswer && session.lastAnswer.quality !== quality) {
             const now = new Date();
@@ -3918,7 +3918,7 @@
             session.currentWord = { ...word, ...patch };
             session.lastAnswer.quality = quality;
         }
-        
+
         moveToNextWord();
     }
 
@@ -4101,15 +4101,15 @@
             const attempts = session.spellingAttempts || 0;
             const maxAttempts = 3;
             const remainingAttempts = maxAttempts - attempts;
-            
-            const attemptsHint = attempts > 0 
+
+            const attemptsHint = attempts > 0
                 ? `<p class="vocab-card__attempts" style="color: #ed8936; font-size: 0.875rem;">已尝试 ${attempts} 次，剩余 ${remainingAttempts} 次机会</p>`
                 : '';
-            
+
             const instructionText = attempts === 0
                 ? '根据释义，拼写出这个单词'
                 : '再试一次，注意拼写细节';
-            
+
             card.innerHTML = `
                 <div class="vocab-card vocab-card--spelling">
                     <div class="vocab-card__meaning" data-visible="true" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">
@@ -4144,18 +4144,18 @@
             const baseEF = session.lastAnswer?.baseEF || word.easeFactor;
             const finalEF = session.lastAnswer?.finalEF || word.easeFactor;
             const penalty = session.lastAnswer?.penalty || 0;
-            
+
             const icon = spellingAttempts >= 3 ? '❌' : (spellingAttempts > 0 || skipped ? '🟡' : '✅');
             const title = spellingAttempts >= 3 ? '需要加强' : (spellingAttempts > 0 || skipped ? '接近了' : '太棒了！');
-            
+
             const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '待安排';
             const typedAnswer = session.lastAnswer?.typed ? escapeHtml(session.lastAnswer.typed) : '';
-            
+
             // SM-2 信息展示
             const intervalDays = word.interval || 1;
             const easeFactor = finalEF.toFixed(2);
             const repetitions = word.repetitions || 0;
-            
+
             // 拼写结果提示
             let spellingFeedback = '';
             if (!skipped) {
@@ -4167,11 +4167,11 @@
             } else {
                 spellingFeedback = `<p style="color: #718096; font-size: 0.875rem; margin: 0.25rem 0;">已跳过拼写 (EF -${(penalty).toFixed(2)})</p>`;
             }
-            
+
             // 认识质量标签
             const recognitionLabel = recognitionQuality === 'easy' ? '简单' : recognitionQuality === 'good' ? '一般' : '困难';
             const recognitionChange = baseEF > word.easeFactor ? `(EF +${(baseEF - (word.easeFactor || 2.5)).toFixed(2)})` : '';
-            
+
             // 质量分解
             const isIntraReview = session.lastAnswer?.isIntraReview || false;
             const cycleType = session.lastAnswer?.cycleType || 'normal';
@@ -4180,9 +4180,9 @@
             const needsEasyVerification = session.lastAnswer?.needsEasyVerification || false;
             const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
             const saved = session.lastAnswer?.saved || false;
-            
+
             let qualityBreakdown = '';
-            
+
             if (needsEasyVerification) {
                 // 安排easy验证
                 qualityBreakdown = `
@@ -4224,7 +4224,7 @@
                 }
             } else if (isIntraReview) {
                 // 轮内循环中的调整
-                const adjustment = session.lastAnswer?.finalQuality === 'easy' ? '+0.15' : 
+                const adjustment = session.lastAnswer?.finalQuality === 'easy' ? '+0.15' :
                                  session.lastAnswer?.finalQuality === 'good' ? '+0.05' : '-0.10';
                 qualityBreakdown = `
                     <div style="margin: 1rem 0; padding: 0.75rem; background: rgba(0,0,0,0.02); border-radius: 8px; font-size: 0.875rem;">
@@ -4259,7 +4259,7 @@
                     `;
                 }
             }
-            
+
             card.innerHTML = `
                 <div class="vocab-card vocab-card--feedback vocab-card--${spellingAttempts >= 3 ? 'wrong' : spellingAttempts > 0 ? 'near' : 'correct'}">
                     <div class="vocab-feedback__head">
@@ -6344,23 +6344,29 @@
         }
 
         async _getUserStatsFromScoreStorage() {
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
+                return await window.PracticeRecordAPI.readStats();
+            }
             const recorder = this._getPracticeRecorder();
             if (recorder && typeof recorder.getUserStats === 'function') {
                 return await recorder.getUserStats();
-            }
-            if (window.storage) {
-                return await window.storage.get('user_stats', this._getDefaultUserStats());
             }
             return this._getDefaultUserStats();
         }
 
         async _getPracticeRecordsFromScoreStorage() {
+            // 使用轻量 listSummary：achievementManager 只需 type/accuracy/duration 等元数据，
+            // 不需要 answers/correctAnswerMap/suiteEntries 等重字段。listSummary 已从 scoreInfo 投影了
+            // accuracy/duration/score 等字段，无需依赖 realData.scoreInfo 后备路径。
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
+                return await window.PracticeRecordAPI.listSummary();
+            }
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                return await window.PracticeRecordAPI.list();
+            }
             const recorder = this._getPracticeRecorder();
             if (recorder && typeof recorder.getPracticeRecords === 'function') {
                 return await recorder.getPracticeRecords();
-            }
-            if (window.storage) {
-                return await window.storage.get('practice_records', []);
             }
             return [];
         }

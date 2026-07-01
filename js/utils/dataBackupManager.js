@@ -84,6 +84,87 @@ class DataBackupManager {
         }
     }
 
+    async listPracticeRecords() {
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+            return await window.PracticeRecordAPI.list();
+        }
+
+        throw new Error('统一练习记录存储未就绪');
+    }
+
+    async replacePracticeRecords(records, options = {}) {
+        const normalizedRecords = Array.isArray(records) ? records : [];
+
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.replace === 'function') {
+            await window.PracticeRecordAPI.replace(normalizedRecords, options);
+            return true;
+        }
+
+        throw new Error('统一练习记录存储未就绪');
+    }
+
+    async restorePracticeRecords(records, stats = null) {
+        const normalizedRecords = Array.isArray(records) ? records : [];
+
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.restoreRecords === 'function') {
+            return await window.PracticeRecordAPI.restoreRecords(normalizedRecords, {
+                stats: this.isPlainObject(stats) ? stats : null,
+                updateStats: true
+            });
+        }
+
+        throw new Error('统一练习记录恢复 API 未就绪');
+    }
+
+    async readUserStats() {
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
+            return await window.PracticeRecordAPI.readStats();
+        }
+
+        throw new Error('统一练习统计 API 未就绪');
+    }
+
+    async mergeUserStats(stats, mergeMode = 'merge') {
+        if (!this.isPlainObject(stats)) {
+            return await this.readUserStats();
+        }
+
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.mergeStats === 'function') {
+            return await window.PracticeRecordAPI.mergeStats(stats, { mergeMode });
+        }
+
+        throw new Error('统一练习统计 API 未就绪');
+    }
+
+    async resetUserStats(stats = null) {
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.resetStats === 'function') {
+            return await window.PracticeRecordAPI.resetStats(stats);
+        }
+
+        throw new Error('统一练习统计 API 未就绪');
+    }
+
+    async createBackup(backupName = null, type = 'manual') {
+        const backup = {
+            id: backupName || `backup_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            type,
+            data: {
+                practice_records: await this.listPracticeRecords(),
+                user_stats: await this.readUserStats(),
+                exam_index: await storage.get('exam_index', [])
+            }
+        };
+
+        const backups = await storage.get(this.storageKeys.manualBackups, []);
+        backups.unshift(backup);
+        while (backups.length > this.maxBackupHistory) {
+            backups.pop();
+        }
+        await storage.set(this.storageKeys.manualBackups, backups);
+        return backup.id;
+    }
+
     async exportPracticeRecords(options = {}) {
         const {
             format = 'json',
@@ -99,14 +180,7 @@ class DataBackupManager {
             throw new Error(`Unsupported export format: ${format}`);
         }
 
-        let practiceRecords = [];
-        if (window.practiceRecorder && typeof window.practiceRecorder.getPracticeRecords === 'function') {
-            const maybe = window.practiceRecorder.getPracticeRecords();
-            practiceRecords = typeof maybe?.then === 'function' ? await maybe : maybe;
-        } else {
-            practiceRecords = await storage.get('practice_records', []);
-        }
-
+        let practiceRecords = await this.listPracticeRecords();
         practiceRecords = Array.isArray(practiceRecords) ? practiceRecords : [];
 
         if (dateRange) {
@@ -129,11 +203,7 @@ class DataBackupManager {
         };
 
         if (includeStats) {
-            if (window.practiceRecorder && typeof window.practiceRecorder.getUserStats === 'function') {
-                exportPayload.userStats = window.practiceRecorder.getUserStats();
-            } else {
-                exportPayload.userStats = await storage.get('user_stats', {});
-            }
+            exportPayload.userStats = await this.readUserStats();
         }
 
         if (includeBackups && window.practiceRecorder && typeof window.practiceRecorder.getBackups === 'function') {
@@ -222,7 +292,6 @@ class DataBackupManager {
         console.log('[DataBackupManager] importPracticeData called, source type:', typeof source, 'length:', Array.isArray(source) ? source.length : source.practiceRecords?.length);
         const {
             mergeMode = 'merge',
-            validateData = true,
             createBackup = true,
             preserveIds = true
         } = options;
@@ -237,23 +306,7 @@ class DataBackupManager {
         const normalized = this.normalizeImportPayload(payload, { preserveIds });
         console.log('[DataBackupManager] Normalized records:', normalized.practiceRecords.length);
 
-        // 优先使用标准化提取结果，必要时再回退到原始载荷路径
         let practiceRecords = Array.isArray(normalized.practiceRecords) ? normalized.practiceRecords : [];
-
-        if (!practiceRecords.length) {
-            if (Array.isArray(payload)) {
-                practiceRecords = payload;
-            } else {
-                practiceRecords = payload.practiceRecords
-                    || payload.practice_records
-                    || (payload.data && payload.data.practice_records)
-                    || (payload.data && payload.data.practiceRecords)
-                    || (payload.data && payload.data.exam_system_practice_records && payload.data.exam_system_practice_records.data)
-                    || (payload.exam_system_practice_records && payload.exam_system_practice_records.data)
-                    || payload.records
-                    || [];
-            }
-        }
 
         if (!practiceRecords.length) {
             throw new Error('Import file does not contain any practice records.');
@@ -263,14 +316,6 @@ class DataBackupManager {
         normalized.practiceRecords = practiceRecords;
         console.log('[DataBackupManager] After sanitize, records:', normalized.practiceRecords.length);
 
-        const originalLength = normalized.practiceRecords.length;
-        if (validateData) {
-            this.validateNormalizedRecords(normalized.practiceRecords);
-        }
-        const validatedLength = normalized.practiceRecords.length;
-        const skippedCount = originalLength - validatedLength;
-        console.log('[DataBackupManager] Validated records:', validatedLength, 'skipped:', skippedCount);
-
         let backupId = null;
         if (createBackup) {
             backupId = await this.createPreImportBackup();
@@ -279,15 +324,11 @@ class DataBackupManager {
 
         let mergeResult;
         try {
-            mergeResult = await this.mergeWithScoreStorageIfAvailable(normalized.practiceRecords, normalized.userStats, mergeMode);
-            if (!mergeResult) {
-                console.log('[DataBackupManager] Fallback to legacy storage merge');
-                mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
-                console.log('[DataBackupManager] Saving to storage');
+            mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
+            console.log('[DataBackupManager] Practice records imported through PracticeRecordAPI');
 
-                if (normalized.userStats) {
-                    await this.mergeUserStats(normalized.userStats, mergeMode);
-                }
+            if (normalized.userStats) {
+                await this.mergeUserStats(normalized.userStats, mergeMode);
             }
         } catch (error) {
             if (backupId) {
@@ -379,668 +420,102 @@ class DataBackupManager {
         const practiceRecords = [];
         const sources = [];
         let userStats = null;
-        const visited = new WeakSet();
 
-        // Fast-path: extract from common shapes (avoids deep traversal misses)
-        try {
-            const direct = this.extractRecordsFromCommonShapes(payload);
-            if (direct.records && direct.records.length) {
-                const normalizedDirect = direct.records
-                    .map((record, index) => this.normalizeRecord(record, {
-                        preserveIds,
-                        fallbackIdPrefix: direct.source || 'record',
-                        index
-                    }))
-                    .filter(Boolean);
-                if (normalizedDirect.length) {
-                    practiceRecords.push(...normalizedDirect);
-                    sources.push({ path: direct.source || '(direct)', count: normalizedDirect.length });
-                }
+        if (this.isPlainObject(payload)) {
+            const directStats = payload.user_stats
+                ?? payload.userStats
+                ?? payload.stats
+                ?? payload.data?.user_stats
+                ?? payload.data?.userStats
+                ?? payload.data?.stats;
+            if (this.isPlainObject(directStats)) {
+                userStats = this.prepareUserStats(directStats);
             }
-        } catch (_) {
-            // ignore and continue with generic traversal
         }
 
-        const collectRecords = (records, originPath) => {
-            if (!Array.isArray(records) || !records.length) {
-                return;
-            }
-
-            const pathString = originPath ? originPath : '';
-            if (!this.isPracticeRecordPath(pathString)) {
-                return;
-            }
-
+        this.extractRecordSources(payload).forEach(({ records, source }) => {
             const normalizedRecords = records
                 .map((record, index) => this.normalizeRecord(record, {
                     preserveIds,
-                    fallbackIdPrefix: pathString || 'record',
+                    fallbackIdPrefix: source || 'record',
                     index
                 }))
                 .filter(Boolean);
 
-            if (!normalizedRecords.length) {
-                return;
+            if (normalizedRecords.length) {
+                practiceRecords.push(...normalizedRecords);
+                sources.push({ path: source || '(root array)', count: normalizedRecords.length });
             }
-
-            practiceRecords.push(...normalizedRecords);
-            sources.push({ path: pathString || '(root array)', count: normalizedRecords.length });
-        };
-
-        const visit = (node, pathSegments = []) => {
-            if (!node || typeof node !== 'object') {
-                return;
-            }
-
-            if (visited.has(node)) {
-                return;
-            }
-            visited.add(node);
-
-            if (Array.isArray(node)) {
-                if (this.isRecordArray(node)) {
-                    collectRecords(node, pathSegments.join('.'));
-                    return;
-                }
-
-                node.forEach((item, index) => visit(item, pathSegments.concat(index)));
-                return;
-            }
-
-            if (!this.isPlainObject(node)) {
-                return;
-            }
-
-            if (!userStats && this.looksLikeUserStats(node)) {
-                userStats = this.extractUserStats(node);
-            }
-
-            for (const [key, value] of Object.entries(node)) {
-                const nextPath = pathSegments.concat(String(key));
-
-                if (Array.isArray(value)) {
-                    if (this.isRecordArray(value)) {
-                        collectRecords(value, nextPath.join('.'));
-                        continue;
-                    }
-                } else if (this.isPlainObject(value)) {
-                    if (Array.isArray(value.data) && this.isRecordArray(value.data)) {
-                        const nestedPath = nextPath.join('.') + '.data';
-                        collectRecords(value.data, nestedPath);
-                        continue;
-                    }
-
-                    if (!userStats && this.looksLikeUserStats(value)) {
-                        userStats = this.extractUserStats(value);
-                    }
-                }
-
-                visit(value, nextPath);
-            }
-        };
-
-        visit(payload, []);
-
-        const deduplicated = this.deduplicateRecords(practiceRecords);
+        });
 
         return {
-            practiceRecords: deduplicated,
+            practiceRecords,
             userStats,
             sources
         };
     }
 
-    isPracticeRecordPath(pathString) {
-        if (!pathString) {
-            return false;
+    extractRecordSources(payload) {
+        const sources = [];
+        const add = (source, records) => {
+            if (Array.isArray(records) && records.some(item => this.isPlainObject(item))) {
+                sources.push({ source, records });
+            }
+        };
+
+        if (Array.isArray(payload)) {
+            add('(root array)', payload);
+            return sources;
+        }
+        if (!this.isPlainObject(payload)) {
+            return sources;
         }
 
-        const normalized = pathString.toLowerCase();
-        return (
-            normalized.includes('practice_records') ||
-            normalized.includes('practicerecords') ||
-            normalized.includes('exam_system_practice_records') ||
-            normalized.includes('mymelodypracticerecords') ||
-            normalized.includes('my_melody_practice_records')
-        );
-    }
+        add('practice_records', payload.practice_records);
+        add('practiceRecords', payload.practiceRecords);
 
-    validateNormalizedRecords(records) {
-        const now = new Date().toISOString();
-        const missingFieldsLog = [];
-        let skippedCount = 0;
-
-        for (let index = 0; index < records.length; index++) {
-            const record = records[index];
-            const missingFields = [];
-            let isValid = true;
-
-            // 检查并修复缺失字段
-            if (!record.id) {
-                record.id = `imported_${now.split('T')[0]}_${Math.random().toString(36).substr(2, 9)}`;
-            }
-            if (!record.examId) {
-                record.examId = 'imported_ielts';
-            }
-            if (!record.startTime) {
-                record.startTime = now;
-            } else if (Number.isNaN(new Date(record.startTime).getTime())) {
-                record.startTime = now;
-            }
-            if (!record.endTime) {
-                record.endTime = now;
-            } else if (Number.isNaN(new Date(record.endTime).getTime())) {
-                record.endTime = now;
-            }
-            if (typeof record.duration !== 'number' || isNaN(record.duration)) {
-                record.duration = 0;
-            }
-            if (typeof record.score !== 'number' || isNaN(record.score)) {
-                record.score = 0;
-            }
-
-            // 如果基本字段仍无效，标记为跳过
-            if (!record.id || !record.examId || Number.isNaN(new Date(record.startTime).getTime())) {
-                isValid = false;
-                missingFields.push('id', 'examId', 'startTime');
-            }
-
-            if (!isValid) {
-                missingFieldsLog.push({ index, missingFields });
-                skippedCount++;
-                records.splice(index, 1);
-                index--; // 调整索引
-                console.log("Skipped record: missing fields - ", missingFields, "at index", index + 1);
-            }
+        const data = this.isPlainObject(payload.data) ? payload.data : {};
+        add('data.practice_records', data.practice_records);
+        add('data.practiceRecords', data.practiceRecords);
+        if (this.isPlainObject(data.practice_records)) {
+            add('data.practice_records.data', data.practice_records.data);
+        }
+        if (this.isPlainObject(data.exam_system_practice_records)) {
+            add('data.exam_system_practice_records.data', data.exam_system_practice_records.data);
+        }
+        if (this.isPlainObject(payload.exam_system_practice_records)) {
+            add('exam_system_practice_records.data', payload.exam_system_practice_records.data);
         }
 
-        if (skippedCount > 0) {
-            console.log(`[DataBackupManager] Skipped ${skippedCount} invalid records during validation.`);
-        }
-
-        if (records.length === 0 && skippedCount > 0) {
-            throw new Error('All records were invalid after validation.');
-        }
-    }
-
-    getScoreStorageInstance() {
-        return window.app?.components?.practiceRecorder?.scoreStorage
-            || window.practiceRecorder?.scoreStorage
-            || window.scoreStorage
-            || null;
-    }
-
-    async mergeWithScoreStorageIfAvailable(records, userStats, mergeMode = 'merge') {
-        const scoreStorage = this.getScoreStorageInstance();
-        if (!scoreStorage || typeof scoreStorage.importData !== 'function') {
-            return null;
-        }
-
-        try {
-            console.log('[DataBackupManager] Using ScoreStorage import path, mode:', mergeMode, 'records:', Array.isArray(records) ? records.length : 0);
-            const existingList = (typeof scoreStorage.getPracticeRecords === 'function')
-                ? await scoreStorage.getPracticeRecords({})
-                : [];
-            const existing = Array.isArray(existingList) ? existingList : [];
-            const existingMap = new Map(
-                existing
-                    .filter(record => record && record.id)
-                    .map(record => [String(record.id), record])
-            );
-
-            let incoming = Array.isArray(records) ? records.slice() : [];
-            const originalLength = incoming.length;
-
-            if (mergeMode === 'skip' && incoming.length) {
-                incoming = incoming.filter(record => record && !existingMap.has(String(record.id)));
-            }
-
-            if (mergeMode === 'skip' && incoming.length === 0) {
-                return {
-                    importedCount: 0,
-                    updatedCount: 0,
-                    skippedCount: originalLength,
-                    finalCount: existing.length
-                };
-            }
-
-            const payload = { practiceRecords: incoming };
-            if (userStats) {
-                payload.userStats = userStats;
-            }
-
-            await scoreStorage.importData(payload, { merge: mergeMode !== 'replace' });
-
-            const finalRecords = (typeof scoreStorage.getPracticeRecords === 'function')
-                ? await scoreStorage.getPracticeRecords({})
-                : [];
-            const finalCount = Array.isArray(finalRecords) ? finalRecords.length : incoming.length;
-
-            const importedCount = mergeMode === 'replace'
-                ? incoming.length
-                : incoming.filter(record => record && !existingMap.has(String(record.id))).length;
-            const updatedCount = mergeMode === 'replace'
-                ? existingMap.size
-                : (mergeMode === 'skip' ? 0 : incoming.length - importedCount);
-            const skippedCount = mergeMode === 'skip' ? (originalLength - incoming.length) : 0;
-
-            console.log('[DataBackupManager] ScoreStorage import finished', {
-                mergeMode,
-                importedCount,
-                updatedCount,
-                skippedCount,
-                finalCount
-            });
-
-            return { importedCount, updatedCount, skippedCount, finalCount };
-        } catch (error) {
-            console.warn('[DataBackupManager] ScoreStorage import failed, fallback to storage', error);
-            return null;
-        }
+        return sources;
     }
 
     async mergePracticeRecords(newRecords, mergeMode = 'merge') {
-        const practiceStore = window.PracticeCore && window.PracticeCore.store;
-        const existingRaw = practiceStore && typeof practiceStore.listPracticeRecords === 'function'
-            ? await practiceStore.listPracticeRecords()
-            : await storage.get('practice_records', []);
-        const existingRecords = Array.isArray(existingRaw) ? existingRaw.slice() : [];
-
-        if (mergeMode === 'replace') {
-            if (practiceStore && typeof practiceStore.replacePracticeRecords === 'function') {
-                await practiceStore.replacePracticeRecords(newRecords);
-            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                await window.simpleStorageWrapper.savePracticeRecords(newRecords);
-            } else {
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, newRecords);
-            }
-            return {
-                importedCount: newRecords.length,
-                updatedCount: existingRecords.length,
-                skippedCount: 0,
-                finalCount: newRecords.length
-            };
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.mergeRecords === 'function') {
+            return await window.PracticeRecordAPI.mergeRecords(
+                Array.isArray(newRecords) ? newRecords : [],
+                { mergeMode, updateStats: true }
+            );
         }
 
-        const indexMap = new Map();
-        existingRecords.forEach((record, index) => {
-            if (record && record.id !== undefined && record.id !== null) {
-                indexMap.set(String(record.id), { record, index });
-            }
-        });
-
-        let importedCount = 0;
-        let updatedCount = 0;
-        let skippedCount = 0;
-
-        const mergedRecords = existingRecords.slice();
-
-        for (const record of newRecords) {
-            if (!record || record.id === undefined || record.id === null) {
-                continue;
-            }
-
-            const key = String(record.id);
-            const existing = indexMap.get(key);
-
-            if (!existing) {
-                mergedRecords.push(record);
-                indexMap.set(key, { record, index: mergedRecords.length - 1 });
-                importedCount += 1;
-                continue;
-            }
-
-            if (mergeMode === 'skip') {
-                skippedCount += 1;
-                continue;
-            }
-
-            const existingTimestamp = this.getRecordTimestamp(existing.record);
-            const incomingTimestamp = this.getRecordTimestamp(record);
-
-            if (incomingTimestamp >= existingTimestamp) {
-                const merged = this.mergeRecordDetails(existing.record, record);
-                mergedRecords[existing.index] = merged;
-                indexMap.set(key, { record: merged, index: existing.index });
-                updatedCount += 1;
-            } else {
-                skippedCount += 1;
-            }
-        }
-
-        mergedRecords.sort((a, b) => this.getRecordTimestamp(a) - this.getRecordTimestamp(b));
-
-        if (practiceStore && typeof practiceStore.replacePracticeRecords === 'function') {
-            await practiceStore.replacePracticeRecords(mergedRecords);
-        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-            await window.simpleStorageWrapper.savePracticeRecords(mergedRecords);
-        } else {
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, mergedRecords);
-        }
-
-        return {
-            importedCount,
-            updatedCount,
-            skippedCount,
-            finalCount: mergedRecords.length
-        };
-    }
-    async mergeUserStats(stats, mergeMode = 'merge') {
-        if (!this.isPlainObject(stats)) {
-            return;
-        }
-
-        if (mergeMode === 'replace') {
-            await storage.set('user_stats', stats);
-            return;
-        }
-
-        const existing = await storage.get('user_stats', {}) || {};
-        const merged = { ...existing };
-
-        for (const [key, value] of Object.entries(stats)) {
-            if (value === undefined || value === null) {
-                continue;
-            }
-
-            const current = existing[key];
-            if (typeof value === 'number' && typeof current === 'number') {
-                merged[key] = Math.max(value, current);
-                continue;
-            }
-
-            if (this.isPlainObject(value) && this.isPlainObject(current)) {
-                merged[key] = { ...current, ...value };
-                continue;
-            }
-
-            if (current === undefined) {
-                merged[key] = value;
-                continue;
-            }
-
-            merged[key] = value;
-        }
-
-        await storage.set('user_stats', merged);
+        throw new Error('统一练习记录导入 API 未就绪');
     }
 
-    mergeRecordDetails(existing, incoming) {
-        const merged = { ...existing, ...incoming };
-
-        if (this.isPlainObject(existing?.metadata) || this.isPlainObject(incoming?.metadata)) {
-            merged.metadata = {
-                ...(this.isPlainObject(existing?.metadata) ? existing.metadata : {}),
-                ...(this.isPlainObject(incoming?.metadata) ? incoming.metadata : {})
-            };
-        }
-
-        if (this.isPlainObject(existing?.realData) || this.isPlainObject(incoming?.realData)) {
-            merged.realData = {
-                ...(this.isPlainObject(existing?.realData) ? existing.realData : {}),
-                ...(this.isPlainObject(incoming?.realData) ? incoming.realData : {})
-            };
-        }
-
-        merged.startTime = this.normalizeDateValue(merged.startTime || incoming.startTime || existing.startTime) || merged.startTime;
-        merged.endTime = this.normalizeDateValue(merged.endTime || incoming.endTime || existing.endTime) || merged.endTime;
-        merged.createdAt = this.normalizeDateValue(merged.createdAt || incoming.createdAt || existing.createdAt) || merged.createdAt;
-        merged.updatedAt = this.normalizeDateValue(merged.updatedAt || incoming.updatedAt || existing.updatedAt) || merged.updatedAt;
-
-        if ((!merged.duration || merged.duration <= 0) && merged.startTime && merged.endTime) {
-            const start = new Date(merged.startTime).getTime();
-            const end = new Date(merged.endTime).getTime();
-            if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-                merged.duration = Math.round((end - start) / 1000);
-            }
-        }
-        if (!merged.duration || merged.duration <= 0) {
-            const rd = merged.realData || {};
-            if (typeof rd.duration === 'number' && rd.duration > 0) {
-                merged.duration = rd.duration;
-            } else if (Array.isArray(rd.interactions) && rd.interactions.length) {
-                try {
-                    const ts = rd.interactions.map(x => x && Number(x.timestamp)).filter(n => Number.isFinite(n));
-                    if (ts.length) {
-                        const span = Math.max(...ts) - Math.min(...ts);
-                        if (Number.isFinite(span) && span > 0) merged.duration = Math.floor(span / 1000);
-                    }
-                } catch(_) {}
-            }
-        }
-
-        return merged;
-    }
-
-    deduplicateRecords(records) {
-        const map = new Map();
-
-        records.forEach(record => {
-            if (!record || record.id === undefined || record.id === null) {
-                return;
-            }
-
-            const key = String(record.id);
-            const timestamp = this.getRecordTimestamp(record);
-            const existing = map.get(key);
-
-            if (!existing || timestamp >= existing.timestamp) {
-                map.set(key, { record, timestamp });
-            }
-        });
-
-        return Array.from(map.values())
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .map(entry => entry.record);
-    }
-
-    isRecordArray(items) {
-        if (!Array.isArray(items) || !items.length) {
-            return false;
-        }
-
-        const sampleSize = Math.min(items.length, 5);
-        let matches = 0;
-        for (let index = 0; index < sampleSize; index += 1) {
-            if (this.looksLikePracticeRecord(items[index])) {
-                matches += 1;
-            }
-        }
-
-        return matches >= Math.ceil(sampleSize / 2);
-    }
-
-    looksLikePracticeRecord(record) {
-        if (!this.isPlainObject(record)) {
-            return false;
-        }
-
-        const keys = Object.keys(record).map(key => key.toLowerCase());
-        const keySet = new Set(keys);
-
-        const identitySignals = [
-            'id', 'practiceid', 'practice_id', 'recordid', 'record_id',
-            'examid', 'exam_id', 'examname', 'title'
-        ];
-        const timeSignals = ['starttime', 'start_time', 'createdat', 'timestamp', 'endtime'];
-        const statusSignals = ['status', 'realdata', 'duration'];
-
-        const hasIdentity = identitySignals.some(signal => keySet.has(signal));
-        if (!hasIdentity) {
-            return false;
-        }
-
-        const hasTime = timeSignals.some(signal => keySet.has(signal));
-        const hasStatus = statusSignals.some(signal => keySet.has(signal));
-        return hasStatus || hasTime;
-    }
-
-    // Heuristic extractor for common export structures
-    extractRecordsFromCommonShapes(payload) {
-        // default empty result
-        const empty = { records: [], source: null };
-        try {
-            if (Array.isArray(payload)) {
-                return { records: payload, source: '(root array)' };
-            }
-            if (!this.isPlainObject(payload)) {
-                return empty;
-            }
-
-            // Top-level practice_records
-            if (Array.isArray(payload.practice_records)) {
-                return { records: payload.practice_records, source: 'practice_records' };
-            }
-
-            // Nested under data
-            const data = payload.data || {};
-            if (Array.isArray(data.practice_records)) {
-                return { records: data.practice_records, source: 'data.practice_records' };
-            }
-            if (this.isPlainObject(data.practice_records) && Array.isArray(data.practice_records.data)) {
-                return { records: data.practice_records.data, source: 'data.practice_records.data' };
-            }
-
-            // Our exported wrapper key
-            if (this.isPlainObject(data.exam_system_practice_records) && Array.isArray(data.exam_system_practice_records.data)) {
-                return { records: data.exam_system_practice_records.data, source: 'data.exam_system_practice_records.data' };
-            }
-            if (this.isPlainObject(payload.exam_system_practice_records) && Array.isArray(payload.exam_system_practice_records.data)) {
-                return { records: payload.exam_system_practice_records.data, source: 'exam_system_practice_records.data' };
-            }
-
-            return empty;
-        } catch (_) {
-            return empty;
-        }
-    }
-
-    looksLikeUserStats(candidate) {
-        if (!this.isPlainObject(candidate)) {
-            return false;
-        }
-
-        const keys = Object.keys(candidate).map(key => key.toLowerCase());
-        return keys.some(key => key.includes('stats') || key.includes('practicecount') || key.includes('totalpractice') || key.includes('total_practice'));
-    }
-
-    extractUserStats(candidate) {
+    prepareUserStats(candidate) {
         if (!this.isPlainObject(candidate)) {
             return null;
         }
-
-        const normalized = {};
-        for (const [key, value] of Object.entries(candidate)) {
-            normalized[this.toCamelCaseKey(key)] = value;
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.prepareStats === 'function') {
+            return window.PracticeRecordAPI.prepareStats(candidate);
         }
-        return normalized;
+        throw new Error('统一练习统计 API 未就绪');
     }
+
     normalizeRecord(record, options = {}) {
-        const {
-            preserveIds = true,
-            fallbackIdPrefix = 'record',
-            index = 0
-        } = options;
-
-        if (!this.isPlainObject(record)) {
-            return null;
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.normalizeRecord === 'function') {
+            return window.PracticeRecordAPI.normalizeRecord(record, options);
         }
-
-        const safePrefix = fallbackIdPrefix || 'record';
-        const sourceId = record.id ?? record.recordId ?? record.practiceId ?? record.sessionId ?? record.timestamp ?? record.uuid;
-
-        let id = preserveIds && sourceId ? String(sourceId).trim() : '';
-        if (!id) {
-            id = `${safePrefix}_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
-        }
-
-        const examId = record.examId ?? record.exam_id ?? record.examID ?? record.examName ?? record.title ?? record.name;
-
-        const normalized = { ...record };
-        normalized.id = id;
-        normalized.examId = examId ? String(examId) : id;
-        normalized.title = record.title ?? record.examTitle ?? record.examName ?? record.name ?? 'Practice record';
-        normalized.status = record.status ?? record.recordStatus ?? 'completed';
-
-        const startTimeRaw = record.startTime ?? record.start_time ?? record.startedAt ?? record.createdAt ?? record.timestamp ?? record.date;
-        const endTimeRaw = record.endTime ?? record.end_time ?? record.finishedAt ?? record.completedAt;
-
-        normalized.startTime = this.normalizeDateValue(startTimeRaw) ?? new Date().toISOString();
-        normalized.endTime = this.normalizeDateValue(endTimeRaw) || normalized.endTime;
-        normalized.createdAt = this.normalizeDateValue(record.createdAt ?? startTimeRaw ?? endTimeRaw) ?? normalized.startTime;
-        normalized.updatedAt = this.normalizeDateValue(record.updatedAt ?? endTimeRaw) || normalized.updatedAt;
-
-        // Prefer a positive duration; avoid locking in 0 when a better value exists
-        (function(){
-            const sInfo = record && (record.scoreInfo || (record.realData && record.realData.scoreInfo)) || {};
-            const rd = record && record.realData || {};
-            const candidates = [
-                record.duration, rd.duration,
-                record.durationSeconds, record.duration_seconds,
-                record.elapsedSeconds, record.elapsed_seconds,
-                record.timeSpent, record.time_spent,
-                rd.durationSeconds, rd.elapsedSeconds, rd.timeSpent,
-                sInfo.duration, sInfo.timeSpent
-            ];
-            let picked = undefined;
-            // pick first positive
-            for (const v of candidates) { const n = Number(v); if (Number.isFinite(n) && n > 0) { picked = n; break; } }
-            // else allow zero if nothing else
-            if (picked === undefined) { for (const v of candidates) { const n = Number(v); if (Number.isFinite(n)) { picked = n; break; } } }
-            if (picked !== undefined) normalized.duration = picked;
-        })();
-        normalized.score = this.parseNumber(record.score ?? record.finalScore ?? record.realData?.score ?? record.percentage ?? record.realData?.percentage) ?? normalized.score;
-        normalized.totalQuestions = this.parseInteger(record.totalQuestions ?? record.questionCount ?? record.questions ?? record.realData?.totalQuestions) ?? normalized.totalQuestions;
-        normalized.correctAnswers = this.parseInteger(record.correctAnswers ?? record.correctCount ?? record.realData?.correctAnswers ?? record.realData?.correct) ?? normalized.correctAnswers;
-        normalized.accuracy = this.parseNumber(record.accuracy ?? record.realData?.accuracy ?? record.percentage) ?? normalized.accuracy;
-
-        normalized.metadata = this.isPlainObject(record.metadata) ? { ...record.metadata } : {};
-        const category = record.category ?? record.examCategory ?? record.section ?? record.mode;
-        if (category && !normalized.metadata.category) {
-            normalized.metadata.category = category;
-        }
-        if (record.frequency !== undefined && normalized.metadata.frequency === undefined) {
-            normalized.metadata.frequency = record.frequency;
-        }
-
-        if (this.isPlainObject(record.realData)) {
-            normalized.realData = { ...record.realData };
-        } else if (this.isPlainObject(record.details)) {
-            normalized.realData = { ...record.details };
-        }
-
-        normalized.source = record.source ?? record.dataSource ?? normalized.source ?? 'imported';
-
-        if ((!normalized.duration || normalized.duration <= 0) && normalized.startTime && normalized.endTime) {
-            const start = new Date(normalized.startTime).getTime();
-            const end = new Date(normalized.endTime).getTime();
-            if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
-                normalized.duration = Math.round((end - start) / 1000);
-            }
-        }
-
-        if (normalized.accuracy !== undefined && normalized.accuracy !== null) {
-            const value = Number(normalized.accuracy);
-            if (Number.isFinite(value)) {
-                normalized.accuracy = value <= 1 && value >= 0 ? Number((value * 100).toFixed(2)) : value;
-                normalized.accuracy = Math.min(Math.max(normalized.accuracy, 0), 100);
-            } else {
-                delete normalized.accuracy;
-            }
-        }
-
-        if (normalized.score !== undefined && normalized.score !== null) {
-            const value = Number(normalized.score);
-            if (Number.isFinite(value)) {
-                normalized.score = value <= 1 && value >= 0 ? Number((value * 100).toFixed(2)) : value;
-            } else {
-                delete normalized.score;
-            }
-        }
-
-        return normalized;
+        throw new Error('统一练习记录标准化 API 未就绪');
     }
     normalizeDateValue(value) {
         if (!value) {
@@ -1076,22 +551,6 @@ class DataBackupManager {
         }
 
         return null;
-    }
-
-    parseNumber(value) {
-        if (value === undefined || value === null || value === '') {
-            return undefined;
-        }
-        const num = Number(value);
-        return Number.isFinite(num) ? num : undefined;
-    }
-
-    parseInteger(value) {
-        if (value === undefined || value === null || value === '') {
-            return undefined;
-        }
-        const num = parseInt(value, 10);
-        return Number.isFinite(num) ? num : undefined;
     }
 
     getRecordTimestamp(record) {
@@ -1152,16 +611,13 @@ class DataBackupManager {
     }
     async createPreImportBackup() {
         try {
-            if (window.practiceRecorder && typeof window.practiceRecorder.createBackup === 'function') {
-                return await window.practiceRecorder.createBackup('pre_import_backup');
-            }
-
             const backup = {
                 id: `pre_import_${Date.now()}`,
                 timestamp: new Date().toISOString(),
+                type: 'pre_import',
                 data: {
-                    practice_records: await storage.get('practice_records', []),
-                    user_stats: await storage.get('user_stats', {}),
+                    practice_records: await this.listPracticeRecords(),
+                    user_stats: await this.readUserStats(),
                     exam_index: await storage.get('exam_index', [])
                 }
             };
@@ -1185,17 +641,22 @@ class DataBackupManager {
         }
 
         try {
-            if (window.practiceRecorder && typeof window.practiceRecorder.restoreBackup === 'function') {
-                return await window.practiceRecorder.restoreBackup(backupId);
-            }
-
             const backups = await storage.get(this.storageKeys.manualBackups, []);
             const backup = backups.find(item => item.id === backupId);
             if (!backup) {
                 throw new Error(`Backup ${backupId} not found.`);
             }
 
-            // 返回备份对象，让调用者决定如何处理数据
+            const data = backup.data || {};
+            const records = Array.isArray(data.practice_records)
+                ? data.practice_records
+                : (Array.isArray(data.practiceRecords) ? data.practiceRecords : []);
+            const stats = this.isPlainObject(data.user_stats)
+                ? data.user_stats
+                : (this.isPlainObject(data.userStats) ? data.userStats : null);
+
+            await this.restorePracticeRecords(records, stats);
+
             return backup;
         } catch (error) {
             console.error('[DataBackupManager] backup restore failed', error);
@@ -1220,19 +681,15 @@ class DataBackupManager {
         const clearedItems = [];
 
         if (clearPracticeRecords) {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                await window.PracticeCore.store.replacePracticeRecords([]);
-            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                await window.simpleStorageWrapper.savePracticeRecords([]);
-            } else {
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, []);
-            }
+            await this.replacePracticeRecords([], { updateStats: !clearUserStats });
             clearedItems.push('practice_records');
+            if (!clearUserStats) {
+                clearedItems.push('user_stats');
+            }
         }
 
         if (clearUserStats) {
-            await storage.set('user_stats', {});
+            await this.resetUserStats();
             clearedItems.push('user_stats');
         }
 
@@ -1286,8 +743,8 @@ class DataBackupManager {
     }
     async getDataStats() {
         try {
-            const practiceRecords = await storage.get('practice_records', []);
-            const userStats = await storage.get('user_stats', {});
+            const practiceRecords = await this.listPracticeRecords();
+            const userStats = await this.readUserStats();
             const exportHistory = await this.getExportHistory();
             const importHistory = await this.getImportHistory();
             const storageInfo = typeof storage.getStorageInfo === 'function' ? await storage.getStorageInfo() : null;

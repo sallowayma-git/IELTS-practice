@@ -253,7 +253,7 @@ async def run() -> Dict[str, Any]:
         context = await browser.new_context(user_agent=UA)
 
         page = await context.new_page()
-        page.on("console", lambda msg: print(f"[PAGE CONSOLE] {msg.text}"))
+        page.on("console", lambda msg: print(f"[PAGE CONSOLE] {msg.text}", file=sys.stderr))
         await page.goto(INDEX_URL)
         await page.wait_for_function("() => window.app && window.app.isInitialized", timeout=60000)
         await dismiss_license_modal_if_present(page)
@@ -267,7 +267,7 @@ async def run() -> Dict[str, Any]:
             await page.locator("#suite-mode-selector-modal").wait_for(state="hidden", timeout=10000)
  
         suite_page = await popup_wait.value
-        suite_page.on("console", lambda msg: print(f"[POPUP CONSOLE] {msg.text}"))
+        suite_page.on("console", lambda msg: print(f"[POPUP CONSOLE] {msg.text}", file=sys.stderr))
         await suite_page.wait_for_load_state("load")
         await suite_page.wait_for_selector("#submit-btn", state="attached", timeout=30000)
         await suite_page.wait_for_timeout(600)
