@@ -288,7 +288,7 @@ function resolveAuthRequestAudience(req, resolveAuthState) {
 
 function rejectUserForAudience(res, user, audience) {
     if (audience === 'business' && user?.role === 'admin') {
-        return res.status(403).json({ error: 'Use the admin login entrance' });
+        return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
     }
     if (audience === 'admin' && user?.role !== 'admin') {
         return res.status(403).json({ error: 'Admin account required' });
@@ -673,12 +673,16 @@ function createAuthRouter(options = {}) {
                 await bcryptImpl.compare(parsed.data.password, DUMMY_PASSWORD_HASH);
                 return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
             }
+            const safeUser = publicUser(user);
+            if (audience === 'business' && safeUser.role === 'admin') {
+                await bcryptImpl.compare(parsed.data.password, DUMMY_PASSWORD_HASH);
+                return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
+            }
             const ok = await bcryptImpl.compare(parsed.data.password, user.password_hash);
             if (!ok) {
                 return res.status(401).json({ error: INVALID_CREDENTIALS_ERROR });
             }
 
-            const safeUser = publicUser(user);
             const audienceRejection = rejectUserForAudience(res, safeUser, audience);
             if (audienceRejection) {
                 return audienceRejection;

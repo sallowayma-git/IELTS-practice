@@ -3433,8 +3433,16 @@ test('auth API enforces account type for signed business and admin flows', async
             password: 'StrongPass1',
             authState: businessState
         });
-        assert.equal(adminInBusinessFlow.response.status, 403);
-        assert.deepEqual(adminInBusinessFlow.json, { error: 'Use the admin login entrance' });
+        assert.equal(adminInBusinessFlow.response.status, 401);
+        assert.deepEqual(adminInBusinessFlow.json, { error: 'Username or password is incorrect' });
+
+        const adminWrongPasswordInBusinessFlow = await businessAuth.request('POST', '/api/auth/login', {
+            username: 'flow_admin',
+            password: 'WrongPass1',
+            authState: businessState
+        });
+        assert.equal(adminWrongPasswordInBusinessFlow.response.status, 401);
+        assert.deepEqual(adminWrongPasswordInBusinessFlow.json, adminInBusinessFlow.json);
 
         const learnerAuth = client.createSession();
         await register(learnerAuth, 'flow_learner', 'StrongPass1');
