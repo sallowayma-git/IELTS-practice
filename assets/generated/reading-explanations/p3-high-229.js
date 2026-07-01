@@ -21,11 +21,11 @@
     },
     {
       "label": "Paragraph 2",
-      "text": "Gene Brody 博士令人惊讶的新研究发现，年长的孩子在学校表现好、受其他孩子欢迎，会带来父母的"沾光感"——提高母亲的自尊。显然，这反过来又与对年幼孩子更积极的养育方式相关，年幼孩子因此表现出更少的行为问题。相反，如果第一个孩子很难带，父母可能会经历家庭紧张气氛的恶性循环。"
+      "text": "Gene Brody 博士令人惊讶的新研究发现，年长的孩子在学校表现好、受其他孩子欢迎，会带来父母的\"沾光感\"——提高母亲的自尊。显然，这反过来又与对年幼孩子更积极的养育方式相关，年幼孩子因此表现出更少的行为问题。相反，如果第一个孩子很难带，父母可能会经历家庭紧张气氛的恶性循环。"
     },
     {
       "label": "Paragraph 3",
-      "text": "国际体育明星 Piri Weepu 是一位橄榄球硬汉，但至少他强硬性格的一部分早在家中就已锻造。他的哥哥 Billy 开始打橄榄球——在 Piri 仅有四岁时就扑倒他——以"把他练硬"。这似乎奏效了。Piri 跟随哥哥在上学前就开始参加七岁以下联赛。这样的故事有多少个家庭就有多少：在家庭这个形成期的温室中，兄弟姐妹在父母、基因和人格这些强大的力场已经发挥作用的情况下，以复杂的方式互动。这从出生顺序开始，出生顺序决定了游戏中的角色：长子/长女是领导者，中间的孩子是调解者，最小的孩子是叛逆者。这些角色可能会伴随一生。"
+      "text": "国际体育明星 Piri Weepu 是一位橄榄球硬汉，但至少他强硬性格的一部分早在家中就已锻造。他的哥哥 Billy 开始打橄榄球——在 Piri 仅有四岁时就扑倒他——以\"把他练硬\"。这似乎奏效了。Piri 跟随哥哥在上学前就开始参加七岁以下联赛。这样的故事有多少个家庭就有多少：在家庭这个形成期的温室中，兄弟姐妹在父母、基因和人格这些强大的力场已经发挥作用的情况下，以复杂的方式互动。这从出生顺序开始，出生顺序决定了游戏中的角色：长子/长女是领导者，中间的孩子是调解者，最小的孩子是叛逆者。这些角色可能会伴随一生。"
     },
     {
       "label": "Paragraph 4",
@@ -60,22 +60,22 @@
         {
           "questionId": "q1",
           "questionNumber": 27,
-          "text": "题目翻译：父母和兄弟姐妹在塑造人们成年后的性格方面起着同等作用。\n答案：NO\n解析：题干说父母和兄弟姐妹作用"equal roles/同等作用"，但原文明确说兄弟姐妹 even more influential，即影响更大。因此题干与作者观点相反，选 NO。"
+          "text": "题目翻译：父母和兄弟姐妹在塑造人们成年后的性格方面起着同等作用。\n答案：NO\n解析：题干说父母和兄弟姐妹作用\"equal roles/同等作用\"，但原文明确说兄弟姐妹 even more influential，即影响更大。因此题干与作者观点相反，选 NO。"
         },
         {
           "questionId": "q2",
           "questionNumber": 28,
-          "text": "题目翻译：人们最早的社会关系往往是和同性别的兄弟姐妹建立的。\n答案：NOT GIVEN\n解析：原文只说"最早的社会关系是和兄弟姐妹有关"，但没有说这些兄弟姐妹是否是 of their own gender/同性别。题干加入了"同性别"这一信息，原文没有提及，因此选 NOT GIVEN。"
+          "text": "题目翻译：人们最早的社会关系往往是和同性别的兄弟姐妹建立的。\n答案：NOT GIVEN\n解析：原文只说\"最早的社会关系是和兄弟姐妹有关\"，但没有说这些兄弟姐妹是否是 of their own gender/同性别。题干加入了\"同性别\"这一信息，原文没有提及，因此选 NOT GIVEN。"
         },
         {
           "questionId": "q3",
           "questionNumber": 29,
-          "text": "题目翻译：人们结婚后，他们与兄弟姐妹的关系往往会受到较少关注。\n答案：NOT GIVEN\n解析：原文确实提到 spouses/配偶，但只是说兄弟姐妹关系在情感强度上不低于配偶和孩子关系。题干说"结婚后兄弟姐妹关系会受到较少关注"，原文没有说明"结婚后"关系是否被忽视，也没有说 attention 变少。因此不是反驳，而是信息缺失，选 NOT GIVEN。"
+          "text": "题目翻译：人们结婚后，他们与兄弟姐妹的关系往往会受到较少关注。\n答案：NOT GIVEN\n解析：原文确实提到 spouses/配偶，但只是说兄弟姐妹关系在情感强度上不低于配偶和孩子关系。题干说\"结婚后兄弟姐妹关系会受到较少关注\"，原文没有说明\"结婚后\"关系是否被忽视，也没有说 attention 变少。因此不是反驳，而是信息缺失，选 NOT GIVEN。"
         },
         {
           "questionId": "q4",
           "questionNumber": 30,
-          "text": "题目翻译：父母的"沾光感/自豪感"对后出生的孩子有好处。\n答案：YES\n解析：题干中的 later siblings 对应原文的 younger children。原文说 parental basking 会让父母对年幼孩子更积极，年幼孩子行为问题更少。所以 parental basking 对后出生的孩子有利，选 YES。"
+          "text": "题目翻译：父母的\"沾光感/自豪感\"对后出生的孩子有好处。\n答案：YES\n解析：题干中的 later siblings 对应原文的 younger children。原文说 parental basking 会让父母对年幼孩子更积极，年幼孩子行为问题更少。所以 parental basking 对后出生的孩子有利，选 YES。"
         }
       ]
     },
@@ -90,22 +90,22 @@
         {
           "questionId": "q5",
           "questionNumber": 31,
-          "text": "题目翻译：作者在第三段中关于出生顺序提出了什么观点？\n答案：B\n解析：原文说 birth order 决定儿童时期的角色，而且这些角色可能持续一生。也就是说，出生顺序可能影响成年后的性格特征。B "It may shape the characteristics of adults." 正确。A"父母低估其作用"未提；C"重要性随成长下降"相反；D"比基因更有影响"未比较。"
+          "text": "题目翻译：作者在第三段中关于出生顺序提出了什么观点？\n答案：B\n解析：原文说 birth order 决定儿童时期的角色，而且这些角色可能持续一生。也就是说，出生顺序可能影响成年后的性格特征。B \"It may shape the characteristics of adults.\" 正确。A\"父母低估其作用\"未提；C\"重要性随成长下降\"相反；D\"比基因更有影响\"未比较。"
         },
         {
           "questionId": "q6",
           "questionNumber": 32,
-          "text": "题目翻译：关于 Claire Cartwright 的一些客户，文章告诉了我们什么？\n答案：C\n解析：关键在 it might not have been true，说明这些客户对童年经历的理解或记忆未必准确。对应 C "Their perceptions of childhood may be inaccurate." A"父母公平对待他们"不是作者确定事实；B"被兄弟姐妹严厉对待"错误，原文是父母判断更严厉；D"成年后和兄弟姐妹更亲近"未提。"
+          "text": "题目翻译：关于 Claire Cartwright 的一些客户，文章告诉了我们什么？\n答案：C\n解析：关键在 it might not have been true，说明这些客户对童年经历的理解或记忆未必准确。对应 C \"Their perceptions of childhood may be inaccurate.\" A\"父母公平对待他们\"不是作者确定事实；B\"被兄弟姐妹严厉对待\"错误，原文是父母判断更严厉；D\"成年后和兄弟姐妹更亲近\"未提。"
         },
         {
           "questionId": "q7",
           "questionNumber": 33,
-          "text": "题目翻译：作者在第五段中关于兄弟姐妹的主要观点是什么？\n答案：C\n解析：第五段的核心是：小时候看似负面的特点，成年后可能被转化为优势。对应 C "Negative characteristics in children can become positive in adults." B 过度概括，原文不是说受宠孩子会成为好领导，而是 disruptive child 可能转化为领导力；D 说 attention-seeking children 不可能取悦老板，原文没有这样说。"
+          "text": "题目翻译：作者在第五段中关于兄弟姐妹的主要观点是什么？\n答案：C\n解析：第五段的核心是：小时候看似负面的特点，成年后可能被转化为优势。对应 C \"Negative characteristics in children can become positive in adults.\" B 过度概括，原文不是说受宠孩子会成为好领导，而是 disruptive child 可能转化为领导力；D 说 attention-seeking children 不可能取悦老板，原文没有这样说。"
         },
         {
           "questionId": "q8",
           "questionNumber": 34,
-          "text": "题目翻译：以下哪一项最能概括作者在第六段中的论点？\n答案：D\n解析：第六段解释为什么同父母、共享 DNA 的兄弟姐妹会差异很大：因为家庭环境会随着时间变化，父母状态、家庭处境也会变化。对应 D "The family environment may change over time." A"很多孩子有偏爱的父母"未提；B"父母养育技巧随孩子出生顺序提高"不是核心；C"兄弟姐妹天生性格不同"不是本段重点。"
+          "text": "题目翻译：以下哪一项最能概括作者在第六段中的论点？\n答案：D\n解析：第六段解释为什么同父母、共享 DNA 的兄弟姐妹会差异很大：因为家庭环境会随着时间变化，父母状态、家庭处境也会变化。对应 D \"The family environment may change over time.\" A\"很多孩子有偏爱的父母\"未提；B\"父母养育技巧随孩子出生顺序提高\"不是核心；C\"兄弟姐妹天生性格不同\"不是本段重点。"
         }
       ]
     },
@@ -130,7 +130,7 @@
         {
           "questionId": "q11",
           "questionNumber": 37,
-          "text": "题目翻译：2003 年的研究表明，孩子们为了寻求关注，会发展出……\n答案：F\n解析：differentiate themselves/让自己区别开来、stronger personalities、better sense of their own identity 都指向"更强的个体性"。所以 37 选 F greater individuality。"
+          "text": "题目翻译：2003 年的研究表明，孩子们为了寻求关注，会发展出……\n答案：F\n解析：differentiate themselves/让自己区别开来、stronger personalities、better sense of their own identity 都指向\"更强的个体性\"。所以 37 选 F greater individuality。"
         },
         {
           "questionId": "q12",
@@ -140,7 +140,7 @@
         {
           "questionId": "q13",
           "questionNumber": 39,
-          "text": "题目翻译：2010 年一项美国研究将拥有姐妹与 10-14 岁儿童的……联系起来。\n答案：K\n解析："不太孤独、不觉得没人爱、不那么自我意识过强或害怕"属于心理状态更好，对应 mental well-being/心理健康、精神幸福感。所以 39 选 K。"
+          "text": "题目翻译：2010 年一项美国研究将拥有姐妹与 10-14 岁儿童的……联系起来。\n答案：K\n解析：\"不太孤独、不觉得没人爱、不那么自我意识过强或害怕\"属于心理状态更好，对应 mental well-being/心理健康、精神幸福感。所以 39 选 K。"
         },
         {
           "questionId": "q14",

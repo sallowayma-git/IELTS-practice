@@ -250,12 +250,17 @@ class DataIntegrityManager {
                 throw new Error('备份不存在');
             }
             const data = backup.data || {};
-            await this.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
-                await repos.practice.overwrite(data.practice_records || [], { transaction: tx });
-                const currentSettings = await repos.settings.getAll({ transaction: tx });
-                const restoredSettings = { ...currentSettings, ...(data.system_settings || {}) };
-                await repos.settings.saveAll(restoredSettings, { transaction: tx });
-            });
+            const records = Array.isArray(data.practice_records)
+                ? data.practice_records
+                : (Array.isArray(data.practiceRecords) ? data.practiceRecords : []);
+            const stats = data.user_stats || data.userStats || null;
+            await this._restorePracticeRecords(records, stats);
+
+            if (data.system_settings && typeof data.system_settings === 'object') {
+                const currentSettings = await this.repositories.settings.getAll();
+                const restoredSettings = { ...currentSettings, ...data.system_settings };
+                await this.repositories.settings.saveAll(restoredSettings);
+            }
             console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功`);
         } catch (error) {
             console.error('[DataIntegrityManager] 恢复备份失败:', error);
@@ -304,10 +309,12 @@ class DataIntegrityManager {
 
         const hasPracticeSection = Array.isArray(payload.practice_records);
         const hasSettingsSection = payload.system_settings && typeof payload.system_settings === 'object';
+        const hasUserStatsSection = payload.user_stats && typeof payload.user_stats === 'object';
         const practiceRecords = hasPracticeSection ? this._preparePracticeRecords(payload.practice_records) : null;
         const systemSettings = hasSettingsSection ? this._prepareSystemSettings(payload.system_settings) : {};
+        const userStats = hasUserStatsSection ? payload.user_stats : null;
 
-        if (!hasPracticeSection && !hasSettingsSection) {
+        if (!hasPracticeSection && !hasSettingsSection && !hasUserStatsSection) {
             throw new Error('导入文件缺少可用的数据');
         }
 
@@ -318,19 +325,28 @@ class DataIntegrityManager {
         }
 
         try {
-            await this.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
-                if (hasPracticeSection) {
-                    await repos.practice.overwrite(practiceRecords || [], { transaction: tx });
-                }
+            if (hasPracticeSection) {
+                await this._restorePracticeRecords(practiceRecords || [], userStats);
+            } else if (userStats) {
+                await this._writeUserStats(userStats);
+            }
 
-                if (hasSettingsSection && Object.keys(systemSettings).length > 0) {
-                    const current = await repos.settings.getAll({ transaction: tx });
-                    const next = { ...current, ...systemSettings };
-                    await repos.settings.saveAll(next, { transaction: tx });
-                }
-            });
+            if (hasSettingsSection && Object.keys(systemSettings).length > 0) {
+                const current = await this.repositories.settings.getAll();
+                const next = { ...current, ...systemSettings };
+                await this.repositories.settings.saveAll(next);
+            }
         } catch (error) {
             console.error('[DataIntegrityManager] 导入数据失败:', error);
+            // 导入已部分写入：尝试从 pre_import 备份恢复，避免半导入状态损坏数据。
+            if (backup && backup.id) {
+                try {
+                    await this._restoreFromBackup(backup);
+                    console.warn('[DataIntegrityManager] 导入失败后已从备份恢复:', backup.id);
+                } catch (restoreError) {
+                    console.error('[DataIntegrityManager] 导入失败后恢复备份也失败:', restoreError);
+                }
+            }
             throw new Error(error?.message || '导入数据失败');
         }
 
@@ -349,7 +365,7 @@ class DataIntegrityManager {
             }
             const data = {};
             try {
-                const practiceRecords = await this.repositories.practice.list();
+                const practiceRecords = await this._listPracticeRecords();
                 data.practice_records = practiceRecords || [];
             } catch (recordsError) {
                 console.warn('[DataIntegrityManager] 获取练习记录失败:', recordsError);
@@ -372,6 +388,9 @@ class DataIntegrityManager {
 
             try {
                 const metaRepo = this.repositories.meta;
+                if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
+                    data.user_stats = await window.PracticeRecordAPI.readStats();
+                }
                 if (metaRepo && typeof metaRepo.get === 'function') {
                     data.vocab_words = await metaRepo.get('vocab_words', []);
                     data.vocab_user_config = await metaRepo.get('vocab_user_config', null);
@@ -389,12 +408,72 @@ class DataIntegrityManager {
         }
     }
 
+    async _listPracticeRecords() {
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+            const records = await window.PracticeRecordAPI.list();
+            return Array.isArray(records) ? records : [];
+        }
+
+        return [];
+    }
+
+    async _restorePracticeRecords(records, userStats = null) {
+        const finalRecords = Array.isArray(records) ? records : [];
+
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.restoreRecords === 'function') {
+            await window.PracticeRecordAPI.restoreRecords(finalRecords, {
+                stats: userStats && typeof userStats === 'object' ? userStats : null,
+                updateStats: true
+            });
+            return true;
+        }
+
+        throw new Error('统一练习记录恢复 API 未就绪');
+    }
+
+    async _writeUserStats(stats) {
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.writeStats === 'function') {
+            await window.PracticeRecordAPI.writeStats(stats);
+            return true;
+        }
+
+        throw new Error('统一练习统计 API 未就绪');
+    }
+
+    // 导入失败时从 pre_import 备份恢复，避免数据停留在半导入状态。
+    // 恢复失败仅记录，不掩盖原始导入错误。
+    async _restoreFromBackup(backup) {
+        if (!backup || !backup.data) {
+            return false;
+        }
+        const snapshot = backup.data;
+        const restoredRecords = Array.isArray(snapshot.practice_records)
+            ? this._preparePracticeRecords(snapshot.practice_records)
+            : null;
+        const restoredStats = snapshot.user_stats && typeof snapshot.user_stats === 'object'
+            ? snapshot.user_stats
+            : null;
+        if (restoredRecords) {
+            await this._restorePracticeRecords(restoredRecords, restoredStats);
+        } else if (restoredStats) {
+            await this._writeUserStats(restoredStats);
+        }
+        if (snapshot.system_settings && typeof snapshot.system_settings === 'object'
+            && Object.keys(snapshot.system_settings).length > 0) {
+            const current = await this.repositories.settings.getAll();
+            const next = { ...current, ...snapshot.system_settings };
+            await this.repositories.settings.saveAll(next);
+        }
+        return true;
+    }
+
     async _normalizeImportPayload(source) {
         const raw = await this._resolveImportSource(source);
         const container = this._unwrapDataSection(raw);
         return {
             practice_records: this._extractField(container, ['practice_records', 'practiceRecords', 'practice']),
             system_settings: this._extractField(container, ['system_settings', 'systemSettings', 'settings']),
+            user_stats: this._extractField(container, ['user_stats', 'userStats']),
             version: typeof raw?.version === 'string' ? raw.version : null
         };
     }
@@ -406,7 +485,7 @@ class DataIntegrityManager {
         if (typeof source === 'string') {
             return JSON.parse(source);
         }
-        if (source instanceof Blob && typeof source.text === 'function') {
+        if (typeof Blob !== 'undefined' && source instanceof Blob && typeof source.text === 'function') {
             const text = await source.text();
             return JSON.parse(text);
         }
@@ -459,68 +538,7 @@ class DataIntegrityManager {
         if (!Array.isArray(list)) {
             return [];
         }
-        const prepared = [];
-        for (const entry of list) {
-            const normalized = this._normalizePracticeRecord(entry);
-            if (normalized) {
-                prepared.push(normalized);
-            }
-        }
-        return prepared;
-    }
-
-    _normalizePracticeRecord(record) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const normalized = { ...record };
-        const now = new Date().toISOString();
-
-        normalized.id = this._stringify(record.id) || `imported_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        normalized.examId = this._stringify(record.examId) || this._stringify(record.sessionId) || 'imported_exam';
-        normalized.title = this._stringify(record.title) || this._stringify(record.examTitle) || normalized.examId;
-        normalized.type = this._pickString([record.type, record.category, record.mode, record.section, 'practice']);
-        normalized.date = this._normalizeDate(record.date || record.startTime || record.createdAt || now) || now;
-        normalized.startTime = this._normalizeDate(record.startTime || record.date || record.createdAt) || normalized.date;
-        normalized.endTime = this._normalizeDate(record.endTime || record.completedAt || record.finishTime) || normalized.startTime;
-        normalized.duration = this._pickDuration([
-            record.duration,
-            record.realData?.duration,
-            record.realData?.durationSeconds,
-            record.realData?.elapsedSeconds
-        ], normalized.startTime, normalized.endTime);
-        normalized.score = this._pickNumber([
-            record.score,
-            record.realData?.score,
-            record.realData?.percentage,
-            record.percentage,
-            record.accuracy
-        ], 0);
-        normalized.totalQuestions = this._pickInteger([
-            record.totalQuestions,
-            record.questionCount,
-            record.realData?.totalQuestions,
-            record.realData?.questionCount
-        ], 0);
-        normalized.correctAnswers = this._pickInteger([
-            record.correctAnswers,
-            record.correct,
-            record.realData?.correctAnswers,
-            record.realData?.correct
-        ], 0);
-
-        if (normalized.accuracy === undefined) {
-            const accuracy = this._pickNumber([record.accuracy, record.realData?.accuracy]);
-            if (accuracy !== null) {
-                normalized.accuracy = accuracy;
-            }
-        }
-
-        if (record.realData && typeof record.realData === 'object') {
-            normalized.realData = { ...record.realData };
-        }
-
-        return normalized;
+        return list.filter(entry => entry && typeof entry === 'object');
     }
 
     _prepareSystemSettings(settings) {
@@ -537,86 +555,6 @@ class DataIntegrityManager {
         return prepared;
     }
 
-    _stringify(value) {
-        if (value === undefined || value === null) {
-            return '';
-        }
-        return String(value);
-    }
-
-    _pickString(values) {
-        for (const value of values) {
-            if (typeof value === 'string' && value.trim()) {
-                return value.trim();
-            }
-        }
-        return 'practice';
-    }
-
-    _pickNumber(values, fallback = null) {
-        for (const value of values) {
-            const number = Number(value);
-            if (Number.isFinite(number)) {
-                return number;
-            }
-        }
-        return fallback;
-    }
-
-    _pickInteger(values, fallback = 0) {
-        for (const value of values) {
-            const number = Number(value);
-            if (Number.isInteger(number)) {
-                return number;
-            }
-        }
-        return fallback;
-    }
-
-    _normalizeDate(value) {
-        if (!value) {
-            return null;
-        }
-        if (value instanceof Date && !Number.isNaN(value.getTime())) {
-            return value.toISOString();
-        }
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            return new Date(value).toISOString();
-        }
-        if (typeof value === 'string') {
-            const trimmed = value.trim();
-            if (!trimmed) {
-                return null;
-            }
-            if (/^\d+$/.test(trimmed)) {
-                const numeric = Number(trimmed);
-                if (Number.isFinite(numeric)) {
-                    const millis = trimmed.length > 10 ? numeric : numeric * 1000;
-                    return new Date(millis).toISOString();
-                }
-            }
-            const date = new Date(trimmed);
-            if (!Number.isNaN(date.getTime())) {
-                return date.toISOString();
-            }
-        }
-        return null;
-    }
-
-    _pickDuration(values, start, end) {
-        for (const value of values) {
-            const number = Number(value);
-            if (Number.isFinite(number) && number >= 0) {
-                return number;
-            }
-        }
-        const startTime = start ? new Date(start).getTime() : NaN;
-        const endTime = end ? new Date(end).getTime() : NaN;
-        if (Number.isFinite(startTime) && Number.isFinite(endTime) && endTime > startTime) {
-            return Math.round((endTime - startTime) / 1000);
-        }
-        return 0;
-    }
 }
 
 let dataIntegrityManagerInstance = null;

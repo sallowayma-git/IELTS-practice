@@ -11,10 +11,51 @@ class DataConsistencyManager {
         };
     }
 
+    cloneRecordData(value) {
+        if (value == null || typeof value !== 'object') {
+            return value;
+        }
+        if (typeof structuredClone === 'function') {
+            try {
+                return structuredClone(value);
+            } catch (_) {
+                // Fall through to plain JSON cloning for file:// compatible data.
+            }
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            if (Array.isArray(value)) {
+                return value.map(item => this.cloneRecordData(item));
+            }
+            const clone = {};
+            Object.keys(value).forEach(key => {
+                clone[key] = this.cloneRecordData(value[key]);
+            });
+            return clone;
+        }
+    }
+
+    isAnswerMap(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    getCorrectAnswerMap(record) {
+        if (!record || typeof record !== 'object') {
+            return {};
+        }
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.resolveRecordCorrectAnswerMap === 'function') {
+            return coreContracts.resolveRecordCorrectAnswerMap(record);
+        }
+        throw new Error('DataConsistencyManager requires PracticeCore.contracts.resolveRecordCorrectAnswerMap');
+    }
+
     /**
      * 验证记录数据完整性
      */
     validateRecordData(record) {
+        const target = record && typeof record === 'object' ? record : {};
         const validation = {
             isValid: true,
             errors: [],
@@ -25,7 +66,7 @@ class DataConsistencyManager {
 
         // 检查必需字段
         this.validationRules.requiredFields.forEach(field => {
-            if (!record[field]) {
+            if (!target[field]) {
                 validation.errors.push(`缺少必需字段: ${field}`);
                 validation.missingFields.push(field);
                 validation.isValid = false;
@@ -33,8 +74,8 @@ class DataConsistencyManager {
         });
 
         // 检查答案数据
-        if (record.answers) {
-            const answerValidation = this.validateAnswers(record.answers);
+        if (this.isAnswerMap(target.answers)) {
+            const answerValidation = this.validateAnswers(target.answers);
             if (!answerValidation.isValid) {
                 validation.warnings.push('用户答案数据存在问题');
                 validation.dataQuality = 'fair';
@@ -42,8 +83,9 @@ class DataConsistencyManager {
         }
 
         // 检查正确答案数据
-        if (record.correctAnswers) {
-            const correctAnswerValidation = this.validateAnswers(record.correctAnswers);
+        const correctAnswerMap = this.getCorrectAnswerMap(target);
+        if (Object.keys(correctAnswerMap).length > 0) {
+            const correctAnswerValidation = this.validateAnswers(correctAnswerMap);
             if (!correctAnswerValidation.isValid) {
                 validation.warnings.push('正确答案数据存在问题');
             }
@@ -53,7 +95,7 @@ class DataConsistencyManager {
         }
 
         // 检查答案比较数据
-        if (!record.answerComparison && record.answers && record.correctAnswers) {
+        if (!target.answerComparison && target.answers && Object.keys(correctAnswerMap).length > 0) {
             validation.warnings.push('缺少答案比较数据，将自动生成');
         }
 
@@ -74,24 +116,25 @@ class DataConsistencyManager {
      * 补充缺失的数据
      */
     enrichRecordData(record) {
-        console.log('[DataConsistencyManager] 开始数据补充:', record.id);
-        
-        const enriched = { ...record };
+        console.log('[DataConsistencyManager] 开始数据补充:', record && record.id);
+
+        const enriched = this.cloneRecordData(record) || {};
+        const numericCorrectCount = typeof enriched.correctAnswers === 'number'
+            ? enriched.correctAnswers
+            : null;
 
         // 标准化答案格式
-        if (enriched.answers) {
+        if (this.isAnswerMap(enriched.answers)) {
             enriched.answers = this.standardizeAnswerFormat(enriched.answers);
         }
 
-        if (enriched.correctAnswers) {
-            enriched.correctAnswers = this.standardizeAnswerFormat(enriched.correctAnswers);
-        }
+        const correctAnswerMap = this.getCorrectAnswerMap(enriched);
 
         // 生成缺失的答案比较数据
-        if (!enriched.answerComparison && enriched.answers) {
+        if (!enriched.answerComparison && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
             enriched.answerComparison = this.generateAnswerComparison(
                 enriched.answers, 
-                enriched.correctAnswers || {}
+                correctAnswerMap
             );
             console.log('[DataConsistencyManager] 生成答案比较数据');
         }
@@ -110,16 +153,16 @@ class DataConsistencyManager {
         if (typeof enriched.score !== 'number') {
             if (enriched.scoreInfo && typeof enriched.scoreInfo.correct === 'number') {
                 enriched.score = enriched.scoreInfo.correct;
-            } else if (typeof enriched.correctAnswers === 'number') {
-                enriched.score = enriched.correctAnswers;
+            } else if (typeof numericCorrectCount === 'number') {
+                enriched.score = numericCorrectCount;
             }
         }
         if (typeof enriched.totalQuestions !== 'number') {
             if (enriched.scoreInfo && typeof enriched.scoreInfo.total === 'number') {
                 enriched.totalQuestions = enriched.scoreInfo.total;
-            } else if (enriched.answers) {
+            } else if (this.isAnswerMap(enriched.answers)) {
                 enriched.totalQuestions = Object.keys(enriched.answers).length;
-            } else if (enriched.realData && enriched.realData.answers) {
+            } else if (enriched.realData && this.isAnswerMap(enriched.realData.answers)) {
                 enriched.totalQuestions = Object.keys(enriched.realData.answers).length;
             }
         }
@@ -167,14 +210,20 @@ class DataConsistencyManager {
         // 确保realData结构的兼容性
         if (!enriched.realData) {
             enriched.realData = {
-                answers: enriched.answers || {},
-                correctAnswers: enriched.correctAnswers || {},
+                answers: this.isAnswerMap(enriched.answers) ? enriched.answers : {},
+                correctAnswers: correctAnswerMap,
+                correctAnswerMap: correctAnswerMap,
                 answerComparison: enriched.answerComparison || {},
                 scoreInfo: enriched.scoreInfo || null
             };
         } else {
             // 更新realData以包含新数据
-            enriched.realData.correctAnswers = enriched.correctAnswers || enriched.realData.correctAnswers || {};
+            enriched.realData.correctAnswers = Object.keys(correctAnswerMap).length > 0
+                ? correctAnswerMap
+                : (this.isAnswerMap(enriched.realData.correctAnswers) ? enriched.realData.correctAnswers : {});
+            enriched.realData.correctAnswerMap = Object.keys(correctAnswerMap).length > 0
+                ? correctAnswerMap
+                : (this.isAnswerMap(enriched.realData.correctAnswerMap) ? enriched.realData.correctAnswerMap : {});
             enriched.realData.answerComparison = enriched.answerComparison || enriched.realData.answerComparison || {};
         }
 
@@ -331,14 +380,15 @@ class DataConsistencyManager {
         console.log('[DataConsistencyManager] 开始修复数据不一致问题');
         
         const fixed = records.map(record => {
-            const validation = this.validateRecordData(record);
+            const projection = this.cloneRecordData(record);
+            const validation = this.validateRecordData(projection);
             
-            if (!validation.isValid || validation.dataQuality === 'poor') {
+            if (!validation.isValid || validation.dataQuality !== 'good') {
                 console.log(`[DataConsistencyManager] 修复记录: ${record.id}`);
-                return this.enrichRecordData(record);
+                return this.enrichRecordData(projection);
             }
             
-            return record;
+            return projection;
         });
 
         console.log('[DataConsistencyManager] 数据修复完成');
@@ -349,15 +399,17 @@ class DataConsistencyManager {
      * 确保弹窗和导出数据一致性
      */
     ensureConsistency(record) {
+        const projection = this.cloneRecordData(record);
+
         // 验证数据
-        const validation = this.validateRecordData(record);
+        const validation = this.validateRecordData(projection);
         
         // 如果数据有问题，进行修复
         if (!validation.isValid || validation.dataQuality !== 'good') {
-            return this.enrichRecordData(record);
+            return this.enrichRecordData(projection);
         }
         
-        return record;
+        return projection;
     }
 
     /**
@@ -389,7 +441,7 @@ class DataConsistencyManager {
                 report.validRecords++;
             }
             
-            if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+            if (this.getCorrectAnswerMap(record) && Object.keys(this.getCorrectAnswerMap(record)).length > 0) {
                 report.recordsWithCorrectAnswers++;
             }
             
@@ -397,7 +449,7 @@ class DataConsistencyManager {
                 report.recordsWithComparison++;
             }
             
-            if (record.answers) {
+            if (this.isAnswerMap(record.answers)) {
                 totalAnswers += Object.keys(record.answers).length;
             }
             
