@@ -2388,7 +2388,7 @@
             if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.deleteMany !== 'function') {
                 throw new Error('统一练习记录删除 API 未就绪');
             }
-            const result = await window.PracticeRecordAPI.deleteMany(Array.from(entrySessionIds), { updateStats: true });
+            const result = await window.PracticeRecordAPI.deleteMany(Array.from(entrySessionIds), { updateStats: true, matchBy: 'sessionId' });
             const deletedCount = Number(result && result.deletedCount) || 0;
             if (deletedCount > 0) {
                 console.log('[SuitePractice] cleared ' + deletedCount + ' suite child records');
