@@ -1121,17 +1121,38 @@ class StorageManager {
 
     /**
      * 合并记录数组，避免重复
-     * 基于 id 去重，保留 timestamp 最新的
+     * 基于 id 去重，保留最新的记录（按 updatedAt/createdAt/endTime/startTime 多字段回退）
      */
     mergeRecords(current, legacy) {
         if (!Array.isArray(current)) current = [];
         if (!Array.isArray(legacy)) return current;
 
+        // canonical 记录的主要时间字段是 updatedAt/createdAt/endTime/startTime，
+        // 不保证有顶层 timestamp。用多字段回退取最大时间戳，避免保留旧副本丢新副本。
+        const resolveTimestamp = (record) => {
+            if (!record || typeof record !== 'object') return 0;
+            const candidates = [
+                record.updatedAt,
+                record.createdAt,
+                record.endTime,
+                record.startTime,
+                record.date,
+                record.timestamp
+            ];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const value = candidates[i];
+                if (!value) continue;
+                const time = new Date(value).getTime();
+                if (Number.isFinite(time)) return time;
+            }
+            return 0;
+        };
+
         const mergedMap = new Map();
         [...current, ...legacy].forEach(record => {
             if (record && record.id) {
                 const existing = mergedMap.get(record.id);
-                if (!existing || (record.timestamp > existing.timestamp)) {
+                if (!existing || (resolveTimestamp(record) > resolveTimestamp(existing))) {
                     mergedMap.set(record.id, record);
                 }
             } else if (record && record.timestamp) {
@@ -1140,7 +1161,7 @@ class StorageManager {
             }
         });
 
-        return Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return Array.from(mergedMap.values()).sort((a, b) => resolveTimestamp(b) - resolveTimestamp(a));
     }
 
     async listPracticeRecordsCanonical(options = {}) {
@@ -1156,14 +1177,17 @@ class StorageManager {
     }
 
     async replacePracticeRecordsCanonical(records, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, updateStats } = options;
         if (!Array.isArray(records)) {
             throw new Error('Storage.replacePracticeRecordsCanonical requires an array of records');
         }
 
         const api = await this.getPracticeRecordAPI({ skipReady });
         if (api && typeof api.replace === 'function') {
-            await api.replace(records, { maxRecords: 1000 });
+            // 透传 updateStats 选项：导入/回滚场景同时写入 user_stats，
+            // 若此处 recalculateStats 会和并发 writeUserStatsCanonical 竞争，谁后写谁生效。
+            // 默认 undefined 让 api.replace 自行决定（保存路径会重算），导入路径传 false 跳过。
+            await api.replace(records, { maxRecords: 1000, updateStats });
             return true;
         }
 
@@ -1860,7 +1884,9 @@ class StorageManager {
                     ? value.data
                     : value;
                 if (key === 'practice_records') {
-                    return this.replacePracticeRecordsCanonical(nextValue, { skipReady });
+                    // updateStats: false — 导入时 user_stats 会通过 writeUserStatsCanonical 独立写入，
+                    // 若此处 recalculateStats 会和并发写入竞争，导致备份中的统计值被覆盖。
+                    return this.replacePracticeRecordsCanonical(nextValue, { skipReady, updateStats: false });
                 }
                 if (key === 'user_stats') {
                     return this.writeUserStatsCanonical(nextValue, { skipReady });
