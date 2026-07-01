@@ -56,6 +56,10 @@
         activeSessions: 'active_sessions',
         tempPracticeRecords: 'temp_practice_records'
     });
+    let internalRepositories = null;
+    // 由 data/index.js 在仓库注入时通过 __installInternalRepositories 第二参数传入，
+    // 使仓库未注入前的 fallback 路径也能拿到 storage internal token，避免被新保护层拒绝。
+    let internalStorageAccess = null;
 
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
@@ -91,6 +95,115 @@
         return Number.isFinite(numeric) ? numeric : fallback;
     }
 
+    function normalizeDateCandidate(value) {
+        if (!value) {
+            return null;
+        }
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            return value.toISOString();
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return new Date(value).toISOString();
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            if (/^\d+$/.test(trimmed)) {
+                const numeric = Number(trimmed);
+                if (Number.isFinite(numeric)) {
+                    return new Date(trimmed.length > 10 ? numeric : numeric * 1000).toISOString();
+                }
+            }
+            const parsed = new Date(trimmed);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString();
+            }
+        }
+        return null;
+    }
+
+    function firstDateCandidate() {
+        for (let index = 0; index < arguments.length; index += 1) {
+            const normalized = normalizeDateCandidate(arguments[index]);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    function firstStringCandidate() {
+        for (let index = 0; index < arguments.length; index += 1) {
+            const value = arguments[index];
+            if (value === undefined || value === null) {
+                continue;
+            }
+            const trimmed = String(value).trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    function resolveDurationSeconds(recordData = {}, startTime = null, endTime = null) {
+        const realData = isPlainObject(recordData.realData) ? recordData.realData : {};
+        const scoreInfo = isPlainObject(recordData.scoreInfo)
+            ? recordData.scoreInfo
+            : (isPlainObject(realData.scoreInfo) ? realData.scoreInfo : {});
+        const candidates = [
+            recordData.duration,
+            realData.duration,
+            recordData.durationSeconds,
+            recordData.duration_seconds,
+            recordData.elapsedSeconds,
+            recordData.elapsed_seconds,
+            recordData.timeSpent,
+            recordData.time_spent,
+            realData.durationSeconds,
+            realData.elapsedSeconds,
+            realData.timeSpent,
+            scoreInfo.duration,
+            scoreInfo.timeSpent
+        ];
+
+        for (let index = 0; index < candidates.length; index += 1) {
+            const numeric = Number(candidates[index]);
+            if (Number.isFinite(numeric) && numeric > 0) {
+                return numeric;
+            }
+        }
+
+        const start = startTime ? new Date(startTime).getTime() : NaN;
+        const end = endTime ? new Date(endTime).getTime() : NaN;
+        if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+            return Math.round((end - start) / 1000);
+        }
+
+        if (Array.isArray(realData.interactions) && realData.interactions.length) {
+            const timestamps = realData.interactions
+                .map(item => item && Number(item.timestamp))
+                .filter(value => Number.isFinite(value));
+            if (timestamps.length) {
+                const span = Math.max(...timestamps) - Math.min(...timestamps);
+                if (Number.isFinite(span) && span > 0) {
+                    return Math.floor(span / 1000);
+                }
+            }
+        }
+
+        for (let index = 0; index < candidates.length; index += 1) {
+            const numeric = Number(candidates[index]);
+            if (Number.isFinite(numeric) && numeric >= 0) {
+                return numeric;
+            }
+        }
+
+        return 0;
+    }
+
     function normalizePracticeType(rawType) {
         if (!rawType) return null;
         const normalized = String(rawType).toLowerCase();
@@ -100,22 +213,27 @@
     }
 
     function resolveRecordDate(recordData = {}, now = new Date().toISOString()) {
+        const metadata = isPlainObject(recordData.metadata) ? recordData.metadata : {};
         const candidates = [
-            recordData.metadata && recordData.metadata.date,
+            metadata.date,
             recordData.date,
             recordData.endTime,
+            recordData.end_time,
             recordData.completedAt,
+            recordData.finishedAt,
+            recordData.finishTime,
             recordData.startTime,
+            recordData.start_time,
+            recordData.startedAt,
+            recordData.createdAt,
             recordData.timestamp,
             now
         ];
 
         for (let i = 0; i < candidates.length; i += 1) {
-            const candidate = candidates[i];
-            if (!candidate) continue;
-            const parsed = new Date(candidate);
-            if (!Number.isNaN(parsed.getTime())) {
-                return parsed.toISOString();
+            const normalized = normalizeDateCandidate(candidates[i]);
+            if (normalized) {
+                return normalized;
             }
         }
 
@@ -127,11 +245,16 @@
             return null;
         }
 
-        if (recordData.examId) {
-            return recordData.examId;
-        }
-        if (recordData.metadata && recordData.metadata.examId) {
-            return recordData.metadata.examId;
+        const metadata = isPlainObject(recordData.metadata) ? recordData.metadata : {};
+        const direct = firstStringCandidate(
+            recordData.examId,
+            recordData.exam_id,
+            recordData.examID,
+            metadata.examId,
+            metadata.exam_id
+        );
+        if (direct) {
+            return direct;
         }
         if (Array.isArray(recordData.suiteEntries)) {
             const suiteExam = recordData.suiteEntries.find((entry) => entry && entry.examId);
@@ -197,25 +320,6 @@
         return String(value).trim();
     }
 
-    function normalizeAnswerValueList(value) {
-        const sanitizer = global.AnswerSanitizer;
-        if (sanitizer && typeof sanitizer.normalizeValueList === 'function') {
-            return sanitizer.normalizeValueList(value);
-        }
-        const values = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
-        const normalized = [];
-        values.forEach((item) => {
-            const text = normalizeAnswerValue(item);
-            if (!text) {
-                return;
-            }
-            if (!normalized.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
-                normalized.push(text);
-            }
-        });
-        return normalized;
-    }
-
     function isNoiseKey(key) {
         if (!key) return true;
 
@@ -258,6 +362,78 @@
         }
         const key = String(rawKey).trim();
         return key.startsWith('q') ? key : `q${key}`;
+    }
+
+    function normalizeReplayQuestionKey(rawKey, index) {
+        if (rawKey == null || rawKey === '') {
+            return Number.isInteger(index) ? `q${index + 1}` : '';
+        }
+        const raw = String(rawKey).trim();
+        if (!raw) {
+            return Number.isInteger(index) ? `q${index + 1}` : '';
+        }
+        const splitIndex = raw.lastIndexOf('::');
+        const value = splitIndex >= 0 ? raw.slice(splitIndex + 2).trim() : raw;
+        if (!value) {
+            return Number.isInteger(index) ? `q${index + 1}` : '';
+        }
+        const explicitQuestion = value.match(/^q\s*[-_ ]?(\d+)$/i) || value.match(/\bq\s*[-_ ]?(\d+)\b/i);
+        if (explicitQuestion) {
+            return `q${explicitQuestion[1]}`;
+        }
+        if (/^\d+$/.test(value)) {
+            return `q${value}`;
+        }
+        const trailingNumber = value.match(/(\d+)(?!.*\d)/);
+        if (trailingNumber) {
+            return `q${trailingNumber[1]}`;
+        }
+        return value.toLowerCase();
+    }
+
+    function normalizeReplayMap(rawMap = {}) {
+        const normalized = {};
+        if (Array.isArray(rawMap)) {
+            rawMap.forEach((entry, index) => {
+                if (entry == null) {
+                    return;
+                }
+                if (typeof entry !== 'object') {
+                    normalized[`q${index + 1}`] = entry;
+                    return;
+                }
+                const normalizedKey = normalizeReplayQuestionKey(
+                    entry.questionId ?? entry.question ?? entry.id,
+                    index
+                );
+                if (!normalizedKey) {
+                    return;
+                }
+                const hasAnswerValue = Object.prototype.hasOwnProperty.call(entry, 'answer')
+                    || Object.prototype.hasOwnProperty.call(entry, 'value');
+                const isComparisonEntry = !hasAnswerValue && (
+                    Object.prototype.hasOwnProperty.call(entry, 'userAnswer')
+                    || Object.prototype.hasOwnProperty.call(entry, 'correctAnswer')
+                    || Object.prototype.hasOwnProperty.call(entry, 'isCorrect')
+                );
+                normalized[normalizedKey] = isComparisonEntry
+                    ? clonePlainObject(entry)
+                    : (Object.prototype.hasOwnProperty.call(entry, 'answer')
+                        ? entry.answer
+                        : (Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : clonePlainObject(entry)));
+            });
+            return normalized;
+        }
+        if (!rawMap || typeof rawMap !== 'object') {
+            return normalized;
+        }
+        Object.entries(rawMap).forEach(([key, value], index) => {
+            const normalizedKey = normalizeReplayQuestionKey(key, index);
+            if (normalizedKey) {
+                normalized[normalizedKey] = value;
+            }
+        });
+        return normalized;
     }
 
     function normalizeAnswerMap(rawAnswers = {}) {
@@ -317,14 +493,6 @@
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
-            const acceptedAnswers = normalizeAnswerValueList(entry.acceptedAnswers);
-            if (acceptedAnswers.length) {
-                normalized[questionId].acceptedAnswers = acceptedAnswers;
-            }
-            const canonicalAnswer = normalizeAnswerValue(entry.canonicalAnswer);
-            if (canonicalAnswer) {
-                normalized[questionId].canonicalAnswer = canonicalAnswer;
-            }
         });
 
         return normalized;
@@ -388,6 +556,131 @@
         return details;
     }
 
+    function compareAnswerValues(userAnswer, correctAnswer) {
+        if (userAnswer == null || correctAnswer == null) {
+            return false;
+        }
+        const matchCore = global.AnswerMatchCore;
+        if (matchCore && typeof matchCore.compareAnswers === 'function') {
+            return matchCore.compareAnswers(userAnswer, correctAnswer) === true;
+        }
+        return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+    }
+
+    function mergeReplayMapFirstWins() {
+        const merged = {};
+        Array.prototype.slice.call(arguments).forEach((source) => {
+            if (!source || typeof source !== 'object' || Array.isArray(source)) {
+                return;
+            }
+            const normalized = normalizeReplayMap(source);
+            Object.entries(normalized).forEach(([key, value]) => {
+                if (!Object.prototype.hasOwnProperty.call(merged, key)) {
+                    merged[key] = value;
+                }
+            });
+        });
+        return merged;
+    }
+
+    function buildReplayCorrectAnswerMap(entry = {}) {
+        const realData = isPlainObject(entry.realData) ? entry.realData : {};
+        const rawData = isPlainObject(entry.rawData) ? entry.rawData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        return mergeReplayMapFirstWins(
+            entry.correctAnswerMap,
+            realData.correctAnswerMap,
+            rawData.correctAnswerMap,
+            rawRealData.correctAnswerMap
+        );
+    }
+
+    function buildReplayResultSnapshot(entry = {}) {
+        const realData = isPlainObject(entry.realData) ? entry.realData : {};
+        const rawData = isPlainObject(entry.rawData) ? entry.rawData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        const answers = mergeReplayMapFirstWins(
+            entry.answers,
+            realData.answers,
+            rawData.answers,
+            rawRealData.answers
+        );
+        const correctAnswerMap = buildReplayCorrectAnswerMap(entry);
+        const rawComparison = mergeReplayMapFirstWins(
+            entry.answerComparison,
+            realData.answerComparison,
+            rawData.answerComparison,
+            rawRealData.answerComparison
+        );
+        const questionIds = new Set([
+            ...Object.keys(answers),
+            ...Object.keys(correctAnswerMap),
+            ...Object.keys(rawComparison),
+            ...(Array.isArray(entry.allQuestionIds)
+                ? entry.allQuestionIds.map((item, index) => normalizeReplayQuestionKey(item, index)).filter(Boolean)
+                : [])
+        ]);
+
+        let correctCount = 0;
+        const answerComparison = {};
+        questionIds.forEach((questionId) => {
+            const rawEntry = rawComparison[questionId];
+            const comparisonEntry = isPlainObject(rawEntry) ? rawEntry : {};
+            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+                ? comparisonEntry.userAnswer
+                : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(correctAnswerMap, questionId);
+            const correctAnswer = hasCanonicalCorrectAnswer ? correctAnswerMap[questionId] : '';
+            const isCorrect = hasCanonicalCorrectAnswer
+                ? compareAnswerValues(userAnswer, correctAnswer)
+                : null;
+            if (isCorrect) {
+                correctCount += 1;
+            }
+            answerComparison[questionId] = {
+                questionId,
+                userAnswer,
+                correctAnswer,
+                isCorrect
+            };
+        });
+
+        const totalQuestions = questionIds.size;
+        const sourceScoreInfo = isPlainObject(entry.scoreInfo)
+            ? entry.scoreInfo
+            : (isPlainObject(realData.scoreInfo)
+                ? realData.scoreInfo
+                : (isPlainObject(rawData.scoreInfo) ? rawData.scoreInfo : {}));
+        const scoreInfo = clonePlainObject(sourceScoreInfo) || {};
+        const hasCompleteCanonicalCorrectAnswers = totalQuestions > 0
+            && Array.from(questionIds).every(questionId => Object.prototype.hasOwnProperty.call(correctAnswerMap, questionId));
+        scoreInfo.correct = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct))
+            ? correctCount
+            : Number(scoreInfo.correct);
+        scoreInfo.total = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total))
+            ? totalQuestions
+            : Number(scoreInfo.total);
+        scoreInfo.totalQuestions = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions))
+            ? scoreInfo.total
+            : Number(scoreInfo.totalQuestions);
+        const existingAccuracy = Number(scoreInfo.accuracy);
+        scoreInfo.accuracy = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(existingAccuracy)
+            ? (scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0)
+            : existingAccuracy;
+        scoreInfo.percentage = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+            ? Math.round(scoreInfo.accuracy * 100)
+            : Number(scoreInfo.percentage);
+        scoreInfo.answerKeyComplete = hasCompleteCanonicalCorrectAnswers;
+
+        return {
+            answers,
+            correctAnswers: correctAnswerMap,
+            correctAnswerMap,
+            answerComparison,
+            scoreInfo
+        };
+    }
+
     function deriveCorrectMapFromDetails(details) {
         if (!details || typeof details !== 'object') {
             return {};
@@ -405,15 +698,20 @@
 
     function buildAnswerArray(answers, correctMap = {}) {
         if (Array.isArray(answers)) {
-            return answers.map((answer, index) => ({
-                questionId: answer.questionId || `q${index + 1}`,
-                answer: normalizeAnswerValue(answer.answer),
-                correctAnswer: normalizeAnswerValue(answer.correctAnswer ?? correctMap[answer.questionId || `q${index + 1}`]),
-                correct: Boolean(answer.correct),
-                timeSpent: ensureNumber(answer.timeSpent, 0),
-                questionType: answer.questionType || 'unknown',
-                timestamp: answer.timestamp || new Date().toISOString()
-            }));
+            return answers.map((answer, index) => {
+                const questionId = answer.questionId || `q${index + 1}`;
+                const userAnswer = normalizeAnswerValue(answer.answer);
+                const normalizedCorrect = normalizeAnswerValue(answer.correctAnswer ?? correctMap[questionId]);
+                return {
+                    questionId,
+                    answer: userAnswer,
+                    correctAnswer: normalizedCorrect,
+                    correct: normalizedCorrect ? compareAnswerValues(userAnswer, normalizedCorrect) : Boolean(answer.correct),
+                    timeSpent: ensureNumber(answer.timeSpent, 0),
+                    questionType: answer.questionType || 'unknown',
+                    timestamp: answer.timestamp || new Date().toISOString()
+                };
+            });
         }
 
         const answerMap = normalizeAnswerMap(answers);
@@ -426,9 +724,7 @@
         keys.forEach((questionId, index) => {
             const userAnswer = normalizeAnswerValue(answerMap[questionId]);
             const normalizedCorrect = normalizeAnswerValue(correctMap[questionId]);
-            const isCorrect = normalizedCorrect
-                ? userAnswer.toLowerCase() === normalizedCorrect.toLowerCase()
-                : false;
+            const isCorrect = normalizedCorrect ? compareAnswerValues(userAnswer, normalizedCorrect) : false;
             list.push({
                 questionId: questionId || `q${index + 1}`,
                 answer: userAnswer,
@@ -446,10 +742,14 @@
         const candidates = [
             recordData.totalQuestions,
             recordData.questionCount,
+            recordData.question_count,
+            typeof recordData.questions === 'number' ? recordData.questions : null,
             recordData.scoreInfo && recordData.scoreInfo.total,
             recordData.scoreInfo && recordData.scoreInfo.totalQuestions,
             recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.totalQuestions,
-            recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.total
+            recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.total,
+            recordData.realData && recordData.realData.totalQuestions,
+            recordData.realData && recordData.realData.questionCount
         ];
         for (let i = 0; i < candidates.length; i += 1) {
             const numeric = Number(candidates[i]);
@@ -482,10 +782,15 @@
     function deriveCorrectAnswerCount(recordData = {}, answers = []) {
         const numericCandidates = [
             recordData.correctAnswers,
+            recordData.correctAnswersCount,
+            recordData.correctCount,
             recordData.correct,
             recordData.score,
             recordData.scoreInfo && recordData.scoreInfo.correct,
             recordData.scoreInfo && recordData.scoreInfo.score,
+            recordData.realData && recordData.realData.correctAnswersCount,
+            recordData.realData && recordData.realData.correctCount,
+            recordData.realData && recordData.realData.correct,
             recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.correct,
             recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.score
         ];
@@ -537,8 +842,8 @@
     function buildMetadata(recordData = {}, type) {
         const metadata = Object.assign({}, recordData.metadata || {});
         const examId = recordData.examId;
-        const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
-        const fallbackCategory = recordData.category || metadata.category || 'Unknown';
+        const fallbackTitle = recordData.title || recordData.examTitle || recordData.examName || recordData.name || examId || 'Unknown Exam';
+        const fallbackCategory = recordData.category || recordData.examCategory || recordData.section || recordData.mode || metadata.category || 'Unknown';
         const fallbackFrequency = recordData.frequency || metadata.frequency || 'unknown';
 
         metadata.examTitle = metadata.examTitle || metadata.title || fallbackTitle;
@@ -561,6 +866,9 @@
             recordData.type
             || metadata.type
             || metadata.examType
+            || recordData.category
+            || recordData.mode
+            || recordData.section
             || (recordData.examId && String(recordData.examId).toLowerCase().includes('listening') ? 'listening' : null)
         );
         return normalized || 'reading';
@@ -574,17 +882,19 @@
             if (!entry || typeof entry !== 'object') {
                 return null;
             }
-            const normalizedAnswers = buildAnswerArray(entry.answers || entry.answerList || [], entry.correctAnswerMap || {});
+            const answerComparisonSource = entry.answerComparison
+                || (entry.realData && entry.realData.answerComparison)
+                || (entry.rawData && entry.rawData.answerComparison)
+                || (entry.scoreInfo && entry.scoreInfo.details)
+                || null;
+            const entryCorrectMap = resolveRecordCorrectAnswerMap(entry, { comparison: answerComparisonSource });
+            const normalizedAnswers = buildAnswerArray(entry.answers || entry.answerList || [], entryCorrectMap);
             const answerMap = normalizedAnswers.reduce((map, item) => {
                 if (item && item.questionId) {
                     map[item.questionId] = item.answer || '';
                 }
                 return map;
             }, {});
-            const answerComparisonSource = entry.answerComparison
-                || (entry.scoreInfo && entry.scoreInfo.details)
-                || (entry.rawData && entry.rawData.answerComparison)
-                || null;
             const highlights = Array.isArray(entry.highlights)
                 ? entry.highlights.slice()
                 : (Array.isArray(entry.rawData && entry.rawData.highlights) ? entry.rawData.highlights.slice() : []);
@@ -598,6 +908,7 @@
                 duration: ensureNumber(entry.duration, 0),
                 scoreInfo: entry.scoreInfo ? clonePlainObject(entry.scoreInfo) : null,
                 answers: answerMap,
+                correctAnswerMap: entryCorrectMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
                 highlights,
@@ -622,10 +933,52 @@
                 if (!trimmed) {
                     return;
                 }
-                merged[key] = trimmed;
+                if (!Object.prototype.hasOwnProperty.call(merged, key)) {
+                    merged[key] = trimmed;
+                }
             });
         });
         return merged;
+    }
+
+    function resolveCorrectAnswerMap() {
+        const sources = Array.prototype.slice.call(arguments).filter((source) => isPlainObject(source));
+        return mergeAnswerSources.apply(null, sources);
+    }
+
+    function resolveRecordCorrectAnswerMap(recordData = {}, options = {}) {
+        if (!isPlainObject(recordData)) {
+            return {};
+        }
+        const realData = isPlainObject(recordData.realData) ? recordData.realData : {};
+        const rawData = isPlainObject(recordData.rawData) ? recordData.rawData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        const comparisonSource = options.comparison
+            || recordData.answerComparison
+            || realData.answerComparison
+            || rawData.answerComparison
+            || rawRealData.answerComparison
+            || null;
+        return resolveCorrectAnswerMap(
+            ...(Array.isArray(options.prioritySources) ? options.prioritySources : []),
+            recordData.correctAnswerMap,
+            realData.correctAnswerMap,
+            rawData.correctAnswerMap,
+            rawRealData.correctAnswerMap,
+            recordData.correctAnswers,
+            realData.correctAnswers,
+            rawData.correctAnswers,
+            rawRealData.correctAnswers,
+            deriveCorrectMapFromDetails(recordData.answerDetails),
+            deriveCorrectMapFromDetails(recordData.scoreInfo && recordData.scoreInfo.details),
+            deriveCorrectMapFromDetails(realData.scoreInfo && realData.scoreInfo.details),
+            deriveCorrectMapFromDetails(rawData.scoreInfo && rawData.scoreInfo.details),
+            deriveCorrectMapFromDetails(rawRealData.scoreInfo && rawRealData.scoreInfo.details),
+            ...(Array.isArray(options.detailSources)
+                ? options.detailSources.map((details) => deriveCorrectMapFromDetails(details))
+                : []),
+            convertComparisonToMap(comparisonSource, 'correctAnswer')
+        );
     }
 
     function defaultGenerateRecordId() {
@@ -637,6 +990,14 @@
         const type = inferPracticeType(recordData);
         const recordDate = resolveRecordDate(recordData, now);
         const resolvedExamId = inferExamId(recordData);
+        const recordId = firstStringCandidate(
+            recordData.id,
+            recordData.recordId,
+            recordData.record_id,
+            recordData.practiceId,
+            recordData.practice_id,
+            recordData.uuid
+        );
         const metadata = buildMetadata(
             Object.assign({}, recordData, { examId: resolvedExamId }),
             type
@@ -644,7 +1005,9 @@
         const comparisonSource = recordData.answerComparison
             || (recordData.realData && recordData.realData.answerComparison)
             || null;
-        const normalizedAnswers = buildAnswerArray(recordData.answers || recordData.answerList || [], recordData.correctAnswerMap || {});
+        let normalizedCorrectMap = resolveRecordCorrectAnswerMap(recordData, { comparison: comparisonSource });
+
+        const normalizedAnswers = buildAnswerArray(recordData.answers || recordData.answerList || [], normalizedCorrectMap);
         let answerMap = normalizedAnswers.reduce((map, item) => {
             if (item && item.questionId) {
                 map[item.questionId] = item.answer || '';
@@ -655,23 +1018,19 @@
             answerMap = convertComparisonToMap(comparisonSource, 'userAnswer');
         }
 
-        let normalizedCorrectMap = (
-            recordData.correctAnswerMap && typeof recordData.correctAnswerMap === 'object'
-        )
-            ? normalizeAnswerMap(recordData.correctAnswerMap)
-            : ((recordData.realData && recordData.realData.correctAnswers && typeof recordData.realData.correctAnswers === 'object')
-                ? normalizeAnswerMap(recordData.realData.correctAnswers)
-                : {});
-
-        if ((!normalizedCorrectMap || Object.keys(normalizedCorrectMap).length === 0) && comparisonSource) {
-            normalizedCorrectMap = convertComparisonToMap(comparisonSource, 'correctAnswer');
-        }
-
         const derivedTotalQuestions = deriveTotalQuestionCount(recordData, normalizedAnswers.length);
         const derivedCorrectAnswers = deriveCorrectAnswerCount(recordData, normalizedAnswers);
         const totalQuestions = ensureNumber(recordData.totalQuestions, derivedTotalQuestions);
         const correctAnswers = ensureNumber(recordData.correctAnswers, derivedCorrectAnswers);
-        let accuracy = ensureNumber(recordData.accuracy, totalQuestions > 0 ? correctAnswers / totalQuestions : 0);
+        let accuracy = ensureNumber(
+            recordData.accuracy
+            ?? (recordData.realData && recordData.realData.accuracy)
+            ?? (recordData.scoreInfo && recordData.scoreInfo.accuracy)
+            ?? (recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.accuracy)
+            ?? recordData.percentage
+            ?? (recordData.scoreInfo && recordData.scoreInfo.percentage),
+            totalQuestions > 0 ? correctAnswers / totalQuestions : 0
+        );
         if (accuracy > 1 && accuracy <= 100) {
             accuracy = accuracy / 100;
         }
@@ -687,77 +1046,64 @@
             || (comparisonSource ? convertComparisonToDetails(comparisonSource) : null)
             || buildAnswerDetails(answerMap, normalizedCorrectMap);
 
-        const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
-            ? new Date(recordData.startTime).toISOString()
-            : recordDate;
-        const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
-            ? new Date(recordData.endTime).toISOString()
-            : recordDate;
+        const startTime = firstDateCandidate(
+            recordData.startTime,
+            recordData.start_time,
+            recordData.startedAt,
+            recordData.createdAt,
+            recordData.timestamp,
+            recordData.date,
+            recordDate
+        ) || recordDate;
+        const endTime = firstDateCandidate(
+            recordData.endTime,
+            recordData.end_time,
+            recordData.completedAt,
+            recordData.finishedAt,
+            recordData.finishTime,
+            recordDate
+        ) || recordDate;
         const resolvedTitle = recordData.title
             || metadata.examTitle
             || metadata.title
             || recordData.examTitle
+            || recordData.examName
+            || recordData.name
             || recordData.examId
             || '未命名练习';
         const normalizedSuiteEntries = standardizeSuiteEntries(recordData.suiteEntries || []);
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? clonePlainObject(comparisonSource)
             : null;
-        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
-            ? clonePlainObject(recordData.questionTypeMap)
-            : ((recordData.realData && recordData.realData.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object')
-                ? clonePlainObject(recordData.realData.questionTypeMap)
-                : {});
-        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
-            ? clonePlainObject(recordData.questionTypePerformance)
-            : ((recordData.realData && recordData.realData.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object')
-                ? clonePlainObject(recordData.realData.questionTypePerformance)
-                : {});
-        const highlights = Array.isArray(recordData.highlights)
-            ? recordData.highlights.slice()
-            : (Array.isArray(recordData.rawData && recordData.rawData.highlights)
-                ? recordData.rawData.highlights.slice()
-                : (Array.isArray(recordData.realData && recordData.realData.highlights)
-                    ? recordData.realData.highlights.slice()
-                    : []));
-        const scrollY = Number.isFinite(Number(recordData.scrollY))
-            ? Number(recordData.scrollY)
-            : (Number.isFinite(Number(recordData.rawData && recordData.rawData.scrollY))
-                ? Number(recordData.rawData.scrollY)
-                : (Number.isFinite(Number(recordData.realData && recordData.realData.scrollY))
-                    ? Number(recordData.realData.scrollY)
-                    : 0));
+        const realDataCorrectAnswers = clonePlainObject(normalizedCorrectMap || {});
         const generateRecordId = typeof options.generateRecordId === 'function'
             ? options.generateRecordId
             : defaultGenerateRecordId;
 
         return {
-            id: recordData.id || generateRecordId(),
+            id: recordId || generateRecordId(),
             examId: resolvedExamId,
-            sessionId: recordData.sessionId || null,
+            sessionId: recordData.sessionId || recordData.sessionID || null,
             title: resolvedTitle,
             type,
             startTime,
             endTime,
-            duration: ensureNumber(recordData.duration, 0),
+            duration: resolveDurationSeconds(recordData, startTime, endTime),
             date: recordDate,
             status: recordData.status || 'completed',
-            score: ensureNumber(recordData.score, correctAnswers),
+            score: ensureNumber(recordData.score ?? recordData.finalScore ?? (recordData.realData && recordData.realData.score), correctAnswers),
             totalQuestions,
             correctAnswers,
             accuracy,
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypeMap,
-            questionTypePerformance,
+            questionTypePerformance: recordData.questionTypePerformance || {},
             metadata,
             frequency: recordData.frequency || metadata.frequency || null,
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
             suiteSessionId: recordData.suiteSessionId || (metadata && metadata.suiteSessionId) || null,
             suiteEntries: normalizedSuiteEntries,
-            highlights,
-            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -766,23 +1112,20 @@
             realData: recordData.realData
                 ? Object.assign({}, recordData.realData, {
                     answers: (recordData.realData && recordData.realData.answers) || answerMap,
-                    correctAnswers: (recordData.realData && recordData.realData.correctAnswers) || normalizedCorrectMap,
+                    correctAnswers: realDataCorrectAnswers,
+                    correctAnswerMap: clonePlainObject(normalizedCorrectMap || {}),
                     scoreInfo: Object.assign({}, (recordData.realData && recordData.realData.scoreInfo) || {}, {
                         details: (recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.details) || detailSource || null
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null),
-                    questionTypeMap,
-                    questionTypePerformance,
-                    highlights,
-                    scrollY
+                        : (normalizedComparison || null)
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,
             version: options.currentVersion || recordData.version || '1.0.0',
-            createdAt: recordData.createdAt || now,
-            updatedAt: now
+            createdAt: firstDateCandidate(recordData.createdAt, recordData.startTime, recordData.start_time, recordDate) || now,
+            updatedAt: firstDateCandidate(recordData.updatedAt, recordData.endTime, recordData.end_time, now) || now
         };
     }
 
@@ -931,9 +1274,10 @@
         );
         const correctAnswerMap = mergeAnswerSources(
             rawPayload.correctAnswerMap,
+            rawPayload.realData && rawPayload.realData.correctAnswerMap,
+            sessionContext.correctAnswerMap,
             rawPayload.correctAnswers,
             rawPayload.realData && rawPayload.realData.correctAnswers,
-            sessionContext.correctAnswerMap,
             deriveCorrectMapFromDetails(scoreInfo.details),
             deriveCorrectMapFromDetails(rawPayload.realData && rawPayload.realData.scoreInfo && rawPayload.realData.scoreInfo.details),
             convertComparisonToMap(answerComparison, 'correctAnswer')
@@ -994,16 +1338,6 @@
             || '未命名练习';
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
-        const questionTypeMap = (rawPayload.questionTypeMap && typeof rawPayload.questionTypeMap === 'object')
-            ? rawPayload.questionTypeMap
-            : ((rawPayload.realData && rawPayload.realData.questionTypeMap && typeof rawPayload.realData.questionTypeMap === 'object')
-                ? rawPayload.realData.questionTypeMap
-                : {});
-        const questionTypePerformance = (rawPayload.questionTypePerformance && typeof rawPayload.questionTypePerformance === 'object')
-            ? rawPayload.questionTypePerformance
-            : ((rawPayload.realData && rawPayload.realData.questionTypePerformance && typeof rawPayload.realData.questionTypePerformance === 'object')
-                ? rawPayload.realData.questionTypePerformance
-                : {});
 
         return standardizeRecord({
             id: rawPayload.id,
@@ -1024,8 +1358,7 @@
             answerDetails,
             correctAnswerMap,
             answerComparison,
-            questionTypeMap,
-            questionTypePerformance,
+            questionTypePerformance: rawPayload.questionTypePerformance || {},
             metadata: Object.assign({}, metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
@@ -1036,12 +1369,6 @@
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
-            highlights: Array.isArray(rawPayload.highlights)
-                ? rawPayload.highlights.slice()
-                : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
-            scrollY: Number.isFinite(Number(rawPayload.scrollY))
-                ? Number(rawPayload.scrollY)
-                : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0),
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
@@ -1054,8 +1381,6 @@
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
-                questionTypeMap,
-                questionTypePerformance,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,
@@ -1067,23 +1392,29 @@
                 interactions: rawPayload.interactions || [],
                 isRealData: true,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page',
-                sessionId: rawPayload.sessionId || sessionContext.sessionId || null,
-                highlights: Array.isArray(rawPayload.highlights)
-                    ? rawPayload.highlights.slice()
-                    : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
-                scrollY: Number.isFinite(Number(rawPayload.scrollY))
-                    ? Number(rawPayload.scrollY)
-                    : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0)
+                sessionId: rawPayload.sessionId || sessionContext.sessionId || null
             })
         }, options);
     }
 
     function getRepositories() {
-        return global.dataRepositories || null;
+        return internalRepositories;
     }
 
     function getStorageManager(storageManager) {
-        return storageManager || global.storage || null;
+        return storageManager || global.persistentStore || global.storage || null;
+    }
+
+    function getStorageInternalOptions(storage) {
+        // 仓库注入后用 token 化选项，确保 fallback 读写能通过 storage 的 internal-only 保护。
+        if (internalStorageAccess && typeof internalStorageAccess.createInternalOptions === 'function') {
+            try {
+                return internalStorageAccess.createInternalOptions({});
+            } catch (_) {
+                // fallthrough 到旧行为
+            }
+        }
+        return { skipPracticeCoreRedirect: true };
     }
 
     function syncPracticeRecordState(records) {
@@ -1099,18 +1430,12 @@
             try {
                 const finalRecords = global.setPracticeRecordsState(records);
                 syncAppState(finalRecords);
-                try {
-                    global.practiceRecords = Array.isArray(finalRecords) ? finalRecords.slice() : [];
-                } catch (_) {}
                 return;
             } catch (error) {
                 console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
             }
         }
         syncAppState(records);
-        try {
-            global.practiceRecords = Array.isArray(records) ? records.slice() : [];
-        } catch (_) {}
     }
 
     async function readPracticeRecords(storageManager) {
@@ -1119,10 +1444,72 @@
             return await repos.practice.list();
         }
         const storage = getStorageManager(storageManager);
+        if (storage && typeof storage.readPersistentValue === 'function') {
+            return await storage.readPersistentValue(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
+        }
         if (storage && typeof storage.get === 'function') {
-            return await storage.get(STORAGE_KEYS.practiceRecords, [], { skipPracticeCoreRedirect: true });
+            return await storage.get(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
         }
         return [];
+    }
+
+    /**
+     * 轻量投影：读取原始数组（clone:false 跳过 structuredClone），映射为精简 summary 对象。
+     * 排除 answers/answerDetails/correctAnswerMap/suiteEntries[]/realData/answerComparison 等重字段，
+     * 供练习历史列表、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用，
+     * 避免大数据量下反序列化+克隆全部记录导致的前端渲染卡顿和内存溢出。
+     */
+    function projectRecordSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scoreInfo = record.scoreInfo || {};
+        const metadata = record.metadata || {};
+        return {
+            id: record.id || record.sessionId || '',
+            sessionId: record.sessionId || null,
+            examId: record.examId || metadata.examId || null,
+            title: record.title || metadata.examTitle || '',
+            type: record.type || metadata.type || 'reading',
+            startTime: record.startTime || null,
+            endTime: record.endTime || null,
+            date: record.date || null,
+            duration: Number(record.duration) || 0,
+            percentage: Number(record.percentage ?? scoreInfo.percentage) || 0,
+            accuracy: Number(record.accuracy ?? scoreInfo.accuracy) || 0,
+            score: Number(record.score ?? scoreInfo.score) || 0,
+            totalQuestions: Number(record.totalQuestions ?? scoreInfo.total) || 0,
+            correctAnswers: Number(record.correctAnswers ?? scoreInfo.correct) || 0,
+            status: record.status || 'completed',
+            suiteMode: Boolean(record.suiteMode),
+            suiteEntryCount: Array.isArray(record.suiteEntries) ? record.suiteEntries.length : 0,
+            suiteSessionId: record.suiteSessionId || (metadata.suiteSessionId) || null,
+            metadata: {
+                category: metadata.category || record.category || null,
+                examTitle: metadata.examTitle || record.title || '',
+                frequency: metadata.frequency || record.frequency || 'unknown',
+                type: metadata.type || record.type || null
+            },
+            updatedAt: record.updatedAt || null,
+            createdAt: record.createdAt || null
+        };
+    }
+
+    async function readPracticeRecordSummaries(storageManager) {
+        const repos = getRepositories();
+        let records;
+        if (repos && repos.practice && typeof repos.practice.read === 'function') {
+            // clone:false 跳过 structuredClone，在投影后原始重字段不会进入返回值
+            records = await repos.practice.read({ clone: false });
+        } else {
+            records = await readPracticeRecords(storageManager);
+        }
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map(projectRecordSummary)
+            .filter(Boolean);
     }
 
     async function writePracticeRecords(records, storageManager) {
@@ -1135,11 +1522,26 @@
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.writePersistentValue === 'function') {
-            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords);
+            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords, getStorageInternalOptions(storage));
             syncPracticeRecordState(finalRecords);
             return result;
         }
         return false;
+    }
+
+    async function readMeta(key, defaultValue, storageManager) {
+        const repos = getRepositories();
+        if (repos && repos.meta && typeof repos.meta.get === 'function') {
+            return await repos.meta.get(key, defaultValue);
+        }
+        const storage = getStorageManager(storageManager);
+        if (storage && typeof storage.readPersistentValue === 'function') {
+            return await storage.readPersistentValue(key, defaultValue, getStorageInternalOptions(storage));
+        }
+        if (storage && typeof storage.get === 'function') {
+            return await storage.get(key, defaultValue, getStorageInternalOptions(storage));
+        }
+        return defaultValue;
     }
 
     async function writeMeta(key, value, storageManager) {
@@ -1150,7 +1552,7 @@
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.writePersistentValue === 'function') {
-            return await storage.writePersistentValue(key, value);
+            return await storage.writePersistentValue(key, value, getStorageInternalOptions(storage));
         }
         return false;
     }
@@ -1163,7 +1565,7 @@
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.removePersistentValue === 'function') {
-            return await storage.removePersistentValue(key);
+            return await storage.removePersistentValue(key, getStorageInternalOptions(storage));
         }
         return false;
     }
@@ -1207,6 +1609,31 @@
         return deduped;
     }
 
+    function getRecordTimestamp(record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        const candidates = [
+            record.updatedAt,
+            record.createdAt,
+            record.endTime,
+            record.startTime,
+            record.date,
+            record.timestamp
+        ];
+        for (let index = 0; index < candidates.length; index += 1) {
+            const value = candidates[index];
+            if (!value) {
+                continue;
+            }
+            const time = new Date(value).getTime();
+            if (Number.isFinite(time)) {
+                return time;
+            }
+        }
+        return 0;
+    }
+
     function handlesStorageKey(key) {
         return key === STORAGE_KEYS.practiceRecords
             || key === STORAGE_KEYS.userStats
@@ -1218,6 +1645,7 @@
         const canonical = dedupePracticeRecords(
             (Array.isArray(records) ? records : []).map((record) => standardizeRecord(record, options))
         );
+        canonical.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
         if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && canonical.length > options.maxRecords) {
             canonical.splice(options.maxRecords);
         }
@@ -1248,6 +1676,7 @@
         }
 
         records = dedupePracticeRecords(records);
+        records.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
         if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && records.length > options.maxRecords) {
             records.splice(options.maxRecords);
         }
@@ -1286,11 +1715,17 @@
         resolveRecordDate,
         inferExamId,
         normalizeAnswerValue,
-        normalizeAnswerValueList,
         isNoiseKey,
         normalizeAnswerMap,
+        normalizeReplayQuestionKey,
+        normalizeReplayMap,
         normalizeAnswerComparison,
         mergeAnswerSources,
+        buildReplayCorrectAnswerMap,
+        buildReplayResultSnapshot,
+        resolveCorrectAnswerMap,
+        resolveRecordCorrectAnswerMap,
+        compareAnswerValues,
         buildAnswerArray,
         buildAnswerDetails,
         deriveCorrectMapFromDetails,
@@ -1317,25 +1752,69 @@
         fromCompletion
     });
 
-    const store = Object.freeze({
+    const internalStore = Object.freeze({
         STORAGE_KEYS,
         handlesStorageKey,
         listPracticeRecords: readPracticeRecords,
+        listPracticeRecordSummaries: readPracticeRecordSummaries,
         replacePracticeRecords,
         savePracticeRecord,
         routeStorageSet,
         routeStorageRemove,
+        readMeta,
         writeMeta,
         removeMeta,
         syncPracticeRecordState
     });
 
-    global.PracticeCore = {
+    const publicStore = Object.freeze({
+        STORAGE_KEYS,
+        handlesStorageKey,
+        listPracticeRecords: readPracticeRecords,
+        listPracticeRecordSummaries: readPracticeRecordSummaries,
+        readMeta,
+        syncPracticeRecordState
+    });
+
+    const practiceCore = {
         __stable: true,
         version: '1.0.0',
         contracts,
         protocol,
         ingestor,
-        store
+        store: publicStore
     };
+    Object.defineProperty(practiceCore, '__installRecordAPI', {
+        value: function(install) {
+            if (typeof install !== 'function') {
+                throw new Error('PracticeCore.__installRecordAPI requires an installer function');
+            }
+            return install(internalStore);
+        },
+        enumerable: false,
+        configurable: true,
+        writable: false
+    });
+    Object.defineProperty(practiceCore, '__installInternalRepositories', {
+        value: function(repositories, installers) {
+            if (!repositories || typeof repositories !== 'object') {
+                throw new Error('PracticeCore.__installInternalRepositories requires repositories');
+            }
+            internalRepositories = repositories;
+            // 接收 storage internal token factory，供 fallback 路径使用。
+            if (installers && typeof installers.createInternalOptions === 'function') {
+                internalStorageAccess = { createInternalOptions: installers.createInternalOptions };
+            }
+            try {
+                delete practiceCore.__installInternalRepositories;
+            } catch (_) {
+                practiceCore.__installInternalRepositories = undefined;
+            }
+            return true;
+        },
+        enumerable: false,
+        configurable: true,
+        writable: false
+    });
+    global.PracticeCore = practiceCore;
 })(typeof window !== 'undefined' ? window : globalThis);

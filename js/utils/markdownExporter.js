@@ -35,19 +35,14 @@ class MarkdownExporter {
             || (details && Object.keys(details).length > 0);
     }
 
+    isAnswerMap(value) {
+        return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
     // 合并 comparison 与其他来源以补全缺失 correctAnswer
     mergeComparisonWithCorrections(record) {
         const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
-        const sources = [
-            record.correctAnswers || {},
-            (record.realData && record.realData.correctAnswers) || {},
-        ];
-        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            sources.push(Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
-        }
-        if (record.scoreInfo && record.scoreInfo.details) {
-            sources.push(Object.fromEntries(Object.entries(record.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
-        }
+        const sources = [this.getCorrectAnswers(record)].filter(source => this.isAnswerMap(source));
         const getFromSources = (key) => {
             for (const src of sources) {
                 if (src && src[key] != null && String(src[key]).trim() !== '') return src[key];
@@ -108,26 +103,13 @@ class MarkdownExporter {
     }
 
     async getPracticeRecordsUnified() {
-        // 优先使用 PracticeRecorder / ScoreStorage
-        const practiceRecorder = window.app?.components?.practiceRecorder;
-        if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
-            const maybe = practiceRecorder.getPracticeRecords();
-            const resolved = typeof maybe?.then === 'function' ? await maybe : maybe;
-            if (Array.isArray(resolved) && resolved.length) {
-                return resolved;
-            }
-        }
-
-        // 兼容 legacy 全局缓存（只读兜底）
-        if (Array.isArray(window.practiceRecords) && window.practiceRecords.length) {
-            return window.practiceRecords;
-        }
-
-        // 最后尝试旧存储（只读兜底）
-        if (this.storage && typeof this.storage.get === 'function') {
-            const recs = await this.storage.get('practice_records', []);
-            if (Array.isArray(recs) && recs.length) {
-                return recs;
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+            try {
+                const records = await window.PracticeRecordAPI.list();
+                return Array.isArray(records) ? records : [];
+            } catch (error) {
+                console.warn('[MarkdownExporter] 从 PracticeRecordAPI 获取练习记录失败:', error);
+                return [];
             }
         }
 
@@ -193,7 +175,7 @@ class MarkdownExporter {
             // 让出控制权
             await new Promise(resolve => setTimeout(resolve, 10));
             
-            // 优先使用统一 PracticeRecorder 数据
+            // 只使用统一 PracticeRecordAPI 数据
             practiceRecords = await this.getPracticeRecordsUnified();
 
             // examIndex 仍从存储/全局读取
@@ -643,10 +625,13 @@ class MarkdownExporter {
                     if (!questionNum) {
                         questionNum = key.replace(/^q/i, '');
                     }
-                    const result = comparison.isCorrect ? '✓' : '✗';
-                    
                     let userAnswer = comparison.userAnswer || comparison.user || 'No Answer';
-                    let correctAnswer = comparison.correctAnswer || comparison.correct || correctMap[key] || 'N/A';
+                    const canonicalCorrect = correctMap[key]
+                        ?? (questionNum ? this.getCorrectAnswer(correctMap, questionNum) : null);
+                    let correctAnswer = canonicalCorrect || comparison.correctAnswer || comparison.correct || 'N/A';
+                    const result = canonicalCorrect
+                        ? (this.compareAnswers(userAnswer, canonicalCorrect) ? '✓' : '✗')
+                        : (comparison.isCorrect ? '✓' : '✗');
 
                     // 清理答案文本
                     const cleanUserAnswer = this.cleanAnswerText(userAnswer);
@@ -683,61 +668,13 @@ class MarkdownExporter {
      * 获取正确答案
      */
     getCorrectAnswers(record) {
-        // 优先使用顶级的correctAnswers
-        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (!coreContracts || typeof coreContracts.resolveRecordCorrectAnswerMap !== 'function') {
+            throw new Error('MarkdownExporter requires PracticeCore.contracts.resolveRecordCorrectAnswerMap');
         }
-        // 其次使用 correctAnswerMap
-        if (record.correctAnswerMap && Object.keys(record.correctAnswerMap).length > 0) {
-            return record.correctAnswerMap;
-        }
-        
-        // 其次使用realData中的correctAnswers / correctAnswerMap
-        if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
-        }
-        if (record.realData && record.realData.correctAnswerMap && Object.keys(record.realData.correctAnswerMap).length > 0) {
-            return record.realData.correctAnswerMap;
-        }
-        
-        // 尝试从answerComparison中提取
-        if (record.answerComparison || record.realData?.answerComparison) {
-            const comparison = record.answerComparison || record.realData?.answerComparison || {};
-            const correctAnswers = {};
-            Object.keys(comparison).forEach(key => {
-                const entry = comparison[key];
-                const val = entry && (entry.correctAnswer ?? entry.correct);
-                if (val != null && String(val).trim() !== '') {
-                    correctAnswers[key] = val;
-                }
-            });
-            if (Object.keys(correctAnswers).length > 0) {
-                return correctAnswers;
-            }
-        }
-        
-        // 尝试从 scoreInfo 的 details 中获取（优先 realData.scoreInfo，其次顶层 scoreInfo，再次 answerDetails）
-        const detailsSources = [];
-        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            detailsSources.push(record.realData.scoreInfo.details);
-        }
-        if (record.scoreInfo && record.scoreInfo.details) {
-            detailsSources.push(record.scoreInfo.details);
-        }
-        if (record.answerDetails) {
-            detailsSources.push(record.answerDetails);
-        }
-        for (const details of detailsSources) {
-            const correctAnswers = {};
-            Object.keys(details).forEach(key => {
-                const detail = details[key];
-                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
-                    correctAnswers[key] = detail.correctAnswer;
-                }
-            });
-            if (Object.keys(correctAnswers).length > 0) {
-                return correctAnswers;
-            }
+        const correctAnswers = coreContracts.resolveRecordCorrectAnswerMap(record);
+        if (Object.keys(correctAnswers).length > 0) {
+            return correctAnswers;
         }
         
         // fallback：若answers有值且无正确答案，至少返回题号以生成表格

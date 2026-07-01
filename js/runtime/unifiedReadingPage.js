@@ -977,6 +977,34 @@
         });
     }
 
+    function syncInlineSuiteIdentity() {
+        if (!state.suite?.inline || !state.examId) {
+            return;
+        }
+        try {
+            document.body.dataset.examId = state.examId;
+        } catch (_) {
+            // ignore DOM dataset failures
+        }
+        try {
+            if (!global.history || typeof global.history.replaceState !== 'function') {
+                return;
+            }
+            const url = new URL(global.location.href);
+            url.searchParams.set('examId', state.examId);
+            url.searchParams.set('dataKey', state.dataKey || state.examId);
+            if (Number.isInteger(state.suite.currentIndex)) {
+                url.searchParams.set('suiteSequenceIndex', String(state.suite.currentIndex));
+            }
+            if (Array.isArray(state.suite.sequence) && state.suite.sequence.length) {
+                url.searchParams.set('suiteSequenceTotal', String(state.suite.sequence.length));
+            }
+            global.history.replaceState(global.history.state, '', url.toString());
+        } catch (_) {
+            // keep navigation working even when URL mutation is unavailable
+        }
+    }
+
     async function ensureSuiteDatasets(rawSequence = []) {
         const sequence = normalizeSuiteSequence(rawSequence);
         if (!sequence.length) {
@@ -1068,6 +1096,7 @@
         applyDraftToDom(slot.draft || buildEmptyDraft());
         setNotesText(slot.draft?.noteText || '');
         syncSimulationCtxForActiveSlot();
+        syncInlineSuiteIdentity();
         state.simulationMode = true;
         state.simulationContextReady = true;
         updateNavStatuses(slot.lastResults || null);
@@ -3404,7 +3433,7 @@
 
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
-        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswers || {});
+        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
         const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
@@ -3425,12 +3454,9 @@
             const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                 ? comparisonEntry.userAnswer
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const correctAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'correctAnswer')
-                ? comparisonEntry.correctAnswer
-                : (Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId) ? normalizedCorrectAnswers[questionId] : '');
-            let isCorrect = typeof comparisonEntry.isCorrect === 'boolean'
-                ? comparisonEntry.isCorrect
-                : compareAnswers(userAnswer, correctAnswer);
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
+            const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
+            let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
             if (isCorrect) {
                 correctCount += 1;
             }
@@ -3444,10 +3470,14 @@
 
         const totalQuestions = questionIds.size;
         const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : correctCount;
-        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
-        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
+        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
+        scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? correctCount : Number(scoreInfo.correct);
+        scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? totalQuestions : Number(scoreInfo.total);
+        scoreInfo.totalQuestions = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions)) ? scoreInfo.total : Number(scoreInfo.totalQuestions);
         scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
+        scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+            ? Math.round(scoreInfo.accuracy * 100)
+            : Number(scoreInfo.percentage);
         scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
             ? Number(scoreInfo.percentage)
             : Math.round(scoreInfo.accuracy * 100);
@@ -3458,6 +3488,15 @@
             answerComparison: normalizedComparison,
             scoreInfo
         };
+    }
+
+    if (global.__IELTS_READING_PAGE_TEST_HOOKS__ === true) {
+        global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.assign(
+            global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
+            {
+                buildReplayResults
+            }
+        );
     }
 
     function applyReplayAnswersToDom(answers = {}) {
@@ -3698,6 +3737,7 @@
                 );
                 postMessage('REVIEW_NAVIGATE', {
                     direction,
+                    examId: document.body.dataset.examId || state.examId || null,
                     sessionId: null,
                     reviewSessionId: state.reviewSessionId || state.reviewContext?.reviewSessionId || null,
                     suiteSessionId: state.suiteSessionId || state.reviewContext?.suiteSessionId || null,

@@ -75,8 +75,8 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
     global _AUTO_CLOSE_POPUPS
     before_records = await page.evaluate(
         "async () => {"
-        "  if (!window.storage?.get) return 0;"
-        "  const records = await window.storage.get('practice_records');"
+        "  if (!window.PracticeRecordAPI?.list) return 0;"
+        "  const records = await window.PracticeRecordAPI.list();"
         "  return Array.isArray(records) ? records.length : 0;"
         "}"
     )
@@ -97,8 +97,8 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
 
         records_after = await popup.evaluate(
             "async () => {"
-            "  if (!window.storage?.get) return 0;"
-            "  const records = await window.storage.get('practice_records');"
+            "  if (!window.PracticeRecordAPI?.list) return 0;"
+            "  const records = await window.PracticeRecordAPI.list();"
             "  return Array.isArray(records) ? records.length : 0;"
             "}"
         )
