@@ -380,21 +380,6 @@
       "pdfFilename": "ReadingPractice/PDF/120. P2 - Will Eating Less Make You Live Longer 节食与长寿.pdf",
       "sourceKind": "generated-reading"
     },
-    "p2-high-26": {
-      "examId": "p2-high-26",
-      "dataKey": null,
-      "script": null,
-      "title": "（无题目） Muscle Loss 肌肉流失",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/121.（无题目） P2 - Muscle Loss 肌肉流失【高】/",
-      "filename": "",
-      "hasHtml": false,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/121. P2(仅原文无题) - Muscle Loss 肌肉流失.pdf",
-      "sourceKind": "pdf-only"
-    },
     "p1-high-27": {
       "examId": "p1-high-27",
       "dataKey": "p1-high-27",
