@@ -20,6 +20,7 @@
         'true_false_not_given',
         'yes_no_not_given'
     ]);
+    const PART_ORDER = ['p1', 'p2', 'p3'];
     const navStatus = new Map();
     const scriptCache = new Map();
     const LOCATOR_HIGHLIGHT_SELECTOR = '.reading-locator-highlight, .reading-locator-block';
@@ -1445,6 +1446,39 @@
         }
     }
 
+    function getPartIndex(partKey) {
+        return PART_ORDER.indexOf(partKey);
+    }
+
+    function getPartKeyFromCategory(category, fallbackIndex = 0) {
+        const normalized = String(category || '').toUpperCase();
+        if (normalized === 'P2') return 'p2';
+        if (normalized === 'P3') return 'p3';
+        if (normalized === 'P1') return 'p1';
+        return PART_ORDER[Math.min(PART_ORDER.length - 1, Math.max(0, fallbackIndex))] || 'p1';
+    }
+
+    function getCurrentPartKey() {
+        return getPartKeyFromCategory(state.dataset?.meta?.category || '', 0);
+    }
+
+    function getSuiteEntryPartKey(entry, index = 0) {
+        const slot = entry?.examId ? getSuiteSlot(entry.examId) : null;
+        return getPartKeyFromCategory(entry?.category || slot?.dataset?.meta?.category || '', index);
+    }
+
+    function getSuiteEntryForPart(partKey) {
+        if (!state.suite?.inline || !Array.isArray(state.suite.sequence)) {
+            return null;
+        }
+        const matchedEntry = state.suite.sequence.find((entry, index) => getSuiteEntryPartKey(entry, index) === partKey);
+        if (matchedEntry) {
+            return matchedEntry;
+        }
+        const index = getPartIndex(partKey);
+        return index >= 0 ? (state.suite.sequence[index] || null) : null;
+    }
+
     function getPassageQuestionStates() {
         if (state.suite?.inline && state.suite.sequence.length) {
             const info = {
@@ -1457,8 +1491,7 @@
             state.suite.sequence.forEach((entry, index) => {
                 const slot = getSuiteSlot(entry.examId);
                 const dataset = slot?.dataset;
-                const category = String(entry.category || dataset?.meta?.category || '').toUpperCase();
-                const partKey = category === 'P2' ? 'p2' : (category === 'P3' ? 'p3' : `p${Math.min(3, index + 1)}`);
+                const partKey = getPartKeyFromCategory(entry.category || dataset?.meta?.category || '', index);
                 if (entry.examId === activeExamId) {
                     currentPart = partKey;
                 }
@@ -1517,9 +1550,7 @@
         } catch (_) {}
 
         const category = (state.dataset?.meta?.category || '').toUpperCase();
-        let currentPart = 'p1';
-        if (category === 'P2') currentPart = 'p2';
-        else if (category === 'P3') currentPart = 'p3';
+        const currentPart = getPartKeyFromCategory(category, 0);
 
         // Part 1
         if (currentPart === 'p1') {
@@ -1673,9 +1704,17 @@
         }
 
         const isSingleMode = !state.suiteSessionId;
+        const canSwitchParts = state.suite?.inline || state.simulationMode;
         const p1Section = document.getElementById('part-section-1');
         if (p1Section) {
+            const canSwitchToPart = canSwitchParts && currentPart !== 'p1';
+            p1Section.dataset.part = 'p1';
             p1Section.classList.toggle('active', currentPart === 'p1');
+            p1Section.classList.toggle('is-switchable', canSwitchToPart);
+            p1Section.tabIndex = canSwitchToPart ? 0 : -1;
+            p1Section.setAttribute('role', canSwitchToPart ? 'button' : 'group');
+            p1Section.setAttribute('aria-label', canSwitchToPart ? 'Go to Part 1' : 'Part 1 questions');
+            p1Section.setAttribute('aria-expanded', currentPart === 'p1' ? 'true' : 'false');
         }
         const p1Name = document.querySelector('#part-section-1 .part-nav-name');
         if (p1Name) {
@@ -1683,7 +1722,14 @@
         }
         const p2Section = document.getElementById('part-section-2');
         if (p2Section) {
+            const canSwitchToPart = canSwitchParts && currentPart !== 'p2';
+            p2Section.dataset.part = 'p2';
             p2Section.classList.toggle('active', currentPart === 'p2');
+            p2Section.classList.toggle('is-switchable', canSwitchToPart);
+            p2Section.tabIndex = canSwitchToPart ? 0 : -1;
+            p2Section.setAttribute('role', canSwitchToPart ? 'button' : 'group');
+            p2Section.setAttribute('aria-label', canSwitchToPart ? 'Go to Part 2' : 'Part 2 questions');
+            p2Section.setAttribute('aria-expanded', currentPart === 'p2' ? 'true' : 'false');
         }
         const p2Name = document.querySelector('#part-section-2 .part-nav-name');
         if (p2Name) {
@@ -1691,7 +1737,14 @@
         }
         const p3Section = document.getElementById('part-section-3');
         if (p3Section) {
+            const canSwitchToPart = canSwitchParts && currentPart !== 'p3';
+            p3Section.dataset.part = 'p3';
             p3Section.classList.toggle('active', currentPart === 'p3');
+            p3Section.classList.toggle('is-switchable', canSwitchToPart);
+            p3Section.tabIndex = canSwitchToPart ? 0 : -1;
+            p3Section.setAttribute('role', canSwitchToPart ? 'button' : 'group');
+            p3Section.setAttribute('aria-label', canSwitchToPart ? 'Go to Part 3' : 'Part 3 questions');
+            p3Section.setAttribute('aria-expanded', currentPart === 'p3' ? 'true' : 'false');
         }
         const p3Name = document.querySelector('#part-section-3 .part-nav-name');
         if (p3Name) {
@@ -2063,64 +2116,81 @@
         syncPrimaryActionButtons();
     }
 
+    function scrollToQuestion(questionId) {
+        if (!questionId) return;
+        const target = findQuestionAnchor(questionId);
+        if (target && typeof global.scrollToElement === 'function') {
+            global.scrollToElement(target);
+        } else {
+            target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        }
+        updateActiveQuestionHighlight(questionId);
+    }
+
+    function navigateToPart(partKey, options = {}) {
+        const targetPartKey = PART_ORDER.includes(partKey) ? partKey : '';
+        if (!targetPartKey) return;
+        const questionId = options.questionId || '';
+        const currentPartKey = getCurrentPartKey();
+
+        if (targetPartKey === currentPartKey) {
+            if (questionId) {
+                scrollToQuestion(questionId);
+            }
+            return;
+        }
+
+        if (state.suite?.inline) {
+            const targetExamId = options.examId || getSuiteEntryForPart(targetPartKey)?.examId || '';
+            if (targetExamId) {
+                activateSuiteSlot(targetExamId).then((activated) => {
+                    if (activated && questionId) {
+                        scrollToQuestion(questionId);
+                    }
+                }).catch((error) => {
+                    console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
+                });
+            }
+            return;
+        }
+
+        if (state.simulationMode) {
+            const currentIndex = getPartIndex(currentPartKey);
+            const targetIndex = getPartIndex(targetPartKey);
+            if (currentIndex < 0 || targetIndex < 0 || currentIndex === targetIndex) {
+                return;
+            }
+            dispatchSimulationNavigate(targetIndex < currentIndex ? 'prev' : 'next', null, {
+                targetIndex,
+                targetPartKey
+            });
+        }
+    }
+
     function attachNavListeners() {
         const handler = (event) => {
+            const section = event.currentTarget;
             const column = event.target.closest('.q-column');
-            if (!column) return;
-            const questionId = column.dataset.questionId;
-            const partKey = column.dataset.part;
-            
-            const category = (state.dataset?.meta?.category || '').toUpperCase();
-            let currentPartKey = 'p1';
-            if (category === 'P2') currentPartKey = 'p2';
-            else if (category === 'P3') currentPartKey = 'p3';
-            
-            if (partKey === currentPartKey) {
-                const target = findQuestionAnchor(questionId);
-                if (target && typeof global.scrollToElement === 'function') {
-                    global.scrollToElement(target);
-                } else {
-                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-                }
-                updateActiveQuestionHighlight(questionId);
-            } else {
-                if (state.suite?.inline) {
-                    const targetExamId = column.dataset.examId || '';
-                    if (targetExamId) {
-                        activateSuiteSlot(targetExamId).then((activated) => {
-                            if (activated && questionId) {
-                                const target = findQuestionAnchor(questionId);
-                                if (target && typeof global.scrollToElement === 'function') {
-                                    global.scrollToElement(target);
-                                } else {
-                                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-                                }
-                                updateActiveQuestionHighlight(questionId);
-                            }
-                        }).catch((error) => {
-                            console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
-                        });
-                    }
-                    return;
-                }
-                if (state.simulationMode) {
-                    if (partKey === 'p1' && currentPartKey === 'p2') dispatchSimulationNavigate('prev');
-                    else if (partKey === 'p2' && currentPartKey === 'p3') dispatchSimulationNavigate('prev');
-                    else if (partKey === 'p2' && currentPartKey === 'p1') dispatchSimulationNavigate('next');
-                    else if (partKey === 'p3' && currentPartKey === 'p2') dispatchSimulationNavigate('next');
-                    else if (partKey === 'p3' && currentPartKey === 'p1') {
-                        dispatchSimulationNavigate('next');
-                    }
-                    else if (partKey === 'p1' && currentPartKey === 'p3') {
-                        dispatchSimulationNavigate('prev');
-                    }
-                }
-            }
+            const partKey = column?.dataset.part || section?.dataset.part || '';
+            navigateToPart(partKey, {
+                questionId: column?.dataset.questionId || '',
+                examId: column?.dataset.examId || ''
+            });
+        };
+
+        const keyboardHandler = (event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            navigateToPart(event.currentTarget.dataset.part || '');
         };
         
-        document.getElementById('part1-questions')?.addEventListener('click', handler);
-        document.getElementById('part2-questions')?.addEventListener('click', handler);
-        document.getElementById('part3-questions')?.addEventListener('click', handler);
+        document.getElementById('part-section-1')?.addEventListener('click', handler);
+        document.getElementById('part-section-2')?.addEventListener('click', handler);
+        document.getElementById('part-section-3')?.addEventListener('click', handler);
+        document.getElementById('part-section-1')?.addEventListener('keydown', keyboardHandler);
+        document.getElementById('part-section-2')?.addEventListener('keydown', keyboardHandler);
+        document.getElementById('part-section-3')?.addEventListener('keydown', keyboardHandler);
 
         dom.right?.addEventListener('focusin', (event) => {
             const input = event.target.closest('input, select, textarea');
@@ -4381,15 +4451,21 @@
         });
     }
 
-    function dispatchSimulationNavigate(direction, submissionSnapshot = null) {
+    function dispatchSimulationNavigate(direction, submissionSnapshot = null, options = {}) {
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
         }
         const snapshot = submissionSnapshot || buildSubmissionSnapshot();
+        const requestedTargetIndex = Number(options.targetIndex);
+        const hasRequestedTarget = options.targetIndex !== null
+            && options.targetIndex !== undefined
+            && Number.isInteger(requestedTargetIndex);
         if (state.suite?.inline) {
             updateActiveSlotFromCurrentDom('navigate');
             const currentIndex = state.suite.currentIndex;
-            const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            const targetIndex = hasRequestedTarget
+                ? requestedTargetIndex
+                : (direction === 'prev' ? currentIndex - 1 : currentIndex + 1);
             const targetEntry = state.suite.sequence[targetIndex];
             if (targetEntry && targetEntry.examId) {
                 activateSuiteSlot(targetEntry.examId).catch((error) => {
@@ -4398,7 +4474,7 @@
             }
             return;
         }
-        postMessage('SIMULATION_NAVIGATE', {
+        const payload = {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
                 answers: snapshot.answers || {},
@@ -4415,7 +4491,14 @@
             scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
             elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
             timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
-        });
+        };
+        if (hasRequestedTarget) {
+            payload.targetIndex = requestedTargetIndex;
+        }
+        if (typeof options.targetPartKey === 'string' && options.targetPartKey) {
+            payload.targetPartKey = options.targetPartKey;
+        }
+        postMessage('SIMULATION_NAVIGATE', payload);
     }
     async function handleSubmit() {
         if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
