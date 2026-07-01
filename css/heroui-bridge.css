@@ -109,15 +109,22 @@ body.hero-body {
     -webkit-backdrop-filter: blur(18px) saturate(160%);
 }
 
+.hero-brand-mark svg {
+    width: 80% !important;
+    height: 80% !important;
+}
+
 .hero-brand-text {
-    font-family: Georgia, 'Times New Roman', 'WenKai', serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     font-size: clamp(2.45rem, 5.2vw, 4.35rem);
-    font-weight: 700;
+    font-weight: 800;
     line-height: 0.96;
-    letter-spacing: 0;
+    letter-spacing: -0.025em;
     color: #08172f;
     text-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.62),
+        0 1px 1px rgba(255, 255, 255, 0.8),
+        0 -1px 0.5px rgba(0, 0, 0, 0.12),
+        0 2px 4px rgba(15, 23, 42, 0.12),
         0 18px 40px rgba(15, 23, 42, 0.16);
 }
 

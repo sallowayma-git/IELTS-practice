@@ -40,22 +40,16 @@ async function main() {
         addEventListener() {},
         removeEventListener() {},
         document: { addEventListener() {}, removeEventListener() {} },
-        PracticeCore: {
-            store: {
-                async listPracticeRecords() {
-                    return [{ id: 'core_1', examId: 'core-a' }];
-                }
-            }
-        },
-        PracticeStore: {
+        // 统一入口：PracticeRecordAPI 是套题练习记录的唯一读取通道
+        PracticeRecordAPI: {
             async list() {
-                return [{ id: 'store_1', examId: 'store-a' }];
+                return [{ id: 'api_1', examId: 'api-a' }];
             },
-            async save() {
-                throw new Error('save should not be called in this case');
+            async saveRecord() {
+                throw new Error('saveRecord should not be called in this read test');
             },
-            async replace() {
-                throw new Error('replace should not be called in this case');
+            async recalculateStats() {
+                return { totalPractices: 1 };
             }
         }
     };
@@ -82,13 +76,7 @@ async function main() {
 
     const mixins = sandboxWindow.ExamSystemAppMixins;
     const app = {
-        components: {
-            practiceRecorder: {
-                async getPracticeRecords() {
-                    return [{ id: 'recorder_1', examId: 'recorder-a' }];
-                }
-            }
-        },
+        components: {},
         setStateCalls: [],
         setState(pathName, value) {
             this.setStateCalls.push({ pathName, value: deepClone(value) });
@@ -98,27 +86,22 @@ async function main() {
 
     Object.assign(app, mixins.examSession, mixins.suitePractice);
 
+    // 统一入口验证：_loadSuitePracticeRecordsForFiltering 应通过 PracticeRecordAPI.list 读取
     const fromFiltering = await app._loadSuitePracticeRecordsForFiltering();
-    assert.strictEqual(fromFiltering[0].id, 'recorder_1', '过滤读取应优先 PracticeRecorder');
+    assert.ok(Array.isArray(fromFiltering) && fromFiltering.length > 0, '过滤读取应返回记录');
+    assert.strictEqual(fromFiltering[0].id, 'api_1', '过滤读取应通过 PracticeRecordAPI.list 获取');
 
-    delete app.components.practiceRecorder;
-    const fromStateSync = await app._listPracticeRecordsWithFallback({ includeRecorder: false });
-    assert.strictEqual(fromStateSync[0].id, 'core_1', '无 recorder 时应回退 PracticeCore');
+    // _listPracticeRecordsViaAPI 也应直接走 PracticeRecordAPI.list
+    const viaAPI = await app._listPracticeRecordsViaAPI();
+    assert.ok(Array.isArray(viaAPI) && viaAPI.length > 0, 'API 读取应返回记录');
+    assert.strictEqual(viaAPI[0].id, 'api_1', 'API 读取应通过 PracticeRecordAPI.list 获取');
 
-    delete sandboxWindow.PracticeCore;
-    const fromStore = await app._listPracticeRecordsWithFallback({ includeRecorder: false });
-    assert.strictEqual(fromStore[0].id, 'store_1', '无 PracticeCore 时应回退 PracticeStore');
+    // 无 PracticeRecordAPI 时应返回空数组，不崩溃
+    delete sandboxWindow.PracticeRecordAPI;
+    const emptyResult = await app._listPracticeRecordsViaAPI();
+    assert.ok(Array.isArray(emptyResult) && emptyResult.length === 0, '无 API 时应安全返回空数组');
 
-    delete sandboxWindow.PracticeStore;
-    const fromStorage = await app._listPracticeRecordsWithFallback({ includeRecorder: false });
-    assert.strictEqual(fromStorage[0].id, 'legacy_1', '最终应回退 storage practice_records');
-
-    await app._updatePracticeRecordsState();
-    assert.strictEqual(app.setStateCalls.length, 1, '应同步一次 practice.records');
-    assert.strictEqual(app.setStateCalls[0].pathName, 'practice.records');
-    assert.strictEqual(app.setStateCalls[0].value[0].id, 'legacy_1');
-
-    process.stdout.write(JSON.stringify({ status: 'pass', detail: 'suitePractice fallback 链统一并按顺序工作' }));
+    process.stdout.write(JSON.stringify({ status: 'pass', detail: 'suitePractice 统一通过 PracticeRecordAPI 读取记录' }));
 }
 
 main().catch((error) => {

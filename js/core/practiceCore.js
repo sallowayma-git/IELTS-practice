@@ -57,6 +57,9 @@
         tempPracticeRecords: 'temp_practice_records'
     });
     let internalRepositories = null;
+    // 由 data/index.js 在仓库注入时通过 __installInternalRepositories 第二参数传入，
+    // 使仓库未注入前的 fallback 路径也能拿到 storage internal token，避免被新保护层拒绝。
+    let internalStorageAccess = null;
 
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
@@ -1403,6 +1406,14 @@
     }
 
     function getStorageInternalOptions(storage) {
+        // 仓库注入后用 token 化选项，确保 fallback 读写能通过 storage 的 internal-only 保护。
+        if (internalStorageAccess && typeof internalStorageAccess.createInternalOptions === 'function') {
+            try {
+                return internalStorageAccess.createInternalOptions({});
+            } catch (_) {
+                // fallthrough 到旧行为
+            }
+        }
         return { skipPracticeCoreRedirect: true };
     }
 
@@ -1440,6 +1451,65 @@
             return await storage.get(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
         }
         return [];
+    }
+
+    /**
+     * 轻量投影：读取原始数组（clone:false 跳过 structuredClone），映射为精简 summary 对象。
+     * 排除 answers/answerDetails/correctAnswerMap/suiteEntries[]/realData/answerComparison 等重字段，
+     * 供练习历史列表、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用，
+     * 避免大数据量下反序列化+克隆全部记录导致的前端渲染卡顿和内存溢出。
+     */
+    function projectRecordSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scoreInfo = record.scoreInfo || {};
+        const metadata = record.metadata || {};
+        return {
+            id: record.id || record.sessionId || '',
+            sessionId: record.sessionId || null,
+            examId: record.examId || metadata.examId || null,
+            title: record.title || metadata.examTitle || '',
+            type: record.type || metadata.type || 'reading',
+            startTime: record.startTime || null,
+            endTime: record.endTime || null,
+            date: record.date || null,
+            duration: Number(record.duration) || 0,
+            percentage: Number(record.percentage ?? scoreInfo.percentage) || 0,
+            accuracy: Number(record.accuracy ?? scoreInfo.accuracy) || 0,
+            score: Number(record.score ?? scoreInfo.score) || 0,
+            totalQuestions: Number(record.totalQuestions ?? scoreInfo.total) || 0,
+            correctAnswers: Number(record.correctAnswers ?? scoreInfo.correct) || 0,
+            status: record.status || 'completed',
+            suiteMode: Boolean(record.suiteMode),
+            suiteEntryCount: Array.isArray(record.suiteEntries) ? record.suiteEntries.length : 0,
+            suiteSessionId: record.suiteSessionId || (metadata.suiteSessionId) || null,
+            metadata: {
+                category: metadata.category || record.category || null,
+                examTitle: metadata.examTitle || record.title || '',
+                frequency: metadata.frequency || record.frequency || 'unknown',
+                type: metadata.type || record.type || null
+            },
+            updatedAt: record.updatedAt || null,
+            createdAt: record.createdAt || null
+        };
+    }
+
+    async function readPracticeRecordSummaries(storageManager) {
+        const repos = getRepositories();
+        let records;
+        if (repos && repos.practice && typeof repos.practice.read === 'function') {
+            // clone:false 跳过 structuredClone，在投影后原始重字段不会进入返回值
+            records = await repos.practice.read({ clone: false });
+        } else {
+            records = await readPracticeRecords(storageManager);
+        }
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map(projectRecordSummary)
+            .filter(Boolean);
     }
 
     async function writePracticeRecords(records, storageManager) {
@@ -1686,6 +1756,7 @@
         STORAGE_KEYS,
         handlesStorageKey,
         listPracticeRecords: readPracticeRecords,
+        listPracticeRecordSummaries: readPracticeRecordSummaries,
         replacePracticeRecords,
         savePracticeRecord,
         routeStorageSet,
@@ -1700,6 +1771,7 @@
         STORAGE_KEYS,
         handlesStorageKey,
         listPracticeRecords: readPracticeRecords,
+        listPracticeRecordSummaries: readPracticeRecordSummaries,
         readMeta,
         syncPracticeRecordState
     });
@@ -1724,11 +1796,15 @@
         writable: false
     });
     Object.defineProperty(practiceCore, '__installInternalRepositories', {
-        value: function(repositories) {
+        value: function(repositories, installers) {
             if (!repositories || typeof repositories !== 'object') {
                 throw new Error('PracticeCore.__installInternalRepositories requires repositories');
             }
             internalRepositories = repositories;
+            // 接收 storage internal token factory，供 fallback 路径使用。
+            if (installers && typeof installers.createInternalOptions === 'function') {
+                internalStorageAccess = { createInternalOptions: installers.createInternalOptions };
+            }
             try {
                 delete practiceCore.__installInternalRepositories;
             } catch (_) {

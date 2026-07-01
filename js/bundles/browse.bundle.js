@@ -1200,7 +1200,7 @@
             button.dataset.date = cell.dateKey;
             button.dataset.count = String(cell.count);
             button.dataset.level = String(cell.level);
-            button.dataset.tooltip = cell.label + '，做题 ' + cell.count + ' 题';
+            button.dataset.tooltip = cell.label + '，做题 ' + cell.count + ' 套';
             button.setAttribute('aria-label', button.dataset.tooltip);
             button.setAttribute('title', button.dataset.tooltip);
             grid.appendChild(button);
@@ -1214,7 +1214,7 @@
         this._setText(
             'heatmapSummary',
             heatmapData.total > 0
-                ? formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 共做题 ' + heatmapData.total + ' 题，活跃 ' + heatmapData.activeDays + ' 天'
+                ? formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 共做题 ' + heatmapData.total + ' 套，活跃 ' + heatmapData.activeDays + ' 天'
                 : formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 暂无练习记录'
         );
     };
@@ -1450,10 +1450,9 @@
         var monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
         var daysInMonth = monthEnd.getDate();
         var weekCount = Math.ceil((leadingDays + daysInMonth) / 7);
-        var counts = aggregatePracticeHeatmapCounts(records, monthStart);
-        var maxCount = Object.keys(counts).reduce(function findMax(max, key) {
-            return counts[key] > max ? counts[key] : max;
-        }, 0);
+        var aggregate = aggregatePracticeHeatmapSets(records, monthStart);
+        var counts = aggregate.monthCounts;
+
         var cells = [];
         var total = 0;
         var activeDays = 0;
@@ -1475,7 +1474,7 @@
                 dateKey: dateKey,
                 label: formatPracticeHeatmapDateLabel(date),
                 count: count,
-                level: inMonth ? resolvePracticeHeatmapLevel(count, maxCount) : 0,
+                level: inMonth ? resolvePracticeHeatmapLevel(count, aggregate.averageSetsPerActiveDay) : 0,
                 inMonth: inMonth,
                 week: Math.floor(index / 7),
                 weekday: index % 7
@@ -1488,12 +1487,13 @@
             cells: cells,
             total: total,
             activeDays: activeDays,
-            maxCount: maxCount
+            averageSetsPerActiveDay: aggregate.averageSetsPerActiveDay
         };
     }
 
-    function aggregatePracticeHeatmapCounts(records, monthStart) {
-        var counts = {};
+    function aggregatePracticeHeatmapSets(records, monthStart) {
+        var monthCounts = {};
+        var allCounts = {};
         var monthKey = toPracticeHeatmapMonthKey(monthStart);
         ensureArray(records).forEach(function collect(record) {
             var timestamp = getRecordTimestamp(record);
@@ -1501,37 +1501,20 @@
                 return;
             }
             var date = new Date(timestamp);
-            if (toPracticeHeatmapMonthKey(date) !== monthKey) {
-                return;
-            }
             var key = toPracticeHeatmapDateKey(date);
-            counts[key] = (counts[key] || 0) + resolvePracticeHeatmapQuestionCount(record);
-        });
-        return counts;
-    }
-
-    function resolvePracticeHeatmapQuestionCount(record) {
-        var rd = record && record.realData && typeof record.realData === 'object' ? record.realData : {};
-        var scoreInfo = record && record.scoreInfo && typeof record.scoreInfo === 'object'
-            ? record.scoreInfo
-            : (rd.scoreInfo && typeof rd.scoreInfo === 'object' ? rd.scoreInfo : {});
-        var candidates = [
-            record && record.totalQuestions,
-            record && record.questionCount,
-            record && record.total,
-            rd.totalQuestions,
-            rd.questionCount,
-            rd.total,
-            scoreInfo.totalQuestions,
-            scoreInfo.total
-        ];
-        for (var i = 0; i < candidates.length; i += 1) {
-            var value = Number(candidates[i]);
-            if (Number.isFinite(value) && value > 0) {
-                return Math.max(1, Math.round(value));
+            allCounts[key] = (allCounts[key] || 0) + 1;
+            if (toPracticeHeatmapMonthKey(date) === monthKey) {
+                monthCounts[key] = (monthCounts[key] || 0) + 1;
             }
-        }
-        return 1;
+        });
+        var activeDayKeys = Object.keys(allCounts);
+        var totalSets = activeDayKeys.reduce(function sumSets(total, key) {
+            return total + allCounts[key];
+        }, 0);
+        return {
+            monthCounts: monthCounts,
+            averageSetsPerActiveDay: activeDayKeys.length > 0 ? totalSets / activeDayKeys.length : 0
+        };
     }
 
     function normalizePracticeHeatmapMonth(value) {
@@ -1547,16 +1530,26 @@
         return new Date(month.getFullYear(), month.getMonth() + offset, 1);
     }
 
-    function resolvePracticeHeatmapLevel(count, maxCount) {
+    function resolvePracticeHeatmapLevel(count, avg) {
         var safeCount = Math.max(0, Number(count) || 0);
-        var safeMax = Math.max(0, Number(maxCount) || 0);
+        var safeAvg = Math.max(0, Number(avg) || 0);
         if (safeCount <= 0) {
             return 0;
         }
-        if (safeMax <= 1) {
+        if (safeAvg <= 0) {
             return 1;
         }
-        return Math.max(1, Math.min(4, Math.ceil(safeCount / safeMax * 4)));
+        var ratio = safeCount / safeAvg;
+        if (ratio < 0.8) {
+            return 1;
+        }
+        if (ratio < 1.5) {
+            return 2;
+        }
+        if (ratio < 2.5) {
+            return 3;
+        }
+        return 4;
     }
 
     function toPracticeHeatmapDateKey(date) {
@@ -2447,6 +2440,30 @@
         return maxTs;
     };
 
+    historyRenderer.helpers.getRecordsSignatureText = function (value) {
+        if (value == null) return '';
+        return String(value);
+    };
+
+    historyRenderer.helpers.computeSuiteEntriesSignature = function (record) {
+        var entries = record && Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+        return entries.map(function (entry, index) {
+            if (!entry || typeof entry !== 'object') {
+                return 'idx' + index;
+            }
+            var entryTitle = entry.title || entry.examTitle || (entry.metadata && entry.metadata.examTitle) || '';
+            var entryExamId = entry.examId || (entry.metadata && entry.metadata.examId) || entry.id || '';
+            var entryPct = Number(entry.percentage || (entry.scoreInfo && entry.scoreInfo.percentage)) || 0;
+            var entryDuration = Number(entry.duration || (entry.rawData && entry.rawData.duration)) || 0;
+            return [
+                historyRenderer.helpers.getRecordsSignatureText(entryExamId),
+                historyRenderer.helpers.getRecordsSignatureText(entryTitle),
+                entryPct,
+                entryDuration
+            ].join(',');
+        }).join('|');
+    };
+
     historyRenderer.helpers.computeRecordsSignature = function (records) {
         var list = Array.isArray(records) ? records : [];
         var tokens = list.map(function (record, index) {
@@ -2454,7 +2471,16 @@
             var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
             var pct = Number(record && record.percentage) || 0;
             var dur = Number(record && record.duration) || 0;
-            return id + ':' + ts + ':' + pct + ':' + dur;
+            var title = record && (record.title || record.examTitle || (record.metadata && record.metadata.examTitle)) || '';
+            var suiteEntries = historyRenderer.helpers.computeSuiteEntriesSignature(record);
+            return JSON.stringify([
+                historyRenderer.helpers.getRecordsSignatureText(id),
+                ts,
+                pct,
+                dur,
+                historyRenderer.helpers.getRecordsSignatureText(title),
+                suiteEntries
+            ]);
         });
         return list.length + '|' + tokens.join(';');
     };
@@ -3962,8 +3988,15 @@
     }
 
     function clearReadingMemorizeBrowseMode() {
-        global.__readingMemorizeBrowseMode = false;
+        if (typeof global.setReadingMemorizeBrowseMode === 'function') {
+            global.setReadingMemorizeBrowseMode(false);
+        } else {
+            global.__readingMemorizeBrowseMode = false;
+        }
         global.__browseMemorizeFilterMode = null;
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
     }
 
     function isReadingMemorizeExam(exam) {
@@ -3987,7 +4020,8 @@
             return false;
         }
         const manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        const entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function filterReadingMemorizeExams(exams) {
@@ -4007,9 +4041,8 @@
             target: 'tab',
             windowName: 'ielts-reading-memorize'
         };
-        clearReadingMemorizeBrowseMode();
-        if (typeof global.setBrowseTitle === 'function') {
-            global.setBrowseTitle('阅读理解');
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
         }
         if (global.app && typeof global.app.openExam === 'function') {
             global.app.openExam(examId, launchOptions);
@@ -4406,6 +4439,9 @@
         }
 
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
 
         // 1. 频率模式委托给 BrowseController
         if (!memorizeSelectionActive && global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
@@ -6425,8 +6461,10 @@
         if (!Array.isArray(dataset) || dataset.length === 0) {
             if (Array.isArray(global.examIndex) && global.examIndex.length) {
                 dataset = global.examIndex.slice();
-            } else if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-                dataset = global.completeExamIndex.slice();
+            } else if (typeof global.getReadingExamIndex === 'function') {
+                dataset = global.getReadingExamIndex();
+            } else if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+                dataset = global.__READING_EXAM_INDEX__.slice();
             }
         }
         return Array.isArray(dataset) ? dataset : [];
@@ -6444,7 +6482,8 @@
 
         const fallbacks = [
             Array.isArray(global.examIndex) ? global.examIndex : null,
-            Array.isArray(global.completeExamIndex) ? global.completeExamIndex : null,
+            typeof global.getReadingExamIndex === 'function' ? global.getReadingExamIndex() : null,
+            Array.isArray(global.__READING_EXAM_INDEX__) ? global.__READING_EXAM_INDEX__ : null,
             Array.isArray(global.listeningExamIndex) ? global.listeningExamIndex : null
         ];
         for (const fallback of fallbacks) {
@@ -6624,7 +6663,7 @@
                 ? window.__READING_EXAM_MANIFEST__
                 : null;
             const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
-            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+            if (!manifestEntry || !manifestEntry.script || !(manifestEntry.dataKey || manifestEntry.examId)) {
                 return null;
             }
             return manifestEntry;
@@ -6779,6 +6818,12 @@
                     sessionInfo.suiteSessionId = options.suiteSessionId;
                     if (options.suiteFlowMode) {
                         sessionInfo.suiteFlowMode = options.suiteFlowMode;
+                    }
+                    if (typeof this._buildSuiteSequencePayload === 'function' && this.currentSuiteSession) {
+                        const suiteSequence = this._buildSuiteSequencePayload(this.currentSuiteSession);
+                        if (suiteSequence.length) {
+                            sessionInfo.suiteSequence = suiteSequence;
+                        }
                     }
                     const timerContext = this._resolveSuiteTimerContext(options, sessionInfo);
                     if (timerContext.suiteTimerAnchorMs != null) {
@@ -8042,6 +8087,7 @@
                     'VOCAB_HIGHLIGHT_SAVE',
                     'SIMULATION_DRAFT_SYNC',
                     'SIMULATION_NAVIGATE',
+                    'SIMULATION_ACTIVE_EXAM_CHANGE',
                     'SIMULATION_SUBMIT'
                 ]);
 
@@ -8195,7 +8241,10 @@
                     return; // 非预期来源的消息忽略
                 }
 
-                const { type, data } = normalized;
+                const type = normalized.type;
+                const data = normalized.data && typeof normalized.data === 'object' && !Array.isArray(normalized.data)
+                    ? { ...normalized.data }
+                    : {};
                 const isPracticeResetRequest = type === 'PRACTICE_RESET_REQUEST';
                 const expectedExamId = String(examId);
                 const payloadExamId = data && data.examId != null ? String(data.examId) : '';
@@ -8208,12 +8257,58 @@
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
                     : '';
+                const activeSuiteSequence = this.currentSuiteSession && Array.isArray(this.currentSuiteSession.sequence)
+                    ? this.currentSuiteSession.sequence
+                    : [];
                 const isExamInActiveSuite = Boolean(
                     this.currentSuiteSession
-                    && Array.isArray(this.currentSuiteSession.sequence)
-                    && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
+                    && activeSuiteSequence.some(item => item && String(item.examId) === expectedExamId)
+                );
+                const isPayloadExamInActiveSuite = Boolean(
+                    this.currentSuiteSession
+                    && payloadExamId
+                    && activeSuiteSequence.some(item => item && String(item.examId) === payloadExamId)
+                );
+                const simulationSuiteMessageTypes = new Set([
+                    'SIMULATION_DRAFT_SYNC',
+                    'SIMULATION_NAVIGATE',
+                    'SIMULATION_ACTIVE_EXAM_CHANGE',
+                    'SIMULATION_SUBMIT'
+                ]);
+                const isSimulationSuiteMessage = simulationSuiteMessageTypes.has(type);
+                const suiteRoutableMessageTypes = new Set([
+                    ...simulationSuiteMessageTypes,
+                    'REVIEW_NAVIGATE',
+                    'SESSION_READY'
+                ]);
+                const canRoutePayloadExamInActiveSuite = Boolean(
+                    suiteRoutableMessageTypes.has(type)
+                    && isPayloadExamInActiveSuite
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const payloadWindowInfo = payloadExamId && payloadExamId !== expectedExamId && this.examWindows
+                    ? this.examWindows.get(payloadExamId)
+                    : null;
+                const payloadWindowMatches = Boolean(
+                    payloadWindowInfo
+                    && payloadWindowInfo.window
+                    && isLikelySameWindowContext(sourceWindow, payloadWindowInfo.window)
+                );
+                const payloadWindowSuiteId = payloadWindowInfo && typeof payloadWindowInfo.suiteSessionId === 'string'
+                    ? payloadWindowInfo.suiteSessionId.trim()
+                    : '';
+                if (
+                    isPayloadExamInActiveSuite
+                    && payloadWindowMatches
+                    && payloadWindowSuiteId
+                    && payloadSuiteSessionId
+                    && payloadWindowSuiteId === payloadSuiteSessionId
+                ) {
+                    return;
+                }
                 const isListeningBridgeSource = src === 'listening_record_bridge';
                 const isListeningBridgeProtocolMessage = Boolean(
                     isListeningBridgeSource
@@ -8228,7 +8323,7 @@
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                     && (
                         (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
                         || isExamInActiveSuite
@@ -8252,14 +8347,16 @@
                     (type === 'PRACTICE_COMPLETE'
                         || type === 'PRACTICE_RESULT'
                         || type === 'REVIEW_NAVIGATE'
+                        || type === 'SIMULATION_DRAFT_SYNC'
                         || type === 'SIMULATION_NAVIGATE'
+                        || type === 'SIMULATION_ACTIVE_EXAM_CHANGE'
                         || type === 'SIMULATION_SUBMIT'
                         || type === 'SESSION_READY')
                     && payloadSuiteSessionId
                     && activeSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                 );
 
                 if (payloadSessionId) {
@@ -8307,12 +8404,14 @@
                         isListeningBridgeProtocolMessage
                         && (sourceMatched || allowListeningSourceFallback)
                     );
-                    if (!allowedLegacy && !allowListeningExamMismatch) {
+                    const allowSuiteExamMismatch = Boolean(isSuiteFlowPayload && isPayloadExamInActiveSuite);
+                    if (!allowedLegacy && !allowListeningExamMismatch && !allowSuiteExamMismatch) {
                         return;
                     }
                 }
 
-                data.examId = examId;
+                const routedExamId = canRoutePayloadExamInActiveSuite ? payloadExamId : examId;
+                data.examId = routedExamId;
                 if (!data.sessionId && expectedSessionId) {
                     data.sessionId = expectedSessionId;
                 }
@@ -8430,7 +8529,7 @@
                     case 'SIMULATION_DRAFT_SYNC':
                         if (this.currentSuiteSession && data && data.draft) {
                             const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
-                            const previousDraft = this.currentSuiteSession.draftsByExam[examId] || null;
+                            const previousDraft = this.currentSuiteSession.draftsByExam[routedExamId] || null;
                             const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
                             const shouldAcceptDraft = !(
                                 previousDraft
@@ -8439,7 +8538,7 @@
                                 && incomingUpdatedAt < previousUpdatedAt
                             );
                             if (shouldAcceptDraft) {
-                                this.currentSuiteSession.draftsByExam[examId] = {
+                                this.currentSuiteSession.draftsByExam[routedExamId] = {
                                     ...data.draft,
                                     updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
                                 };
@@ -8451,14 +8550,38 @@
                         break;
                     case 'SIMULATION_NAVIGATE':
                         if (typeof this._handleSimulationNavigate === 'function') {
-                            await this._handleSimulationNavigate(examId, data, sourceWindow || expectedWindow);
+                            await this._handleSimulationNavigate(routedExamId, data, sourceWindow || expectedWindow);
+                        }
+                        break;
+                    case 'SIMULATION_ACTIVE_EXAM_CHANGE':
+                        if (
+                            this.currentSuiteSession
+                            && isPayloadExamInActiveSuite
+                            && (
+                                !payloadSuiteSessionId
+                                || !activeSuiteSessionId
+                                || payloadSuiteSessionId === activeSuiteSessionId
+                            )
+                        ) {
+                            const activeIndex = activeSuiteSequence.findIndex(item => item && String(item.examId) === routedExamId);
+                            this.currentSuiteSession.activeExamId = routedExamId;
+                            if (activeIndex >= 0) {
+                                this.currentSuiteSession.currentIndex = activeIndex;
+                            }
+                            this.currentSuiteSession.lastUpdate = Date.now();
+                            if (sourceWindow && !sourceWindow.closed) {
+                                this.currentSuiteSession.windowRef = sourceWindow;
+                            }
+                            if (typeof this._mirrorSessionToStorage === 'function') {
+                                this._mirrorSessionToStorage(this.currentSuiteSession);
+                            }
                         }
                         break;
                     case 'SIMULATION_SUBMIT':
                         if (windowInfo && windowInfo.reviewMode) {
                             break;
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow);
                         break;
                     default:
                 }
@@ -9416,6 +9539,11 @@
                 suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
+                suiteSequence: Array.isArray(info.suiteSequence)
+                    ? info.suiteSequence
+                    : (typeof this._buildSuiteSequencePayload === 'function' && this.currentSuiteSession
+                        ? this._buildSuiteSequencePayload(this.currentSuiteSession)
+                        : []),
                 practiceMode: typeof info.practiceMode === 'string' && info.practiceMode.trim()
                     ? info.practiceMode.trim().toLowerCase()
                     : null,
@@ -9804,6 +9932,9 @@
                 }
                 if (Number.isInteger(payload.suiteSequenceTotal)) {
                     windowInfo.suiteSequenceTotal = payload.suiteSequenceTotal;
+                }
+                if (Array.isArray(payload.suiteSequence) && payload.suiteSequence.length) {
+                    windowInfo.suiteSequence = payload.suiteSequence;
                 }
                 if (payload.url) {
                     windowInfo.latestUrl = payload.url;
@@ -11325,6 +11456,9 @@
         updateBrowseTitle() {
             const titleElement = document.getElementById('browse-title');
             if (!titleElement) return;
+            if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+                global.syncReadingMemorizeBrowseModeUI();
+            }
 
             if (isReadingMemorizeBrowseMode()) {
                 titleElement.textContent = '阅读背题选题';
@@ -13389,8 +13523,17 @@ window.BrowseStateManager = BrowseStateManager;
     }
 
     function getAllExamIndexes(globalObj) {
+        let readingIndex = null;
+        if (globalObj && typeof globalObj.getReadingExamIndex === 'function') {
+            try {
+                readingIndex = globalObj.getReadingExamIndex();
+            } catch (_) {
+                readingIndex = null;
+            }
+        }
         const sources = [
-            globalObj.completeExamIndex,
+            readingIndex,
+            globalObj.__READING_EXAM_INDEX__,
             globalObj.examIndex,
             globalObj.readingExamIndex,
             globalObj.listeningExamIndex,
@@ -14857,6 +15000,7 @@ async function syncPracticeRecords(options = {}) {
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
     // 若数据未变则跳过 UI 刷新，避免无意义的列表重置
+    // 使用轻量 listSummary 进行签名比对，无需反序列化+克隆完整记录数组
     try {
         const prev = typeof getPracticeRecordsState === 'function'
             ? getPracticeRecordsState()
@@ -14864,10 +15008,20 @@ async function syncPracticeRecords(options = {}) {
         const renderer = window.PracticeHistoryRenderer;
         if (renderer && renderer.helpers && typeof renderer.helpers.computeRecordsSignature === 'function') {
             const prevSig = renderer.helpers.computeRecordsSignature(prev);
-            const nextSig = renderer.helpers.computeRecordsSignature(records);
-            if (!forceRender && prevSig === nextSig) {
-                console.log('[System] 练习记录未变化，跳过UI刷新');
-                return;
+            // 若 forceRender 则跳过轻量查询，直接走完整加载
+            if (!forceRender && window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
+                const summaries = await window.PracticeRecordAPI.listSummary();
+                const nextSig = renderer.helpers.computeRecordsSignature(summaries);
+                if (prevSig === nextSig) {
+                    console.log('[System] 练习记录未变化，跳过UI刷新');
+                    return;
+                }
+            } else {
+                const nextSig = renderer.helpers.computeRecordsSignature(records);
+                if (!forceRender && prevSig === nextSig) {
+                    console.log('[System] 练习记录未变化，跳过UI刷新');
+                    return;
+                }
             }
         }
     } catch (_) { /* 保底不中断同步流程 */ }
@@ -15230,15 +15384,31 @@ function setupMessageListener() {
             const shouldNotify = shouldAnnounceCompletion(recSessionId || sessionId);
             if (rec) {
                 console.log('[System] 收到练习完成，保存 canonical 记录');
-                savePracticeCompletionRecord(rec.examId, payload).finally(() => {
+                const cleanupAfterCompletion = () => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
                     try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
-                    if (shouldNotify) {
-                        showMessage('练习已完成，正在更新记录...', 'success');
-                        showCompletionSummary(payload);
+                };
+                savePracticeCompletionRecord(rec.examId, payload).then(
+                    () => {
+                        // 保存成功：提示完成、展示摘要、同步记录。
+                        cleanupAfterCompletion();
+                        if (shouldNotify) {
+                            showMessage('练习已完成，正在更新记录...', 'success');
+                            showCompletionSummary(payload);
+                        }
+                        setTimeout(syncPracticeRecords, 300);
+                    },
+                    (saveError) => {
+                        // 保存失败：仍清理 timer/session，但不展示“已完成”成功横幅与摘要，
+                        // 避免在记录未落库时误导用户；同步一次以反映真实状态。
+                        console.error('[System] 练习完成记录保存失败:', saveError);
+                        cleanupAfterCompletion();
+                        if (shouldNotify) {
+                            showMessage('练习已完成，但记录保存失败，请重试或检查数据。', 'error');
+                        }
+                        setTimeout(syncPracticeRecords, 300);
                     }
-                    setTimeout(syncPracticeRecords, 300);
-                });
+                );
             } else {
                 console.log('[System] 收到练习完成消息，正在同步记录...');
                 if (shouldNotify) {
@@ -16756,7 +16926,8 @@ function isReadingMemorizeCandidateFallback(exam) {
     if (exam.hasHtml === false) {
         return false;
     }
-    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+    const manifestEntry = window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id];
+    return !!(manifestEntry && manifestEntry.script);
 }
 
 function filterReadingMemorizeExamsFallback(exams) {
@@ -16764,8 +16935,15 @@ function filterReadingMemorizeExamsFallback(exams) {
 }
 
 function clearReadingMemorizeBrowseMode() {
-    window.__readingMemorizeBrowseMode = false;
+    if (typeof window.setReadingMemorizeBrowseMode === 'function') {
+        window.setReadingMemorizeBrowseMode(false);
+    } else {
+        window.__readingMemorizeBrowseMode = false;
+    }
     window.__browseMemorizeFilterMode = null;
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
+    }
 }
 
 function selectReadingMemorizeExam(examId) {
@@ -16784,9 +16962,8 @@ function selectReadingMemorizeExam(examId) {
         }
         return null;
     }
-    clearReadingMemorizeBrowseMode();
-    if (typeof setBrowseTitle === 'function') {
-        setBrowseTitle('阅读理解');
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
     }
     return openExam(examId, {
         practiceMode: 'memorize',
@@ -16896,6 +17073,9 @@ function loadExamListFallback() {
         let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         if (memorizeSelectionActive) {
             currentCategory = 'all';
             currentType = 'reading';
@@ -17021,6 +17201,9 @@ function displayExams(exams) {
         }
 
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         const normalizedExams = memorizeSelectionActive
             ? filterReadingMemorizeExamsFallback(exams)
             : (Array.isArray(exams) ? exams : []);
@@ -17835,9 +18018,11 @@ async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
         const activeIndex = Array.isArray(getExamIndexState()) ? getExamIndexState() : [];
-        const defaultIndex = Array.isArray(window.completeExamIndex)
-            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-            : [];
+        const defaultIndex = typeof window.getReadingExamIndex === 'function'
+            ? window.getReadingExamIndex().map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : (Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+                : []);
         const defaultListening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
         const storedDefault = await storage.get('exam_index', []);
         const combinedDefault = storedDefault.length ? storedDefault : [...defaultIndex, ...defaultListening];

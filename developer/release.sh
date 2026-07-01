@@ -93,13 +93,19 @@ fi
 
 # 打包：只包含用户运行时需要的文件
 # js/bundles/ 包含了所有 JS 逻辑，js/app/ js/core/ 等源文件不进入分发包
+ZIP_INPUTS=(
+    index.html
+    css/
+    js/bundles/
+    assets/
+    ReadingPractice/
+)
+if [ ${#LISTENING_ZIP_INPUTS[@]} -gt 0 ]; then
+    ZIP_INPUTS+=("${LISTENING_ZIP_INPUTS[@]}")
+fi
+
 zip -r "${ZIP_PATH}" \
-    index.html \
-    css/ \
-    js/bundles/ \
-    assets/ \
-    ReadingPractice/ \
-    "${LISTENING_ZIP_INPUTS[@]}" \
+    "${ZIP_INPUTS[@]}" \
     -x "*.DS_Store" \
        '~$*' \
        "*.MOV" \
@@ -152,7 +158,6 @@ require_entry "css/main.css"
 require_entry "css/heroui-bridge.css"
 require_entry "css/onboarding.css"
 require_entry "assets/vendor/three.min.js"
-require_entry "assets/scripts/complete-exam-data.js"
 require_entry "assets/generated/reading-exams/manifest.js"
 require_entry "assets/generated/reading-exams/reading-practice-unified.html"
 require_entry "js/bundles/runtime-entry.bundle.js"

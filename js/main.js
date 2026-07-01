@@ -403,6 +403,7 @@ async function syncPracticeRecords(options = {}) {
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
     // 若数据未变则跳过 UI 刷新，避免无意义的列表重置
+    // 使用轻量 listSummary 进行签名比对，无需反序列化+克隆完整记录数组
     try {
         const prev = typeof getPracticeRecordsState === 'function'
             ? getPracticeRecordsState()
@@ -410,10 +411,20 @@ async function syncPracticeRecords(options = {}) {
         const renderer = window.PracticeHistoryRenderer;
         if (renderer && renderer.helpers && typeof renderer.helpers.computeRecordsSignature === 'function') {
             const prevSig = renderer.helpers.computeRecordsSignature(prev);
-            const nextSig = renderer.helpers.computeRecordsSignature(records);
-            if (!forceRender && prevSig === nextSig) {
-                console.log('[System] 练习记录未变化，跳过UI刷新');
-                return;
+            // 若 forceRender 则跳过轻量查询，直接走完整加载
+            if (!forceRender && window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
+                const summaries = await window.PracticeRecordAPI.listSummary();
+                const nextSig = renderer.helpers.computeRecordsSignature(summaries);
+                if (prevSig === nextSig) {
+                    console.log('[System] 练习记录未变化，跳过UI刷新');
+                    return;
+                }
+            } else {
+                const nextSig = renderer.helpers.computeRecordsSignature(records);
+                if (!forceRender && prevSig === nextSig) {
+                    console.log('[System] 练习记录未变化，跳过UI刷新');
+                    return;
+                }
             }
         }
     } catch (_) { /* 保底不中断同步流程 */ }
@@ -776,15 +787,31 @@ function setupMessageListener() {
             const shouldNotify = shouldAnnounceCompletion(recSessionId || sessionId);
             if (rec) {
                 console.log('[System] 收到练习完成，保存 canonical 记录');
-                savePracticeCompletionRecord(rec.examId, payload).finally(() => {
+                const cleanupAfterCompletion = () => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
                     try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
-                    if (shouldNotify) {
-                        showMessage('练习已完成，正在更新记录...', 'success');
-                        showCompletionSummary(payload);
+                };
+                savePracticeCompletionRecord(rec.examId, payload).then(
+                    () => {
+                        // 保存成功：提示完成、展示摘要、同步记录。
+                        cleanupAfterCompletion();
+                        if (shouldNotify) {
+                            showMessage('练习已完成，正在更新记录...', 'success');
+                            showCompletionSummary(payload);
+                        }
+                        setTimeout(syncPracticeRecords, 300);
+                    },
+                    (saveError) => {
+                        // 保存失败：仍清理 timer/session，但不展示“已完成”成功横幅与摘要，
+                        // 避免在记录未落库时误导用户；同步一次以反映真实状态。
+                        console.error('[System] 练习完成记录保存失败:', saveError);
+                        cleanupAfterCompletion();
+                        if (shouldNotify) {
+                            showMessage('练习已完成，但记录保存失败，请重试或检查数据。', 'error');
+                        }
+                        setTimeout(syncPracticeRecords, 300);
                     }
-                    setTimeout(syncPracticeRecords, 300);
-                });
+                );
             } else {
                 console.log('[System] 收到练习完成消息，正在同步记录...');
                 if (shouldNotify) {
@@ -2302,7 +2329,8 @@ function isReadingMemorizeCandidateFallback(exam) {
     if (exam.hasHtml === false) {
         return false;
     }
-    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+    const manifestEntry = window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id];
+    return !!(manifestEntry && manifestEntry.script);
 }
 
 function filterReadingMemorizeExamsFallback(exams) {
@@ -2310,8 +2338,15 @@ function filterReadingMemorizeExamsFallback(exams) {
 }
 
 function clearReadingMemorizeBrowseMode() {
-    window.__readingMemorizeBrowseMode = false;
+    if (typeof window.setReadingMemorizeBrowseMode === 'function') {
+        window.setReadingMemorizeBrowseMode(false);
+    } else {
+        window.__readingMemorizeBrowseMode = false;
+    }
     window.__browseMemorizeFilterMode = null;
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
+    }
 }
 
 function selectReadingMemorizeExam(examId) {
@@ -2330,9 +2365,8 @@ function selectReadingMemorizeExam(examId) {
         }
         return null;
     }
-    clearReadingMemorizeBrowseMode();
-    if (typeof setBrowseTitle === 'function') {
-        setBrowseTitle('阅读理解');
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
     }
     return openExam(examId, {
         practiceMode: 'memorize',
@@ -2442,6 +2476,9 @@ function loadExamListFallback() {
         let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         if (memorizeSelectionActive) {
             currentCategory = 'all';
             currentType = 'reading';
@@ -2565,8 +2602,11 @@ function displayExams(exams) {
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
-        
+
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         const normalizedExams = memorizeSelectionActive
             ? filterReadingMemorizeExamsFallback(exams)
             : (Array.isArray(exams) ? exams : []);
@@ -3381,9 +3421,11 @@ async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
         const activeIndex = Array.isArray(getExamIndexState()) ? getExamIndexState() : [];
-        const defaultIndex = Array.isArray(window.completeExamIndex)
-            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-            : [];
+        const defaultIndex = typeof window.getReadingExamIndex === 'function'
+            ? window.getReadingExamIndex().map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : (Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+                : []);
         const defaultListening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
         const storedDefault = await storage.get('exam_index', []);
         const combinedDefault = storedDefault.length ? storedDefault : [...defaultIndex, ...defaultListening];

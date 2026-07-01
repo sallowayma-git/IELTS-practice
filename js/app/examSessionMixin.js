@@ -52,8 +52,10 @@
         if (!Array.isArray(dataset) || dataset.length === 0) {
             if (Array.isArray(global.examIndex) && global.examIndex.length) {
                 dataset = global.examIndex.slice();
-            } else if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-                dataset = global.completeExamIndex.slice();
+            } else if (typeof global.getReadingExamIndex === 'function') {
+                dataset = global.getReadingExamIndex();
+            } else if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+                dataset = global.__READING_EXAM_INDEX__.slice();
             }
         }
         return Array.isArray(dataset) ? dataset : [];
@@ -71,7 +73,8 @@
 
         const fallbacks = [
             Array.isArray(global.examIndex) ? global.examIndex : null,
-            Array.isArray(global.completeExamIndex) ? global.completeExamIndex : null,
+            typeof global.getReadingExamIndex === 'function' ? global.getReadingExamIndex() : null,
+            Array.isArray(global.__READING_EXAM_INDEX__) ? global.__READING_EXAM_INDEX__ : null,
             Array.isArray(global.listeningExamIndex) ? global.listeningExamIndex : null
         ];
         for (const fallback of fallbacks) {
@@ -251,7 +254,7 @@
                 ? window.__READING_EXAM_MANIFEST__
                 : null;
             const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
-            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+            if (!manifestEntry || !manifestEntry.script || !(manifestEntry.dataKey || manifestEntry.examId)) {
                 return null;
             }
             return manifestEntry;
@@ -406,6 +409,12 @@
                     sessionInfo.suiteSessionId = options.suiteSessionId;
                     if (options.suiteFlowMode) {
                         sessionInfo.suiteFlowMode = options.suiteFlowMode;
+                    }
+                    if (typeof this._buildSuiteSequencePayload === 'function' && this.currentSuiteSession) {
+                        const suiteSequence = this._buildSuiteSequencePayload(this.currentSuiteSession);
+                        if (suiteSequence.length) {
+                            sessionInfo.suiteSequence = suiteSequence;
+                        }
                     }
                     const timerContext = this._resolveSuiteTimerContext(options, sessionInfo);
                     if (timerContext.suiteTimerAnchorMs != null) {
@@ -1669,6 +1678,7 @@
                     'VOCAB_HIGHLIGHT_SAVE',
                     'SIMULATION_DRAFT_SYNC',
                     'SIMULATION_NAVIGATE',
+                    'SIMULATION_ACTIVE_EXAM_CHANGE',
                     'SIMULATION_SUBMIT'
                 ]);
 
@@ -1822,7 +1832,10 @@
                     return; // 非预期来源的消息忽略
                 }
 
-                const { type, data } = normalized;
+                const type = normalized.type;
+                const data = normalized.data && typeof normalized.data === 'object' && !Array.isArray(normalized.data)
+                    ? { ...normalized.data }
+                    : {};
                 const isPracticeResetRequest = type === 'PRACTICE_RESET_REQUEST';
                 const expectedExamId = String(examId);
                 const payloadExamId = data && data.examId != null ? String(data.examId) : '';
@@ -1835,12 +1848,58 @@
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
                     : '';
+                const activeSuiteSequence = this.currentSuiteSession && Array.isArray(this.currentSuiteSession.sequence)
+                    ? this.currentSuiteSession.sequence
+                    : [];
                 const isExamInActiveSuite = Boolean(
                     this.currentSuiteSession
-                    && Array.isArray(this.currentSuiteSession.sequence)
-                    && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
+                    && activeSuiteSequence.some(item => item && String(item.examId) === expectedExamId)
+                );
+                const isPayloadExamInActiveSuite = Boolean(
+                    this.currentSuiteSession
+                    && payloadExamId
+                    && activeSuiteSequence.some(item => item && String(item.examId) === payloadExamId)
+                );
+                const simulationSuiteMessageTypes = new Set([
+                    'SIMULATION_DRAFT_SYNC',
+                    'SIMULATION_NAVIGATE',
+                    'SIMULATION_ACTIVE_EXAM_CHANGE',
+                    'SIMULATION_SUBMIT'
+                ]);
+                const isSimulationSuiteMessage = simulationSuiteMessageTypes.has(type);
+                const suiteRoutableMessageTypes = new Set([
+                    ...simulationSuiteMessageTypes,
+                    'REVIEW_NAVIGATE',
+                    'SESSION_READY'
+                ]);
+                const canRoutePayloadExamInActiveSuite = Boolean(
+                    suiteRoutableMessageTypes.has(type)
+                    && isPayloadExamInActiveSuite
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const payloadWindowInfo = payloadExamId && payloadExamId !== expectedExamId && this.examWindows
+                    ? this.examWindows.get(payloadExamId)
+                    : null;
+                const payloadWindowMatches = Boolean(
+                    payloadWindowInfo
+                    && payloadWindowInfo.window
+                    && isLikelySameWindowContext(sourceWindow, payloadWindowInfo.window)
+                );
+                const payloadWindowSuiteId = payloadWindowInfo && typeof payloadWindowInfo.suiteSessionId === 'string'
+                    ? payloadWindowInfo.suiteSessionId.trim()
+                    : '';
+                if (
+                    isPayloadExamInActiveSuite
+                    && payloadWindowMatches
+                    && payloadWindowSuiteId
+                    && payloadSuiteSessionId
+                    && payloadWindowSuiteId === payloadSuiteSessionId
+                ) {
+                    return;
+                }
                 const isListeningBridgeSource = src === 'listening_record_bridge';
                 const isListeningBridgeProtocolMessage = Boolean(
                     isListeningBridgeSource
@@ -1855,7 +1914,7 @@
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                     && (
                         (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
                         || isExamInActiveSuite
@@ -1879,14 +1938,16 @@
                     (type === 'PRACTICE_COMPLETE'
                         || type === 'PRACTICE_RESULT'
                         || type === 'REVIEW_NAVIGATE'
+                        || type === 'SIMULATION_DRAFT_SYNC'
                         || type === 'SIMULATION_NAVIGATE'
+                        || type === 'SIMULATION_ACTIVE_EXAM_CHANGE'
                         || type === 'SIMULATION_SUBMIT'
                         || type === 'SESSION_READY')
                     && payloadSuiteSessionId
                     && activeSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                 );
 
                 if (payloadSessionId) {
@@ -1934,12 +1995,14 @@
                         isListeningBridgeProtocolMessage
                         && (sourceMatched || allowListeningSourceFallback)
                     );
-                    if (!allowedLegacy && !allowListeningExamMismatch) {
+                    const allowSuiteExamMismatch = Boolean(isSuiteFlowPayload && isPayloadExamInActiveSuite);
+                    if (!allowedLegacy && !allowListeningExamMismatch && !allowSuiteExamMismatch) {
                         return;
                     }
                 }
 
-                data.examId = examId;
+                const routedExamId = canRoutePayloadExamInActiveSuite ? payloadExamId : examId;
+                data.examId = routedExamId;
                 if (!data.sessionId && expectedSessionId) {
                     data.sessionId = expectedSessionId;
                 }
@@ -2057,7 +2120,7 @@
                     case 'SIMULATION_DRAFT_SYNC':
                         if (this.currentSuiteSession && data && data.draft) {
                             const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
-                            const previousDraft = this.currentSuiteSession.draftsByExam[examId] || null;
+                            const previousDraft = this.currentSuiteSession.draftsByExam[routedExamId] || null;
                             const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
                             const shouldAcceptDraft = !(
                                 previousDraft
@@ -2066,7 +2129,7 @@
                                 && incomingUpdatedAt < previousUpdatedAt
                             );
                             if (shouldAcceptDraft) {
-                                this.currentSuiteSession.draftsByExam[examId] = {
+                                this.currentSuiteSession.draftsByExam[routedExamId] = {
                                     ...data.draft,
                                     updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
                                 };
@@ -2078,14 +2141,38 @@
                         break;
                     case 'SIMULATION_NAVIGATE':
                         if (typeof this._handleSimulationNavigate === 'function') {
-                            await this._handleSimulationNavigate(examId, data, sourceWindow || expectedWindow);
+                            await this._handleSimulationNavigate(routedExamId, data, sourceWindow || expectedWindow);
+                        }
+                        break;
+                    case 'SIMULATION_ACTIVE_EXAM_CHANGE':
+                        if (
+                            this.currentSuiteSession
+                            && isPayloadExamInActiveSuite
+                            && (
+                                !payloadSuiteSessionId
+                                || !activeSuiteSessionId
+                                || payloadSuiteSessionId === activeSuiteSessionId
+                            )
+                        ) {
+                            const activeIndex = activeSuiteSequence.findIndex(item => item && String(item.examId) === routedExamId);
+                            this.currentSuiteSession.activeExamId = routedExamId;
+                            if (activeIndex >= 0) {
+                                this.currentSuiteSession.currentIndex = activeIndex;
+                            }
+                            this.currentSuiteSession.lastUpdate = Date.now();
+                            if (sourceWindow && !sourceWindow.closed) {
+                                this.currentSuiteSession.windowRef = sourceWindow;
+                            }
+                            if (typeof this._mirrorSessionToStorage === 'function') {
+                                this._mirrorSessionToStorage(this.currentSuiteSession);
+                            }
                         }
                         break;
                     case 'SIMULATION_SUBMIT':
                         if (windowInfo && windowInfo.reviewMode) {
                             break;
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow);
                         break;
                     default:
                 }
@@ -3043,6 +3130,11 @@
                 suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
+                suiteSequence: Array.isArray(info.suiteSequence)
+                    ? info.suiteSequence
+                    : (typeof this._buildSuiteSequencePayload === 'function' && this.currentSuiteSession
+                        ? this._buildSuiteSequencePayload(this.currentSuiteSession)
+                        : []),
                 practiceMode: typeof info.practiceMode === 'string' && info.practiceMode.trim()
                     ? info.practiceMode.trim().toLowerCase()
                     : null,
@@ -3431,6 +3523,9 @@
                 }
                 if (Number.isInteger(payload.suiteSequenceTotal)) {
                     windowInfo.suiteSequenceTotal = payload.suiteSequenceTotal;
+                }
+                if (Array.isArray(payload.suiteSequence) && payload.suiteSequence.length) {
+                    windowInfo.suiteSequence = payload.suiteSequence;
                 }
                 if (payload.url) {
                     windowInfo.latestUrl = payload.url;

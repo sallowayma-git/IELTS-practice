@@ -6355,6 +6355,12 @@
         }
 
         async _getPracticeRecordsFromScoreStorage() {
+            // 使用轻量 listSummary：achievementManager 只需 type/accuracy/duration 等元数据，
+            // 不需要 answers/correctAnswerMap/suiteEntries 等重字段。listSummary 已从 scoreInfo 投影了
+            // accuracy/duration/score 等字段，无需依赖 realData.scoreInfo 后备路径。
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
+                return await window.PracticeRecordAPI.listSummary();
+            }
             if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
                 return await window.PracticeRecordAPI.list();
             }

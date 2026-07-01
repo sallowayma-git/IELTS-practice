@@ -366,6 +366,7 @@
             }
             postMessage('REVIEW_NAVIGATE', {
                 direction,
+                examId: document.body.dataset.examId || state.examId || null,
                 sessionId: null,
                 suiteSessionId: state.suiteSessionId || null,
                 suiteReviewMode: state.suiteReviewMode === true || isManualReviewModeEnabled(),

@@ -341,6 +341,15 @@ class DataIntegrityManager {
             }
         } catch (error) {
             console.error('[DataIntegrityManager] 导入数据失败:', error);
+            // 导入已部分写入：尝试从 pre_import 备份恢复，避免半导入状态损坏数据。
+            if (backup && backup.id) {
+                try {
+                    await this._restoreFromBackup(backup);
+                    console.warn('[DataIntegrityManager] 导入失败后已从备份恢复:', backup.id);
+                } catch (restoreError) {
+                    console.error('[DataIntegrityManager] 导入失败后恢复备份也失败:', restoreError);
+                }
+            }
             throw new Error(error?.message || '导入数据失败');
         }
 
@@ -432,6 +441,33 @@ class DataIntegrityManager {
         }
 
         throw new Error('统一练习统计 API 未就绪');
+    }
+
+    // 导入失败时从 pre_import 备份恢复，避免数据停留在半导入状态。
+    // 恢复失败仅记录，不掩盖原始导入错误。
+    async _restoreFromBackup(backup) {
+        if (!backup || !backup.data) {
+            return false;
+        }
+        const snapshot = backup.data;
+        const restoredRecords = Array.isArray(snapshot.practice_records)
+            ? this._preparePracticeRecords(snapshot.practice_records)
+            : null;
+        const restoredStats = snapshot.user_stats && typeof snapshot.user_stats === 'object'
+            ? snapshot.user_stats
+            : null;
+        if (restoredRecords) {
+            await this._restorePracticeRecords(restoredRecords, restoredStats);
+        } else if (restoredStats) {
+            await this._writeUserStats(restoredStats);
+        }
+        if (snapshot.system_settings && typeof snapshot.system_settings === 'object'
+            && Object.keys(snapshot.system_settings).length > 0) {
+            const current = await this.repositories.settings.getAll();
+            const next = { ...current, ...snapshot.system_settings };
+            await this.repositories.settings.saveAll(next);
+        }
+        return true;
     }
 
     async _normalizeImportPayload(source) {
