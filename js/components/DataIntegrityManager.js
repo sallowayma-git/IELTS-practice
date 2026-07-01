@@ -250,11 +250,17 @@ class DataIntegrityManager {
                 throw new Error('备份不存在');
             }
             const data = backup.data || {};
+            // 缺失 practice_records 时不清空现有记录（settings-only 备份恢复不应删练习数据）。
+            // 仅当备份显式包含 practice_records 数组时才恢复。
             const records = Array.isArray(data.practice_records)
                 ? data.practice_records
-                : (Array.isArray(data.practiceRecords) ? data.practiceRecords : []);
+                : (Array.isArray(data.practiceRecords) ? data.practiceRecords : null);
             const stats = data.user_stats || data.userStats || null;
-            await this._restorePracticeRecords(records, stats);
+            if (records != null) {
+                await this._restorePracticeRecords(records, stats);
+            } else if (stats) {
+                await this._writeUserStats(stats);
+            }
 
             if (data.system_settings && typeof data.system_settings === 'object') {
                 const currentSettings = await this.repositories.settings.getAll();
@@ -366,10 +372,12 @@ class DataIntegrityManager {
             const data = {};
             try {
                 const practiceRecords = await this._listPracticeRecords();
-                data.practice_records = practiceRecords || [];
+                // 读取失败时用 null 而非 []，区分"读取失败"与"确实无记录"。
+                // rollback 时 null 表示不恢复 records，避免用空备份清空好数据。
+                data.practice_records = practiceRecords != null ? practiceRecords : null;
             } catch (recordsError) {
                 console.warn('[DataIntegrityManager] 获取练习记录失败:', recordsError);
-                data.practice_records = [];
+                data.practice_records = null;
             }
 
             try {
@@ -442,12 +450,15 @@ class DataIntegrityManager {
 
     // 导入失败时从 pre_import 备份恢复，避免数据停留在半导入状态。
     // 恢复失败仅记录，不掩盖原始导入错误。
+    // 注意：practice_records 为 null/undefined 时不恢复 records（读取失败时的占位），
+    // 只有非 null 的数组才视为有效备份进行恢复；空数组也需恢复（表示备份时确实无记录）。
     async _restoreFromBackup(backup) {
         if (!backup || !backup.data) {
             return false;
         }
         const snapshot = backup.data;
-        const restoredRecords = Array.isArray(snapshot.practice_records)
+        const hasRecordsBackup = snapshot.practice_records != null;
+        const restoredRecords = hasRecordsBackup && Array.isArray(snapshot.practice_records)
             ? this._preparePracticeRecords(snapshot.practice_records)
             : null;
         const restoredStats = snapshot.user_stats && typeof snapshot.user_stats === 'object'

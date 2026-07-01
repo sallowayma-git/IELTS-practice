@@ -265,8 +265,8 @@ async function testPracticeRecordApiContract(sandbox, PracticeCore, practiceStat
     ], { maxRecords: 1000 });
     assert.strictEqual(practiceState.length, 2, 'replace 应写入统一 PracticeCore store');
 
-    const deletedBySession = await api.deleteMany(['session-delete-a'], { maxRecords: 1000, updateStats: true });
-    assert.strictEqual(deletedBySession.deletedCount, 1, 'deleteMany 应支持按 sessionId 删除');
+    const deletedBySession = await api.deleteMany(['session-delete-a'], { maxRecords: 1000, updateStats: true, matchBy: 'sessionId' });
+    assert.strictEqual(deletedBySession.deletedCount, 1, 'deleteMany 应支持按 sessionId 删除 (matchBy: sessionId)');
     assert.deepStrictEqual(
         practiceState.map((record) => record.id),
         ['record-delete-b'],

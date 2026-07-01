@@ -392,7 +392,10 @@
     }
 
     async function recalculateStats() {
-        const records = await list();
+        // 使用轻量 listSummary 避免反序列化+克隆完整记录（answers/suiteEntries/realData 等重字段）。
+        // summary 已包含 applyRecordToStats 所需的全部字段：duration, accuracy, metadata.category,
+        // date/endTime/startTime/createdAt, totalQuestions, correctAnswers, questionTypePerformance。
+        const records = await listSummary();
         const stats = getDefaultStats();
         (Array.isArray(records) ? records : []).forEach((record) => applyRecordToStats(stats, record));
         return await writeStats(stats);
@@ -472,6 +475,10 @@
     /** 返回记录总数，不加载记录数组到内存 */
     async function count(options = {}) {
         const store = getRecordStore();
+        if (store && typeof store.countPracticeRecords === 'function') {
+            return await store.countPracticeRecords();
+        }
+        // 回退：store 不支持 count 时从 summary 长度获取
         if (store && typeof store.listPracticeRecordSummaries === 'function') {
             const summaries = await store.listPracticeRecordSummaries();
             return Array.isArray(summaries) ? summaries.length : 0;
@@ -502,16 +509,32 @@
         }
         const scoreInfo = record.scoreInfo || {};
         const metadata = record.metadata || {};
+        // 轻量 suiteEntries 投影：仅保留签名字段，不含 answers/correctAnswerMap/realData
+        const rawSuiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+        const suiteEntries = rawSuiteEntries.map(function (entry) {
+            if (!entry || typeof entry !== 'object') { return null; }
+            const entryMeta = entry.metadata || {};
+            const entryScore = entry.scoreInfo || {};
+            return {
+                id: entry.id || '',
+                examId: entry.examId || entryMeta.examId || '',
+                title: entry.title || entryMeta.examTitle || '',
+                percentage: Number(entry.percentage != null ? entry.percentage : entryScore.percentage) || 0,
+                duration: Number(entry.duration != null ? entry.duration : (entry.rawData && entry.rawData.duration)) || 0
+            };
+        }).filter(Boolean);
         return {
             id: record.id || record.sessionId || '',
             sessionId: record.sessionId || null,
             examId: record.examId || metadata.examId || null,
             title: record.title || metadata.examTitle || '',
             type: record.type || metadata.type || 'reading',
+            practiceType: record.practiceType || metadata.practiceType || metadata.examType || null,
+            url: record.url || metadata.url || null,
             startTime: record.startTime || null,
             endTime: record.endTime || null,
             date: record.date || null,
-            duration: Number(record.duration) || 0,
+            duration: Number(record.duration != null ? record.duration : (scoreInfo.duration != null ? scoreInfo.duration : scoreInfo.timeSpent)) || 0,
             percentage: Number(record.percentage != null ? record.percentage : scoreInfo.percentage) || 0,
             accuracy: Number(record.accuracy != null ? record.accuracy : scoreInfo.accuracy) || 0,
             score: Number(record.score != null ? record.score : scoreInfo.score) || 0,
@@ -519,13 +542,29 @@
             correctAnswers: Number(record.correctAnswers != null ? record.correctAnswers : scoreInfo.correct) || 0,
             status: record.status || 'completed',
             suiteMode: Boolean(record.suiteMode),
-            suiteEntryCount: Array.isArray(record.suiteEntries) ? record.suiteEntries.length : 0,
+            suiteEntryCount: rawSuiteEntries.length,
+            suiteEntries: suiteEntries,
             suiteSessionId: record.suiteSessionId || metadata.suiteSessionId || null,
+            questionTypePerformance: record.questionTypePerformance || null,
+            scoreInfo: {
+                accuracy: scoreInfo.accuracy != null ? scoreInfo.accuracy : null,
+                duration: scoreInfo.duration != null ? scoreInfo.duration : null,
+                timeSpent: scoreInfo.timeSpent != null ? scoreInfo.timeSpent : null,
+                percentage: scoreInfo.percentage != null ? scoreInfo.percentage : null,
+                score: scoreInfo.score != null ? scoreInfo.score : null,
+                total: scoreInfo.total != null ? scoreInfo.total : null,
+                correct: scoreInfo.correct != null ? scoreInfo.correct : null
+            },
             metadata: {
                 category: metadata.category || record.category || null,
                 examTitle: metadata.examTitle || record.title || '',
                 frequency: metadata.frequency || record.frequency || 'unknown',
-                type: metadata.type || record.type || null
+                type: metadata.type || record.type || null,
+                examType: metadata.examType || null,
+                practiceType: metadata.practiceType || null,
+                examId: metadata.examId || null,
+                title: metadata.title || null,
+                url: metadata.url || null
             },
             updatedAt: record.updatedAt || null,
             createdAt: record.createdAt || null
@@ -680,6 +719,9 @@
         }
 
         const idSet = new Set(ids);
+        // 默认仅按 record.id 删除，避免共享 sessionId 的不同记录被误删。
+        // matchBy: 'sessionId' 时才按 sessionId 匹配（用于 suite 子记录清理等显式场景）。
+        const matchBySessionId = options.matchBy === 'sessionId';
         const records = await list();
         const deletedRecords = [];
         const remainingRecords = [];
@@ -687,7 +729,9 @@
         (Array.isArray(records) ? records : []).forEach((record) => {
             const recordId = toIdString(record && record.id);
             const sessionId = toIdString(record && record.sessionId);
-            if ((recordId && idSet.has(recordId)) || (sessionId && idSet.has(sessionId))) {
+            const idMatch = recordId && idSet.has(recordId);
+            const sessionMatch = matchBySessionId && sessionId && idSet.has(sessionId);
+            if (idMatch || sessionMatch) {
                 deletedRecords.push(record);
                 return;
             }
