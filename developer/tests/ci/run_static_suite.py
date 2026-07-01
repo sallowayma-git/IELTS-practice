@@ -1109,7 +1109,52 @@ def _extract_registered_payload(path: Path) -> Optional[dict]:
     try:
         payload = json.loads(match.group(2))
     except json.JSONDecodeError:
-        payload = _extract_registered_payload_from_js_object(match.group(2))
+        payload = _extract_registered_payload_via_node(path)
+        if not payload:
+            payload = _extract_registered_payload_from_js_object(match.group(2))
+    return payload if isinstance(payload, dict) else None
+
+
+def _extract_registered_payload_via_node(path: Path) -> Optional[dict]:
+    script = r"""
+const fs = require('fs');
+const vm = require('vm');
+const file = process.argv[1];
+const source = fs.readFileSync(file, 'utf8');
+let payload = null;
+const registry = {
+  register(id, data) {
+    payload = data || null;
+  }
+};
+const sandbox = {
+  console: { log() {}, warn() {}, error() {}, info() {} },
+  __READING_EXAM_DATA__: registry,
+  __READING_EXPLANATION_DATA__: registry
+};
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.runInNewContext(source, sandbox, { filename: file, timeout: 1000 });
+process.stdout.write(JSON.stringify(payload));
+"""
+    try:
+        completed = subprocess.run(
+            ["node", "-e", script, str(path)],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=5,
+            check=False,
+        )
+    except Exception:
+        return None
+    if completed.returncode != 0:
+        return None
+    try:
+        payload = json.loads(completed.stdout or "null")
+    except Exception:
+        return None
     return payload if isinstance(payload, dict) else None
 
 
@@ -1662,10 +1707,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
-    complete_exam_data = REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js"
-    complete_meta_passed, complete_meta_detail = _ensure_exists(complete_exam_data)
-    results.append(_format_result("complete-exam-data.js 存在性", complete_meta_passed, complete_meta_detail))
-    all_passed &= complete_meta_passed
+    reading_manifest = REPO_ROOT / "assets" / "generated" / "reading-exams" / "manifest.js"
+    reading_manifest_passed, reading_manifest_detail = _ensure_exists(reading_manifest)
+    results.append(_format_result("reading-exams manifest.js 存在性", reading_manifest_passed, reading_manifest_detail))
+    all_passed &= reading_manifest_passed
 
     path_map_path = REPO_ROOT / "assets" / "data" / "path-map.json"
     path_map_passed, path_map_detail = _check_json_path_map(path_map_path)

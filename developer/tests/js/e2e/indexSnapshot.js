@@ -17,6 +17,8 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
     </head>
 
     <body class="hero-body boot-active" data-theme="heroui">
+        <!-- NewJeans Theme Background -->
+        <div class="newjeans-bg-container" aria-hidden="true"></div>
         <div id="boot-overlay" role="status" aria-live="polite">
             <div class="boot-panel">
                 <div class="boot-logo">SHUI · IELTS</div>
@@ -174,6 +176,16 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         ></span>
                     </button>
                     <h2 id="browse-title" class="hero-panel__title" style="margin: 0;">题库浏览</h2>
+                    <button
+                        id="reading-memorize-exit-btn"
+                        class="reading-memorize-exit-btn"
+                        type="button"
+                        hidden
+                        aria-label="退出阅读背题模式"
+                        title="退出阅读背题模式"
+                    >
+                        退出背题
+                    </button>
                     <div
                         class="browse-preference-panel"
                         id="browse-preference-panel"
@@ -954,6 +966,29 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                             class="theme-card-btn"
                                             data-index-action="switch-bg-theme"
                                             data-action-value="floral-bloom"
+                                        >
+                                            应用
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- NewJeans -->
+                            <div class="theme-card">
+                                <div class="theme-card-bg theme-bg-newjeans"></div>
+                                <div class="theme-preview-bunny"></div>
+                                <div class="theme-card-glass-layer">
+                                    <div class="theme-card-header">
+                                        <h4 class="theme-card-title">NewJeans</h4>
+                                        <div class="theme-card-subtitle">
+                                            <span>🐰 Tokki Flower</span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-footer">
+                                        <span class="theme-card-tag">动态</span>
+                                        <button
+                                            class="theme-card-btn"
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="newjeans"
                                         >
                                             应用
                                         </button>

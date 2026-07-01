@@ -1290,60 +1290,10 @@ class StorageManager {
                 }
             }
 
-            // 迁移 MyMelody 遗留键（IndexedDB 中的旧键）
-            if (!await this.get('my_melody_migration_completed', null, { skipReady })) {
-                console.log('[Storage] 检查 MyMelody 遗留键迁移...');
-                const oldMyMelodyKey = this.getKey('practice_records'); // 'exam_system_practice_records'
-                try {
-                    const legacyMyMelodyData = await this.getFromIndexedDB(oldMyMelodyKey);
-                    if (legacyMyMelodyData) {
-                        let legacyData;
-                        try {
-                            const parsed = JSON.parse(legacyMyMelodyData);
-                            legacyData = parsed.data || parsed;
-                        } catch (parseError) {
-                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        if (!Array.isArray(legacyData)) {
-                            console.warn('[Storage] MyMelody 遗留数据非数组，跳过');
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        if (legacyData.length === 0) {
-                            console.log('[Storage] MyMelody 旧数据为空，跳过迁移');
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        await this.mergePracticeRecordsCanonical(legacyData, { skipReady });
-
-                        // 删除旧键
-                        await this.removeFromIndexedDB(oldMyMelodyKey);
-                        console.log(`[Storage] 成功迁移 MyMelody 数据: ${legacyData.length} 项合并到 practice_records`);
-                    } else {
-                        console.log('[Storage] 无 MyMelody 遗留数据需要迁移');
-                    }
-                    await this.set('my_melody_migration_completed', true, { skipReady });
-                } catch (migrateError) {
-                    console.error('[Storage] MyMelody 迁移失败:', migrateError);
-                    const message = migrateError && migrateError.message ? migrateError.message : String(migrateError);
-                    if (!/PracticeRecordAPI|unified store not ready/i.test(message)) {
-                        await this.set('my_melody_migration_completed', true, { skipReady }); // 避免无效数据无限重试
-                    }
-                }
-            } else {
-                console.log('[Storage] MyMelody 迁移已完成，跳过');
-            }
-
         } catch (error) {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true, { skipReady });
-            await this.set('my_melody_migration_completed', true, { skipReady });
         }
     }
 

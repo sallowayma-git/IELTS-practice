@@ -192,7 +192,7 @@
                 return registry.runConsistencyChecks(names);
             }
         };
-        window.PracticeCore.__installInternalRepositories(internalApi);
+        window.PracticeCore.__installInternalRepositories(internalApi, { createInternalOptions });
         if (window.__installStorageInternalAccess) {
             try {
                 delete window.__installStorageInternalAccess;

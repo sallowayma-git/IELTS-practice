@@ -145,8 +145,11 @@ class PracticeRecorder {
 
         const sources = [
             () => Array.isArray(window.examIndex) ? window.examIndex : null,
-            () => Array.isArray(window.completeExamIndex)
-                ? window.completeExamIndex.map(exam => ({ ...exam, type: exam.type || 'reading' }))
+            () => typeof window.getReadingExamIndex === 'function'
+                ? window.getReadingExamIndex().map(exam => ({ ...exam, type: exam.type || 'reading' }))
+                : null,
+            () => Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map(exam => ({ ...exam, type: exam.type || 'reading' }))
                 : null,
             () => Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : null
         ];
@@ -1642,6 +1645,15 @@ class PracticeRecorder {
     }
 
     async listPracticeRecordsForStats() {
+        // 统计读取只需元数据字段，使用轻量 listSummary 避免反序列化+克隆完整记录
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
+            try {
+                const records = await window.PracticeRecordAPI.listSummary();
+                return Array.isArray(records) ? records : [];
+            } catch (error) {
+                console.warn('[PracticeRecorder] PracticeRecordAPI.listSummary 统计读取失败:', error);
+            }
+        }
         if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
             try {
                 const records = await window.PracticeRecordAPI.list();
@@ -1761,7 +1773,10 @@ class PracticeRecorder {
      */
     async exportData(format = 'json') {
         const normalizedFormat = String(format || 'json').toLowerCase();
-        const records = await this.getPracticeRecords();
+        // CSV 导出只需元数据字段，使用轻量 listSummary 避免加载完整记录
+        const records = normalizedFormat === 'csv'
+            ? await this.listPracticeRecordsForStats()
+            : await this.getPracticeRecords();
         if (normalizedFormat === 'csv') {
             return this.convertRecordsToCSV(records);
         }

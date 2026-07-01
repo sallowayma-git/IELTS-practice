@@ -452,6 +452,86 @@
         return Array.isArray(records) ? records : [];
     }
 
+    /**
+     * 轻量投影查询：返回每条记录的元数据摘要，不含 answers/correctAnswerMap/
+     * suiteEntries[]/realData 等重字段。底层以 clone:false 读取原始数组后即时映射，
+     * 避免大数据量下 structuredClone 全部记录导致内存溢出和渲染卡顿。
+     * 供练习历史列表签名、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用。
+     */
+    async function listSummary(options = {}) {
+        const store = getRecordStore();
+        if (!store || typeof store.listPracticeRecordSummaries !== 'function') {
+            // 回退：store 尚未支持 summary 时从完整记录投影
+            const records = await list();
+            return records.map(_projectSummary).filter(Boolean);
+        }
+        const summaries = await store.listPracticeRecordSummaries();
+        return Array.isArray(summaries) ? summaries : [];
+    }
+
+    /** 返回记录总数，不加载记录数组到内存 */
+    async function count(options = {}) {
+        const store = getRecordStore();
+        if (store && typeof store.listPracticeRecordSummaries === 'function') {
+            const summaries = await store.listPracticeRecordSummaries();
+            return Array.isArray(summaries) ? summaries.length : 0;
+        }
+        const records = await list();
+        return Array.isArray(records) ? records.length : 0;
+    }
+
+    /** 返回去重后的 examId 列表，供 overview 统计使用 */
+    async function distinctExamIds(options = {}) {
+        const summaries = await listSummary(options);
+        const seen = new Set();
+        const result = [];
+        for (let i = 0; i < summaries.length; i += 1) {
+            const examId = summaries[i] && summaries[i].examId;
+            if (examId && !seen.has(examId)) {
+                seen.add(examId);
+                result.push(examId);
+            }
+        }
+        return result;
+    }
+
+    /** 纯函数投影：从单条完整记录提取轻量 summary */
+    function _projectSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scoreInfo = record.scoreInfo || {};
+        const metadata = record.metadata || {};
+        return {
+            id: record.id || record.sessionId || '',
+            sessionId: record.sessionId || null,
+            examId: record.examId || metadata.examId || null,
+            title: record.title || metadata.examTitle || '',
+            type: record.type || metadata.type || 'reading',
+            startTime: record.startTime || null,
+            endTime: record.endTime || null,
+            date: record.date || null,
+            duration: Number(record.duration) || 0,
+            percentage: Number(record.percentage != null ? record.percentage : scoreInfo.percentage) || 0,
+            accuracy: Number(record.accuracy != null ? record.accuracy : scoreInfo.accuracy) || 0,
+            score: Number(record.score != null ? record.score : scoreInfo.score) || 0,
+            totalQuestions: Number(record.totalQuestions != null ? record.totalQuestions : scoreInfo.total) || 0,
+            correctAnswers: Number(record.correctAnswers != null ? record.correctAnswers : scoreInfo.correct) || 0,
+            status: record.status || 'completed',
+            suiteMode: Boolean(record.suiteMode),
+            suiteEntryCount: Array.isArray(record.suiteEntries) ? record.suiteEntries.length : 0,
+            suiteSessionId: record.suiteSessionId || metadata.suiteSessionId || null,
+            metadata: {
+                category: metadata.category || record.category || null,
+                examTitle: metadata.examTitle || record.title || '',
+                frequency: metadata.frequency || record.frequency || 'unknown',
+                type: metadata.type || record.type || null
+            },
+            updatedAt: record.updatedAt || null,
+            createdAt: record.createdAt || null
+        };
+    }
+
     async function getById(recordId) {
         const targetId = toIdString(recordId);
         if (!targetId) {
@@ -723,6 +803,9 @@
         __stable: true,
         version: '1.0.0',
         list,
+        listSummary,
+        count,
+        distinctExamIds,
         getById,
         replace,
         mergeRecords,

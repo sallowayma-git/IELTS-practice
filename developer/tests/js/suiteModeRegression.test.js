@@ -378,12 +378,14 @@ async function run() {
         session.draftsByExam['reading-p2'] = {
             answers: { q1: 'B' },
             highlights: p2Highlights,
+            noteText: 'P2 draft note',
             scrollY: 288,
             updatedAt: Date.now()
         };
 
         const p2Replay = app._buildSuiteReplayEntry(session, 'reading-p2');
         assert.deepStrictEqual(p2Replay.highlights, p2Highlights, '回顾态 replay 必须从 P2 draft 回灌高亮');
+        assert.strictEqual(p2Replay.noteText, 'P2 draft note', '回顾态 replay 必须从 P2 draft 回灌笔记正文');
         assert.strictEqual(p2Replay.scrollY, 288, '回顾态 replay 必须从 P2 draft 回灌滚动位置');
 
         let savedRecord = null;
@@ -395,6 +397,7 @@ async function run() {
         await app.finalizeSuiteRecord(session);
         const p2Entry = savedRecord.suiteEntries.find(entry => entry.examId === 'reading-p2');
         assert.deepStrictEqual(p2Entry.highlights, p2Highlights, '最终记录也必须保留 draft 中的 P2 高亮');
+        assert.strictEqual(p2Entry.noteText, 'P2 draft note', '最终记录也必须保留 draft 中的 P2 笔记正文');
         assert.strictEqual(p2Entry.scrollY, 288, '最终记录也必须保留 draft 中的 P2 滚动位置');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(p2Entry.rawData || {}, 'highlights'), false, '最终 entry.rawData 不应重复持久化高亮');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecord.metadata || {}, 'suiteEntries'), false, 'metadata 不应重复持久化 suiteEntries');
@@ -656,6 +659,57 @@ async function run() {
         assert.strictEqual(routedPayload.data.direction, 'prev', '路由方向必须正确');
     }
 
+    // Case 2.4.1: inline simulation 草稿必须按 payload.examId 分区保存
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_inline_draft_route');
+        session.currentIndex = 0;
+        session.activeExamId = 'reading-p1';
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const examWindow = createStubWindow('ielts-suite-mode-tab');
+        app.setupExamWindowCommunication(examWindow, 'reading-p1', session.sequence[0].exam, {
+            suiteSessionId: session.id,
+            suiteFlowMode: 'simulation',
+            sequenceIndex: 0,
+            sequenceTotal: 3
+        });
+
+        const info = app.ensureExamWindowSession('reading-p1', examWindow);
+        info.expectedSessionId = 'expected_inline_session';
+        info.suiteSessionId = session.id;
+        app.examWindows.set('reading-p1', info);
+
+        const handler = app.messageHandlers.get('reading-p1');
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'SIMULATION_DRAFT_SYNC',
+                data: {
+                    examId: 'reading-p2',
+                    suiteSessionId: session.id,
+                    sessionId: 'stale_inline_session',
+                    draft: {
+                        answers: { q1: 'P2 answer' },
+                        highlights: [{ scope: 'left', text: 'P2 highlight' }],
+                        noteText: 'P2 note',
+                        scrollY: 222,
+                        updatedAt: 2000
+                    },
+                    draftUpdatedAt: 2000,
+                    source: 'practice_page'
+                },
+                source: 'practice_page'
+            }
+        });
+
+        assert.strictEqual(session.draftsByExam['reading-p1'], undefined, 'P2 草稿不能误写到 P1');
+        assert.deepStrictEqual(session.draftsByExam['reading-p2'].answers, { q1: 'P2 answer' }, 'P2 草稿应按 payload.examId 保存');
+        assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应保存');
+    }
+
     // Case 2.5: activeExamId 漂移但 currentIndex 正确时，导航应自愈继续
     {
         const app = createApp(windowStub);
@@ -710,6 +764,77 @@ async function run() {
 
         assert.strictEqual(handled, true, '最后一篇提交应成功');
         assert.strictEqual(finalizeCount, 1, '最后一篇提交后应立即 finalize');
+    }
+
+    // Case 3.0.1: inline simulation 整套提交应一次 finalize 并保留三篇草稿态
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_inline_submit');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        let finalizeCount = 0;
+        app.finalizeSuiteRecord = async (handledSession) => {
+            finalizeCount += 1;
+            assert.strictEqual(handledSession, session, '应 finalize 当前套题 session');
+        };
+
+        const handled = await app.handleSuitePracticeComplete('reading-p1', {
+            suiteSessionId: session.id,
+            suiteSubmission: true,
+            duration: 3600,
+            suiteEntries: [
+                {
+                    examId: 'reading-p1',
+                    title: 'Passage 1',
+                    category: 'P1',
+                    duration: 1200,
+                    answers: { q1: 'A' },
+                    answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                    highlights: [{ scope: 'left', text: 'P1 highlight' }],
+                    noteText: 'P1 note',
+                    scrollY: 111,
+                    updatedAt: 1001
+                },
+                {
+                    examId: 'reading-p2',
+                    title: 'Passage 2',
+                    category: 'P2',
+                    duration: 1100,
+                    answers: { q1: 'B' },
+                    answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                    highlights: [{ scope: 'groups', text: 'P2 highlight' }],
+                    noteText: 'P2 note',
+                    scrollY: 222,
+                    updatedAt: 1002
+                },
+                {
+                    examId: 'reading-p3',
+                    title: 'Passage 3',
+                    category: 'P3',
+                    duration: 1300,
+                    answers: { q1: 'C' },
+                    answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                    highlights: [{ scope: 'left', text: 'P3 highlight' }],
+                    noteText: 'P3 note',
+                    scrollY: 333,
+                    updatedAt: 1003
+                }
+            ]
+        }, session.windowRef);
+
+        assert.strictEqual(handled, true, 'inline 整套提交应被处理');
+        assert.strictEqual(finalizeCount, 1, 'inline 整套提交只 finalize 一次');
+        assert.strictEqual(session.currentIndex, 3, '整套提交后 currentIndex 应到末尾');
+        assert.strictEqual(session.results.length, 3, '整套提交应填充三篇 result');
+        assert.deepStrictEqual(plain(session.results.map(item => item.examId)), ['reading-p1', 'reading-p2', 'reading-p3'], 'result 顺序应跟 sequence 一致');
+        assert.strictEqual(session.draftsByExam['reading-p1'].noteText, 'P1 note', 'P1 noteText 应入 draft');
+        assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应入 draft');
+        assert.strictEqual(session.draftsByExam['reading-p3'].scrollY, 333, 'P3 scrollY 应入 draft');
+        assert.deepStrictEqual(plain(session.draftsByExam['reading-p2'].highlights), [{ scope: 'groups', text: 'P2 highlight' }], 'P2 高亮应隔离保存');
     }
 
     // Case 3.1: 如果最后一篇已有导航快照，最终提交仍应覆盖并 finalize
@@ -805,6 +930,8 @@ async function run() {
         assert(ctxMsg, '应收到 SIMULATION_CONTEXT');
         assert.strictEqual(ctxMsg.data.currentIndex, 0, 'currentIndex 应为 0');
         assert.strictEqual(ctxMsg.data.total, 3, 'total 应为 3');
+        assert.strictEqual(Array.isArray(ctxMsg.data.suiteSequence), true, 'SIMULATION_CONTEXT 应包含 suiteSequence');
+        assert.deepStrictEqual(ctxMsg.data.suiteSequence.map(item => item.examId), ['reading-p1', 'reading-p2', 'reading-p3'], 'suiteSequence 应包含三篇 examId');
         assert.strictEqual(ctxMsg.data.isLast, false, 'P1 不是最后一篇');
         assert.strictEqual(ctxMsg.data.canPrev, false, 'P1 不能向前');
         assert.strictEqual(ctxMsg.data.canNext, true, 'P1 可以向后');
@@ -816,6 +943,22 @@ async function run() {
         const ctxP3 = targetWindow._messages.filter(m => m && m.type === 'SIMULATION_CONTEXT')[1];
         assert.strictEqual(ctxP3.data.isLast, true, 'P3 应标记为最后一篇');
         assert.strictEqual(ctxP3.data.canNext, false, 'P3 不能向后导航');
+    }
+
+    // Case 6.1: INIT_SESSION payload 应携带三篇 suiteSequence
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_init_sequence');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        const initWindow = createStubWindow('init-window');
+        const windowInfo = app.ensureExamWindowSession('reading-p1', initWindow);
+        windowInfo.suiteSessionId = session.id;
+        windowInfo.suiteFlowMode = 'simulation';
+        const payload = app._buildExamInitPayload('reading-p1', windowInfo);
+        assert.strictEqual(Array.isArray(payload.suiteSequence), true, 'INIT_SESSION 应包含 suiteSequence');
+        assert.deepStrictEqual(payload.suiteSequence.map(item => item.examId), ['reading-p1', 'reading-p2', 'reading-p3'], 'INIT suiteSequence 应覆盖三篇');
+        assert.deepStrictEqual(payload.suiteSequence.map(item => item.category), ['P1', 'P2', 'P3'], 'INIT suiteSequence 应带 category');
     }
 
     // Case 8: handleSessionReady 应触发首篇模拟上下文下发

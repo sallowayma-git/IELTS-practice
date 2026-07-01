@@ -166,7 +166,7 @@ function testCompatPatchRegistry() {
 function testReadingLaunchHost() {
     const windowStub = {
         __READING_EXAM_MANIFEST__: {
-            'p1-reading': { dataKey: 'p1-reading-data' }
+            'p1-reading': { dataKey: 'p1-reading-data', script: 'dummy.js' }
         },
         buildResourcePath(exam, kind) {
             return `${kind}/${exam.pdfFilename || ''}`;
@@ -215,7 +215,7 @@ function testReadingLaunchHost() {
 }
 
 function testMainOpenExamDoesNotFallbackToRawHtml() {
-    const source = fs.readFileSync(path.join(repoRoot, 'js/main.js'), 'utf8');
+    const source = fs.readFileSync(path.join(repoRoot, 'js/main.js'), 'utf8').replace(/\r\n/g, '\n');
     const match = source.match(/function openExam\s*\([^)]*\)\s*\{([\s\S]*?)\n\}\n\nfunction viewPDF/);
     assert(match, 'main.js 应保留 openExam 函数，并位于 viewPDF 之前');
 

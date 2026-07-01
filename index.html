@@ -15,6 +15,10 @@
     </head>
 
     <body class="hero-body boot-active" data-theme="heroui">
+        <!-- NewJeans Theme Background -->
+        <div class="newjeans-bg-container" aria-hidden="true"></div>
+        <!-- ASCII Flower Background -->
+        <div class="ascii-bg-container" aria-hidden="true"></div>
         <div id="boot-overlay" role="status" aria-live="polite">
             <div class="boot-panel">
                 <div class="boot-logo">SHUI · IELTS</div>
@@ -43,22 +47,8 @@
             <div class="hero-header">
                 <h1 class="hero-brand-title" aria-label="IELTS Atlas">
                     <span class="hero-brand-mark" aria-hidden="true">
-                        <svg
-                            viewBox="0 0 24 24"
-                            width="1em"
-                            height="1em"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.75"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <path d="M4.5 20V8.2a2.7 2.7 0 0 1 2.7-2.7H10"></path>
-                            <path d="M19.5 20V8.2a2.7 2.7 0 0 0-2.7-2.7H14"></path>
-                            <path d="M7.2 16.8H10a2 2 0 0 1 2 2V6.5a2 2 0 0 0-2-2H7.2a2.7 2.7 0 0 0-2.7 2.7v11.6a2 2 0 0 1 2-2Z"></path>
-                            <path d="M16.8 16.8H14a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2h2.8a2.7 2.7 0 0 1 2.7 2.7v11.6a2 2 0 0 0-2-2Z"></path>
-                            <path d="M9 9.5h1.3M13.7 9.5H15"></path>
-                        </svg>
+                        <img src="assets/images/logo.svg" alt="IELTS Atlas Logo" style="width: 80%; height: 80%; object-fit: contain; filter: drop-shadow(0 2px 8px rgba(15, 23, 42, 0.08));">
+
                     </span>
                     <span class="hero-brand-text">IELTS Atlas</span>
                     <span class="hero-brand-subtitle"
@@ -165,6 +155,16 @@
                         ></span>
                     </button>
                     <h2 id="browse-title" class="hero-panel__title">题库浏览</h2>
+                    <button
+                        id="reading-memorize-exit-btn"
+                        class="reading-memorize-exit-btn"
+                        type="button"
+                        hidden
+                        aria-label="退出阅读背题模式"
+                        title="退出阅读背题模式"
+                    >
+                        退出背题
+                    </button>
                     <div
                         class="browse-preference-panel"
                         id="browse-preference-panel"
@@ -1241,6 +1241,47 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- NewJeans -->
+                            <div class="theme-card">
+                                <div class="theme-card-bg theme-bg-newjeans"></div>
+                                <div class="theme-preview-bunny"></div>
+                                <div class="theme-card-glass-layer">
+                                    <div class="theme-card-header">
+                                        <h4 class="theme-card-title">NewJeans</h4>
+                                        <div class="theme-card-subtitle">
+                                            <span>🐰 Tokki Flower</span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-footer">
+                                        <span class="theme-card-tag">动态</span>
+                                        <button
+                                            class="theme-card-btn"
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="newjeans" > 应用 </button> </div> </div> </div>
+                            <!-- 墨染字花 -->
+                            <div class="theme-card">
+                                <div class="theme-card-bg theme-bg-ascii"></div>
+                                <div class="theme-preview-ascii" aria-hidden="true">
+                                    <div class="tulip-silhouette">
+                                        <div class="tulip-petal-left"></div>
+                                        <div class="tulip-petal-center"></div>
+                                        <div class="tulip-petal-right"></div>
+                                        <div class="tulip-stem"></div>
+                                    </div>
+                                </div>
+                                <div class="theme-card-glass-layer">
+                                    <div class="theme-card-header">
+                                        <h4 class="theme-card-title">墨染字花</h4>
+                                        <div class="theme-card-subtitle">
+                                            <span>🌷 ASCII Tulip</span>
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-footer">
+                                        <span class="theme-card-tag">静态</span>
+                                        <button
+                                            class="theme-card-btn"
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="ascii-flower" > 应用 </button> </div> </div> </div>
                         </div>
                     </div>
                 </div>
