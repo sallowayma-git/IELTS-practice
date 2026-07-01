@@ -547,8 +547,14 @@ function createTotpRouter(options = {}) {
 
     async function rotateAuthenticatedSession(req, user, options = {}) {
         const safeUser = publicUser(user);
+        const authSessionAudience = options.authSessionAudience
+            || req.session?.authSession?.audience
+            || (safeUser.role === 'admin' ? 'admin' : 'business');
         if (options.revokeOtherSessions && authStore && typeof authStore.deleteSessionsForUser === 'function') {
             await authStore.deleteSessionsForUser(safeUser.id, req.sessionID);
+        }
+        if (typeof req.revokeAuthSession === 'function') {
+            await req.revokeAuthSession();
         }
         await new Promise((resolve, reject) => {
             req.session.regenerate((error) => error ? reject(error) : resolve());
@@ -556,6 +562,9 @@ function createTotpRouter(options = {}) {
         req.session.user = safeUser;
         if (options.totpVerified) {
             markSessionTotpVerified(req, safeUser);
+        }
+        if (typeof req.establishAuthSession === 'function') {
+            await req.establishAuthSession(safeUser, { audience: authSessionAudience });
         }
         return safeUser;
     }
@@ -605,6 +614,9 @@ function createTotpRouter(options = {}) {
                 user,
                 secretEncrypted: encryptSecret(secret, config.encryptionKeySource),
                 startedAt: Date.now(),
+                authSessionAudience: req.session.pendingTotpSetup?.authSessionAudience
+                    || req.session.authSession?.audience
+                    || (user.role === 'admin' ? 'admin' : 'business'),
                 forced: !req.session.user
             };
             return res.json({
@@ -659,7 +671,8 @@ function createTotpRouter(options = {}) {
             );
             const safeUser = await rotateAuthenticatedSession(req, user, {
                 revokeOtherSessions: true,
-                totpVerified: true
+                totpVerified: true,
+                authSessionAudience: setup.authSessionAudience
             });
             return res.json({
                 user: safeUser,
@@ -689,7 +702,10 @@ function createTotpRouter(options = {}) {
             if (!parsed.success || !(await verifyStoredToken(pending.user.id, parsed.data.token))) {
                 return res.status(401).json({ error: 'TOTP code is invalid' });
             }
-            const user = await rotateAuthenticatedSession(req, pending.user, { totpVerified: true });
+            const user = await rotateAuthenticatedSession(req, pending.user, {
+                totpVerified: true,
+                authSessionAudience: pending.authSessionAudience
+            });
             return res.json({ user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);

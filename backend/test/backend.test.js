@@ -12,6 +12,7 @@ const session = require('express-session');
 const { createApp } = require('../src/app');
 const { MemoryAuthStore, PostgresAuthStore, createRateLimiter, normalizeRateLimitKey } = require('../src/auth');
 const { MemoryAuthHandoffStore } = require('../src/authHandoff');
+const { MemoryAuthSessionStore } = require('../src/authSessions');
 const { MemoryAdminStore, PostgresAdminStore, createTrafficMiddleware, normalizeAdminSearchQuery, normalizeTrafficEvent, serializeRecord } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { runMigrations } = require('../src/migrations');
@@ -342,8 +343,10 @@ async function createClient(options = {}) {
     const practiceStore = new MemoryPracticeRecordStore();
     const adminStore = new MemoryAdminStore({ authStore, practiceStore, totpStore, sessionStore });
     const authHandoffStore = new MemoryAuthHandoffStore();
+    const authSessionStore = new MemoryAuthSessionStore();
     const app = createApp({
         authStore,
+        authSessionStore,
         totpStore,
         practiceStore,
         adminStore,
@@ -478,6 +481,7 @@ async function createClient(options = {}) {
     return {
         sessionStore,
         authStore,
+        authSessionStore,
         adminStore,
         authHandoffStore,
         totpStore,
@@ -1103,6 +1107,62 @@ test('authenticated APIs require the session verifier companion cookie', async (
         assert.equal(logout.response.status, 200);
         const fullReplayAfterLogout = await fullCookieReplay.request('GET', '/api/auth/me');
         assert.equal(fullReplayAfterLogout.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('authenticated APIs require an active server-side auth session registry entry', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'registry_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const activeSessions = Array.from(client.authSessionStore.sessions.values())
+            .filter((record) => record.user_id === created.json.user.id && !record.revoked_at);
+        assert.equal(activeSessions.length, 1);
+        assert.equal(activeSessions[0].audience, 'business');
+
+        const fullCookieReplay = createFullCookieReplay(client);
+        const replayBeforeRevoke = await fullCookieReplay.request('GET', '/api/auth/me');
+        assert.equal(replayBeforeRevoke.response.status, 200);
+
+        await client.authSessionStore.revokeSession(activeSessions[0].id);
+        const currentAfterRevoke = await client.request('GET', '/api/auth/me');
+        assert.equal(currentAfterRevoke.response.status, 401);
+        const replayAfterRevoke = await fullCookieReplay.request('GET', '/api/auth/me');
+        assert.equal(replayAfterRevoke.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth session registry rejects copied sessions on the wrong onion audience', async () => {
+    const client = await createClient();
+    try {
+        await client.csrf();
+        const created = await client.request('POST', '/api/auth/register', {
+            username: 'registry_audience_user',
+            password: 'StrongPass1'
+        }, {
+            headers: {
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(created.response.status, 201);
+
+        const businessMe = await client.request('GET', '/api/auth/me', undefined, {
+            headers: {
+                'x-ielts-onion-audience': 'business'
+            }
+        });
+        assert.equal(businessMe.response.status, 200);
+
+        const wrongAudience = await client.request('GET', '/api/auth/me', undefined, {
+            headers: {
+                'x-ielts-onion-audience': 'admin'
+            }
+        });
+        assert.equal(wrongAudience.response.status, 401);
     } finally {
         await client.close();
     }
@@ -2990,8 +3050,25 @@ test('auth handoff creates a one-time business session ticket', async () => {
         const state = getRedirectParam(start.response.headers.get('location'), 'state');
         assert(state);
 
-        const created = await register(authSession, 'handoff_business', 'StrongPass1');
+        await authSession.csrf();
+        const created = await authSession.request('POST', '/api/auth/register', {
+            username: 'handoff_business',
+            password: 'StrongPass1',
+            authState: state
+        }, {
+            headers: {
+                host: 'auth.local',
+                'x-forwarded-host': 'auth.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'auth'
+            }
+        });
         assert.equal(created.response.status, 201);
+        assert(Array.from(client.authSessionStore.sessions.values()).some((record) => {
+            return record.user_id === created.json.user.id
+                && record.audience === 'auth'
+                && !record.revoked_at;
+        }));
 
         const complete = await authSession.request('GET', `/auth/complete?state=${encodeURIComponent(state)}`, undefined, { redirect: 'manual' });
         assert.equal(complete.response.status, 302);
@@ -3010,6 +3087,11 @@ test('auth handoff creates a one-time business session ticket', async () => {
         const me = await targetSession.request('GET', '/api/auth/me');
         assert.equal(me.response.status, 200);
         assert.equal(me.json.user.username, 'handoff_business');
+        assert(Array.from(client.authSessionStore.sessions.values()).some((record) => {
+            return record.user_id === created.json.user.id
+                && record.audience === 'business'
+                && !record.revoked_at;
+        }));
 
         const repeated = await targetSession.request('GET', `${callbackUrl.pathname}${callbackUrl.search}`, undefined, { redirect: 'manual' });
         assert.equal(repeated.response.status, 403);
@@ -3036,9 +3118,25 @@ test('auth logout handoff clears the shared auth session before returning to the
         const loginState = getRedirectParam(start.response.headers.get('location'), 'state');
         assert(loginState);
 
-        const created = await register(authSession, 'handoff_logout_user', 'StrongPass1');
+        await authSession.csrf();
+        const created = await authSession.request('POST', '/api/auth/register', {
+            username: 'handoff_logout_user',
+            password: 'StrongPass1',
+            authState: loginState
+        }, {
+            headers: {
+                host: 'auth.local',
+                'x-forwarded-host': 'auth.local',
+                'x-forwarded-proto': 'http',
+                'x-ielts-onion-audience': 'auth'
+            }
+        });
         assert.equal(created.response.status, 201);
-        const beforeLogout = await authSession.request('GET', '/api/auth/me');
+        const beforeLogout = await authSession.request('GET', '/api/auth/me', undefined, {
+            headers: {
+                'x-ielts-onion-audience': 'auth'
+            }
+        });
         assert.equal(beforeLogout.response.status, 200);
 
         const logoutStart = await targetSession.request('GET', '/auth/business/logout?return_to=/practice/reading/p1-high-01', undefined, {

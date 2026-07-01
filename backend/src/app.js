@@ -10,6 +10,13 @@ const helmet = require('helmet');
 const db = require('./db');
 const { PostgresAuthStore, createAuthRouter, publicUser, requireAuth, requireAdmin } = require('./auth');
 const { PostgresAuthHandoffStore, createAuthHandoffRouter, verifySignedAuthState } = require('./authHandoff');
+const {
+    PostgresAuthSessionStore,
+    createAuthSessionHandle,
+    createAuthSessionId,
+    hashAuthSessionHandle,
+    normalizeAuthSessionAudience
+} = require('./authSessions');
 const { PostgresAdminStore, createAdminRouter, createTrafficMiddleware } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
 const {
@@ -25,6 +32,7 @@ const SESSION_VERIFIER_HASH_KEY = 'sessionVerifierHash';
 const SESSION_VERIFIER_ISSUED_AT_KEY = 'sessionVerifierIssuedAt';
 const SESSION_VERIFIER_ROTATE_KEY = Symbol('sessionVerifierRotate');
 const SESSION_VERIFIER_PROTECTED_PATHS = ['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'];
+const AUTH_SESSION_KEY = 'authSession';
 
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
@@ -974,6 +982,7 @@ function createApp(options = {}) {
     }
 
     const authStore = options.authStore || new PostgresAuthStore(dbClient);
+    const authSessionStore = options.authSessionStore || new PostgresAuthSessionStore(dbClient);
     const totpStore = options.totpStore || new PostgresTotpStore(dbClient);
     const practiceStore = options.practiceStore || new PostgresPracticeRecordStore(dbClient);
     const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
@@ -991,6 +1000,127 @@ function createApp(options = {}) {
         ? Boolean(options.trafficEnabled)
         : parseBoolean(process.env.TRAFFIC_ENABLED, true);
     const resolveListeningExam = createListeningExamResolver(repoRoot);
+
+    function getProxyAudience(req) {
+        return normalizeAuthSessionAudience(req.get('x-ielts-onion-audience'));
+    }
+
+    function inferAuthSessionAudience(req, user, explicitAudience = '') {
+        const explicit = normalizeAuthSessionAudience(explicitAudience);
+        if (explicit) {
+            return explicit;
+        }
+        const proxyAudience = getProxyAudience(req);
+        if (proxyAudience) {
+            return proxyAudience;
+        }
+        const safeUser = publicUser(user);
+        return safeUser?.role === 'admin' ? 'admin' : 'business';
+    }
+
+    function summarizeUserAgent(req) {
+        const value = String(req.get('user-agent') || '').replace(/[\u0000-\u001F\u007F]+/g, ' ').trim();
+        return value ? value.slice(0, 160) : null;
+    }
+
+    function hashClientIp(req) {
+        const value = String(req.ip || req.socket?.remoteAddress || '').trim();
+        return value ? crypto.createHmac('sha256', sessionSecret).update(value).digest('hex') : null;
+    }
+
+    async function revokeCurrentAuthSession(req) {
+        const current = req.session && req.session[AUTH_SESSION_KEY];
+        if (current?.id && authSessionStore && typeof authSessionStore.revokeSession === 'function') {
+            await authSessionStore.revokeSession(current.id);
+        }
+        if (req.session) {
+            delete req.session[AUTH_SESSION_KEY];
+        }
+    }
+
+    async function establishAuthSession(req, user, options = {}) {
+        const safeUser = publicUser(user || req.session?.user);
+        if (!req.session || !safeUser?.id || !authSessionStore || typeof authSessionStore.createSession !== 'function') {
+            return null;
+        }
+        const audience = inferAuthSessionAudience(req, safeUser, options.audience);
+        const handle = createAuthSessionHandle();
+        const id = createAuthSessionId();
+        const expiresAt = new Date(Date.now() + sessionCookieOptions.maxAge).toISOString();
+        const totpVerifiedAt = req.session.totpVerified?.userId === safeUser.id && Number.isFinite(Number(req.session.totpVerified?.verifiedAt))
+            ? new Date(Number(req.session.totpVerified.verifiedAt)).toISOString()
+            : null;
+        const created = await authSessionStore.createSession({
+            id,
+            handleHash: hashAuthSessionHandle(sessionSecret, handle),
+            userId: safeUser.id,
+            audience,
+            expiresAt,
+            lastVerifierRotatedAt: req.session[SESSION_VERIFIER_ISSUED_AT_KEY]
+                ? new Date(Number(req.session[SESSION_VERIFIER_ISSUED_AT_KEY])).toISOString()
+                : null,
+            totpVerifiedAt,
+            userAgentSummary: summarizeUserAgent(req),
+            ipHash: hashClientIp(req)
+        });
+        req.session[AUTH_SESSION_KEY] = {
+            id,
+            handle,
+            audience: created?.audience || audience,
+            userId: safeUser.id
+        };
+        return req.session[AUTH_SESSION_KEY];
+    }
+
+    function attachAuthSessionControls(req, _res, next) {
+        req.establishAuthSession = (user, establishOptions = {}) => establishAuthSession(req, user, establishOptions);
+        req.revokeAuthSession = () => revokeCurrentAuthSession(req);
+        return next();
+    }
+
+    async function destroyInvalidAuthSession(req, res) {
+        if (req.session && typeof req.session.destroy === 'function') {
+            await new Promise((resolve) => {
+                req.session.destroy(() => resolve());
+            });
+        }
+        res.clearCookie(cookieName, clearSessionCookieOptions);
+        res.clearCookie(sessionVerifierCookieName, clearSessionVerifierCookieOptions);
+    }
+
+    async function requireAuthSessionRegistry(req, res, next) {
+        try {
+            if (!req.session || !req.session.user) {
+                return next();
+            }
+            const current = req.session[AUTH_SESSION_KEY];
+            if (!current?.id || !current?.handle || !current?.userId) {
+                await destroyInvalidAuthSession(req, res);
+                return res.status(401).json({ error: 'Authentication required' });
+            }
+            const active = authSessionStore && typeof authSessionStore.getActiveSession === 'function'
+                ? await authSessionStore.getActiveSession(current.id, hashAuthSessionHandle(sessionSecret, current.handle))
+                : null;
+            if (!active || active.user_id !== req.session.user.id) {
+                await destroyInvalidAuthSession(req, res);
+                return res.status(401).json({ error: 'Authentication required' });
+            }
+            const expectedAudience = getProxyAudience(req);
+            if (expectedAudience && active.audience !== expectedAudience) {
+                await destroyInvalidAuthSession(req, res);
+                return res.status(401).json({ error: 'Authentication required' });
+            }
+            req.session[AUTH_SESSION_KEY] = {
+                id: active.id,
+                handle: current.handle,
+                audience: active.audience,
+                userId: active.user_id
+            };
+            return next();
+        } catch (error) {
+            return next(error);
+        }
+    }
 
     async function refreshSessionUser(req, res, next) {
         try {
@@ -1030,9 +1160,11 @@ function createApp(options = {}) {
     }
 
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], noStoreSensitiveApiMiddleware);
+    app.use(attachAuthSessionControls);
     app.use(['/api/auth', '/api/practice-records', '/api/admin', '/admin', '/auth'], refreshSessionUser);
     app.use(SESSION_VERIFIER_PROTECTED_PATHS, attachSessionVerifierControls);
     app.use(SESSION_VERIFIER_PROTECTED_PATHS, requireSessionVerifier);
+    app.use(SESSION_VERIFIER_PROTECTED_PATHS, requireAuthSessionRegistry);
     app.use(SESSION_VERIFIER_PROTECTED_PATHS, attachSessionVerifierIssuer);
     app.use(createTrafficMiddleware({
         store: trafficStore,

@@ -2333,10 +2333,17 @@ function createAdminRouter(options = {}) {
             }
             if (current.id === req.session.user.id && parsed.data.password !== undefined) {
                 const preserveTotpVerification = hasSessionTotpVerification(req, req.session.user, totpVerificationMaxAgeMs);
+                const authSessionAudience = req.session.authSession?.audience || 'admin';
+                if (typeof req.revokeAuthSession === 'function') {
+                    await req.revokeAuthSession();
+                }
                 await regenerateSession(req);
                 req.session.user = publicUser(user);
                 if (preserveTotpVerification) {
                     markSessionTotpVerified(req, req.session.user);
+                }
+                if (typeof req.establishAuthSession === 'function') {
+                    await req.establishAuthSession(req.session.user, { audience: authSessionAudience });
                 }
                 return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
             }

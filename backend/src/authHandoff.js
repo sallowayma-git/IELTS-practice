@@ -275,6 +275,12 @@ function destroySession(req) {
     });
 }
 
+async function revokeRequestAuthSession(req) {
+    if (typeof req.revokeAuthSession === 'function') {
+        await req.revokeAuthSession();
+    }
+}
+
 class PostgresAuthHandoffStore {
     constructor(db) {
         this.db = db;
@@ -446,6 +452,7 @@ function createAuthHandoffRouter(options = {}) {
                     if (!state || state.intent !== 'logout' || state.audience !== audience) {
                         return res.status(400).type('text/plain').send('Invalid auth logout state');
                     }
+                    await revokeRequestAuthSession(req);
                     await destroySession(req);
                     clearLocalSessionCookies(res);
                     const targetBaseUrl = normalizePublicBaseUrl(state.targetBaseUrl) || configuredTargetUrls[audience] || '';
@@ -458,6 +465,7 @@ function createAuthHandoffRouter(options = {}) {
                     return rejectInvalidHost(res);
                 }
                 const returnTo = sanitizeReturnTo(req.query.return_to, audience);
+                await revokeRequestAuthSession(req);
                 await destroySession(req);
                 clearLocalSessionCookies(res);
                 const state = createSignedAuthState(stateSecret, {
@@ -605,6 +613,9 @@ function createAuthHandoffRouter(options = {}) {
                 req.session.user = safeUser;
                 if (audience === 'admin' && ticket.admin_totp_verified_at) {
                     markSessionTotpVerified(req, safeUser, Date.parse(ticket.admin_totp_verified_at));
+                }
+                if (typeof req.establishAuthSession === 'function') {
+                    await req.establishAuthSession(safeUser, { audience });
                 }
                 return res.redirect(sanitizeReturnTo(ticket.return_to, audience));
             } catch (error) {

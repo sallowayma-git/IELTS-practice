@@ -296,6 +296,34 @@ function rejectUserForAudience(res, user, audience) {
     return null;
 }
 
+function normalizeSessionAudience(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return ['business', 'admin', 'auth'].includes(text) ? text : '';
+}
+
+function resolveSessionAudience(req, user, handoffAudience = '') {
+    if (handoffAudience) {
+        return 'auth';
+    }
+    const proxyAudience = normalizeSessionAudience(req.get('x-ielts-onion-audience'));
+    if (proxyAudience) {
+        return proxyAudience;
+    }
+    return publicUser(user)?.role === 'admin' ? 'admin' : 'business';
+}
+
+async function establishRequestAuthSession(req, user, audience) {
+    if (typeof req.establishAuthSession === 'function') {
+        await req.establishAuthSession(user, { audience });
+    }
+}
+
+async function revokeRequestAuthSession(req) {
+    if (typeof req.revokeAuthSession === 'function') {
+        await req.revokeAuthSession();
+    }
+}
+
 class PostgresAuthStore {
     constructor(db) {
         this.db = db;
@@ -612,6 +640,7 @@ function createAuthRouter(options = {}) {
 
             await regenerateSession(req);
             req.session.user = publicUser(user);
+            await establishRequestAuthSession(req, req.session.user, resolveSessionAudience(req, req.session.user, audience));
             const csrfToken = ensureCsrfToken(req);
             return res.status(201).json({ user: publicUser(user), csrfToken });
         } catch (error) {
@@ -660,6 +689,7 @@ function createAuthRouter(options = {}) {
                     await regenerateSession(req);
                     req.session.pendingTotpLogin = {
                         user: safeUser,
+                        authSessionAudience: resolveSessionAudience(req, safeUser, audience),
                         startedAt: Date.now()
                     };
                     return res.json({
@@ -671,6 +701,7 @@ function createAuthRouter(options = {}) {
                     await regenerateSession(req);
                     req.session.pendingTotpSetup = {
                         user: safeUser,
+                        authSessionAudience: resolveSessionAudience(req, safeUser, audience),
                         forced: true,
                         startedAt: Date.now()
                     };
@@ -684,6 +715,7 @@ function createAuthRouter(options = {}) {
 
             await regenerateSession(req);
             req.session.user = safeUser;
+            await establishRequestAuthSession(req, safeUser, resolveSessionAudience(req, safeUser, audience));
             const csrfToken = ensureCsrfToken(req);
             return res.json({ user: safeUser, csrfToken });
         } catch (error) {
@@ -693,6 +725,7 @@ function createAuthRouter(options = {}) {
 
     router.post('/logout', verifyCsrfToken, async (req, res, next) => {
         try {
+            await revokeRequestAuthSession(req);
             await destroySession(req);
             clearSessionCookies(res);
             return res.json({ ok: true });
@@ -742,10 +775,13 @@ function createAuthRouter(options = {}) {
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
+            const authSessionAudience = req.session.authSession?.audience || resolveSessionAudience(req, currentUser);
+            await revokeRequestAuthSession(req);
             const totpVerification = getSessionTotpVerificationMarker(req, currentUser);
             await regenerateSession(req);
             req.session.user = publicUser(updatedUser);
             restoreSessionTotpVerification(req, totpVerification, req.session.user);
+            await establishRequestAuthSession(req, req.session.user, authSessionAudience);
             return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);
@@ -786,10 +822,13 @@ function createAuthRouter(options = {}) {
             if (typeof store.deleteSessionsForUser === 'function') {
                 await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
+            const authSessionAudience = req.session.authSession?.audience || resolveSessionAudience(req, currentUser);
+            await revokeRequestAuthSession(req);
             const totpVerification = getSessionTotpVerificationMarker(req, currentUser);
             await regenerateSession(req);
             req.session.user = publicUser(updatedUser);
             restoreSessionTotpVerification(req, totpVerification, req.session.user);
+            await establishRequestAuthSession(req, req.session.user, authSessionAudience);
             return res.json({ ok: true, user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
             return next(error);
@@ -831,6 +870,7 @@ function createAuthRouter(options = {}) {
                 return res.status(404).json({ error: 'User not found' });
             }
             await onDeleteUser(currentUser.id, deletedUser);
+            await revokeRequestAuthSession(req);
             await destroySession(req);
             clearSessionCookies(res);
             return res.json({ ok: true, deleted: true });
