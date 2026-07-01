@@ -2,7 +2,7 @@
     'use strict';
 
     const READING_CATEGORIES = ['P1', 'P2', 'P3'];
-    const LISTENING_CATEGORIES = ['P3', 'P4'];
+    const LISTENING_CATEGORIES = ['P1', 'P2', 'P3', 'P4'];
 
     // 新增：100 P1 和 100 P4 特殊分类
     const SPECIAL_LISTENING_CATEGORIES = [
@@ -24,6 +24,24 @@
             });
         });
         return map;
+    }
+
+    function normalizeCustomCategory(category) {
+        const value = String(category || '').trim();
+        return value || 'Custom';
+    }
+
+    function incrementCategory(map, category, type, extra = {}) {
+        const key = normalizeCustomCategory(category);
+        if (!map.has(key)) {
+            map.set(key, Object.assign({
+                category: key,
+                type,
+                total: 0,
+                custom: true
+            }, extra));
+        }
+        map.get(key).total += 1;
     }
 
     function calculate(exams) {
@@ -77,6 +95,7 @@
                     if (listening.has(category)) {
                         listening.get(category).total += 1;
                     } else {
+                        incrementCategory(listening, category, 'listening');
                         listeningUnknownEntries.push(exam);
                     }
                 }

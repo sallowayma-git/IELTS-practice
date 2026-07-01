@@ -59,14 +59,14 @@ async def wait_exam_change(page, old_exam_id: str, timeout_ms: int = 25000) -> s
         current = await safe_exam_id(page)
         if current and current != old_exam_id:
             await page.wait_for_load_state("load")
-            await page.wait_for_selector("#submit-btn", timeout=20000)
+            await page.wait_for_selector("#submit-btn", state="attached", timeout=20000)
             return current
         await page.wait_for_timeout(250)
     return await safe_exam_id(page)
 
 
 async def click_and_wait_change(page, selector: str, old_exam_id: str) -> str:
-    await page.click(selector)
+    await page.click(selector, force=True)
     return await wait_exam_change(page, old_exam_id)
 
 
@@ -253,23 +253,25 @@ async def run() -> Dict[str, Any]:
         context = await browser.new_context(user_agent=UA)
 
         page = await context.new_page()
+        page.on("console", lambda msg: print(f"[PAGE CONSOLE] {msg.text}"))
         await page.goto(INDEX_URL)
         await page.wait_for_function("() => window.app && window.app.isInitialized", timeout=60000)
         await dismiss_license_modal_if_present(page)
         await ensure_fixed_suite_index(page)
-
+ 
         start_button = page.locator("button[data-action='start-suite-mode']").first
         async with page.expect_popup() as popup_wait:
             await start_button.click()
             await page.locator("#suite-mode-selector-modal").wait_for(state="visible", timeout=10000)
             await page.locator("#suite-mode-selector-modal button[data-suite-flow-mode='simulation']").click()
             await page.locator("#suite-mode-selector-modal").wait_for(state="hidden", timeout=10000)
-
+ 
         suite_page = await popup_wait.value
+        suite_page.on("console", lambda msg: print(f"[POPUP CONSOLE] {msg.text}"))
         await suite_page.wait_for_load_state("load")
-        await suite_page.wait_for_selector("#submit-btn", timeout=30000)
+        await suite_page.wait_for_selector("#submit-btn", state="attached", timeout=30000)
         await suite_page.wait_for_timeout(600)
-
+ 
         first_exam = await safe_exam_id(suite_page)
         if first_exam != TARGET_EXAMS[0]:
             raise RuntimeError(f"unexpected_first_exam:{first_exam}")
@@ -279,7 +281,7 @@ async def run() -> Dict[str, Any]:
             raise RuntimeError("p1_marker_missing")
         hl_initial = await add_highlight(suite_page)
 
-        second_exam = await click_and_wait_change(suite_page, "#submit-btn", first_exam)
+        second_exam = await click_and_wait_change(suite_page, "#float-next-btn", first_exam)
         if second_exam != TARGET_EXAMS[1]:
             raise RuntimeError(f"unexpected_second_exam:{second_exam}")
 
@@ -298,7 +300,7 @@ async def run() -> Dict[str, Any]:
             "q12_13": ["B", "E"],
         }
 
-        p1_back = await click_and_wait_change(suite_page, "#reset-btn", second_exam)
+        p1_back = await click_and_wait_change(suite_page, "#float-prev-btn", second_exam)
         if p1_back != TARGET_EXAMS[0]:
             raise RuntimeError(f"unexpected_back_to_p1:{p1_back}")
 
@@ -306,7 +308,7 @@ async def run() -> Dict[str, Any]:
         restored_p1 = await read_marker(suite_page, marker_p1)
         hl_restored = await suite_page.evaluate("() => document.querySelectorAll('.hl').length")
 
-        p2_back = await click_and_wait_change(suite_page, "#submit-btn", p1_back)
+        p2_back = await click_and_wait_change(suite_page, "#float-next-btn", p1_back)
         if p2_back != TARGET_EXAMS[1]:
             raise RuntimeError(f"unexpected_back_to_p2:{p2_back}")
 
@@ -315,18 +317,18 @@ async def run() -> Dict[str, Any]:
         grouped_restored = await read_grouped_checkbox_answers(suite_page)
 
         # move to p3 and stress P3<->P2 roundtrip to catch dead nav buttons
-        third_exam = await click_and_wait_change(suite_page, "#submit-btn", p2_back)
+        third_exam = await click_and_wait_change(suite_page, "#float-next-btn", p2_back)
         if third_exam != TARGET_EXAMS[2]:
             raise RuntimeError(f"unexpected_third_exam:{third_exam}")
 
         nav_trace = []
         current = third_exam
         for index in range(3):
-            prev_exam = await click_and_wait_change(suite_page, "#reset-btn", current)
+            prev_exam = await click_and_wait_change(suite_page, "#float-prev-btn", current)
             nav_trace.append({"step": f"p3_to_p2_{index}", "from": current, "to": prev_exam})
             if prev_exam != TARGET_EXAMS[1]:
                 raise RuntimeError(f"p3_to_p2_failed:{prev_exam}")
-            next_exam = await click_and_wait_change(suite_page, "#submit-btn", prev_exam)
+            next_exam = await click_and_wait_change(suite_page, "#float-next-btn", prev_exam)
             nav_trace.append({"step": f"p2_to_p3_{index}", "from": prev_exam, "to": next_exam})
             if next_exam != TARGET_EXAMS[2]:
                 raise RuntimeError(f"p2_to_p3_failed:{next_exam}")

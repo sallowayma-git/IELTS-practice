@@ -188,7 +188,11 @@
     
     // 如果基类没有数据，尝试从全局变量获取
     if (exams.length === 0) {
-      const reading = Array.isArray(window.completeExamIndex) ? window.completeExamIndex : [];
+      const reading = typeof window.getReadingExamIndex === 'function'
+        ? window.getReadingExamIndex()
+        : (Array.isArray(window.__READING_EXAM_INDEX__)
+          ? window.__READING_EXAM_INDEX__
+          : []);
       const listening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
       return [...reading, ...listening];
     }

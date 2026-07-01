@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import zipfile
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 
 class _HTMLDoctypeParser(HTMLParser):
@@ -123,6 +125,680 @@ def _check_contains(path: Path, snippet: str) -> Tuple[bool, str]:
     return present, ("已包含片段" if present else f"缺少片段：{snippet}")
 
 
+def _extract_script_srcs_from_html(source: str) -> List[str]:
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"<script\b[^>]*\bsrc\s*=\s*['\"]([^'\"]+)['\"][^>]*>", source, re.IGNORECASE)
+        if match.group(1).strip()
+    ]
+
+def _extract_css_hrefs_from_html(source: str) -> List[str]:
+    return [
+        match.group(1).strip()
+        for match in re.finditer(
+            r"<link\b[^>]*\brel\s*=\s*['\"]stylesheet['\"][^>]*\bhref\s*=\s*['\"]([^'\"]+)['\"][^>]*>",
+            source,
+            re.IGNORECASE,
+        )
+        if match.group(1).strip()
+    ]
+
+def _strip_js_comments(source: str) -> str:
+    without_block = re.sub(r"/\*[\s\S]*?\*/", "", source)
+    without_line = re.sub(r"//.*$", "", without_block, flags=re.MULTILINE)
+    return without_line
+
+def _is_forward_only_js_source(source: str) -> bool:
+    cleaned = _strip_js_comments(source)
+    normalized = re.sub(r"\s+", " ", cleaned).strip()
+    if not normalized:
+        return True
+
+    if re.fullmatch(r"export\s+(\*\s+from|\{[^}]+\}\s+from)\s+['\"][^'\"]+['\"]\s*;?\s*", normalized):
+        return True
+    if re.fullmatch(r"module\.exports\s*=\s*require\(['\"][^'\"]+['\"]\)\s*;?\s*", normalized):
+        return True
+
+    function_count = len(re.findall(r"\bfunction\b", cleaned))
+    direct_alias = re.search(
+        r"(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*=\s*(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*;?",
+        cleaned,
+    )
+    object_assign_alias = re.search(
+        r"(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*=\s*Object\.assign\(\{\}\s*,\s*(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*\|\|\s*\{\}\s*\)\s*;?",
+        cleaned,
+    )
+    return function_count <= 1 and bool(direct_alias or object_assign_alias)
+
+def _check_features_no_forward_only_files(features_dir: Path) -> Tuple[bool, dict]:
+    if not features_dir.exists():
+        return True, {"scanned": 0, "forwardOnlyFiles": [], "note": "js/features 已完全收敛删除"}
+
+    forward_only_files: List[str] = []
+    scanned = 0
+    for js_path in sorted(features_dir.rglob("*.js")):
+        scanned += 1
+        try:
+            source = js_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return False, {"error": f"读取失败：{js_path}: {exc}"}
+        if _is_forward_only_js_source(source):
+            forward_only_files.append(str(js_path.relative_to(REPO_ROOT)).replace("\\", "/"))
+
+    return len(forward_only_files) == 0, {
+        "scannedCount": scanned,
+        "forwardOnlyFiles": forward_only_files,
+    }
+
+def _check_index_css_convergence(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    css_hrefs = _extract_css_hrefs_from_html(source)
+    allowed = {
+        "css/main.css",
+        "css/heroui-bridge.css",
+        "css/onboarding.css",
+    }
+    unexpected = sorted([href for href in css_hrefs if href not in allowed])
+    missing_required = sorted([href for href in ("css/main.css",) if href not in css_hrefs])
+
+    passed = not unexpected and not missing_required
+    return passed, {
+        "cssLinks": css_hrefs,
+        "unexpectedCssLinks": unexpected,
+        "missingRequiredCssLinks": missing_required,
+    }
+
+def _check_build_bundles_no_deleted_refs(build_script: Path) -> Tuple[bool, dict]:
+    removed_scripts = [
+        "js/features/session/examSessionService.js",
+        "js/features/session/sessionFeature.js",
+        "js/features/app/app-init.js",
+        "js/features/practice/practice-sync.js",
+        "js/features/overview/overview-runtime.js",
+        "js/runtime/mainRuntime.js",
+        "js/runtime/legacyPublicAPI.js",
+    ]
+    try:
+        source = build_script.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    stale_refs = sorted([item for item in removed_scripts if item in source])
+    return len(stale_refs) == 0, {
+        "checkedRemovedScripts": removed_scripts,
+        "staleRefs": stale_refs,
+    }
+
+def _check_optional_listening_assets_not_bundled(build_script: Path, core_bundle: Path) -> Tuple[bool, dict]:
+    try:
+        build_source = build_script.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取 build-bundles 失败：{exc}"}
+
+    forbidden_inputs = [
+        "assets/generated/listening-exams/manifest.js",
+        "assets/generated/listening-exams/listening-index.compat.js",
+    ]
+    build_hits = sorted([item for item in forbidden_inputs if item in build_source])
+    bundle_hits: List[str] = []
+    if core_bundle.exists():
+        try:
+            core_source = core_bundle.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return False, {"error": f"读取 core-foundation bundle 失败：{exc}"}
+        bundle_forbidden = [
+            "global.__LISTENING_EXAM_MANIFEST__ = ",
+            "global.listeningExamIndex = [",
+            "assets/generated/listening-exams/listening-index.compat.js",
+        ]
+        bundle_hits = sorted([item for item in bundle_forbidden if item in core_source])
+
+    passed = not build_hits and not bundle_hits
+    return passed, {
+        "forbiddenBuildInputs": build_hits,
+        "forbiddenCoreBundlePayloads": bundle_hits,
+    }
+
+
+def _extract_snapshot_html(snapshot_path: Path) -> Tuple[Optional[str], str]:
+    if not snapshot_path.exists():
+        return None, "快照文件缺失"
+    try:
+        source = snapshot_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return None, f"读取失败：{exc}"
+
+    marker = "window.__APP_INDEX_HTML_SNAPSHOT__ = `"
+    start = source.find(marker)
+    if start < 0:
+        return None, "未找到快照模板字面量起点"
+    start += len(marker)
+
+    end = source.rfind("`")
+    if end <= start:
+        return None, "未找到快照模板字面量终点"
+
+    return source[start:end], "已提取快照 HTML"
+
+
+def _check_index_script_layout(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    script_srcs = _extract_script_srcs_from_html(source)
+    bundle_scripts = sorted({
+        src for src in script_srcs if src.startswith("js/bundles/") and src.endswith(".bundle.js")
+    })
+    expected_bundle_scripts = sorted([
+        "js/bundles/runtime-entry.bundle.js",
+        "js/bundles/core-foundation.bundle.js",
+        "js/bundles/ui-shell.bundle.js",
+        "js/bundles/legacy-app.bundle.js",
+    ])
+    legacy_entry_scripts = sorted([
+        "js/main.js",
+        "js/app/main-entry.js",
+        "js/app.js",
+    ])
+    legacy_hits = sorted([src for src in script_srcs if src in legacy_entry_scripts])
+
+    mode = "bundle" if bundle_scripts else "source"
+    if mode == "bundle":
+        missing_bundle_scripts = sorted(set(expected_bundle_scripts) - set(bundle_scripts))
+        passed = not missing_bundle_scripts and not legacy_hits
+        detail = {
+            "mode": mode,
+            "bundles": bundle_scripts,
+            "missingBundles": missing_bundle_scripts,
+            "legacyDirectHits": legacy_hits,
+        }
+        return passed, detail
+
+    required_legacy_scripts = ["js/main.js", "js/app.js"]
+    missing_legacy_scripts = sorted([src for src in required_legacy_scripts if src not in script_srcs])
+    passed = not missing_legacy_scripts
+    detail = {
+        "mode": mode,
+        "requiredLegacyScripts": required_legacy_scripts,
+        "missingLegacyScripts": missing_legacy_scripts,
+    }
+    return passed, detail
+
+
+def _check_index_no_inline_runtime(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    inline_event_hits = [
+        {"line": line_no, "text": line.strip()}
+        for line_no, line in enumerate(source.splitlines(), start=1)
+        if re.search(r"\son[a-z]+\s*=", line, re.IGNORECASE)
+    ]
+    inline_style_blocks = [
+        {"line": source.count("\n", 0, match.start()) + 1, "text": "<style>"}
+        for match in re.finditer(r"<style\b", source, re.IGNORECASE)
+    ]
+    inline_scripts = []
+    for match in re.finditer(r"<script\b([^>]*)>", source, re.IGNORECASE):
+        attrs = match.group(1) or ""
+        if not re.search(r"\bsrc\s*=", attrs, re.IGNORECASE):
+            inline_scripts.append({
+                "line": source.count("\n", 0, match.start()) + 1,
+                "text": match.group(0)
+            })
+
+    passed = not inline_event_hits and not inline_style_blocks and not inline_scripts
+    return passed, {
+        "inlineEventHits": inline_event_hits,
+        "inlineStyleBlocks": inline_style_blocks,
+        "inlineScripts": inline_scripts,
+    }
+
+
+def _check_index_listening_filter_initially_hidden(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    match = re.search(
+        r"<button\b(?=[^>]*\bdata-filter-type\s*=\s*['\"]listening['\"])([^>]*)>",
+        source,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return True, {"listeningFilterButton": "not-present"}
+
+    attrs = match.group(1) or ""
+    hidden = bool(re.search(r"(^|\s)hidden(\s|=|$)", attrs, re.IGNORECASE))
+    return hidden, {
+        "listeningFilterButton": "present",
+        "hidden": hidden,
+    }
+
+
+def _check_index_snapshot_script_sync(index_path: Path, snapshot_path: Path) -> Tuple[bool, dict]:
+    try:
+        index_source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取 index 失败：{exc}"}
+
+    snapshot_html, snapshot_detail = _extract_snapshot_html(snapshot_path)
+    if snapshot_html is None:
+        return False, {"error": snapshot_detail}
+
+    index_scripts = sorted(set(_extract_script_srcs_from_html(index_source)))
+    snapshot_scripts = sorted(set(_extract_script_srcs_from_html(snapshot_html)))
+    missing_in_snapshot = sorted(set(index_scripts) - set(snapshot_scripts))
+    only_in_snapshot = sorted(set(snapshot_scripts) - set(index_scripts))
+    passed = not missing_in_snapshot and not only_in_snapshot
+    detail = {
+        "indexScriptCount": len(index_scripts),
+        "snapshotScriptCount": len(snapshot_scripts),
+        "missingInSnapshot": missing_in_snapshot,
+        "onlyInSnapshot": only_in_snapshot,
+    }
+    return passed, detail
+
+
+def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
+    dist_dir = REPO_ROOT / "dist"
+    if not dist_dir.exists():
+        return True, {"skipped": True, "reason": "dist 目录缺失，跳过已生成 zip 内容检查"}
+
+    candidates = sorted(
+        dist_dir.glob("ielts-practice-*.zip"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        return True, {"skipped": True, "reason": "未找到 ielts-practice-*.zip，跳过已生成 zip 内容检查"}
+
+    archive_path = candidates[0]
+    try:
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            names = [name.rstrip("/") for name in archive.namelist()]
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取压缩包失败：{exc}", "zip": str(archive_path.relative_to(REPO_ROOT))}
+
+    name_set = set(names)
+    bundled_scripts = sorted(
+        name for name in name_set
+        if name.startswith("js/bundles/") and name.endswith(".bundle.js")
+    )
+    expected_bundles = sorted([
+        "js/bundles/runtime-entry.bundle.js",
+        "js/bundles/core-foundation.bundle.js",
+        "js/bundles/ui-shell.bundle.js",
+        "js/bundles/legacy-app.bundle.js",
+        "js/bundles/browse.bundle.js",
+        "js/bundles/practice.bundle.js",
+        "js/bundles/session.bundle.js",
+        "js/bundles/settings.bundle.js",
+        "js/bundles/diagnostics.bundle.js",
+        "js/bundles/more.bundle.js",
+        "js/bundles/theme.bundle.js",
+        "js/bundles/reading-page.bundle.js",
+        "js/bundles/practice-page-enhancer.bundle.js",
+        "js/bundles/listening-record-bridge.bundle.js",
+    ])
+    missing_bundles = sorted(set(expected_bundles) - set(bundled_scripts))
+
+    forbidden_templates = sorted([name for name in name_set if name == "templates" or name.startswith("templates/")])
+    forbidden_listening = sorted([
+        name for name in name_set
+        if name == "ListeningPractice/vip" or name.startswith("ListeningPractice/vip/")
+    ])
+    unexpected_listening_roots = sorted([
+        name for name in name_set
+        if name.startswith("ListeningPractice/")
+        and not any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for part in ("P1", "P2", "P3", "P4", "vip"))
+    ])
+    listening_parts_present = sorted([
+        part for part in ("P1", "P2", "P3", "P4")
+        if any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for name in name_set)
+    ])
+    optional_listening_generated = sorted([
+        name for name in name_set
+        if name == "assets/generated/listening-exams" or name.startswith("assets/generated/listening-exams/")
+    ])
+    optional_listening_generated_files = sorted([
+        name for name in optional_listening_generated
+        if name != "assets/generated/listening-exams"
+    ])
+    expected_optional_generated = {
+        "assets/generated/listening-exams/manifest.js",
+        "assets/generated/listening-exams/listening-index.compat.js",
+    }
+    optional_generated_present = set(optional_listening_generated_files)
+    has_optional_listening_payload = bool(listening_parts_present)
+    forbidden_default_listening_generated = (
+        optional_listening_generated
+        if not has_optional_listening_payload
+        else []
+    )
+    missing_optional_listening_generated = sorted(
+        expected_optional_generated - optional_generated_present
+    ) if has_optional_listening_payload else []
+    unexpected_optional_listening_generated = sorted(
+        optional_generated_present - expected_optional_generated
+    ) if has_optional_listening_payload else []
+    forbidden_source_js = sorted([
+        name for name in name_set
+        if re.match(r"^js/(app|core|data|runtime|services|utils|components|presentation|views)/", name)
+    ])
+    forbidden_assets_py = sorted([
+        name for name in name_set
+        if name.startswith("assets/scripts/") and name.endswith(".py")
+    ])
+    forbidden_listening_video = sorted([
+        name for name in name_set
+        if name.startswith("ListeningPractice/") and re.search(r"\.(MOV|mov|MP4|mp4)$", name)
+    ])
+    forbidden_temp_office = sorted([
+        name for name in name_set
+        if re.search(r"(^|/)~\$[^/]*$", name)
+    ])
+
+    passed = (
+        not missing_bundles
+        and not forbidden_templates
+        and not forbidden_listening
+        and not unexpected_listening_roots
+        and not forbidden_default_listening_generated
+        and not missing_optional_listening_generated
+        and not unexpected_optional_listening_generated
+        and not forbidden_source_js
+        and not forbidden_assets_py
+        and not forbidden_listening_video
+        and not forbidden_temp_office
+    )
+    detail = {
+        "zip": str(archive_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+        "bundleCount": len(bundled_scripts),
+        "missingBundles": missing_bundles,
+        "forbiddenTemplates": forbidden_templates,
+        "forbiddenListeningPractice": forbidden_listening,
+        "unexpectedListeningRoots": unexpected_listening_roots,
+        "optionalListeningPartsPresent": listening_parts_present,
+        "optionalListeningGeneratedAssets": optional_listening_generated,
+        "optionalListeningGeneratedFiles": optional_listening_generated_files,
+        "forbiddenDefaultListeningGeneratedAssets": forbidden_default_listening_generated,
+        "missingOptionalListeningGeneratedAssets": missing_optional_listening_generated,
+        "unexpectedOptionalListeningGeneratedAssets": unexpected_optional_listening_generated,
+        "forbiddenSourceJs": forbidden_source_js[:20],
+        "forbiddenAssetScriptsPy": forbidden_assets_py,
+        "forbiddenListeningVideo": forbidden_listening_video,
+        "forbiddenTempOfficeFiles": forbidden_temp_office,
+    }
+    return passed, detail
+
+
+def _check_release_script_runtime_guards(release_script: Path) -> Tuple[bool, dict]:
+    try:
+        source = release_script.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    required_snippets = [
+        'require_entry "js/bundles/runtime-entry.bundle.js"',
+        'require_entry "js/bundles/core-foundation.bundle.js"',
+        'require_entry "js/bundles/ui-shell.bundle.js"',
+        'require_entry "js/bundles/legacy-app.bundle.js"',
+        'require_entry "js/bundles/browse.bundle.js"',
+        'require_entry "js/bundles/practice.bundle.js"',
+        'require_entry "js/bundles/session.bundle.js"',
+        'require_entry "js/bundles/settings.bundle.js"',
+        'require_entry "js/bundles/diagnostics.bundle.js"',
+        'require_entry "js/bundles/more.bundle.js"',
+        'require_entry "js/bundles/theme.bundle.js"',
+        'require_entry "js/bundles/reading-page.bundle.js"',
+        'require_entry "js/bundles/practice-page-enhancer.bundle.js"',
+        'require_entry "js/bundles/listening-record-bridge.bundle.js"',
+        'LISTENING_EXCLUDE_PATTERNS=("assets/generated/listening-exams/" "assets/generated/listening-exams/*" "ListeningPractice/" "ListeningPractice/*")',
+        'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ]; then',
+        'INCLUDE_LOCAL_LISTENING=1 requires both assets/generated/listening-exams/manifest.js and listening-index.compat.js',
+        'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening-exams/manifest.js" ]; then',
+        'reject_entry_prefix "assets/generated/listening-exams/"',
+        'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then',
+        'reject_entry_prefix "templates/"',
+        'reject_entry_prefix "ListeningPractice/vip/"',
+        "reject_entry_pattern '(^|/)~\\$[^/]*$'",
+        "reject_entry_pattern '^ListeningPractice/.*\\.(MOV|mov|MP4|mp4)$'",
+        "reject_entry_pattern '^assets/scripts/.*\\.py$'",
+        "reject_entry_pattern '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'",
+    ]
+    missing = [snippet for snippet in required_snippets if snippet not in source]
+    return not missing, {"missing": missing}
+
+
+def _extract_js_json_assignment(source: str, marker: str, end_marker: str) -> Any:
+    start = source.find(marker)
+    if start < 0:
+        raise ValueError(f"missing marker: {marker}")
+    start += len(marker)
+    end = source.find(end_marker, start)
+    if end < 0:
+        raise ValueError(f"missing end marker after: {marker}")
+    return json.loads(source[start:end].strip())
+
+
+def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> Tuple[bool, dict]:
+    if not index_path.exists() and not manifest_path.exists():
+        return True, {
+            "optional": True,
+            "reason": "内置听力 manifest/index 未放置，默认隐藏内置听力入口",
+        }
+    if not index_path.exists():
+        return False, {"error": "listening-index.compat.js 缺失"}
+    if not manifest_path.exists():
+        return False, {"error": "manifest.js 缺失"}
+
+    try:
+        index_source = index_path.read_text(encoding="utf-8")
+        manifest_source = manifest_path.read_text(encoding="utf-8")
+        index_entries = _extract_js_json_assignment(
+            index_source,
+            "global.listeningExamIndex = ",
+            ";\n    global.listeningExamIndex.pathRoot",
+        )
+        manifest = _extract_js_json_assignment(
+            manifest_source,
+            "global.__LISTENING_EXAM_MANIFEST__ = ",
+            ";\n})(typeof window",
+        )
+    except Exception as exc:
+        return False, {"error": f"解析失败：{exc}"}
+
+    if not isinstance(index_entries, list) or not isinstance(manifest, dict):
+        return False, {
+            "error": "听力索引结构错误",
+            "indexType": type(index_entries).__name__,
+            "manifestType": type(manifest).__name__,
+        }
+
+    ids: List[str] = []
+    duplicate_ids: List[str] = []
+    seen: set[str] = set()
+    bad_paths: List[str] = []
+    missing_html: List[str] = []
+    missing_pdf: List[str] = []
+    missing_audio: List[str] = []
+    entries_without_pdf: List[str] = []
+    indexed_pdf_paths: set[str] = set()
+    for entry in index_entries:
+        if not isinstance(entry, dict):
+            bad_paths.append("<non-object-entry>")
+            continue
+        exam_id = str(entry.get("examId") or entry.get("id") or "")
+        if exam_id in seen:
+            duplicate_ids.append(exam_id)
+        seen.add(exam_id)
+        ids.append(exam_id)
+
+        rel_path = str(entry.get("path") or "")
+        filename = str(entry.get("filename") or "")
+        pdf_filename = str(entry.get("pdfFilename") or "")
+        audio = str(entry.get("audioFilename") or "")
+        if (
+            rel_path.startswith("ListeningPractice/")
+            or not any(rel_path.startswith(f"{part}/") for part in ("P1", "P2", "P3", "P4"))
+            or "/vip/" in f"/{rel_path}"
+        ):
+            bad_paths.append(f"{exam_id}:{rel_path}")
+        if filename and not (REPO_ROOT / "ListeningPractice" / rel_path / filename).exists():
+            missing_html.append(f"{rel_path}{filename}")
+        if pdf_filename:
+            pdf_rel = f"{rel_path}{pdf_filename}".replace("\\", "/")
+            indexed_pdf_paths.add(pdf_rel)
+            if not (REPO_ROOT / "ListeningPractice" / rel_path / pdf_filename).exists():
+                missing_pdf.append(pdf_rel)
+        elif entry.get("hasPdf") is True:
+            missing_pdf.append(f"{exam_id}:hasPdf-without-pdfFilename")
+        else:
+            entries_without_pdf.append(f"{rel_path}{filename or exam_id}")
+        if audio and not (REPO_ROOT / "ListeningPractice" / rel_path / audio).exists():
+            missing_audio.append(f"{rel_path}{audio}")
+
+    disk_pdf_paths: set[str] = set()
+    listening_root = REPO_ROOT / "ListeningPractice"
+    for part in ("P1", "P2", "P3", "P4"):
+        part_root = listening_root / part
+        if part_root.exists():
+            for pdf_path in sorted(part_root.rglob("*.pdf")):
+                disk_pdf_paths.add(pdf_path.relative_to(listening_root).as_posix())
+    unindexed_disk_pdfs = sorted(disk_pdf_paths - indexed_pdf_paths)
+
+    manifest_ids = set(manifest.keys())
+    index_ids = set(ids)
+    missing_in_manifest = sorted(index_ids - manifest_ids)
+    missing_in_index = sorted(manifest_ids - index_ids)
+    path_root_ok = "global.listeningExamIndex.pathRoot = 'ListeningPractice/';" in index_source
+
+    passed = (
+        len(index_entries) > 0
+        and not duplicate_ids
+        and not bad_paths
+        and not missing_html
+        and not missing_pdf
+        and not unindexed_disk_pdfs
+        and not missing_in_manifest
+        and not missing_in_index
+        and path_root_ok
+    )
+    return passed, {
+        "indexCount": len(index_entries),
+        "manifestCount": len(manifest),
+        "diskPdfCount": len(disk_pdf_paths),
+        "indexedPdfCount": len(indexed_pdf_paths),
+        "duplicateIds": duplicate_ids[:20],
+        "badPaths": bad_paths[:20],
+        "missingHtml": missing_html[:20],
+        "missingPdf": missing_pdf[:20],
+        "unindexedDiskPdfs": unindexed_disk_pdfs[:20],
+        "entriesWithoutPdf": entries_without_pdf[:20],
+        "missingAudio": missing_audio[:20],
+        "missingInManifest": missing_in_manifest[:20],
+        "missingInIndex": missing_in_index[:20],
+        "pathRootOk": path_root_ok,
+    }
+
+
+def _check_listening_static_bridge_coverage() -> Tuple[bool, dict]:
+    listening_root = REPO_ROOT / "ListeningPractice"
+    if not listening_root.exists():
+        return True, {
+            "skipped": True,
+            "reason": "ListeningPractice 本地题源目录未放置，跳过静态 bridge 覆盖校验",
+        }
+    parts = ("P1", "P2", "P3", "P4")
+    bridge_name = "listening-record-bridge.bundle.js"
+    bridge_target = (REPO_ROOT / "js" / "bundles" / bridge_name).resolve()
+
+    html_files: List[Path] = []
+    by_part: Dict[str, int] = {}
+    for part in parts:
+        part_root = listening_root / part
+        part_files = sorted(part_root.rglob("*.html")) if part_root.exists() else []
+        by_part[part] = len(part_files)
+        html_files.extend(part_files)
+
+    missing_bridge: List[str] = []
+    duplicate_bridge: List[str] = []
+    missing_marker: List[str] = []
+    bad_bridge_path: List[str] = []
+    legacy_enhancer: List[str] = []
+    bridge_after_body: List[str] = []
+
+    bridge_script_pattern = re.compile(
+        r"<script\b(?=[^>]*\bsrc\s*=\s*['\"]([^'\"]*"
+        + re.escape(bridge_name)
+        + r"[^'\"]*)['\"])([^>]*)>",
+        re.IGNORECASE,
+    )
+
+    for html_path in html_files:
+        rel_html = str(html_path.relative_to(REPO_ROOT)).replace("\\", "/")
+        try:
+            source = html_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            missing_bridge.append(f"{rel_html}:读取失败:{exc}")
+            continue
+
+        if "practice-page-enhancer.js" in source:
+            legacy_enhancer.append(rel_html)
+
+        bridge_matches = list(bridge_script_pattern.finditer(source))
+        if not bridge_matches:
+            missing_bridge.append(rel_html)
+            continue
+        if len(bridge_matches) > 1:
+            duplicate_bridge.append(rel_html)
+
+        first_match = bridge_matches[0]
+        script_src = first_match.group(1)
+        script_attrs = first_match.group(0)
+        if not re.search(r"\bdata-listening-record-bridge\s*=\s*['\"]true['\"]", script_attrs, re.IGNORECASE):
+            missing_marker.append(rel_html)
+
+        clean_src = script_src.split("?", 1)[0].split("#", 1)[0]
+        resolved_src = (html_path.parent / clean_src).resolve()
+        if resolved_src != bridge_target:
+            bad_bridge_path.append(f"{rel_html}:{script_src}")
+
+        body_index = source.lower().rfind("</body>")
+        if body_index >= 0 and first_match.start() > body_index:
+            bridge_after_body.append(rel_html)
+
+    passed = (
+        len(html_files) > 0
+        and not missing_bridge
+        and not duplicate_bridge
+        and not missing_marker
+        and not bad_bridge_path
+        and not legacy_enhancer
+        and not bridge_after_body
+    )
+    return passed, {
+        "htmlCount": len(html_files),
+        "byPart": by_part,
+        "missingBridge": missing_bridge[:20],
+        "duplicateBridge": duplicate_bridge[:20],
+        "missingMarker": missing_marker[:20],
+        "badBridgePath": bad_bridge_path[:20],
+        "legacyPracticeEnhancer": legacy_enhancer[:20],
+        "bridgeAfterBody": bridge_after_body[:20],
+    }
+
+
 def _check_main_entry_on_demand(main_entry: Path) -> Tuple[bool, str]:
     try:
         source = main_entry.read_text(encoding="utf-8")
@@ -183,6 +859,44 @@ def _check_lazy_loader_dedupe(loader_path: Path) -> Tuple[bool, str]:
     if missing:
         return False, {"missing": missing}
     return True, "已检测到静态脚本去重逻辑"
+
+
+def _check_settings_tools_split() -> Tuple[bool, dict]:
+    build_script = REPO_ROOT / "scripts" / "build-bundles.mjs"
+    lazy_loader = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
+    boot_fallbacks = REPO_ROOT / "js" / "boot-fallbacks.js"
+    exam_actions = REPO_ROOT / "js" / "app" / "examActions.js"
+
+    try:
+        build_source = build_script.read_text(encoding="utf-8")
+        loader_source = lazy_loader.read_text(encoding="utf-8")
+        fallback_source = boot_fallbacks.read_text(encoding="utf-8")
+        actions_source = exam_actions.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    required = {
+        "buildSettingsBundle": "'js/bundles/settings.bundle.js'" in build_source,
+        "settingsHasDataIntegrityManager": "'js/components/DataIntegrityManager.js'" in build_source,
+        "settingsHasDataBackupManager": "'js/utils/dataBackupManager.js'" in build_source,
+        "loaderManifest": "manifest['settings-tools']" in loader_source,
+        "loaderDependency": "dependencies['settings-tools'] = ['state-core'];" in loader_source,
+        "moreDependsOnSettings": "dependencies['more-tools'] = ['state-core', 'settings-tools'];" in loader_source,
+        "diagnosticsDependsOnSettings": "dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];" in loader_source,
+        "fallbackUsesSettingsTools": "ensureGroup('settings-tools')" in fallback_source,
+        "examActionsUsesSettingsTools": "ensureGroup('settings-tools')" in actions_source,
+    }
+
+    forbidden = {
+        "fallbackLoadsBrowseForDataIntegrity": "ensureGroup('browse-runtime')" in fallback_source,
+        "examActionsLoadsDiagnosticsForDataIntegrity": "ensureGroup('diagnostics-tools')" in actions_source,
+    }
+
+    passed = all(required.values()) and not any(forbidden.values())
+    return passed, {
+        "required": required,
+        "forbidden": forbidden,
+    }
 
 
 def _check_practice_recorder_synthetic_guard(recorder_path: Path) -> Tuple[bool, str]:
@@ -395,8 +1109,36 @@ def _extract_registered_payload(path: Path) -> Optional[dict]:
     try:
         payload = json.loads(match.group(2))
     except json.JSONDecodeError:
-        return None
+        payload = _extract_registered_payload_from_js_object(match.group(2))
     return payload if isinstance(payload, dict) else None
+
+
+def _extract_registered_payload_from_js_object(source: str) -> Optional[dict]:
+    exam_match = re.search(r"\bexamId\s*:\s*['\"]([^'\"]+)['\"]", source)
+    if not exam_match:
+        return None
+
+    payload: Dict[str, object] = {"examId": exam_match.group(1)}
+
+    title_match = re.search(r"\btitle\s*:\s*['\"]([^'\"]+)['\"]", source)
+    if title_match:
+        payload["meta"] = {"title": title_match.group(1)}
+
+    display_map_match = re.search(r"\bquestionDisplayMap\s*:\s*\{([\s\S]*?)\}\s*,", source)
+    if display_map_match:
+        display_map: Dict[str, str] = {}
+        for key, value in re.findall(r"\b(q\d+)\s*:\s*['\"]([^'\"]+)['\"]", display_map_match.group(1)):
+            display_map[key] = value
+        if display_map:
+            payload["questionDisplayMap"] = display_map
+
+    order_match = re.search(r"\bquestionOrder\s*:\s*\[([\s\S]*?)\]\s*,", source)
+    if order_match:
+        order = re.findall(r"['\"](q\d+)['\"]", order_match.group(1))
+        if order:
+            payload["questionOrder"] = order
+
+    return payload
 
 
 def _normalize_title_for_similarity(title: str) -> str:
@@ -460,6 +1202,8 @@ def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
 
     exam_payloads: Dict[str, dict] = {}
     explanation_payloads: Dict[str, dict] = {}
+    manifest_missing_scripts: List[str] = []
+    manifest_unregistered_scripts: List[str] = []
 
     for exam_file in sorted(exams_dir.glob("*.js")):
         payload = _extract_registered_payload(exam_file)
@@ -476,6 +1220,34 @@ def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
         exam_id = str(payload.get("examId") or "").strip()
         if exam_id:
             explanation_payloads[exam_id] = payload
+
+    manifest_path = explanations_dir / "manifest.js"
+    try:
+        manifest = _extract_js_json_assignment(
+            manifest_path.read_text(encoding="utf-8"),
+            "global.__READING_EXPLANATION_MANIFEST__ = ",
+            ";\n})(typeof window",
+        )
+    except Exception as exc:
+        return False, {"error": f"解析 reading-explanations manifest 失败：{exc}"}
+
+    if not isinstance(manifest, dict):
+        return False, {"error": "reading-explanations manifest 结构错误"}
+
+    for exam_id, entry in manifest.items():
+        if not isinstance(entry, dict):
+            manifest_unregistered_scripts.append(f"{exam_id}:<non-object-entry>")
+            continue
+        script = str(entry.get("script") or "").strip()
+        if not script:
+            manifest_missing_scripts.append(f"{exam_id}:<empty-script>")
+            continue
+        script_path = (explanations_dir / script).resolve()
+        if not script_path.exists():
+            manifest_missing_scripts.append(f"{exam_id}:{script}")
+            continue
+        if str(entry.get("examId") or exam_id).strip() not in explanation_payloads:
+            manifest_unregistered_scripts.append(f"{exam_id}:{script}")
 
     missing_explanations = sorted([exam_id for exam_id in exam_payloads.keys() if exam_id not in explanation_payloads])
     mismatches: List[dict] = []
@@ -526,10 +1298,13 @@ def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
                     },
                 })
 
-    passed = not mismatches
+    passed = not mismatches and not manifest_missing_scripts and not manifest_unregistered_scripts
     detail = {
         "examCount": len(exam_payloads),
         "explanationCount": len(explanation_payloads),
+        "manifestCount": len(manifest),
+        "manifestMissingScripts": manifest_missing_scripts[:20],
+        "manifestUnregisteredScripts": manifest_unregistered_scripts[:20],
         "missingExplanations": len(missing_explanations),
         "mismatchCount": len(mismatches),
         "mismatches": mismatches[:20],
@@ -543,14 +1318,6 @@ def _format_result(name: str, passed: bool, detail: str) -> dict:
         "status": "pass" if passed else "fail",
         "detail": detail,
     }
-
-
-def _safe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
 
 
 def _ensure_exists(path: Path) -> Tuple[bool, str]:
@@ -573,20 +1340,19 @@ def _run_json_subprocess(
             text=True,
             timeout=timeout,
             env=env,
-            encoding="utf-8",
-            errors="replace"
+            encoding="utf-8"
         )
     except subprocess.TimeoutExpired:
         return False, f"执行超时（{timeout}秒）"
     except subprocess.CalledProcessError as exc:
-        output_text = _safe_text(exc.stdout) + _safe_text(exc.stderr) + _safe_text(exc)
+        output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
         return False, f"执行失败: {output_text.strip()}"
 
     if parse_mode == "last-line":
-        output_lines = [line.strip() for line in _safe_text(completed.stdout).splitlines() if line.strip()]
+        output_lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
         parse_target = output_lines[-1] if output_lines else ""
     else:
-        parse_target = _safe_text(completed.stdout).strip() or _safe_text(completed.stderr).strip()
+        parse_target = (completed.stdout or "").strip() or (completed.stderr or "").strip()
 
     try:
         payload = json.loads(parse_target or "{}")
@@ -606,6 +1372,44 @@ def run_checks() -> Tuple[List[dict], bool]:
     passed, detail = _ensure_exists(index_file)
     results.append(_format_result("index.html 存在性", passed, detail))
     all_passed &= passed
+    if passed:
+        script_layout_passed, script_layout_detail = _check_index_script_layout(index_file)
+        results.append(_format_result("index.html 脚本入口形态守卫", script_layout_passed, script_layout_detail))
+        all_passed &= script_layout_passed
+
+        inline_runtime_passed, inline_runtime_detail = _check_index_no_inline_runtime(index_file)
+        results.append(_format_result("index.html 禁止内联运行时", inline_runtime_passed, inline_runtime_detail))
+        all_passed &= inline_runtime_passed
+
+        listening_filter_hidden_passed, listening_filter_hidden_detail = _check_index_listening_filter_initially_hidden(index_file)
+        results.append(_format_result("index.html 听力入口初始隐藏守卫", listening_filter_hidden_passed, listening_filter_hidden_detail))
+        all_passed &= listening_filter_hidden_passed
+
+        css_convergence_passed, css_convergence_detail = _check_index_css_convergence(index_file)
+        results.append(_format_result("index.html CSS 收敛守卫", css_convergence_passed, css_convergence_detail))
+        all_passed &= css_convergence_passed
+
+    features_dir = REPO_ROOT / "js" / "features"
+    feature_convergence_passed, feature_convergence_detail = _check_features_no_forward_only_files(features_dir)
+    results.append(_format_result("js/features 禁止转发-only 文件", feature_convergence_passed, feature_convergence_detail))
+    all_passed &= feature_convergence_passed
+
+    build_script = REPO_ROOT / "scripts" / "build-bundles.mjs"
+    build_ref_passed, build_ref_detail = _check_build_bundles_no_deleted_refs(build_script)
+    results.append(_format_result("build-bundles 删除脚本引用守卫", build_ref_passed, build_ref_detail))
+    all_passed &= build_ref_passed
+    optional_listening_bundle_passed, optional_listening_bundle_detail = _check_optional_listening_assets_not_bundled(
+        build_script,
+        REPO_ROOT / "js" / "bundles" / "core-foundation.bundle.js",
+    )
+    results.append(_format_result("内置听力索引禁止硬打包守卫", optional_listening_bundle_passed, optional_listening_bundle_detail))
+    all_passed &= optional_listening_bundle_passed
+    release_script_passed, release_script_detail = _check_release_script_runtime_guards(REPO_ROOT / "developer" / "release.sh")
+    results.append(_format_result("Release 脚本运行时守卫", release_script_passed, release_script_detail))
+    all_passed &= release_script_passed
+    release_zip_passed, release_zip_detail = _check_release_zip_runtime_payload()
+    results.append(_format_result("Release ZIP 运行时内容守卫", release_zip_passed, release_zip_detail))
+    all_passed &= release_zip_passed
 
     # Static regression harnesses should start with a doctype for consistent rendering
     static_html_files = sorted((REPO_ROOT / "developer" / "tests").glob("*.html"))
@@ -638,6 +1442,10 @@ def run_checks() -> Tuple[List[dict], bool]:
             script_passed, script_detail = _ensure_exists(script_path)
             results.append(_format_result(f"E2E 依赖 {script_path.name}", script_passed, script_detail))
             all_passed &= script_passed
+        snapshot_path = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "indexSnapshot.js"
+        snapshot_sync_passed, snapshot_sync_detail = _check_index_snapshot_script_sync(index_file, snapshot_path)
+        results.append(_format_result("E2E 快照脚本清单与 index 同步", snapshot_sync_passed, snapshot_sync_detail))
+        all_passed &= snapshot_sync_passed
 
         fixture_path = REPO_ROOT / "developer" / "tests" / "e2e" / "fixtures" / "data-integrity-import-sample.json"
         fixture_passed, fixture_detail = _ensure_exists(fixture_path)
@@ -791,6 +1599,10 @@ def run_checks() -> Tuple[List[dict], bool]:
     results.append(_format_result("lazyLoader 静态脚本去重", dedupe_ok, dedupe_detail))
     all_passed &= dedupe_ok
 
+    settings_split_ok, settings_split_detail = _check_settings_tools_split()
+    results.append(_format_result("settings-tools 拆包守卫", settings_split_ok, settings_split_detail))
+    all_passed &= settings_split_ok
+
     practice_recorder_path = REPO_ROOT / "js" / "core" / "practiceRecorder.js"
     synthetic_guard_ok, synthetic_guard_detail = _check_practice_recorder_synthetic_guard(practice_recorder_path)
     results.append(_format_result("PracticeRecorder 生产 synthetic 保护", synthetic_guard_ok, synthetic_guard_detail))
@@ -828,6 +1640,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("switchLibraryConfig 禁止 confirm", switch_passed, switch_detail))
         all_passed &= switch_passed
 
+        delete_confirm_passed, delete_confirm_detail = _check_js_body_forbidden(main_js_source, "deleteLibraryConfig", "confirm(")
+        results.append(_format_result("deleteLibraryConfig 禁止原生 confirm", delete_confirm_passed, delete_confirm_detail))
+        all_passed &= delete_confirm_passed
+
         shim_passed, shim_detail = _check_window_load_library_shim(main_js_source)
         results.append(_format_result("loadLibrary 全局 shim 防递归", shim_passed, shim_detail))
         all_passed &= shim_passed
@@ -846,15 +1662,26 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
-    complete_exam_data = REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js"
-    complete_meta_passed, complete_meta_detail = _ensure_exists(complete_exam_data)
-    results.append(_format_result("complete-exam-data.js 存在性", complete_meta_passed, complete_meta_detail))
-    all_passed &= complete_meta_passed
+    reading_manifest = REPO_ROOT / "assets" / "generated" / "reading-exams" / "manifest.js"
+    reading_manifest_passed, reading_manifest_detail = _ensure_exists(reading_manifest)
+    results.append(_format_result("reading-exams manifest.js 存在性", reading_manifest_passed, reading_manifest_detail))
+    all_passed &= reading_manifest_passed
 
     path_map_path = REPO_ROOT / "assets" / "data" / "path-map.json"
     path_map_passed, path_map_detail = _check_json_path_map(path_map_path)
     results.append(_format_result("path-map.json 路径映射", path_map_passed, path_map_detail))
     all_passed &= path_map_passed
+
+    listening_assets_passed, listening_assets_detail = _check_listening_generated_assets(
+        REPO_ROOT / "assets" / "generated" / "listening-exams" / "listening-index.compat.js",
+        REPO_ROOT / "assets" / "generated" / "listening-exams" / "manifest.js",
+    )
+    results.append(_format_result("Listening generated 索引结构", listening_assets_passed, listening_assets_detail))
+    all_passed &= listening_assets_passed
+
+    listening_bridge_passed, listening_bridge_detail = _check_listening_static_bridge_coverage()
+    results.append(_format_result("Listening 静态 bridge 覆盖守卫", listening_bridge_passed, listening_bridge_detail))
+    all_passed &= listening_bridge_passed
 
     lazy_loader_path = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
     if lazy_loader_path.exists():
@@ -932,8 +1759,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             sanitizer_passed = False
@@ -955,8 +1781,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -986,8 +1811,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1018,8 +1842,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 capture_output=True,
                 text=True,
                 timeout=240,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.TimeoutExpired:
             sim_nb_drag_passed = False
@@ -1053,8 +1876,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 capture_output=True,
                 text=True,
                 timeout=360,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.TimeoutExpired:
             sim_roundtrip_restore_passed = False
@@ -1088,8 +1910,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 capture_output=True,
                 text=True,
                 timeout=240,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.TimeoutExpired:
             unified_submit_passed = False
@@ -1122,8 +1943,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1153,8 +1973,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1185,8 +2004,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1216,8 +2034,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1247,8 +2064,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1270,6 +2086,66 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeRecorder 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_custom_card_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCustomCard.test.js"
+    if practice_custom_card_test.exists():
+        try:
+            completed_practice_custom_card = subprocess.run(
+                ["node", str(practice_custom_card_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            practice_custom_card_passed = False
+            practice_custom_card_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_custom_card_output = (completed_practice_custom_card.stdout or "").strip() or (completed_practice_custom_card.stderr or "").strip()
+            try:
+                practice_custom_card_payload = json.loads(raw_practice_custom_card_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_custom_card_passed = False
+                practice_custom_card_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_custom_card_passed = practice_custom_card_payload.get("status") == "pass"
+                practice_custom_card_detail = practice_custom_card_payload.get("detail", practice_custom_card_payload)
+        results.append(_format_result("Practice 自定义卡片守卫", practice_custom_card_passed, practice_custom_card_detail))
+        all_passed &= practice_custom_card_passed
+    else:
+        results.append(_format_result("Practice 自定义卡片守卫", False, "测试脚本缺失"))
+        all_passed = False
+
+    vocab_store_test = REPO_ROOT / "developer" / "tests" / "js" / "vocabStore.test.js"
+    if vocab_store_test.exists():
+        try:
+            completed_vocab_store = subprocess.run(
+                ["node", str(vocab_store_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            vocab_store_passed = False
+            vocab_store_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_vocab_store_output = (completed_vocab_store.stdout or "").strip() or (completed_vocab_store.stderr or "").strip()
+            try:
+                vocab_store_payload = json.loads(raw_vocab_store_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                vocab_store_passed = False
+                vocab_store_detail = f"输出解析失败: {parse_error}"
+            else:
+                vocab_store_passed = vocab_store_payload.get("status") == "pass"
+                vocab_store_detail = vocab_store_payload.get("detail", vocab_store_payload)
+        results.append(_format_result("VocabStore 错词释义补全测试", vocab_store_passed, vocab_store_detail))
+        all_passed &= vocab_store_passed
+    else:
+        results.append(_format_result("VocabStore 错词释义补全测试", False, "测试脚本缺失"))
+        all_passed = False
+
     resource_core_test = REPO_ROOT / "developer" / "tests" / "js" / "resourceCore.test.js"
     if resource_core_test.exists():
         try:
@@ -1278,8 +2154,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1301,6 +2176,89 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    library_discovery_test = REPO_ROOT / "developer" / "tests" / "js" / "libraryDiscovery.test.js"
+    if library_discovery_test.exists():
+        library_discovery_passed, library_discovery_detail = _run_json_subprocess(
+            ["node", str(library_discovery_test)],
+            timeout=30,
+        )
+        if library_discovery_passed:
+            library_discovery_passed = library_discovery_detail.get("status") == "pass"
+            library_discovery_detail = library_discovery_detail.get("detail", library_discovery_detail)
+        results.append(_format_result("LibraryDiscovery 动态题库识别测试", library_discovery_passed, library_discovery_detail))
+        all_passed &= library_discovery_passed
+    else:
+        results.append(_format_result("LibraryDiscovery 动态题库识别测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    library_manager_import_test = REPO_ROOT / "developer" / "tests" / "js" / "libraryManagerImportConfig.test.js"
+    if library_manager_import_test.exists():
+        library_manager_import_passed, library_manager_import_detail = _run_json_subprocess(
+            ["node", str(library_manager_import_test)],
+            timeout=30,
+        )
+        if library_manager_import_passed:
+            library_manager_import_passed = library_manager_import_detail.get("status") == "pass"
+            library_manager_import_detail = library_manager_import_detail.get("detail", library_manager_import_detail)
+        results.append(_format_result("LibraryManager 导入配置隔离测试", library_manager_import_passed, library_manager_import_detail))
+        all_passed &= library_manager_import_passed
+    else:
+        results.append(_format_result("LibraryManager 导入配置隔离测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    browse_controller_test = REPO_ROOT / "developer" / "tests" / "js" / "browseController.test.js"
+    if browse_controller_test.exists():
+        try:
+            subprocess.run(
+                ["node", str(browse_controller_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                encoding="utf-8",
+            )
+            browse_controller_passed = True
+            browse_controller_detail = "BrowseController 测试通过"
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            browse_controller_passed = False
+            browse_controller_detail = f"执行失败: {output_text.strip()}"
+        results.append(_format_result("BrowseController 听力入口可用性测试", browse_controller_passed, browse_controller_detail))
+        all_passed &= browse_controller_passed
+    else:
+        results.append(_format_result("BrowseController 听力入口可用性测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    browse_preferences_records_test = REPO_ROOT / "developer" / "tests" / "js" / "browsePreferencesRecords.test.js"
+    if browse_preferences_records_test.exists():
+        browse_preferences_records_passed, browse_preferences_records_detail = _run_json_subprocess(
+            ["node", str(browse_preferences_records_test)],
+            timeout=30,
+        )
+        if browse_preferences_records_passed:
+            browse_preferences_records_passed = browse_preferences_records_detail.get("status") == "pass"
+            browse_preferences_records_detail = browse_preferences_records_detail.get("detail", browse_preferences_records_detail)
+        results.append(_format_result("BrowsePreferences 历史记录锚点测试", browse_preferences_records_passed, browse_preferences_records_detail))
+        all_passed &= browse_preferences_records_passed
+    else:
+        results.append(_format_result("BrowsePreferences 历史记录锚点测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    overview_stats_test = REPO_ROOT / "developer" / "tests" / "js" / "overviewStats.test.js"
+    if overview_stats_test.exists():
+        overview_stats_passed, overview_stats_detail = _run_json_subprocess(
+            ["node", str(overview_stats_test)],
+            timeout=30,
+        )
+        if overview_stats_passed:
+            overview_stats_passed = overview_stats_detail.get("status") == "pass"
+            overview_stats_detail = overview_stats_detail.get("detail", overview_stats_detail)
+        results.append(_format_result("OverviewStats 自定义听力入口测试", overview_stats_passed, overview_stats_detail))
+        all_passed &= overview_stats_passed
+    else:
+        results.append(_format_result("OverviewStats 自定义听力入口测试", False, "测试脚本缺失"))
+        all_passed = False
+
     on_demand_entry_test = REPO_ROOT / "developer" / "tests" / "js" / "onDemandEntrypoints.test.js"
     if on_demand_entry_test.exists():
         try:
@@ -1309,8 +2267,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1332,6 +2289,66 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("按需入口回归测试", False, "测试脚本缺失"))
         all_passed = False
 
+    service_facade_test = REPO_ROOT / "developer" / "tests" / "js" / "serviceFacade.test.js"
+    if service_facade_test.exists():
+        try:
+            completed_service_facade = subprocess.run(
+                ["node", str(service_facade_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            service_facade_passed = False
+            service_facade_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_service_facade_output = (completed_service_facade.stdout or "").strip() or (completed_service_facade.stderr or "").strip()
+            try:
+                service_facade_payload = json.loads(raw_service_facade_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                service_facade_passed = False
+                service_facade_detail = f"输出解析失败: {parse_error}"
+            else:
+                service_facade_passed = service_facade_payload.get("status") == "pass"
+                service_facade_detail = service_facade_payload.get("detail", service_facade_payload)
+        results.append(_format_result("服务门面回归测试", service_facade_passed, service_facade_detail))
+        all_passed &= service_facade_passed
+    else:
+        results.append(_format_result("服务门面回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    exam_filter_service_test = REPO_ROOT / "developer" / "tests" / "js" / "examFilterService.test.js"
+    if exam_filter_service_test.exists():
+        try:
+            completed_exam_filter_service = subprocess.run(
+                ["node", str(exam_filter_service_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            exam_filter_service_passed = False
+            exam_filter_service_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_exam_filter_service_output = (completed_exam_filter_service.stdout or "").strip() or (completed_exam_filter_service.stderr or "").strip()
+            try:
+                exam_filter_service_payload = json.loads(raw_exam_filter_service_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                exam_filter_service_passed = False
+                exam_filter_service_detail = f"输出解析失败: {parse_error}"
+            else:
+                exam_filter_service_passed = exam_filter_service_payload.get("status") == "pass"
+                exam_filter_service_detail = exam_filter_service_payload.get("detail", exam_filter_service_payload)
+        results.append(_format_result("ExamFilterService 回归测试", exam_filter_service_passed, exam_filter_service_detail))
+        all_passed &= exam_filter_service_passed
+    else:
+        results.append(_format_result("ExamFilterService 回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     practice_core_guard_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.guard.test.js"
     if practice_core_guard_test.exists():
         try:
@@ -1340,8 +2357,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1371,8 +2387,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1394,6 +2409,24 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("练习记录持久化删除链路测试", False, "测试脚本缺失"))
         all_passed = False
 
+    dictionary_service_test = REPO_ROOT / "developer" / "tests" / "js" / "dictionaryService.test.js"
+    if dictionary_service_test.exists():
+        dictionary_test_passed, dictionary_test_payload = _run_json_subprocess(
+            ["node", str(dictionary_service_test)],
+            timeout=30,
+        )
+        if dictionary_test_passed and isinstance(dictionary_test_payload, dict):
+            test_passed = dictionary_test_payload.get("status") == "pass"
+            test_detail = dictionary_test_payload.get("detail", dictionary_test_payload)
+        else:
+            test_passed = False
+            test_detail = dictionary_test_payload
+        results.append(_format_result("阅读高亮本地词典测试", test_passed, test_detail))
+        all_passed &= test_passed
+    else:
+        results.append(_format_result("阅读高亮本地词典测试", False, "测试脚本缺失"))
+        all_passed = False
+
     practice_core_app_state_sync_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCoreAppStateSync.test.js"
     if practice_core_app_state_sync_test.exists():
         try:
@@ -1402,8 +2435,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
@@ -1423,68 +2455,6 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= practice_core_app_state_sync_passed
     else:
         results.append(_format_result("PracticeCore app.state 同步测试", False, "测试脚本缺失"))
-        all_passed = False
-
-    practice_page_enhancer_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageEnhancer.test.js"
-    if practice_page_enhancer_test.exists():
-        try:
-            completed_practice_page_enhancer = subprocess.run(
-                ["node", str(practice_page_enhancer_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            practice_page_enhancer_passed = False
-            practice_page_enhancer_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_practice_page_enhancer_output = (completed_practice_page_enhancer.stdout or "").strip() or (completed_practice_page_enhancer.stderr or "").strip()
-            try:
-                practice_page_enhancer_payload = json.loads(raw_practice_page_enhancer_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                practice_page_enhancer_passed = False
-                practice_page_enhancer_detail = f"输出解析失败: {parse_error}"
-            else:
-                practice_page_enhancer_passed = practice_page_enhancer_payload.get("status") == "pass"
-                practice_page_enhancer_detail = practice_page_enhancer_payload.get("detail", practice_page_enhancer_payload)
-        results.append(_format_result("练习页增强器回归测试", practice_page_enhancer_passed, practice_page_enhancer_detail))
-        all_passed &= practice_page_enhancer_passed
-    else:
-        results.append(_format_result("练习页增强器回归测试", False, "测试脚本缺失"))
-        all_passed = False
-
-    unified_reading_page_test = REPO_ROOT / "developer" / "tests" / "js" / "unifiedReadingPage.test.js"
-    if unified_reading_page_test.exists():
-        try:
-            completed_unified_reading_page = subprocess.run(
-                ["node", str(unified_reading_page_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            unified_reading_page_passed = False
-            unified_reading_page_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_unified_reading_page_output = (completed_unified_reading_page.stdout or "").strip() or (completed_unified_reading_page.stderr or "").strip()
-            try:
-                unified_reading_page_payload = json.loads(raw_unified_reading_page_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                unified_reading_page_passed = False
-                unified_reading_page_detail = f"输出解析失败: {parse_error}"
-            else:
-                unified_reading_page_passed = unified_reading_page_payload.get("status") == "pass"
-                unified_reading_page_detail = unified_reading_page_payload.get("detail", unified_reading_page_payload)
-        results.append(_format_result("统一阅读页协议回归测试", unified_reading_page_passed, unified_reading_page_detail))
-        all_passed &= unified_reading_page_passed
-    else:
-        results.append(_format_result("统一阅读页协议回归测试", False, "测试脚本缺失"))
         all_passed = False
 
     # Integration tests
@@ -1516,8 +2486,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                     capture_output=True,
                     text=True,
                     timeout=30,
-                    encoding="utf-8",
-                    errors="replace"
+                    encoding="utf-8"
                 )
             except subprocess.TimeoutExpired:
                 integration_passed = False
@@ -1557,8 +2526,7 @@ def run_checks() -> Tuple[List[dict], bool]:
                 capture_output=True,
                 text=True,
                 timeout=480,
-                encoding="utf-8",
-                errors="replace"
+                encoding="utf-8"
             )
         except subprocess.TimeoutExpired:
             reading_audit_passed = False

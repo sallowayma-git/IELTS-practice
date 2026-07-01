@@ -65,9 +65,70 @@
         return 0;
     }
 
-    function applyExamSort(exams) {
+    function resolveDifficultyScore(exam) {
+        const score = Number(exam && exam.difficultyScore);
+        return Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY;
+    }
+
+    function compareByCategoryThenTitle(a, b) {
+        const categoryA = String(a && a.category || '');
+        const categoryB = String(b && b.category || '');
+        const categoryDiff = categoryA.localeCompare(categoryB, 'zh-Hans-CN');
+        if (categoryDiff !== 0) {
+            return categoryDiff;
+        }
+        return String(a && a.title || '').localeCompare(String(b && b.title || ''), 'zh-Hans-CN');
+    }
+
+    function normalizeBrowseFrequencyFilter(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        if (raw === 'high' || raw === 'medium' || raw === 'low') {
+            return raw;
+        }
+        return 'all';
+    }
+
+    function normalizeFrequencyBucket(exam) {
+        const raw = String(exam && exam.frequency || '').trim().toLowerCase();
+        if (!raw || raw === 'unknown' || raw === '未知频率') {
+            return '';
+        }
+        if (raw === 'low' || raw === '低频') {
+            return 'low';
+        }
+        if (raw === 'medium' || raw === 'mid' || raw === '中频' || raw === 'very-high' || raw === '次高频') {
+            return 'medium';
+        }
+        if (raw === 'high' || raw === '高频' || raw === 'ultra-high' || raw === '超高频') {
+            return 'high';
+        }
+        return '';
+    }
+
+    function applyBrowseFrequencyFilter(exams, frequencyFilter) {
         const list = Array.isArray(exams) ? exams.slice() : [];
-        const mode = String(global.__browseSortMode || 'default').trim().toLowerCase();
+        const filter = normalizeBrowseFrequencyFilter(
+            frequencyFilter || global.__browseFrequencyFilter || 'all'
+        );
+        if (filter === 'all') {
+            return list;
+        }
+        return list.filter((exam) => normalizeFrequencyBucket(exam) === filter);
+    }
+
+    function applyExamSort(exams, sortMode) {
+        const list = Array.isArray(exams) ? exams.slice() : [];
+        const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
+        if (mode === 'difficulty-desc') {
+            return list.sort((a, b) => {
+                const difficultyA = resolveDifficultyScore(a);
+                const difficultyB = resolveDifficultyScore(b);
+                if (difficultyA !== difficultyB) {
+                    return difficultyB - difficultyA;
+                }
+                return compareByCategoryThenTitle(a, b);
+            });
+        }
         if (mode !== 'frequency-desc') {
             return list;
         }
@@ -76,19 +137,106 @@
             if (rankDiff !== 0) {
                 return rankDiff;
             }
-            const categoryA = String(a && a.category || '');
-            const categoryB = String(b && b.category || '');
-            const categoryDiff = categoryA.localeCompare(categoryB, 'zh-Hans-CN');
-            if (categoryDiff !== 0) {
-                return categoryDiff;
-            }
-            return String(a && a.title || '').localeCompare(String(b && b.title || ''), 'zh-Hans-CN');
+            return compareByCategoryThenTitle(a, b);
         });
     }
 
-    function applyBrowsePostFilters(exams) {
+    function applyBrowsePostFilters(exams, sortMode, frequencyFilter) {
         const deduplicated = deduplicateExams(exams);
-        return applyExamSort(deduplicated);
+        const frequencyFiltered = applyBrowseFrequencyFilter(deduplicated, frequencyFilter);
+        return applyExamSort(frequencyFiltered, sortMode);
+    }
+
+    function hasListeningEntries(exams) {
+        return (Array.isArray(exams) ? exams : []).some((exam) => exam && exam.type === 'listening');
+    }
+
+    function normalizeUnavailableListeningFilter(activeCategory, activeExamType, examIndexSnapshot) {
+        const listeningAvailable = typeof global.hasActiveListeningLibrary === 'function'
+            ? global.hasActiveListeningLibrary(examIndexSnapshot)
+            : hasListeningEntries(examIndexSnapshot);
+        const isListeningFilter = activeExamType === 'listening'
+            || (global.__browseFilterMode && global.__browseFilterMode !== 'default');
+        if (listeningAvailable || !isListeningFilter) {
+            return { activeCategory, activeExamType };
+        }
+
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        if (global.browseController) {
+            global.browseController.currentMode = 'default';
+            global.browseController.activeFilter = 'all';
+            if (typeof global.browseController.setBrowseFilterState === 'function') {
+                global.browseController.setBrowseFilterState('all', 'all');
+            }
+            if (typeof global.browseController.renderFilterButtons === 'function') {
+                global.browseController.renderFilterButtons();
+            }
+        } else if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'all');
+        }
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('题库列表');
+        }
+        return { activeCategory: 'all', activeExamType: 'all' };
+    }
+
+    function filterExamsWithLegacyFallback(exams, state) {
+        const inputList = Array.isArray(exams) ? exams : [];
+        const safeState = state && typeof state === 'object' ? state : {};
+        const activeCategory = String(safeState.activeCategory || safeState.category || 'all');
+        const activeExamType = String(safeState.activeExamType || safeState.examType || 'all');
+        const filterMode = String(safeState.browseFilterMode || safeState.filterMode || 'default');
+        const sortMode = String(safeState.sortMode || safeState.browseSortMode || global.__browseSortMode || 'default');
+        const frequencyFilter = normalizeBrowseFrequencyFilter(
+            safeState.frequencyFilter || safeState.browseFrequencyFilter || global.__browseFrequencyFilter || 'all'
+        );
+        const isFrequencyMode = filterMode !== 'default';
+        const basePathFilter = isFrequencyMode
+            && typeof safeState.basePathFilter === 'string'
+            && safeState.basePathFilter.trim()
+            ? safeState.basePathFilter.trim()
+            : (isFrequencyMode && typeof safeState.browsePath === 'string' && safeState.browsePath.trim()
+                ? safeState.browsePath.trim()
+                : null);
+        const preferredMap = safeState.preferredFirstExamByCategory && typeof safeState.preferredFirstExamByCategory === 'object'
+            ? safeState.preferredFirstExamByCategory
+            : preferredFirstExamByCategory;
+        let list = inputList.slice();
+
+        if (activeExamType !== 'all') {
+            list = list.filter(exam => exam.type === activeExamType);
+        }
+        if (activeCategory !== 'all') {
+            const filteredByCategory = list.filter(exam => exam.category === activeCategory);
+            if (filteredByCategory.length > 0 || !basePathFilter) {
+                list = filteredByCategory;
+            }
+        }
+        if (basePathFilter) {
+            list = list.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(basePathFilter));
+        }
+
+        if (activeCategory !== 'all' && activeExamType !== 'all') {
+            const key = `${activeCategory}_${activeExamType}`;
+            const preferred = preferredMap[key];
+            if (preferred) {
+                let preferredIndex = list.findIndex(exam => exam.id === preferred.id);
+                if (preferredIndex === -1) {
+                    preferredIndex = list.findIndex(exam =>
+                        exam.title === preferred.title &&
+                        exam.category === activeCategory &&
+                        exam.type === activeExamType
+                    );
+                }
+                if (preferredIndex > -1) {
+                    const [item] = list.splice(preferredIndex, 1);
+                    list.unshift(item);
+                }
+            }
+        }
+
+        return applyBrowsePostFilters(list, sortMode, frequencyFilter);
     }
 
     function formatFrequencyLabel(frequency) {
@@ -213,6 +361,85 @@
         return Array.isArray(list)
             ? list.find((item) => item && String(item.id) === String(examId))
             : null;
+    }
+
+    function isReadingMemorizeBrowseMode() {
+        return global.__readingMemorizeBrowseMode === true
+            || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
+    }
+
+    function clearReadingMemorizeBrowseMode() {
+        if (typeof global.setReadingMemorizeBrowseMode === 'function') {
+            global.setReadingMemorizeBrowseMode(false);
+        } else {
+            global.__readingMemorizeBrowseMode = false;
+        }
+        global.__browseMemorizeFilterMode = null;
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
+    }
+
+    function isReadingMemorizeExam(exam) {
+        if (global.isReadingMemorizeCandidate && global.isReadingMemorizeCandidate !== isReadingMemorizeExam) {
+            try {
+                return global.isReadingMemorizeCandidate(exam) === true;
+            } catch (_) {
+                // fallback below
+            }
+        }
+        if (!exam || !exam.id) {
+            return false;
+        }
+        if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+            return false;
+        }
+        if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+            return false;
+        }
+        if (exam.hasHtml === false) {
+            return false;
+        }
+        const manifest = global.__READING_EXAM_MANIFEST__;
+        const entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
+    }
+
+    function filterReadingMemorizeExams(exams) {
+        return (Array.isArray(exams) ? exams : []).filter(isReadingMemorizeExam);
+    }
+
+    function launchReadingMemorizeExam(examId) {
+        const exam = findExamById(examId);
+        if (!isReadingMemorizeExam(exam)) {
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('该题目无法使用统一阅读页背题，请选择有 HTML 数据的阅读题。', 'warning');
+            }
+            return;
+        }
+        const launchOptions = {
+            practiceMode: 'memorize',
+            target: 'tab',
+            windowName: 'ielts-reading-memorize'
+        };
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
+        if (global.app && typeof global.app.openExam === 'function') {
+            global.app.openExam(examId, launchOptions);
+            return;
+        }
+        if (typeof global.openExam === 'function') {
+            global.openExam(examId, launchOptions);
+            return;
+        }
+        if (global.AppActions && typeof global.AppActions.openExamWithFallback === 'function') {
+            global.AppActions.openExamWithFallback(exam, 0, launchOptions);
+            return;
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('打开阅读背题失败，题目启动模块未就绪。', 'error');
+        }
     }
 
     function ensureCustomSuiteSelectionPortal() {
@@ -583,9 +810,22 @@
      */
     function loadExamList() {
         console.log('[ExamActions] loadExamList called');
-        
+
+        if (typeof global.setupBrowseControls === 'function') {
+            try {
+                global.setupBrowseControls();
+            } catch (error) {
+                console.warn('[ExamActions] 浏览控件绑定失败:', error);
+            }
+        }
+
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
+
         // 1. 频率模式委托给 BrowseController
-        if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
+        if (!memorizeSelectionActive && global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
             try {
                 if (!global.browseController.buttonContainer) {
                     global.browseController.initialize('type-filter-buttons');
@@ -612,8 +852,6 @@
             examIndexSnapshot = Array.isArray(global.examIndex) ? global.examIndex : [];
         }
 
-        let examsToShow = Array.from(examIndexSnapshot);
-
         // 3. 获取筛选条件
         let activeCategory = 'all';
         let activeExamType = 'all';
@@ -627,6 +865,23 @@
             activeExamType = typeof global.getCurrentExamType === 'function' ? global.getCurrentExamType() : 'all';
         }
 
+        const normalizedFilter = normalizeUnavailableListeningFilter(activeCategory, activeExamType, examIndexSnapshot);
+        activeCategory = normalizedFilter.activeCategory;
+        activeExamType = normalizedFilter.activeExamType;
+        if (memorizeSelectionActive) {
+            activeCategory = 'all';
+            activeExamType = 'reading';
+            global.__browseFilterMode = 'default';
+            global.__browsePath = null;
+            if (global.browseController) {
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'reading';
+            }
+            if (typeof global.setBrowseFilterState === 'function') {
+                global.setBrowseFilterState('all', 'reading');
+            }
+        }
+
         // 4. 执行筛选
         // 仅在频率模式下使用 basePath 过滤
         const isFrequencyMode = global.__browseFilterMode && global.__browseFilterMode !== 'default';
@@ -634,51 +889,25 @@
             ? global.__browsePath.trim()
             : null;
 
-        if (activeExamType !== 'all') {
-            examsToShow = examsToShow.filter(exam => exam.type === activeExamType);
-        }
-        if (activeCategory !== 'all') {
-            const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
-            // 只有在有筛选结果或不是频率模式时才应用分类过滤
-            if (filteredByCategory.length > 0 || !basePathFilter) {
-                examsToShow = filteredByCategory;
+        let examsToShow = filterExamsWithLegacyFallback(examIndexSnapshot, {
+            activeCategory,
+            activeExamType,
+            browseFilterMode: global.__browseFilterMode,
+            basePathFilter,
+            browsePath: global.__browsePath,
+            sortMode: global.__browseSortMode,
+            preferredFirstExamByCategory
+        });
+        if (memorizeSelectionActive) {
+            examsToShow = filterReadingMemorizeExams(examsToShow);
+            if (typeof global.setBrowseTitle === 'function') {
+                global.setBrowseTitle('阅读背题选题');
             }
         }
-        // 只有在频率模式下才应用路径过滤
-        if (basePathFilter) {
-            examsToShow = examsToShow.filter((exam) => {
-                return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
-            });
-        }
-
-        // 5. 执行置顶逻辑
-        if (activeCategory !== 'all' && activeExamType !== 'all') {
-            const key = `${activeCategory}_${activeExamType}`;
-            const preferred = preferredFirstExamByCategory[key];
-
-            if (preferred) {
-                // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
-                let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
-
-                // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
-                if (preferredIndex === -1) {
-                    preferredIndex = examsToShow.findIndex(exam =>
-                        exam.title === preferred.title &&
-                        exam.category === activeCategory &&
-                        exam.type === activeExamType
-                    );
-                }
-
-                if (preferredIndex > -1) {
-                    const [item] = examsToShow.splice(preferredIndex, 1);
-                    examsToShow.unshift(item);
-                }
-            }
-        }
-
-        examsToShow = applyBrowsePostFilters(examsToShow);
         const customSuiteDraft = getCustomSuiteDraft();
-        const selectionMode = isCustomSuiteSelectionActive() ? 'custom-suite' : '';
+        const selectionMode = memorizeSelectionActive
+            ? 'reading-memorize'
+            : (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
 
         // 6. 更新状态并渲染
         if (global.appStateService) {
@@ -705,6 +934,7 @@
      * 重置浏览视图
      */
     function resetBrowseViewToAll() {
+        clearReadingMemorizeBrowseMode();
         // 1. 清除频率模式标记（关键修复）
         if (typeof global.__browseFilterMode !== 'undefined') {
             global.__browseFilterMode = 'default';
@@ -750,6 +980,13 @@
      * 渲染题库列表 DOM
      */
     function displayExams(exams, options = {}) {
+        const effectiveOptions = Object.assign({}, options || {});
+        if (!effectiveOptions.selectionMode && isReadingMemorizeBrowseMode()) {
+            effectiveOptions.selectionMode = 'reading-memorize';
+        }
+        const renderExams = effectiveOptions.selectionMode === 'reading-memorize'
+            ? filterReadingMemorizeExams(exams)
+            : exams;
         // 1. 尝试使用 BrowseController 管理的 examListViewInstance
         let view = null;
         if (global.browseController && typeof global.browseController.getExamListView === 'function') {
@@ -769,10 +1006,10 @@
         }
 
         if (view) {
-            view.render(exams, {
+            view.render(renderExams, {
                 loadingSelector: '#browse-view .loading',
-                selectionMode: options.selectionMode || '',
-                customSuiteDraft: options.customSuiteDraft || null
+                selectionMode: effectiveOptions.selectionMode || '',
+                customSuiteDraft: effectiveOptions.customSuiteDraft || null
             });
             setupExamActionHandlers();
             return;
@@ -794,7 +1031,7 @@
             loadingEl.style.display = 'none';
         }
 
-        const normalizedExams = Array.isArray(exams) ? exams : [];
+        const normalizedExams = Array.isArray(renderExams) ? renderExams : [];
         if (normalizedExams.length === 0) {
             renderEmptyState(container);
             return;
@@ -805,7 +1042,7 @@
 
         normalizedExams.forEach((exam) => {
             if (!exam) return;
-            const item = createExamCard(exam, options);
+            const item = createExamCard(exam, effectiveOptions);
             list.appendChild(item);
         });
 
@@ -849,11 +1086,13 @@
         const currentCategory = getCustomSuiteCurrentCategory(draft);
         const examCategory = normalizeExamCategory(exam);
         const isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        const isMemorizeSelecting = selectionMode === 'reading-memorize';
         const isSelected = !!draft && draft.pickedByCategory && draft.pickedByCategory[examCategory]
             && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         const item = document.createElement('div');
         item.className = 'exam-item'
             + (isSelecting ? ' exam-item--suite-selecting' : '')
+            + (isMemorizeSelecting ? ' exam-item--memorize-selecting' : '')
             + (isSelected ? ' exam-item--suite-selected' : '');
         if (exam.id) {
             item.dataset.examId = exam.id;
@@ -890,9 +1129,30 @@
             selectBadge.textContent = `${currentCategory} 待选`;
             info.appendChild(selectBadge);
         }
+        if (isMemorizeSelecting) {
+            const selectBadge = document.createElement('div');
+            selectBadge.className = 'suite-custom-selection-badge';
+            selectBadge.textContent = '背题模式';
+            info.appendChild(selectBadge);
+        }
 
         const actions = document.createElement('div');
         actions.className = 'exam-actions';
+
+        if (isMemorizeSelecting) {
+            const selectBtn = document.createElement('button');
+            selectBtn.className = 'btn exam-item-action-btn';
+            selectBtn.type = 'button';
+            selectBtn.dataset.action = 'reading-memorize-select';
+            if (exam.id) {
+                selectBtn.dataset.examId = exam.id;
+            }
+            selectBtn.textContent = '选择背题';
+            actions.appendChild(selectBtn);
+            item.appendChild(info);
+            item.appendChild(actions);
+            return item;
+        }
 
         const startBtn = document.createElement('button');
         startBtn.className = 'btn exam-item-action-btn';
@@ -973,8 +1233,19 @@
                 return;
             }
 
-            if (action === 'start' && typeof global.openExam === 'function') {
-                global.openExam(examId);
+            if (action === 'reading-memorize-select') {
+                launchReadingMemorizeExam(examId);
+                return;
+            }
+
+            if (action === 'start') {
+                if (global.app && typeof global.app.openExam === 'function') {
+                    global.app.openExam(examId);
+                    return;
+                }
+                if (typeof global.openExam === 'function') {
+                    global.openExam(examId);
+                }
                 return;
             }
 
@@ -1014,6 +1285,9 @@
             global.DOM.delegate('click', '[data-action="suite-custom-cancel"]', function (event) {
                 invoke(this, event);
             });
+            global.DOM.delegate('click', '[data-action="reading-memorize-select"]', function (event) {
+                invoke(this, event);
+            });
         } else if (typeof document !== 'undefined') {
             document.addEventListener('click', function (event) {
                 var target = event.target.closest('[data-action]');
@@ -1046,11 +1320,18 @@
         return Promise.resolve();
     }
 
+    function ensureSettingsToolsReady() {
+        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            return global.AppLazyLoader.ensureGroup('settings-tools');
+        }
+        return ensureBrowseGroupReady();
+    }
+
     async function ensureDataIntegrityManagerReady() {
         try {
-            await ensureBrowseGroupReady();
+            await ensureSettingsToolsReady();
         } catch (error) {
-            console.warn('[ExamActions] 浏览组预加载失败，继续尝试导出:', error);
+            console.warn('[ExamActions] 设置工具预加载失败，继续尝试导出:', error);
         }
 
         if (!global.dataIntegrityManager && global.DataIntegrityManager) {
@@ -1111,9 +1392,43 @@
         }
     }
 
+    function renderExamListView(exams, options = {}) {
+        if (typeof document === 'undefined') {
+            return false;
+        }
+        const container = document.getElementById('exam-list-container');
+        if (!container) {
+            return false;
+        }
+        displayExams(exams, options);
+        return true;
+    }
+
     // ============================================================================
     // 导出到全局
     // ============================================================================
+
+    global.ExamFilterService = Object.assign({}, global.ExamFilterService || {}, {
+        filterExams: filterExamsWithLegacyFallback
+    });
+    global.ExamListView = Object.assign({}, global.ExamListView || {}, {
+        render: renderExamListView,
+        createExamCard,
+        renderEmptyState
+    });
+    global.CustomSuiteSelection = Object.assign({}, global.CustomSuiteSelection || {}, {
+        getDraft: getCustomSuiteDraft,
+        isActive: isCustomSuiteSelectionActive,
+        normalizeExamCategory,
+        getCurrentCategory: getCustomSuiteCurrentCategory,
+        render: renderCustomSuiteSelectionPortal,
+        refresh: refreshCustomSuiteSelectionPortal,
+        hide: hideCustomSuiteSelectionPortal,
+        select: handleCustomSuiteSelect,
+        remove: handleCustomSuiteDelete,
+        confirm: handleCustomSuiteConfirm,
+        cancel: handleCustomSuiteCancel
+    });
 
     global.ExamActions = {
         loadExamList,
@@ -1124,7 +1439,12 @@
         exportPracticeData,
         deduplicateExams,
         applyExamSort,
-        applyBrowsePostFilters
+        applyBrowsePostFilters,
+        applyBrowseFrequencyFilter,
+        normalizeBrowseFrequencyFilter,
+        launchReadingMemorizeExam,
+        isReadingMemorizeBrowseMode,
+        isReadingMemorizeExam
     };
 
     global.loadExamList = loadExamList;
@@ -1133,6 +1453,7 @@
     global.setupExamActionHandlers = setupExamActionHandlers;
     global.exportAllData = exportAllData;
     global.exportPracticeData = exportPracticeData;
+    global.launchReadingMemorizeExam = launchReadingMemorizeExam;
 
     console.log('[ExamActions] 模块已加载 (Phase 2)');
 

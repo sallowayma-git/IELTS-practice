@@ -1,14 +1,6 @@
 (function (global) {
     'use strict';
 
-    const DEFAULT_MAX_MESSAGES = 3;
-    const MESSAGE_ICONS = {
-        error: '❌',
-        success: '✅',
-        warning: '⚠️',
-        info: 'ℹ️'
-    };
-
     function ensureContainer(containerId) {
         if (typeof document === 'undefined') {
             return null;
@@ -25,20 +17,31 @@
 
     function createMessageNode(message, type) {
         const note = document.createElement('div');
-        note.className = 'message ' + (type || 'info');
-        const icon = document.createElement('strong');
-        icon.textContent = MESSAGE_ICONS[type] || MESSAGE_ICONS.info;
-        note.appendChild(icon);
-        note.appendChild(document.createTextNode(' ' + String(message || '')));
+        note.className = 'message ' + (type || 'info') + ' message-entering';
+        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+
+        const indicator = document.createElement('span');
+        indicator.className = 'message-indicator';
+        indicator.setAttribute('aria-hidden', 'true');
+
+        const text = document.createElement('span');
+        text.className = 'message-text';
+        text.textContent = String(message || '');
+        note.title = text.textContent;
+
+        note.appendChild(indicator);
+        note.appendChild(text);
         return note;
     }
 
     class MessageCenter {
         constructor(options = {}) {
             this.options = Object.assign({
-                containerId: 'message-container',
-                maxMessages: DEFAULT_MAX_MESSAGES
+                containerId: 'message-container'
             }, options || {});
+            this.activeMessage = null;
+            this.activeTimer = null;
         }
 
         show(message, type = 'info', duration = 4000) {
@@ -56,23 +59,46 @@
             }
 
             const note = createMessageNode(message, type);
+            this.dismiss(180);
             container.appendChild(note);
-
-            while (container.children.length > this.options.maxMessages) {
-                container.removeChild(container.firstChild);
-            }
+            this.activeMessage = note;
+            window.setTimeout(() => {
+                if (note.parentNode && !note.classList.contains('message-leaving')) {
+                    note.classList.remove('message-entering');
+                    note.classList.add('message-visible');
+                }
+            }, 760);
 
             const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
-            window.setTimeout(() => {
-                note.classList.add('message-leaving');
-                window.setTimeout(() => {
-                    if (note.parentNode) {
-                        note.parentNode.removeChild(note);
-                    }
-                }, 320);
+            this.activeTimer = window.setTimeout(() => {
+                this.dismiss(480, note);
             }, timeout);
 
             return note;
+        }
+
+        dismiss(delay = 480, target) {
+            const note = target || this.activeMessage;
+            if (!note) {
+                return;
+            }
+
+            if (!target && this.activeTimer) {
+                window.clearTimeout(this.activeTimer);
+                this.activeTimer = null;
+            }
+
+            note.classList.add('message-leaving');
+            note.classList.remove('message-entering', 'message-visible');
+            window.setTimeout(() => {
+                if (note.parentNode) {
+                    note.parentNode.removeChild(note);
+                }
+                if (this.activeMessage === note) {
+                    this.activeMessage = null;
+                    this.activeTimer = null;
+                }
+            }, delay);
         }
     }
 

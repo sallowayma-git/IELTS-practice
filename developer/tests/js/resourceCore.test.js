@@ -47,11 +47,16 @@ function createResourceCoreHarness() {
             async set(key, value) {
                 storageState.set(key, JSON.parse(JSON.stringify(value)));
                 return true;
+            },
+            async remove(key) {
+                storageState.delete(key);
+                return true;
             }
         },
         location: {
             href: 'file:///Users/test/index.html'
-        }
+        },
+        LibraryDiscovery: null
     };
 
     const sandbox = {
@@ -172,7 +177,87 @@ function testDefaultRootStillWorks(ResourceCore) {
     });
 }
 
-function main() {
+function testExplicitEmptyRootDoesNotFallback(ResourceCore) {
+    ResourceCore.setBasePrefix('./');
+    ResourceCore.setActivePathMap({
+        reading: { root: '', exceptions: {} },
+        listening: { root: '', exceptions: {} }
+    });
+
+    const exam = {
+        type: 'listening',
+        path: 'Teacher Pack/deep/set-1',
+        filename: 'custom.html'
+    };
+
+    assert.strictEqual(
+        ResourceCore.resolveExamBasePath(exam),
+        'Teacher Pack/deep/set-1/',
+        '显式空 root 代表自定义路径已自带根目录，不能回退拼接 ListeningPractice'
+    );
+    assert.strictEqual(
+        ResourceCore.buildResourcePath(exam, 'html'),
+        './Teacher%20Pack/deep/set-1/custom.html',
+        '显式空 root 应按题库索引路径直接构建资源'
+    );
+
+    recordResult('ResourceCore 显式空 root 不回退默认根', true, {
+        path: ResourceCore.buildResourcePath(exam, 'html')
+    });
+}
+
+function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
+    ResourceCore.setBasePrefix('./');
+    ResourceCore.setActivePathMap(ResourceCore.DEFAULT_PATH_MAP);
+    context.window.LibraryDiscovery = {
+        resolveRuntimeResource(exam, kind) {
+            if (exam && exam.importKey === 'listening:external/deep/custom.html' && kind === 'html') {
+                return 'blob:test-runtime/custom-html';
+            }
+            return '';
+        }
+    };
+
+    const exam = {
+        id: 'custom-listening',
+        importKey: 'listening:external/deep/custom.html',
+        type: 'listening',
+        path: 'External/deep/',
+        filename: 'custom.html'
+    };
+
+    assert.strictEqual(
+        ResourceCore.buildResourcePath(exam, 'html'),
+        'blob:test-runtime/custom-html',
+        '运行时 File/Blob URL 应优先于持久化相对路径'
+    );
+    assert.strictEqual(
+        ResourceCore.getResourceAttempts(exam, 'html')[0].label,
+        'runtime',
+        '资源探测应优先尝试运行时 URL'
+    );
+
+    recordResult('ResourceCore 运行时 URL 优先', true, {
+        path: ResourceCore.buildResourcePath(exam, 'html')
+    });
+}
+
+async function testDeletePathMapForConfiguration(context, ResourceCore) {
+    const key = ResourceCore.getPathMapStorageKey('custom_config');
+    await context.window.storage.set(key, {
+        reading: { root: 'ReadingCustom/', exceptions: {} },
+        listening: { root: 'ListeningCustom/', exceptions: {} }
+    });
+
+    const deleted = await ResourceCore.deletePathMapForConfiguration('custom_config');
+
+    assert.strictEqual(deleted, true, '删除 path map 应返回 true');
+    assert.strictEqual(await context.window.storage.get(key, null), null, '删除配置时 path map 存储键必须被移除');
+
+    recordResult('ResourceCore 删除指定配置 path map', true, { key });
+}
+
+async function main() {
     const context = createResourceCoreHarness();
     loadScript('js/core/resourceCore.js', context);
     const ResourceCore = context.window.ResourceCore;
@@ -181,6 +266,9 @@ function main() {
         testCustomLibraryRootPreserved(ResourceCore);
         testMappedRootStillPrependsRelativePaths(ResourceCore);
         testDefaultRootStillWorks(ResourceCore);
+        testExplicitEmptyRootDoesNotFallback(ResourceCore);
+        testRuntimeResourceTakesPrecedence(context, ResourceCore);
+        await testDeletePathMapForConfiguration(context, ResourceCore);
 
         console.log(JSON.stringify({
             status: 'pass',

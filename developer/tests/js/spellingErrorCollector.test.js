@@ -9,9 +9,13 @@
  * 4. 词表保存和合并
  */
 
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ============================================================================
 // 模拟浏览器环境
@@ -317,6 +321,95 @@ async function testDetectErrors() {
 }
 
 /**
+ * 测试：听力候选答案和短语 token 级错词检测
+ */
+async function testListeningCandidateSpellingDetection() {
+    console.log('测试: 听力候选答案和短语 token 检测');
+
+    const collector = new window.SpellingErrorCollector();
+    await collector.ensureInitialized();
+
+    const answerComparison = {
+        q1: {
+            userAnswer: 'acommodation',
+            correctAnswer: 'lodging',
+            acceptedAnswers: ['accommodation', 'lodging'],
+            canonicalAnswer: 'accommodation',
+            isCorrect: false
+        },
+        q2: {
+            userAnswer: 'green gardon',
+            correctAnswer: 'green garden',
+            acceptedAnswers: ['green garden'],
+            canonicalAnswer: 'green garden',
+            isCorrect: false
+        },
+        q3: {
+            userAnswer: 'enviroment.',
+            correctAnswer: 'environment',
+            acceptedAnswers: ['environment'],
+            canonicalAnswer: 'environment',
+            isCorrect: false
+        }
+    };
+
+    const errors = collector.detectErrors(answerComparison, 'set-listening', 'ListeningPractice/P1/高频/test');
+    assert.strictEqual(errors.length, 3, '应该检测到3个拼写错误');
+
+    const accommodation = errors.find(e => e.questionId === 'q1');
+    assert(accommodation, '应该检测多候选答案中的accommodation');
+    assert.strictEqual(accommodation.word, 'accommodation');
+    assert.deepStrictEqual(accommodation.acceptedAnswers, ['accommodation', 'lodging']);
+    assert.strictEqual(accommodation.canonicalAnswer, 'accommodation');
+
+    const garden = errors.find(e => e.questionId === 'q2');
+    assert(garden, '应该检测短语中的单个错词');
+    assert.strictEqual(garden.word, 'garden');
+    assert.strictEqual(garden.userInput, 'gardon');
+    assert.strictEqual(garden.tokenIndex, 1);
+    assert.strictEqual(garden.metadata.comparisonMode, 'phrase-token');
+
+    const environment = errors.find(e => e.questionId === 'q3');
+    assert(environment, '应该忽略用户答案的句末标点后检测错词');
+    assert.strictEqual(environment.word, 'environment');
+    assert.strictEqual(environment.userInput, 'enviroment');
+
+    console.log('  ✓ 听力候选答案和短语 token 检测正确');
+}
+
+/**
+ * 测试：错词误抓过滤
+ */
+function testSpellingFalsePositiveFilters() {
+    console.log('测试: 错词误抓过滤');
+
+    const collector = new window.SpellingErrorCollector();
+
+    assert.strictEqual(
+        collector.findSpellingError({ userAnswer: 'UK', correctAnswer: 'U.K.', isCorrect: false }),
+        null,
+        '缩写不应该进入错词词表'
+    );
+    assert.strictEqual(
+        collector.findSpellingError({ userAnswer: 'Cambrige', correctAnswer: 'Cambridge', isCorrect: false }),
+        null,
+        '明显专名不应该进入错词词表'
+    );
+    assert.strictEqual(
+        collector.findSpellingError({ userAnswer: 'analysis', correctAnswer: 'analyses', isCorrect: false }),
+        null,
+        '常见词形变化不应该被当成拼写错误'
+    );
+    assert.strictEqual(
+        collector.isAdjacentTransposition('abcd', 'badc'),
+        false,
+        '非同一处相邻换位不能被标记为transpose'
+    );
+
+    console.log('  ✓ 错词误抓过滤正确');
+}
+
+/**
  * 测试：词表保存和加载
  */
 async function testVocabListSaveAndLoad() {
@@ -570,9 +663,11 @@ async function runTests() {
         testIsSimilarSpelling();
         testIsSpellingError();
         testDetectSource();
+        testSpellingFalsePositiveFilters();
         
         // 异步测试
         await testDetectErrors();
+        await testListeningCandidateSpellingDetection();
         await testVocabListSaveAndLoad();
         await testMergeErrorsToList();
         await testSaveErrors();

@@ -106,8 +106,10 @@
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         attachPrefetchTriggers();
+        setupReadingMemorizeExitButton();
     } else {
         document.addEventListener('DOMContentLoaded', attachPrefetchTriggers);
+        document.addEventListener('DOMContentLoaded', setupReadingMemorizeExitButton);
     }
 
     // ============================================================================
@@ -340,8 +342,9 @@
         });
     }
 
-    function openExamWithFallback(exam, delay) {
+    function openExamWithFallback(exam, delay, options) {
         var actualDelay = typeof delay === 'number' ? delay : 600;
+        var launchOptions = options && typeof options === 'object' ? options : {};
 
         if (!exam) {
             if (typeof global.showMessage === 'function') {
@@ -352,8 +355,10 @@
 
         var launch = function () {
             try {
-                if (exam.hasHtml && typeof global.openExam === 'function') {
-                    global.openExam(exam.id);
+                if (exam.hasHtml && global.app && typeof global.app.openExam === 'function') {
+                    global.app.openExam(exam.id, launchOptions);
+                } else if (exam.hasHtml && typeof global.openExam === 'function') {
+                    global.openExam(exam.id, launchOptions);
                 } else if (typeof global.viewPDF === 'function') {
                     global.viewPDF(exam.id);
                 } else {
@@ -372,6 +377,223 @@
         } else {
             launch();
         }
+    }
+
+    function getExamIndexSnapshot() {
+        if (typeof global.getExamIndexState === 'function') {
+            try {
+                var snapshot = global.getExamIndexState();
+                if (Array.isArray(snapshot) && snapshot.length) {
+                    return snapshot.slice();
+                }
+            } catch (_) { }
+        }
+        if (Array.isArray(global.examIndex) && global.examIndex.length) {
+            return global.examIndex.slice();
+        }
+        if (typeof global.getReadingExamIndex === 'function') {
+            var readingIndex = global.getReadingExamIndex();
+            if (Array.isArray(readingIndex) && readingIndex.length) {
+                return readingIndex.map(function (exam) {
+                    return Object.assign({}, exam, { type: exam.type || 'reading' });
+                });
+            }
+        }
+        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+            return global.__READING_EXAM_INDEX__.map(function (exam) {
+                return Object.assign({}, exam, { type: exam.type || 'reading' });
+            });
+        }
+        return [];
+    }
+
+    function isReadingMemorizeCandidate(exam) {
+        if (!exam || !exam.id) {
+            return false;
+        }
+        if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+            return false;
+        }
+        if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+            return false;
+        }
+        if (exam.hasHtml === false) {
+            return false;
+        }
+        var manifest = global.__READING_EXAM_MANIFEST__;
+        var entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
+    }
+
+    function ensureReadingMemorizeDataReady() {
+        var loader = global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function'
+            ? global.AppLazyLoader
+            : null;
+        var tasks = [];
+        if (loader) {
+            tasks.push(loader.ensureGroup('exam-data'));
+            tasks.push(loader.ensureGroup('browse-runtime').catch(function () { return undefined; }));
+        }
+        return Promise.all(tasks).then(function () {
+            return undefined;
+        });
+    }
+
+    function isReadingMemorizeBrowseMode() {
+        return global.__readingMemorizeBrowseMode === true
+            || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
+    }
+
+    function syncReadingMemorizeBrowseModeUI() {
+        if (!global.document) {
+            return;
+        }
+        var isActive = isReadingMemorizeBrowseMode();
+        var button = global.document.getElementById('reading-memorize-exit-btn');
+        if (button) {
+            button.hidden = !isActive;
+            button.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+            button.classList.toggle('is-active', isActive);
+        }
+        if (global.document.body) {
+            global.document.body.classList.toggle('reading-memorize-browse-active', isActive);
+        }
+    }
+
+    function setupReadingMemorizeExitButton() {
+        if (!global.document) {
+            return;
+        }
+        var button = global.document.getElementById('reading-memorize-exit-btn');
+        if (!button) {
+            return;
+        }
+        if (button.dataset.bound === 'true') {
+            syncReadingMemorizeBrowseModeUI();
+            return;
+        }
+        button.addEventListener('click', function handleExitClick(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            exitReadingMemorizeBrowseMode();
+        });
+        button.dataset.bound = 'true';
+        syncReadingMemorizeBrowseModeUI();
+    }
+
+    function setReadingMemorizeBrowseMode(enabled) {
+        global.__readingMemorizeBrowseMode = enabled === true;
+        if (!global.__readingMemorizeBrowseMode && typeof global.__browseMemorizeFilterMode !== 'undefined') {
+            global.__browseMemorizeFilterMode = null;
+        }
+        syncReadingMemorizeBrowseModeUI();
+    }
+
+    function exitReadingMemorizeBrowseMode() {
+        setReadingMemorizeBrowseMode(false);
+        global.__browseMemorizeFilterMode = null;
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+
+        if (typeof global.resetBrowseViewToAll === 'function') {
+            try {
+                global.resetBrowseViewToAll();
+            } catch (error) {
+                console.warn('[AppActions] 退出阅读背题模式时重置浏览页失败:', error);
+            }
+        } else {
+            if (typeof global.setBrowseFilterState === 'function') {
+                try { global.setBrowseFilterState('all', 'all'); } catch (_) { }
+            }
+            if (typeof global.setBrowseTitle === 'function') {
+                try { global.setBrowseTitle('题库列表'); } catch (_) { }
+            }
+            if (typeof global.loadExamList === 'function') {
+                try { global.loadExamList(); } catch (_) { }
+            }
+        }
+
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('已退出阅读背题模式。', 'info');
+        }
+    }
+
+    function navigateToReadingMemorizeBrowse() {
+        setupReadingMemorizeExitButton();
+        setReadingMemorizeBrowseMode(true);
+        global.__browseMemorizeFilterMode = 'reading-memorize';
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        global.__pendingBrowseFilter = {
+            category: 'all',
+            type: 'reading',
+            filterMode: null,
+            path: null
+        };
+
+        if (global.browseController) {
+            try {
+                if (!global.browseController.buttonContainer
+                    && typeof global.browseController.initialize === 'function') {
+                    global.browseController.initialize('type-filter-buttons');
+                }
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'reading';
+                if (typeof global.browseController.setBrowseFilterState === 'function') {
+                    global.browseController.setBrowseFilterState('all', 'reading');
+                } else if (typeof global.setBrowseFilterState === 'function') {
+                    global.setBrowseFilterState('all', 'reading');
+                }
+                if (typeof global.browseController.renderFilterButtons === 'function') {
+                    global.browseController.renderFilterButtons();
+                }
+            } catch (_) { }
+        } else if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'reading');
+        }
+
+        if (global.app && typeof global.app.navigateToView === 'function') {
+            global.app.navigateToView('browse');
+        } else if (typeof global.showView === 'function') {
+            global.showView('browse', false);
+        } else {
+            try {
+                document.querySelectorAll('.view').forEach(function (view) {
+                    view.classList.remove('active');
+                });
+                var browseView = document.getElementById('browse-view');
+                if (browseView) {
+                    browseView.classList.add('active');
+                }
+            } catch (_) { }
+        }
+
+        if (typeof global.applyBrowseFilter === 'function') {
+            global.applyBrowseFilter('all', 'reading', null, null);
+        } else if (typeof global.loadExamList === 'function') {
+            global.loadExamList();
+        }
+
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('阅读背题选题');
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('请选择一套阅读题进入背题模式。', 'info');
+        }
+    }
+
+    function startReadingMemorize() {
+        return ensureReadingMemorizeDataReady().then(function openMemorizeBrowser() {
+            navigateToReadingMemorizeBrowse();
+            return null;
+        }).catch(function handleMemorizeError(error) {
+            console.error('[AppActions] 阅读背题启动失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('阅读背题启动失败，请稍后重试。', 'error');
+            }
+            return null;
+        });
     }
 
     function startRandomPractice(category, type, filterMode, path) {
@@ -697,6 +919,9 @@
         startSuitePractice: startSuitePractice,
         continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
+        startReadingMemorize: startReadingMemorize,
+        exitReadingMemorizeBrowseMode: exitReadingMemorizeBrowseMode,
+        syncReadingMemorizeBrowseModeUI: syncReadingMemorizeBrowseModeUI,
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
@@ -707,6 +932,12 @@
     global.startSuitePractice = startSuitePractice;
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
+    global.isReadingMemorizeCandidate = isReadingMemorizeCandidate;
+    global.isReadingMemorizeBrowseMode = isReadingMemorizeBrowseMode;
+    global.setReadingMemorizeBrowseMode = setReadingMemorizeBrowseMode;
+    global.exitReadingMemorizeBrowseMode = exitReadingMemorizeBrowseMode;
+    global.syncReadingMemorizeBrowseModeUI = syncReadingMemorizeBrowseModeUI;
+    global.startReadingMemorize = startReadingMemorize;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;
     global.stopEndlessPractice = stopEndlessPractice;

@@ -5,96 +5,68 @@
     var scriptStatus = Object.create(null);
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
-    var GROUP_ALIASES = {
-        'browse-view': 'browse-runtime'
-    };
-
-    function normalizeGroupName(name) {
-        if (!name) {
-            return '';
-        }
-        return GROUP_ALIASES[name] || name;
-    }
+    var providedScripts = new Set();
+    var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
+    var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
+    var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            'assets/scripts/complete-exam-data.js'
+            READING_EXAM_MANIFEST_SCRIPT
         ];
 
         manifest['state-core'] = [
-            'js/core/practiceCore.js',
-            'js/core/resourceCore.js',
-            'js/app/state-service.js',
-            'js/services/libraryManager.js'
+            // Provided by js/bundles/core-foundation.bundle.js.
         ];
 
         manifest['practice-suite'] = [
-            // 练习记录功能与存储相关，需按用户行为加载
-            'js/app/spellingErrorCollector.js',
-            'js/utils/markdownExporter.js',
-            'js/components/practiceRecordModal.js',
-            'js/components/practiceHistoryEnhancer.js',
-            'js/core/scoreStorage.js',
-            'js/utils/answerSanitizer.js',
-            'js/core/practiceRecorder.js'
+            'js/bundles/practice.bundle.js'
         ];
 
         manifest['browse-runtime'] = [
-            // 浏览和主逻辑（main.js 保持组内最后加载）
-            'js/views/legacyViewBundle.js',
-            'js/app/examActions.js',
-            // 单篇练习通信与会话能力属于 browse/practice 主流程
-            'js/app/readingLaunchMixin.js',
-            'js/app/examSessionMixin.js',
-            'js/app/browseController.js',
-            'js/presentation/message-center.js',
-            'js/components/PDFHandler.js',
-            'js/components/SystemDiagnostics.js',
-            'js/components/PerformanceOptimizer.js',
-            'js/components/DataIntegrityManager.js',
-            'js/components/BrowseStateManager.js',
-            'js/utils/dataConsistencyManager.js',
-            'js/utils/suitePreference.js',
-            'js/utils/suiteBackGuard.js',
-            'js/utils/answerMatchCore.js',
-            'js/utils/answerComparisonUtils.js',
-            'js/utils/BrowsePreferencesUtils.js',
-            'js/utils/performance.js',
-            'js/utils/typeChecker.js',
-            'js/utils/codeStandards.js',
-            'js/main.js'
+            'js/bundles/browse.bundle.js'
         ];
 
+        // 向后兼容旧组名
+        manifest['browse-view'] = manifest['browse-runtime'].slice();
+
         manifest['session-suite'] = [
-            'js/app/suitePracticeMixin.js'
+            'js/bundles/session.bundle.js'
         ];
 
         manifest['more-tools'] = [
-            // 更多工具与词汇模块
-            'assets/wordlists/ielts_core.bundle.js',
-            'js/utils/vocabDataIO.js',
-            'js/core/vocabScheduler.js',
-            'js/core/vocabStore.js',
-            'js/app/vocabListSwitcher.js',
-            'js/components/vocabDashboardCards.js',
-            'js/components/vocabSessionView.js',
-            'js/utils/dataBackupManager.js',
-            'js/presentation/moreView.js',
-            'js/presentation/miniGames.js',
-            'js/services/achievementManager.js'
+            'js/bundles/more.bundle.js'
         ];
 
         manifest['theme-tools'] = [
-            'js/theme-switcher.js'
+            'js/bundles/theme.bundle.js'
+        ];
+
+        manifest['settings-tools'] = [
+            'js/bundles/settings.bundle.js'
+        ];
+
+        manifest['diagnostics-tools'] = [
+            'js/bundles/diagnostics.bundle.js'
         ];
 
         dependencies['state-core'] = [];
         dependencies['exam-data'] = [];
         dependencies['practice-suite'] = ['state-core'];
         dependencies['browse-runtime'] = ['state-core'];
+        dependencies['browse-view'] = ['state-core'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
-        dependencies['more-tools'] = ['state-core'];
+        dependencies['settings-tools'] = ['state-core'];
+        dependencies['more-tools'] = ['state-core', 'settings-tools'];
         dependencies['theme-tools'] = [];
+        dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];
+    }
+
+    function setBuiltInListeningAvailability(available, reason) {
+        try {
+            global.__defaultListeningLibraryAvailable = available === true;
+            global.__defaultListeningLibraryAvailabilityReason = reason || (available ? 'available' : 'unavailable');
+        } catch (_) { }
     }
 
     function normalizeScriptUrl(url) {
@@ -130,8 +102,34 @@
         return null;
     }
 
+    function markProvided(files) {
+        if (!Array.isArray(files)) {
+            return;
+        }
+        files.forEach(function mark(file) {
+            if (!file) {
+                return;
+            }
+            var normalized = normalizeScriptUrl(file);
+            providedScripts.add(normalized);
+            scriptStatus[file] = 'loaded';
+            if (normalized) {
+                scriptStatus[normalized] = 'loaded';
+            }
+        });
+    }
+
+    function isProvided(url) {
+        var normalized = normalizeScriptUrl(url);
+        return providedScripts.has(normalized) || scriptStatus[url] === 'loaded' || scriptStatus[normalized] === 'loaded';
+    }
+
     function loadScript(url) {
         if (!url) {
+            return Promise.resolve();
+        }
+        if (isProvided(url)) {
+            scriptStatus[url] = 'loaded';
             return Promise.resolve();
         }
         if (scriptStatus[url] === 'loaded') {
@@ -157,12 +155,59 @@
             };
             script.onerror = function handleError(error) {
                 scriptStatus[url] = null;
+                try {
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                } catch (_) { }
                 reject(new Error('加载脚本失败: ' + url + ' => ' + (error?.message || error)));
             };
             document.head.appendChild(script);
         });
 
         return scriptStatus[url];
+    }
+
+    function loadOptionalScript(url, label) {
+        return loadScript(url).then(function onOptionalLoaded() {
+            return true;
+        }).catch(function onOptionalFailed(error) {
+            scriptStatus[url] = null;
+            try {
+                console.warn('[LazyLoader] 可选脚本未加载，已跳过:', label || url, error && error.message ? error.message : error);
+            } catch (_) { }
+            return false;
+        });
+    }
+
+    function hasListeningManifest() {
+        var manifestObject = global.__LISTENING_EXAM_MANIFEST__;
+        return !!(
+            manifestObject
+            && typeof manifestObject === 'object'
+            && Object.keys(manifestObject).length > 0
+        );
+    }
+
+    function ensureOptionalListeningExamData() {
+        setBuiltInListeningAvailability(false, 'pending-manifest');
+        return loadOptionalScript(LISTENING_EXAM_MANIFEST_SCRIPT, 'listening manifest')
+            .then(function afterManifestLoaded(loaded) {
+                if (!loaded || !hasListeningManifest()) {
+                    setBuiltInListeningAvailability(false, loaded ? 'manifest-empty' : 'manifest-missing');
+                    return undefined;
+                }
+                return loadOptionalScript(LISTENING_EXAM_INDEX_SCRIPT, 'listening index')
+                    .then(function afterListeningIndexLoaded(indexLoaded) {
+                        var available = !!(
+                            indexLoaded
+                            && Array.isArray(global.listeningExamIndex)
+                            && global.listeningExamIndex.length > 0
+                        );
+                        setBuiltInListeningAvailability(available, available ? 'available' : 'index-missing');
+                        return undefined;
+                    });
+            });
     }
 
     function loadBatch(batch) {
@@ -199,7 +244,11 @@
             return Promise.resolve();
         }
 
-        if (groupName === 'browse-runtime') {
+        if (groupName === 'exam-data') {
+            return sequentialLoad(list).then(ensureOptionalListeningExamData);
+        }
+
+        if ((groupName === 'browse-runtime' || groupName === 'browse-view') && list.indexOf('js/bundles/browse.bundle.js') === -1) {
             var mainIndex = list.indexOf('js/main.js');
             var withoutMain = mainIndex >= 0
                 ? list.filter(function (file) { return file !== 'js/main.js'; })
@@ -229,14 +278,15 @@
         return sequentialLoad(list);
     }
 
-    function refreshAppPrototypeIfNeeded(groupName) {
-        var files = manifest[groupName] || [];
-        var containsMixin = files.some(function (file) {
-            return typeof file === 'string' && /Mixin\.js$/.test(file);
-        });
-        if (!containsMixin) {
-            return;
+    function mirrorAliasStatus(groupName, statusValue) {
+        if (groupName === 'browse-runtime') {
+            groupStatus['browse-view'] = statusValue;
+        } else if (groupName === 'browse-view') {
+            groupStatus['browse-runtime'] = statusValue;
         }
+    }
+
+    function refreshAppPrototypeIfNeeded(groupName) {
         try {
             if (global.ExamSystemAppMixins && typeof global.ExamSystemAppMixins.__applyToApp === 'function') {
                 global.ExamSystemAppMixins.__applyToApp();
@@ -247,50 +297,53 @@
     }
 
     function ensureGroup(groupName) {
-        var resolvedName = normalizeGroupName(groupName);
-        if (!resolvedName || !manifest[resolvedName]) {
+        if (!groupName || !manifest[groupName]) {
             return Promise.resolve();
         }
 
-        if (groupStatus[resolvedName] === 'loaded') {
-            return Promise.resolve();
+        if (groupStatus[groupName] === 'loaded') {
+            return groupName === 'exam-data'
+                ? ensureOptionalListeningExamData()
+                : Promise.resolve();
         }
-        if (groupStatus[resolvedName] && groupStatus[resolvedName].then) {
-            return groupStatus[resolvedName];
+        if (groupStatus[groupName] && groupStatus[groupName].then) {
+            return groupStatus[groupName];
         }
 
-        var required = dependencies[resolvedName] || [];
-        groupStatus[resolvedName] = Promise.all(required.map(ensureGroup))
+        var required = dependencies[groupName] || [];
+        groupStatus[groupName] = Promise.all(required.map(ensureGroup))
             .then(function () {
-                return loadGroup(resolvedName, manifest[resolvedName]);
+                return loadGroup(groupName, manifest[groupName]);
             })
             .then(function onGroupLoaded() {
-                refreshAppPrototypeIfNeeded(resolvedName);
-                groupStatus[resolvedName] = 'loaded';
+                refreshAppPrototypeIfNeeded(groupName);
+                groupStatus[groupName] = 'loaded';
+                mirrorAliasStatus(groupName, 'loaded');
             }).catch(function onGroupFailed(error) {
-                console.error('[LazyLoader] 组加载失败:', resolvedName, error);
-                groupStatus[resolvedName] = null;
+                console.error('[LazyLoader] 组加载失败:', groupName, error);
+                groupStatus[groupName] = null;
+                mirrorAliasStatus(groupName, null);
                 throw error;
             });
+        mirrorAliasStatus(groupName, groupStatus[groupName]);
 
-        return groupStatus[resolvedName];
+        return groupStatus[groupName];
     }
 
     function registerGroup(name, files) {
         if (!name || !Array.isArray(files)) {
             return;
         }
-        manifest[normalizeGroupName(name)] = files.slice();
+        manifest[name] = files.slice();
     }
 
     function getStatus(name) {
         if (!name) {
             return { manifest: Object.keys(manifest) };
         }
-        var resolvedName = normalizeGroupName(name);
         return {
-            loaded: groupStatus[resolvedName] === 'loaded',
-            files: manifest[resolvedName] ? manifest[resolvedName].slice() : []
+            loaded: groupStatus[name] === 'loaded',
+            files: manifest[name] ? manifest[name].slice() : []
         };
     }
 
@@ -299,5 +352,6 @@
     global.AppLazyLoader = global.AppLazyLoader || {};
     global.AppLazyLoader.ensureGroup = ensureGroup;
     global.AppLazyLoader.registerGroup = registerGroup;
+    global.AppLazyLoader.markProvided = markProvided;
     global.AppLazyLoader.getStatus = getStatus;
 })(typeof window !== 'undefined' ? window : this);

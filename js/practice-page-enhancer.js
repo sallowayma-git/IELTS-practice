@@ -743,9 +743,9 @@
                     if (typeof value === 'string') {
                         normalizedValue = value.trim();
 
-                        if (/^(true|yes|正确|是)$/i.test(normalizedValue)) {
+                        if (/^(true|t|yes|y|正确|是)$/i.test(normalizedValue)) {
                             normalizedValue = 'TRUE';
-                        } else if (/^(false|no|错误|否)$/i.test(normalizedValue)) {
+                        } else if (/^(false|f|no|n|错误|否)$/i.test(normalizedValue)) {
                             normalizedValue = 'FALSE';
                         }
 
@@ -819,16 +819,7 @@
         },
 
         getPracticeTimerSnapshot: function () {
-            const timer = window.__IELTS_PRACTICE_TIMER__;
-            if (timer && typeof timer.getSnapshot === 'function') {
-                return timer.getSnapshot();
-            }
-            const now = Date.now();
-            return {
-                effectiveStartTimeMs: this.startTime || now,
-                actualEndTimeMs: now,
-                durationSeconds: this.startTime ? Math.max(0, Math.round((now - this.startTime) / 1000)) : 0
-            };
+            return window.__IELTS_PRACTICE_TIMER__.getSnapshot();
         },
 
         resolvePracticeTiming: function () {
@@ -1722,6 +1713,12 @@
                 })
             }, replayResults);
             this.dispatchPracticeResultsEvent(finalPayload);
+
+            setTimeout(() => {
+                if (!this.hasRenderableResults()) {
+                    this.renderReplayFallbackTable(finalPayload);
+                }
+            }, 120);
         },
 
         captureQuestionSet: function () {
@@ -3290,7 +3287,6 @@
             // 构建标准化消息格式
             // 符合Requirements 9.1-9.7
             const timing = this.resolvePracticeTiming();
-            const effectiveScoreInfo = scoreInfo || this.calculateSuiteScore(comparison || {});
             const message = {
                 // Requirement 9.1: 必须包含的基本字段
                 examId: `${this.examId}_${suiteId}`,  // Requirement 9.2: examId包含套题标识
@@ -3300,10 +3296,10 @@
 
                 // Requirement 9.4: scoreInfo包含必需字段
                 scoreInfo: {
-                    correct: effectiveScoreInfo.correct,
-                    total: effectiveScoreInfo.total,
-                    accuracy: effectiveScoreInfo.accuracy,
-                    percentage: effectiveScoreInfo.percentage
+                    correct: scoreInfo.correct,
+                    total: scoreInfo.total,
+                    accuracy: scoreInfo.accuracy,
+                    percentage: scoreInfo.percentage
                 },
 
                 // Requirement 9.5: answerComparison包含每个问题的详细信息
@@ -3329,63 +3325,60 @@
             this.sendMessage('PRACTICE_COMPLETE', message);
         },
 
-        readResultsState: function () {
-            const resultsEl = document.getElementById('results');
-            const isVisible = !!(resultsEl && resultsEl.style.display !== 'none');
-            const rows = isVisible && typeof resultsEl.querySelectorAll === 'function'
-                ? resultsEl.querySelectorAll('table tr')
-                : [];
-            return {
-                resultsEl,
-                text: isVisible ? (resultsEl.textContent || '') : '',
-                hasDataRows: rows.length > 1
-            };
-        },
-
-        retryUntil: function (task, options) {
-            const maxTries = options && Number.isFinite(options.maxTries) ? options.maxTries : 1;
-            const delayMs = options && Number.isFinite(options.delayMs) ? options.delayMs : 0;
-            let tries = 0;
-            const run = () => {
-                tries += 1;
-                const shouldContinue = task();
-                if (shouldContinue !== false && tries < maxTries) {
-                    setTimeout(run, delayMs);
-                }
-            };
-            setTimeout(run, delayMs);
-        },
-
         startCorrectAnswerMonitoring: function () {
+            let checkCount = 0;
+            const maxChecks = 30;
             const self = this;
-            this.retryUntil(function checkForCorrectAnswers() {
-                const state = self.readResultsState();
-                if (state.hasDataRows) {
-                    console.log('[PracticeEnhancer] 检测到结果表格，提取正确答案');
-                    self.extractFromResultsTable();
+
+            function checkForCorrectAnswers() {
+                checkCount++;
+
+                // 尝试从结果表格提取
+                const resultsEl = document.getElementById('results');
+                if (resultsEl && resultsEl.style.display !== 'none') {
+                    const tables = resultsEl.querySelectorAll('table');
+                    if (tables.length > 0) {
+                        const firstTable = tables[0];
+                        const rows = firstTable.querySelectorAll('tr');
+                        if (rows.length > 1) { // 有数据行
+                            console.log('[PracticeEnhancer] 检测到结果表格，提取正确答案');
+                            self.extractFromResultsTable();
+                        }
+                    }
                 }
-                return Object.keys(self.correctAnswers).length === 0;
-            }, {
-                maxTries: 30,
-                delayMs: 1000
-            });
+
+                // 继续检查直到达到最大次数
+                if (checkCount < maxChecks && Object.keys(self.correctAnswers).length === 0) {
+                    setTimeout(checkForCorrectAnswers, 1000);
+                }
+            }
+
+            setTimeout(checkForCorrectAnswers, 3000);
         },
 
         startResultsMonitoring: function () {
+            let checkCount = 0;
+            const maxChecks = 60;
             const self = this;
-            this.retryUntil(function checkResults() {
-                const state = self.readResultsState();
-                if (state.text.includes('Final Score')) {
+
+            function checkResults() {
+                checkCount++;
+                const resultsEl = document.getElementById('results');
+
+                if (resultsEl && resultsEl.style.display !== 'none' && resultsEl.textContent.includes('Final Score')) {
                     console.log('[PracticeEnhancer] 检测到结果显示，自动提取分数');
                     self.collectAllAnswers();
+                    // 不需要额外延迟，handleSubmit内部已经有延迟处理
                     self.handleSubmit();
-                    return false;
+                    return;
                 }
-                return true;
-            }, {
-                maxTries: 60,
-                delayMs: 500
-            });
+
+                if (checkCount < maxChecks) {
+                    setTimeout(checkResults, 500);
+                }
+            }
+
+            setTimeout(checkResults, 2000);
         },
 
         collectAllAnswers: function () {
@@ -3993,21 +3986,9 @@
                     detail: results
                 }));
                 if (this.readOnly && results && results.status === 'final') {
-                    const replayToken = results && results.metadata && results.metadata.replay
-                        ? `${results.examId || this.examId || ''}::${results.sessionId || this.sessionId || ''}`
-                        : null;
-                    if (replayToken && this._replayFallbackScheduledToken === replayToken) {
-                        return;
-                    }
-                    if (replayToken) {
-                        this._replayFallbackScheduledToken = replayToken;
-                    }
                     setTimeout(() => {
                         if (!this.hasRenderableResults()) {
                             this.renderReplayFallbackTable(results);
-                        }
-                        if (replayToken && this._replayFallbackScheduledToken === replayToken) {
-                            this._replayFallbackScheduledToken = null;
                         }
                     }, 120);
                 }
@@ -4175,7 +4156,7 @@
             return comparison;
         },
 
-        calculateScoreFromComparison: function (comparison, options) {
+        calculateScoreFromComparison: function (comparison) {
             if (!comparison || typeof comparison !== 'object') {
                 return null;
             }
@@ -4197,17 +4178,7 @@
                 }
             });
 
-            const allowEmpty = Boolean(options && options.allowEmpty);
             if (total === 0) {
-                if (allowEmpty) {
-                    return {
-                        correct: 0,
-                        total: 0,
-                        accuracy: 0,
-                        percentage: 0,
-                        source: 'comparison_fallback'
-                    };
-                }
                 return null;
             }
 
@@ -4317,14 +4288,13 @@
         },
 
         extractScore: function () {
-            const state = typeof this.readResultsState === 'function' ? this.readResultsState() : {};
-            const resultsEl = state.resultsEl || document.getElementById('results');
-            const text = state.text != null ? String(state.text || '') : (resultsEl && resultsEl.textContent || '');
-            if (!resultsEl && !text) {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) {
                 console.warn('[PracticeEnhancer] 未找到结果元素');
                 return null;
             }
 
+            const text = resultsEl.textContent || '';
             console.log('[PracticeEnhancer] 结果文本:', text);
 
             // 匹配 "Final Score: 85% (11/13)" 格式 - 66号文件格式
@@ -4436,12 +4406,8 @@
             }
 
             // 尝试从表格中提取成绩信息
-            const correctCells = resultsEl && typeof resultsEl.querySelectorAll === 'function'
-                ? resultsEl.querySelectorAll('.result-correct')
-                : [];
-            const incorrectCells = resultsEl && typeof resultsEl.querySelectorAll === 'function'
-                ? resultsEl.querySelectorAll('.result-incorrect')
-                : [];
+            const correctCells = resultsEl.querySelectorAll('.result-correct');
+            const incorrectCells = resultsEl.querySelectorAll('.result-incorrect');
             if (correctCells.length > 0 || incorrectCells.length > 0) {
                 const correct = correctCells.length;
                 const total = correctCells.length + incorrectCells.length;

@@ -6,24 +6,13 @@
     var PRACTICE_GROUP = 'practice-suite';
     var SESSION_GROUP = 'session-suite';
     var STATE_CORE_GROUP = 'state-core';
+    var SETTINGS_GROUP = 'settings-tools';
 
     function ensureLazyGroup(name) {
         if (!name || !global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
         }
         return global.AppLazyLoader.ensureGroup(name);
-    }
-
-    function setGlobalFunctionIfAbsent(name, fn) {
-        if (typeof global[name] !== 'function') {
-            global[name] = fn;
-        }
-    }
-
-    function showNotReady(message, type) {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage(message, type || 'warning');
-        }
     }
 
     var browseGroupPromise = null;
@@ -89,8 +78,12 @@
     }
 
     // 向后兼容：提供 window.ensureBrowseGroup，避免 main.js 注入垃圾 shim 警告
-    setGlobalFunctionIfAbsent('ensureBrowseGroup', ensureBrowseGroup);
-    setGlobalFunctionIfAbsent('ensureSessionSuiteReady', ensureSessionSuiteReady);
+    if (typeof global.ensureBrowseGroup !== 'function') {
+        global.ensureBrowseGroup = ensureBrowseGroup;
+    }
+    if (typeof global.ensureSessionSuiteReady !== 'function') {
+        global.ensureSessionSuiteReady = ensureSessionSuiteReady;
+    }
 
     function ensureExamData() {
         if (typeof global.ensureExamDataScripts === 'function') {
@@ -105,6 +98,10 @@
 
     function ensureThemeToolsGroup() {
         return ensureLazyGroup('theme-tools');
+    }
+
+    function ensureSettingsToolsGroup() {
+        return ensureLazyGroup(SETTINGS_GROUP);
     }
 
     function setStorageNamespace() {
@@ -155,7 +152,7 @@
             var args = Array.prototype.slice.call(arguments);
             return ensureLazyGroup(groupName).then(function invoke() {
                 var fn = getter();
-                if (typeof fn === 'function' && fn !== proxiedCall) {
+                if (typeof fn === 'function') {
                     return fn.apply(global, args);
                 }
                 if (typeof fallback === 'function') {
@@ -167,33 +164,41 @@
     }
 
     // 保持对外接口
-    setGlobalFunctionIfAbsent('normalizeRecordId', function normalizeRecordId(id) {
-        return id == null ? '' : String(id);
-    });
+    if (typeof global.normalizeRecordId !== 'function') {
+        global.normalizeRecordId = function normalizeRecordId(id) {
+            return id == null ? '' : String(id);
+        };
+    }
 
-    setGlobalFunctionIfAbsent('reportBootStage', function reportBootStage(message, progress) {
-        if (global.AppBootScreen && typeof global.AppBootScreen.setStage === 'function') {
-            try {
-                global.AppBootScreen.setStage(message, progress);
-            } catch (error) {
-                console.warn('[BootStage] 更新失败:', error);
+    if (typeof global.reportBootStage !== 'function') {
+        global.reportBootStage = function reportBootStage(message, progress) {
+            if (global.AppBootScreen && typeof global.AppBootScreen.setStage === 'function') {
+                try {
+                    global.AppBootScreen.setStage(message, progress);
+                } catch (error) {
+                    console.warn('[BootStage] 更新失败:', error);
+                }
             }
-        }
-    });
+        };
+    }
 
-    setGlobalFunctionIfAbsent('ensureExamDataScripts', function ensureExamDataScripts() {
-        return ensureLazyGroup('exam-data');
-    });
+    if (typeof global.ensureExamDataScripts !== 'function') {
+        global.ensureExamDataScripts = function ensureExamDataScripts() {
+            return ensureLazyGroup('exam-data');
+        };
+    }
 
-    setGlobalFunctionIfAbsent('ensurePracticeSuiteReady', function ensurePracticeSuiteReady() {
-        if (global.AppActions && typeof global.AppActions.ensurePracticeSuite === 'function') {
-            return global.AppActions.ensurePracticeSuite();
-        }
-        return ensurePracticeSuiteGroup();
-    });
+    if (typeof global.ensurePracticeSuiteReady !== 'function') {
+        global.ensurePracticeSuiteReady = function ensurePracticeSuiteReady() {
+            if (global.AppActions && typeof global.AppActions.ensurePracticeSuite === 'function') {
+                return global.AppActions.ensurePracticeSuite();
+            }
+            return ensurePracticeSuiteGroup();
+        };
+    }
 
     function ensureGlobalFunctionAfterGroup(name, group, fallback) {
-        if (typeof global[name] === 'function') {
+        if (typeof global[name] === 'function' && global[name].__legacyPublicAPIBootstrapShim !== true) {
             return;
         }
         var proxy = function lazyProxy() {
@@ -209,91 +214,138 @@
                 return undefined;
             });
         };
+        proxy.__legacyPublicAPIBootstrapShim = true;
         global[name] = proxy;
     }
 
-    // 懒加载代理（browse 组）
-    setGlobalFunctionIfAbsent('loadExamList', proxyAfterGroup(BROWSE_GROUP, function () {
-        return global.__legacyLoadExamList || global.loadExamList;
-    }));
+    function installLegacyGlobalFallback() {
+        var doc = global.document || null;
+        var groupByName = {
+            switchLibraryConfig: STATE_CORE_GROUP,
+            loadLibrary: STATE_CORE_GROUP,
+            showThemeSwitcherModal: 'theme-tools',
+            showAchievements: 'more-tools',
+            hideAchievements: 'more-tools'
+        };
 
-    setGlobalFunctionIfAbsent('resetBrowseViewToAll', proxyAfterGroup(BROWSE_GROUP, function () {
-        return global.__legacyResetBrowseViewToAll || global.resetBrowseViewToAll;
-    }));
-
-    [
-        ['showLibraryLoaderModal', BROWSE_GROUP, '题库管理模块未就绪'],
-        ['showThemeSwitcherModal', 'theme-tools', '主题切换模块未就绪'],
-        ['filterByType', BROWSE_GROUP, '题库筛选模块未就绪'],
-        ['filterRecordsByType', BROWSE_GROUP, '练习筛选模块未就绪'],
-        ['toggleBulkDelete', BROWSE_GROUP, '批量删除模块未就绪'],
-        ['clearPracticeData', BROWSE_GROUP, '练习数据模块未就绪'],
-        ['showAchievements', 'more-tools', '成就模块未就绪'],
-        ['hideAchievements', 'more-tools', null]
-    ].forEach(function registerLazyContract(item) {
-        var name = item[0];
-        var group = item[1];
-        var message = item[2];
-        ensureGlobalFunctionAfterGroup(name, group, function () {
-            if (message) {
-                showNotReady(message);
+        function message(text, type) {
+            if (typeof global.showMessage === 'function') {
+                global.showMessage(text, type || 'warning');
             }
+        }
+
+        function getLibraryManager() {
+            if (global.LibraryManager && typeof global.LibraryManager.getInstance === 'function') {
+                return global.LibraryManager.getInstance();
+            }
+            return global.LibraryManager || null;
+        }
+
+        function getSearchInput() {
+            if (!doc) {
+                return null;
+            }
+            return doc.getElementById('exam-search-input') || doc.querySelector('.search-input');
+        }
+
+        var fallbacks = {
+            switchLibraryConfig: function (key) {
+                var manager = getLibraryManager();
+                return manager && typeof manager.switchLibraryConfig === 'function'
+                    ? manager.switchLibraryConfig(key)
+                    : undefined;
+            },
+            loadLibrary: function (keyOrForceReload) {
+                var manager = getLibraryManager();
+                return manager && typeof manager.loadLibrary === 'function'
+                    ? manager.loadLibrary(keyOrForceReload)
+                    : undefined;
+            },
+            showLibraryLoaderModal: function () { message('题库管理模块未就绪'); },
+            showThemeSwitcherModal: function () { message('主题切换模块未就绪'); },
+            filterByType: function () { message('题库筛选模块未就绪'); },
+            filterByFrequency: function () { message('题库筛选模块未就绪'); },
+            filterRecordsByType: function () { message('练习筛选模块未就绪'); },
+            openExam: function (examId, options) {
+                if (global.app && typeof global.app.openExam === 'function') {
+                    return global.app.openExam(examId, options);
+                }
+                message('题目模块未就绪');
+                return undefined;
+            },
+            viewPDF: function (examId) {
+                if (global.app && typeof global.app.viewPDF === 'function') {
+                    return global.app.viewPDF(examId);
+                }
+                message('PDF 模块未就绪');
+                return examId;
+            },
+            searchExams: function (query) {
+                var input = getSearchInput();
+                if (input && typeof query === 'string') {
+                    input.value = query;
+                }
+                return query;
+            },
+            clearSearch: function () {
+                var input = getSearchInput();
+                var clearButton = doc && doc.getElementById('search-clear-btn');
+                if (input) {
+                    input.value = '';
+                }
+                if (clearButton) {
+                    clearButton.hidden = true;
+                }
+                if (typeof global.searchExams === 'function') {
+                    return global.searchExams('');
+                }
+                return undefined;
+            },
+            toggleBulkDelete: function () { message('批量删除模块未就绪'); },
+            clearPracticeData: function () { message('练习数据模块未就绪'); },
+            showAchievements: function () { message('成就模块未就绪'); },
+            hideAchievements: function () { },
+            browseCategory: function (category, type, filterMode, path) {
+                if (global.app && typeof global.app.browseCategory === 'function') {
+                    return global.app.browseCategory(category, type, filterMode, path);
+                }
+                if (typeof global.showView === 'function') {
+                    global.showView('browse', false);
+                }
+                return undefined;
+            }
+        };
+
+        Object.keys(fallbacks).forEach(function install(name) {
+            ensureGlobalFunctionAfterGroup(name, groupByName[name] || BROWSE_GROUP, fallbacks[name]);
         });
-    });
 
-    ensureGlobalFunctionAfterGroup('openExam', BROWSE_GROUP, function (examId, options) {
-        if (global.app && typeof global.app.openExam === 'function') {
-            return global.app.openExam(examId, options);
+        if (typeof global.launchMiniGame !== 'function' || global.launchMiniGame.__legacyPublicAPIBootstrapShim === true) {
+            global.launchMiniGame = proxyAfterGroup('more-tools', function () {
+                return global.__legacyLaunchMiniGame || global.launchMiniGame;
+            }, function fallback(gameId) {
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('小游戏模块未就绪', 'info');
+                }
+                return gameId;
+            });
         }
-        showNotReady('题目模块未就绪');
-        return undefined;
-    });
+    }
 
-    ensureGlobalFunctionAfterGroup('viewPDF', BROWSE_GROUP, function (examId) {
-        showNotReady('PDF 模块未就绪');
-        return examId;
-    });
+    // 懒加载代理（browse 组）
+    if (typeof global.loadExamList !== 'function') {
+        global.loadExamList = proxyAfterGroup(BROWSE_GROUP, function () {
+            return global.__legacyLoadExamList || global.loadExamList;
+        });
+    }
 
-    ensureGlobalFunctionAfterGroup('searchExams', BROWSE_GROUP, function (query) {
-        var input = document.getElementById('exam-search-input') || document.querySelector('.search-input');
-        if (input && typeof query === 'string') {
-            input.value = query;
-        }
-        return query;
-    });
+    if (typeof global.resetBrowseViewToAll !== 'function') {
+        global.resetBrowseViewToAll = proxyAfterGroup(BROWSE_GROUP, function () {
+            return global.__legacyResetBrowseViewToAll || global.resetBrowseViewToAll;
+        });
+    }
 
-    ensureGlobalFunctionAfterGroup('clearSearch', BROWSE_GROUP, function () {
-        var input = document.getElementById('exam-search-input') || document.querySelector('.search-input');
-        var clearButton = document.getElementById('search-clear-btn');
-        if (input) {
-            input.value = '';
-        }
-        if (clearButton) {
-            clearButton.hidden = true;
-        }
-        if (typeof global.searchExams === 'function') {
-            return global.searchExams('');
-        }
-        return undefined;
-    });
-
-    ensureGlobalFunctionAfterGroup('browseCategory', BROWSE_GROUP, function (category, type, filterMode, path) {
-        if (global.app && typeof global.app.browseCategory === 'function') {
-            return global.app.browseCategory(category, type, filterMode, path);
-        }
-        if (typeof global.showView === 'function') {
-            global.showView('browse', false);
-        }
-        return undefined;
-    });
-
-    // 懒加载代理（more 组/小游戏）
-    setGlobalFunctionIfAbsent('launchMiniGame', proxyAfterGroup('more-tools', function () {
-        return global.__legacyLaunchMiniGame || global.launchMiniGame;
-    }, function fallback(gameId) {
-        showNotReady('小游戏模块未就绪', 'info');
-        return gameId;
-    }));
+    installLegacyGlobalFallback();
 
     function getActiveViewName() {
         var active = document.querySelector('.view.active');
@@ -428,6 +480,7 @@
         ensureBrowseGroup: ensureBrowseGroup,
         ensureBrowseRuntime: ensureBrowseGroup,
         ensureMoreToolsGroup: ensureMoreToolsGroup,
+        ensureSettingsToolsGroup: ensureSettingsToolsGroup,
         ensurePracticeSuiteGroup: ensurePracticeSuiteGroup,
         ensureStateCoreGroup: ensureStateCoreGroup,
         ensureSessionSuiteReady: ensureSessionSuiteReady,
