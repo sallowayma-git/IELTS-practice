@@ -1,5 +1,4 @@
 (function(global) {
-    const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     function getSuitePreferenceUtils() {
@@ -685,6 +684,55 @@
             }
         },
 
+        async _waitForSuiteWindowExamReady(session, examId, targetWindow = null, timeoutMs = 2500) {
+            if (!session || !examId || !targetWindow || targetWindow.closed) {
+                return false;
+            }
+            const expectedExamId = String(examId);
+            const startedAt = Date.now();
+            const readWindowExamId = () => {
+                try {
+                    if (!targetWindow || targetWindow.closed || !targetWindow.location) {
+                        return '';
+                    }
+                    const href = typeof targetWindow.location.href === 'string' ? targetWindow.location.href : '';
+                    if (!href || href === 'about:blank') {
+                        return '';
+                    }
+                    const parsed = new URL(href, (global && global.location && global.location.href) ? global.location.href : undefined);
+                    return String(parsed.searchParams.get('examId') || '').trim();
+                } catch (_) {
+                    return '';
+                }
+            };
+            while (Date.now() - startedAt < timeoutMs) {
+                if (targetWindow.closed) {
+                    return false;
+                }
+                const windowExamId = readWindowExamId();
+                if (windowExamId && windowExamId !== expectedExamId) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    continue;
+                }
+                const windowInfo = this.examWindows && this.examWindows.get(expectedExamId)
+                    ? this.examWindows.get(expectedExamId)
+                    : null;
+                const readyMatches = Boolean(
+                    windowInfo
+                    && windowInfo.window
+                    && !windowInfo.window.closed
+                    && windowInfo.lastMessageType === 'SESSION_READY'
+                    && (!windowInfo.suiteSessionId || windowInfo.suiteSessionId === session.id)
+                    && (!windowInfo.pageType || /unified-reading|suite-placeholder/i.test(String(windowInfo.pageType)))
+                );
+                if (readyMatches) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            return false;
+        },
+
         async _maybeRestoreSuiteReviewState(examId, targetWindow = null, windowInfo = null) {
             if (!examId || this._shouldAutoAdvanceAfterSubmit()) {
                 return false;
@@ -792,7 +840,8 @@
 
             let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
 
-            if (targetEntry.examId !== examId || !targetWindow) {
+            const isCrossExamNavigation = targetEntry.examId !== examId;
+            if (isCrossExamNavigation || !targetWindow) {
                 targetWindow = await this.openExam(targetEntry.examId, {
                     target: 'tab',
                     windowName: session.windowName || 'ielts-suite-mode-tab',
@@ -813,6 +862,13 @@
             session.windowRef = targetWindow;
             session.activeExamId = targetEntry.examId;
             this._focusSuiteWindow(targetWindow);
+            if (isCrossExamNavigation) {
+                const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
+                if (!ready) {
+                    console.warn('[SuitePractice] 套题回看切换未等到目标篇章 ready，跳过即时回灌');
+                    return false;
+                }
+            }
             await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
             return true;
         },
@@ -1192,7 +1248,7 @@
             const pageType = windowInfo && typeof windowInfo.pageType === 'string'
                 ? windowInfo.pageType.toLowerCase()
                 : '';
-            if (!pageType.includes('unified-reading')) {
+            if (pageType && !pageType.includes('unified-reading') && !pageType.includes('suite-placeholder')) {
                 return false;
             }
             let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
@@ -1810,91 +1866,27 @@
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
-        async _listPracticeRecordsWithFallback(options = {}) {
+        async _listPracticeRecordsViaAPI() {
             const normalizeList = (list) => (Array.isArray(list) ? list : []);
-            const includeRecorder = options && options.includeRecorder !== false;
 
-            if (
-                includeRecorder
-                && this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.getPracticeRecords === 'function'
-            ) {
-                try {
-                    return normalizeList(await this.components.practiceRecorder.getPracticeRecords());
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
-                try {
-                    return normalizeList(await window.PracticeCore.store.listPracticeRecords());
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (window.PracticeStore && typeof window.PracticeStore.list === 'function') {
-                try {
-                    return normalizeList(await window.PracticeStore.list());
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeStore 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (typeof storage?.get === 'function') {
-                try {
-                    return normalizeList(await storage.get('practice_records', []));
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 practice_records 失败:', error);
-                }
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                return normalizeList(await window.PracticeRecordAPI.list());
             }
 
             return [];
         },
 
-        async _replacePracticeRecordsWithFallback(records) {
-            const normalizedRecords = Array.isArray(records) ? records : [];
-            if (window.PracticeStore && typeof window.PracticeStore.replace === 'function') {
-                await window.PracticeStore.replace(normalizedRecords);
-                return;
+        async _recalculatePracticeStatsFromRecords() {
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.recalculateStats === 'function') {
+                await window.PracticeRecordAPI.recalculateStats();
+                return true;
             }
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                await window.PracticeCore.store.replacePracticeRecords(normalizedRecords);
-                return;
-            }
-            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                await window.simpleStorageWrapper.savePracticeRecords(normalizedRecords);
-                return;
-            }
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, normalizedRecords);
+            console.warn('[SuitePractice] 统一练习统计 API 未就绪');
+            return false;
         },
 
-        async _saveSinglePracticeRecordWithFallback(record) {
-            if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
-                await window.PracticeStore.save(record);
-                return;
-            }
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                await window.PracticeCore.store.savePracticeRecord(record);
-                return;
-            }
-            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                await window.simpleStorageWrapper.addPracticeRecord(record);
-                return;
-            }
-
-            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
-            if (!Array.isArray(practiceRecords)) {
-                practiceRecords = [];
-            }
-            practiceRecords.unshift(record);
-            if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-            }
-            await this._replacePracticeRecordsWithFallback(practiceRecords);
+        async _loadSuitePracticeRecordsForFiltering() {
+            return this._listPracticeRecordsViaAPI();
         },
 
         _isSuitePracticeRecord(record) {
@@ -1907,10 +1899,6 @@
             const freq = String(record.frequency || '').toLowerCase();
             const metaFreq = String(record.metadata && record.metadata.frequency || '').toLowerCase();
             return freq === 'suite' || metaFreq === 'suite';
-        },
-
-        async _loadSuitePracticeRecordsForFiltering() {
-            return this._listPracticeRecordsWithFallback({ includeRecorder: true });
         },
 
         _collectExamIdsFromPracticeRecord(record, collector) {
@@ -2250,6 +2238,9 @@
                 session.status = 'active';
                 session.activeExamId = firstEntry.examId;
                 this._focusSuiteWindow(session.windowRef);
+                if (flowMode === 'simulation') {
+                    this._sendSimulationContext(session, firstEntry.examId, session.windowRef);
+                }
                 return true;
             } catch (error) {
                 console.error('[SuitePractice] 启动失败:', error);
@@ -2306,6 +2297,9 @@
             const comparison = rawData && rawData.answerComparison
                 ? rawData.answerComparison
                 : (score && score.details ? score.details : {});
+            const correctAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
+                ? this._resolveReplayCorrectAnswerMap(rawData, { examId: exam && exam.id, comparison })
+                : {};
 
             const correct = toNumber(score.correct, 0);
             const total = toNumber(score.total, Object.keys(answers).length);
@@ -2339,6 +2333,7 @@
                     source: score && score.source ? score.source : 'suite_mode_aggregated'
                 },
                 answers,
+                correctAnswerMap,
                 answerComparison: comparison,
                 markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
                     ? rawData.metadata.markedQuestions.slice()
@@ -2348,27 +2343,10 @@
         },
 
         async _saveSuitePracticeRecord(record) {
-            const recorderAvailable = this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
-
-            if (recorderAvailable) {
-                try {
-                    await this.components.practiceRecorder.savePracticeRecord(record);
-                    await this._cleanupSuiteEntryRecords(record).catch(error => {
-                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
-                    });
-                    return;
-                } catch (error) {
-                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
-                }
+            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.saveRecord !== 'function') {
+                throw new Error('统一练习记录存储未就绪');
             }
-
-            await this._saveSuitePracticeRecordFallback(record);
-        },
-
-        async _saveSuitePracticeRecordFallback(record) {
-            await this._saveSinglePracticeRecordWithFallback(record);
+            await window.PracticeRecordAPI.saveRecord(record, { updateStats: true });
             await this._cleanupSuiteEntryRecords(record).catch(error => {
                 console.warn('[SuitePractice] 清理套题子记录失败:', error);
             });
@@ -2379,88 +2357,48 @@
                 return;
             }
 
-            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
-            if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
-                return;
-            }
-
             const entrySessionIds = new Set();
-            const entryExamIds = new Set();
-            const entryTimestamps = [];
 
             record.suiteEntries.forEach((entry) => {
                 if (!entry || typeof entry !== 'object') {
                     return;
                 }
-                if (entry.examId) {
-                    entryExamIds.add(entry.examId);
-                }
                 const raw = entry.rawData || {};
-                if (raw.sessionId) {
-                    entrySessionIds.add(raw.sessionId);
-                }
-                const ts = raw.completedAt || raw.endTime || raw.timestamp;
-                if (ts) {
-                    const parsed = new Date(ts).getTime();
-                    if (Number.isFinite(parsed)) {
-                        entryTimestamps.push(parsed);
-                    }
+                const sessionId = raw.sessionId || entry.sessionId || entry.suiteEntrySessionId || null;
+                if (sessionId) {
+                    entrySessionIds.add(String(sessionId));
                 }
             });
 
-            if (entrySessionIds.size === 0 && entryExamIds.size === 0) {
+            if (entrySessionIds.size === 0) {
+                console.warn('[SuitePractice] 跳过套题子记录清理：suiteEntries 缺少 sessionId，不能用 examId/时间窗口猜测删除');
                 return;
             }
 
-            const referenceTime = (() => {
-                if (entryTimestamps.length) {
-                    const sum = entryTimestamps.reduce((acc, value) => acc + value, 0);
-                    return sum / entryTimestamps.length;
-                }
-                const fallbackTs = new Date(record.endTime || record.date || record.createdAt || Date.now()).getTime();
-                return Number.isFinite(fallbackTs) ? fallbackTs : Date.now();
-            })();
-            const tolerance = 10 * 60 * 1000; // 10分钟
+            if (record.sessionId) {
+                entrySessionIds.delete(String(record.sessionId));
+            }
+            if (entrySessionIds.size === 0) {
+                return;
+            }
 
-            const before = practiceRecords.length;
-            practiceRecords = practiceRecords.filter((rec) => {
-                if (!rec || typeof rec !== 'object') {
-                    return true;
-                }
-                if (rec.sessionId === record.sessionId) {
-                    return true; // 保留聚合记录
-                }
-                const sessionMatch = rec.sessionId && entrySessionIds.has(rec.sessionId);
-                if (sessionMatch) {
-                    return false;
-                }
-                if (this._isSuitePracticeRecord(rec)) {
-                    return true;
-                }
-                const examMatch = rec.examId && entryExamIds.has(rec.examId);
-                if (!examMatch) {
-                    return true;
-                }
-                const recTime = new Date(rec.endTime || rec.date || rec.timestamp || rec.createdAt || Date.now()).getTime();
-                if (!Number.isFinite(recTime)) {
-                    return true;
-                }
-                const withinWindow = Math.abs(recTime - referenceTime) <= tolerance;
-                return !withinWindow;
-            });
-
-            if (practiceRecords.length !== before) {
-                await this._replacePracticeRecordsWithFallback(practiceRecords);
-                console.log('[SuitePractice] cleared ' + (before - practiceRecords.length) + ' suite child records');
+            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.deleteMany !== 'function') {
+                throw new Error('统一练习记录删除 API 未就绪');
+            }
+            const result = await window.PracticeRecordAPI.deleteMany(Array.from(entrySessionIds), { updateStats: true });
+            const deletedCount = Number(result && result.deletedCount) || 0;
+            if (deletedCount > 0) {
+                console.log('[SuitePractice] cleared ' + deletedCount + ' suite child records');
             }
         },
 
         async _updatePracticeRecordsState() {
             try {
                 if (typeof window.syncPracticeRecords === 'function') {
-                    window.syncPracticeRecords();
+                    await window.syncPracticeRecords({ forceRender: true });
+                    return;
                 } else {
-                    const latest = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
+                    const latest = await this._listPracticeRecordsViaAPI();
                     if (this.setState) {
                         this.setState('practice.records', Array.isArray(latest) ? latest : []);
                     }
@@ -2495,7 +2433,7 @@
             const targetMonth = date.getMonth();
             const targetDate = date.getDate();
 
-            const existingRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: true });
+            const existingRecords = await this._listPracticeRecordsViaAPI();
 
             const resolveRecordDate = record => {
                 const candidates = [

@@ -72,14 +72,13 @@ class PracticeHistoryEnhancer {
             const checkInterval = setInterval(() => {
                 checkCount++;
                 
-                // 检查是否有练习历史相关的函数或数据
+                // 检查是否有练习历史相关的函数或组件
                 const hasStandardComponent = window.app?.components?.practiceHistory;
-                const hasGlobalData = typeof window.exportPracticeData === 'function' && window.practiceRecords;
                 const hasBasicStructure = document.querySelector('.practice-history') || 
                                         document.querySelector('#practice-records') ||
-                                        typeof window.practiceRecords !== 'undefined';
+                                        window.PracticeRecordAPI;
                 
-                if (hasStandardComponent || hasGlobalData || hasBasicStructure) {
+                if (hasStandardComponent || hasBasicStructure) {
                     clearInterval(checkInterval);
                     console.log('[PracticeHistoryEnhancer] 检测到练习历史组件');
                     resolve();
@@ -113,10 +112,13 @@ class PracticeHistoryEnhancer {
                 if (originalCreateRecordItem) {
                     practiceHistory.createRecordItem = (record) => {
                         const html = originalCreateRecordItem(record);
-                        // 替换标题，使其可点击
-                        return html.replace(
-                            /<h4 class="record-title clickable">([^<]+)<\/h4>/,
-                            `<h4 class="record-title practice-record-title" onclick="window.practiceHistoryEnhancer.showRecordDetails('${record.id}')" title="点击查看详情">$1</h4>`
+                        const safeId = this.escapeAttribute(record && record.id != null ? record.id : record && record.sessionId);
+                        if (!safeId) {
+                            return html;
+                        }
+                        return String(html).replace(
+                            /<h4([^>]*\bclass=(["'])(?=[^"']*\brecord-title\b)[^"']*\2[^>]*)>([\s\S]*?)<\/h4>/i,
+                            `<h4$1 data-record-id="${safeId}" onclick="window.practiceHistoryEnhancer.showRecordDetails(this.dataset.recordId)" title="点击查看详情">$3</h4>`
                         );
                     };
                 }
@@ -158,6 +160,18 @@ class PracticeHistoryEnhancer {
                 };
             }
         }
+    }
+
+    escapeAttribute(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
     /**
@@ -219,7 +233,7 @@ class PracticeHistoryEnhancer {
             const selectedFormat = document.querySelector('input[name="export-format"]:checked')?.value;
 
             if (selectedFormat === 'markdown') {
-                this.exportAsMarkdown();
+                await this.exportAsMarkdown();
             } else {
                 await this.exportAsJSON();
             }
@@ -235,13 +249,13 @@ class PracticeHistoryEnhancer {
     /**
      * 导出为 Markdown 格式
      */
-    exportAsMarkdown() {
+    async exportAsMarkdown() {
         if (!window.MarkdownExporter) {
             throw new Error('MarkdownExporter 未加载');
         }
         
         const exporter = new MarkdownExporter();
-        exporter.exportToMarkdown();
+        await exporter.exportToMarkdown();
         
         window.showMessage('Markdown 格式导出成功', 'success');
     }
@@ -251,40 +265,16 @@ class PracticeHistoryEnhancer {
      */
     async exportAsJSON() {
         try {
-            // 尝试使用标准的PracticeRecorder
-            const practiceRecorder = window.app?.components?.practiceRecorder;
-            if (practiceRecorder) {
-                const exportData = await practiceRecorder.exportData('json');
-
-                const blob = new Blob([exportData], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `practice_history_${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                if (window.showMessage) {
-                    window.showMessage('JSON 格式导出成功', 'success');
-                }
-                return;
-            }
-            
-            // 降级到直接从全局变量导出
             let practiceRecords = [];
             let practiceStats = {};
 
-            if (Array.isArray(window.practiceRecords)) {
-                practiceRecords = window.practiceRecords;
-            } else if (window.storage && typeof window.storage.get === 'function') {
-                const storedRecords = await window.storage.get('practice_records', []);
-                practiceRecords = Array.isArray(storedRecords) ? storedRecords : [];
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                const records = await window.PracticeRecordAPI.list();
+                practiceRecords = Array.isArray(records) ? records : [];
             }
 
-            if (window.practiceStats) {
-                practiceStats = window.practiceStats;
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
+                practiceStats = await window.PracticeRecordAPI.readStats();
             }
             
             if (practiceRecords.length === 0) {
@@ -294,7 +284,10 @@ class PracticeHistoryEnhancer {
             const data = {
                 exportDate: new Date().toISOString(),
                 stats: practiceStats,
-                records: practiceRecords
+                user_stats: practiceStats,
+                userStats: practiceStats,
+                records: practiceRecords,
+                practice_records: practiceRecords
             };
 
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -318,29 +311,30 @@ class PracticeHistoryEnhancer {
     }
 
     /**
-     * 优先从核心数据仓库获取练习记录，避免 legacy storage 造成数据缺失
+     * 从统一练习记录 API 获取练习记录，避免 legacy storage 影子键回灌
      */
     async fetchRecordById(recordId) {
         const toIdStr = (v) => v == null ? '' : String(v);
         const targetIdStr = toIdStr(recordId);
 
-        // 1) 优先通过 PracticeRecorder / ScoreStorage 获取最新记录
-        const practiceRecorder = window.app?.components?.practiceRecorder;
-        if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.getById === 'function') {
             try {
-                const maybe = practiceRecorder.getPracticeRecords();
-                const records = Array.isArray(maybe?.then ? await maybe : maybe) ? (maybe?.then ? await maybe : maybe) : [];
-                const hit = records.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
+                const hit = await window.PracticeRecordAPI.getById(targetIdStr);
                 if (hit) return hit;
             } catch (err) {
-                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecorder 获取记录失败，继续降级:', err);
+                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecordAPI 获取记录失败:', err);
             }
         }
 
-        // 2) 兼容 legacy window.practiceRecords（只读兜底）
-        if (Array.isArray(window.practiceRecords)) {
-            const hit = window.practiceRecords.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
-            if (hit) return hit;
+        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+            try {
+                const records = await window.PracticeRecordAPI.list();
+                if (!Array.isArray(records)) return null;
+                const hit = records.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
+                if (hit) return hit;
+            } catch (err) {
+                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecordAPI 列表查找记录失败:', err);
+            }
         }
 
         return null;
@@ -351,7 +345,6 @@ class PracticeHistoryEnhancer {
       */
     async showRecordDetails(recordId) {
         try {
-            // 尝试从不同的数据源获取记录
             const record = await this.fetchRecordById(recordId);
             
             if (!record) {

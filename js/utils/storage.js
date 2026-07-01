@@ -1,7 +1,23 @@
+(function initStorage(window) {
+'use strict';
+
 /**
  * 本地存储工具类
  * 提供统一的数据存储和检索接口
  */
+const STORAGE_INTERNAL_ACCESS_TOKEN = Symbol('StorageManager.internalAccessToken');
+
+const createInternalAccessOptions = (options = {}) => {
+    return Object.assign({}, options, {
+        skipPracticeCoreRedirect: true,
+        internalAccessToken: STORAGE_INTERNAL_ACCESS_TOKEN
+    });
+};
+
+const hasInternalAccessOptions = (options = {}) => {
+    return Boolean(options && options.internalAccessToken === STORAGE_INTERNAL_ACCESS_TOKEN);
+};
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
@@ -12,6 +28,10 @@ class StorageManager {
         this.indexedDBBlocked = false;
         this.volatileMode = false;
         this.mode = 'indexeddb';
+        this.protectedDataKeys = new Set([
+            'practice_records',
+            'user_stats'
+        ]);
         this.persistentKeys = new Set([
             'practice_records',
             'user_stats',
@@ -35,6 +55,52 @@ class StorageManager {
         if (!skipReady) {
             await this.ready;
         }
+    }
+
+    isProtectedDataKey(key) {
+        return this.protectedDataKeys.has(String(key || ''));
+    }
+
+    isProtectedStorageKey(storageKey) {
+        const key = String(storageKey || '');
+        if (!key.startsWith(this.prefix)) {
+            return false;
+        }
+        return this.isProtectedDataKey(key.slice(this.prefix.length));
+    }
+
+    async getPracticeRecordAPI(options = {}) {
+        const api = window.PracticeRecordAPI;
+        if (api) {
+            return api;
+        }
+        if (options.skipReady || !this.ready || this._resolvingPracticeRecordAPI) {
+            return null;
+        }
+        this._resolvingPracticeRecordAPI = true;
+        try {
+            await this.ready;
+            return window.PracticeRecordAPI || null;
+        } finally {
+            this._resolvingPracticeRecordAPI = false;
+        }
+    }
+
+    async readProtectedDataKey(key, defaultValue = null, options = {}) {
+        const api = await this.getPracticeRecordAPI(options);
+        if (key === 'practice_records') {
+            if (api && typeof api.list === 'function') {
+                return await api.list();
+            }
+            throw new Error('Storage.get(practice_records): PracticeRecordAPI.list not ready');
+        }
+        if (key === 'user_stats') {
+            if (api && typeof api.readStats === 'function') {
+                return await api.readStats({ fallback: defaultValue });
+            }
+            throw new Error('Storage.get(user_stats): PracticeRecordAPI.readStats not ready');
+        }
+        return defaultValue;
     }
 
     /**
@@ -428,16 +494,6 @@ class StorageManager {
         const { skipReady = false } = options;
         await this.waitForInitialization(skipReady);
         const defaultData = {
-            user_stats: {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                lastPracticeDate: null,
-                achievements: []
-            },
             settings: {
                 theme: 'light',
                 notifications: true,
@@ -445,7 +501,6 @@ class StorageManager {
                 reminderTime: '19:00'
             },
             exam_index: null,
-            practice_records: [],
             learning_goals: []
         };
 
@@ -522,7 +577,10 @@ class StorageManager {
         }
     }
 
-    async writePersistentValue(key, value) {
+    async writePersistentValue(key, value, options = {}) {
+        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+            throw new Error(`Storage.writePersistentValue(${key}) is internal-only`);
+        }
         const serializedValue = this.createStoredEnvelope(value);
         const storageKey = this.getKey(key);
 
@@ -560,7 +618,10 @@ class StorageManager {
         return true;
     }
 
-    async readPersistentValue(key, defaultValue = undefined) {
+    async readPersistentValue(key, defaultValue = undefined, options = {}) {
+        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+            throw new Error(`Storage.readPersistentValue(${key}) is internal-only`);
+        }
         const storageKey = this.getKey(key);
 
         if (this.fallbackStorage && this.fallbackStorage.has(storageKey)) {
@@ -583,7 +644,10 @@ class StorageManager {
         return defaultValue;
     }
 
-    async removePersistentValue(key) {
+    async removePersistentValue(key, options = {}) {
+        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+            throw new Error(`Storage.removePersistentValue(${key}) is internal-only`);
+        }
         const storageKey = this.getKey(key);
 
         if (this.fallbackStorage) {
@@ -600,7 +664,10 @@ class StorageManager {
         return true;
     }
 
-    async clearPersistentStorage() {
+    async clearPersistentStorage(options = {}) {
+        if (!hasInternalAccessOptions(options)) {
+            throw new Error('Storage.clearPersistentStorage is internal-only');
+        }
         if (this.fallbackStorage) {
             this.fallbackStorage.clear();
         }
@@ -658,10 +725,10 @@ class StorageManager {
      * 压缩对象数据
      */
     compressObject(obj) {
-        // 只保留核心字段：用户答案、正确答案、正误、得分、正确率、答题时长、答题时间
+        // 只保留核心字段：用户答案、canonical 正确答案表、正误、得分、正确率、答题时长、答题时间
         const coreFields = [
             'id', 'examId', 'title', 'category', 'frequency',
-            'score', 'totalQuestions', 'accuracy', 'percentage', 'duration',
+            'score', 'totalQuestions', 'correctAnswers', 'correctAnswerMap', 'accuracy', 'percentage', 'duration',
             'startTime', 'endTime', 'date', 'sessionId', 'timestamp',
             'dataSource', 'realData'
         ];
@@ -707,6 +774,52 @@ class StorageManager {
         return Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     }
 
+    async listPracticeRecordsCanonical(options = {}) {
+        const { skipReady = false } = options;
+
+        const api = await this.getPracticeRecordAPI({ skipReady });
+        if (api && typeof api.list === 'function') {
+            const records = await api.list();
+            return Array.isArray(records) ? records : [];
+        }
+
+        throw new Error('Storage.listPracticeRecordsCanonical: unified store not ready');
+    }
+
+    async replacePracticeRecordsCanonical(records, options = {}) {
+        const { skipReady = false } = options;
+        if (!Array.isArray(records)) {
+            throw new Error('Storage.replacePracticeRecordsCanonical requires an array of records');
+        }
+
+        const api = await this.getPracticeRecordAPI({ skipReady });
+        if (api && typeof api.replace === 'function') {
+            await api.replace(records, { maxRecords: 1000 });
+            return true;
+        }
+
+        throw new Error('Storage.replacePracticeRecordsCanonical: unified store not ready');
+    }
+
+    async writeUserStatsCanonical(stats, options = {}) {
+        const { skipReady = false } = options;
+        const api = await this.getPracticeRecordAPI({ skipReady });
+        if (api && typeof api.writeStats === 'function') {
+            return await api.writeStats(stats);
+        }
+        throw new Error('Storage.writeUserStatsCanonical: unified stats store not ready');
+    }
+
+    async mergePracticeRecordsCanonical(records, options = {}) {
+        if (!Array.isArray(records)) {
+            throw new Error('Storage.mergePracticeRecordsCanonical requires an array of records');
+        }
+        const current = await this.listPracticeRecordsCanonical(options);
+        const merged = this.mergeRecords(current, records);
+        await this.replacePracticeRecordsCanonical(merged, options);
+        return merged;
+    }
+
     /**
      * 压缩realData数据
      */
@@ -718,7 +831,7 @@ class StorageManager {
             percentage: realData.percentage,
             duration: realData.duration,
             answers: realData.answers || {},
-            correctAnswers: realData.correctAnswers || {},
+            correctAnswerMap: realData.correctAnswerMap || {},
             isRealData: realData.isRealData,
             source: realData.source
         };
@@ -745,8 +858,7 @@ class StorageManager {
             Object.entries(realData.answerComparison).forEach(([questionId, comparison]) => {
                 simplifiedComparison[questionId] = {
                     userAnswer: comparison.userAnswer || '',
-                    correctAnswer: comparison.correctAnswer || '',
-                    isCorrect: comparison.isCorrect || false
+                    isCorrect: typeof comparison.isCorrect === 'boolean' ? comparison.isCorrect : null
                 };
             });
             compressed.answerComparison = simplifiedComparison;
@@ -759,21 +871,21 @@ class StorageManager {
      * 存储数据
      */
     async set(key, value, options = {}) {
-        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
+        const { skipReady = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            const allowPracticeCoreRedirect = !skipReady && !skipPracticeCoreRedirect;
-            if (allowPracticeCoreRedirect && window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.handlesStorageKey === 'function' && window.PracticeCore.store.handlesStorageKey(key)) {
-                const redirected = await window.PracticeCore.store.routeStorageSet(this, key, value, options);
-                if (redirected !== null && redirected !== undefined) {
-                    return redirected;
-                }
+            if (protectedPublicAccess) {
+                throw new Error(`Storage.set(${key}) is disabled; use PracticeRecordAPI`);
             }
-            return await this.writePersistentValue(key, value);
+            return await this.writePersistentValue(key, value, options);
         } catch (error) {
             console.error('[Storage] set 操作错误:', error);
-            this.handleStorageError(key, value, error);
+            this.handleStorageError(key, value, error, options);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return false;
         }
     }
@@ -786,30 +898,44 @@ class StorageManager {
      */
     async append(key, value, options = {}) {
         const { skipReady = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            let currentList = await this.readPersistentValue(key, []);
+            if (protectedPublicAccess) {
+                throw new Error(`Storage.append(${key}) is disabled; use PracticeRecordAPI`);
+            }
+            let currentList = await this.readPersistentValue(key, [], options);
             if (!Array.isArray(currentList)) {
                 currentList = [];
             }
             currentList.push(value);
-            return await this.writePersistentValue(key, currentList);
+            return await this.writePersistentValue(key, currentList, options);
         } catch (error) {
             console.error('[Storage] Append error:', error);
-            this.handleStorageError(key, value, error);
+            this.handleStorageError(key, value, error, options);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return false;
         }
     }
 
     async get(key, defaultValue = null, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            return await this.readPersistentValue(key, defaultValue);
+            if (protectedPublicAccess) {
+                return await this.readProtectedDataKey(key, defaultValue, options);
+            }
+            return await this.readPersistentValue(key, defaultValue, options);
         } catch (error) {
             console.error('Storage get error:', error);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return defaultValue;
         }
     }
@@ -818,20 +944,20 @@ class StorageManager {
      * 删除数据
      */
     async remove(key, options = {}) {
-        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
+        const { skipReady = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            const allowPracticeCoreRedirect = !skipReady && !skipPracticeCoreRedirect;
-            if (allowPracticeCoreRedirect && window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.handlesStorageKey === 'function' && window.PracticeCore.store.handlesStorageKey(key)) {
-                const redirected = await window.PracticeCore.store.routeStorageRemove(this, key, options);
-                if (redirected !== null && redirected !== undefined) {
-                    return redirected;
-                }
+            if (protectedPublicAccess) {
+                throw new Error(`Storage.remove(${key}) is disabled; use PracticeRecordAPI`);
             }
-            return await this.removePersistentValue(key);
+            return await this.removePersistentValue(key, options);
         } catch (error) {
             console.error('Storage remove error:', error);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return false;
         }
     }
@@ -844,7 +970,15 @@ class StorageManager {
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            return await this.clearPersistentStorage();
+            if (!hasInternalAccessOptions(options)) {
+                const api = await this.getPracticeRecordAPI(options);
+                if (!api || typeof api.clear !== 'function' || typeof api.resetStats !== 'function') {
+                    throw new Error('Storage.clear: PracticeRecordAPI clear/resetStats not ready');
+                }
+                await api.clear({ updateStats: false });
+                await api.resetStats();
+            }
+            return await this.clearPersistentStorage(createInternalAccessOptions(options));
         } catch (error) {
             console.error('Storage clear error:', error);
             return false;
@@ -1040,7 +1174,7 @@ class StorageManager {
         try {
             console.log('[Storage] 开始清理旧数据...');
 
-            const practiceRecords = await this.get('practice_records', [], { skipReady });
+            const practiceRecords = await this.listPracticeRecordsCanonical({ skipReady });
             if (practiceRecords.length > 0) {
                 console.log(`[Storage] 练习记录数据保留${practiceRecords.length}条记录，跳过压缩以保护答案数据完整性`);
             }
@@ -1100,6 +1234,7 @@ class StorageManager {
                 await this.set('migration_completed', true, { skipReady });
             } else {
                 let migratedCount = 0;
+                let deferredPracticeMigration = false;
                 for (const oldKey of legacyKeys) {
                     try {
                         const legacyDataStr = localStorage.getItem(oldKey);
@@ -1125,84 +1260,40 @@ class StorageManager {
 
                         // 对应新键（去除 old_prefix_ 如果存在）
                         let newKey = oldKey.replace(/^old_prefix_/, '');
-                        const current = await this.get(newKey, [], { skipReady });
-
-                        // 对于关键键额外检查
-                        const criticalKeys = ['practice_records'];
-                        if (criticalKeys.includes(newKey) && legacyData.length === 0 && current.length > 0) {
-                            console.log('[Storage] 发现空旧数据但新数据存在，跳过以避免覆盖');
-                            continue;
+                        const isPracticeRecordsKey = newKey === 'practice_records';
+                        if (isPracticeRecordsKey) {
+                            await this.mergePracticeRecordsCanonical(legacyData, { skipReady });
+                        } else {
+                            const current = await this.get(newKey, [], { skipReady });
+                            const merged = this.mergeRecords(current, legacyData);
+                            await this.set(newKey, merged, { skipReady });
                         }
-
-                        const merged = this.mergeRecords(current, legacyData);
-                        await this.set(newKey, merged, { skipReady });
 
                         // 删除旧键
                         localStorage.removeItem(oldKey);
                         migratedCount++;
                         console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
                     } catch (migrateError) {
+                        const newKey = oldKey.replace(/^old_prefix_/, '');
+                        if (newKey === 'practice_records') {
+                            deferredPracticeMigration = true;
+                        }
                         console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
                     }
                 }
 
                 console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
-                await this.set('migration_completed', true, { skipReady });
-            }
-
-            // 迁移 MyMelody 遗留键（IndexedDB 中的旧键）
-            if (!await this.get('my_melody_migration_completed', null, { skipReady })) {
-                console.log('[Storage] 检查 MyMelody 遗留键迁移...');
-                const oldMyMelodyKey = this.getKey('practice_records'); // 'exam_system_practice_records'
-                try {
-                    const legacyMyMelodyData = await this.getFromIndexedDB(oldMyMelodyKey);
-                    if (legacyMyMelodyData) {
-                        let legacyData;
-                        try {
-                            const parsed = JSON.parse(legacyMyMelodyData);
-                            legacyData = parsed.data || parsed;
-                        } catch (parseError) {
-                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        if (!Array.isArray(legacyData)) {
-                            console.warn('[Storage] MyMelody 遗留数据非数组，跳过');
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        if (legacyData.length === 0) {
-                            console.log('[Storage] MyMelody 旧数据为空，跳过迁移');
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        const currentPracticeRecords = await this.get('practice_records', [], { skipReady });
-                        const merged = this.mergeRecords(currentPracticeRecords, legacyData);
-                        await this.set('practice_records', merged, { skipReady });
-
-                        // 删除旧键
-                        await this.removeFromIndexedDB(oldMyMelodyKey);
-                        console.log(`[Storage] 成功迁移 MyMelody 数据: ${legacyData.length} 项合并到 practice_records`);
-                    } else {
-                        console.log('[Storage] 无 MyMelody 遗留数据需要迁移');
-                    }
-                    await this.set('my_melody_migration_completed', true, { skipReady });
-                } catch (migrateError) {
-                    console.error('[Storage] MyMelody 迁移失败:', migrateError);
-                    await this.set('my_melody_migration_completed', true, { skipReady }); // 避免无限重试
+                if (deferredPracticeMigration) {
+                    console.warn('[Storage] 练习记录迁移已延后，等待 PracticeRecordAPI 就绪后重试');
+                } else {
+                    await this.set('migration_completed', true, { skipReady });
                 }
-            } else {
-                console.log('[Storage] MyMelody 迁移已完成，跳过');
             }
 
         } catch (error) {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true, { skipReady });
-            await this.set('my_melody_migration_completed', true, { skipReady });
         }
     }
 
@@ -1235,8 +1326,8 @@ class StorageManager {
                 console.warn('[Storage] 备份数据格式无效');
                 return false;
             }
-            // 恢复 practice_records
-            await this.set('practice_records', backupData.practice_records, { skipReady });
+            // 运行期恢复必须走统一记录 API；raw practice_records 只允许启动迁移兼容使用。
+            await this.replacePracticeRecordsCanonical(backupData.practice_records, { skipReady });
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
@@ -1246,31 +1337,14 @@ class StorageManager {
     }
 
     /**
-     * 处理存储配额超限
-     */
-    handleStorageQuotaExceeded(key, value) {
-        console.error('[Storage] 存储配额超限，无法保存数据:', key);
-
-        // 显示用户警告
-        if (window.showMessage) {
-            window.showMessage('存储空间不足，系统已自动清理旧数据，请稍后重试', 'warning');
-        }
-
-        // 触发存储不足事件
-        document.dispatchEvent(new CustomEvent('storageQuotaExceeded', {
-            detail: { key, value, storageInfo: this.getStorageInfo() }
-        }));
-    }
-
-    /**
      * 处理存储错误
      */
-    handleStorageError(key, value, error) {
+    handleStorageError(key, value, error, options = {}) {
         console.error('[Storage] 存储错误:', error);
 
         // 如果是配额错误，尝试切换到备用存储
         if (error.name === 'QuotaExceededError') {
-            this.handleStorageQuotaExceeded(key, value);
+            this.handleStorageQuotaExceeded(key, value, options);
         } else {
             // 其他错误
             if (window.showMessage) {
@@ -1297,6 +1371,9 @@ class StorageManager {
             if (this.fallbackStorage) {
                 this.fallbackStorage.forEach((value, key) => {
                     if (key.startsWith(this.prefix)) {
+                        if (this.isProtectedStorageKey(key)) {
+                            return;
+                        }
                         const cleanKey = key.replace(this.prefix, '');
                         data[cleanKey] = JSON.parse(value);
                     }
@@ -1310,7 +1387,7 @@ class StorageManager {
                     const items = await this.getAllFromIndexedDB();
                     const indexedDBData = {};
                     items.forEach(item => {
-                        if (item.key.startsWith(this.prefix)) {
+                        if (item.key.startsWith(this.prefix) && !this.isProtectedStorageKey(item.key)) {
                             const cleanKey = item.key.replace(this.prefix, '');
                             indexedDBData[cleanKey] = JSON.parse(item.value);
                         }
@@ -1328,6 +1405,9 @@ class StorageManager {
             const appKeys = localStorageKeys.filter(key => key.startsWith(this.prefix));
             appKeys.forEach(key => {
                 const cleanKey = key.replace(this.prefix, '');
+                if (this.isProtectedDataKey(cleanKey)) {
+                    return;
+                }
                 try {
                     const value = localStorage.getItem(key);
                     if (value) {
@@ -1338,6 +1418,9 @@ class StorageManager {
                 }
             });
             console.log(`[Storage] 已导出localStorage数据 ${appKeys.length} 条`);
+
+            data.practice_records = await this.readProtectedDataKey('practice_records', [], { skipReady });
+            data.user_stats = await this.readProtectedDataKey('user_stats', null, { skipReady });
 
             console.log(`[Storage] 数据导出完成，总计 ${Object.keys(data).length} 条记录`);
 
@@ -1390,17 +1473,38 @@ class StorageManager {
                 throw new Error('Invalid import data format');
             }
 
+            const importEntries = Object.entries(importedData.data);
+            const api = await this.getPracticeRecordAPI({ skipReady });
+            const hasPracticeRecords = importEntries.some(([key]) => key === 'practice_records');
+            const hasUserStats = importEntries.some(([key]) => key === 'user_stats');
+            if (hasPracticeRecords && (!api || typeof api.replace !== 'function')) {
+                throw new Error('Storage.importData: unified practice record store not ready');
+            }
+            if (hasUserStats && (!api || typeof api.writeStats !== 'function')) {
+                throw new Error('Storage.importData: unified user stats store not ready');
+            }
+
             // 备份当前数据
             const backup = await this.exportData({ skipReady });
+            const importEntry = ([key, value]) => {
+                const nextValue = value && Object.prototype.hasOwnProperty.call(value, 'data')
+                    ? value.data
+                    : value;
+                if (key === 'practice_records') {
+                    return this.replacePracticeRecordsCanonical(nextValue, { skipReady });
+                }
+                if (key === 'user_stats') {
+                    return this.writeUserStatsCanonical(nextValue, { skipReady });
+                }
+                return this.set(key, nextValue, { skipReady });
+            };
 
             try {
                 // 清空现有数据
                 await this.clear({ skipReady });
 
                 // 导入新数据
-                const importPromises = Object.entries(importedData.data).map(([key, value]) => {
-                    return this.set(key, value.data, { skipReady });
-                });
+                const importPromises = importEntries.map(importEntry);
 
                 await Promise.all(importPromises);
 
@@ -1411,9 +1515,7 @@ class StorageManager {
                 await this.clear({ skipReady });
 
                 if (backup && backup.data) {
-                    const restorePromises = Object.entries(backup.data).map(([key, value]) => {
-                        return this.set(key, value.data, { skipReady });
-                    });
+                    const restorePromises = Object.entries(backup.data).map(importEntry);
                     await Promise.all(restorePromises);
                 }
 
@@ -2124,10 +2226,18 @@ class StorageManager {
     /**
      * 处理存储空间不足
      */
-    async handleStorageQuotaExceeded(key, value) {
+    async handleStorageQuotaExceeded(key, value, options = {}) {
         console.warn('[Storage] 存储空间不足，尝试清理');
 
         try {
+            if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+                console.error(`[Storage] ${key} 空间不足时禁止 raw fallback`);
+                if (window.showMessage) {
+                    window.showMessage('练习数据保存空间不足，请先导出备份并清理空间', 'error');
+                }
+                return false;
+            }
+
             // 1. 清理旧数据
             await this.cleanupOldData({ skipReady: true });
 
@@ -2320,8 +2430,7 @@ class StorageManager {
         try {
             console.log('[Storage] 开始导出练习记录');
 
-            // 加载练习记录
-            const records = await this.get('practice_records', [], { skipReady });
+            const records = await this.listPracticeRecordsCanonical({ skipReady });
 
             const exportData = {
                 type: 'practice_records',
@@ -2723,11 +2832,9 @@ class StorageKeyRegistry {
             'blue-theme-mode',
             'browse_state',
             'hasSeenGplLicense',
-            'hp.theme',
             'preferred_theme_portal'
         ]);
         this.sessionKeys = new Set([
-            'hp.portal.pendingView',
             'preferred_theme_skip_session'
         ]);
     }
@@ -2821,6 +2928,25 @@ window.persistentStore = storageManager;
 window.preferenceStore = preferenceStore;
 window.storageKeyRegistry = storageKeyRegistry;
 window.storage = storageFacade;
+Object.defineProperty(window, '__installStorageInternalAccess', {
+    value(install) {
+        if (typeof install !== 'function') {
+            throw new Error('__installStorageInternalAccess requires an installer function');
+        }
+        const result = install(createInternalAccessOptions, hasInternalAccessOptions);
+        if (result !== false) {
+            try {
+                delete window.__installStorageInternalAccess;
+            } catch (_) {
+                window.__installStorageInternalAccess = undefined;
+            }
+        }
+        return result;
+    },
+    enumerable: false,
+    configurable: true,
+    writable: false
+});
 
 // 启动存储监控和数据同步
 storageManager.ready
@@ -2831,3 +2957,4 @@ storageManager.ready
     .catch(error => {
         console.error('[Storage] 存储初始化失败，监控未启动:', error);
     });
+})(typeof window !== 'undefined' ? window : globalThis);

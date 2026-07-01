@@ -15,10 +15,11 @@ class PracticeRecordModal {
 
     show(record) {
         try {
+            const replayRecord = this.cloneRecord(record);
             let processedRecord = record;
 
             if (window.DataConsistencyManager) {
-                const manager = new DataConsistencyManager();
+                const manager = new window.DataConsistencyManager();
                 processedRecord = manager.ensureConsistency(record);
                 console.log('[PracticeRecordModal] \u6570\u636e\u4e00\u81f4\u6027\u68c0\u67e5\u5b8c\u6210');
             }
@@ -28,10 +29,10 @@ class PracticeRecordModal {
             const modalHtml = this.createModalHtml(processedRecord);
 
             this.hide();
+            this.currentRecord = replayRecord;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
             this.modalElement = document.getElementById(this.modalId);
-            this.currentRecord = processedRecord;
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
 
@@ -45,6 +46,17 @@ class PracticeRecordModal {
             if (typeof window.showMessage === 'function') {
                 window.showMessage('\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55', 'error');
             }
+        }
+    }
+
+    cloneRecord(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+        try {
+            return JSON.parse(JSON.stringify(record));
+        } catch (_) {
+            return Object.assign({}, record);
         }
     }
 
@@ -470,10 +482,14 @@ class PracticeRecordModal {
         }
 
         if (hasSuites) {
-            suites.forEach((entry) => {
+            suites.forEach((entry, index) => {
                 const subset = utils.getNormalizedEntries(entry) || [];
                 if (subset.length > 0) {
-                    entries = entries.concat(subset);
+                    entries = entries.concat(subset.map((item) => ({
+                        ...item,
+                        sourceEntryKey: item.sourceEntryKey || entry.examId || entry.id || `suite-entry-${index}`,
+                        examId: item.examId || entry.examId || entry.id || `suite-entry-${index}`
+                    })));
                 }
             });
         }
@@ -484,8 +500,8 @@ class PracticeRecordModal {
 
         const seen = new Set();
         return entries.filter((entry) => {
-            const questionKey = entry && (entry.questionId || entry.displayNumber || entry.key || '');
-            const examKey = entry && (entry.examId || '');
+            const questionKey = entry && (entry.questionId || entry.canonicalKey || entry.displayNumber || entry.key || '');
+            const examKey = entry && (entry.sourceEntryKey || entry.examId || '');
             const dedupeKey = `${examKey}::${questionKey}::${entry && entry.correctAnswer ? String(entry.correctAnswer) : ''}`;
             if (seen.has(dedupeKey)) {
                 return false;
@@ -850,9 +866,9 @@ class PracticeRecordModal {
 
     mergeComparisonWithCorrections(record) {
         const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const canonicalMap = this.getCanonicalCorrectAnswerMap(record);
         const sources = [
-            record.correctAnswers || {},
-            record.realData && record.realData.correctAnswers,
+            canonicalMap,
             (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details)
                 ? Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
                 : null,
@@ -872,11 +888,15 @@ class PracticeRecordModal {
 
         Object.keys(comparison).forEach((key) => {
             const item = comparison[key] || {};
-            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(canonicalMap, key);
+            if (hasCanonicalCorrectAnswer) {
                 const fixed = getFromSources(key);
                 if (fixed != null) {
                     item.correctAnswer = fixed;
                 }
+            } else {
+                item.correctAnswer = '';
+                item.isCorrect = null;
             }
             if (item.userAnswer == null) {
                 item.userAnswer = '';
@@ -953,47 +973,24 @@ class PracticeRecordModal {
     }
 
     getLegacyCorrectAnswers(record) {
-        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
+        const canonicalMap = this.getCanonicalCorrectAnswerMap(record);
+        if (Object.keys(canonicalMap).length > 0) {
+            return canonicalMap;
         }
 
-        if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
-        }
+        return {};
+    }
 
-        if (record.answerComparison) {
-            const extracted = {};
-            Object.keys(record.answerComparison).forEach((key) => {
-                const comparison = record.answerComparison[key];
-                if (comparison && comparison.correctAnswer) {
-                    extracted[key] = comparison.correctAnswer;
-                }
-            });
-            if (Object.keys(extracted).length > 0) {
-                return extracted;
+    getCanonicalCorrectAnswerMap(record) {
+        const sources = [
+            record && record.correctAnswerMap,
+            record && record.realData && record.realData.correctAnswerMap
+        ];
+        for (const source of sources) {
+            if (source && typeof source === 'object' && !Array.isArray(source) && Object.keys(source).length > 0) {
+                return Object.assign({}, source);
             }
         }
-
-        const detailSources = [];
-        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            detailSources.push(record.realData.scoreInfo.details);
-        }
-        if (record.scoreInfo && record.scoreInfo.details) {
-            detailSources.push(record.scoreInfo.details);
-        }
-        for (const details of detailSources) {
-            const extracted = {};
-            Object.keys(details || {}).forEach((key) => {
-                const detail = details[key];
-                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
-                    extracted[key] = detail.correctAnswer;
-                }
-            });
-            if (Object.keys(extracted).length > 0) {
-                return extracted;
-            }
-        }
-
         return {};
     }
 
@@ -1134,14 +1131,21 @@ class PracticeRecordModal {
 
     async exportSingle(recordId) {
         try {
+            const normalise = (value) => (value == null ? '' : String(value));
+            const targetId = normalise(recordId);
+            const api = window.PracticeRecordAPI || null;
             let record = null;
 
-            // 1) 优先使用 PracticeRecorder / ScoreStorage
-            const practiceRecorder = window.app?.components?.practiceRecorder;
-            if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
-                const maybe = practiceRecorder.getPracticeRecords();
-                const records = Array.isArray(maybe?.then ? await maybe : maybe) ? (maybe?.then ? await maybe : maybe) : [];
-                record = records.find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
+            if (api && typeof api.getById === 'function') {
+                record = await api.getById(targetId);
+            }
+
+            if (!record && api && typeof api.list === 'function') {
+                const records = await api.list();
+                if (Array.isArray(records)) {
+                    record = records.find(r => normalise(r.id) === targetId) ||
+                        records.find(r => normalise(r.sessionId) === targetId);
+                }
             }
 
             if (!record) {
@@ -1191,10 +1195,20 @@ if (!window.practiceRecordModal.showById) {
         try {
             const normalise = (value) => (value == null ? '' : String(value));
             const targetId = normalise(recordId);
+            const api = window.PracticeRecordAPI || null;
+            let record = null;
 
-            const records = (window.storage ? (await window.storage.get('practice_records', [])) : []) || [];
-            let record = records.find(r => normalise(r.id) === targetId) ||
-                records.find(r => normalise(r.sessionId) === targetId);
+            if (api && typeof api.getById === 'function') {
+                record = await api.getById(targetId);
+            }
+
+            if (!record && api && typeof api.list === 'function') {
+                const records = await api.list();
+                if (Array.isArray(records)) {
+                    record = records.find(r => normalise(r.id) === targetId) ||
+                        records.find(r => normalise(r.sessionId) === targetId);
+                }
+            }
 
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');

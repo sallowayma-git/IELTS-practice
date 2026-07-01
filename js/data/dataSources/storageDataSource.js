@@ -1,11 +1,28 @@
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
 
+    function isProtectedPracticeDataKey(key) {
+        return key === 'practice_records' || key === 'user_stats';
+    }
+
     class StorageTransactionContext {
-        constructor(storageManager) {
+        constructor(storageManager, options = {}) {
             this.storage = storageManager;
+            this.createInternalOptions = typeof options.createInternalOptions === 'function'
+                ? options.createInternalOptions
+                : null;
             this.operations = [];
             this.cache = new Map();
+        }
+
+        _internalOptions(key) {
+            if (this.createInternalOptions) {
+                return this.createInternalOptions();
+            }
+            if (isProtectedPracticeDataKey(key)) {
+                throw new Error(`StorageTransactionContext cannot access protected key ${key} without internal storage access`);
+            }
+            return { skipPracticeCoreRedirect: true };
         }
 
         async get(key, defaultValue) {
@@ -13,7 +30,7 @@
                 return this.cache.get(key);
             }
             const resolvedDefault = typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-            const value = await this.storage.get(key, resolvedDefault);
+            const value = await this.storage.get(key, resolvedDefault, this._internalOptions(key));
             const finalValue = value === undefined ? resolvedDefault : value;
             this.cache.set(key, finalValue);
             return finalValue;
@@ -32,9 +49,9 @@
         async commit() {
             for (const op of this.operations) {
                 if (op.type === 'set') {
-                    await this.storage.set(op.key, op.value, { skipPracticeCoreRedirect: true });
+                    await this.storage.set(op.key, op.value, this._internalOptions(op.key));
                 } else if (op.type === 'remove') {
-                    await this.storage.remove(op.key, { skipPracticeCoreRedirect: true });
+                    await this.storage.remove(op.key, this._internalOptions(op.key));
                 }
             }
             this.operations = [];
@@ -46,30 +63,43 @@
     }
 
     class StorageDataSource {
-        constructor(storageManager) {
+        constructor(storageManager, options = {}) {
             if (!storageManager) {
                 throw new Error('StorageDataSource requires a StorageManager instance');
             }
             this.storage = storageManager;
+            this.createInternalOptions = typeof options.createInternalOptions === 'function'
+                ? options.createInternalOptions
+                : null;
             this._queue = Promise.resolve();
+        }
+
+        _internalOptions(key) {
+            if (this.createInternalOptions) {
+                return this.createInternalOptions();
+            }
+            if (isProtectedPracticeDataKey(key)) {
+                throw new Error(`StorageDataSource cannot access protected key ${key} without internal storage access`);
+            }
+            return { skipPracticeCoreRedirect: true };
         }
 
         async read(key, defaultValue) {
             const resolvedDefault = typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-            const value = await this.storage.get(key, resolvedDefault);
+            const value = await this.storage.get(key, resolvedDefault, this._internalOptions(key));
             return value === undefined ? resolvedDefault : value;
         }
 
         async write(key, value) {
             return this._enqueue(async () => {
-                await this.storage.set(key, value, { skipPracticeCoreRedirect: true });
+                await this.storage.set(key, value, this._internalOptions(key));
                 return true;
             });
         }
 
         async remove(key) {
             return this._enqueue(async () => {
-                await this.storage.remove(key, { skipPracticeCoreRedirect: true });
+                await this.storage.remove(key, this._internalOptions(key));
                 return true;
             });
         }
@@ -80,7 +110,9 @@
             }
             const label = options.label || 'storage-transaction';
             return this._enqueue(async () => {
-                const context = new StorageTransactionContext(this.storage);
+                const context = new StorageTransactionContext(this.storage, {
+                    createInternalOptions: this.createInternalOptions
+                });
                 try {
                     const result = await handler(context);
                     await context.commit();
