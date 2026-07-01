@@ -3424,6 +3424,36 @@
       "hasPdf": true,
       "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
       "sourceKind": "generated-reading"
+    },
+    "p2-low-240": {
+      "examId": "p2-low-240",
+      "dataKey": "p2-low-240",
+      "script": "./p2-low-240.js",
+      "title": "Coins - the first form of money",
+      "category": "P2",
+      "frequency": "low",
+      "difficultyScore": null,
+      "path": "/Users/hissin/工程/lelts-new/",
+      "filename": "P2 - Coins.docx",
+      "hasHtml": true,
+      "hasPdf": false,
+      "pdfFilename": "",
+      "sourceKind": "generated-reading"
+    },
+    "p3-low-240": {
+      "examId": "p3-low-240",
+      "dataKey": "p3-low-240",
+      "script": "./p3-low-240.js",
+      "title": "How a prehistoric predator took to the skies",
+      "category": "P3",
+      "frequency": "low",
+      "difficultyScore": null,
+      "path": "/Users/hissin/工程/lelts-new/",
+      "filename": "P3 - How a prehistoric predator took to the skies(1).docx",
+      "hasHtml": true,
+      "hasPdf": false,
+      "pdfFilename": "",
+      "sourceKind": "generated-reading"
     }
   };
 
