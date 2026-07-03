@@ -3652,6 +3652,9 @@
                 mergeSuiteDraftPayload,
                 captureInlineSuiteDraftBeforeReinit,
                 shouldIgnoreInlineSuiteEnvelope,
+                shouldAcceptWindowSessionMessage,
+                adoptWindowSessionMessage,
+                handleIncoming,
                 initializeInlineSimulationSuite,
                 getTestState() {
                     return {
@@ -3664,6 +3667,8 @@
                         simulationCtx: state.simulationCtx && typeof state.simulationCtx === 'object'
                             ? JSON.parse(JSON.stringify(state.simulationCtx))
                             : state.simulationCtx,
+                        windowSessionToken: state.windowSessionToken,
+                        windowSessionIssuedAtMs: state.windowSessionIssuedAtMs,
                         sessionReadySent: state.sessionReadySent,
                         lastInitSignature: state.lastInitSignature,
                         activeExamId: state.suite?.activeExamId || null,
@@ -4935,7 +4940,11 @@
         }
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
+        const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
+                return;
+            }
             const initSignature = buildInitSignature(data);
             const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
@@ -4955,6 +4964,7 @@
             if (isDuplicateInit && state.sessionReadySent) {
                 return;
             }
+            adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
             }
@@ -5074,6 +5084,9 @@
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {
+            if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
+                return;
+            }
             const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
             const contextSuiteSequence = normalizeSuiteSequence(data && data.suiteSequence);
@@ -5101,6 +5114,7 @@
                 syncPrimaryActionButtons();
                 return;
             }
+            adoptWindowSessionMessage(data, sourceWindow);
             state.simulationMode = true;
             state.simulationContextReady = true;
             state.simulationCtx = data;
