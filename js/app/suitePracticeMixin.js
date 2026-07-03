@@ -223,7 +223,10 @@
                 return true;
             }
 
-            const normalized = this._normalizeSuiteResult(sequenceEntry.exam, data);
+            const derivedDuration = this._deriveSuiteExamElapsedSeconds(session, examId, data && data.duration);
+            const normalized = this._normalizeSuiteResult(sequenceEntry.exam, Object.assign({}, data, {
+                duration: derivedDuration
+            }));
             this._upsertSuiteResult(session, examId, normalized);
             this._syncSuiteTimerFromPayload(session, data);
             session.lastUpdate = Date.now();
@@ -240,7 +243,7 @@
                     : Date.now()
             };
             if (Number.isFinite(Number(data && data.duration))) {
-                session.elapsedByExam[examId] = Math.max(0, Number(data.duration));
+                session.elapsedByExam[examId] = derivedDuration;
             }
 
             const currentIndex = session.sequence.findIndex(item => item.examId === examId);
@@ -685,6 +688,58 @@
             }
         },
 
+        async _waitForSuiteWindowExamReady(session, examId, targetWindow = null, timeoutMs = 2500) {
+            if (!session || !examId || !targetWindow || targetWindow.closed) {
+                return false;
+            }
+            const expectedExamId = String(examId);
+            const startedAt = Date.now();
+            const readWindowExamId = () => {
+                try {
+                    if (!targetWindow || targetWindow.closed || !targetWindow.location) {
+                        return '';
+                    }
+                    const href = typeof targetWindow.location.href === 'string' ? targetWindow.location.href : '';
+                    if (!href || href === 'about:blank') {
+                        return '';
+                    }
+                    const parsed = new URL(href, (global && global.location && global.location.href) ? global.location.href : undefined);
+                    return String(parsed.searchParams.get('examId') || '').trim();
+                } catch (_) {
+                    return '';
+                }
+            };
+            while (Date.now() - startedAt < timeoutMs) {
+                if (targetWindow.closed) {
+                    return false;
+                }
+                const windowExamId = readWindowExamId();
+                if (windowExamId && windowExamId !== expectedExamId) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    continue;
+                }
+                const windowInfo = this.examWindows && this.examWindows.get(expectedExamId)
+                    ? this.examWindows.get(expectedExamId)
+                    : null;
+                const readyMatches = Boolean(
+                    windowInfo
+                    && windowInfo.window
+                    && !windowInfo.window.closed
+                    && windowInfo.window === targetWindow
+                    && windowInfo.lastMessageType === 'SESSION_READY'
+                    && Number(windowInfo.lastMessageAt) >= startedAt
+                    && (!windowInfo.suiteSessionId || windowInfo.suiteSessionId === session.id)
+                    && (!windowInfo.windowSessionToken || !windowInfo.lastWindowSessionToken || windowInfo.windowSessionToken === windowInfo.lastWindowSessionToken)
+                    && (!windowInfo.pageType || /unified-reading|suite-placeholder/i.test(String(windowInfo.pageType)))
+                );
+                if (readyMatches) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            return false;
+        },
+
         async _maybeRestoreSuiteReviewState(examId, targetWindow = null, windowInfo = null) {
             if (!examId || this._shouldAutoAdvanceAfterSubmit()) {
                 return false;
@@ -813,7 +868,20 @@
             session.windowRef = targetWindow;
             session.activeExamId = targetEntry.examId;
             this._focusSuiteWindow(targetWindow);
-            await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
+            const isCrossExamNavigation = targetEntry.examId !== examId;
+            if (isCrossExamNavigation) {
+                const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
+                if (!ready) {
+                    console.warn('[SuitePractice] 套题切换等待 ready 超时，继续尝试推送上下文');
+                }
+            }
+            if (session.flowMode === 'simulation') {
+                session._contextSentExamId = targetEntry.examId;
+                session._contextSentAt = Date.now();
+                this._sendSimulationContext(session, targetEntry.examId, targetWindow);
+            } else {
+                await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
+            }
             return true;
         },
 
@@ -986,6 +1054,42 @@
             ) ? Math.floor(pausedAtMs) : null;
         },
 
+        _deriveSuiteExamElapsedSeconds(session, examId, suiteElapsedSeconds, options = {}) {
+            if (!session || !examId) {
+                return 0;
+            }
+            const normalizedExamId = String(examId).trim();
+            const totalElapsedSeconds = Number(suiteElapsedSeconds);
+            const previousElapsedSeconds = Number(
+                session.elapsedByExam && session.elapsedByExam[normalizedExamId]
+            );
+            if (!Number.isFinite(totalElapsedSeconds) || totalElapsedSeconds < 0) {
+                return Number.isFinite(previousElapsedSeconds) && previousElapsedSeconds >= 0
+                    ? Math.max(0, previousElapsedSeconds)
+                    : 0;
+            }
+            let consumedByOtherExams = 0;
+            const sequence = Array.isArray(session.sequence) ? session.sequence : [];
+            sequence.forEach((entry) => {
+                const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+                if (!entryExamId || entryExamId === normalizedExamId) {
+                    return;
+                }
+                const value = Number(session.elapsedByExam && session.elapsedByExam[entryExamId]);
+                if (Number.isFinite(value) && value > 0) {
+                    consumedByOtherExams += Math.max(0, value);
+                }
+            });
+            const derivedElapsedSeconds = Math.max(0, totalElapsedSeconds - consumedByOtherExams);
+            if (options.allowDecrease === true) {
+                return derivedElapsedSeconds;
+            }
+            if (Number.isFinite(previousElapsedSeconds) && previousElapsedSeconds > derivedElapsedSeconds) {
+                return Math.max(0, previousElapsedSeconds);
+            }
+            return derivedElapsedSeconds;
+        },
+
         _computeSuiteElapsedSeconds(session, referenceNow = Date.now()) {
             if (!session || typeof session !== 'object') return 0;
             const anchorMs = Number(session.globalTimerAnchorMs) > 0
@@ -1093,15 +1197,16 @@
                     }
                 }
                 if (data && typeof data.elapsed === 'number') {
-                    session.elapsedByExam[normalizedExamId] = data.elapsed;
+                    session.elapsedByExam[normalizedExamId] = this._deriveSuiteExamElapsedSeconds(session, normalizedExamId, data.elapsed);
                 }
                 this._syncSuiteTimerFromPayload(session, data);
                 const currentEntry = session.sequence.find(e => e && e.examId === normalizedExamId);
                 if (currentEntry && data && data.resultSnapshot) {
                     const draftSnapshot = data.draft && typeof data.draft === 'object' ? data.draft : {};
+                    const derivedSnapshotDuration = this._deriveSuiteExamElapsedSeconds(session, normalizedExamId, data.elapsed);
                     const snapshot = {
                         ...data.resultSnapshot,
-                        duration: Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : data.resultSnapshot.duration,
+                        duration: Number.isFinite(Number(data.elapsed)) ? derivedSnapshotDuration : data.resultSnapshot.duration,
                         answers: data.resultSnapshot.answers || data.answers || draftSnapshot.answers || {},
                         highlights: Array.isArray(data.resultSnapshot.highlights)
                             ? data.resultSnapshot.highlights
@@ -1199,7 +1304,7 @@
             const pageType = windowInfo && typeof windowInfo.pageType === 'string'
                 ? windowInfo.pageType.toLowerCase()
                 : '';
-            if (!pageType.includes('unified-reading')) {
+            if (pageType && !pageType.includes('unified-reading') && !pageType.includes('suite-placeholder')) {
                 return false;
             }
             let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
@@ -1244,6 +1349,11 @@
             session.activeExamId = examId;
             session.windowRef = targetWindow;
             this._mirrorSessionToStorage(session);
+            if (session._contextSentExamId === examId
+                && Number.isFinite(Number(session._contextSentAt))
+                && Date.now() - session._contextSentAt < 3000) {
+                return true;
+            }
             return this._sendSimulationContext(session, examId, targetWindow);
         },
 

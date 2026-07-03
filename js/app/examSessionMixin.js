@@ -1842,6 +1842,9 @@
                 const payloadSessionId = data && typeof data.sessionId === 'string'
                     ? data.sessionId.trim()
                     : '';
+                const payloadWindowSessionToken = data && typeof data.windowSessionToken === 'string'
+                    ? data.windowSessionToken.trim()
+                    : '';
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
                     : '';
@@ -1864,14 +1867,56 @@
                     'SIMULATION_SUBMIT'
                 ]);
                 const isSimulationSuiteMessage = simulationSuiteMessageTypes.has(type);
+                const suiteRoutableMessageTypes = new Set([
+                    ...simulationSuiteMessageTypes,
+                    'REVIEW_NAVIGATE',
+                    'SESSION_READY'
+                ]);
+                const expectedWindowSessionToken = windowInfo && typeof windowInfo.windowSessionToken === 'string'
+                    ? windowInfo.windowSessionToken.trim()
+                    : '';
                 const canRoutePayloadExamInActiveSuite = Boolean(
-                    isSimulationSuiteMessage
+                    suiteRoutableMessageTypes.has(type)
                     && isPayloadExamInActiveSuite
                     && activeSuiteSessionId
                     && payloadSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const payloadWindowInfo = payloadExamId && payloadExamId !== expectedExamId && this.examWindows
+                    ? this.examWindows.get(payloadExamId)
+                    : null;
+                const payloadWindowMatches = Boolean(
+                    payloadWindowInfo
+                    && payloadWindowInfo.window
+                    && isLikelySameWindowContext(sourceWindow, payloadWindowInfo.window)
+                );
+                const payloadWindowSuiteId = payloadWindowInfo && typeof payloadWindowInfo.suiteSessionId === 'string'
+                    ? payloadWindowInfo.suiteSessionId.trim()
+                    : '';
+                const payloadWindowToken = payloadWindowInfo && typeof payloadWindowInfo.windowSessionToken === 'string'
+                    ? payloadWindowInfo.windowSessionToken.trim()
+                    : '';
+                const payloadTokenMatchesExpectedWindow = Boolean(
+                    expectedWindowSessionToken
+                    && payloadWindowSessionToken
+                    && expectedWindowSessionToken === payloadWindowSessionToken
+                );
+                const payloadTokenMatchesPayloadWindow = Boolean(
+                    payloadWindowToken
+                    && payloadWindowSessionToken
+                    && payloadWindowToken === payloadWindowSessionToken
+                );
+                if (
+                    isPayloadExamInActiveSuite
+                    && payloadWindowMatches
+                    && payloadWindowSuiteId
+                    && payloadSuiteSessionId
+                    && payloadWindowSuiteId === payloadSuiteSessionId
+                    && payloadTokenMatchesPayloadWindow
+                ) {
+                    return;
+                }
                 const isListeningBridgeSource = src === 'listening_record_bridge';
                 const isListeningBridgeProtocolMessage = Boolean(
                     isListeningBridgeSource
@@ -1886,6 +1931,7 @@
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
+                    && payloadTokenMatchesExpectedWindow
                     && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                     && (
                         (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
@@ -1903,7 +1949,7 @@
                 if (!sourceMatched && !allowSuiteSourceFallback && !allowListeningSourceFallback) {
                     return;
                 }
-                if (windowInfo && sourceWindow !== expectedWindow) {
+                if (windowInfo && sourceWindow && (sourceMatched || !expectedWindow || expectedWindow.closed)) {
                     windowInfo.window = sourceWindow;
                 }
                 const isSuiteFlowPayload = Boolean(
@@ -1920,6 +1966,11 @@
                     && payloadSuiteSessionId === activeSuiteSessionId
                     && payloadExamId
                     && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
+                    && (
+                        payloadExamId === expectedExamId
+                            ? (sourceMatched || payloadTokenMatchesExpectedWindow || !expectedWindowSessionToken)
+                            : (payloadTokenMatchesPayloadWindow || payloadWindowMatches || sourceMatched)
+                    )
                 );
 
                 if (payloadSessionId) {
@@ -1982,6 +2033,9 @@
                 windowInfo.origin = event.origin;
                 windowInfo.lastMessageAt = Date.now();
                 windowInfo.lastMessageType = type;
+                if (payloadWindowSessionToken) {
+                    windowInfo.lastWindowSessionToken = payloadWindowSessionToken;
+                }
                 this.examWindows.set(examId, windowInfo);
 
                 switch (type) {
@@ -2105,6 +2159,17 @@
                                     ...data.draft,
                                     updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
                                 };
+                            }
+                            if (Number.isFinite(Number(data.elapsed))) {
+                                if (typeof this._deriveSuiteExamElapsedSeconds === 'function') {
+                                    this.currentSuiteSession.elapsedByExam[routedExamId] = this._deriveSuiteExamElapsedSeconds(
+                                        this.currentSuiteSession,
+                                        routedExamId,
+                                        Number(data.elapsed)
+                                    );
+                                } else {
+                                    this.currentSuiteSession.elapsedByExam[routedExamId] = Math.max(0, Number(data.elapsed));
+                                }
                             }
                             if (typeof this._mirrorSessionToStorage === 'function') {
                                 this._mirrorSessionToStorage(this.currentSuiteSession);
@@ -2446,6 +2511,31 @@
             }
 
             return `session_${suffix}`;
+        },
+
+        generateWindowSessionToken(examId) {
+            const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+            const normalizedExamId = typeof examId === 'string'
+                ? examId.trim().replace(/\s+/g, '-')
+                : (examId != null ? String(examId).trim().replace(/\s+/g, '-') : '');
+            return normalizedExamId
+                ? `win_${normalizedExamId}_${suffix}`
+                : `win_${suffix}`;
+        },
+
+        _refreshExamWindowToken(examId, windowInfo = {}) {
+            const info = windowInfo || {};
+            const expectedSessionId = info.expectedSessionId
+                ? String(info.expectedSessionId).trim()
+                : '';
+            const boundSessionId = info.windowSessionTokenSessionId
+                ? String(info.windowSessionTokenSessionId).trim()
+                : '';
+            if (!info.windowSessionToken || !expectedSessionId || boundSessionId !== expectedSessionId) {
+                info.windowSessionToken = this.generateWindowSessionToken(examId);
+                info.windowSessionTokenSessionId = expectedSessionId || null;
+            }
+            return info.windowSessionToken;
         },
 
         _cloneReviewData(value) {
@@ -3052,6 +3142,7 @@
             if (!info.expectedSessionId) {
                 info.expectedSessionId = this.generateSessionId(examId);
             }
+            this._refreshExamWindowToken(examId, info);
             const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
                 ? this._resolveSuiteSessionId(examId, info)
                 : (info.suiteSessionId || null);
@@ -3062,10 +3153,16 @@
                     suiteTimerMode: info.suiteTimerMode || null,
                     suiteTimerLimitSeconds: info.suiteTimerLimitSeconds || null
                 };
+            const messageIssuedAtMs = Number.isFinite(Number(extras && (extras.messageIssuedAtMs ?? extras.timestamp)))
+                ? Math.floor(Number(extras.messageIssuedAtMs ?? extras.timestamp))
+                : Date.now();
+            info.lastInitMessageAt = messageIssuedAtMs;
             const payload = {
                 examId: examId,
                 parentOrigin: window.location.origin,
                 sessionId: info.expectedSessionId,
+                windowSessionToken: info.windowSessionToken || null,
+                messageIssuedAtMs,
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
                 suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,
@@ -3134,6 +3231,8 @@
                     startTime: Date.now(),
                     status: 'active',
                     expectedSessionId: this.generateSessionId(examId),
+                    windowSessionToken: null,
+                    windowSessionTokenSessionId: null,
                     origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
                     suiteTimerAnchorMs: null,
                     globalTimerAnchorMs: null,
@@ -3159,6 +3258,7 @@
             if (!windowInfo.expectedSessionId) {
                 windowInfo.expectedSessionId = this.generateSessionId(examId);
             }
+            this._refreshExamWindowToken(examId, windowInfo);
             if (typeof windowInfo.practiceMode !== 'string') {
                 windowInfo.practiceMode = null;
             } else {
