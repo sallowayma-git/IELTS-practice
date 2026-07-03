@@ -35,7 +35,12 @@ function createDocumentStub() {
     const radio = { checked: true, value: 'A' };
     const notes = { value: 'fresh note' };
     return {
-        body: { dataset: {} },
+        body: {
+            dataset: {},
+            classList: {
+                toggle() {}
+            }
+        },
         querySelector(selector) {
             if (selector === '#notes-panel textarea') {
                 return notes;
@@ -285,10 +290,99 @@ async function testInlineReinitSnapshot() {
     assert.deepStrictEqual(plain(stored.draft.answers), { q1: 'A' }, 'persisted mirror must use the captured draft');
 }
 
+async function testWindowSessionMessageGuard() {
+    const { hooks } = loadHooks();
+    const sourceWindow = { name: 'suite-host' };
+
+    hooks.setTestState({
+        examId: 'reading-p2',
+        sessionId: 'session-new',
+        suiteSessionId: 'suite-new',
+        parentWindow: sourceWindow,
+        windowSessionToken: 'token-new',
+        windowSessionIssuedAtMs: 5000,
+        lastInitSignature: '',
+        simulationCtx: { examId: 'reading-p2', flowMode: 'simulation', currentIndex: 1 },
+        suite: {
+            inline: true,
+            activeExamId: 'reading-p2',
+            currentIndex: 1,
+            sequence: [
+                { examId: 'reading-p1' },
+                { examId: 'reading-p2' },
+                { examId: 'reading-p3' }
+            ],
+            slotsByExamId: new Map()
+        }
+    });
+
+    await hooks.handleIncoming({
+        source: sourceWindow,
+        data: {
+            type: 'INIT_SESSION',
+            data: {
+                examId: 'reading-p2',
+                sessionId: 'session-new',
+                suiteSessionId: 'suite-new',
+                windowSessionToken: 'token-old',
+                messageIssuedAtMs: 4000
+            }
+        }
+    });
+
+    let state = hooks.getTestState();
+    assert.strictEqual(state.lastInitSignature, '', 'stale INIT_SESSION must not overwrite current inline session');
+    assert.strictEqual(state.windowSessionToken, 'token-new', 'stale INIT_SESSION must not replace window token');
+
+    await hooks.handleIncoming({
+        source: sourceWindow,
+        data: {
+            type: 'SIMULATION_CONTEXT',
+            data: {
+                examId: 'reading-p2',
+                sessionId: 'session-new',
+                suiteSessionId: 'suite-new',
+                flowMode: 'simulation',
+                currentIndex: 0,
+                total: 3,
+                windowSessionToken: 'token-old',
+                messageIssuedAtMs: 4000,
+                suiteSequence: [
+                    { examId: 'reading-p1' },
+                    { examId: 'reading-p2' },
+                    { examId: 'reading-p3' }
+                ]
+            }
+        }
+    });
+
+    state = hooks.getTestState();
+    assert.strictEqual(state.simulationCtx.currentIndex, 1, 'stale SIMULATION_CONTEXT must not replace active simulation context');
+
+    await hooks.handleIncoming({
+        source: sourceWindow,
+        data: {
+            type: 'INIT_SESSION',
+            data: {
+                examId: 'reading-p2',
+                sessionId: 'session-newer',
+                suiteSessionId: 'suite-new',
+                windowSessionToken: 'token-newer',
+                messageIssuedAtMs: 6000
+            }
+        }
+    });
+
+    state = hooks.getTestState();
+    assert.strictEqual(state.sessionId, 'session-newer', 'newer INIT_SESSION must still be accepted');
+    assert.strictEqual(state.windowSessionToken, 'token-newer', 'newer INIT_SESSION must adopt the latest window token');
+}
+
 async function main() {
     await testDraftArbitration();
     await testInlineEnvelopeGuard();
     await testInlineReinitSnapshot();
+    await testWindowSessionMessageGuard();
     process.stdout.write(JSON.stringify({
         status: 'pass',
         detail: 'unified reading inline suite regressions covered'

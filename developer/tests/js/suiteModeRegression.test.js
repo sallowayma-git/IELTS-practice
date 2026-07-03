@@ -710,6 +710,59 @@ async function run() {
         assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应保存');
     }
 
+    // Case 2.4.2: inline simulation 草稿同步必须按篇拆分 elapsed，并镜像回 sessionStorage
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_inline_elapsed_route');
+        session.currentIndex = 0;
+        session.activeExamId = 'reading-p1';
+        session.elapsedByExam['reading-p1'] = 60;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const examWindow = createStubWindow('ielts-suite-mode-tab');
+        app.setupExamWindowCommunication(examWindow, 'reading-p1', session.sequence[0].exam, {
+            suiteSessionId: session.id,
+            suiteFlowMode: 'simulation',
+            sequenceIndex: 0,
+            sequenceTotal: 3
+        });
+
+        const info = app.ensureExamWindowSession('reading-p1', examWindow);
+        info.expectedSessionId = 'expected_inline_elapsed_session';
+        info.suiteSessionId = session.id;
+        app.examWindows.set('reading-p1', info);
+
+        const handler = app.messageHandlers.get('reading-p1');
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'SIMULATION_DRAFT_SYNC',
+                data: {
+                    examId: 'reading-p2',
+                    suiteSessionId: session.id,
+                    sessionId: 'stale_inline_elapsed_session',
+                    draft: {
+                        answers: { q1: 'P2 answer' },
+                        highlights: [],
+                        noteText: 'P2 note',
+                        scrollY: 222,
+                        updatedAt: 3000
+                    },
+                    draftUpdatedAt: 3000,
+                    elapsed: 120,
+                    source: 'practice_page'
+                },
+                source: 'practice_page'
+            }
+        });
+
+        assert.strictEqual(session.elapsedByExam['reading-p2'], 60, 'P2 elapsed 必须按整套累计时间拆分为单篇时长');
+        const mirrored = JSON.parse(sessionStorageStub.get('ielts_sim_session'));
+        assert.strictEqual(mirrored.elapsedByExam['reading-p2'], 60, 'sessionStorage 镜像也必须保存拆分后的 P2 elapsed');
+    }
+
     // Case 2.5: activeExamId 漂移但 currentIndex 正确时，导航应自愈继续
     {
         const app = createApp(windowStub);
@@ -1011,6 +1064,27 @@ async function run() {
         assert.strictEqual(session.currentIndex, 0, '迟到 SESSION_READY 不得覆写 currentIndex');
         const staleCtx = staleWindow._messages.find(item => item && item.type === 'SIMULATION_CONTEXT');
         assert.strictEqual(staleCtx, undefined, '迟到 SESSION_READY 不应下发模拟上下文');
+    }
+
+    // Case 8.2: waitForSuiteWindowExamReady 不得把调用前的旧 ready 当成当前切题成功
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_ready_timestamp_guard');
+        const targetWindow = createStubWindow('ready-window');
+        targetWindow.location.href = 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p2';
+        app.examWindows = new Map([
+            ['reading-p2', {
+                examId: 'reading-p2',
+                window: targetWindow,
+                suiteSessionId: session.id,
+                pageType: 'unified-reading',
+                lastMessageType: 'SESSION_READY',
+                lastMessageAt: Date.now() - 5000
+            }]
+        ]);
+
+        const ready = await app._waitForSuiteWindowExamReady(session, 'reading-p2', targetWindow, 120);
+        assert.strictEqual(ready, false, '调用前的旧 SESSION_READY 不能被误判为当前窗口已就绪');
     }
 
     // Case 7: 错篇 PRACTICE_COMPLETE 必须被忽略，不能污染结果

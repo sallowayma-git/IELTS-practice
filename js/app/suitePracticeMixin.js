@@ -1108,6 +1108,10 @@
             if (session.flowMode !== 'simulation') return false;
             const idx = session.sequence.findIndex(e => e && e.examId === examId);
             if (idx < 0) return false;
+            const windowInfo = typeof this.ensureExamWindowSession === 'function'
+                ? this.ensureExamWindowSession(examId, targetWindow)
+                : null;
+            const messageIssuedAtMs = Date.now();
             const draft = session.draftsByExam && session.draftsByExam[examId] || null;
             const timerAnchorMs = Number(session.globalTimerAnchorMs) > 0
                 ? Number(session.globalTimerAnchorMs)
@@ -1124,6 +1128,9 @@
                     suiteSessionId: session.id,
                     flowMode: session.flowMode || 'simulation',
                     examId,
+                    sessionId: windowInfo && windowInfo.expectedSessionId ? windowInfo.expectedSessionId : null,
+                    windowSessionToken: windowInfo && windowInfo.windowSessionToken ? windowInfo.windowSessionToken : null,
+                    messageIssuedAtMs,
                     suiteSequence: this._buildSuiteSequencePayload(session),
                     currentIndex: idx,
                     total: session.sequence.length,
