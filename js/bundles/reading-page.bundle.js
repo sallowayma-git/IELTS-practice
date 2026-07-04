@@ -2248,7 +2248,7 @@
         const leftPane = dom.left;
         const rightPane = document.getElementById('right');
         const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
-        
+
         let highlightNode = container instanceof HTMLElement
             ? (container.matches('.hl') ? container : container.closest('.hl'))
             : null;
@@ -2830,6 +2830,34 @@
         });
     }
 
+    function syncInlineSuiteIdentity() {
+        if (!state.suite?.inline || !state.examId) {
+            return;
+        }
+        try {
+            document.body.dataset.examId = state.examId;
+        } catch (_) {
+            // ignore DOM dataset failures
+        }
+        try {
+            if (!global.history || typeof global.history.replaceState !== 'function') {
+                return;
+            }
+            const url = new URL(global.location.href);
+            url.searchParams.set('examId', state.examId);
+            url.searchParams.set('dataKey', state.dataKey || state.examId);
+            if (Number.isInteger(state.suite.currentIndex)) {
+                url.searchParams.set('suiteSequenceIndex', String(state.suite.currentIndex));
+            }
+            if (Array.isArray(state.suite.sequence) && state.suite.sequence.length) {
+                url.searchParams.set('suiteSequenceTotal', String(state.suite.sequence.length));
+            }
+            global.history.replaceState(global.history.state, '', url.toString());
+        } catch (_) {
+            // keep navigation working even when URL mutation is unavailable
+        }
+    }
+
     async function ensureSuiteDatasets(rawSequence = []) {
         const sequence = normalizeSuiteSequence(rawSequence);
         if (!sequence.length) {
@@ -2921,6 +2949,7 @@
         applyDraftToDom(slot.draft || buildEmptyDraft());
         setNotesText(slot.draft?.noteText || '');
         syncSimulationCtxForActiveSlot();
+        syncInlineSuiteIdentity();
         state.simulationMode = true;
         state.simulationContextReady = true;
         updateNavStatuses(slot.lastResults || null);
@@ -3293,7 +3322,7 @@
             if (category === 'P2') partName = 'Part 2';
             else if (category === 'P3') partName = 'Part 3';
             partEl.textContent = partName;
-            
+
             const range = getQuestionRangeText();
             instEl.textContent = range ? `Read the text and answer questions ${range}.` : '';
         }
@@ -3421,7 +3450,7 @@
             const draftAnswers = draft ? (draft.answers || {}) : {};
             const result = examId ? resultsByExam[examId] : null;
             const comparison = result ? (result.answerComparison || {}) : {};
-            
+
             info.p1.questions = p1PlaceholderOrder.map(qId => {
                 const label = qId.replace(/^q/i, '');
                 let status = '';
@@ -3453,7 +3482,7 @@
             const draftAnswers = draft ? (draft.answers || {}) : {};
             const result = examId ? resultsByExam[examId] : null;
             const comparison = result ? (result.answerComparison || {}) : {};
-            
+
             info.p2.questions = p2PlaceholderOrder.map(qId => {
                 const label = qId.replace(/^q/i, '');
                 let status = '';
@@ -3485,7 +3514,7 @@
             const draftAnswers = draft ? (draft.answers || {}) : {};
             const result = examId ? resultsByExam[examId] : null;
             const comparison = result ? (result.answerComparison || {}) : {};
-            
+
             info.p3.questions = p3PlaceholderOrder.map(qId => {
                 const label = qId.replace(/^q/i, '');
                 let status = '';
@@ -3517,7 +3546,7 @@
 
     function buildQuestionNav() {
         const { info, currentPart } = getPassageQuestionStates();
-        
+
         const renderQuestionsHtml = (partKey, questions, isCurrent) => {
             return questions.map(q => {
                 const segmentClass = q.status ? q.status : '';
@@ -3525,7 +3554,7 @@
                 const disabledClass = isCurrent || state.suite?.inline ? '' : 'disabled';
                 const qidAttr = isCurrent ? `data-question-id="${q.qId}"` : '';
                 const examAttr = q.examId ? ` data-exam-id="${escapeHtml(q.examId)}"` : '';
-                
+
                 return `
                     <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}"${examAttr}>
                         <div class="q-bar-segment ${segmentClass}"></div>
@@ -3534,21 +3563,21 @@
                 `;
             }).join('');
         };
-        
+
         const p1Status = document.getElementById('part1-status-text');
         const p1QuestionsContainer = document.getElementById('part1-questions');
         if (p1Status) p1Status.textContent = `${info.p1.answeredCount} of ${info.p1.total}`;
         if (p1QuestionsContainer) {
             p1QuestionsContainer.innerHTML = renderQuestionsHtml('p1', info.p1.questions, currentPart === 'p1');
         }
-        
+
         const p2Status = document.getElementById('part2-status-text');
         const p2QuestionsContainer = document.getElementById('part2-questions');
         if (p2Status) p2Status.textContent = `${info.p2.answeredCount} of ${info.p2.total}`;
         if (p2QuestionsContainer) {
             p2QuestionsContainer.innerHTML = renderQuestionsHtml('p2', info.p2.questions, currentPart === 'p2');
         }
-        
+
         const p3Status = document.getElementById('part3-status-text');
         const p3QuestionsContainer = document.getElementById('part3-questions');
         if (p3Status) p3Status.textContent = `${info.p3.answeredCount} of ${info.p3.total}`;
@@ -4037,7 +4066,7 @@
             event.preventDefault();
             navigateToPart(event.currentTarget.dataset.part || '');
         };
-        
+
         document.getElementById('part-section-1')?.addEventListener('click', handler);
         document.getElementById('part-section-2')?.addEventListener('click', handler);
         document.getElementById('part-section-3')?.addEventListener('click', handler);
@@ -4066,7 +4095,7 @@
     function attachFloatingNavListeners() {
         const prevBtn = document.getElementById('float-prev-btn');
         const nextBtn = document.getElementById('float-next-btn');
-        
+
         prevBtn?.addEventListener('click', () => {
             if (state.simulationMode && state.simulationCtx) {
                 if (state.simulationCtx.canPrev) {
@@ -4078,7 +4107,7 @@
                 }
             }
         });
-        
+
         nextBtn?.addEventListener('click', () => {
             if (state.simulationMode && state.simulationCtx) {
                 if (!state.simulationCtx.isLast) {
@@ -5257,7 +5286,7 @@
 
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
-        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswers || {});
+        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
         const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
@@ -5278,12 +5307,9 @@
             const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                 ? comparisonEntry.userAnswer
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const correctAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'correctAnswer')
-                ? comparisonEntry.correctAnswer
-                : (Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId) ? normalizedCorrectAnswers[questionId] : '');
-            let isCorrect = typeof comparisonEntry.isCorrect === 'boolean'
-                ? comparisonEntry.isCorrect
-                : compareAnswers(userAnswer, correctAnswer);
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
+            const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
+            let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
             if (isCorrect) {
                 correctCount += 1;
             }
@@ -5297,10 +5323,14 @@
 
         const totalQuestions = questionIds.size;
         const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : correctCount;
-        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
-        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
+        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
+        scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? correctCount : Number(scoreInfo.correct);
+        scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? totalQuestions : Number(scoreInfo.total);
+        scoreInfo.totalQuestions = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions)) ? scoreInfo.total : Number(scoreInfo.totalQuestions);
         scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
+        scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+            ? Math.round(scoreInfo.accuracy * 100)
+            : Number(scoreInfo.percentage);
         scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
             ? Number(scoreInfo.percentage)
             : Math.round(scoreInfo.accuracy * 100);
@@ -5311,6 +5341,15 @@
             answerComparison: normalizedComparison,
             scoreInfo
         };
+    }
+
+    if (global.__IELTS_READING_PAGE_TEST_HOOKS__ === true) {
+        global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.assign(
+            global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
+            {
+                buildReplayResults
+            }
+        );
     }
 
     function applyReplayAnswersToDom(answers = {}) {
@@ -5433,8 +5472,8 @@
 
     function syncPrimaryActionButtons() {
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn') 
-                ? 'Submit' 
+            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn')
+                ? 'Submit'
                 : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
@@ -5449,7 +5488,7 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
-        
+
         const setSubmitLabel = (label) => {
             if (!dom.submitBtn) return;
             if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
@@ -5551,6 +5590,7 @@
                 );
                 postMessage('REVIEW_NAVIGATE', {
                     direction,
+                    examId: document.body.dataset.examId || state.examId || null,
                     sessionId: null,
                     reviewSessionId: state.reviewSessionId || state.reviewContext?.reviewSessionId || null,
                     suiteSessionId: state.suiteSessionId || state.reviewContext?.suiteSessionId || null,
