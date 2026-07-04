@@ -28,6 +28,7 @@ const bundles = {
         'js/data/repositories/metaRepository.js',
         'js/data/index.js',
         'js/core/practiceCore.js',
+        'js/core/practiceRecordAPI.js',
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
@@ -136,7 +137,12 @@ function readSource(relativePath) {
     if (!fs.existsSync(absolutePath)) {
         throw new Error(`Missing bundle input: ${relativePath}`);
     }
-    return fs.readFileSync(absolutePath, 'utf8').replace(/\s*$/, '\n');
+    return fs.readFileSync(absolutePath, 'utf8')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/g, ''))
+        .join('\n')
+        .replace(/\s*$/, '\n');
 }
 
 function renderBundle(outputPath, inputs) {

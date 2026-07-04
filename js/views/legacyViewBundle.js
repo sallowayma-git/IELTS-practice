@@ -2485,6 +2485,30 @@
         return maxTs;
     };
 
+    historyRenderer.helpers.getRecordsSignatureText = function (value) {
+        if (value == null) return '';
+        return String(value);
+    };
+
+    historyRenderer.helpers.computeSuiteEntriesSignature = function (record) {
+        var entries = record && Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+        return entries.map(function (entry, index) {
+            if (!entry || typeof entry !== 'object') {
+                return 'idx' + index;
+            }
+            var entryTitle = entry.title || entry.examTitle || (entry.metadata && entry.metadata.examTitle) || '';
+            var entryExamId = entry.examId || (entry.metadata && entry.metadata.examId) || entry.id || '';
+            var entryPct = Number(entry.percentage || (entry.scoreInfo && entry.scoreInfo.percentage)) || 0;
+            var entryDuration = Number(entry.duration || (entry.rawData && entry.rawData.duration)) || 0;
+            return [
+                historyRenderer.helpers.getRecordsSignatureText(entryExamId),
+                historyRenderer.helpers.getRecordsSignatureText(entryTitle),
+                entryPct,
+                entryDuration
+            ].join(',');
+        }).join('|');
+    };
+
     historyRenderer.helpers.computeRecordsSignature = function (records) {
         var list = Array.isArray(records) ? records : [];
         var tokens = list.map(function (record, index) {
@@ -2492,7 +2516,16 @@
             var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
             var pct = Number(record && record.percentage) || 0;
             var dur = Number(record && record.duration) || 0;
-            return id + ':' + ts + ':' + pct + ':' + dur;
+            var title = record && (record.title || record.examTitle || (record.metadata && record.metadata.examTitle)) || '';
+            var suiteEntries = historyRenderer.helpers.computeSuiteEntriesSignature(record);
+            return JSON.stringify([
+                historyRenderer.helpers.getRecordsSignatureText(id),
+                ts,
+                pct,
+                dur,
+                historyRenderer.helpers.getRecordsSignatureText(title),
+                suiteEntries
+            ]);
         });
         return list.length + '|' + tokens.join(';');
     };
