@@ -46,7 +46,7 @@
         if (/^[a-z]$/i.test(cleaned)) {
             return cleaned.toUpperCase();
         }
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }

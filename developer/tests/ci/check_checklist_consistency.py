@@ -86,7 +86,9 @@ def infer_status_from_report(path: Path, report_kind: str):
         blocking = bool(payload.get("blockingDuplicates"))
         missing = bool(payload.get("missingPdfRef"))
         malformed = bool(payload.get("malformedPdfRef"))
-        return "fail" if (blocking or missing or malformed) else "pass"
+        parse_failures = bool(payload.get("parseFailures"))
+        paragraph_match_text_inputs = bool(payload.get("paragraphMatchTextInputs"))
+        return "fail" if (blocking or missing or malformed or parse_failures or paragraph_match_text_inputs) else "pass"
     return None
 
 

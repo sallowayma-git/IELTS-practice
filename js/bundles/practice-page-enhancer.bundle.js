@@ -219,7 +219,7 @@
         if (/^[a-z]$/i.test(cleaned)) {
             return cleaned.toUpperCase();
         }
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }
@@ -3237,6 +3237,98 @@
             document.head.appendChild(style);
         },
 
+        captureDraftHighlights: function () {
+            if (typeof window.getPracticeHighlights === 'function') {
+                try {
+                    const direct = window.getPracticeHighlights();
+                    return Array.isArray(direct) ? direct.slice() : [];
+                } catch (_) {
+                    // ignore highlight snapshot failures
+                }
+            }
+            const shared = window.__READING_HIGHLIGHT_SHARED__;
+            if (!shared || typeof shared.snapshotHighlights !== 'function') {
+                return [];
+            }
+            const rootsByScope = {
+                left: document.querySelector('#passage-left, .passage-left, #reading-passage, .reading-passage, #left-column, .left-column'),
+                groups: document.querySelector('#question-groups, .question-groups, #questions-container, .questions-container, #right-column, .right-column')
+            };
+            if (!rootsByScope.left && !rootsByScope.groups) {
+                return [];
+            }
+            try {
+                return shared.snapshotHighlights(rootsByScope);
+            } catch (_) {
+                return [];
+            }
+        },
+
+        captureDraftNoteText: function () {
+            if (typeof window.getNotesText === 'function') {
+                try {
+                    const direct = window.getNotesText();
+                    return typeof direct === 'string' ? direct : '';
+                } catch (_) {
+                    // ignore note snapshot failures
+                }
+            }
+            const noteField = document.querySelector(
+                '#notes-panel textarea, #notes-panel input[type="text"], #notes-panel input:not([type]), textarea[name="notes"], textarea[name="note"], input[name="notes"], input[name="note"]'
+            );
+            return noteField && typeof noteField.value === 'string' ? noteField.value : '';
+        },
+
+        captureDraftMarkedQuestions: function () {
+            if (typeof window.getPracticeMarkedQuestions === 'function') {
+                try {
+                    const direct = window.getPracticeMarkedQuestions();
+                    return Array.isArray(direct) ? direct.slice() : [];
+                } catch (_) {
+                    // ignore marked-question snapshot failures
+                }
+            }
+            return [];
+        },
+
+        buildPracticeDraftSnapshot: function (options = {}) {
+            if (options.collectAnswers !== false) {
+                this.collectAllAnswers();
+            }
+            const updatedAt = Number.isFinite(Number(options.updatedAt))
+                ? Number(options.updatedAt)
+                : Date.now();
+            return {
+                answers: Object.assign({}, this.answers),
+                highlights: this.captureDraftHighlights(),
+                noteText: this.captureDraftNoteText(),
+                scrollY: Number.isFinite(Number(window.scrollY)) ? Number(window.scrollY) : 0,
+                markedQuestions: this.captureDraftMarkedQuestions(),
+                updatedAt
+            };
+        },
+
+        buildReviewNavigatePayload: function (direction, options = {}) {
+            const draft = this.buildPracticeDraftSnapshot();
+            return {
+                direction,
+                examId: this.resolveExamId(),
+                sessionId: null,
+                reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
+                currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0,
+                suiteSessionId: this.suiteSessionId || (this.reviewContext && this.reviewContext.suiteSessionId) || null,
+                suiteReviewMode: this.suiteReviewMode === true,
+                finalizeOnNext: Boolean(options.finalizeOnNext),
+                draft,
+                draftUpdatedAt: draft.updatedAt,
+                answers: draft.answers,
+                highlights: draft.highlights,
+                noteText: draft.noteText,
+                scrollY: draft.scrollY,
+                markedQuestions: draft.markedQuestions
+            };
+        },
+
         ensureReviewNavBar: function () {
             if (this.reviewNavBarElement && this.reviewNavBarElement.isConnected) {
                 return this.reviewNavBarElement;
@@ -3260,15 +3352,9 @@
                 if (!direction) {
                     return;
                 }
-                this.sendMessage('REVIEW_NAVIGATE', {
-                    direction,
-                    sessionId: null,
-                    reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
-                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0,
-                    suiteSessionId: this.suiteSessionId || (this.reviewContext && this.reviewContext.suiteSessionId) || null,
-                    suiteReviewMode: this.suiteReviewMode === true,
+                this.sendMessage('REVIEW_NAVIGATE', this.buildReviewNavigatePayload(direction, {
                     finalizeOnNext: Boolean(direction === 'next' && bar.dataset && bar.dataset.finalizeOnNext === 'true')
-                });
+                }));
             });
             const header = document.querySelector('body > header') || document.querySelector('header');
             if (header) {
@@ -5765,6 +5851,13 @@
             const answerComparison = includeComparison
                 ? this.generateAnswerComparison()
                 : {};
+            const draftSnapshot = this.buildPracticeDraftSnapshot({
+                collectAnswers: false,
+                updatedAt: endTime
+            });
+            if (!Array.isArray(metadataPayload.markedQuestions) && draftSnapshot.markedQuestions.length) {
+                metadataPayload.markedQuestions = draftSnapshot.markedQuestions.slice();
+            }
 
             const payload = {
                 sessionId: this.sessionId,
@@ -5788,6 +5881,10 @@
                 url: window.location.href,
                 title: resolvedTitle,
                 allQuestionIds: this.captureQuestionSet().slice(),
+                highlights: draftSnapshot.highlights.slice(),
+                noteText: draftSnapshot.noteText,
+                scrollY: draftSnapshot.scrollY,
+                markedQuestions: draftSnapshot.markedQuestions.slice(),
                 metadata: metadataPayload
             };
 
