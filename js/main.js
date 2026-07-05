@@ -342,12 +342,33 @@ async function cleanupOldCache() {
 async function syncPracticeRecords(options = {}) {
     const { forceRender = false } = options || {};
     console.log('[System] 正在从存储中同步练习记录...');
+    const previousRecords = typeof getPracticeRecordsState === 'function'
+        ? getPracticeRecordsState()
+        : (Array.isArray(window.practiceRecords) ? window.practiceRecords : []);
     let records = [];
+    let loadError = null;
     try {
         records = await listCanonicalPracticeRecords();
     } catch (e) {
         console.warn('[System] 同步记录时发生错误:', e);
-        records = [];
+        loadError = e;
+        records = Array.isArray(previousRecords) ? previousRecords.slice() : [];
+        const errorMessage = String(e && e.message ? e.message : e).toLowerCase();
+        if (errorMessage.includes('not ready') || errorMessage.includes('未就绪')) {
+            setTimeout(() => {
+                try {
+                    startPracticeRecordsSyncInBackground('api-ready-retry');
+                } catch (_) { }
+            }, 800);
+        }
+        if (Array.isArray(previousRecords) && previousRecords.length > 0) {
+            console.warn('[System] canonical store 暂未就绪，保留当前内存中的练习记录，避免误清空视图。');
+        }
+    }
+
+    if (loadError && (!Array.isArray(records) || records.length === 0) && (!Array.isArray(previousRecords) || previousRecords.length === 0)) {
+        console.warn('[System] canonical store 暂未就绪，本次跳过练习记录视图刷新。');
+        return;
     }
 
     // Normalize duration and percentages to avoid 0-second artifacts

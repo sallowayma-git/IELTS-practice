@@ -1336,6 +1336,31 @@
             || (examEntry && examEntry.title)
             || resolvedExamId
             || '未命名练习';
+        const resolvedHighlights = Array.isArray(rawPayload.highlights)
+            ? rawPayload.highlights.slice()
+            : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights)
+                ? rawPayload.realData.highlights.slice()
+                : (Array.isArray(sessionContext.highlights) ? sessionContext.highlights.slice() : []));
+        const resolvedMarkedQuestions = Array.isArray(rawPayload.markedQuestions)
+            ? rawPayload.markedQuestions.slice()
+            : (Array.isArray(rawPayload.realData && rawPayload.realData.markedQuestions)
+                ? rawPayload.realData.markedQuestions.slice()
+                : (Array.isArray(sessionContext.markedQuestions) ? sessionContext.markedQuestions.slice() : []));
+        const resolvedScrollY = Number.isFinite(Number(rawPayload.scrollY))
+            ? Number(rawPayload.scrollY)
+            : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY))
+                ? Number(rawPayload.realData.scrollY)
+                : (Number.isFinite(Number(sessionContext.scrollY)) ? Number(sessionContext.scrollY) : 0));
+        const resolvedNoteText = typeof rawPayload.noteText === 'string'
+            ? rawPayload.noteText
+            : (typeof rawPayload.realData?.noteText === 'string'
+                ? rawPayload.realData.noteText
+                : (typeof sessionContext.noteText === 'string' ? sessionContext.noteText : ''));
+        const resolvedQuestionTypeMap = isPlainObject(rawPayload.questionTypeMap)
+            ? clonePlainObject(rawPayload.questionTypeMap)
+            : (isPlainObject(rawPayload.realData && rawPayload.realData.questionTypeMap)
+                ? clonePlainObject(rawPayload.realData.questionTypeMap)
+                : {});
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
 
@@ -1363,12 +1388,18 @@
                 examId: resolvedExamId,
                 examTitle: title,
                 category,
-                frequency
+                frequency,
+                markedQuestions: resolvedMarkedQuestions.slice()
             }),
             frequency,
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
+            highlights: resolvedHighlights.slice(),
+            scrollY: resolvedScrollY,
+            markedQuestions: resolvedMarkedQuestions.slice(),
+            noteText: resolvedNoteText,
+            questionTypeMap: resolvedQuestionTypeMap,
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
@@ -1381,6 +1412,12 @@
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
+                correctAnswerMap,
+                highlights: resolvedHighlights.slice(),
+                scrollY: resolvedScrollY,
+                markedQuestions: resolvedMarkedQuestions.slice(),
+                noteText: resolvedNoteText,
+                questionTypeMap: resolvedQuestionTypeMap,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,

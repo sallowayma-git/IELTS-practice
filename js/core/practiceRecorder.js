@@ -483,6 +483,23 @@ class PracticeRecorder {
             normalizedComparison
         );
         const answerList = this.convertAnswerMapToArray(answerMap, correctAnswerMap);
+        const highlights = Array.isArray(payload.highlights)
+            ? payload.highlights.slice()
+            : (Array.isArray(payload.realData?.highlights) ? payload.realData.highlights.slice() : []);
+        const markedQuestions = Array.isArray(payload.markedQuestions)
+            ? payload.markedQuestions.slice()
+            : (Array.isArray(payload.realData?.markedQuestions) ? payload.realData.markedQuestions.slice() : []);
+        const scrollY = Number.isFinite(Number(payload.scrollY))
+            ? Number(payload.scrollY)
+            : (Number.isFinite(Number(payload.realData?.scrollY)) ? Number(payload.realData.scrollY) : 0);
+        const noteText = typeof payload.noteText === 'string'
+            ? payload.noteText
+            : (typeof payload.realData?.noteText === 'string' ? payload.realData.noteText : '');
+        const questionTypeMap = payload.questionTypeMap && typeof payload.questionTypeMap === 'object'
+            ? { ...payload.questionTypeMap }
+            : (payload.realData?.questionTypeMap && typeof payload.realData.questionTypeMap === 'object'
+                ? { ...payload.realData.questionTypeMap }
+                : {});
         const totalQuestions = toNumber(
             payload.totalQuestions ?? scoreInfo.total ?? scoreInfo.totalQuestions,
             Object.keys(answerMap).length
@@ -535,15 +552,27 @@ class PracticeRecorder {
                 answerComparison: normalizedComparison,
                 questionTypePerformance: payload.questionTypePerformance || {},
                 interactions: payload.interactions || [],
+                highlights,
+                scrollY,
+                markedQuestions,
+                noteText,
+                questionTypeMap,
                 startTime: payload.startTime || null,
                 endTime: payload.endTime || null,
-                metadata: payload.metadata || {},
+                metadata: Object.assign({}, payload.metadata || {}, {
+                    markedQuestions: markedQuestions.slice()
+                }),
                 source: scoreInfo.source || payload.pageType || 'practice_page',
                 realData: Object.assign({}, payload.realData || {}, {
                     answers: answerMap,
                     correctAnswers: correctAnswerMap,
                     correctAnswerMap,
                     answerComparison: normalizedComparison,
+                    highlights,
+                    scrollY,
+                    markedQuestions,
+                    noteText,
+                    questionTypeMap,
                     scoreInfo: Object.assign({}, scoreInfo, { details: answerDetails })
                 })
             }
@@ -2001,8 +2030,32 @@ class PracticeRecorder {
         // 提取分数信息
         const scoreInfo = realData.scoreInfo || {};
         const score = scoreInfo.correct || 0;
-        const totalQuestions = scoreInfo.total || Object.keys(realData.answers || {}).length;
+        const answerComparison = this.normalizeAnswerComparison(
+            realData.answerComparison || realData.realData?.answerComparison || null
+        );
+        const answerMap = this.mergeAnswerSources(
+            realData.answerMap,
+            realData.answers,
+            this.convertComparisonToAnswerMap(answerComparison, 'userAnswer')
+        );
+        const correctAnswerMap = this.resolveRecordCorrectAnswerMap(
+            Object.assign({}, realData, { answerComparison })
+        );
+        const questionTypeMap = realData.questionTypeMap && typeof realData.questionTypeMap === 'object'
+            ? { ...realData.questionTypeMap }
+            : {};
+        const answerList = this.convertAnswersFormat(
+            answerMap,
+            correctAnswerMap,
+            answerComparison,
+            questionTypeMap
+        );
+        const totalQuestions = scoreInfo.total || Object.keys(correctAnswerMap).length || Object.keys(answerMap).length;
         const accuracy = scoreInfo.accuracy || (totalQuestions > 0 ? score / totalQuestions : 0);
+        const highlights = Array.isArray(realData.highlights) ? realData.highlights.slice() : [];
+        const markedQuestions = Array.isArray(realData.markedQuestions) ? realData.markedQuestions.slice() : [];
+        const scrollY = Number.isFinite(Number(realData.scrollY)) ? Number(realData.scrollY) : 0;
+        const noteText = typeof realData.noteText === 'string' ? realData.noteText : '';
 
         const practiceRecord = {
             // 基础信息 - 与ScoreStorage兼容
@@ -2024,14 +2077,22 @@ class PracticeRecorder {
             accuracy: accuracy,
 
             // 答题详情 - 转换为ScoreStorage期望的格式
-            answers: this.convertAnswersFormat(realData.answers || {}),
+            answers: answerList,
+            correctAnswerMap,
+            answerComparison,
+            questionTypeMap,
             questionTypePerformance: this.extractQuestionTypePerformance(realData),
+            highlights,
+            scrollY,
+            markedQuestions,
+            noteText,
 
             // 元数据 - 与ScoreStorage兼容
             metadata: {
                 examTitle: exam.title || '',
                 category: exam.category || '',
                 frequency: exam.frequency || '',
+                markedQuestions: markedQuestions.slice(),
                 collectionMethod: 'automatic',
                 dataQuality: this.assessDataQuality(realData),
                 processingTime: Date.now()
@@ -2040,9 +2101,17 @@ class PracticeRecorder {
             // 额外的真实数据信息
             realData: {
                 sessionId: realData.sessionId,
-                answers: realData.answers || {},
+                answers: answerMap,
+                correctAnswers: correctAnswerMap,
+                correctAnswerMap,
+                answerComparison,
+                questionTypeMap,
                 answerHistory: realData.answerHistory || {},
                 interactions: realData.interactions || [],
+                highlights,
+                scrollY,
+                markedQuestions,
+                noteText,
                 scoreInfo: scoreInfo,
                 pageType: realData.pageType,
                 url: realData.url,
@@ -2061,7 +2130,7 @@ class PracticeRecorder {
     /**
      * 转换答案格式为ScoreStorage兼容格式
      */
-    convertAnswersFormat(answers) {
+    convertAnswersFormat(answers, correctAnswerMap = {}, answerComparison = {}, questionTypeMap = {}) {
         if (!answers || typeof answers !== 'object') {
             return [];
         }
@@ -2069,9 +2138,27 @@ class PracticeRecorder {
         return Object.entries(answers).map(([questionId, answer], index) => ({
             questionId: questionId,
             answer: answer,
-            correct: false, // 这里需要与正确答案比较，暂时设为false
+            correct: (() => {
+                const comparisonEntry = answerComparison && typeof answerComparison === 'object'
+                    ? answerComparison[questionId]
+                    : null;
+                if (comparisonEntry && typeof comparisonEntry.isCorrect === 'boolean') {
+                    return comparisonEntry.isCorrect;
+                }
+                const correctAnswer = correctAnswerMap && Object.prototype.hasOwnProperty.call(correctAnswerMap, questionId)
+                    ? correctAnswerMap[questionId]
+                    : '';
+                return correctAnswer !== '' && String(answer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+            })(),
             timeSpent: 0,
-            questionType: 'unknown',
+            questionType: (() => {
+                const comparisonEntry = answerComparison && typeof answerComparison === 'object'
+                    ? answerComparison[questionId]
+                    : null;
+                return (comparisonEntry && (comparisonEntry.questionType || comparisonEntry.type))
+                    || questionTypeMap[questionId]
+                    || 'unknown';
+            })(),
             timestamp: new Date().toISOString()
         }));
     }
