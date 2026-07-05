@@ -5912,6 +5912,31 @@ storageManager.ready
             || (examEntry && examEntry.title)
             || resolvedExamId
             || '未命名练习';
+        const resolvedHighlights = Array.isArray(rawPayload.highlights)
+            ? rawPayload.highlights.slice()
+            : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights)
+                ? rawPayload.realData.highlights.slice()
+                : (Array.isArray(sessionContext.highlights) ? sessionContext.highlights.slice() : []));
+        const resolvedMarkedQuestions = Array.isArray(rawPayload.markedQuestions)
+            ? rawPayload.markedQuestions.slice()
+            : (Array.isArray(rawPayload.realData && rawPayload.realData.markedQuestions)
+                ? rawPayload.realData.markedQuestions.slice()
+                : (Array.isArray(sessionContext.markedQuestions) ? sessionContext.markedQuestions.slice() : []));
+        const resolvedScrollY = Number.isFinite(Number(rawPayload.scrollY))
+            ? Number(rawPayload.scrollY)
+            : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY))
+                ? Number(rawPayload.realData.scrollY)
+                : (Number.isFinite(Number(sessionContext.scrollY)) ? Number(sessionContext.scrollY) : 0));
+        const resolvedNoteText = typeof rawPayload.noteText === 'string'
+            ? rawPayload.noteText
+            : (typeof rawPayload.realData?.noteText === 'string'
+                ? rawPayload.realData.noteText
+                : (typeof sessionContext.noteText === 'string' ? sessionContext.noteText : ''));
+        const resolvedQuestionTypeMap = isPlainObject(rawPayload.questionTypeMap)
+            ? clonePlainObject(rawPayload.questionTypeMap)
+            : (isPlainObject(rawPayload.realData && rawPayload.realData.questionTypeMap)
+                ? clonePlainObject(rawPayload.realData.questionTypeMap)
+                : {});
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
 
@@ -5939,12 +5964,18 @@ storageManager.ready
                 examId: resolvedExamId,
                 examTitle: title,
                 category,
-                frequency
+                frequency,
+                markedQuestions: resolvedMarkedQuestions.slice()
             }),
             frequency,
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
+            highlights: resolvedHighlights.slice(),
+            scrollY: resolvedScrollY,
+            markedQuestions: resolvedMarkedQuestions.slice(),
+            noteText: resolvedNoteText,
+            questionTypeMap: resolvedQuestionTypeMap,
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
@@ -5957,6 +5988,12 @@ storageManager.ready
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
+                correctAnswerMap,
+                highlights: resolvedHighlights.slice(),
+                scrollY: resolvedScrollY,
+                markedQuestions: resolvedMarkedQuestions.slice(),
+                noteText: resolvedNoteText,
+                questionTypeMap: resolvedQuestionTypeMap,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,
@@ -7815,6 +7852,28 @@ storageManager.ready
         return normalized;
     }
 
+    function resolveGeneratedReadingRuntimeUrl(exam, kind = 'html') {
+        if (!exam || kind === 'pdf') {
+            return '';
+        }
+        const manifest = global.__READING_EXAM_MANIFEST__;
+        const examId = exam.id || exam.examId || exam.dataKey || '';
+        const entry = manifest && examId ? manifest[examId] : null;
+        if (!entry || !entry.script) {
+            return '';
+        }
+        const resolvedDataKey = entry.dataKey || entry.examId || examId;
+        if (!resolvedDataKey) {
+            return '';
+        }
+        const params = new URLSearchParams();
+        if (examId) {
+            params.set('examId', String(examId));
+        }
+        params.set('dataKey', String(resolvedDataKey));
+        return `assets/generated/reading-exams/reading-practice-unified.html?${params.toString()}`;
+    }
+
     function resolveExamBasePath(exam) {
         const relativePath = exam && exam.path ? String(exam.path) : '';
         const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
@@ -7869,6 +7928,10 @@ storageManager.ready
             return '';
         }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const generatedReadingRuntimeUrl = resolveGeneratedReadingRuntimeUrl(exam, resourceKind);
+        if (generatedReadingRuntimeUrl) {
+            return generatedReadingRuntimeUrl;
+        }
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
                 const runtimeUrl = global.LibraryDiscovery.resolveRuntimeResource(exam, resourceKind);
@@ -11472,8 +11535,8 @@ storageManager.ready
       "category": "P2",
       "frequency": "low",
       "difficultyScore": null,
-      "path": "/Users/hissin/工程/lelts-new/",
-      "filename": "P2 - Coins.docx",
+      "path": "assets/generated/reading-exams/",
+      "filename": "reading-practice-unified.html",
       "hasHtml": true,
       "hasPdf": false,
       "pdfFilename": "",
@@ -11487,8 +11550,8 @@ storageManager.ready
       "category": "P3",
       "frequency": "low",
       "difficultyScore": null,
-      "path": "/Users/hissin/工程/lelts-new/",
-      "filename": "P3 - How a prehistoric predator took to the skies(1).docx",
+      "path": "assets/generated/reading-exams/",
+      "filename": "reading-practice-unified.html",
       "hasHtml": true,
       "hasPdf": false,
       "pdfFilename": "",

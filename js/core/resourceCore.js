@@ -422,6 +422,28 @@
         return normalized;
     }
 
+    function resolveGeneratedReadingRuntimeUrl(exam, kind = 'html') {
+        if (!exam || kind === 'pdf') {
+            return '';
+        }
+        const manifest = global.__READING_EXAM_MANIFEST__;
+        const examId = exam.id || exam.examId || exam.dataKey || '';
+        const entry = manifest && examId ? manifest[examId] : null;
+        if (!entry || !entry.script) {
+            return '';
+        }
+        const resolvedDataKey = entry.dataKey || entry.examId || examId;
+        if (!resolvedDataKey) {
+            return '';
+        }
+        const params = new URLSearchParams();
+        if (examId) {
+            params.set('examId', String(examId));
+        }
+        params.set('dataKey', String(resolvedDataKey));
+        return `assets/generated/reading-exams/reading-practice-unified.html?${params.toString()}`;
+    }
+
     function resolveExamBasePath(exam) {
         const relativePath = exam && exam.path ? String(exam.path) : '';
         const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
@@ -476,6 +498,10 @@
             return '';
         }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const generatedReadingRuntimeUrl = resolveGeneratedReadingRuntimeUrl(exam, resourceKind);
+        if (generatedReadingRuntimeUrl) {
+            return generatedReadingRuntimeUrl;
+        }
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
                 const runtimeUrl = global.LibraryDiscovery.resolveRuntimeResource(exam, resourceKind);
