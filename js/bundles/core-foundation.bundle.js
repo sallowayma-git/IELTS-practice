@@ -1683,6 +1683,13 @@ class StorageManager {
                 }
             }
 
+            if (!await this.get('my_melody_migration_completed', null, { skipReady })) {
+                console.log('[Storage] 检查 MyMelody 遗留键迁移...');
+                const canonicalPracticeKey = this.getKey('practice_records');
+                console.warn('[Storage] 跳过 MyMelody 遗留键迁移：旧键与 canonical practice_records 键相同，继续迁移会误删当前记录', canonicalPracticeKey);
+                await this.set('my_melody_migration_completed', true, { skipReady });
+            }
+
         } catch (error) {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试

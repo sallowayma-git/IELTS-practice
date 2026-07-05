@@ -241,6 +241,7 @@ class DataIntegrityManager {
     }
 
     async restoreBackup(backupId) {
+        let currentSnapshot = null;
         try {
             if (!this.repositories) {
                 throw new Error('数据仓库不可用');
@@ -248,6 +249,11 @@ class DataIntegrityManager {
             const backup = await this.repositories.backups.getById(backupId);
             if (!backup) {
                 throw new Error('备份不存在');
+            }
+            try {
+                currentSnapshot = await this.getCriticalData();
+            } catch (snapshotError) {
+                console.warn('[DataIntegrityManager] 恢复前快照采集失败:', snapshotError);
             }
             const data = backup.data || {};
             // 缺失 practice_records 时不清空现有记录（settings-only 备份恢复不应删练习数据）。
@@ -270,6 +276,14 @@ class DataIntegrityManager {
             console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功`);
         } catch (error) {
             console.error('[DataIntegrityManager] 恢复备份失败:', error);
+            if (currentSnapshot) {
+                try {
+                    await this._restoreFromBackup({ data: currentSnapshot });
+                    console.warn('[DataIntegrityManager] 恢复失败后已回滚到恢复前快照');
+                } catch (restoreError) {
+                    console.error('[DataIntegrityManager] 恢复失败后的回滚也失败:', restoreError);
+                }
+            }
             throw error;
         }
     }
@@ -421,6 +435,10 @@ class DataIntegrityManager {
             const records = await window.PracticeRecordAPI.list();
             return Array.isArray(records) ? records : [];
         }
+        if (this.repositories && this.repositories.practice && typeof this.repositories.practice.list === 'function') {
+            const records = await this.repositories.practice.list();
+            return Array.isArray(records) ? records : [];
+        }
 
         return [];
     }
@@ -435,6 +453,10 @@ class DataIntegrityManager {
             });
             return true;
         }
+        if (this.repositories && this.repositories.practice && typeof this.repositories.practice.overwrite === 'function') {
+            await this.repositories.practice.overwrite(finalRecords);
+            return true;
+        }
 
         throw new Error('统一练习记录恢复 API 未就绪');
     }
@@ -442,6 +464,10 @@ class DataIntegrityManager {
     async _writeUserStats(stats) {
         if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.writeStats === 'function') {
             await window.PracticeRecordAPI.writeStats(stats);
+            return true;
+        }
+        if (this.repositories && this.repositories.meta && typeof this.repositories.meta.set === 'function') {
+            await this.repositories.meta.set('user_stats', stats);
             return true;
         }
 

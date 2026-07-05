@@ -693,26 +693,11 @@
             }
             const expectedExamId = String(examId);
             const startedAt = Date.now();
-            const readWindowExamId = () => {
-                try {
-                    if (!targetWindow || targetWindow.closed || !targetWindow.location) {
-                        return '';
-                    }
-                    const href = typeof targetWindow.location.href === 'string' ? targetWindow.location.href : '';
-                    if (!href || href === 'about:blank') {
-                        return '';
-                    }
-                    const parsed = new URL(href, (global && global.location && global.location.href) ? global.location.href : undefined);
-                    return String(parsed.searchParams.get('examId') || '').trim();
-                } catch (_) {
-                    return '';
-                }
-            };
             while (Date.now() - startedAt < timeoutMs) {
                 if (targetWindow.closed) {
                     return false;
                 }
-                const windowExamId = readWindowExamId();
+                const windowExamId = this._readSuiteWindowExamId(targetWindow);
                 if (windowExamId && windowExamId !== expectedExamId) {
                     await new Promise(resolve => setTimeout(resolve, 50));
                     continue;
@@ -737,6 +722,46 @@
                 await new Promise(resolve => setTimeout(resolve, 50));
             }
             return false;
+        },
+
+        _readSuiteWindowExamId(targetWindow = null) {
+            try {
+                if (!targetWindow || targetWindow.closed || !targetWindow.location) {
+                    return '';
+                }
+                const href = typeof targetWindow.location.href === 'string' ? targetWindow.location.href : '';
+                if (!href || href === 'about:blank') {
+                    return '';
+                }
+                const parsed = new URL(href, (global && global.location && global.location.href) ? global.location.href : undefined);
+                return String(parsed.searchParams.get('examId') || '').trim();
+            } catch (_) {
+                return '';
+            }
+        },
+
+        _canFallbackSendSuiteContext(examId, targetWindow = null) {
+            const expectedExamId = examId != null ? String(examId).trim() : '';
+            if (!expectedExamId || !targetWindow || targetWindow.closed) {
+                return false;
+            }
+            const windowExamId = this._readSuiteWindowExamId(targetWindow);
+            if (!windowExamId || windowExamId !== expectedExamId) {
+                return false;
+            }
+            const windowInfo = this.examWindows && this.examWindows.get(expectedExamId)
+                ? this.examWindows.get(expectedExamId)
+                : null;
+            if (windowInfo && windowInfo.window && !windowInfo.window.closed && windowInfo.window !== targetWindow) {
+                return false;
+            }
+            const pageType = windowInfo && typeof windowInfo.pageType === 'string'
+                ? windowInfo.pageType.toLowerCase()
+                : '';
+            if (pageType && !pageType.includes('unified-reading') && !pageType.includes('suite-placeholder')) {
+                return false;
+            }
+            return true;
         },
 
         async _maybeRestoreSuiteReviewState(examId, targetWindow = null, windowInfo = null) {
@@ -871,11 +896,20 @@
             if (isCrossExamNavigation) {
                 const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
                 if (!ready) {
-                    console.warn('[SuitePractice] 套题回看切换未等到目标篇章 ready，跳过即时回灌');
-                    return false;
+                    if (!this._canFallbackSendSuiteContext(targetEntry.examId, targetWindow)) {
+                        console.warn('[SuitePractice] 套题切换等待 ready 超时，延后上下文下发，等待 SESSION_READY 兜底');
+                        return true;
+                    }
+                    console.warn('[SuitePractice] 套题切换未收到 fresh ready，但窗口已切到目标篇，继续下发上下文');
                 }
             }
-            await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
+            if (session.flowMode === 'simulation') {
+                session._contextSentExamId = targetEntry.examId;
+                session._contextSentAt = Date.now();
+                this._sendSimulationContext(session, targetEntry.examId, targetWindow);
+            } else {
+                await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
+            }
             return true;
         },
 
@@ -953,6 +987,20 @@
             this._ensureSuiteWindowGuard(session, session.windowRef);
             this._focusSuiteWindow(session.windowRef);
             this._mirrorSessionToStorage(session);
+            const reusedNextWindow = Boolean(reuseWindow && nextWindow === reuseWindow);
+            if (reusedNextWindow) {
+                const ready = await this._waitForSuiteWindowExamReady(session, nextEntry.examId, session.windowRef);
+                if (!ready) {
+                    if (!this._canFallbackSendSuiteContext(nextEntry.examId, session.windowRef)) {
+                        window.showMessage && window.showMessage('已完成' + (completedTitle || '上一篇') + '，正在继续：' + nextEntry.exam.title + '。', 'success');
+                        console.warn('[SuitePractice] 自动切题等待 ready 超时，延后上下文下发，等待 SESSION_READY 兜底');
+                        return true;
+                    }
+                    console.warn('[SuitePractice] 自动切题未收到 fresh ready，但窗口已切到目标篇，继续下发上下文');
+                }
+            }
+            session._contextSentExamId = nextEntry.examId;
+            session._contextSentAt = Date.now();
             this._sendSimulationContext(session, nextEntry.examId, session.windowRef);
             window.showMessage && window.showMessage('已完成' + (completedTitle || '上一篇') + '，正在继续：' + nextEntry.exam.title + '。', 'success');
             return true;
@@ -1251,6 +1299,25 @@
 
                 session.windowRef = targetWindow;
                 this._mirrorSessionToStorage(session);
+                const reusedSourceWindow = Boolean(
+                    sourceWindow
+                    && !sourceWindow.closed
+                    && sourceWindow === targetWindow
+                    && targetEntry.examId !== normalizedExamId
+                );
+                if (reusedSourceWindow) {
+                    const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
+                    if (!ready) {
+                        if (!this._canFallbackSendSuiteContext(targetEntry.examId, targetWindow)) {
+                            console.warn('[SuitePractice] 模拟模式切题等待 ready 超时，延后上下文下发，等待 SESSION_READY 兜底');
+                            this._focusSuiteWindow(targetWindow);
+                            return true;
+                        }
+                        console.warn('[SuitePractice] 模拟模式切题未收到 fresh ready，但窗口已切到目标篇，继续下发上下文');
+                    }
+                }
+                session._contextSentExamId = targetEntry.examId;
+                session._contextSentAt = Date.now();
                 this._sendSimulationContext(session, targetEntry.examId, targetWindow);
                 this._focusSuiteWindow(targetWindow);
                 return true;
@@ -1329,7 +1396,7 @@
                     return '';
                 }
             };
-            const windowExamId = resolveWindowExamId(targetWindow);
+            const windowExamId = this._readSuiteWindowExamId(targetWindow) || resolveWindowExamId(targetWindow);
             if (windowExamId && windowExamId !== String(examId)) {
                 // Ignore late SESSION_READY events from previously active pages.
                 return false;
@@ -1343,6 +1410,11 @@
             session.activeExamId = examId;
             session.windowRef = targetWindow;
             this._mirrorSessionToStorage(session);
+            if (session._contextSentExamId === examId
+                && Number.isFinite(Number(session._contextSentAt))
+                && Date.now() - session._contextSentAt < 3000) {
+                return true;
+            }
             return this._sendSimulationContext(session, examId, targetWindow);
         },
 

@@ -111,7 +111,9 @@ function createSandbox() {
         setInterval,
         clearInterval,
         Math,
-        CustomEvent: windowStub.CustomEvent
+        CustomEvent: windowStub.CustomEvent,
+        URL,
+        URLSearchParams
     };
     windowStub.storage = storageStub;
     sandbox.globalThis = sandbox.window;
@@ -973,7 +975,8 @@ async function run() {
     {
         const app = createApp(windowStub);
         const session = makeSession('suite_context');
-        session.draftsByExam['reading-p1'] = { answers: { q1: 'A' }, highlights: [], scrollY: 0 };
+        const p1Highlights = [{ scope: 'left', text: 'P1 context highlight', color: 'yellow' }];
+        session.draftsByExam['reading-p1'] = { answers: { q1: 'A' }, highlights: p1Highlights, scrollY: 0 };
         session.elapsedByExam['reading-p1'] = 45;
         app.currentSuiteSession = session;
         const targetWindow = createStubWindow('ctx-window');
@@ -989,6 +992,7 @@ async function run() {
         assert.strictEqual(ctxMsg.data.canPrev, false, 'P1 不能向前');
         assert.strictEqual(ctxMsg.data.canNext, true, 'P1 可以向后');
         assert.deepStrictEqual(ctxMsg.data.draft.answers, { q1: 'A' }, 'draft 应回传');
+        assert.deepStrictEqual(ctxMsg.data.draft.highlights, p1Highlights, 'draft highlights 应随上下文回传，避免切题后丢失高亮');
         assert.strictEqual(ctxMsg.data.elapsed, 45, 'elapsed 应回传');
 
         const sentP3 = app._sendSimulationContext(session, 'reading-p3', targetWindow);
@@ -1085,6 +1089,87 @@ async function run() {
 
         const ready = await app._waitForSuiteWindowExamReady(session, 'reading-p2', targetWindow, 120);
         assert.strictEqual(ready, false, '调用前的旧 SESSION_READY 不能被误判为当前窗口已就绪');
+    }
+
+    // Case 8.3: 复用窗口切题若未等到 fresh ready，不得提前把目标篇高亮推送到旧页
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_reuse_window_highlight_guard');
+        session.currentIndex = 0;
+        session.activeExamId = 'reading-p1';
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const reusedWindow = createStubWindow('suite-window');
+        reusedWindow.location.href = 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1';
+        session.windowRef = reusedWindow;
+        app.openExam = async (_examId, options = {}) => options.reuseWindow || reusedWindow;
+        app._waitForSuiteWindowExamReady = async () => false;
+
+        const ok = await app._handleSimulationNavigate('reading-p1', {
+            direction: 'next',
+            draft: {
+                answers: { q1: 'A' },
+                highlights: [{ scope: 'left', text: 'P1 highlight before switch' }],
+                scrollY: 123,
+                updatedAt: Date.now()
+            },
+            resultSnapshot: {
+                answers: { q1: 'A' },
+                answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+            }
+        }, reusedWindow);
+
+        assert.strictEqual(ok, true, 'ready 超时时切题流程仍应继续，由后续 SESSION_READY 兜底');
+        assert.strictEqual(session.activeExamId, 'reading-p2', 'activeExamId 应先对齐到目标篇');
+        assert.strictEqual(
+            reusedWindow._messages.some(message => message && message.type === 'SIMULATION_CONTEXT'),
+            false,
+            '未拿到 fresh ready 前不得向复用窗口提前发送 SIMULATION_CONTEXT，避免旧页误吃目标篇高亮'
+        );
+        assert.deepStrictEqual(
+            session.draftsByExam['reading-p1'].highlights,
+            [{ scope: 'left', text: 'P1 highlight before switch' }],
+            '切题前当前篇高亮仍应保存在 draft 中'
+        );
+    }
+
+    // Case 8.4: 复用窗口若已落到目标篇 URL，即使 fresh ready 缺失也应兜底下发上下文
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_reuse_window_target_url_fallback');
+        session.currentIndex = 0;
+        session.activeExamId = 'reading-p1';
+        const p2Highlights = [{ scope: 'left', text: 'P2 highlight after switch', color: 'green' }];
+        session.draftsByExam['reading-p2'] = { answers: { q5: 'B' }, highlights: p2Highlights, scrollY: 66 };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const reusedWindow = createStubWindow('suite-window');
+        reusedWindow.location.href = 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p2';
+        session.windowRef = reusedWindow;
+        app.examWindows = new Map([
+            ['reading-p2', { window: reusedWindow }]
+        ]);
+        app.openExam = async (_examId, options = {}) => options.reuseWindow || reusedWindow;
+        app._waitForSuiteWindowExamReady = async () => false;
+
+        const ok = await app._handleSimulationNavigate('reading-p1', {
+            direction: 'next',
+            draft: {
+                answers: { q1: 'A' },
+                highlights: [{ scope: 'left', text: 'P1 highlight before switch' }],
+                scrollY: 123,
+                updatedAt: Date.now()
+            }
+        }, reusedWindow);
+
+        assert.strictEqual(ok, true, '目标窗口 URL 已切到新篇时，切题流程应允许兜底恢复');
+        const ctxMsg = reusedWindow._messages.find(message => message && message.type === 'SIMULATION_CONTEXT');
+        assert(ctxMsg, '目标窗口 URL 已切到新篇时，应继续下发 SIMULATION_CONTEXT');
+        assert.strictEqual(ctxMsg.data.examId, 'reading-p2', '兜底上下文必须指向目标篇');
+        assert.deepStrictEqual(ctxMsg.data.draft.highlights, p2Highlights, '目标篇高亮应随兜底上下文一起恢复');
     }
 
     // Case 7: 错篇 PRACTICE_COMPLETE 必须被忽略，不能污染结果
