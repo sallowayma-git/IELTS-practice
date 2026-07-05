@@ -396,6 +396,9 @@
                 } catch (guardError) {
                     console.warn('[App] 题目窗口占位页守护失败:', guardError);
                 }
+                if (guardOptions.reuseWindow && examWindow && !examWindow.closed && typeof this._cleanupReusedWindowSessions === 'function') {
+                    await this._cleanupReusedWindowSessions(examWindow, examId);
+                }
 
                 // 再进行会话记录与脚本注入
                 if (!reviewMode && !memorizeMode) {
@@ -4314,6 +4317,31 @@
         /**
          * 清理题目会话
          */
+        async _cleanupReusedWindowSessions(targetWindow, keepExamId = null) {
+            if (!targetWindow || !this.examWindows || typeof this.cleanupExamSession !== 'function') {
+                return [];
+            }
+            const normalizedKeepExamId = keepExamId != null ? String(keepExamId).trim() : '';
+            const staleExamIds = [];
+            this.examWindows.forEach((windowInfo, candidateExamId) => {
+                const normalizedCandidateExamId = candidateExamId != null ? String(candidateExamId).trim() : '';
+                if (!normalizedCandidateExamId || (normalizedKeepExamId && normalizedCandidateExamId === normalizedKeepExamId)) {
+                    return;
+                }
+                if (windowInfo && windowInfo.window === targetWindow) {
+                    staleExamIds.push(normalizedCandidateExamId);
+                }
+            });
+            for (const staleExamId of staleExamIds) {
+                try {
+                    await this.cleanupExamSession(staleExamId);
+                } catch (error) {
+                    console.warn('[App] 清理复用窗口旧题目会话失败:', staleExamId, error);
+                }
+            }
+            return staleExamIds;
+        },
+
         async cleanupExamSession(examId) {
             // 清理窗口引用
             if (this.examWindows && this.examWindows.has(examId)) {

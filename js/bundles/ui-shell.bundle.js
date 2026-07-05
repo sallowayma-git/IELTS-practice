@@ -1880,6 +1880,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             return;
         }
 
+        function isExamSearchTarget(target) {
+            return !!(target && target.dataset && target.dataset.indexAction === 'search-exams');
+        }
+
         document.addEventListener('click', function (event) {
             var target = event.target && event.target.closest
                 ? event.target.closest('[data-index-action]')
@@ -1893,8 +1897,21 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
         document.addEventListener('input', function (event) {
             var target = event.target;
-            if (!target || !target.dataset || target.dataset.indexAction !== 'search-exams') {
+            if (!isExamSearchTarget(target)) {
                 return;
+            }
+            if (typeof global.searchExams === 'function') {
+                global.searchExams(target.value);
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            var target = event.target;
+            if (!isExamSearchTarget(target) || event.isComposing || event.keyCode === 229 || event.key !== 'Enter') {
+                return;
+            }
+            if (typeof event.preventDefault === 'function') {
+                event.preventDefault();
             }
             if (typeof global.searchExams === 'function') {
                 global.searchExams(target.value);

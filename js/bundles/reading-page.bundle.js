@@ -705,7 +705,7 @@
         if (/^[a-z]$/i.test(cleaned)) {
             return cleaned.toUpperCase();
         }
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }
@@ -1978,6 +1978,28 @@
         currentHighlightNode: null,
         keepToolbar: false
     };
+    const testOverrides = {
+        renderExplanations: null
+    };
+
+    function parseOptionalNumber(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (typeof value === 'string' && !value.trim()) {
+            return null;
+        }
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function parseOptionalNonNegativeInteger(value) {
+        const numeric = parseOptionalNumber(value);
+        if (!Number.isFinite(numeric) || numeric < 0) {
+            return null;
+        }
+        return Math.floor(numeric);
+    }
 
     function ensurePracticeTimerBridge() {
         if (global[PRACTICE_TIMER_BRIDGE_KEY] && typeof global[PRACTICE_TIMER_BRIDGE_KEY].getSnapshot === 'function') {
@@ -2091,7 +2113,8 @@
         const timer = document.getElementById('timer');
         if (!timer) return;
         var displaySeconds;
-        var limitSeconds = Number.isFinite(Number(state.suiteTimerLimitSeconds)) ? Number(state.suiteTimerLimitSeconds) : 3600;
+        var parsedLimitSeconds = parseOptionalNonNegativeInteger(state.suiteTimerLimitSeconds);
+        var limitSeconds = parsedLimitSeconds !== null ? parsedLimitSeconds : 3600;
         if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
             var remainingMs = state.endlessCountdownEndTime - Date.now();
             displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -2114,8 +2137,8 @@
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
-        var _warnRemaining = state.suiteTimerMode === 'countdown' && state.suiteTimerLimitSeconds !== null && state.suiteTimerLimitSeconds > 0
-            ? Math.max(0, state.suiteTimerLimitSeconds - getPageElapsedSeconds())
+        var _warnRemaining = state.suiteTimerMode === 'countdown' && parsedLimitSeconds !== null && parsedLimitSeconds > 0
+            ? Math.max(0, parsedLimitSeconds - getPageElapsedSeconds())
             : null;
         if (_warnRemaining !== null) {
             timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
@@ -4369,6 +4392,10 @@
     }
 
     async function renderExplanations() {
+        if (typeof testOverrides.renderExplanations === 'function') {
+            await testOverrides.renderExplanations();
+            return;
+        }
         clearExplanations();
         const explanation = await ensureExplanationDataset();
         if (!explanation) {
@@ -5145,7 +5172,7 @@
         if (['false', 'f', 'no', 'n'].includes(lowered)) return 'false';
         if (['ng', 'notgiven', 'not-given'].includes(lowered)) return 'not given';
         if (/^[a-z]$/i.test(cleaned)) return cleaned.toUpperCase();
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }
@@ -5200,10 +5227,92 @@
         return tokenEquivalent(actualTokens[0], expectedTokens[0]);
     }
 
-    function questionWeight(correctAnswer) {
-        const normalized = normalizeAnswerValue(correctAnswer);
-        if (Array.isArray(normalized) && normalized.length > 0) {
-            return normalized.length;
+    function buildQuestionGroupLookup(dataset) {
+        const lookup = new Map();
+        const groups = Array.isArray(dataset?.questionGroups) ? dataset.questionGroups : [];
+        groups.forEach((group, index) => {
+            if (!group || !Array.isArray(group.questionIds) || !group.questionIds.length) {
+                return;
+            }
+            const normalizedIds = group.questionIds
+                .map((entry) => normalizeQuestionId(entry))
+                .filter(Boolean);
+            if (!normalizedIds.length) {
+                return;
+            }
+            const normalizedGroup = Object.assign({}, group, {
+                groupId: group.groupId || `group-${index + 1}`,
+                questionIds: normalizedIds
+            });
+            normalizedIds.forEach((questionId) => {
+                lookup.set(questionId, normalizedGroup);
+            });
+        });
+        return lookup;
+    }
+
+    function areAnswerTokensEquivalent(left, right) {
+        const core = getAnswerMatchCore();
+        if (core && typeof core.areTokensEquivalent === 'function') {
+            return core.areTokensEquivalent(left, right);
+        }
+        const normalizedLeft = canonicalizeAnswerToken(left);
+        const normalizedRight = canonicalizeAnswerToken(right);
+        if (!normalizedLeft || !normalizedRight) {
+            return false;
+        }
+        if (normalizedLeft === normalizedRight) {
+            return true;
+        }
+        if (/^[A-Z]$/.test(normalizedLeft) || /^[A-Z]$/.test(normalizedRight)) {
+            return false;
+        }
+        const looseLeft = String(normalizedLeft).toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const looseRight = String(normalizedRight).toLowerCase().replace(/[^a-z0-9]+/g, '');
+        return !!looseLeft && looseLeft === looseRight;
+    }
+
+    function normalizeChoiceTokenList(value) {
+        const rawTokens = Array.isArray(value)
+            ? value.flatMap((entry) => splitAnswerTokens(entry))
+            : splitAnswerTokens(value);
+        const normalized = [];
+        rawTokens.forEach((entry) => {
+            const token = canonicalizeAnswerToken(entry);
+            if (!token) {
+                return;
+            }
+            if (!normalized.some((existing) => areAnswerTokensEquivalent(existing, token))) {
+                normalized.push(token);
+            }
+        });
+        return normalized.sort((left, right) => left.localeCompare(right, 'en'));
+    }
+
+    function collectGroupChoiceTokens(answers, questionIds) {
+        const tokens = [];
+        questionIds.forEach((questionId) => {
+            normalizeChoiceTokenList(answers[questionId]).forEach((token) => {
+                if (!tokens.some((existing) => areAnswerTokensEquivalent(existing, token))) {
+                    tokens.push(token);
+                }
+            });
+        });
+        return tokens.sort((left, right) => left.localeCompare(right, 'en'));
+    }
+
+    function questionWeight(correctAnswer, questionGroup = null) {
+        if (Array.isArray(correctAnswer)) {
+            const normalized = normalizeAnswerValue(correctAnswer);
+            const isMultiChoiceGroup = Boolean(
+                questionGroup
+                && questionGroup.kind === 'multi_choice'
+                && Array.isArray(questionGroup.questionIds)
+            );
+            if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
+                return normalized.length;
+            }
+            return 1;
         }
         return 1;
     }
@@ -5218,6 +5327,7 @@
         const answerKey = dataset?.answerKey || {};
         const questionOrder = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : Object.keys(answerKey);
         const questionTypeMap = buildQuestionTypeMap(dataset);
+        const questionGroupLookup = buildQuestionGroupLookup(dataset);
         const questionTypePerformance = {};
         const answerComparison = {};
         const details = {};
@@ -5225,12 +5335,57 @@
         let totalQuestions = 0;
 
         questionOrder.forEach((questionId) => {
-            const userAnswer = answers[questionId] || '';
+            const userAnswer = Object.prototype.hasOwnProperty.call(answers, questionId)
+                ? answers[questionId]
+                : '';
             const correctAnswer = answerKey[questionId];
-            const isCorrect = compareAnswers(userAnswer, correctAnswer);
-            const weight = questionWeight(correctAnswer);
             const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+            const questionGroup = questionGroupLookup.get(normalizedQuestionId) || null;
             const questionType = questionTypeMap[normalizedQuestionId] || 'other';
+            const isSplitMultiChoiceGroup = Boolean(
+                questionGroup
+                && questionGroup.kind === 'multi_choice'
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length > 1
+            );
+            const isSingleKeyMultiChoiceGroup = Boolean(
+                questionGroup
+                && questionGroup.kind === 'multi_choice'
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length === 1
+                && Array.isArray(correctAnswer)
+            );
+            let displayUserAnswer = userAnswer;
+            let isCorrect = compareAnswers(userAnswer, correctAnswer);
+            let weight = questionWeight(correctAnswer, questionGroup);
+            let partialCorrectCount = isCorrect ? weight : 0;
+
+            if (isSplitMultiChoiceGroup) {
+                const selectedTokens = collectGroupChoiceTokens(answers, questionGroup.questionIds);
+                const expectedToken = canonicalizeAnswerToken(correctAnswer);
+                displayUserAnswer = selectedTokens.length ? selectedTokens : userAnswer;
+                if (!expectedToken) {
+                    isCorrect = null;
+                    partialCorrectCount = 0;
+                } else {
+                    isCorrect = selectedTokens.some((token) => areAnswerTokensEquivalent(token, expectedToken));
+                    partialCorrectCount = isCorrect ? 1 : 0;
+                }
+                weight = 1;
+            } else if (isSingleKeyMultiChoiceGroup) {
+                const selectedTokens = normalizeChoiceTokenList(userAnswer);
+                const expectedTokens = normalizeChoiceTokenList(correctAnswer);
+                const matchedTokens = expectedTokens.filter((expectedToken) => (
+                    selectedTokens.some((token) => areAnswerTokensEquivalent(token, expectedToken))
+                ));
+                displayUserAnswer = selectedTokens.length ? selectedTokens : userAnswer;
+                partialCorrectCount = matchedTokens.length;
+                isCorrect = expectedTokens.length > 0
+                    && matchedTokens.length === expectedTokens.length
+                    && selectedTokens.length === expectedTokens.length;
+                weight = expectedTokens.length || 1;
+            }
+
             if (!questionTypePerformance[questionType]) {
                 questionTypePerformance[questionType] = {
                     total: 0,
@@ -5240,23 +5395,27 @@
             }
             totalQuestions += weight;
             questionTypePerformance[questionType].total += weight;
-            if (isCorrect) {
-                correctCount += weight;
-                questionTypePerformance[questionType].correct += weight;
+            if (partialCorrectCount > 0) {
+                correctCount += partialCorrectCount;
+                questionTypePerformance[questionType].correct += partialCorrectCount;
             }
             answerComparison[questionId] = {
                 questionId,
-                userAnswer,
+                userAnswer: displayUserAnswer,
                 correctAnswer,
                 isCorrect,
-                questionType
+                questionType,
+                partialCorrectCount,
+                weight
             };
             details[questionId] = {
                 questionId,
-                userAnswer,
+                userAnswer: displayUserAnswer,
                 correctAnswer,
                 isCorrect,
-                questionType
+                questionType,
+                partialCorrectCount,
+                weight
             };
         });
 
@@ -5421,7 +5580,10 @@
         global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.assign(
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
-                buildReplayResults
+                buildReplayResults,
+                buildResultsFromAnswers,
+                renderTimer,
+                handleSubmit
             }
         );
     }
@@ -5548,6 +5710,9 @@
                 adoptWindowSessionMessage,
                 handleIncoming,
                 initializeInlineSimulationSuite,
+                buildResultsFromAnswers,
+                renderTimer,
+                handleSubmit,
                 getTestState() {
                     return {
                         examId: state.examId,
@@ -5566,6 +5731,7 @@
                         activeExamId: state.suite?.activeExamId || null,
                         currentIndex: state.suite?.currentIndex || 0,
                         suiteInline: Boolean(state.suite?.inline),
+                        suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                         suiteSequence: Array.isArray(state.suite?.sequence)
                             ? state.suite.sequence.map((entry) => ({ ...entry }))
                             : [],
@@ -5613,6 +5779,12 @@
                             state.suite.slotsByExamId = new Map(Object.entries(slots));
                         }
                     }
+                },
+                setTestOverride(name, value) {
+                    if (!Object.prototype.hasOwnProperty.call(testOverrides, name)) {
+                        return;
+                    }
+                    testOverrides[name] = typeof value === 'function' ? value : null;
                 }
             }
         );
@@ -6051,7 +6223,7 @@
             suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '',
             suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
             suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
-            suiteTimerLimitSeconds: Number.isFinite(Number(data && data.suiteTimerLimitSeconds)) ? Number(data.suiteTimerLimitSeconds) : null,
+            suiteTimerLimitSeconds: parseOptionalNonNegativeInteger(data && data.suiteTimerLimitSeconds),
             globalTimerAnchorMs: Number.isFinite(Number(data && data.globalTimerAnchorMs)) ? Number(data.globalTimerAnchorMs) : null
         });
     }
@@ -6653,10 +6825,6 @@
         }
         renderResults(results);
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
-        await renderExplanations();
-        applyHighlights(highlightSnapshot);
-        enhanceReviewHighlights();
-        updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         postMessage(messageType, Object.assign({
@@ -6689,6 +6857,10 @@
             suiteSubmission: true,
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
         } : {}, postedResults));
+        await renderExplanations();
+        applyHighlights(highlightSnapshot);
+        enhanceReviewHighlights();
+        updateNavStatuses(results);
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
@@ -6879,8 +7051,9 @@
                     state.suiteTimerMode = normalizedTimerMode;
                 }
             }
-            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
-                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
+            const initTimerLimitSeconds = parseOptionalNonNegativeInteger(data.suiteTimerLimitSeconds);
+            if (initTimerLimitSeconds !== null) {
+                state.suiteTimerLimitSeconds = initTimerLimitSeconds;
             }
             const initPausedOffsetMs = Number(data.suiteTimerPausedOffsetMs ?? data.pausedOffsetMs);
             if (Number.isFinite(initPausedOffsetMs) && initPausedOffsetMs >= 0) {
@@ -7028,8 +7201,9 @@
                     state.suiteTimerMode = normalizedTimerMode;
                 }
             }
-            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
-                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
+            const contextTimerLimitSeconds = parseOptionalNonNegativeInteger(data.suiteTimerLimitSeconds);
+            if (contextTimerLimitSeconds !== null) {
+                state.suiteTimerLimitSeconds = contextTimerLimitSeconds;
             }
             const timerSnapshot = data && data.timerSnapshot && typeof data.timerSnapshot === 'object'
                 ? data.timerSnapshot
