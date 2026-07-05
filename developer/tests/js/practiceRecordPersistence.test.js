@@ -34,7 +34,7 @@ function createWebStorage() {
 }
 
 function createHarness(options = {}) {
-    const { syncUiOnReplace = false } = options;
+    const { syncUiOnReplace = false, saveCompletionImpl = null, forceCompletionNotice = false } = options;
     const practiceState = [
         {
             id: 'record-1',
@@ -54,6 +54,8 @@ function createHarness(options = {}) {
     const uiState = practiceState.map((record) => ({ ...record }));
     const localStorage = createWebStorage();
     const sessionStorage = createWebStorage();
+    const listeners = new Map();
+    const savedSpellingErrors = [];
     const quietConsole = {
         log() {},
         warn() {},
@@ -121,6 +123,18 @@ function createHarness(options = {}) {
         normalizeRecordId(id) {
             return id == null ? '' : String(id);
         },
+        getExamIndexState() {
+            return [
+                {
+                    id: 'listening-p1-fallback',
+                    title: 'Listening P1 Fallback',
+                    category: 'P1',
+                    path: 'assets/generated/listening-exams/listening-p1-fallback.html',
+                    frequency: 'fallback',
+                    type: 'listening'
+                }
+            ];
+        },
         document: {
             addEventListener() {},
             getElementById() {
@@ -136,6 +150,31 @@ function createHarness(options = {}) {
         window: {
             console: quietConsole,
             storage: storageStub,
+            location: {
+                origin: 'http://localhost'
+            },
+            addEventListener(type, handler) {
+                if (!listeners.has(type)) {
+                    listeners.set(type, []);
+                }
+                listeners.get(type).push(handler);
+            },
+            async __dispatchWindowEvent(type, event) {
+                const handlers = listeners.get(type) || [];
+                for (const handler of handlers) {
+                    await handler(event);
+                }
+            },
+            spellingErrorCollector: {
+                detectSource(value) {
+                    const text = String(value || '').toLowerCase();
+                    return text.includes('p1') ? 'p1' : (text.includes('p4') ? 'p4' : 'other');
+                },
+                async saveErrors(errors) {
+                    savedSpellingErrors.push(...errors.map((error) => ({ ...error })));
+                    return true;
+                }
+            },
             app: {
                 state: {
                     practice: {
@@ -152,6 +191,22 @@ function createHarness(options = {}) {
                     return practiceState.find((record) => (
                         String(record.id) === targetId || String(record.sessionId || '') === targetId
                     )) || null;
+                },
+                async saveCompletion(realData = {}, context = {}, exam = {}) {
+                    if (typeof saveCompletionImpl === 'function') {
+                        return await saveCompletionImpl(realData, context, exam);
+                    }
+                    const record = {
+                        id: `record-${practiceState.length + 1}`,
+                        examId: context && context.examId ? context.examId : (exam.id || realData.examId || ''),
+                        sessionId: realData.sessionId || '',
+                        title: exam.title || realData.title || '',
+                        date: realData.endTime || '2026-03-09T12:00:00.000Z',
+                        percentage: Number(realData?.scoreInfo?.percentage) || 0,
+                        duration: Number(realData?.duration ?? realData?.scoreInfo?.duration) || 0
+                    };
+                    practiceState.unshift({ ...record });
+                    return { ...record };
                 },
                 async replace(records) {
                     practiceState.splice(0, practiceState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
@@ -187,10 +242,15 @@ function createHarness(options = {}) {
     };
 
     sandbox.globalThis = sandbox.window;
+    sandbox.fallbackExamSessions = new Map();
     sandbox.window.localStorage = localStorage;
     sandbox.window.sessionStorage = sessionStorage;
+    sandbox.window.fallbackExamSessions = sandbox.fallbackExamSessions;
 
     loadScript('js/main.js', vm.createContext(sandbox));
+    if (forceCompletionNotice) {
+        sandbox.shouldAnnounceCompletion = () => true;
+    }
     sandbox.updatePracticeView = function updatePracticeViewSpy() {
         renderCount += 1;
     };
@@ -202,6 +262,7 @@ function createHarness(options = {}) {
         localStorage,
         sessionStorage,
         messageLog,
+        savedSpellingErrors,
         getRenderCount() {
             return renderCount;
         }
@@ -259,14 +320,131 @@ async function testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState
     );
 }
 
+async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
+    const harness = createHarness({ forceCompletionNotice: true });
+    const childWindow = { closed: false, postMessage() {} };
+    harness.sandbox.window.fallbackExamSessions.set('parent-session-1', {
+        examId: 'listening-p1-fallback',
+        sessionId: 'parent-session-1',
+        win: childWindow,
+        initPayload: {
+            examId: 'listening-p1-fallback',
+            sessionId: 'parent-session-1'
+        },
+        timer: null
+    });
+
+    harness.sandbox.setupMessageListener();
+    await harness.sandbox.window.__dispatchWindowEvent('message', {
+        origin: 'http://localhost',
+        source: childWindow,
+        data: {
+            type: 'PRACTICE_COMPLETE',
+            realData: {
+                examId: 'listening-unknown',
+                sessionId: 'child-temp-session',
+                type: 'listening',
+                practiceType: 'listening',
+                answers: { q1: 'acommodatio' },
+                correctAnswers: { q1: 'accommodation' },
+                answerComparison: {
+                    q1: {
+                        userAnswer: 'acommodatio',
+                        correctAnswer: 'accommodation',
+                        isCorrect: false
+                    }
+                },
+                scoreInfo: {
+                    correct: 0,
+                    total: 1,
+                    accuracy: 0,
+                    percentage: 0,
+                    source: 'listening_record_bridge'
+                },
+                spellingErrors: [
+                    {
+                        word: 'accommodation',
+                        userInput: 'acommodatio',
+                        questionId: 'q1',
+                        examId: 'listening-unknown',
+                        source: 'other'
+                    }
+                ]
+            }
+        }
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const savedRecord = harness.practiceState.find((record) => record && record.examId === 'listening-p1-fallback');
+    assert(savedRecord, 'fallback PRACTICE_COMPLETE 应保存父页题源练习记录');
+    assert.strictEqual(savedRecord.sessionId, 'parent-session-1', 'fallback 记录 sessionId 应归一到父页会话');
+
+    assert.strictEqual(harness.savedSpellingErrors.length, 1, 'fallback 应保存 bridge 带回的 spellingErrors');
+    assert.deepStrictEqual(
+        harness.savedSpellingErrors[0],
+        {
+            word: 'accommodation',
+            userInput: 'acommodatio',
+            questionId: 'q1',
+            examId: 'listening-p1-fallback',
+            source: 'p1',
+            sessionId: 'parent-session-1'
+        },
+        'fallback 错词必须归一 examId/source/sessionId，不能落到 listening-unknown/other'
+    );
+}
+
+async function testCanonicalCompletionSaveRejectsWhenPersistenceFails() {
+    const harness = createHarness({
+        saveCompletionImpl: async () => {
+            throw new Error('save failed');
+        }
+    });
+    await assert.rejects(
+        () => harness.sandbox.savePracticeCompletionRecord('listening-p1-fallback', {
+            examId: 'listening-p1-fallback',
+            sessionId: 'child-temp-session-fail',
+            type: 'listening',
+            practiceType: 'listening',
+            answers: { q1: 'A' },
+            correctAnswers: { q1: 'A' },
+            answerComparison: {
+                q1: {
+                    userAnswer: 'A',
+                    correctAnswer: 'A',
+                    isCorrect: true
+                }
+            },
+            scoreInfo: {
+                correct: 1,
+                total: 1,
+                accuracy: 1,
+                percentage: 100,
+                source: 'listening_record_bridge'
+            }
+        }),
+        /save failed/,
+        'canonical 持久化失败时 savePracticeCompletionRecord 必须向上抛错，供上层停止成功提示'
+    );
+    assert.strictEqual(
+        harness.practiceState.some((record) => record.examId === 'listening-p1-fallback' && record.id !== 'record-1' && record.id !== 'record-2'),
+        false,
+        '保存失败时不能偷偷留下半成品记录'
+    );
+}
+
 async function main() {
     try {
         await testDeleteRecordPersistsAndCleansLegacyKeys();
         await testClearPracticeDataPersistsAndClearsLegacyKeys();
         await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
+        await testFallbackCompletionPersistsNormalizedSpellingErrors();
+        await testCanonicalCompletionSaveRejectsWhenPersistenceFails();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'deleteRecord / clearPracticeData 已覆盖 canonical store、legacy shadow key 与删除后的强制 UI 刷新链路'
+            detail: 'practice record persistence and fallback completion regressions are covered'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({
