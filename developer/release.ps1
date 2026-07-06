@@ -261,7 +261,7 @@ if (Test-Path -LiteralPath $DistDir) {
 [void](New-Item -ItemType Directory -Path $DistDir)
 
 $zipInputs = [System.Collections.Generic.List[string]]::new()
-@('index.html', 'css', 'js/bundles', 'assets', 'ReadingPractice', 'templates/exam-placeholder.html') | ForEach-Object {
+@('index.html', 'css', 'js/bundles', 'assets', 'ReadingPractice') | ForEach-Object {
     $zipInputs.Add($_)
 }
 
@@ -318,7 +318,6 @@ Require-ZipEntry $zipEntries 'js/bundles/theme.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/reading-page.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/practice-page-enhancer.bundle.js'
 Require-ZipEntry $zipEntries 'js/bundles/listening-record-bridge.bundle.js'
-Require-ZipEntry $zipEntries 'templates/exam-placeholder.html'
 
 if ($IncludeLocalListening -and (Test-Path -LiteralPath (Join-Path $ProjectRoot 'assets/generated/listening-exams/manifest.js'))) {
     Require-ZipEntry $zipEntries 'assets/generated/listening-exams/manifest.js'
@@ -335,8 +334,7 @@ if ($IncludeLocalListening -and (Test-Path -LiteralPath (Join-Path $ProjectRoot 
     }
 }
 
-Reject-ZipEntryPrefix $zipEntries 'templates/ci-practice-fixtures/'
-Reject-ZipEntryPattern $zipEntries '^templates/(question-types\.js|template_base\.html)$'
+Reject-ZipEntryPrefix $zipEntries 'templates/'
 Reject-ZipEntryPrefix $zipEntries 'ListeningPractice/vip/'
 Reject-ZipEntryPattern $zipEntries '(^|/)~\$[^/]*$'
 Reject-ZipEntryPattern $zipEntries '^ListeningPractice/.*\.(MOV|mov|MP4|mp4)$'
