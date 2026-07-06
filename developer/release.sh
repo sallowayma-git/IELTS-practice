@@ -99,6 +99,7 @@ ZIP_INPUTS=(
     js/bundles/
     assets/
     ReadingPractice/
+    templates/exam-placeholder.html
 )
 if [ ${#LISTENING_ZIP_INPUTS[@]} -gt 0 ]; then
     ZIP_INPUTS+=("${LISTENING_ZIP_INPUTS[@]}")
@@ -174,6 +175,7 @@ require_entry "js/bundles/theme.bundle.js"
 require_entry "js/bundles/reading-page.bundle.js"
 require_entry "js/bundles/practice-page-enhancer.bundle.js"
 require_entry "js/bundles/listening-record-bridge.bundle.js"
+require_entry "templates/exam-placeholder.html"
 
 if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening-exams/manifest.js" ]; then
     require_entry "assets/generated/listening-exams/manifest.js"
@@ -190,7 +192,8 @@ if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then
     done
 fi
 
-reject_entry_prefix "templates/"
+reject_entry_prefix "templates/ci-practice-fixtures/"
+reject_entry_pattern '^templates/(question-types\.js|template_base\.html)$'
 reject_entry_prefix "ListeningPractice/vip/"
 reject_entry_pattern '(^|/)~\$[^/]*$'
 reject_entry_pattern '^ListeningPractice/.*\.(MOV|mov|MP4|mp4)$'
