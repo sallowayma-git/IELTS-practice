@@ -10103,8 +10103,9 @@
             // 更新题目状态
             this.updateExamStatus(examId, 'in-progress');
 
-            // 尝试打开练习页面
-            const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
+            // 降级时使用已随发布包提供的占位页，避免打开不存在的旧模板。
+            const practiceUrl = this._buildExamPlaceholderUrl(exam, { examId })
+                || `templates/exam-placeholder.html?examId=${encodeURIComponent(examId)}`;
             window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
         },
 
