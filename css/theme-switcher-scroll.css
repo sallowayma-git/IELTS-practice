@@ -1,0 +1,101 @@
+.theme-options-viewport {
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-options-glass {
+    padding: 20px 28px 30px;
+    scroll-behavior: smooth;
+}
+
+.theme-scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 56px;
+    border: 0;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.8);
+    color: rgba(15, 23, 42, 0.82);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease,
+        background-color 0.2s ease,
+        color 0.2s ease;
+    z-index: 3;
+}
+
+.theme-scroll-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.94);
+    color: #0f172a;
+    transform: translateY(-50%) scale(1.03);
+}
+
+.theme-scroll-btn:disabled {
+    opacity: 0.26;
+    cursor: default;
+    transform: translateY(-50%);
+}
+
+.theme-scroll-btn[hidden] {
+    display: none;
+}
+
+.theme-scroll-btn__glyph {
+    width: 9px;
+    height: 9px;
+    border-top: 1.5px solid currentColor;
+    border-right: 1.5px solid currentColor;
+    pointer-events: none;
+}
+
+.theme-scroll-btn-prev .theme-scroll-btn__glyph {
+    transform: rotate(-135deg);
+}
+
+.theme-scroll-btn-next .theme-scroll-btn__glyph {
+    transform: rotate(45deg);
+}
+
+.theme-scroll-btn-prev {
+    left: 17px;
+}
+
+.theme-scroll-btn-next {
+    right: 17px;
+}
+
+@media (max-width: 640px) {
+    .theme-options-viewport {
+        padding: 20px 12px;
+    }
+
+    .theme-options-glass {
+        gap: 16px;
+        padding: 16px 20px 24px;
+    }
+
+    .theme-scroll-btn {
+        width: 16px;
+        height: 48px;
+    }
+
+    .theme-scroll-btn-prev {
+        left: 11px;
+    }
+
+    .theme-scroll-btn-next {
+        right: 11px;
+    }
+
+    .theme-card {
+        width: min(250px, calc(100vw - 88px));
+    }
+}

@@ -43,13 +43,13 @@
                 q.x += sin(q.y * 5.2 - totalTime * 0.8) * warpScale * 0.5;
                 q.y += cos(q.x * 4.7 + totalTime * 0.9) * warpScale * 0.5;
 
-                vec3 bgColor   = vec3(0.92, 0.90, 0.88); 
-                vec3 sunColor  = vec3(0.98, 0.45, 0.35); 
-                vec3 mountColor= vec3(0.15, 0.25, 0.60); 
-                vec3 fogColor  = vec3(0.60, 0.55, 0.80); 
+                vec3 bgColor   = vec3(0.92, 0.90, 0.88);
+                vec3 sunColor  = vec3(0.98, 0.45, 0.35);
+                vec3 mountColor= vec3(0.15, 0.25, 0.60);
+                vec3 fogColor  = vec3(0.60, 0.55, 0.80);
                 vec3 color = bgColor;
 
-                vec2 sunCenter = vec2(0.0, 0.15); 
+                vec2 sunCenter = vec2(0.0, 0.15);
                 float sunDist = length(q - sunCenter);
                 float sunAlpha = 1.0 - smoothstep(0.12, 0.35 + dispersion * 0.25, sunDist);
                 color = mix(color, sunColor, sunAlpha * 0.9);
@@ -122,7 +122,7 @@
                 vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
                 float totalTime = uTime * 0.5;
                 float horizon = 0.15;
-                
+
                 vec3 skyBase = vec3(0.55, 0.60, 0.62);
                 float cloudTime = totalTime * 0.1;
                 vec2 qt = p * vec2(2.5, 3.5) + vec2(cloudTime, 0.0);
@@ -134,36 +134,36 @@
                 vec3 colLight = vec3(0.95, 0.98, 1.00);
                 vec3 cloudVolColor = mix(colDark, colLight, volLight);
                 vec3 skyColor = mix(skyBase, cloudVolColor, skyMask);
-                
+
                 vec3 waterDeep = vec3(0.01, 0.18, 0.22); vec3 waterMid = vec3(0.02, 0.35, 0.38); vec3 waterLight = vec3(0.05, 0.45, 0.45);
                 float wave1 = sin(p.x * 25.0 + totalTime * 2.0) * 0.5 + 0.5;
                 float wave2 = sin(p.x * 50.0 - totalTime * 2.5 + p.y * 150.0) * 0.5 + 0.5;
                 float waveNoise = fbm(p * vec2(12.0, 60.0) + vec2(totalTime * 0.15, totalTime * 0.3));
                 float waveBlend = wave1 * 0.2 + wave2 * 0.15 + waveNoise * 0.65;
                 float depthMts = smoothstep(horizon - 0.15, horizon, p.y);
-                
+
                 vec3 oceanColor = mix(waterDeep, waterMid, (p.y + 0.5) / 0.65);
                 oceanColor = mix(oceanColor, waterLight, waveBlend * (1.0 - depthMts*0.8) * 0.6);
                 float spec = smoothstep(0.7, 1.0, waveNoise) * smoothstep(0.0, 0.15, horizon - p.y);
                 oceanColor += spec * 0.15 * vec3(0.8,0.9,0.9);
 
                 vec2 bp = p - vec2(0.0, -0.12);
-                float tilt = sin(totalTime * 1.5) * 0.03; 
-                bp = mat2(cos(tilt), -sin(tilt), sin(tilt), cos(tilt)) * bp; 
+                float tilt = sin(totalTime * 1.5) * 0.03;
+                bp = mat2(cos(tilt), -sin(tilt), sin(tilt), cos(tilt)) * bp;
                 bp.y += sin(totalTime * 2.1) * 0.005;
-                
+
                 float scale = 1.6;
                 bp /= scale;
 
                 vec3 finalColor = p.y > horizon ? skyColor : oceanColor;
-                
+
                 float hullD, sailD;
                 boatSDF(bp, hullD, sailD);
-                
+
                 float px = (1.5 / max(uResolution.x, uResolution.y)) / scale;
                 float hullMask = 1.0 - smoothstep(0.0, px, hullD);
                 float sailMask = 1.0 - smoothstep(0.0, px, sailD);
-                
+
                 finalColor = mix(finalColor, vec3(0.08, 0.12, 0.15), hullMask);
                 finalColor = mix(finalColor, vec3(0.92, 0.95, 0.98), sailMask);
 
@@ -192,13 +192,13 @@
             void main() {
                 float aspect = uResolution.x / max(uResolution.y, 1.0);
                 vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
-                
+
                 // 1. Precise Background Gradient
                 vec3 cBot = vec3(0.40, 0.60, 0.90);
-                vec3 cTop = vec3(0.98, 0.86, 0.76); 
-                float bgMix = smoothstep(-0.4, 0.4, p.y + p.x * 0.1); 
+                vec3 cTop = vec3(0.98, 0.86, 0.76);
+                float bgMix = smoothstep(-0.4, 0.4, p.y + p.x * 0.1);
                 vec3 color = mix(cBot, cTop, bgMix);
-                
+
                 // Pinkish haze in upper left & warmth on right
                 float hazeL = soft(length(p - vec2(-0.3, 0.2)), 0.4, 0.4);
                 color = mix(color, vec3(0.98, 0.65, 0.75), hazeL * 0.4);
@@ -253,15 +253,15 @@
                 color = mix(color, vec3(0.15, 0.5, 0.45), bulb * 0.95);
 
                 vec2 pF2 = p - vec2(-0.03, 0.25);
-                pF2 *= rot(-0.1); 
+                pF2 *= rot(-0.1);
                 float a2 = atan(pF2.y, pF2.x); float r2 = length(pF2);
-                float inner2 = smoothstep(-0.05, 0.1, pF2.y); 
+                float inner2 = smoothstep(-0.05, 0.1, pF2.y);
                 vec3 cF2 = mix(vec3(0.2, 0.35, 0.75), vec3(0.65, 0.8, 0.98), inner2);
-                
+
                 float lobe2 = 0.16 * (0.65 + 0.35 * pow(abs(sin(a2 * 2.5)), 1.2)); // 5 distinct petals
                 float f2 = soft(r2, lobe2 - 0.02, 0.04);
                 color = mix(color, cF2, f2 * 0.92);
-                // Center shadow core 
+                // Center shadow core
                 float core2 = soft(length(pF2 - vec2(0.01, -0.06)), 0.02, 0.05);
                 color = mix(color, vec3(0.1, 0.25, 0.45), core2 * 0.85);
 
@@ -270,12 +270,12 @@
                 vec2 pF1 = p - vec2(-0.35, -0.16);
                 pF1 *= rot(0.25);
                 float a1 = atan(pF1.y, pF1.x); float r1 = length(pF1);
-                float lobe1 = 0.18 * (0.8 + 0.2 * abs(sin(a1 * 3.5))); 
+                float lobe1 = 0.18 * (0.8 + 0.2 * abs(sin(a1 * 3.5)));
                 float f1 = soft(r1, lobe1 - 0.03, 0.07);
-                
+
                 vec3 cF1 = mix(vec3(0.98, 0.35, 0.1), vec3(0.98, 0.65, 0.4), r1 * 4.0);
                 color = mix(color, cF1, f1 * 0.95);
-                
+
                 // Hot red core
                 float core1 = soft(length(pF1 - vec2(0.005, 0.0)), 0.01, 0.07);
                 color = mix(color, vec3(0.98, 0.12, 0.02), core1 * 0.9);
@@ -283,20 +283,20 @@
                 // 6. Flower 4: Right Orange Flower (Clone of Flower 1)
                 // Moved Right by +0.2 -> New Pos: (0.45, -0.20)
                 vec2 pF4 = p - vec2(0.45, -0.20);
-                pF4 *= rot(-0.6); 
+                pF4 *= rot(-0.6);
                 float a4 = atan(pF4.y, pF4.x); float r4 = length(pF4);
-                float lobe4 = 0.16 * (0.8 + 0.2 * abs(sin(a4 * 3.5))); 
+                float lobe4 = 0.16 * (0.8 + 0.2 * abs(sin(a4 * 3.5)));
                 float f4 = soft(r4, lobe4 - 0.03, 0.07);
                 vec3 cF4 = mix(vec3(0.98, 0.35, 0.1), vec3(0.98, 0.65, 0.4), r4 * 4.0);
                 color = mix(color, cF4, f4 * 0.9);
                 float core4 = soft(length(pF4 - vec2(-0.005, 0.0)), 0.01, 0.07);
                 color = mix(color, vec3(0.98, 0.12, 0.02), core4 * 0.85);
-                
+
                 // 7. Photographic Texture & Vignette
                 float n1 = random(vUv * 123.456 + fract(random(vUv)));
                 float n2 = random(vUv * 345.678 - fract(random(vUv*2.0)));
-                float noise = (n1 + n2 - 1.0) * 0.04; 
-                
+                float noise = (n1 + n2 - 1.0) * 0.04;
+
                 float vig = length(p);
                 color *= 1.0 - vig * 0.18;
                 color += noise;
@@ -325,7 +325,7 @@
         renderer.domElement.id = 'shui-three-bg';
         renderer.domElement.setAttribute('aria-hidden', 'true');
         renderer.setClearColor(0xf5f6f8, 1);
-        
+
         // Remove existing canvas if any
         const existing = document.getElementById('shui-three-bg');
         if (existing) existing.remove();
@@ -337,7 +337,7 @@
             uTime: { value: 0 },
             uResolution: { value: new THREE.Vector2(1, 1) }
         };
-        
+
         const fragmentShader = shaders[theme] || shaders['misty-mountain'];
 
         const material = new THREE.ShaderMaterial({
@@ -418,15 +418,159 @@
         };
     }
 
+    const ASCII_FLOWER_LINES = [
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [23, "':l:;."],
+      [21, "..,;;;;:."],
+      [18, "..;c::::;:::                                      .;,:c,;;:clcl,."],
+      [15, "..,''',;;,;,,;::,.                              ..;;;;:;;;;;;:;;::;;.  .."],
+      [14, ".'';;;;:;:;::cclcc'..                         .,;ccc:::c::::c:lcc:c:cc;;cc;;,"],
+      [13, "'..','',,',':;ccc::,...                       ';:;;;;,;;:,,;,::c::;:;c:c,,,'''."],
+      [12, "....,,,'',,:;:;:cc:::....'''.                 .;,;;;;;';;c::c,;::,;;,;c;:'..',;;"],
+      [10, "'..'..',;;;c;::c:cclloll;;lc:cc',..           .l:c:c::cc:::l::;,;;;',;;:;;ccoooodl'."],
+      [10, "..'''',,,;;:;'':;::::cccccc:,;;,;';;;,.      ';:;;,;;:::,,','',','',;',;:;:;::;;;;,;."],
+      [9, ".,,,;,,,;:::::,',,:;:;cll:;;:'...,;c;;,'..   .'',''.,,,,;',','''',,;''';;;,::cc::;;,,'........"],
+      [9, "..'','',;',;:;'',''',,::,,,,;,,;,,,:;;.....  ......',''',.'.'..'';':;;,:.'''.,;,;;;;::,',,,',''."],
+      [9, ".,,,;,';::,,:,;,:,;,,,:c;;::::cc,:,;,;;;;:;,'cc,,.,;:;;;;,;,:,;;,:locc;c;;:lcllllollollcccc::;;''"],
+      [11, "... ..'.'',''',''''.;;;;::;:::',''.,''',,'':;,,.'',''',.'',,,',:::;;;,,';c:::::::;:::;;;;,;''.."],
+      [12, "....',''',,,',',,,';clccc:ccl;,';;ccc::;;:llcc:c',''',',';':c:ccl:ccc,cllccccclcclc:;,,,';'',."],
+      [14, "..';,,,;;;,:,;;:colllccclll::;llllllllllollollll:;;:,cclccc:c;lclcl;lllcccccllclllcl,,',''..."],
+      [16, "..''',''.,.,:llllcccccccc::;ccc:ccccccclcllocc::;;;::c::ccc,:cc;;;ccc,:::lllccc::,........."],
+      [18, ".'',,'',',:::;;;:::cc:c:c::c:::ccccccccclccc:c::;ccc:c:;:,:c:;;;:;,;::::::;:::.........."],
+      [19, "..'''',.,c;;:::clcclcl:lccclcccclccllloolclllllcccc:cc:c;lc,;;;;',:c:,;cc:c:,....."],
+      [19, ".::,,,;,;;;;cclllllccllolllllclllllollllolllcclclclc:cccco:::l;;,:;:c:ccc:c;'..."],
+      [10, ".         .,''.'.'''';;::::;c:::::::cc:::cc::::cclcc,',;;;;:;,,',;:';,:.'''.;';;;;,;'..."],
+      [8, ".;lll:       ';:,;,;;;,lllclcclllclllclllllllclllollc:,;,;:c;:,lc,;cc:;c:',,;,,;::cc:;..."],
+      [7, ".,,;,:;        .'';',,,'::cc:ccccc:lccccccccc::lclc::',,,',.,',',,';;,,;:,''''.;;;:::'...."],
+      [6, ".,;,;,;:,.....    .,,:,,;ccccccclcl:lllclllllc;cllll,,,,;,',.'.,'','c;:'l:,.,';;cc::'....."],
+      [6, ",,,.;.',;:::,,..     ..,'::;:c::c:c;ccccc:ccc,ccclc:',,;''.....,',',,,;::''.',:;:;......."],
+      [5, ".:,...'',:c:ccc::;;,,'';;,;:::cccccc:cccccccc:ccclcc:,;,;''',''.,'';;,;cc;',',:c;,'....."],
+      [6, ";,'.;::lccclllollllcclcc:c::::::ccc:c:cccc::cccclccl;,,;''';',';',:',;l;'',;::,......"],
+      [6, ",,;':;lollllllllllllclllcc::;;';::c;::c:cc::c::ccccl:,''.'''.'.'.;,.,:c''',,'......"],
+      [7, ";:;c:lol:llooolclcllllllllcc::;;,;;;;c:ccc:cccclcc:,,';',,;,,,:;,;,c:,',,........"],
+      [8, ";:::::...;;;:ccc:cclllcc::::;''''.,';;:;:,:::;:;',',','.',.'';.';,;''........"],
+      [8, "';:,. .....''..,''.';c;cc;;;;,,,;,;,,,ccc,;cc:;,;;,;,,',';':,;;:c;;'......        ''.."],
+      [15, "'....    ......''''','''''.'.'.',;,,''.''.'''.''..;';':;,,''.....         ......"],
+      [15, "...             ....',''''.,''.'',,;,,,,'',',;c;::::c:c,;;''';,;,,''''',;;;::,;;;."],
+      [31, "...........'...'...'',.''.,,,,,.'';;;;:cccc:::;;,;;:::,;,';::;:::."],
+      [33, "..''',,,',',',''','',,'';',',,:ccloddool;'''';;:;clocllllolllll.....'.,."],
+      [35, "...'''.'.'.'.''''..'..'.,,;;:::::c:,',,;,,.'.,'::c:ccccccccc;,;'..',;;."],
+      [37, "..',',.'.'';;'',,,'',''',''',,,,;;;;;;,'.'',',;cloollllllllllclllc:cc."],
+      [40, "..'...;;;;:';::'''.'.'''''''','''''.'...'.'',':c:ccc:c::;:;,,:;cc;.."],
+      [42, ". ..,,:::;;;c,.''..'.......'................''.,;,''',',''.,,'...."],
+      [44, ".'::::c:::cc',''.'.'''.'.'..'.'.....'.'.'.'..'''',,;;c:'......."],
+      [39, ".. . .;cc::c:c:c:;,',.'..',''.'..'.'.....'.'.'.''''''',,:c;'..."],
+      [38, "..    .;cc::cc:;;;;;,,,'''',',','''.'''''''.'''''''',,,:,,...."],
+      [44, ".',,'.,,''''',.''........'...................';;'....."],
+      [37, ".      .;c;:';;;,;,,;',,,',',';,;,,,',,,'',,',,,',,',l:...."],
+      [37, ".       .;...'''.'..'.'.'......';;:;,,''.....'''.,,';;...."],
+      [36, "..        ''...'''''.'''.'.'''....';:;:;;..''.'.''''.;...."],
+      [47, "....,..'..'.'.'.'''...'..,'::c;:::;::c:c:....."],
+      [35, "..           ..'';,,,',''',.'';',',.''.',::cclcllo:;'..."],
+      [34, ".                ...,,',''.'.'',,,,:;:;,;,:;;,,''......"],
+      [33, ".                    .';:'',,.;;;,;;:;::;c:'......"],
+      [56, ".',;;:clclcl:c::::,....."],
+      [33, ".                           .....''........."],
+      [32, "."],
+      [0, ""],
+      [31, ".."],
+      [31, "."],
+      [31, "."],
+      [0, ""],
+      [31, ".."],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [29, "."],
+      [29, "."],
+      [0, ""],
+      [29, "."],
+      [29, "."],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""]
+    ];
+
+    function renderAsciiFlower() {
+        const container = document.querySelector('.ascii-bg-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'ascii-flower-wrapper';
+
+        wrapper.style.position = 'absolute';
+        wrapper.style.fontFamily = '"Courier New", Courier, monospace';
+        wrapper.style.fontSize = '11px';
+        wrapper.style.lineHeight = '11.5px';
+        wrapper.style.fontWeight = '600';
+        wrapper.style.color = '#f4f4f5';
+        wrapper.style.opacity = '0.75';
+        wrapper.style.pointerEvents = 'none';
+        wrapper.style.userSelect = 'none';
+
+        const charWidth = 6.0;
+        const rowHeight = 11.5;
+
+        ASCII_FLOWER_LINES.forEach((line, index) => {
+            if (!line[1]) return;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'ascii-line';
+            lineDiv.style.position = 'absolute';
+            lineDiv.style.whiteSpace = 'pre';
+            lineDiv.style.top = (index * rowHeight) + 'px';
+            lineDiv.style.left = (line[0] * charWidth) + 'px';
+            lineDiv.textContent = line[1];
+            wrapper.appendChild(lineDiv);
+        });
+
+        container.appendChild(wrapper);
+    }
+
     function start(themeName = null) {
         if (!themeName) {
             try {
-                themeName = localStorage.getItem('three_bg_theme') || 'misty-mountain';
+                themeName = localStorage.getItem('three_bg_theme') || 'floral-bloom';
             } catch(e) {
-                themeName = 'misty-mountain';
+                themeName = 'floral-bloom';
             }
         }
-        
+
+        try {
+            document.body.setAttribute('data-bg-theme', themeName);
+        } catch (e) {}
+
+        const asciiContainer = document.querySelector('.ascii-bg-container');
+        if (asciiContainer) {
+            asciiContainer.innerHTML = '';
+        }
+
+        if (themeName === 'newjeans' || themeName === 'ascii-flower') {
+            try {
+                if (global.SHUIThreeBackground) {
+                    global.SHUIThreeBackground.destroy();
+                    global.SHUIThreeBackground = null;
+                }
+                const existing = document.getElementById('shui-three-bg');
+                if (existing) existing.remove();
+                document.body.classList.remove('three-bg-active');
+            } catch (error) {
+                console.warn('[SHUI Three Background] failed to stop WebGL for ' + themeName + ' theme:', error);
+            }
+
+            if (themeName === 'ascii-flower') {
+                renderAsciiFlower();
+            }
+            return;
+        }
+
         try {
             if (global.SHUIThreeBackground) {
                 global.SHUIThreeBackground.destroy();
@@ -445,10 +589,14 @@
         start(themeName);
     };
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    function init() {
         start();
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        init();
     } else {
-        document.addEventListener('DOMContentLoaded', () => start(), { once: true });
+        document.addEventListener('DOMContentLoaded', () => init(), { once: true });
     }
 })(typeof window !== 'undefined' ? window : this);
 
@@ -569,13 +717,13 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
-    var READING_EXAM_DATA_SCRIPT = 'assets/scripts/complete-exam-data.js';
+    var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            READING_EXAM_DATA_SCRIPT
+            READING_EXAM_MANIFEST_SCRIPT
         ];
 
         manifest['state-core'] = [
@@ -1254,8 +1402,10 @@
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         attachPrefetchTriggers();
+        setupReadingMemorizeExitButton();
     } else {
         document.addEventListener('DOMContentLoaded', attachPrefetchTriggers);
+        document.addEventListener('DOMContentLoaded', setupReadingMemorizeExitButton);
     }
 
     // ============================================================================
@@ -1537,8 +1687,16 @@
         if (Array.isArray(global.examIndex) && global.examIndex.length) {
             return global.examIndex.slice();
         }
-        if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-            return global.completeExamIndex.map(function (exam) {
+        if (typeof global.getReadingExamIndex === 'function') {
+            var readingIndex = global.getReadingExamIndex();
+            if (Array.isArray(readingIndex) && readingIndex.length) {
+                return readingIndex.map(function (exam) {
+                    return Object.assign({}, exam, { type: exam.type || 'reading' });
+                });
+            }
+        }
+        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+            return global.__READING_EXAM_INDEX__.map(function (exam) {
                 return Object.assign({}, exam, { type: exam.type || 'reading' });
             });
         }
@@ -1559,7 +1717,8 @@
             return false;
         }
         var manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        var entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function ensureReadingMemorizeDataReady() {
@@ -1576,14 +1735,88 @@
         });
     }
 
+    function isReadingMemorizeBrowseMode() {
+        return global.__readingMemorizeBrowseMode === true
+            || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
+    }
+
+    function syncReadingMemorizeBrowseModeUI() {
+        if (!global.document) {
+            return;
+        }
+        var isActive = isReadingMemorizeBrowseMode();
+        var button = global.document.getElementById('reading-memorize-exit-btn');
+        if (button) {
+            button.hidden = !isActive;
+            button.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+            button.classList.toggle('is-active', isActive);
+        }
+        if (global.document.body) {
+            global.document.body.classList.toggle('reading-memorize-browse-active', isActive);
+        }
+    }
+
+    function setupReadingMemorizeExitButton() {
+        if (!global.document) {
+            return;
+        }
+        var button = global.document.getElementById('reading-memorize-exit-btn');
+        if (!button) {
+            return;
+        }
+        if (button.dataset.bound === 'true') {
+            syncReadingMemorizeBrowseModeUI();
+            return;
+        }
+        button.addEventListener('click', function handleExitClick(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            exitReadingMemorizeBrowseMode();
+        });
+        button.dataset.bound = 'true';
+        syncReadingMemorizeBrowseModeUI();
+    }
+
     function setReadingMemorizeBrowseMode(enabled) {
         global.__readingMemorizeBrowseMode = enabled === true;
         if (!global.__readingMemorizeBrowseMode && typeof global.__browseMemorizeFilterMode !== 'undefined') {
             global.__browseMemorizeFilterMode = null;
         }
+        syncReadingMemorizeBrowseModeUI();
+    }
+
+    function exitReadingMemorizeBrowseMode() {
+        setReadingMemorizeBrowseMode(false);
+        global.__browseMemorizeFilterMode = null;
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+
+        if (typeof global.resetBrowseViewToAll === 'function') {
+            try {
+                global.resetBrowseViewToAll();
+            } catch (error) {
+                console.warn('[AppActions] 退出阅读背题模式时重置浏览页失败:', error);
+            }
+        } else {
+            if (typeof global.setBrowseFilterState === 'function') {
+                try { global.setBrowseFilterState('all', 'all'); } catch (_) { }
+            }
+            if (typeof global.setBrowseTitle === 'function') {
+                try { global.setBrowseTitle('题库列表'); } catch (_) { }
+            }
+            if (typeof global.loadExamList === 'function') {
+                try { global.loadExamList(); } catch (_) { }
+            }
+        }
+
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('已退出阅读背题模式。', 'info');
+        }
     }
 
     function navigateToReadingMemorizeBrowse() {
+        setupReadingMemorizeExitButton();
         setReadingMemorizeBrowseMode(true);
         global.__browseMemorizeFilterMode = 'reading-memorize';
         global.__browseFilterMode = 'default';
@@ -1983,6 +2216,8 @@
         continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
         startReadingMemorize: startReadingMemorize,
+        exitReadingMemorizeBrowseMode: exitReadingMemorizeBrowseMode,
+        syncReadingMemorizeBrowseModeUI: syncReadingMemorizeBrowseModeUI,
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
@@ -1994,6 +2229,10 @@
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
     global.isReadingMemorizeCandidate = isReadingMemorizeCandidate;
+    global.isReadingMemorizeBrowseMode = isReadingMemorizeBrowseMode;
+    global.setReadingMemorizeBrowseMode = setReadingMemorizeBrowseMode;
+    global.exitReadingMemorizeBrowseMode = exitReadingMemorizeBrowseMode;
+    global.syncReadingMemorizeBrowseModeUI = syncReadingMemorizeBrowseModeUI;
     global.startReadingMemorize = startReadingMemorize;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;

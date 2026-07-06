@@ -12,11 +12,11 @@
 
 ## 项目概述
 
-IELTS Atlas 是一个面向雅思阅读与听力练习的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
+IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
 
-系统提供题库浏览、阅读练习、听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
+系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
 
-当前项目版本见 [package.json](package.json)：`0.3.1`。
+当前准备发布版本：`0.6.2-fix`。
 
 ## 快速开始
 
@@ -69,20 +69,20 @@ http://localhost:8000/
 
 ### 题库浏览与管理
 
-题库浏览是系统的核心入口。当前实现支持阅读与听力两类资源，并按题目元数据生成可检索、可筛选的题库列表。
+题库浏览是系统的核心入口。当前实现默认支持阅读资源；听力资源作为可选本地扩展接入，并按题目元数据生成可检索、可筛选的题库列表。
 
 主要能力包括：
 
-- 类型筛选：支持“全部”“阅读”“听力”等过滤方式。
+- 类型筛选：支持“全部”“阅读”“听力”等过滤方式；未配置听力扩展资源时，听力列表可能为空。
 - 分类筛选：支持按 P1、P2、P3 等分类查看题目。
 - 关键词搜索：支持按题目标题、文件名或元数据关键字检索。
 - 排序与状态：支持题库排序、练习状态展示和进度回显。
-- 资源区分：阅读资源主要来自生成后的阅读题库资产；听力资源可来自内置听力索引或用户导入的本地听力目录。
+- 资源区分：阅读资源主要来自生成后的阅读题库资产；听力资源来自用户自行配置的本地扩展索引或本地听力目录。
 - 题库导入：设置页提供“加载题库”入口，可通过文件夹选择器导入自定义阅读或听力资源。
 - 配置切换：设置页提供“题库配置切换”，用于在默认题库和导入题库配置之间切换。
 - 强制刷新：设置页提供“强制刷新题库”，用于重新同步当前题库索引和界面状态。
 
-题库索引不应手写维护。默认阅读与听力索引来自 `assets/generated/` 下的生成资产；用户导入题库时由浏览器侧扫描和标准化流程生成配置。
+题库索引不应手写维护。默认阅读索引来自 `assets/generated/` 下的生成资产；听力索引属于可选本地扩展资源，用户导入题库时由浏览器侧扫描和标准化流程生成配置。
 
 ### 阅读练习
 
@@ -106,7 +106,9 @@ assets/generated/reading-explanations/
 
 ### 听力练习
 
-听力练习通过听力索引和记录桥接模块接入。当前仓库包含听力生成索引：
+听力练习通过听力索引和记录桥接模块接入。出于版权合规考虑，公开仓库和普通发布包默认不包含听力音频、配套题源、PDF、完整 `ListeningPractice/` 目录或预生成听力索引。
+
+如需在个人本地环境启用听力练习，可自行准备听力资源，并按可选扩展路径放置生成索引：
 
 ```text
 assets/generated/listening-exams/manifest.js
@@ -115,13 +117,13 @@ assets/generated/listening-exams/listening-index.compat.js
 
 主要能力包括：
 
-- 支持从默认听力索引加载听力题目。
-- 支持用户通过题库加载流程导入本地听力资源。
+- 支持从本地扩展听力索引加载听力题目。
+- 支持用户通过题库加载流程导入自备本地听力资源。
 - 支持 P1-P4 听力目录结构。
 - 通过 `listening-record-bridge` 将听力练习结果转换为统一练习记录。
 - 在练习记录和统计系统中与阅读记录使用同一套数据管理流程。
 
-普通发布包默认不包含完整本地听力资源目录。需要随发布包包含 `ListeningPractice/P1-P4` 时，应使用 `INCLUDE_LOCAL_LISTENING=1` 进行打包。
+这些路径只表示扩展资源的约定位置。若公开包中不存在上述文件，这是预期行为，不代表仓库缺失。需要随个人自用发布包包含 `ListeningPractice/P1-P4` 时，应先在本地准备资源并使用 `INCLUDE_LOCAL_LISTENING=1` 进行打包。
 
 ### 套题练习模式
 
@@ -274,7 +276,7 @@ js/components/       设置、诊断、记录弹窗、题库状态等 UI 组件
 js/presentation/     导航、主题、更多工具、首页交互
 js/utils/            存储、答案匹配、导入导出、性能和 DOM 工具
 js/plugins/          主题和扩展桥接
-assets/generated/    生成后的阅读、听力题库索引、页面和解析资产
+assets/generated/    生成后的阅读题库索引、页面、解析资产，以及可选听力扩展索引
 assets/wordlists/    词汇数据
 developer/doc/Wiki/  架构文档、历史决策和模块说明
 developer/tests/     静态回归、E2E、工具脚本和测试报告
@@ -300,13 +302,13 @@ node scripts/build-bundles.mjs
 Linux / Git Bash：
 
 ```bash
-bash developer/release.sh 0.3.1
+bash developer/release.sh 0.6.2-fix
 ```
 
 Windows PowerShell：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.3.1
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
 ```
 
 输出位置：
@@ -319,17 +321,17 @@ dist/ielts-practice-{version}.zip
 
 ### 包含本地听力资源
 
-普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将本地听力资源打入发布包，使用：
+普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将自备本地听力资源打入个人自用发布包，使用：
 
 ```bash
-INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.3.1
+INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
 ```
 
 PowerShell：
 
 ```powershell
 $env:INCLUDE_LOCAL_LISTENING = "1"
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.3.1
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
 ```
 
 该模式要求存在：
@@ -432,13 +434,13 @@ assets/generated/reading-exams/
 assets/generated/reading-explanations/
 ```
 
-听力生成资产位于：
+可选听力扩展生成资产位于：
 
 ```text
 assets/generated/listening-exams/
 ```
 
-运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
+公开仓库和普通发布包可能不包含该目录。运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
 
 ## 常见问题
 
@@ -495,12 +497,13 @@ ReadingPractice/
 
 ### 听力题库不可见
 
-普通发布包可能不包含完整听力资源。检查：
+公开仓库和普通发布包默认不包含听力资源。若需要启用听力题库，请检查：
 
-1. 是否存在 `assets/generated/listening-exams/manifest.js`。
-2. 是否存在 `assets/generated/listening-exams/listening-index.compat.js`。
-3. 如需本地听力目录，发布时是否设置 `INCLUDE_LOCAL_LISTENING=1`。
-4. `ListeningPractice/P1-P4` 中是否存在实际资源。
+1. 是否已经自行准备本地听力资源。
+2. 是否存在 `assets/generated/listening-exams/manifest.js`。
+3. 是否存在 `assets/generated/listening-exams/listening-index.compat.js`。
+4. 如需本地听力目录，发布时是否设置 `INCLUDE_LOCAL_LISTENING=1`。
+5. `ListeningPractice/P1-P4` 中是否存在实际资源。
 
 ### 数据丢失或统计清零
 
