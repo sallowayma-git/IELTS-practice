@@ -1389,7 +1389,7 @@
 
         buildReplayResultsFromEntry: function (entry = {}) {
             const answers = this.normalizeReplayMap(entry.answers || {});
-            const correctAnswers = this.normalizeReplayMap(entry.correctAnswers || entry.correctAnswerMap || {});
+            const correctAnswers = this.normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
             const rawComparison = this.normalizeReplayMap(entry.answerComparison || {});
             const questionIds = new Set([
                 ...Object.keys(answers),
@@ -1409,12 +1409,11 @@
                 const userAnswer = Object.prototype.hasOwnProperty.call(item, 'userAnswer')
                     ? item.userAnswer
                     : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
-                const correctAnswer = Object.prototype.hasOwnProperty.call(item, 'correctAnswer')
-                    ? item.correctAnswer
-                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
-                const isCorrect = typeof item.isCorrect === 'boolean'
-                    ? item.isCorrect
-                    : this.compareAnswers(userAnswer, correctAnswer);
+                const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(correctAnswers, questionId);
+                const correctAnswer = hasCanonicalCorrectAnswer ? correctAnswers[questionId] : '';
+                const isCorrect = hasCanonicalCorrectAnswer
+                    ? this.compareAnswers(userAnswer, correctAnswer)
+                    : null;
                 answerComparison[questionId] = {
                     questionId,
                     userAnswer,
@@ -1430,9 +1429,13 @@
                 scoreInfo = {};
             }
             const derivedScore = this.calculateScoreFromComparison(answerComparison) || { correct: 0, total: questionIds.size, accuracy: 0, percentage: 0 };
-            scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : derivedScore.correct;
-            scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : derivedScore.total;
-            scoreInfo.accuracy = Number.isFinite(Number(scoreInfo.accuracy)) ? Number(scoreInfo.accuracy) : derivedScore.accuracy;
+            const hasCanonicalCorrectAnswers = Object.keys(correctAnswers).length > 0;
+            scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? derivedScore.correct : Number(scoreInfo.correct);
+            scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? derivedScore.total : Number(scoreInfo.total);
+            scoreInfo.accuracy = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.accuracy)) ? derivedScore.accuracy : Number(scoreInfo.accuracy);
+            scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+                ? derivedScore.percentage
+                : Number(scoreInfo.percentage);
             scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
                 ? Number(scoreInfo.percentage)
                 : Math.round(scoreInfo.accuracy * 100);
@@ -1528,6 +1531,98 @@
             document.head.appendChild(style);
         },
 
+        captureDraftHighlights: function () {
+            if (typeof window.getPracticeHighlights === 'function') {
+                try {
+                    const direct = window.getPracticeHighlights();
+                    return Array.isArray(direct) ? direct.slice() : [];
+                } catch (_) {
+                    // ignore highlight snapshot failures
+                }
+            }
+            const shared = window.__READING_HIGHLIGHT_SHARED__;
+            if (!shared || typeof shared.snapshotHighlights !== 'function') {
+                return [];
+            }
+            const rootsByScope = {
+                left: document.querySelector('#passage-left, .passage-left, #reading-passage, .reading-passage, #left-column, .left-column'),
+                groups: document.querySelector('#question-groups, .question-groups, #questions-container, .questions-container, #right-column, .right-column')
+            };
+            if (!rootsByScope.left && !rootsByScope.groups) {
+                return [];
+            }
+            try {
+                return shared.snapshotHighlights(rootsByScope);
+            } catch (_) {
+                return [];
+            }
+        },
+
+        captureDraftNoteText: function () {
+            if (typeof window.getNotesText === 'function') {
+                try {
+                    const direct = window.getNotesText();
+                    return typeof direct === 'string' ? direct : '';
+                } catch (_) {
+                    // ignore note snapshot failures
+                }
+            }
+            const noteField = document.querySelector(
+                '#notes-panel textarea, #notes-panel input[type="text"], #notes-panel input:not([type]), textarea[name="notes"], textarea[name="note"], input[name="notes"], input[name="note"]'
+            );
+            return noteField && typeof noteField.value === 'string' ? noteField.value : '';
+        },
+
+        captureDraftMarkedQuestions: function () {
+            if (typeof window.getPracticeMarkedQuestions === 'function') {
+                try {
+                    const direct = window.getPracticeMarkedQuestions();
+                    return Array.isArray(direct) ? direct.slice() : [];
+                } catch (_) {
+                    // ignore marked-question snapshot failures
+                }
+            }
+            return [];
+        },
+
+        buildPracticeDraftSnapshot: function (options = {}) {
+            if (options.collectAnswers !== false) {
+                this.collectAllAnswers();
+            }
+            const updatedAt = Number.isFinite(Number(options.updatedAt))
+                ? Number(options.updatedAt)
+                : Date.now();
+            return {
+                answers: Object.assign({}, this.answers),
+                highlights: this.captureDraftHighlights(),
+                noteText: this.captureDraftNoteText(),
+                scrollY: Number.isFinite(Number(window.scrollY)) ? Number(window.scrollY) : 0,
+                markedQuestions: this.captureDraftMarkedQuestions(),
+                updatedAt
+            };
+        },
+
+        buildReviewNavigatePayload: function (direction, options = {}) {
+            const draft = this.buildPracticeDraftSnapshot();
+            return {
+                direction,
+                examId: this.resolveExamId(),
+                sessionId: null,
+                reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
+                currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0,
+                suiteSessionId: this.suiteSessionId || (this.reviewContext && this.reviewContext.suiteSessionId) || null,
+                suiteReviewMode: this.suiteReviewMode === true,
+                finalizeOnNext: Boolean(options.finalizeOnNext),
+                draft,
+                draftUpdatedAt: draft.updatedAt,
+                answers: draft.answers,
+                highlights: draft.highlights,
+                noteText: draft.noteText,
+                scrollY: draft.scrollY,
+                markedQuestions: draft.markedQuestions
+            };
+        },
+
         ensureReviewNavBar: function () {
             if (this.reviewNavBarElement && this.reviewNavBarElement.isConnected) {
                 return this.reviewNavBarElement;
@@ -1551,15 +1646,9 @@
                 if (!direction) {
                     return;
                 }
-                this.sendMessage('REVIEW_NAVIGATE', {
-                    direction,
-                    sessionId: null,
-                    reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
-                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0,
-                    suiteSessionId: this.suiteSessionId || (this.reviewContext && this.reviewContext.suiteSessionId) || null,
-                    suiteReviewMode: this.suiteReviewMode === true,
+                this.sendMessage('REVIEW_NAVIGATE', this.buildReviewNavigatePayload(direction, {
                     finalizeOnNext: Boolean(direction === 'next' && bar.dataset && bar.dataset.finalizeOnNext === 'true')
-                });
+                }));
             });
             const header = document.querySelector('body > header') || document.querySelector('header');
             if (header) {
@@ -4056,6 +4145,13 @@
             const answerComparison = includeComparison
                 ? this.generateAnswerComparison()
                 : {};
+            const draftSnapshot = this.buildPracticeDraftSnapshot({
+                collectAnswers: false,
+                updatedAt: endTime
+            });
+            if (!Array.isArray(metadataPayload.markedQuestions) && draftSnapshot.markedQuestions.length) {
+                metadataPayload.markedQuestions = draftSnapshot.markedQuestions.slice();
+            }
 
             const payload = {
                 sessionId: this.sessionId,
@@ -4069,6 +4165,7 @@
                 effectiveEndTime: timing.effectiveEndTime,
                 answers: Object.assign({}, this.answers),
                 correctAnswers: Object.assign({}, this.correctAnswers),
+                correctAnswerMap: Object.assign({}, this.correctAnswers),
                 answerComparison: answerComparison,
                 interactions: Array.isArray(this.interactions) ? this.interactions.slice() : [],
                 scoreInfo: includeScore ? this.extractScore() : null,
@@ -4078,6 +4175,10 @@
                 url: window.location.href,
                 title: resolvedTitle,
                 allQuestionIds: this.captureQuestionSet().slice(),
+                highlights: draftSnapshot.highlights.slice(),
+                noteText: draftSnapshot.noteText,
+                scrollY: draftSnapshot.scrollY,
+                markedQuestions: draftSnapshot.markedQuestions.slice(),
                 metadata: metadataPayload
             };
 

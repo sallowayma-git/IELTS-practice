@@ -4,7 +4,7 @@
     const PATH_PROTOCOL_RE = /^(?:[a-z]+:)?\/\//i;
     const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
     const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-    const BASE_PREFIX_STORAGE_KEY = 'hp.basePrefix';
+    const BASE_PREFIX_STORAGE_KEY = 'resource.basePrefix';
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
@@ -323,7 +323,7 @@
         return withoutHash.split('?', 1)[0];
     }
 
-    function normalizeThemeBasePrefix(prefix) {
+    function normalizeBasePrefix(prefix) {
         if (prefix == null) {
             return './';
         }
@@ -344,8 +344,7 @@
                 'js/core/resourceCore.js',
                 'js/main.js',
                 'js/app.js',
-                'js/boot-fallbacks.js',
-                'js/plugins/hp/hp-path.js'
+                'js/boot-fallbacks.js'
             ];
 
             for (let i = scripts.length - 1; i >= 0; i -= 1) {
@@ -396,20 +395,20 @@
     }
 
     function getBasePrefix() {
-        const direct = normalizeThemeBasePrefix(global.HP_BASE_PREFIX);
+        const direct = normalizeBasePrefix(global.RESOURCE_BASE_PREFIX);
         if (direct && direct !== './') {
             return direct;
         }
 
-        const stored = normalizeThemeBasePrefix(loadStoredBasePrefix());
+        const stored = normalizeBasePrefix(loadStoredBasePrefix());
         if (stored && stored !== './') {
-            global.HP_BASE_PREFIX = stored;
+            global.RESOURCE_BASE_PREFIX = stored;
             return stored;
         }
 
-        const detected = normalizeThemeBasePrefix(detectScriptBasePrefix());
+        const detected = normalizeBasePrefix(detectScriptBasePrefix());
         if (detected && detected !== './') {
-            global.HP_BASE_PREFIX = detected;
+            global.RESOURCE_BASE_PREFIX = detected;
             return detected;
         }
 
@@ -417,10 +416,32 @@
     }
 
     function setBasePrefix(value) {
-        const normalized = normalizeThemeBasePrefix(value);
-        global.HP_BASE_PREFIX = normalized;
+        const normalized = normalizeBasePrefix(value);
+        global.RESOURCE_BASE_PREFIX = normalized;
         storeBasePrefix(normalized === './' ? '' : normalized);
         return normalized;
+    }
+
+    function resolveGeneratedReadingRuntimeUrl(exam, kind = 'html') {
+        if (!exam || kind === 'pdf') {
+            return '';
+        }
+        const manifest = global.__READING_EXAM_MANIFEST__;
+        const examId = exam.id || exam.examId || exam.dataKey || '';
+        const entry = manifest && examId ? manifest[examId] : null;
+        if (!entry || !entry.script) {
+            return '';
+        }
+        const resolvedDataKey = entry.dataKey || entry.examId || examId;
+        if (!resolvedDataKey) {
+            return '';
+        }
+        const params = new URLSearchParams();
+        if (examId) {
+            params.set('examId', String(examId));
+        }
+        params.set('dataKey', String(resolvedDataKey));
+        return `assets/generated/reading-exams/reading-practice-unified.html?${params.toString()}`;
     }
 
     function resolveExamBasePath(exam) {
@@ -477,6 +498,10 @@
             return '';
         }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const generatedReadingRuntimeUrl = resolveGeneratedReadingRuntimeUrl(exam, resourceKind);
+        if (generatedReadingRuntimeUrl) {
+            return generatedReadingRuntimeUrl;
+        }
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
                 const runtimeUrl = global.LibraryDiscovery.resolveRuntimeResource(exam, resourceKind);
@@ -497,7 +522,7 @@
         }
 
         // Support centralized PDF storage paths such as "ReadingPractice/PDF/*.pdf".
-        // These paths are repository-root relative and must not inherit cached HP_BASE_PREFIX.
+        // These paths are repository-root relative and must not inherit a cached base prefix.
         if (resourceKind === 'pdf' && /^readingpractice\/pdf\//i.test(normalizedFile)) {
             const rootedPdfPath = normalizedFile.replace(/^\/+/, '');
             const encodedPdfPath = encodePathSegments(rootedPdfPath);
@@ -654,6 +679,6 @@
         sanitizeFilename,
         encodePathSegments,
         detectScriptBasePrefix,
-        normalizeThemeBasePrefix
+        normalizeBasePrefix
     };
 })(typeof window !== 'undefined' ? window : globalThis);
