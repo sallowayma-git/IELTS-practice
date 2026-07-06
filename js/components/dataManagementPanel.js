@@ -30,7 +30,7 @@ class DataManagementPanel {
         this.isVisible = false;
         this.selectedFileContent = null;
         this.pendingImportMode = null;
-        
+
         this.initialize();
     }
 
@@ -42,7 +42,7 @@ class DataManagementPanel {
         this.bindEvents();
         this.loadDataStats();
         await this.loadHistory();
-        
+
         console.log('DataManagementPanel initialized');
     }
 
@@ -521,12 +521,12 @@ class DataManagementPanel {
     async loadDataStats() {
         try {
             const stats = await this.backupManager.getDataStats();
-            
+
             if (stats) {
                 document.getElementById('recordCount').textContent = stats.practiceRecords.count;
                 document.getElementById('totalTime').textContent = this.formatTime(stats.userStats.totalTimeSpent);
                 document.getElementById('avgScore').textContent = Math.round(stats.userStats.averageScore * 100) + '%';
-                
+
                 if (stats.storage) {
                     const usageKB = Math.round(stats.storage.used / 1024);
                     document.getElementById('storageUsage').textContent = `${usageKB} KB`;
@@ -547,10 +547,10 @@ class DataManagementPanel {
             const format = document.getElementById('exportFormat').value;
             const includeStats = document.getElementById('includeStats').checked;
             const includeBackups = document.getElementById('includeBackups').checked;
-            
+
             const startDate = document.getElementById('exportStartDate').value;
             const endDate = document.getElementById('exportEndDate').value;
-            
+
             const options = {
                 format,
                 includeStats,
@@ -562,10 +562,10 @@ class DataManagementPanel {
             }
 
             const exportResult = await this.backupManager.exportPracticeRecords(options);
-            
+
             // 下载文件
             this.downloadFile(exportResult.data, exportResult.filename, exportResult.mimeType);
-            
+
             this.hideProgress();
             this.showMessage('数据导出成功！', 'success');
             this.loadHistory();
@@ -588,7 +588,7 @@ class DataManagementPanel {
         if (file) {
             fileNameSpan.textContent = file.name;
             importBtn.disabled = false;
-            
+
             // 异步读取文件内容
             this.readFile(file).then(content => {
                 try {
@@ -692,7 +692,7 @@ class DataManagementPanel {
                 );
                 this.loadDataStats();
                 this.loadHistory();
-                
+
                 // 清空文件选择
                 fileInput.value = '';
                 document.getElementById('selectedFileName').textContent = '未选择文件';
@@ -759,7 +759,7 @@ class DataManagementPanel {
                 );
                 this.loadDataStats();
                 this.loadHistory();
-                
+
                 // 重置清理选项
                 document.querySelectorAll('.cleanup-checkboxes input[type="checkbox"]').forEach(cb => {
                     cb.checked = false;
@@ -900,7 +900,7 @@ class DataManagementPanel {
     updateCleanupButton() {
         const checkboxes = document.querySelectorAll('.cleanup-checkboxes input[type="checkbox"]');
         const cleanupBtn = document.querySelector('[data-action="cleanup"]');
-        
+
         const hasSelection = Array.from(checkboxes).some(cb => cb.checked);
         cleanupBtn.disabled = !hasSelection;
     }
@@ -911,7 +911,7 @@ class DataManagementPanel {
     showProgress(text) {
         const overlay = document.getElementById('progressOverlay');
         const progressText = document.getElementById('progressText');
-        
+
         progressText.textContent = text;
         overlay.style.display = 'flex';
     }
@@ -970,15 +970,15 @@ class DataManagementPanel {
     readFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            
+
             reader.onload = (e) => {
                 resolve(e.target.result);
             };
-            
+
             reader.onerror = () => {
                 reject(new Error('文件读取失败'));
             };
-            
+
             reader.readAsText(file);
         });
     }
@@ -1014,10 +1014,10 @@ class DataManagementPanel {
      */
     formatTime(seconds) {
         if (!seconds) return '0分钟';
-        
+
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
-        
+
         if (hours > 0) {
             return `${hours}小时${minutes}分钟`;
         } else {

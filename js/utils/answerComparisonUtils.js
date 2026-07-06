@@ -177,12 +177,12 @@
         }
 
         const collapsed = str.replace(/\s+/g, ' ').trim();
-        
+
         // 过滤 [object Object] 这样的无效字符串
         if (/^\[object\s/i.test(collapsed)) {
             return { display: null, normalized: null };
         }
-        
+
         const lowered = collapsed.toLowerCase();
 
         if (NO_ANSWER_MARKERS.has(lowered)) {
@@ -649,7 +649,7 @@
                 // 提取 URL 中的文件夹名称
                 const urlParts = urlPath.split('/').filter(Boolean);
                 const pathParts = itemPath.split('/').filter(Boolean);
-                
+
                 // 检查是否有共同的文件夹路径
                 for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
                     if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
@@ -692,7 +692,7 @@
                     return titleLookup.get(title);
                 }
             }
-            
+
             // 4. 模糊标题匹配（移除标签前缀后比较）
             for (const candidateTitle of candidateTitles) {
                 const match = indexes.find(item => {
@@ -701,7 +701,7 @@
                     // 移除标签前缀，如 "[听力全量-...] City Development" vs "City Development"
                     const cleanCandidate = candidateTitle.replace(/^\[.*?\]\s*/, '');
                     const cleanItem = itemTitle.replace(/^\[.*?\]\s*/, '');
-                    return cleanCandidate === cleanItem || 
+                    return cleanCandidate === cleanItem ||
                            (cleanCandidate.length > 5 && cleanItem.includes(cleanCandidate)) ||
                            (cleanItem.length > 5 && cleanCandidate.includes(cleanItem));
                 });
