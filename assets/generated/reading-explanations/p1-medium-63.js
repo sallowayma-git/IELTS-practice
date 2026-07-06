@@ -67,7 +67,7 @@
         {
           "questionNumber": 4,
           "questionId": "q4",
-          "text": "题目翻译：Clarence Birdseye 之前在澳大利亚食品行业工作过。\n答案：NOT GIVEN\n解析：定位第 7 段提到 Birdseye 在加拿大北极与因纽特人一起，但文中完全没有提及澳大利亚。文中只说他在加拿大的钓鱼之旅，没有提到澳大利亚食品业。"
+          "text": "题目翻译：Clarence Birdseye 之前在澳大利亚食品行业工作过。\n答案：NOT GIVEN\n解析：定位第 7 段。原文先说 \"frozen fish and other goods were transported by ship from Australia to England\"，后面又说 \"the modern frozen food industry was started in the 1920s by an American, Clarence Birdseye\"。文章分别提到澳大利亚冷冻运输和 Birdseye 的加拿大北极经历，但没有说明 Birdseye 曾在澳大利亚食品行业工作，因此是 NOT GIVEN。"
         },
         {
           "questionNumber": 5,

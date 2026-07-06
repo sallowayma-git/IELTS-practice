@@ -234,16 +234,7 @@
             session.lastUpdate = Date.now();
             this.updateExamStatus && this.updateExamStatus(examId, 'completed');
 
-            // Save draft snapshot for this passage
-            session.draftsByExam[examId] = {
-                answers: data.answers || {},
-                highlights: data.highlights || [],
-                noteText: typeof data.noteText === 'string' ? data.noteText : '',
-                scrollY: data.scrollY || 0,
-                updatedAt: Number.isFinite(Number(data && data.draftUpdatedAt))
-                    ? Number(data.draftUpdatedAt)
-                    : Date.now()
-            };
+            this._persistSuiteDraftSnapshot(session, examId, data);
             if (Number.isFinite(Number(data && data.duration))) {
                 session.elapsedByExam[examId] = derivedDuration;
             }
@@ -362,15 +353,18 @@
                         : Number(data.duration || 0)
                 }));
                 this._upsertSuiteResult(session, entryExamId, normalized);
-                session.draftsByExam[entryExamId] = {
-                    answers: entryPayload.answers || {},
-                    highlights: Array.isArray(entryPayload.highlights) ? entryPayload.highlights.slice() : [],
-                    noteText: typeof entryPayload.noteText === 'string' ? entryPayload.noteText : '',
-                    scrollY: Number.isFinite(Number(entryPayload.scrollY)) ? Number(entryPayload.scrollY) : 0,
-                    updatedAt: Number.isFinite(Number(entryPayload.updatedAt))
+                this._persistSuiteDraftSnapshot(session, entryExamId, {
+                    draft: {
+                        answers: entryPayload.answers || {},
+                        highlights: Array.isArray(entryPayload.highlights) ? entryPayload.highlights.slice() : [],
+                        noteText: typeof entryPayload.noteText === 'string' ? entryPayload.noteText : '',
+                        scrollY: Number.isFinite(Number(entryPayload.scrollY)) ? Number(entryPayload.scrollY) : 0,
+                        markedQuestions: Array.isArray(entryPayload.markedQuestions) ? entryPayload.markedQuestions.slice() : []
+                    },
+                    draftUpdatedAt: Number.isFinite(Number(entryPayload.updatedAt))
                         ? Number(entryPayload.updatedAt)
                         : Date.now()
-                };
+                });
                 const entryDuration = Number(entryPayload.duration);
                 if (Number.isFinite(entryDuration)) {
                     session.elapsedByExam[entryExamId] = Math.max(0, entryDuration);
@@ -435,6 +429,91 @@
             }
             const draft = session.draftsByExam[examId];
             return draft && typeof draft === 'object' ? draft : null;
+        },
+
+        _hasSuiteDraftPayload(data = {}) {
+            if (!data || typeof data !== 'object') {
+                return false;
+            }
+            if (data.draft && typeof data.draft === 'object' && !Array.isArray(data.draft)) {
+                return true;
+            }
+            return ['answers', 'highlights', 'noteText', 'scrollY', 'markedQuestions', 'draftUpdatedAt'].some((key) => (
+                Object.prototype.hasOwnProperty.call(data, key)
+            ));
+        },
+
+        _cloneSuiteDraftPlainObject(source) {
+            if (!source || typeof source !== 'object' || Array.isArray(source)) {
+                return {};
+            }
+            const SourceConstructor = typeof source.constructor === 'function'
+                ? source.constructor
+                : Object;
+            try {
+                return Object.assign(new SourceConstructor(), source);
+            } catch (_) {
+                return Object.assign({}, source);
+            }
+        },
+
+        _buildSuiteDraftSnapshot(data = {}) {
+            const draftSource = data && data.draft && typeof data.draft === 'object' && !Array.isArray(data.draft)
+                ? data.draft
+                : {};
+            const answerSource = draftSource.answers && typeof draftSource.answers === 'object' && !Array.isArray(draftSource.answers)
+                ? draftSource.answers
+                : (data && data.answers && typeof data.answers === 'object' && !Array.isArray(data.answers) ? data.answers : {});
+            const highlightSource = Array.isArray(draftSource.highlights)
+                ? draftSource.highlights
+                : (Array.isArray(data && data.highlights) ? data.highlights : []);
+            const noteTextSource = typeof draftSource.noteText === 'string'
+                ? draftSource.noteText
+                : (data && typeof data.noteText === 'string' ? data.noteText : '');
+            const scrollSource = Number.isFinite(Number(draftSource.scrollY))
+                ? Number(draftSource.scrollY)
+                : (Number.isFinite(Number(data && data.scrollY)) ? Number(data.scrollY) : 0);
+            const markedQuestionsSource = Array.isArray(draftSource.markedQuestions)
+                ? draftSource.markedQuestions
+                : (Array.isArray(data && data.markedQuestions) ? data.markedQuestions : []);
+            const updatedAt = Number(
+                data && (data.draftUpdatedAt ?? draftSource.updatedAt ?? data.updatedAt)
+            );
+            return {
+                answers: this._cloneSuiteDraftPlainObject(answerSource),
+                highlights: highlightSource.slice(),
+                noteText: noteTextSource,
+                scrollY: scrollSource,
+                markedQuestions: markedQuestionsSource.slice(),
+                updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now()
+            };
+        },
+
+        _persistSuiteDraftSnapshot(session, examId, data = {}) {
+            if (!session || !examId || !this._hasSuiteDraftPayload(data)) {
+                return false;
+            }
+            if (!session.draftsByExam || typeof session.draftsByExam !== 'object') {
+                session.draftsByExam = {};
+            }
+            const normalizedExamId = String(examId).trim();
+            if (!normalizedExamId) {
+                return false;
+            }
+            const nextDraft = this._buildSuiteDraftSnapshot(data);
+            const previousDraft = session.draftsByExam[normalizedExamId] || null;
+            const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
+            const nextUpdatedAt = Number(nextDraft.updatedAt);
+            if (
+                previousDraft
+                && Number.isFinite(previousUpdatedAt)
+                && Number.isFinite(nextUpdatedAt)
+                && nextUpdatedAt < previousUpdatedAt
+            ) {
+                return false;
+            }
+            session.draftsByExam[normalizedExamId] = nextDraft;
+            return true;
         },
 
         _buildSuiteSequencePayload(session) {
@@ -559,15 +638,19 @@
             if (!session || !Array.isArray(session.results)) {
                 return null;
             }
-            const result = session.results.find(item => item && item.examId === examId);
-            if (!result) {
+            const result = session.results.find(item => item && item.examId === examId) || null;
+            const draft = this._resolveSuiteEntryDraft(session, examId);
+            const sequenceEntry = Array.isArray(session.sequence)
+                ? session.sequence.find(item => item && item.examId === examId)
+                : null;
+            if (!result && !draft) {
                 return null;
             }
 
-            const answerComparison = result.answerComparison && typeof result.answerComparison === 'object'
+            const answerComparison = result && result.answerComparison && typeof result.answerComparison === 'object'
                 ? result.answerComparison
                 : {};
-            const answers = result.answers && typeof result.answers === 'object'
+            const answers = result && result.answers && typeof result.answers === 'object'
                 ? result.answers
                 : {};
 
@@ -600,17 +683,46 @@
                 filteredAnswers[questionId] = value;
             });
 
-            const draft = this._resolveSuiteEntryDraft(session, result.examId || examId);
+            if (draft && draft.answers && typeof draft.answers === 'object') {
+                Object.keys(draft.answers).forEach((questionId) => {
+                    if (Object.prototype.hasOwnProperty.call(filteredAnswers, questionId)) {
+                        return;
+                    }
+                    const value = draft.answers[questionId];
+                    if (!this._hasMeaningfulSuiteAnswer(value)) {
+                        return;
+                    }
+                    filteredAnswers[questionId] = value;
+                });
+            }
+
+            const highlights = this._resolveSuiteEntryHighlights(result, draft);
+            const noteText = this._resolveSuiteEntryNoteText(result, draft);
+            const scrollY = this._resolveSuiteEntryScrollY(result, draft);
+            const markedQuestions = result && Array.isArray(result.markedQuestions)
+                ? result.markedQuestions.slice()
+                : (draft && Array.isArray(draft.markedQuestions) ? draft.markedQuestions.slice() : []);
+            const hasReplayData = Boolean(
+                Object.keys(filteredAnswers).length
+                || Object.keys(filteredComparison).length
+                || markedQuestions.length
+                || highlights.length
+                || noteText
+                || (Number.isFinite(Number(scrollY)) && Number(scrollY) > 0)
+            );
+            if (!hasReplayData) {
+                return null;
+            }
             return {
-                examId: result.examId,
-                title: result.title,
+                examId: (result && result.examId) || examId,
+                title: (result && result.title) || (sequenceEntry && sequenceEntry.exam && sequenceEntry.exam.title) || examId,
                 answers: filteredAnswers,
                 answerComparison: filteredComparison,
-                scoreInfo: result.scoreInfo || {},
-                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : [],
-                highlights: this._resolveSuiteEntryHighlights(result, draft),
-                noteText: this._resolveSuiteEntryNoteText(result, draft),
-                scrollY: this._resolveSuiteEntryScrollY(result, draft)
+                scoreInfo: (result && result.scoreInfo) || {},
+                markedQuestions,
+                highlights,
+                noteText,
+                scrollY
             };
         },
 
@@ -670,13 +782,13 @@
                 return false;
             }
             try {
-                const shouldReplay = contextPayload.viewMode === 'review';
-                if (shouldReplay && replayEntry) {
+                if (replayEntry) {
                     resolvedWindow.postMessage({
                         type: 'REPLAY_PRACTICE_RECORD',
                         data: {
                             suiteSessionId: session.id,
-                            readOnly: true,
+                            reviewEntryIndex: contextPayload.currentIndex,
+                            readOnly: contextPayload.readOnly !== false,
                             markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
                             entry: replayEntry
                         }
@@ -801,6 +913,11 @@
             }
 
             session.activeExamId = examId;
+            const sessionIndex = session.sequence.findIndex(item => item && item.examId === examId);
+            if (sessionIndex >= 0) {
+                session.currentIndex = sessionIndex;
+                this._mirrorSessionToStorage(session);
+            }
             return this._sendSuiteReviewState(session, examId, resolvedWindow);
         },
 
@@ -824,6 +941,14 @@
             if (currentIndex < 0) {
                 return false;
             }
+            session.currentIndex = currentIndex;
+            session.activeExamId = examId;
+            this._persistSuiteDraftSnapshot(session, examId, data);
+            if (Number.isFinite(Number(data && data.elapsed))) {
+                session.elapsedByExam[examId] = this._deriveSuiteExamElapsedSeconds(session, examId, Number(data.elapsed));
+            }
+            this._syncSuiteTimerFromPayload(session, data);
+            this._mirrorSessionToStorage(session);
 
             const direction = String(data.direction || '').trim().toLowerCase();
             let targetIndex = currentIndex;
@@ -875,6 +1000,13 @@
             let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
 
             const isCrossExamNavigation = targetEntry.examId !== examId;
+            if (isCrossExamNavigation && typeof this.cleanupExamSession === 'function') {
+                try {
+                    await this.cleanupExamSession(examId);
+                } catch (cleanupError) {
+                    console.warn('[SuitePractice] review 跨篇切换清理旧会话失败:', cleanupError);
+                }
+            }
             if (isCrossExamNavigation || !targetWindow) {
                 targetWindow = await this.openExam(targetEntry.examId, {
                     target: 'tab',
@@ -894,7 +1026,10 @@
             }
 
             session.windowRef = targetWindow;
+            session.currentIndex = targetIndex;
             session.activeExamId = targetEntry.examId;
+            session.lastUpdate = Date.now();
+            this._mirrorSessionToStorage(session);
             this._focusSuiteWindow(targetWindow);
             if (isCrossExamNavigation) {
                 const ready = await this._waitForSuiteWindowExamReady(session, targetEntry.examId, targetWindow);
@@ -1230,24 +1365,7 @@
             session.simulationNavigateLocked = true;
             try {
 
-                // Save current draft before switching
-                if (data && data.draft) {
-                    const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
-                    const previousDraft = session.draftsByExam[normalizedExamId] || null;
-                    const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
-                    const shouldAcceptDraft = !(
-                        previousDraft
-                        && Number.isFinite(previousUpdatedAt)
-                        && Number.isFinite(incomingUpdatedAt)
-                        && incomingUpdatedAt < previousUpdatedAt
-                    );
-                    if (shouldAcceptDraft) {
-                        session.draftsByExam[normalizedExamId] = {
-                            ...data.draft,
-                            updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
-                        };
-                    }
-                }
+                this._persistSuiteDraftSnapshot(session, normalizedExamId, data);
                 if (data && typeof data.elapsed === 'number') {
                     session.elapsedByExam[normalizedExamId] = this._deriveSuiteExamElapsedSeconds(session, normalizedExamId, data.elapsed);
                 }

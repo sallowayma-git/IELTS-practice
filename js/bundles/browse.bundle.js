@@ -3104,23 +3104,146 @@
         }
     };
 
+    function getCompletionStatusDateValue(record, fallbackTimestamp) {
+        if (!record || typeof record !== 'object') {
+            return fallbackTimestamp > 0 ? new Date(fallbackTimestamp).toISOString() : null;
+        }
+        var realData = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var rawData = record.rawData && typeof record.rawData === 'object' ? record.rawData : {};
+        var metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var candidates = [
+            record.date, record.completedAt, record.endTime, record.startTime, record.startedAt,
+            record.timestamp, record.createdAt, record.updatedAt,
+            realData.date, realData.completedAt, realData.endTime, realData.startTime, realData.startedAt,
+            realData.timestamp, realData.createdAt, realData.updatedAt,
+            rawData.date, rawData.completedAt, rawData.endTime, rawData.startTime, rawData.startedAt,
+            rawData.timestamp, rawData.createdAt, rawData.updatedAt,
+            metadata.completedAt, metadata.startedAt, metadata.createdAt, metadata.updatedAt
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (candidate == null) {
+                continue;
+            }
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > 0) {
+                return new Date(candidate).toISOString();
+            }
+            var parsed = new Date(candidate).getTime();
+            if (!isNaN(parsed) && parsed > 0) {
+                return typeof candidate === 'string' ? candidate : new Date(parsed).toISOString();
+            }
+        }
+        return fallbackTimestamp > 0 ? new Date(fallbackTimestamp).toISOString() : null;
+    }
+
+    function buildComparableSuiteEntryRecord(parentRecord, entry) {
+        var metadata = entry && entry.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+        var rawData = entry && entry.rawData && typeof entry.rawData === 'object' ? entry.rawData : {};
+        var nestedRealData = rawData.realData && typeof rawData.realData === 'object' ? rawData.realData : {};
+        var realData = entry && entry.realData && typeof entry.realData === 'object'
+            ? entry.realData
+            : (Object.keys(nestedRealData).length ? nestedRealData : rawData);
+        return {
+            examId: entry && (entry.examId || metadata.examId || rawData.examId || realData.examId) || null,
+            title: entry && (entry.title || entry.examTitle || metadata.examTitle || rawData.title || rawData.examTitle || realData.title || realData.examTitle) || '',
+            examTitle: entry && (entry.examTitle || metadata.examTitle || rawData.examTitle || realData.examTitle) || '',
+            path: entry && (entry.path || entry.examPath || entry.resourcePath || rawData.path || rawData.examPath || realData.path || realData.examPath) || '',
+            examPath: entry && (entry.examPath || rawData.examPath || realData.examPath) || '',
+            resourcePath: entry && (entry.resourcePath || rawData.resourcePath || realData.resourcePath) || '',
+            filename: entry && (entry.filename || entry.examFile || entry.examFilename || rawData.filename || rawData.examFile || realData.filename || realData.examFile) || '',
+            examFile: entry && (entry.examFile || rawData.examFile || realData.examFile) || '',
+            examFilename: entry && (entry.examFilename || rawData.examFilename || realData.examFilename) || '',
+            percentage: entry && entry.percentage != null ? entry.percentage : undefined,
+            accuracy: entry && entry.accuracy != null ? entry.accuracy : undefined,
+            correctAnswers: entry && entry.correctAnswers != null ? entry.correctAnswers : undefined,
+            totalQuestions: entry && entry.totalQuestions != null ? entry.totalQuestions : undefined,
+            score: entry && entry.score != null ? entry.score : undefined,
+            total: entry && entry.total != null ? entry.total : undefined,
+            duration: entry && entry.duration != null
+                ? entry.duration
+                : (entry && entry.scoreInfo && entry.scoreInfo.duration != null
+                    ? entry.scoreInfo.duration
+                    : rawData.duration),
+            date: entry && entry.date != null ? entry.date : rawData.date,
+            completedAt: entry && entry.completedAt != null ? entry.completedAt : rawData.completedAt,
+            endTime: entry && entry.endTime != null ? entry.endTime : rawData.endTime,
+            startTime: entry && entry.startTime != null ? entry.startTime : rawData.startTime,
+            startedAt: entry && entry.startedAt != null ? entry.startedAt : rawData.startedAt,
+            timestamp: entry && entry.timestamp != null ? entry.timestamp : rawData.timestamp,
+            createdAt: entry && entry.createdAt != null ? entry.createdAt : rawData.createdAt,
+            updatedAt: entry && entry.updatedAt != null ? entry.updatedAt : rawData.updatedAt,
+            scoreInfo: entry && entry.scoreInfo && typeof entry.scoreInfo === 'object' ? entry.scoreInfo : {},
+            metadata: metadata,
+            rawData: rawData,
+            realData: realData,
+            __parentRecord: parentRecord || null
+        };
+    }
+
+    function buildCompletionStatusCandidate(record, fallbackRecord) {
+        var timestamp = getRecordTimestamp(record);
+        if (!(timestamp > 0) && fallbackRecord) {
+            timestamp = getRecordTimestamp(fallbackRecord);
+        }
+        var percentage = normalizePracticeTrendPercentage(record);
+        if (!Number.isFinite(percentage) && fallbackRecord) {
+            percentage = normalizePracticeTrendPercentage(fallbackRecord);
+        }
+        if (!Number.isFinite(percentage)) {
+            percentage = 0;
+        }
+        var boundedPercentage = Math.max(0, Math.min(100, percentage));
+        var duration = Number(record && record.duration != null
+            ? record.duration
+            : (record && record.scoreInfo && record.scoreInfo.duration != null
+                ? record.scoreInfo.duration
+                : (record && record.rawData && record.rawData.duration)));
+        if (!Number.isFinite(duration) && fallbackRecord) {
+            duration = Number(fallbackRecord.duration);
+        }
+        return {
+            percentage: boundedPercentage,
+            duration: Number.isFinite(duration) ? duration : 0,
+            date: getCompletionStatusDateValue(record, timestamp)
+                || (fallbackRecord ? getCompletionStatusDateValue(fallbackRecord, timestamp) : null),
+            timestamp: timestamp
+        };
+    }
+
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
         var source = (typeof global.getPracticeRecordsState === 'function')
             ? global.getPracticeRecordsState()
             : global.practiceRecords;
-        var records = ensureArray(source).filter(function (record) {
-            return recordMatchesExam(exam, record);
+        var statuses = [];
+        ensureArray(source).forEach(function collectStatus(record) {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            if (recordMatchesExam(exam, record)) {
+                statuses.push(buildCompletionStatusCandidate(record));
+            }
+            var suiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+            suiteEntries.forEach(function collectSuiteEntry(entry) {
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                var comparableEntry = buildComparableSuiteEntryRecord(record, entry);
+                if (recordMatchesExam(exam, comparableEntry)) {
+                    statuses.push(buildCompletionStatusCandidate(comparableEntry, record));
+                }
+            });
         });
-        if (records.length === 0) {
+        if (statuses.length === 0) {
             return null;
         }
-        records.sort(function (a, b) {
-            return getRecordTimestamp(b) - getRecordTimestamp(a);
+        statuses.sort(function (a, b) {
+            return b.timestamp - a.timestamp;
         });
-        var latest = records[0] || {};
+        var latest = statuses[0] || {};
         return {
             percentage: typeof latest.percentage === 'number' ? latest.percentage : 0,
-            date: latest.date || latest.endTime || latest.timestamp || latest.createdAt || null
+            date: latest.date || null,
+            duration: typeof latest.duration === 'number' ? latest.duration : 0
         };
     };
 
@@ -6852,6 +6975,9 @@
                     }
                 } catch (guardError) {
                     console.warn('[App] 题目窗口占位页守护失败:', guardError);
+                }
+                if (guardOptions.reuseWindow && examWindow && !examWindow.closed && typeof this._cleanupReusedWindowSessions === 'function') {
+                    await this._cleanupReusedWindowSessions(examWindow, examId);
                 }
 
                 // 再进行会话记录与脚本注入
@@ -10771,6 +10897,31 @@
         /**
          * 清理题目会话
          */
+        async _cleanupReusedWindowSessions(targetWindow, keepExamId = null) {
+            if (!targetWindow || !this.examWindows || typeof this.cleanupExamSession !== 'function') {
+                return [];
+            }
+            const normalizedKeepExamId = keepExamId != null ? String(keepExamId).trim() : '';
+            const staleExamIds = [];
+            this.examWindows.forEach((windowInfo, candidateExamId) => {
+                const normalizedCandidateExamId = candidateExamId != null ? String(candidateExamId).trim() : '';
+                if (!normalizedCandidateExamId || (normalizedKeepExamId && normalizedCandidateExamId === normalizedKeepExamId)) {
+                    return;
+                }
+                if (windowInfo && windowInfo.window === targetWindow) {
+                    staleExamIds.push(normalizedCandidateExamId);
+                }
+            });
+            for (const staleExamId of staleExamIds) {
+                try {
+                    await this.cleanupExamSession(staleExamId);
+                } catch (error) {
+                    console.warn('[App] 清理复用窗口旧题目会话失败:', staleExamId, error);
+                }
+            }
+            return staleExamIds;
+        },
+
         async cleanupExamSession(examId) {
             // 清理窗口引用
             if (this.examWindows && this.examWindows.has(examId)) {
@@ -12922,7 +13073,7 @@ window.BrowseStateManager = BrowseStateManager;
         if (/^[a-z]$/i.test(cleaned)) {
             return cleaned.toUpperCase();
         }
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }

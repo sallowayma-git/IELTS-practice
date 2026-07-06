@@ -86,6 +86,9 @@ function showThemeSwitcherModal() {
     const modal = document.getElementById('theme-switcher-modal');
     if (modal) {
         modal.classList.add('show');
+        if (typeof window !== 'undefined' && typeof window.__syncThemeScrollerButtons === 'function') {
+            window.requestAnimationFrame(window.__syncThemeScrollerButtons);
+        }
     }
 }
 
@@ -96,8 +99,62 @@ function hideThemeSwitcherModal() {
     }
 }
 
-// Initialize theme switcher when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+function syncThemeScrollerButtons() {
+    const scroller = document.getElementById('theme-options-scroller');
+    const prevButton = document.querySelector('[data-theme-scroll="prev"]');
+    const nextButton = document.querySelector('[data-theme-scroll="next"]');
+
+    if (!scroller || !prevButton || !nextButton) {
+        return;
+    }
+
+    const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const canScroll = maxScrollLeft > 8;
+    const isAtStart = scroller.scrollLeft <= 8;
+    const isAtEnd = scroller.scrollLeft >= maxScrollLeft - 8;
+
+    prevButton.hidden = !canScroll;
+    nextButton.hidden = !canScroll;
+    prevButton.disabled = !canScroll || isAtStart;
+    nextButton.disabled = !canScroll || isAtEnd;
+}
+
+function initializeThemeScrollerControls() {
+    const scroller = document.getElementById('theme-options-scroller');
+    const prevButton = document.querySelector('[data-theme-scroll="prev"]');
+    const nextButton = document.querySelector('[data-theme-scroll="next"]');
+
+    if (!scroller || !prevButton || !nextButton) {
+        return;
+    }
+
+    const scrollStep = function scrollStep() {
+        return Math.max(280, Math.round(scroller.clientWidth * 0.72));
+    };
+
+    prevButton.addEventListener('click', function() {
+        scroller.scrollBy({ left: -scrollStep(), behavior: 'smooth' });
+    });
+
+    nextButton.addEventListener('click', function() {
+        scroller.scrollBy({ left: scrollStep(), behavior: 'smooth' });
+    });
+
+    scroller.addEventListener('scroll', syncThemeScrollerButtons, { passive: true });
+    window.addEventListener('resize', syncThemeScrollerButtons);
+    syncThemeScrollerButtons();
+}
+
+function initializeThemeSwitcher() {
+    if (typeof window !== 'undefined' && window.__themeSwitcherInitialized) {
+        return;
+    }
+
+    if (typeof window !== 'undefined') {
+        window.__themeSwitcherInitialized = true;
+        window.__syncThemeScrollerButtons = syncThemeScrollerButtons;
+    }
+
     // Restore general theme
     try {
         const savedTheme = localStorage.getItem('theme');
@@ -123,4 +180,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-});
+
+    initializeThemeScrollerControls();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeThemeSwitcher, { once: true });
+} else {
+    initializeThemeSwitcher();
+}

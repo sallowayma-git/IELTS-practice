@@ -1,1 +1,19 @@
-developer/release.sh text eol=lf
+# Keep POSIX-oriented source and generated assets on LF across platforms.
+*.sh text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Keep this legacy mixed-EOL stylesheet stable to avoid noisy full-file diffs.
+css/main.css -text !eol
+
+# Keep Windows-native scripts on CRLF for local execution.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
