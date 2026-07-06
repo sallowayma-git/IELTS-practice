@@ -4,39 +4,105 @@
             this.repos = repositories;
         }
 
-        get practiceRepo() { return this.repos.practice; }
         get settingsRepo() { return this.repos.settings; }
         get backupRepo() { return this.repos.backups; }
         get metaRepo() { return this.repos.meta; }
 
+        isPracticeDataKey(key) {
+            return key === 'practice_records' || key === 'user_stats';
+        }
+
+        getPracticeRecordAPI() {
+            const api = window.PracticeRecordAPI;
+            if (!api) {
+                throw new Error('PracticeRecordAPI unavailable');
+            }
+            return api;
+        }
+
+        rejectPracticeDataWrite(methodName, targetName) {
+            throw new Error(`SimpleStorageWrapper.${methodName} is disabled; use ${targetName}`);
+        }
+
         async getPracticeRecords() {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
-                return await window.PracticeCore.store.listPracticeRecords();
+            const api = this.getPracticeRecordAPI();
+            if (typeof api.list !== 'function') {
+                throw new Error('PracticeRecordAPI.list unavailable');
             }
-            return await this.practiceRepo.list();
+            return await api.list();
         }
-        async savePracticeRecords(records) {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                return await window.PracticeCore.store.replacePracticeRecords(records, { maxRecords: this.practiceRepo.maxRecords || 1000 });
+
+        async savePracticeRecords() {
+            this.rejectPracticeDataWrite('savePracticeRecords', 'PracticeRecordAPI.replace');
+        }
+
+        async addPracticeRecord() {
+            this.rejectPracticeDataWrite('addPracticeRecord', 'PracticeRecordAPI.saveRecord');
+        }
+
+        async getById(id) {
+            const api = this.getPracticeRecordAPI();
+            if (typeof api.getById !== 'function') {
+                throw new Error('PracticeRecordAPI.getById unavailable');
             }
-            await this.practiceRepo.overwrite(records);
-            return true;
+            return await api.getById(id);
         }
-        async addPracticeRecord(record) {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                await window.PracticeCore.store.savePracticeRecord(record, { maxRecords: this.practiceRepo.maxRecords || 1000 });
-                return true;
+
+        async update() {
+            this.rejectPracticeDataWrite('update', 'PracticeRecordAPI.saveRecord');
+        }
+
+        async delete() {
+            this.rejectPracticeDataWrite('delete', 'PracticeRecordAPI.deleteById');
+        }
+
+        async deletePracticeRecord() {
+            this.rejectPracticeDataWrite('deletePracticeRecord', 'PracticeRecordAPI.deleteById');
+        }
+
+        async deletePracticeRecords() {
+            this.rejectPracticeDataWrite('deletePracticeRecords', 'PracticeRecordAPI.deleteMany');
+        }
+
+        async getPracticeRecordsCount() {
+            const records = await this.getPracticeRecords();
+            return Array.isArray(records) ? records.length : 0;
+        }
+
+        validatePracticeRecord(record) {
+            const errors = [];
+            if (!record || typeof record !== 'object') {
+                errors.push('记录必须是对象');
+            } else {
+                if (!record.id || typeof record.id !== 'string') {
+                    errors.push('记录缺少有效的 id');
+                }
+                if (!record.type || typeof record.type !== 'string') {
+                    errors.push('记录缺少有效的 type');
+                }
+                if (record.score === undefined || record.score === null || typeof record.score !== 'number') {
+                    errors.push('记录缺少有效的 score');
+                }
+                if (record.totalQuestions !== undefined && typeof record.totalQuestions !== 'number') {
+                    errors.push('totalQuestions 必须是数字');
+                }
+                if (record.correctAnswers !== undefined && typeof record.correctAnswers !== 'number') {
+                    errors.push('correctAnswers 必须是数字');
+                }
+                if (record.duration !== undefined && typeof record.duration !== 'number') {
+                    errors.push('duration 必须是数字');
+                }
+                if (!record.date) {
+                    errors.push('记录缺少有效的 date');
+                } else if (Number.isNaN(new Date(record.date).getTime())) {
+                    errors.push('date 格式无效');
+                }
             }
-            await this.practiceRepo.upsert(record);
-            return true;
+            return {
+                isValid: errors.length === 0,
+                errors
+            };
         }
-        async getById(id) { return await this.practiceRepo.getById(id); }
-        async update(id, updates) { return await this.practiceRepo.update(id, updates); }
-        async delete(id) { const removed = await this.practiceRepo.removeById(id); return removed > 0; }
-        async deletePracticeRecord(id) { return await this.delete(id); }
-        async deletePracticeRecords(ids) { return await this.practiceRepo.removeByIds(ids); }
-        async getPracticeRecordsCount() { return await this.practiceRepo.count(); }
-        validatePracticeRecord(record) { return this.practiceRepo.validatePracticeRecord(record); }
 
         async getUserSettings() { return await this.settingsRepo.getAll(); }
         async saveUserSettings(settings) { await this.settingsRepo.saveAll(settings); return true; }
@@ -49,9 +115,44 @@
         async deleteBackup(id) { return await this.backupRepo.delete(id); }
         async clearBackups() { await this.backupRepo.clear(); return true; }
 
-        async get(key, defaultValue = null) { return await this.metaRepo.get(key, defaultValue); }
-        async set(key, value) { await this.metaRepo.set(key, value); return true; }
-        async remove(key) { await this.metaRepo.remove(key); return true; }
+        async get(key, defaultValue = null) {
+            if (this.isPracticeDataKey(key)) {
+                const api = this.getPracticeRecordAPI();
+                if (key === 'practice_records') {
+                    if (typeof api.list !== 'function') {
+                        throw new Error('PracticeRecordAPI.list unavailable');
+                    }
+                    return await api.list();
+                }
+                if (typeof api.readStats !== 'function') {
+                    throw new Error('PracticeRecordAPI.readStats unavailable');
+                }
+                return await api.readStats({ fallback: defaultValue });
+            }
+            return await this.metaRepo.get(key, defaultValue);
+        }
+
+        async set(key, value) {
+            if (this.isPracticeDataKey(key)) {
+                if (key === 'practice_records') {
+                    this.rejectPracticeDataWrite('set(practice_records)', 'PracticeRecordAPI.replace');
+                }
+                this.rejectPracticeDataWrite('set(user_stats)', 'PracticeRecordAPI.writeStats');
+            }
+            await this.metaRepo.set(key, value);
+            return true;
+        }
+
+        async remove(key) {
+            if (this.isPracticeDataKey(key)) {
+                if (key === 'practice_records') {
+                    this.rejectPracticeDataWrite('remove(practice_records)', 'PracticeRecordAPI.clear');
+                }
+                this.rejectPracticeDataWrite('remove(user_stats)', 'PracticeRecordAPI.resetStats');
+            }
+            await this.metaRepo.remove(key);
+            return true;
+        }
     }
 
     function connectWrapper(repositories) {

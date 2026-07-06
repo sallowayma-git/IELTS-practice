@@ -11,6 +11,7 @@
         />
         <link rel="stylesheet" href="css/main.css" />
         <link rel="stylesheet" href="css/heroui-bridge.css" />
+        <link rel="stylesheet" href="css/theme-switcher-scroll.css" />
         <link rel="stylesheet" href="css/onboarding.css" />
     </head>
 
@@ -1163,7 +1164,22 @@
                 </div>
                 <div class="theme-modal-body">
                     <div class="theme-options-viewport" role="presentation">
-                        <div class="theme-options-glass">
+                        <button
+                            class="theme-scroll-btn theme-scroll-btn-prev"
+                            type="button"
+                            data-theme-scroll="prev"
+                            aria-label="向左滚动主题列表"
+                            aria-controls="theme-options-scroller"
+                        >
+                            <span
+                                class="theme-scroll-btn__glyph"
+                                aria-hidden="true"
+                            ></span>
+                        </button>
+                        <div
+                            class="theme-options-glass"
+                            id="theme-options-scroller"
+                        >
                             <!-- 晨雾群山 -->
                             <div class="theme-card">
                                 <div class="theme-card-bg theme-bg-misty"></div>
@@ -1283,6 +1299,18 @@
                                             data-index-action="switch-bg-theme"
                                             data-action-value="ascii-flower" > 应用 </button> </div> </div> </div>
                         </div>
+                        <button
+                            class="theme-scroll-btn theme-scroll-btn-next"
+                            type="button"
+                            data-theme-scroll="next"
+                            aria-label="向右滚动主题列表"
+                            aria-controls="theme-options-scroller"
+                        >
+                            <span
+                                class="theme-scroll-btn__glyph"
+                                aria-hidden="true"
+                            ></span>
+                        </button>
                     </div>
                 </div>
             </div>

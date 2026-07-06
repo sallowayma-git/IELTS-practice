@@ -212,7 +212,8 @@ async function run() {
     const recordId = await suiteRecord.getAttribute('data-record-id');
     if (!recordId) throw new Error('Suite practice record not found in history list');
     const suiteDuration = await page.evaluate(async (id) => {
-      const records = await window.storage.get('practice_records', []);
+      if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') return -1;
+      const records = await window.PracticeRecordAPI.list();
       const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;
       return target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;
     }, recordId);
@@ -221,8 +222,8 @@ async function run() {
     }
 
     const recordCountBefore = await page.evaluate(async () => {
-      if (window.storage && typeof window.storage.get === 'function') {
-        const records = await window.storage.get('practice_records', []);
+      if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+        const records = await window.PracticeRecordAPI.list();
         return Array.isArray(records) ? records.length : 0;
       }
       return document.querySelectorAll('#history-list .history-record-item').length;
@@ -336,8 +337,8 @@ async function run() {
     await page.waitForTimeout(800);
 
     const recordCountAfter = await page.evaluate(async () => {
-      if (window.storage && typeof window.storage.get === 'function') {
-        const records = await window.storage.get('practice_records', []);
+      if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+        const records = await window.PracticeRecordAPI.list();
         return Array.isArray(records) ? records.length : 0;
       }
       return document.querySelectorAll('#history-list .history-record-item').length;

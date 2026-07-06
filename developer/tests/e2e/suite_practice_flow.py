@@ -424,8 +424,8 @@ async def _verify_popstate_back_guard(suite_page: Page) -> bool:
 async def _count_practice_records(page: Page) -> int:
     return await page.evaluate(
         "async () => {\n"
-        "  if (window.storage && typeof window.storage.get === 'function') {\n"
-        "    const records = await window.storage.get('practice_records', []);\n"
+        "  if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {\n"
+        "    const records = await window.PracticeRecordAPI.list();\n"
         "    return Array.isArray(records) ? records.length : 0;\n"
         "  }\n"
         "  return document.querySelectorAll('#history-list .history-record-item').length;\n"
@@ -464,11 +464,11 @@ async def _suite_record_stats(page: Page) -> Dict[str, int]:
         "      toFiniteNumber(record.timestamp)\n"
         "    );\n"
         "  };\n"
-        "  if (!window.storage || typeof window.storage.get !== 'function') {\n"
+        "  if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') {\n"
         "    const fallbackCount = document.querySelectorAll('#history-list .history-record-item').length;\n"
         "    return { count: Number(fallbackCount) || 0, latestTs: 0 };\n"
         "  }\n"
-        "  const records = await window.storage.get('practice_records', []);\n"
+        "  const records = await window.PracticeRecordAPI.list();\n"
         "  if (!Array.isArray(records)) {\n"
         "    return { count: 0, latestTs: 0 };\n"
         "  }\n"
@@ -706,13 +706,12 @@ async def run() -> None:
             if not record_id:
                 raise AssertionError("Suite practice record not found in history list")
             suite_duration = await page.evaluate(
-                "(id) => {\n"
-                "  if (!window.storage || typeof window.storage.get !== 'function') return -1;\n"
-                "  return window.storage.get('practice_records', []).then((records) => {\n"
+                "async (id) => {\n"
+                "  if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') return -1;\n"
+                "  const records = await window.PracticeRecordAPI.list();\n"
                 "    const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;\n"
                 "    const value = target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;\n"
                 "    return value;\n"
-                "  });\n"
                 "}",
                 record_id,
             )

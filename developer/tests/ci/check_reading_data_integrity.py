@@ -23,6 +23,14 @@ def norm_text(value: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\u4e00-\u9fa5]+", " ", value.lower())).strip()
 
 
+def extract_registered_payload(path: Path):
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r'register\("[^"]+",\s*(\{[\s\S]*\})\s*\)\s*;?\s*\}', text)
+    if not match:
+        return None
+    return json.loads(match.group(1))
+
+
 def extract_field(pattern: str, text: str) -> str:
     match = re.search(pattern, text, flags=re.MULTILINE)
     return match.group(1).strip() if match else ""
@@ -45,6 +53,8 @@ def main() -> int:
     duplicates = {}
     missing_pdf_ref = []
     malformed_pdf_ref = []
+    parse_failures = []
+    paragraph_match_text_inputs = []
 
     seen = {}
     for path in files:
@@ -66,6 +76,27 @@ def main() -> int:
                 missing_pdf_ref.append(exam_id or path.stem)
             elif not shui_pdf.endswith(".pdf"):
                 malformed_pdf_ref.append({"examId": exam_id or path.stem, "shuiPdf": shui_pdf})
+
+        payload = extract_registered_payload(path)
+        if payload is None:
+            parse_failures.append(exam_id or path.stem)
+            continue
+
+        for group in payload.get("questionGroups") or []:
+            body_html = str(group.get("bodyHtml") or "")
+            if (
+                re.search(r"Which\s+(?:paragraph|section)\s+contains the following information\?", body_html, flags=re.IGNORECASE)
+                and re.search(r"Write the correct letter", body_html, flags=re.IGNORECASE)
+                and re.search(r'type=["\']text["\']', body_html, flags=re.IGNORECASE)
+            ):
+                paragraph_match_text_inputs.append(
+                    {
+                        "examId": exam_id or path.stem,
+                        "groupId": group.get("groupId"),
+                        "kind": group.get("kind"),
+                        "questionIds": group.get("questionIds") or [],
+                    }
+                )
 
     duplicate_entries = []
     duplicate_allowlisted = []
@@ -89,11 +120,19 @@ def main() -> int:
         "blockingDuplicates": duplicate_blocking,
         "missingPdfRef": missing_pdf_ref,
         "malformedPdfRef": malformed_pdf_ref,
+        "parseFailures": parse_failures,
+        "paragraphMatchTextInputs": paragraph_match_text_inputs,
     }
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    fatal_issue = bool(missing_pdf_ref or malformed_pdf_ref or duplicate_blocking)
+    fatal_issue = bool(
+        missing_pdf_ref
+        or malformed_pdf_ref
+        or duplicate_blocking
+        or parse_failures
+        or paragraph_match_text_inputs
+    )
     if fatal_issue:
         print("[reading-data-integrity] fatal issues found")
     elif duplicate_entries:

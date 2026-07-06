@@ -808,6 +808,106 @@ function sortQuestionIds(questionIds) {
     });
 }
 
+function expandLetterRange(startLetter, endLetter) {
+    const start = String(startLetter || '').toUpperCase().charCodeAt(0);
+    const end = String(endLetter || '').toUpperCase().charCodeAt(0);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end - start > 25) {
+        return [];
+    }
+    const letters = [];
+    for (let code = start; code <= end; code += 1) {
+        letters.push(String.fromCharCode(code));
+    }
+    return letters;
+}
+
+function extractParagraphMatchLetters(groupHtml) {
+    const html = groupHtml || '';
+    const match = html.match(/<strong>\s*([A-Z])\s*[–-]\s*([A-Z])\s*<\/strong>/i)
+        || html.match(/\b([A-Z])\s*[–-]\s*([A-Z])\b/);
+    if (!match) {
+        return [];
+    }
+    return expandLetterRange(match[1], match[2]);
+}
+
+function isParagraphLetterSelectionGroup(groupHtml) {
+    const html = groupHtml || '';
+    return /Which\s+(?:paragraph|section)\s+contains the following information\?/i.test(html)
+        && /Write the correct letter/i.test(html)
+        && /type=["']text["']/i.test(html);
+}
+
+function rewriteParagraphLetterSelectionGroup(groupHtml) {
+    if (!isParagraphLetterSelectionGroup(groupHtml)) {
+        return groupHtml;
+    }
+
+    const letters = extractParagraphMatchLetters(groupHtml);
+    if (!letters.length) {
+        return groupHtml;
+    }
+
+    const questionItemPattern = /<div[^>]*>\s*<p>([\s\S]*?)<input[^>]*name=["'](q\d+)["'][^>]*>\s*<\/p>\s*<\/div>|<div[^>]*>\s*<p>([\s\S]*?)<\/p>\s*<input[^>]*name=["'](q\d+)["'][^>]*>[\s\S]*?<\/div>/gi;
+    const questionItems = Array.from(groupHtml.matchAll(questionItemPattern));
+    if (!questionItems.length) {
+        return groupHtml;
+    }
+
+    const wrapperMatch = groupHtml.match(/<div class="group"([^>]*)>/i);
+    const headingMatch = groupHtml.match(/<h4>[\s\S]*?<\/h4>/i);
+    const firstQuestionIndex = typeof questionItems[0].index === 'number' ? questionItems[0].index : -1;
+    if (!wrapperMatch || !headingMatch || firstQuestionIndex === -1) {
+        return groupHtml;
+    }
+
+    const wrapperAttributes = wrapperMatch[1] || '';
+    const headingHtml = headingMatch[0];
+    const introHtml = groupHtml
+        .slice((headingMatch.index || 0) + headingHtml.length, firstQuestionIndex)
+        .trim();
+
+    const headerCells = letters.map((letter) => `<th>${letter}</th>`).join('');
+    const rowsHtml = questionItems.map((match) => {
+        const promptHtml = (match[1] || match[3] || '').trim();
+        const questionId = match[2] || match[4] || '';
+        const prompt = promptHtml.replace(/\s+/g, ' ');
+        const optionCells = letters
+            .map((letter) => `<td><input type="radio" name="${questionId}" value="${letter}"></td>`)
+            .join('');
+        return [
+            '                            <tr>',
+            `                                <td>${prompt}</td>`,
+            `                                ${optionCells}`,
+            '                            </tr>'
+        ].join('\n');
+    }).join('\n');
+
+    return [
+        `<div class="group"${wrapperAttributes}>`,
+        `                ${headingHtml}`,
+        introHtml ? `                ${introHtml}` : null,
+        '                <div style="overflow-x: auto;">',
+        '                    <table class="matching-table">',
+        '                        <thead>',
+        '                            <tr>',
+        '                                <th></th>',
+        `                                ${headerCells}`,
+        '                            </tr>',
+        '                        </thead>',
+        '                        <tbody>',
+        rowsHtml,
+        '                        </tbody>',
+        '                    </table>',
+        '                </div>',
+        '            </div>'
+    ].filter(Boolean).join('\n');
+}
+
+function normalizeQuestionGroupHtml(groupHtml) {
+    return rewriteParagraphLetterSelectionGroup(groupHtml);
+}
+
 function detectGroupKind(groupHtml) {
     const html = groupHtml || '';
     if (/paragraph-dropzone|match-dropzone|drag-item|headings-pool|options-pool/i.test(html)) {
@@ -959,7 +1059,7 @@ function buildQuestionGroups(groupBlocks, introHtml, answerKey, originalToIntern
     const groups = [];
     let introAttached = false;
     for (let index = 0; index < groupBlocks.length; index += 1) {
-        const bodyHtml = rewriteQuestionReferences(groupBlocks[index], renumberMap);
+        const bodyHtml = normalizeQuestionGroupHtml(rewriteQuestionReferences(groupBlocks[index], renumberMap));
         const htmlQuestionIds = extractQuestionIdsFromHtml(bodyHtml);
         const headingQuestionIds = inferQuestionIdsFromHeading(groupBlocks[index], originalToInternalMap);
         const finalQuestionIds = sortQuestionIds([...htmlQuestionIds, ...headingQuestionIds])
@@ -1026,7 +1126,7 @@ function buildQuestionGroupsLegacy(groupBlocks, introHtml, answerKey) {
     const groups = [];
     let introAttached = false;
     for (let index = 0; index < groupBlocks.length; index += 1) {
-        const bodyHtml = groupBlocks[index];
+        const bodyHtml = normalizeQuestionGroupHtml(groupBlocks[index]);
         const questionIds = extractQuestionIdsFromHtml(bodyHtml);
         const filteredQuestionIds = questionIds.length
             ? questionIds.filter((questionId) => Object.prototype.hasOwnProperty.call(answerKey, questionId) || /-/.test(questionId))
@@ -1491,4 +1591,13 @@ function main() {
     process.stdout.write(`Generated ${sourceRecords.length} reading exam assets. Failed: ${failures.length}.\n`);
 }
 
-main();
+export {
+    detectGroupKind,
+    extractParagraphMatchLetters,
+    isParagraphLetterSelectionGroup,
+    normalizeQuestionGroupHtml
+};
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+    main();
+}
