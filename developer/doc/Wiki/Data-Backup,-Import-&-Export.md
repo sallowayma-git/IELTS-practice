@@ -184,7 +184,7 @@ The JSON export produces a structured payload with metadata:
 {
   "exportInfo": {
     "timestamp": "2024-01-15T10:30:00.000Z",
-    "version": "1.0.0",
+    "version": "0.6.2-fix",
     "format": "json",
     "recordCount": 150,
     "options": { /* export options */ }

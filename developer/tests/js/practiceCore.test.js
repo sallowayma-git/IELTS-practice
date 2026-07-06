@@ -218,7 +218,7 @@ async function testPracticeRecordApiContract(sandbox, PracticeCore, practiceStat
         category: 'P2',
         frequency: 'high',
         type: 'reading'
-    }, { currentVersion: '1.0.0', maxRecords: 1000 });
+    }, { currentVersion: '0.6.2-fix', maxRecords: 1000 });
 
     assert(saved, 'saveCompletion 应返回已保存记录');
     assert.strictEqual(saved.examId, 'reading-p2');
@@ -350,8 +350,8 @@ async function testPracticeRecordApiStatsIdempotency(sandbox, practiceState, met
         type: 'reading'
     };
 
-    await api.saveCompletion(payload, context, examEntry, { currentVersion: '1.0.0', maxRecords: 1000, updateStats: true });
-    await api.saveCompletion(payload, context, examEntry, { currentVersion: '1.0.0', maxRecords: 1000, updateStats: true });
+    await api.saveCompletion(payload, context, examEntry, { currentVersion: '0.6.2-fix', maxRecords: 1000, updateStats: true });
+    await api.saveCompletion(payload, context, examEntry, { currentVersion: '0.6.2-fix', maxRecords: 1000, updateStats: true });
 
     assert.strictEqual(practiceState.length, 1, '重复 completion 只能保留一条 canonical 记录');
     const stats = metaState.get('user_stats');
@@ -385,7 +385,7 @@ async function testNumericCorrectAnswersRemainScoreCount(PracticeCore) {
             correctAnswers: 7
         }
     }, {
-        currentVersion: '1.0.0',
+        currentVersion: '0.6.2-fix',
         generateRecordId: () => 'record-generated-should-not-be-used'
     });
 
@@ -418,7 +418,7 @@ async function testObjectCorrectAnswersBecomeCorrectAnswerMap(PracticeCore) {
         correctAnswers: { 1: 'A', 2: 'C' },
         metadata: { examTitle: 'Object Correct Answers', category: 'P1', frequency: 'low', type: 'reading' }
     }, {
-        currentVersion: '1.0.0',
+        currentVersion: '0.6.2-fix',
         generateRecordId: () => 'record-generated-should-not-be-used'
     });
 
@@ -455,7 +455,7 @@ async function testSuiteEntryCorrectAnswerMapSurvives(PracticeCore) {
         ],
         metadata: { examTitle: 'Suite Parent', category: 'suite', frequency: 'suite', type: 'reading' }
     }, {
-        currentVersion: '1.0.0',
+        currentVersion: '0.6.2-fix',
         generateRecordId: () => 'record-generated-should-not-be-used'
     });
 
@@ -488,7 +488,7 @@ async function testCanonicalCorrectAnswerMapWinsOverLegacyObjects(PracticeCore) 
         },
         metadata: { examTitle: 'Canonical Correct Map', category: 'P1', frequency: 'low', type: 'reading' }
     }, {
-        currentVersion: '1.0.0',
+        currentVersion: '0.6.2-fix',
         generateRecordId: () => 'record-generated-should-not-be-used'
     });
 
@@ -535,7 +535,7 @@ async function testSuiteEntryDerivesCorrectAnswerMapFromComparison(PracticeCore)
         ],
         metadata: { examTitle: 'Suite Parent Derived', category: 'suite', frequency: 'suite', type: 'reading' }
     }, {
-        currentVersion: '1.0.0',
+        currentVersion: '0.6.2-fix',
         generateRecordId: () => 'record-generated-should-not-be-used'
     });
 

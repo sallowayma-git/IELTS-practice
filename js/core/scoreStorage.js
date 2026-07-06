@@ -19,7 +19,7 @@ class ScoreStorage {
             backupData: 'manual_backups'
         };
 
-        this.currentVersion = '1.0.0';
+        this.currentVersion = '0.6.2-fix';
         this.maxRecords = 1000;
         this.storage = this.createStorageAdapter();
         if (typeof window !== 'undefined') {

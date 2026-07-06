@@ -5,7 +5,7 @@
 #
 # 用法:
 #   bash developer/release.sh            # 生成 dist/ielts-practice-{version}.zip
-#   bash developer/release.sh 1.0.0      # 指定版本号
+#   bash developer/release.sh 0.6.2-fix  # 指定版本号
 #
 # 功能:
 #   1. 运行 node scripts/build-bundles.mjs 生成 js/bundles/*.bundle.js

@@ -449,7 +449,7 @@
         return JSON.stringify({
             data,
             timestamp: Date.now(),
-            version: '1.0.0',
+            version: '0.6.2-fix',
             compressed: false
         });
     }

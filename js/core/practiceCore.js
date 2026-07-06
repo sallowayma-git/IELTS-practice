@@ -1123,7 +1123,7 @@
                 })
                 : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,
-            version: options.currentVersion || recordData.version || '1.0.0',
+            version: options.currentVersion || recordData.version || '0.6.2-fix',
             createdAt: firstDateCandidate(recordData.createdAt, recordData.startTime, recordData.start_time, recordDate) || now,
             updatedAt: firstDateCandidate(recordData.updatedAt, recordData.endTime, recordData.end_time, now) || now
         };
@@ -1774,7 +1774,7 @@
     async function routeStorageSet(storageManager, key, value, options = {}) {
         if (key === STORAGE_KEYS.practiceRecords) {
             return await replacePracticeRecords(value, {
-                currentVersion: options.currentVersion || '1.0.0',
+                currentVersion: options.currentVersion || '0.6.2-fix',
                 maxRecords: options.maxRecords || 1000,
                 storageManager
             });
@@ -1867,7 +1867,7 @@
 
     const practiceCore = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         contracts,
         protocol,
         ingestor,

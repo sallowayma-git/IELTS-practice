@@ -4094,7 +4094,7 @@
                     examEntry: exam,
                     metadata
                 }, exam, {
-                    currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0',
+                    currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '0.6.2-fix',
                     maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000,
                     updateStats: true
                 });

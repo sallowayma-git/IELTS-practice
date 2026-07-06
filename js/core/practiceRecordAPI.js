@@ -1,7 +1,7 @@
 (function initPracticeRecordAPI(global) {
     'use strict';
 
-    const DEFAULT_VERSION = '1.0.0';
+    const DEFAULT_VERSION = '0.6.2-fix';
     const DEFAULT_MAX_RECORDS = 1000;
 
     if (global.PracticeRecordAPI && global.PracticeRecordAPI.__stable === true) {
@@ -845,7 +845,7 @@
 
     global.PracticeRecordAPI = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         list,
         listSummary,
         count,

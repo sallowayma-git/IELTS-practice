@@ -4,7 +4,7 @@ Path: developer/release.ps1
 
 Usage:
   powershell -ExecutionPolicy Bypass -File developer/release.ps1
-  powershell -ExecutionPolicy Bypass -File developer/release.ps1 1.0.0
+  powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
 
 Output:
   dist/ielts-practice-{version}.zip

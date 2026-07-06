@@ -3844,7 +3844,7 @@ class ScoreStorage {
             backupData: 'manual_backups'
         };
 
-        this.currentVersion = '1.0.0';
+        this.currentVersion = '0.6.2-fix';
         this.maxRecords = 1000;
         this.storage = this.createStorageAdapter();
         if (typeof window !== 'undefined') {
@@ -5828,7 +5828,7 @@ window.ScoreStorage = ScoreStorage;
 
 
 /* ===== js/core/practiceRecorder.js ===== */
-const PRACTICE_RECORDER_EXPORT_VERSION = '1.0.0';
+const PRACTICE_RECORDER_EXPORT_VERSION = '0.6.2-fix';
 
 /**
  * 练习记录管理器
@@ -7280,7 +7280,7 @@ class PracticeRecorder {
             metadata,
 
             // 系统信息
-            version: '1.0.0',
+            version: '0.6.2-fix',
             createdAt: recordData.createdAt || now,
             updatedAt: now
         };

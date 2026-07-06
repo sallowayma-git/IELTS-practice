@@ -1141,7 +1141,7 @@ async function savePracticeCompletionRecord(examId, realData) {
                 type: exam.type || realData.type || null
             }
         }, exam, {
-            currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0',
+            currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '0.6.2-fix',
             maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000,
             updateStats: true
         });

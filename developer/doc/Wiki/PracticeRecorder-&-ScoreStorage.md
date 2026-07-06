@@ -821,7 +821,7 @@ end
 
 ```yaml
 {
-  version: '1.0.0',
+  version: '0.6.2-fix',
   savedBy: 'fallback',              // Indicates fallback save path
   fallbackReason: 'ScoreStorage unavailable'
 }

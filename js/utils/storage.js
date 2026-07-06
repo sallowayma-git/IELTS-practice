@@ -21,7 +21,7 @@ const hasInternalAccessOptions = (options = {}) => {
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
-        this.version = '1.0.0';
+        this.version = '0.6.2-fix';
         this.localStorageAvailable = false;
         this.sessionStorageAvailable = false;
         this.backendPreferenceKey = this.prefix + 'storage_backend';

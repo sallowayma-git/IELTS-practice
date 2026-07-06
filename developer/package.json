@@ -1,6 +1,6 @@
 {
   "name": "ielts-practice-developer",
-  "version": "1.0.0",
+  "version": "0.6.2-fix",
   "description": "Development and testing dependencies for IELTS Practice",
   "private": true,
   "type": "module",

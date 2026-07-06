@@ -7,7 +7,7 @@ class DataIntegrityManager {
     constructor(options = {}) {
         this.backupInterval = 600000; // 10分钟自动备份
         this.maxBackups = 5; // 最多保留5个备份（减少占用）
-        this.dataVersion = '1.0.0';
+        this.dataVersion = '0.6.2-fix';
         this.backupTimer = null;
         this.validationRules = new Map();
         this.repositories = null;

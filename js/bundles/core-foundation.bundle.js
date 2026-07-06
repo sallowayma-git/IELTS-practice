@@ -390,7 +390,7 @@ const hasInternalAccessOptions = (options = {}) => {
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
-        this.version = '1.0.0';
+        this.version = '0.6.2-fix';
         this.localStorageAvailable = false;
         this.sessionStorageAvailable = false;
         this.backendPreferenceKey = this.prefix + 'storage_backend';
@@ -4155,7 +4155,7 @@ storageManager.ready
             normalized.id = normalized.id ? String(normalized.id) : `backup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
-            normalized.version = normalized.version || '1.0.0';
+            normalized.version = normalized.version || '0.6.2-fix';
             normalized.data = normalized.data || {};
             normalized.size = normalized.size || JSON.stringify(normalized.data).length;
             return normalized;
@@ -5706,7 +5706,7 @@ storageManager.ready
                 })
                 : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,
-            version: options.currentVersion || recordData.version || '1.0.0',
+            version: options.currentVersion || recordData.version || '0.6.2-fix',
             createdAt: firstDateCandidate(recordData.createdAt, recordData.startTime, recordData.start_time, recordDate) || now,
             updatedAt: firstDateCandidate(recordData.updatedAt, recordData.endTime, recordData.end_time, now) || now
         };
@@ -6357,7 +6357,7 @@ storageManager.ready
     async function routeStorageSet(storageManager, key, value, options = {}) {
         if (key === STORAGE_KEYS.practiceRecords) {
             return await replacePracticeRecords(value, {
-                currentVersion: options.currentVersion || '1.0.0',
+                currentVersion: options.currentVersion || '0.6.2-fix',
                 maxRecords: options.maxRecords || 1000,
                 storageManager
             });
@@ -6450,7 +6450,7 @@ storageManager.ready
 
     const practiceCore = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         contracts,
         protocol,
         ingestor,
@@ -6496,7 +6496,7 @@ storageManager.ready
 (function initPracticeRecordAPI(global) {
     'use strict';
 
-    const DEFAULT_VERSION = '1.0.0';
+    const DEFAULT_VERSION = '0.6.2-fix';
     const DEFAULT_MAX_RECORDS = 1000;
 
     if (global.PracticeRecordAPI && global.PracticeRecordAPI.__stable === true) {
@@ -7340,7 +7340,7 @@ storageManager.ready
 
     global.PracticeRecordAPI = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         list,
         listSummary,
         count,
@@ -8090,7 +8090,7 @@ storageManager.ready
 
     global.ResourceCore = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         RAW_DEFAULT_PATH_MAP,
         DEFAULT_PATH_MAP,
         PATH_MAP_STORAGE_PREFIX,

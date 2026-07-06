@@ -653,7 +653,7 @@
 
     global.ResourceCore = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         RAW_DEFAULT_PATH_MAP,
         DEFAULT_PATH_MAP,
         PATH_MAP_STORAGE_PREFIX,

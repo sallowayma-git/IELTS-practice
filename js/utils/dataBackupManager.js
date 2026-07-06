@@ -194,7 +194,7 @@ class DataBackupManager {
         const exportPayload = {
             exportInfo: {
                 timestamp: new Date().toISOString(),
-                version: '1.0.0',
+                version: '0.6.2-fix',
                 format: normalizedFormat,
                 recordCount: practiceRecords.length,
                 options: { format, includeStats, includeBackups, dateRange, categories }

@@ -350,7 +350,7 @@ async function testLegacyDataMethodsUseUnifiedAdapters(PracticeRecorder, windowS
     assert.deepStrictEqual(loadedStats, stats, 'getUserStats 应通过 PracticeRecordAPI.readStats');
 
     const exported = JSON.parse(await recorder.exportData('json'));
-    assert.strictEqual(exported.version, '1.0.0', 'JSON 导出应使用稳定导出版本');
+    assert.strictEqual(exported.version, '0.6.2-fix', 'JSON 导出应使用稳定导出版本');
     assert.deepStrictEqual(exported.practiceRecords, records, 'JSON 导出应通过 PracticeRecordAPI.list');
     assert.deepStrictEqual(exported.userStats, stats, 'JSON 导出应通过 PracticeRecordAPI.readStats');
 

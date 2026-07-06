@@ -170,7 +170,7 @@ async function writeRawPracticeRecords(harness, records) {
     harness.localStorage.setItem('exam_system_practice_records', JSON.stringify({
         data: records,
         timestamp: Date.now(),
-        version: '1.0.0',
+        version: '0.6.2-fix',
         compressed: false
     }));
 }
