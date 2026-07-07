@@ -61,6 +61,36 @@ http://localhost:8000/
 
 公开部署前请重新阅读顶部使用声明。部署可行不等于适合公开传播，尤其不要将包含题源的网页用于商业化、宣传或大规模分发。
 
+### 可选多设备后端部署
+
+如果需要在手机、平板和桌面浏览器之间共享练习记录，可以使用 `backend/` 中的轻量后端。该模式使用单一应用入口、PostgreSQL 和浏览器 session 保存同一账号的练习记录，适合个人 NAS、小型自托管服务器或只在可信局域网内使用的环境。
+
+Docker Compose 快速启动：
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+# 编辑 backend\.env，至少替换 POSTGRES_PASSWORD 和 SESSION_SECRET
+docker compose --env-file backend\.env -f backend\docker-compose.yml up --build
+```
+
+如果不使用 Docker，需要先准备 PostgreSQL，然后运行：
+
+```powershell
+npm --prefix backend install
+npm --prefix backend run migrate
+npm --prefix backend start
+```
+
+默认只暴露一个应用服务：`http://127.0.0.1:3000/`。如果需要在局域网访问，可以在确认防火墙、访问范围和反向代理设置后，将 `APP_BIND_ADDRESS` 改为合适的监听地址。`REGISTRATION_MODE=first-user` 会限制只有第一个账号可以自行注册；创建账号后可改为 `disabled`。
+
+可选 Tor hidden service 使用同一个后端应用入口，不需要拆分 auth、admin 或 business 域名：
+
+```powershell
+docker compose --profile onion --env-file backend\.env -f backend\docker-compose.yml up --build
+```
+
+该轻量后端不包含管理员页面、TOTP、独立认证域、多个 public URL 或多层代理架构。普通静态模式仍可继续直接打开 `index.html` 使用。
+
 ## 功能说明
 
 ### 学习总览
@@ -531,4 +561,3 @@ ReadingPractice/
 代码许可证见 [LICENSE](LICENSE)。使用、修改和再分发代码时，应遵守许可证条款。
 
 题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有。本项目不授予这些内容的商业使用权或公开传播权。使用者应自行承担因复制、部署、传播或商业化使用相关内容产生的法律和平台风险。
-
