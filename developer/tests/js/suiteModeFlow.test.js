@@ -52,6 +52,7 @@ function createStubWindow(name) {
 
 async function main() {
     const storageState = new Map();
+    const practiceRecords = [];
     const storage = {
         async get(key, fallback = undefined) {
             if (storageState.has(key)) {
@@ -97,6 +98,30 @@ async function main() {
     };
 
     windowStub.storage = storage;
+    windowStub.PracticeRecordAPI = {
+        async list() {
+            return deepClone(practiceRecords);
+        },
+        async saveRecord(record) {
+            practiceRecords.unshift(deepClone(record));
+            return deepClone(record);
+        },
+        async deleteMany(ids) {
+            const targets = new Set((Array.isArray(ids) ? ids : []).map((id) => String(id)));
+            let deleted = 0;
+            for (let index = practiceRecords.length - 1; index >= 0; index -= 1) {
+                const record = practiceRecords[index];
+                if (record && targets.has(String(record.id || record.sessionId || ''))) {
+                    practiceRecords.splice(index, 1);
+                    deleted += 1;
+                }
+            }
+            return { deleted };
+        },
+        async recalculateStats() {
+            return { totalPractices: practiceRecords.length };
+        }
+    };
     windowStub.CustomEvent = function CustomEvent(type, init = {}) {
         return { type, detail: init.detail || null };
     };
@@ -161,7 +186,6 @@ async function main() {
 
     await storage.set('exam_index', examIndex);
     await storage.set('active_exam_index_key', 'exam_index');
-    await storage.set('practice_records', []);
     await storage.set('active_sessions', []);
 
     const mixins = windowStub.ExamSystemAppMixins;
@@ -322,9 +346,9 @@ async function main() {
     assert.strictEqual(handledP3, true, 'P3 完成后应顺利收尾');
     assert.strictEqual(app.currentSuiteSession, null, '套题会话应在完成后被清理');
 
-    const practiceRecords = await storage.get('practice_records', []);
-    assert.strictEqual(practiceRecords.length, 1, '应只生成一条套题练习记录');
-    assert.strictEqual(practiceRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
+    const savedPracticeRecords = await windowStub.PracticeRecordAPI.list();
+    assert.strictEqual(savedPracticeRecords.length, 1, '应只生成一条套题练习记录');
+    assert.strictEqual(savedPracticeRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
 
     const completionMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('套题练习已完成'));
     assert(completionMessage, '应提示套题练习完成');

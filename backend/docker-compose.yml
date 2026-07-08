@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ielts-practice-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ielts_practice
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ielts_practice"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: ielts-practice-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ielts_practice
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in backend/.env}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-first-user}
+      PORT: 3000
+      HOST: 0.0.0.0
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  tor:
+    profiles:
+      - onion
+    build:
+      context: ./tor
+      dockerfile: Dockerfile
+    container_name: ielts-practice-tor
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - tor_hidden_service:/var/lib/tor/hidden_service
+    tmpfs:
+      - /run/tor:rw,noexec,nosuid,nodev,size=1m,mode=750
+
+volumes:
+  postgres_data:
+  tor_hidden_service:

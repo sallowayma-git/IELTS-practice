@@ -37,17 +37,33 @@
         if (!record || typeof record !== 'object') {
             return 0;
         }
-        var candidates = [
-            record.date, record.startTime, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
-            record.completedAt, record.startedAt
-        ];
         var rd = record.realData || {};
         var metadata = record.metadata || {};
-        candidates.push(
-            rd.date, rd.startTime, rd.endTime, rd.timestamp, rd.createdAt, rd.completedAt,
-            metadata.startedAt, metadata.completedAt, metadata.createdAt
-        );
 
+        // 优先取“练习发生时间”：date/completedAt/startTime/endTime 才代表用户真正做题的时刻。
+        // updatedAt/createdAt 是落库/迁移时间，每次重新保存都会被刷新为当下，会让历史记录全部塌缩到今天，
+        // 因此只在缺失练习时间字段时才作为兜底，避免污染热力图的按日聚合。
+        var practiceTimeCandidates = [
+            record.date, record.completedAt, record.startTime, record.endTime, record.startedAt,
+            rd.date, rd.completedAt, rd.startTime, rd.endTime,
+            metadata.completedAt, metadata.startedAt
+        ];
+        var maxTs = pickMaxTimestamp(practiceTimeCandidates);
+        if (maxTs > 0) {
+            return maxTs;
+        }
+
+        // 兜底：拿不到练习发生时间时，再回退到 record.timestamp / createdAt / updatedAt 等记账字段，
+        // 以便旧数据（仅含 timestamp）仍能参与聚合。
+        var fallbackCandidates = [
+            record.timestamp, record.createdAt, record.updatedAt,
+            rd.timestamp, rd.createdAt,
+            metadata.createdAt
+        ];
+        return pickMaxTimestamp(fallbackCandidates);
+    }
+
+    function pickMaxTimestamp(candidates) {
         var maxTs = 0;
         for (var i = 0; i < candidates.length; i += 1) {
             var candidate = candidates[i];
@@ -1094,7 +1110,8 @@
         this.records = [];
         this.exams = [];
         this.examType = 'all';
-        this.activeWidget = options.defaultWidget || 'heatmap';
+        // 优先沿用用户上次选中的组件；显式传入 defaultWidget 时只作为兜底。
+        this.activeWidget = loadPersistedPracticeWidget() || options.defaultWidget || 'heatmap';
         this.heatmapMonth = normalizePracticeHeatmapMonth(options.defaultHeatmapMonth || new Date());
         this.bound = false;
         this.resizeHandler = null;
@@ -1151,6 +1168,7 @@
     PracticePriorityRenderer.prototype.setWidget = function setWidget(widget) {
         if (!widget) return;
         this.activeWidget = widget;
+        persistPracticeWidget(widget);
         this.render();
     };
 
@@ -1525,6 +1543,36 @@
     function addPracticeHeatmapMonths(value, offset) {
         var month = normalizePracticeHeatmapMonth(value);
         return new Date(month.getFullYear(), month.getMonth() + offset, 1);
+    }
+
+    // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达）持久化，
+    // 刷新或重开页面后沿用用户上次的选中组件，而不是总回到默认的热力图。
+    var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';
+    var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar'];
+
+    function loadPersistedPracticeWidget() {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) {
+                return null;
+            }
+            var value = localStorage.getItem(PRACTICE_WIDGET_PREFERENCE_KEY);
+            return SUPPORTED_PRACTICE_WIDGETS.indexOf(value) >= 0 ? value : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function persistPracticeWidget(widget) {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) {
+                return;
+            }
+            if (SUPPORTED_PRACTICE_WIDGETS.indexOf(widget) >= 0) {
+                localStorage.setItem(PRACTICE_WIDGET_PREFERENCE_KEY, widget);
+            }
+        } catch (_) {
+            /* 持久化失败不影响渲染 */
+        }
     }
 
     function resolvePracticeHeatmapLevel(count, avg) {
@@ -2437,6 +2485,30 @@
         return maxTs;
     };
 
+    historyRenderer.helpers.getRecordsSignatureText = function (value) {
+        if (value == null) return '';
+        return String(value);
+    };
+
+    historyRenderer.helpers.computeSuiteEntriesSignature = function (record) {
+        var entries = record && Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+        return entries.map(function (entry, index) {
+            if (!entry || typeof entry !== 'object') {
+                return 'idx' + index;
+            }
+            var entryTitle = entry.title || entry.examTitle || (entry.metadata && entry.metadata.examTitle) || '';
+            var entryExamId = entry.examId || (entry.metadata && entry.metadata.examId) || entry.id || '';
+            var entryPct = Number(entry.percentage || (entry.scoreInfo && entry.scoreInfo.percentage)) || 0;
+            var entryDuration = Number(entry.duration || (entry.rawData && entry.rawData.duration)) || 0;
+            return [
+                historyRenderer.helpers.getRecordsSignatureText(entryExamId),
+                historyRenderer.helpers.getRecordsSignatureText(entryTitle),
+                entryPct,
+                entryDuration
+            ].join(',');
+        }).join('|');
+    };
+
     historyRenderer.helpers.computeRecordsSignature = function (records) {
         var list = Array.isArray(records) ? records : [];
         var tokens = list.map(function (record, index) {
@@ -2444,7 +2516,16 @@
             var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
             var pct = Number(record && record.percentage) || 0;
             var dur = Number(record && record.duration) || 0;
-            return id + ':' + ts + ':' + pct + ':' + dur;
+            var title = record && (record.title || record.examTitle || (record.metadata && record.metadata.examTitle)) || '';
+            var suiteEntries = historyRenderer.helpers.computeSuiteEntriesSignature(record);
+            return JSON.stringify([
+                historyRenderer.helpers.getRecordsSignatureText(id),
+                ts,
+                pct,
+                dur,
+                historyRenderer.helpers.getRecordsSignatureText(title),
+                suiteEntries
+            ]);
         });
         return list.length + '|' + tokens.join(';');
     };
@@ -3020,23 +3101,146 @@
         }
     };
 
+    function getCompletionStatusDateValue(record, fallbackTimestamp) {
+        if (!record || typeof record !== 'object') {
+            return fallbackTimestamp > 0 ? new Date(fallbackTimestamp).toISOString() : null;
+        }
+        var realData = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var rawData = record.rawData && typeof record.rawData === 'object' ? record.rawData : {};
+        var metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var candidates = [
+            record.date, record.completedAt, record.endTime, record.startTime, record.startedAt,
+            record.timestamp, record.createdAt, record.updatedAt,
+            realData.date, realData.completedAt, realData.endTime, realData.startTime, realData.startedAt,
+            realData.timestamp, realData.createdAt, realData.updatedAt,
+            rawData.date, rawData.completedAt, rawData.endTime, rawData.startTime, rawData.startedAt,
+            rawData.timestamp, rawData.createdAt, rawData.updatedAt,
+            metadata.completedAt, metadata.startedAt, metadata.createdAt, metadata.updatedAt
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (candidate == null) {
+                continue;
+            }
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > 0) {
+                return new Date(candidate).toISOString();
+            }
+            var parsed = new Date(candidate).getTime();
+            if (!isNaN(parsed) && parsed > 0) {
+                return typeof candidate === 'string' ? candidate : new Date(parsed).toISOString();
+            }
+        }
+        return fallbackTimestamp > 0 ? new Date(fallbackTimestamp).toISOString() : null;
+    }
+
+    function buildComparableSuiteEntryRecord(parentRecord, entry) {
+        var metadata = entry && entry.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+        var rawData = entry && entry.rawData && typeof entry.rawData === 'object' ? entry.rawData : {};
+        var nestedRealData = rawData.realData && typeof rawData.realData === 'object' ? rawData.realData : {};
+        var realData = entry && entry.realData && typeof entry.realData === 'object'
+            ? entry.realData
+            : (Object.keys(nestedRealData).length ? nestedRealData : rawData);
+        return {
+            examId: entry && (entry.examId || metadata.examId || rawData.examId || realData.examId) || null,
+            title: entry && (entry.title || entry.examTitle || metadata.examTitle || rawData.title || rawData.examTitle || realData.title || realData.examTitle) || '',
+            examTitle: entry && (entry.examTitle || metadata.examTitle || rawData.examTitle || realData.examTitle) || '',
+            path: entry && (entry.path || entry.examPath || entry.resourcePath || rawData.path || rawData.examPath || realData.path || realData.examPath) || '',
+            examPath: entry && (entry.examPath || rawData.examPath || realData.examPath) || '',
+            resourcePath: entry && (entry.resourcePath || rawData.resourcePath || realData.resourcePath) || '',
+            filename: entry && (entry.filename || entry.examFile || entry.examFilename || rawData.filename || rawData.examFile || realData.filename || realData.examFile) || '',
+            examFile: entry && (entry.examFile || rawData.examFile || realData.examFile) || '',
+            examFilename: entry && (entry.examFilename || rawData.examFilename || realData.examFilename) || '',
+            percentage: entry && entry.percentage != null ? entry.percentage : undefined,
+            accuracy: entry && entry.accuracy != null ? entry.accuracy : undefined,
+            correctAnswers: entry && entry.correctAnswers != null ? entry.correctAnswers : undefined,
+            totalQuestions: entry && entry.totalQuestions != null ? entry.totalQuestions : undefined,
+            score: entry && entry.score != null ? entry.score : undefined,
+            total: entry && entry.total != null ? entry.total : undefined,
+            duration: entry && entry.duration != null
+                ? entry.duration
+                : (entry && entry.scoreInfo && entry.scoreInfo.duration != null
+                    ? entry.scoreInfo.duration
+                    : rawData.duration),
+            date: entry && entry.date != null ? entry.date : rawData.date,
+            completedAt: entry && entry.completedAt != null ? entry.completedAt : rawData.completedAt,
+            endTime: entry && entry.endTime != null ? entry.endTime : rawData.endTime,
+            startTime: entry && entry.startTime != null ? entry.startTime : rawData.startTime,
+            startedAt: entry && entry.startedAt != null ? entry.startedAt : rawData.startedAt,
+            timestamp: entry && entry.timestamp != null ? entry.timestamp : rawData.timestamp,
+            createdAt: entry && entry.createdAt != null ? entry.createdAt : rawData.createdAt,
+            updatedAt: entry && entry.updatedAt != null ? entry.updatedAt : rawData.updatedAt,
+            scoreInfo: entry && entry.scoreInfo && typeof entry.scoreInfo === 'object' ? entry.scoreInfo : {},
+            metadata: metadata,
+            rawData: rawData,
+            realData: realData,
+            __parentRecord: parentRecord || null
+        };
+    }
+
+    function buildCompletionStatusCandidate(record, fallbackRecord) {
+        var timestamp = getRecordTimestamp(record);
+        if (!(timestamp > 0) && fallbackRecord) {
+            timestamp = getRecordTimestamp(fallbackRecord);
+        }
+        var percentage = normalizePracticeTrendPercentage(record);
+        if (!Number.isFinite(percentage) && fallbackRecord) {
+            percentage = normalizePracticeTrendPercentage(fallbackRecord);
+        }
+        if (!Number.isFinite(percentage)) {
+            percentage = 0;
+        }
+        var boundedPercentage = Math.max(0, Math.min(100, percentage));
+        var duration = Number(record && record.duration != null
+            ? record.duration
+            : (record && record.scoreInfo && record.scoreInfo.duration != null
+                ? record.scoreInfo.duration
+                : (record && record.rawData && record.rawData.duration)));
+        if (!Number.isFinite(duration) && fallbackRecord) {
+            duration = Number(fallbackRecord.duration);
+        }
+        return {
+            percentage: boundedPercentage,
+            duration: Number.isFinite(duration) ? duration : 0,
+            date: getCompletionStatusDateValue(record, timestamp)
+                || (fallbackRecord ? getCompletionStatusDateValue(fallbackRecord, timestamp) : null),
+            timestamp: timestamp
+        };
+    }
+
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
         var source = (typeof global.getPracticeRecordsState === 'function')
             ? global.getPracticeRecordsState()
             : global.practiceRecords;
-        var records = ensureArray(source).filter(function (record) {
-            return recordMatchesExam(exam, record);
+        var statuses = [];
+        ensureArray(source).forEach(function collectStatus(record) {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            if (recordMatchesExam(exam, record)) {
+                statuses.push(buildCompletionStatusCandidate(record));
+            }
+            var suiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+            suiteEntries.forEach(function collectSuiteEntry(entry) {
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                var comparableEntry = buildComparableSuiteEntryRecord(record, entry);
+                if (recordMatchesExam(exam, comparableEntry)) {
+                    statuses.push(buildCompletionStatusCandidate(comparableEntry, record));
+                }
+            });
         });
-        if (records.length === 0) {
+        if (statuses.length === 0) {
             return null;
         }
-        records.sort(function (a, b) {
-            return getRecordTimestamp(b) - getRecordTimestamp(a);
+        statuses.sort(function (a, b) {
+            return b.timestamp - a.timestamp;
         });
-        var latest = records[0] || {};
+        var latest = statuses[0] || {};
         return {
             percentage: typeof latest.percentage === 'number' ? latest.percentage : 0,
-            date: latest.date || latest.endTime || latest.timestamp || latest.createdAt || null
+            date: latest.date || null,
+            duration: typeof latest.duration === 'number' ? latest.duration : 0
         };
     };
 

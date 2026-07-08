@@ -143,7 +143,7 @@
         },
         {
           "questionNumber": 40,
-          "text": "(6) 题目 40：Various uses including the mapping of 40 \\___\\___ by state cartographers （各种用途，包括由国家制图师绘制40 \\___\\___的地图）\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。",
+          "text": "(6) 题目 40：Various uses including the mapping of 40 \\___\\___ by state cartographers （各种用途，包括由国家制图师绘制40 \\___\\___的地图）\n答案：North America\n解析：定位第10段前半句。原文：\"By the 20th century, Mercator's Projection had been adopted by state cartographers to map the land that he had named 'North America'.\" 题干中的 \"by state cartographers\" 对应这一句；后面的 Britain 只是 1938 年英国地形测量局的另一个应用例子，不是本空答案。",
           "questionId": "q14"
         }
       ],
@@ -151,7 +151,7 @@
         "start": 35,
         "end": 40
       },
-      "text": "答案：two-dimensional\n解析：定位第5段。原文：\"converting the spherical globe into a two-dimensional map\"（将球形地球转换为二维地图）。\n答案：straight line\n解析：定位第5段末尾。原文：\"how could the course of a ship... be represented as a straight line\"（如何将船的航线……表示为一条直线？）。这里讨论的是当时未解决的问题（Could not be shown）。\n答案：areal distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。\n答案：polar regions\n解析：定位第6段。原文：\"the polar regions occupied the full width of the map\"（极地地区占据了地图的全部宽度）。\n答案：navigation\n解析：定位第7段。原文：\"the map's title explaining that it was intended 'for use in navigation'\"（地图的标题解释说它是为了“用于航海”）。\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。"
+      "text": "答案：two-dimensional\n解析：定位第5段。原文：\"converting the spherical globe into a two-dimensional map\"（将球形地球转换为二维地图）。\n答案：straight line\n解析：定位第5段末尾。原文：\"how could the course of a ship... be represented as a straight line\"（如何将船的航线……表示为一条直线？）。这里讨论的是当时未解决的问题（Could not be shown）。\n答案：areal distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。\n答案：polar regions\n解析：定位第6段。原文：\"the polar regions occupied the full width of the map\"（极地地区占据了地图的全部宽度）。\n答案：navigation\n解析：定位第7段。原文：\"the map's title explaining that it was intended 'for use in navigation'\"（地图的标题解释说它是为了“用于航海”）。\n答案：North America\n解析：定位第10段前半句。原文：\"By the 20th century, Mercator's Projection had been adopted by state cartographers to map the land that he had named 'North America'.\" 题干中的 \"by state cartographers\" 对应这一句；后面的 Britain 只是 1938 年英国地形测量局的另一个应用例子，不是本空答案。"
     }
   ]
 }

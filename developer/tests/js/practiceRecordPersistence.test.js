@@ -34,7 +34,7 @@ function createWebStorage() {
 }
 
 function createHarness(options = {}) {
-    const { syncUiOnReplace = false } = options;
+    const { syncUiOnReplace = false, saveCompletionImpl = null, forceCompletionNotice = false } = options;
     const practiceState = [
         {
             id: 'record-1',
@@ -127,15 +127,14 @@ function createHarness(options = {}) {
             return [
                 {
                     id: 'listening-p1-fallback',
-                    title: 'Fallback Listening P1',
-                    type: 'listening',
+                    title: 'Listening P1 Fallback',
                     category: 'P1',
-                    frequency: 'high',
-                    path: 'P1/高频/Fallback Listening P1/'
+                    path: 'assets/generated/listening-exams/listening-p1-fallback.html',
+                    frequency: 'fallback',
+                    type: 'listening'
                 }
             ];
         },
-        syncPracticeRecords() {},
         document: {
             addEventListener() {},
             getElementById() {
@@ -151,8 +150,9 @@ function createHarness(options = {}) {
         window: {
             console: quietConsole,
             storage: storageStub,
-            location: { origin: 'http://localhost', href: 'http://localhost/' },
-            fallbackExamSessions: new Map(),
+            location: {
+                origin: 'http://localhost'
+            },
             addEventListener(type, handler) {
                 if (!listeners.has(type)) {
                     listeners.set(type, []);
@@ -182,31 +182,75 @@ function createHarness(options = {}) {
                     }
                 }
             },
-            PracticeCore: {
-                store: {
-                    async listPracticeRecords() {
-                        return practiceState.map((record) => ({ ...record }));
-                    },
-                    async replacePracticeRecords(records) {
-                        practiceState.splice(0, practiceState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-                        if (syncUiOnReplace) {
-                            uiState.splice(0, uiState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-                        }
-                        return true;
+            PracticeRecordAPI: {
+                async list() {
+                    return practiceState.map((record) => ({ ...record }));
+                },
+                async getById(recordId) {
+                    const targetId = recordId == null ? '' : String(recordId);
+                    return practiceState.find((record) => (
+                        String(record.id) === targetId || String(record.sessionId || '') === targetId
+                    )) || null;
+                },
+                async saveCompletion(realData = {}, context = {}, exam = {}) {
+                    if (typeof saveCompletionImpl === 'function') {
+                        return await saveCompletionImpl(realData, context, exam);
                     }
+                    const record = {
+                        id: `record-${practiceState.length + 1}`,
+                        examId: context && context.examId ? context.examId : (exam.id || realData.examId || ''),
+                        sessionId: realData.sessionId || '',
+                        title: exam.title || realData.title || '',
+                        date: realData.endTime || '2026-03-09T12:00:00.000Z',
+                        percentage: Number(realData?.scoreInfo?.percentage) || 0,
+                        duration: Number(realData?.duration ?? realData?.scoreInfo?.duration) || 0
+                    };
+                    practiceState.unshift({ ...record });
+                    return { ...record };
+                },
+                async replace(records) {
+                    practiceState.splice(0, practiceState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
+                    if (syncUiOnReplace) {
+                        uiState.splice(0, uiState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
+                    }
+                    return practiceState.map((record) => ({ ...record }));
+                },
+                async deleteById(recordId) {
+                    const targetId = recordId == null ? '' : String(recordId);
+                    const next = [];
+                    let deleted = null;
+                    practiceState.forEach((record) => {
+                        if (!deleted && (String(record.id) === targetId || String(record.sessionId || '') === targetId)) {
+                            deleted = { ...record };
+                            return;
+                        }
+                        next.push(record);
+                    });
+                    await this.replace(next);
+                    return {
+                        deleted: Boolean(deleted),
+                        record: deleted,
+                        records: practiceState.map((record) => ({ ...record }))
+                    };
+                },
+                async clear() {
+                    await this.replace([]);
+                    return true;
                 }
             }
         }
     };
 
     sandbox.globalThis = sandbox.window;
+    sandbox.fallbackExamSessions = new Map();
     sandbox.window.localStorage = localStorage;
     sandbox.window.sessionStorage = sessionStorage;
-    sandbox.window.getExamIndexState = sandbox.getExamIndexState;
-    sandbox.window.syncPracticeRecords = sandbox.syncPracticeRecords;
-    sandbox.fallbackExamSessions = sandbox.window.fallbackExamSessions;
+    sandbox.window.fallbackExamSessions = sandbox.fallbackExamSessions;
 
     loadScript('js/main.js', vm.createContext(sandbox));
+    if (forceCompletionNotice) {
+        sandbox.shouldAnnounceCompletion = () => true;
+    }
     sandbox.updatePracticeView = function updatePracticeViewSpy() {
         renderCount += 1;
     };
@@ -240,8 +284,8 @@ async function testDeleteRecordPersistsAndCleansLegacyKeys() {
     );
     assert.strictEqual(
         harness.localStorage.getItem('practice_records'),
-        JSON.stringify([{ id: 'record-2', title: 'Record 2', date: '2026-03-09T11:00:00.000Z', percentage: 60, duration: 90 }]),
-        'deleteRecord 后应同步 legacy practice_records'
+        null,
+        'deleteRecord 后应清理 legacy practice_records，避免删除记录被影子键回灌'
     );
     assert.deepStrictEqual(
         harness.sandbox.window.app.state.practice.records.map((record) => record.id),
@@ -277,7 +321,7 @@ async function testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState
 }
 
 async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
-    const harness = createHarness();
+    const harness = createHarness({ forceCompletionNotice: true });
     const childWindow = { closed: false, postMessage() {} };
     harness.sandbox.window.fallbackExamSessions.set('parent-session-1', {
         examId: 'listening-p1-fallback',
@@ -352,15 +396,55 @@ async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
     );
 }
 
+async function testCanonicalCompletionSaveRejectsWhenPersistenceFails() {
+    const harness = createHarness({
+        saveCompletionImpl: async () => {
+            throw new Error('save failed');
+        }
+    });
+    await assert.rejects(
+        () => harness.sandbox.savePracticeCompletionRecord('listening-p1-fallback', {
+            examId: 'listening-p1-fallback',
+            sessionId: 'child-temp-session-fail',
+            type: 'listening',
+            practiceType: 'listening',
+            answers: { q1: 'A' },
+            correctAnswers: { q1: 'A' },
+            answerComparison: {
+                q1: {
+                    userAnswer: 'A',
+                    correctAnswer: 'A',
+                    isCorrect: true
+                }
+            },
+            scoreInfo: {
+                correct: 1,
+                total: 1,
+                accuracy: 1,
+                percentage: 100,
+                source: 'listening_record_bridge'
+            }
+        }),
+        /save failed/,
+        'canonical 持久化失败时 savePracticeCompletionRecord 必须向上抛错，供上层停止成功提示'
+    );
+    assert.strictEqual(
+        harness.practiceState.some((record) => record.examId === 'listening-p1-fallback' && record.id !== 'record-1' && record.id !== 'record-2'),
+        false,
+        '保存失败时不能偷偷留下半成品记录'
+    );
+}
+
 async function main() {
     try {
         await testDeleteRecordPersistsAndCleansLegacyKeys();
         await testClearPracticeDataPersistsAndClearsLegacyKeys();
         await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
         await testFallbackCompletionPersistsNormalizedSpellingErrors();
+        await testCanonicalCompletionSaveRejectsWhenPersistenceFails();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'practice record persistence and fallback listening spelling errors are covered'
+            detail: 'practice record persistence and fallback completion regressions are covered'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

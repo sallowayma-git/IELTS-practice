@@ -684,15 +684,28 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
             fragment.appendChild(readingSection);
 
-            const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
-            if (listeningEntries.length > 0) {
-                fragment.appendChild(this.createSection({
-                    title: '听力',
-                    icon: '🎧',
-                    entries: listeningEntries,
-                    style: { gridColumn: '1 / -1', marginTop: '40px' }
-                }));
-            }
+            // [DISABLED] 听力入口已禁用
+            // const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
+            // if (listeningEntries.length > 0) {
+            //     fragment.appendChild(this.createSection({
+            //         title: '听力',
+            //         icon: '🎧',
+            //         entries: listeningEntries,
+            //         style: { gridColumn: '1 / -1', marginTop: '40px' }
+            //     }));
+            // }
+
+            // [DISABLED] 听力练习 - 频率分类入口已禁用
+            // const specialListeningEntries = (stats?.specialListening || []).filter((entry) => entry.total > 0);
+            // if (specialListeningEntries.length > 0) {
+            //     fragment.appendChild(this.createSection({
+            //         title: '听力练习 - 频率分类',
+            //         icon: '🎧',
+            //         entries: specialListeningEntries,
+            //         style: { gridColumn: '1 / -1', marginTop: '40px' },
+            //         isSpecial: true
+            //     }));
+            // }
 
             this.dom.replaceContent(container, fragment);
         }
@@ -1867,6 +1880,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             return;
         }
 
+        function isExamSearchTarget(target) {
+            return !!(target && target.dataset && target.dataset.indexAction === 'search-exams');
+        }
+
         document.addEventListener('click', function (event) {
             var target = event.target && event.target.closest
                 ? event.target.closest('[data-index-action]')
@@ -1880,8 +1897,21 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
         document.addEventListener('input', function (event) {
             var target = event.target;
-            if (!target || !target.dataset || target.dataset.indexAction !== 'search-exams') {
+            if (!isExamSearchTarget(target)) {
                 return;
+            }
+            if (typeof global.searchExams === 'function') {
+                global.searchExams(target.value);
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            var target = event.target;
+            if (!isExamSearchTarget(target) || event.isComposing || event.keyCode === 229 || event.key !== 'Enter') {
+                return;
+            }
+            if (typeof event.preventDefault === 'function') {
+                event.preventDefault();
             }
             if (typeof global.searchExams === 'function') {
                 global.searchExams(target.value);
@@ -1965,7 +1995,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
 
         var indicator = state.indicator;
-        
+
         // 如果需要瞬间完成（例如窗口 Resize），则临时关闭过渡动画
         var shouldReduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (immediate || shouldReduceMotion) {
@@ -1975,7 +2005,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
 
         applyHeroNavIndicatorRect(indicator, targetRect);
-        
+
         // 强制浏览器重排以便 none 立即生效后再恢复
         if (immediate || shouldReduceMotion) {
             void indicator.offsetWidth;
@@ -2074,7 +2104,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
     function setupSegmentedControls() {
         if (global.__segmentedControlsInitialized) return;
-        
+
         function syncIndicator(control) {
             // indicator 可能在 innerHTML='' 后被销毁，必须每次检查重建
             var indicator = control.querySelector('.shui-segmented-indicator');
@@ -2083,7 +2113,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 indicator.className = 'shui-segmented-indicator';
                 control.insertBefore(indicator, control.firstChild);
             }
-            
+
             var activeBtn = control.querySelector('.shui-segmented-btn.active') || control.querySelector('.shui-segmented-btn[aria-pressed="true"]');
             if (activeBtn && activeBtn.offsetWidth > 0) {
                 indicator.style.width = activeBtn.offsetWidth + 'px';
@@ -2135,10 +2165,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 setTimeout(syncAll, 15);
             }
         });
-        
+
         observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
         global.addEventListener('resize', syncAll);
-        
+
         // 视图切换时重新同步（view 从 display:none 变为可见后 offsetLeft 才有效）
         document.addEventListener('click', function(e) {
             var navBtn = e.target && e.target.closest && e.target.closest('.hero-nav__btn');
@@ -2149,11 +2179,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 setTimeout(syncAll, 500);
             }
         });
-        
+
         if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
             document.fonts.ready.then(syncAll);
         }
-        
+
         setTimeout(syncAll, 50);
         setTimeout(syncAll, 300);
         global.__segmentedControlsInitialized = true;
