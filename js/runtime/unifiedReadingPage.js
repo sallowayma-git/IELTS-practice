@@ -8,6 +8,8 @@
     const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
+    const READING_CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
+    const READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -72,6 +74,9 @@
         endlessCountdownSeconds: 0,
         endlessCountdownEndTime: null,
         suiteTimerLimitSeconds: null,
+        timerExpired: false,
+        timerExpiryHandled: false,
+        timerLocked: false,
         ready: false,
         submitted: false,
         initTimer: null,
@@ -256,12 +261,117 @@
         return `${minutes}:${seconds}`;
     }
 
+    function readReadingTimerPreferences() {
+        const manager = global.PracticeTimerPreferences;
+        if (manager && typeof manager.read === 'function') {
+            return manager.read('reading');
+        }
+        return {
+            version: 1,
+            mode: 'elapsed',
+            countdownMinutes: 60,
+            limitEnabled: false,
+            limitMinutes: 60,
+            expiryAction: 'warn'
+        };
+    }
+
+    function minutesToSeconds(value, fallbackMinutes = 60) {
+        const manager = global.PracticeTimerPreferences;
+        if (manager && typeof manager.minutesToSeconds === 'function') {
+            return manager.minutesToSeconds(value);
+        }
+        const numeric = Number(value);
+        const minutes = Number.isFinite(numeric)
+            ? Math.min(240, Math.max(1, Math.round(numeric)))
+            : fallbackMinutes;
+        return minutes * 60;
+    }
+
+    function setTimerLockMode(enabled) {
+        const locked = Boolean(enabled);
+        state.timerLocked = locked;
+        document.body.classList.toggle('timer-locked-mode', locked);
+        document.querySelectorAll('input, textarea, select').forEach((control) => {
+            if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                control.disabled = locked || state.readOnly;
+            }
+        });
+        disableDragInteractions();
+    }
+
+    function handleTimerExpired(preferences) {
+        if (state.timerExpiryHandled || state.submitted || state.readOnly || state.reviewMode || state.memorizeMode) {
+            return;
+        }
+        state.timerExpiryHandled = true;
+        const action = preferences && preferences.expiryAction ? preferences.expiryAction : 'warn';
+        if (action === 'auto-submit') {
+            global.setTimeout(() => {
+                if (!state.submitted && !state.readOnly) {
+                    handleSubmit();
+                }
+            }, 0);
+            return;
+        }
+        if (action === 'lock') {
+            setTimerLockMode(true);
+        }
+    }
+
+    function hashReadingCandidateCode(sourceId) {
+        const source = String(sourceId || '');
+        if (!source) {
+            return '';
+        }
+        let hash = 0;
+        source.split('').forEach((char) => {
+            hash = ((hash << 5) - hash) + char.charCodeAt(0);
+            hash |= 0;
+        });
+        return String(Math.abs(hash) % 900000 + 100000);
+    }
+
+    function readReadingCandidateCodePreferences() {
+        try {
+            const raw = global.localStorage?.getItem(READING_CANDIDATE_CODE_PREF_KEY);
+            const parsed = raw ? JSON.parse(raw) : null;
+            const mode = parsed?.mode === 'custom' ? 'custom' : 'auto';
+            const customCode = typeof parsed?.customCode === 'string'
+                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
+                : '';
+            return {
+                mode,
+                customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
+            };
+        } catch (_) {
+            return { mode: 'auto', customCode: '' };
+        }
+    }
+
+    function resolveReadingCandidateCode() {
+        const preferences = readReadingCandidateCodePreferences();
+        if (preferences.mode === 'custom' && preferences.customCode) {
+            return preferences.customCode;
+        }
+        return hashReadingCandidateCode(state.suiteSessionId || state.sessionId || '');
+    }
+
     function renderTimer() {
         const timer = document.getElementById('timer');
         if (!timer) return;
+        const preferences = readReadingTimerPreferences();
         var displaySeconds;
-        var parsedLimitSeconds = parseOptionalNonNegativeInteger(state.suiteTimerLimitSeconds);
-        var limitSeconds = parsedLimitSeconds !== null ? parsedLimitSeconds : 3600;
+        var elapsed = getPageElapsedSeconds();
+        var limitSeconds;
+        const rawLimitSeconds = Number(state.suiteTimerLimitSeconds);
+        if (Number.isFinite(rawLimitSeconds) && rawLimitSeconds > 0) {
+            limitSeconds = Math.floor(rawLimitSeconds);
+        } else if (preferences.limitEnabled) {
+            limitSeconds = minutesToSeconds(preferences.limitMinutes, 60);
+        } else {
+            limitSeconds = null;
+        }
         if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
             var remainingMs = state.endlessCountdownEndTime - Date.now();
             displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -272,26 +382,45 @@
             }
             var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
             timer.textContent = remainingMinutes + ' minutes remaining';
-        } else if (!state.suiteSessionId) {
-            var elapsed = getPageElapsedSeconds();
-            timer.textContent = formatTimerSeconds(elapsed);
-        } else {
-            var elapsed = getPageElapsedSeconds();
+        } else if (preferences.mode === 'countdown') {
+            const countdownSeconds = minutesToSeconds(preferences.countdownMinutes, 60);
+            displaySeconds = Math.max(0, countdownSeconds - elapsed);
+            timer.textContent = formatTimerSeconds(displaySeconds);
+        } else if (state.suiteSessionId && Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0) {
             displaySeconds = Math.max(0, limitSeconds - elapsed);
             var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
             timer.textContent = remainingMinutes + ' minutes remaining';
+        } else {
+            displaySeconds = elapsed;
+            timer.textContent = formatTimerSeconds(displaySeconds);
         }
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
+        var countdownExpired = preferences.mode === 'countdown' && !hasEndlessCountdown && displaySeconds <= 0;
+        var limitExpired = Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds);
+        var expired = Boolean(countdownExpired || limitExpired);
+        state.timerExpired = expired;
+        if (expired) {
+            handleTimerExpired(preferences);
+        }
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
+        timer.classList.toggle('timer-expired', expired);
+        timer.dataset.timerMode = preferences.mode;
+        timer.dataset.expiryAction = preferences.expiryAction;
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
-        var _warnRemaining = state.suiteTimerMode === 'countdown' && parsedLimitSeconds !== null && parsedLimitSeconds > 0
-            ? Math.max(0, parsedLimitSeconds - getPageElapsedSeconds())
+        var _warnRemaining = !hasEndlessCountdown
+            && (preferences.mode === 'countdown' || (Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0))
+            && Number.isFinite(Number(displaySeconds))
+            ? Math.max(0, Number(displaySeconds))
             : null;
         if (_warnRemaining !== null) {
             timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
             if (_warnRemaining <= 0) {
                 timer.classList.add('countdown-expired');
-                if (!state.countdownExpiredAutoSubmit && !state.submitted) {
+                if (state.suiteTimerMode === 'countdown'
+                    && Number.isFinite(rawLimitSeconds)
+                    && rawLimitSeconds > 0
+                    && !state.countdownExpiredAutoSubmit
+                    && !state.submitted) {
                     state.countdownExpiredAutoSubmit = true;
                     handleCountdownExpired();
                 }
@@ -3810,7 +3939,7 @@
         const controls = document.querySelectorAll('input, textarea, select');
         controls.forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
-                control.disabled = state.readOnly;
+                control.disabled = state.readOnly || state.timerLocked;
             }
         });
         syncPrimaryActionButtons();
@@ -3819,10 +3948,11 @@
     }
 
     function disableDragInteractions() {
+        const locked = Boolean(state.readOnly || state.timerLocked);
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
-            item.setAttribute('draggable', state.readOnly ? 'false' : 'true');
-            item.classList.toggle('drag-item-locked', state.readOnly);
+            item.setAttribute('draggable', locked ? 'false' : 'true');
+            item.classList.toggle('drag-item-locked', locked);
         });
     }
 
@@ -4102,6 +4232,9 @@
         state.lastResults = null;
         state.submitted = false;
         state.readOnly = false;
+        state.timerLocked = false;
+        state.timerExpired = false;
+        state.timerExpiryHandled = false;
         closeReviewHighlightDictionary();
         if (dom.results) {
             dom.results.style.display = 'none';
@@ -4109,6 +4242,7 @@
         }
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
+        document.body.classList.remove('timer-locked-mode');
         enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
@@ -5089,14 +5223,9 @@
         }
         const candidateId = document.getElementById('candidate-id');
         if (candidateId) {
-            const sourceId = state.suiteSessionId || state.sessionId || '';
-            if (sourceId) {
-                let hash = 0;
-                String(sourceId).split('').forEach((char) => {
-                    hash = ((hash << 5) - hash) + char.charCodeAt(0);
-                    hash |= 0;
-                });
-                candidateId.textContent = String(Math.abs(hash) % 900000 + 100000);
+            const candidateCode = resolveReadingCandidateCode();
+            if (candidateCode) {
+                candidateId.textContent = candidateCode;
                 candidateId.hidden = false;
             } else {
                 candidateId.textContent = '';

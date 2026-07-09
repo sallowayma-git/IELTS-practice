@@ -7948,6 +7948,202 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     color: #ffffff !important;
 }
 
+.reading-candidate-code-settings {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-md);
+    width: min(100%, 720px);
+    margin: 0 auto;
+}
+
+.reading-candidate-code-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: color-mix(in srgb, var(--surface) 58%, transparent);
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.reading-candidate-code-option input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    accent-color: var(--color-primary);
+}
+
+.reading-candidate-code-option span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.reading-candidate-code-option strong {
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+
+.reading-candidate-code-option small {
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.reading-candidate-code-controls {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.reading-candidate-code-input {
+    width: 160px;
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-align: center;
+}
+
+.reading-candidate-code-input:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
+.reading-candidate-code-status {
+    min-height: 20px;
+    color: var(--color-text-secondary);
+    font-size: 0.86rem;
+    text-align: center;
+}
+
+.reading-candidate-code-status[data-state="error"] {
+    color: var(--color-danger, var(--danger));
+}
+
+.reading-candidate-code-status[data-state="success"] {
+    color: var(--color-success, var(--success));
+}
+
+.practice-timer-settings {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: var(--space-md);
+    width: min(100%, 960px);
+    margin: 0 auto;
+}
+
+.practice-timer-card {
+    display: grid;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: color-mix(in srgb, var(--surface) 58%, transparent);
+    color: var(--color-text);
+}
+
+.practice-timer-card__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.practice-timer-card__header h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.practice-timer-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-sm);
+}
+
+.practice-timer-field {
+    display: grid;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    font-size: 0.84rem;
+    text-align: left;
+}
+
+.practice-timer-field select,
+.practice-timer-field input[type="number"] {
+    min-height: 42px;
+    border: 1px solid var(--bloom-border);
+    border-radius: var(--border-radius-md);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    color: var(--color-text);
+    font: inherit;
+    padding: 0 12px;
+}
+
+.practice-timer-check {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    color: var(--color-text);
+}
+
+.practice-timer-check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+}
+
+.practice-timer-status {
+    min-height: 18px;
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+}
+
+.practice-timer-status[data-state="error"] {
+    color: var(--color-danger, var(--danger));
+}
+
+.practice-timer-status[data-state="success"] {
+    color: var(--color-success, var(--success));
+}
+
+.practice-timer-save {
+    justify-self: center;
+}
+
+body.bloom-dark-mode .reading-candidate-code-option,
+body.blue-dark-mode .reading-candidate-code-option,
+body.bloom-dark-mode .practice-timer-card,
+body.blue-dark-mode .practice-timer-card {
+    background: color-mix(in srgb, var(--text-primary) 58%, transparent);
+}
+
+body.bloom-dark-mode .reading-candidate-code-input,
+body.bloom-dark-mode .practice-timer-field select,
+body.bloom-dark-mode .practice-timer-field input[type="number"],
+body.blue-dark-mode .reading-candidate-code-input,
+body.blue-dark-mode .practice-timer-field select,
+body.blue-dark-mode .practice-timer-field input[type="number"] {
+    background: color-mix(in srgb, var(--text-primary) 72%, transparent);
+    color: var(--surface-subtle);
+}
+
+@media (max-width: 760px) {
+    .practice-timer-settings,
+    .practice-timer-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
 
 
 

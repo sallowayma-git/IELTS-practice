@@ -13,6 +13,23 @@ TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 H1_RE = re.compile(r"<h1[^>]*>(.*?)</h1>", re.IGNORECASE | re.DOTALL)
 PART_RE = re.compile(r"\bP(?:ART)?\s*([1-4])\b", re.IGNORECASE)
 LEADING_NUMBER_RE = re.compile(r"^\s*(\d{1,4})[\s.\-、_]+")
+LISTENING_PREFIX_RE = re.compile(
+    r"^\s*(?:IELTS\s+)?Listening(?:\s+(?:Practice|Enhanced\s+Practice|Simulator|Pro))?\s*",
+    re.IGNORECASE,
+)
+TITLE_SEPARATOR_RE = re.compile(r"^\s*(?:[-:|/·•—–]|\u8def)+\s*")
+QUESTION_SIGNAL_RE = re.compile(
+    r"(?:Questions?\s+\d|\bQ\s*\d|data-question|answer-input|answer-highlight|correctAnswers|<input\b|<textarea\b|<select\b)",
+    re.IGNORECASE,
+)
+MOJIBAKE_RE = re.compile(
+    r"(?:[\u00c2-\u00ff\ufffd\u20ac\ue000-\uf8ff]"
+    r"|鈥\?|闆呮|鍚|鍔涙|鎷|濉|鎴峰|娲诲|姩涓|撶粌|杈╄|鏅|闈)"
+)
+GENERIC_TITLE_RE = re.compile(
+    r"^(?:IELTS\s+)?Listening(?:\s+(?:Practice|Enhanced\s+Practice|Simulator|Pro))?$",
+    re.IGNORECASE,
+)
 FREQUENCY_ALIASES = {
     "超高频": "超高频",
     "高频": "高频",
@@ -43,10 +60,19 @@ def clean_title(value: str) -> str:
     text = re.sub(r"\s+", " ", value or "").strip()
     if not text:
         return ""
-    text = re.sub(r"IELTS\s+Listening\s+Practice\s*[-–—:]?\s*", "", text, flags=re.IGNORECASE)
+    text = LISTENING_PREFIX_RE.sub("", text)
+    text = TITLE_SEPARATOR_RE.sub("", text)
     text = LEADING_NUMBER_RE.sub("", text)
     text = re.sub(r"^\s*P(?:ART)?\s*[1-4]\s*[-–—:]?\s*", "", text, flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", text).strip()
+    text = TITLE_SEPARATOR_RE.sub("", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text or GENERIC_TITLE_RE.fullmatch(text) or MOJIBAKE_RE.search(text):
+        return ""
+    return text
+
+
+def has_question_content(raw: str) -> bool:
+    return bool(QUESTION_SIGNAL_RE.search(raw or ""))
 
 
 def normalize_rel(path: Path) -> str:
@@ -242,8 +268,16 @@ def main() -> int:
             html_files.extend(sorted(category_dir.rglob("*.html")))
             pdf_files.extend(sorted(category_dir.rglob("*.pdf")))
 
-    entries = [scan_html(root, path, index + 1) for index, path in enumerate(html_files)]
-    html_dirs = {path.parent for path in html_files}
+    valid_html_files: list[Path] = []
+    skipped_html_no_question_content: list[str] = []
+    for path in html_files:
+        if has_question_content(read_text(path)):
+            valid_html_files.append(path)
+        else:
+            skipped_html_no_question_content.append(normalize_rel(path.relative_to(root)))
+
+    entries = [scan_html(root, path, index + 1) for index, path in enumerate(valid_html_files)]
+    html_dirs = {path.parent for path in valid_html_files}
     pdf_only_files = [path for path in pdf_files if path.parent not in html_dirs]
     entries.extend(scan_pdf_only(root, path, len(entries) + index + 1) for index, path in enumerate(pdf_only_files))
     entries.sort(key=lambda item: (
@@ -269,6 +303,7 @@ def main() -> int:
         "missingAudio": [entry["sourcePath"] for entry in entries if not entry["hasAudio"]],
         "missingPdf": [entry["sourcePath"] for entry in entries if not entry["hasPdf"]],
         "pdfOnly": [entry["sourcePath"] for entry in entries if not entry["hasHtml"] and entry["hasPdf"]],
+        "skippedHtmlNoQuestionContent": skipped_html_no_question_content,
         "indexedPdfCount": sum(1 for entry in entries if entry["hasPdf"]),
         "duplicateIds": [],
         "outputs": {
