@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/183. P2 - The importance of being playful 玩耍的重要性.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/183. P2 - The importance of being playful 玩耍的重要性.pdf",
+    "pdf": "ReadingPractice/PDF/183. P2 - The importance of being playful 玩耍的重要性.pdf",
     "ieltsHtml": "IELTS/P2/The importance of being playful.html"
   },
   "audit": {

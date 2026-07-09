@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/171. P1 - Salt  盐的历史/171. P1 - Salt  盐的历史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/171. P1 - Salt  盐的历史/171. P1 - Salt  盐的历史.pdf",
+    "pdf": "ReadingPractice/PDF/171. P1 - Salt  盐的历史.pdf",
     "ieltsHtml": null
   },
   "audit": {

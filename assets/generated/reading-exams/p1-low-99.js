@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/188. P1 - The history of the bar code 条形码的历史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/188. P1 - The history of the bar code 条形码的历史.pdf",
+    "pdf": "ReadingPractice/PDF/188. P1 - The history of the bar code 条形码的历史.pdf",
     "ieltsHtml": "IELTS/P1/The history of the bar code.html"
   },
   "audit": {

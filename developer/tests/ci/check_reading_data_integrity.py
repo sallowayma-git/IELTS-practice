@@ -63,7 +63,6 @@ def main() -> int:
         title = extract_field(r'"title":\s*"([^"]+)"', content)
         category = extract_field(r'"category":\s*"([^"]+)"', content)
         pdf_filename = extract_field(r'"pdfFilename":\s*"([^"]*)"', content)
-        shui_pdf = extract_field(r'"shuiPdf":\s*"([^"]*)"', content)
 
         key = f"{norm_text(category)}::{norm_text(title)}"
         if key in seen:
@@ -71,16 +70,18 @@ def main() -> int:
         else:
             seen[key] = exam_id or path.stem
 
-        if pdf_filename:
-            if not shui_pdf:
-                missing_pdf_ref.append(exam_id or path.stem)
-            elif not shui_pdf.endswith(".pdf"):
-                malformed_pdf_ref.append({"examId": exam_id or path.stem, "shuiPdf": shui_pdf})
-
         payload = extract_registered_payload(path)
         if payload is None:
             parse_failures.append(exam_id or path.stem)
             continue
+
+        source_refs = payload.get("sourceRefs") if isinstance(payload.get("sourceRefs"), dict) else {}
+        pdf_ref = str(source_refs.get("pdf") or "").strip()
+        if pdf_filename:
+            if not pdf_ref:
+                missing_pdf_ref.append(exam_id or path.stem)
+            elif not pdf_ref.endswith(".pdf"):
+                malformed_pdf_ref.append({"examId": exam_id or path.stem, "pdf": pdf_ref})
 
         for group in payload.get("questionGroups") or []:
             body_html = str(group.get("bodyHtml") or "")

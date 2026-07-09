@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/174. P1 - Why good ideas fail TF公司.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/174. P1 - Why good ideas fail TF公司.pdf",
+    "pdf": "ReadingPractice/PDF/174. P1 - Why good ideas fail TF公司.pdf",
     "ieltsHtml": null
   },
   "audit": {

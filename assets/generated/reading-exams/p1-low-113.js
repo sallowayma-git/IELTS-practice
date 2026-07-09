@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf",
+    "pdf": "ReadingPractice/PDF/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf",
     "ieltsHtml": "IELTS/P1/Thomas Young The last man who knew everything.html"
   },
   "audit": {

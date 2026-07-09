@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/146. P1 - The Early History of Olive Oil 橄榄油的历史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
+    "pdf": "ReadingPractice/PDF/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
     "ieltsHtml": "IELTS/P1/The Early History of Olive Oil.html"
   },
   "audit": {

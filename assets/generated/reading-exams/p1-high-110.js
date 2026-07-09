@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/24. P1 - The Pearls 珍珠【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/24. P1 - The Pearls 珍珠【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/24. P1 - The Pearls 珍珠【高】.pdf",
     "ieltsHtml": "IELTS/P1/The Pearls.html"
   },
   "audit": {

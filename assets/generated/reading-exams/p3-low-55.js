@@ -82,7 +82,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/148. P3 - Improving Patient Safety 药品包装设计.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/148. P3 - Improving Patient Safety 药品包装设计.pdf",
+    "pdf": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
     "ieltsHtml": "IELTS/P3/Improving Patient Safety.html"
   },
   "audit": {

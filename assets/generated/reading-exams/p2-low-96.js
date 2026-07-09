@@ -90,7 +90,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
+    "pdf": "ReadingPractice/PDF/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
     "ieltsHtml": null
   },
   "audit": {

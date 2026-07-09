@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/170. P1 - The unsung sense 被低估的嗅觉.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/170. P1 - The unsung sense 被低估的嗅觉.pdf",
+    "pdf": "ReadingPractice/PDF/170. P1 - The unsung sense 被低估的嗅觉.pdf",
     "ieltsHtml": "IELTS/P1/The unsung sense.html"
   },
   "audit": {

@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/4. P1 - Ambergris 龙涎香/4. P1 - Ambergris 龙涎香.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/4. P1 - Ambergris 龙涎香/4. P1 - Ambergris 龙涎香.pdf",
+    "pdf": "ReadingPractice/PDF/4. P1 - Ambergris 龙涎香.pdf",
     "ieltsHtml": "IELTS/P1/Ambergris.html"
   },
   "audit": {

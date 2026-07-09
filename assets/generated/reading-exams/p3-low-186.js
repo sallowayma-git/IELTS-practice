@@ -87,7 +87,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/93. P3 - The Robbers Cave Study (山洞)群体行为实验/93. P3 - The Robbers Cave Study (山洞)群体行为实验.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/93. P3 - The Robbers Cave Study (山洞)群体行为实验/93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf",
+    "pdf": "ReadingPractice/PDF/93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf",
     "ieltsHtml": null
   },
   "audit": {

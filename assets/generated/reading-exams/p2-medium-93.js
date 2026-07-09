@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.pdf",
+    "pdf": "ReadingPractice/PDF/182. P2 - Antarctic research 南极考察.pdf",
     "ieltsHtml": "IELTS/P2/Antarctic research.html"
   },
   "audit": {

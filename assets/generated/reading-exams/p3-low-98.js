@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/187. P3 - Petrol power an eco-revolution 交通的革命.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
+    "pdf": "ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
     "ieltsHtml": "IELTS/P3/Petrol power an eco-revolution.html"
   },
   "audit": {

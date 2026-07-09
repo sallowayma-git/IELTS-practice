@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.pdf",
     "ieltsHtml": "IELTS/P3/Charles Darwin and Evolutionary Psychology.html"
   },
   "audit": {

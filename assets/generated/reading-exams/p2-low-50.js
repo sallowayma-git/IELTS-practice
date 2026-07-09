@@ -85,7 +85,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
+    "pdf": "ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
     "ieltsHtml": "IELTS/P2/Jellyfish – The Dominant Species.html"
   },
   "audit": {

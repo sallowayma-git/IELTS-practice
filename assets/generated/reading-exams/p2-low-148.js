@@ -85,7 +85,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/59. P2 - Why do we need the arts_ 艺术的意义/59. P2 - Why do we need the arts_ 艺术的意义.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/59. P2 - Why do we need the arts_ 艺术的意义/59. P2 - Why do we need the arts_ 艺术的意义.pdf",
+    "pdf": "ReadingPractice/PDF/59. P2 - Why do we need the arts_ 艺术的意义.pdf",
     "ieltsHtml": null
   },
   "audit": {

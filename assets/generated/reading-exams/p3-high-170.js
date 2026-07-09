@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.pdf",
     "ieltsHtml": null
   },
   "audit": {

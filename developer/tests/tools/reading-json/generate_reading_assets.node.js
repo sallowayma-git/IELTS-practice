@@ -1172,9 +1172,10 @@ function buildAuditNotes(sourceProvider, signature) {
 
 function buildSourceRefs(examEntry, pilotRow, sourceHtmlPath, sourceProvider) {
     const shuiHtml = sourceProvider === 'shui' ? sourceHtmlPath : (pilotRow.shuiPath || null);
+    const pdfFilename = String(examEntry.pdfFilename || '').replace(/\\/g, '/').split('/').pop();
     const sourceRefs = {
         shuiHtml,
-        shuiPdf: `${examEntry.path}${examEntry.pdfFilename || ''}`,
+        pdf: pdfFilename ? `ReadingPractice/PDF/${pdfFilename}` : '',
         ieltsHtml: sourceProvider === 'ielts' ? sourceHtmlPath : (pilotRow.ieltsPath || null)
     };
 

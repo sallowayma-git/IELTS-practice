@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
+    "pdf": "ReadingPractice/PDF/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
     "ieltsHtml": "IELTS/P2/The Myth of the Eight-hour Sleep.html"
   },
   "audit": {

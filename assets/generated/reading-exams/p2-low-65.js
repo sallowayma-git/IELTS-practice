@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/157. P2 - Boring Buildings 无聊建筑.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/157. P2 - Boring Buildings 无聊建筑.pdf",
+    "pdf": "ReadingPractice/PDF/157. P2 - Boring Buildings 无聊建筑.pdf",
     "ieltsHtml": null
   },
   "audit": {

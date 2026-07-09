@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/124. P1 - The extinction of the cave bear洞熊的灭绝【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/124. P1 - The extinction of the cave bear洞熊的灭绝【次】.pdf",
     "ieltsHtml": "IELTS/P1/The extinction of the cave bear.html"
   },
   "audit": {

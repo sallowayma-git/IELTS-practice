@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/53. P2 - The fashion industry 时尚产业.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/53. P2 - The fashion industry 时尚产业.pdf",
+    "pdf": "ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf",
     "ieltsHtml": "IELTS/P2/The fashion industry.html"
   },
   "audit": {

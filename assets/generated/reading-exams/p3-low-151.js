@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
+    "pdf": "ReadingPractice/PDF/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
     "ieltsHtml": "IELTS/P3/Book Review The Discovery of Slowness.html"
   },
   "audit": {

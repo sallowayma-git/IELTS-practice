@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/175. P3 - Music soothes and awes 音乐疗愈/175. P3 - Music soothes and awes 音乐疗愈.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/175. P3 - Music soothes and awes 音乐疗愈/175. P3 - Music soothes and awes 音乐疗愈.pdf",
+    "pdf": "ReadingPractice/PDF/175. P3 - Music soothes and awes 音乐疗愈.pdf",
     "ieltsHtml": null
   },
   "audit": {
