@@ -44,6 +44,7 @@ const bundles = {
         'js/views/overviewView.js',
         'js/presentation/navigation-controller.js',
         'js/presentation/message-center.js',
+        'js/utils/practiceTimerPreferences.js',
         'js/app/main-entry.js',
         'js/presentation/indexInteractions.js',
         'js/presentation/emojiIconizer.js'
@@ -102,6 +103,7 @@ const bundles = {
         'assets/wordlists/ecdict_reading.bundle.js',
         'js/core/dictionaryService.js',
         'js/runtime/reviewHighlightDictionary.js',
+        'js/utils/practiceTimerPreferences.js',
         'js/runtime/unifiedReadingPage.js'
     ],
     'js/bundles/practice-page-enhancer.bundle.js': [
@@ -114,6 +116,10 @@ const bundles = {
         'js/utils/answerMatchCore.js',
         'js/app/spellingErrorCollector.js',
         'js/listeningRecordBridge.js'
+    ],
+    'js/bundles/listening-wrapper.bundle.js': [
+        'js/utils/practiceTimerPreferences.js',
+        'js/listeningUnifiedWrapper.js'
     ],
     'js/bundles/more.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',

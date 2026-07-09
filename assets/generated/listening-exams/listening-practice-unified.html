@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN" data-listening-wrapper="true">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>IELTS Listening Practice</title>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: #f6f7fb;
+        }
+
+        #listening-wrapper-root {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #listening-practice-frame {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            display: block;
+            background: #f6f7fb;
+        }
+
+        .listening-wrapper-status {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: #f6f7fb;
+            color: #1f2937;
+            font: 600 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            z-index: 2;
+        }
+
+        .listening-wrapper-status[hidden] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="listening-wrapper-root" data-exam-id="" data-source-url="" data-base-href="">
+        <iframe id="listening-practice-frame" title="IELTS Listening Practice"></iframe>
+        <div id="listening-wrapper-status" class="listening-wrapper-status">Loading listening practice...</div>
+    </div>
+    <script src="/js/bundles/listening-wrapper.bundle.js" defer></script>
+</body>
+</html>

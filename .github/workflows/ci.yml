@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [opensource]
+  push:
+    branches: [opensource]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Rebuild JS bundles and check for drift
+        # The committed files under js/bundles/ must match what the build script
+        # produces from the committed sources. If this step fails, a source file
+        # was edited without rebuilding its bundle (run `node scripts/build-bundles.mjs`).
+        run: node scripts/build-bundles.mjs && git diff --exit-code -- js/bundles/
+
+      - name: Run JS test (practiceTimerPreferences)
+        run: node developer/tests/js/practiceTimerPreferences.test.js
+
+      - name: Run Python tests (listening asset quality)
+        run: python -m unittest developer.tests.py.test_listening_generate_assets_quality
