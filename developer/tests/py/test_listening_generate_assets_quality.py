@@ -49,6 +49,31 @@ class ListeningGenerateAssetsQualityTest(unittest.TestCase):
 
         self.assertTrue(tool.has_question_content("<html><body><p>Questions 1-5</p><input name='q1'></body></html>"))
 
+    def test_question_content_detection_accepts_entity_nbsp(self):
+        tool = load_tool()
+
+        # Real listening pages sometimes separate "Questions" and the number with
+        # an HTML entity (&#160; / &nbsp;). The naive regex missed these.
+        self.assertTrue(tool.has_question_content("<html><body><p>Questions&#160;1-5</p></body></html>"))
+
+    def test_question_content_detection_accepts_tagged_number(self):
+        tool = load_tool()
+
+        # Number wrapped in inline tags (e.g. <b>1</b>) between "Questions" and the digit.
+        self.assertTrue(tool.has_question_content("<html><body><p>Questions <b>1</b>-<b>5</b></p></body></html>"))
+
+    def test_question_content_detection_accepts_ordered_list(self):
+        tool = load_tool()
+
+        # Numbered questions rendered as a list without an explicit "Questions N" heading.
+        self.assertTrue(tool.has_question_content("<html><body><ol><li>First</li><li>Second</li></ol></body></html>"))
+
+    def test_question_content_detection_accepts_image_question(self):
+        tool = load_tool()
+
+        # Image-only questions carry no text signal; detect via question-related <img>.
+        self.assertTrue(tool.has_question_content("<html><body><img class='question-image' src='q1.png' alt='question 1'></body></html>"))
+
 
 if __name__ == "__main__":
     unittest.main()

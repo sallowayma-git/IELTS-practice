@@ -22,6 +22,25 @@ QUESTION_SIGNAL_RE = re.compile(
     r"(?:Questions?\s+\d|\bQ\s*\d|data-question|answer-input|answer-highlight|correctAnswers|<input\b|<textarea\b|<select\b)",
     re.IGNORECASE,
 )
+# "Questions" (or "Question") followed — across HTML tags / entities / whitespace —
+# by a digit. Closes false negatives like "Questions&#160;1" or "Questions <b>1</b>".
+QUESTION_WITH_NUMBER_RE = re.compile(
+    r"Questions?\b(?:<[^>]*>|&[a-zA-Z0-9#]+;|\s)*\d",
+    re.IGNORECASE,
+)
+ANSWER_INPUT_RE = re.compile(r"<(?:input|textarea|select)\b", re.IGNORECASE)
+ANSWER_MARKER_RE = re.compile(
+    r"data-question|answer-input|answer-highlight|correctAnswers|class=\"[^\"]*question",
+    re.IGNORECASE,
+)
+ORDERED_LIST_RE = re.compile(r"<(?:ol|ul)\b", re.IGNORECASE)
+LIST_ITEM_RE = re.compile(r"<li\b", re.IGNORECASE)
+# Pure-image / audio questions: an <img> that is clearly a question (question in
+# class or alt), best-effort detection when there is no text signal at all.
+IMAGE_QUESTION_RE = re.compile(
+    r"<img\b[^>]*\bquestion\b",
+    re.IGNORECASE,
+)
 MOJIBAKE_RE = re.compile(
     r"(?:[\u00c2-\u00ff\ufffd\u20ac\ue000-\uf8ff]"
     r"|鈥\?|闆呮|鍚|鍔涙|鎷|濉|鎴峰|娲诲|姩涓|撶粌|杈╄|鏅|闈)"
@@ -72,7 +91,26 @@ def clean_title(value: str) -> str:
 
 
 def has_question_content(raw: str) -> bool:
-    return bool(QUESTION_SIGNAL_RE.search(raw or ""))
+    text = raw or ""
+    # Tier 1: explicit "Questions N" (tolerant of tags/entities between word and number).
+    if QUESTION_WITH_NUMBER_RE.search(text):
+        return True
+    # Tier 2: answer input elements (<input>/<textarea>/<select>).
+    if ANSWER_INPUT_RE.search(text):
+        return True
+    # Tier 3: explicit answer/question markers in markup.
+    if ANSWER_MARKER_RE.search(text):
+        return True
+    # Tier 4: ordered/unordered list with multiple items (numbered questions).
+    if ORDERED_LIST_RE.search(text) and len(LIST_ITEM_RE.findall(text)) >= 2:
+        return True
+    # Tier 5: image-backed question (no text signal available).
+    if IMAGE_QUESTION_RE.search(text):
+        return True
+    # Tier 6: fall back to the original conservative signal (keeps "Q1" etc.).
+    if QUESTION_SIGNAL_RE.search(text):
+        return True
+    return False
 
 
 def normalize_rel(path: Path) -> str:

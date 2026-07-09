@@ -660,7 +660,10 @@
         }
     }
 
-    function ensurePartNavigation(doc) {
+    // Builds the part-navigation DOM structure. Intended to run only when the
+    // structure is missing or new question items appear (not on every timer
+    // tick), so the per-tick hot path stays cheap.
+    function buildPartNavigation(doc) {
         var nav = doc.getElementById('q-nav-container');
         if (!nav) return;
         nav.classList.add('listening-part-nav');
@@ -696,6 +699,27 @@
             }
         });
         fillMissingPartQuestions(doc, nav);
+    }
+
+    // Cheap per-tick refresh: answered counts + active part highlight only.
+    // Rebuilds structure only when question items exist that are not yet placed
+    // into navigation columns (e.g. iframe content loaded late, or dynamically
+    // injected questions). Once placed, this path performs no DOM create/move.
+    function updatePartNavigationStatus(doc) {
+        var nav = doc.getElementById('q-nav-container');
+        if (!nav) return;
+
+        var items = nav.querySelectorAll('.q-nav-item');
+        var unplaced = false;
+        for (var i = 0; i < items.length; i += 1) {
+            if (!items[i].closest('.q-column.listening-question-column')) {
+                unplaced = true;
+                break;
+            }
+        }
+        if (unplaced) {
+            buildPartNavigation(doc);
+        }
 
         Array.prototype.slice.call(nav.querySelectorAll('.listening-part-nav-section'))
             .forEach(function updatePart(section) {
@@ -726,13 +750,13 @@
         normalizeSettingsPanel(doc);
         ensureSettingsActions(doc);
         ensureBottomActions(doc);
-        ensurePartNavigation(doc);
+        buildPartNavigation(doc);
     }
 
     function updateTimerDisplay() {
         var doc = getFrameDocument();
         if (!doc) return;
-        ensurePartNavigation(doc);
+        updatePartNavigationStatus(doc);
         var timer = ensureWrapperTimer(doc);
         if (!timer) return;
         var preferences = readTimerPreferences();
