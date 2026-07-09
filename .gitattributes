@@ -10,8 +10,8 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 
-# Keep this legacy mixed-EOL stylesheet stable to avoid noisy full-file diffs.
-css/main.css -text !eol
+# css/main.css is now LF-normalized like the rest of the stylesheets.
+# (Its previous -text !eol exemption caused a recurring CRLF flip-flop.)
 
 # Keep Windows-native scripts on CRLF for local execution.
 *.ps1 text eol=crlf

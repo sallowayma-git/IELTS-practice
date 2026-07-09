@@ -7534,69 +7534,19 @@ body[data-bg-theme="newjeans"] .newjeans-bg-container {
     justify-content: center;
     align-items: center;
     overflow: hidden;
-    background: radial-gradient(circle, rgba(120, 120, 140, 0.28) 0%, rgba(120, 120, 140, 0) 70%);
+    background: transparent;
 }
 
-.tulip-silhouette {
-    position: relative;
-    width: 50px;
-    height: 70px;
-    opacity: 0.65;
-    filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.25));
-    transition: all 0.3s ease;
+.ink-flower {
+    width: 100%;
+    height: 100%;
+    display: block;
+    transform-origin: center center;
+    transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-.theme-card:hover .tulip-silhouette {
-    opacity: 0.85;
+.theme-card:hover .ink-flower {
     transform: scale(1.05);
-    filter: drop-shadow(0 4px 12px rgba(255, 255, 255, 0.45));
-}
-
-.tulip-petal-center {
-    position: absolute;
-    width: 20px;
-    height: 35px;
-    background: linear-gradient(to top, #3f3f46, #d4d4d8);
-    border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
-    left: 15px;
-    top: 5px;
-    z-index: 2;
-    border: 0.5px solid rgba(255, 255, 255, 0.1);
-}
-
-.tulip-petal-left {
-    position: absolute;
-    width: 16px;
-    height: 30px;
-    background: linear-gradient(to top, #27272a, #a1a1aa);
-    border-radius: 60% 30% 30% 60% / 50% 30% 70% 50%;
-    left: 7px;
-    top: 9px;
-    transform: rotate(-15deg);
-    z-index: 1;
-    border: 0.5px solid rgba(255, 255, 255, 0.08);
-}
-
-.tulip-petal-right {
-    position: absolute;
-    width: 16px;
-    height: 30px;
-    background: linear-gradient(to top, #27272a, #a1a1aa);
-    border-radius: 30% 60% 60% 30% / 30% 50% 50% 70%;
-    left: 27px;
-    top: 9px;
-    transform: rotate(15deg);
-    z-index: 1;
-    border: 0.5px solid rgba(255, 255, 255, 0.08);
-}
-
-.tulip-stem {
-    position: absolute;
-    width: 2px;
-    height: 30px;
-    background: linear-gradient(to bottom, #52525b, #18181b);
-    left: 24px;
-    top: 38px;
 }
 
 .ascii-bg-container {

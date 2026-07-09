@@ -1171,10 +1171,21 @@
                             aria-label="向左滚动主题列表"
                             aria-controls="theme-options-scroller"
                         >
-                            <span
+                            <svg
                                 class="theme-scroll-btn__glyph"
+                                viewBox="0 0 24 24"
                                 aria-hidden="true"
-                            ></span>
+                                focusable="false"
+                            >
+                                <path
+                                    d="M15 6 L9 12 L15 18"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
                         </button>
                         <div
                             class="theme-options-glass"
@@ -1278,18 +1289,39 @@
                             <div class="theme-card">
                                 <div class="theme-card-bg theme-bg-ascii"></div>
                                 <div class="theme-preview-ascii" aria-hidden="true">
-                                    <div class="tulip-silhouette">
-                                        <div class="tulip-petal-left"></div>
-                                        <div class="tulip-petal-center"></div>
-                                        <div class="tulip-petal-right"></div>
-                                        <div class="tulip-stem"></div>
-                                    </div>
+                                    <svg class="ink-flower" viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                                        <defs>
+                                            <linearGradient id="inkGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stop-color="#fafafa" stop-opacity="0.95" />
+                                                <stop offset="55%" stop-color="#d4d4d8" stop-opacity="0.75" />
+                                                <stop offset="100%" stop-color="#52525b" stop-opacity="0.55" />
+                                            </linearGradient>
+                                            <linearGradient id="stemGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stop-color="#a1a1aa" stop-opacity="0.9" />
+                                                <stop offset="100%" stop-color="#3f3f46" stop-opacity="0.7" />
+                                            </linearGradient>
+                                            <filter id="inkGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                                <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#e4e4e7" flood-opacity="0.55" />
+                                            </filter>
+                                            <filter id="inkBleed" x="-60%" y="-60%" width="220%" height="220%">
+                                                <feGaussianBlur stdDeviation="4" />
+                                            </filter>
+                                        </defs>
+                                        <path filter="url(#inkBleed)" fill="url(#inkGrad)" opacity="0.22" d="M 40 36 C 33 54, 36 74, 47 81 C 54 86, 66 86, 73 81 C 84 74, 87 54, 80 36 C 72 30, 64 34, 60 38 C 56 34, 48 30, 40 36 Z" />
+                                        <path d="M 60 80 C 60 100, 58 118, 60 138" fill="none" stroke="url(#stemGrad)" stroke-width="2.4" stroke-linecap="round" />
+                                        <path d="M 60 112 C 44 108, 34 120, 38 134 C 52 130, 58 122, 60 114 Z" fill="url(#stemGrad)" opacity="0.7" stroke="#a1a1aa" stroke-width="1" stroke-opacity="0.5" />
+                                        <path d="M 60 122 C 76 118, 86 130, 82 144 C 68 140, 62 132, 60 124 Z" fill="url(#stemGrad)" opacity="0.7" stroke="#a1a1aa" stroke-width="1" stroke-opacity="0.5" />
+                                        <path filter="url(#inkGlow)" fill="url(#inkGrad)" stroke="#f4f4f5" stroke-width="1.5" stroke-opacity="0.85" d="M 40 36 C 33 54, 36 74, 47 81 C 54 86, 66 86, 73 81 C 84 74, 87 54, 80 36 C 72 30, 64 34, 60 38 C 56 34, 48 30, 40 36 Z" />
+                                        <path d="M 60 38 C 56 52, 54 68, 56 80" fill="none" stroke="#f4f4f5" stroke-width="1.2" stroke-opacity="0.6" stroke-linecap="round" />
+                                        <path d="M 60 38 C 64 52, 66 68, 64 80" fill="none" stroke="#f4f4f5" stroke-width="1.2" stroke-opacity="0.6" stroke-linecap="round" />
+                                        <path d="M 60 38 C 60 55, 60 68, 60 80" fill="none" stroke="#f4f4f5" stroke-width="1.2" stroke-opacity="0.45" stroke-linecap="round" />
+                                    </svg>
                                 </div>
                                 <div class="theme-card-glass-layer">
                                     <div class="theme-card-header">
                                         <h4 class="theme-card-title">墨染字花</h4>
                                         <div class="theme-card-subtitle">
-                                            <span>🌷 ASCII Tulip</span>
+                                            <span>🌷 Ink Bloom</span>
                                         </div>
                                     </div>
                                     <div class="theme-card-footer">
@@ -1306,10 +1338,21 @@
                             aria-label="向右滚动主题列表"
                             aria-controls="theme-options-scroller"
                         >
-                            <span
+                            <svg
                                 class="theme-scroll-btn__glyph"
+                                viewBox="0 0 24 24"
                                 aria-hidden="true"
-                            ></span>
+                                focusable="false"
+                            >
+                                <path
+                                    d="M15 6 L9 12 L15 18"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
                         </button>
                     </div>
                 </div>

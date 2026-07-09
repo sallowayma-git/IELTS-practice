@@ -12,36 +12,74 @@
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 18px;
-    height: 56px;
-    border: 0;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.8);
-    color: rgba(15, 23, 42, 0.82);
+    width: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    /* Kill any inline baseline gap so the glyph sits dead-centre */
+    line-height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    color: rgba(15, 23, 42, 0.7);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
-    backdrop-filter: blur(12px);
+    box-shadow:
+        0 3px 12px rgba(15, 23, 42, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(10px) saturate(150%);
+    -webkit-backdrop-filter: blur(10px) saturate(150%);
     cursor: pointer;
+    /* Hidden until the surrounding card area is hovered/focused,
+       so the buttons don't intrude otherwise. */
+    opacity: 0;
+    pointer-events: none;
     transition:
-        opacity 0.2s ease,
-        transform 0.2s ease,
-        background-color 0.2s ease,
-        color 0.2s ease;
+        opacity 0.3s ease,
+        transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+        background-color 0.25s ease,
+        color 0.25s ease,
+        box-shadow 0.25s ease,
+        border-color 0.25s ease;
     z-index: 3;
 }
 
+/* Reveal the scroll buttons only while the user is interacting with
+   the theme card scroll area (hover or keyboard focus). */
+.theme-options-viewport:hover .theme-scroll-btn,
+.theme-options-viewport:focus-within .theme-scroll-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .theme-scroll-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.94);
+    background: rgba(255, 255, 255, 0.92);
     color: #0f172a;
-    transform: translateY(-50%) scale(1.03);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-50%) scale(1.08);
+    box-shadow:
+        0 8px 22px rgba(15, 23, 42, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.theme-scroll-btn:active:not(:disabled) {
+    transform: translateY(-50%) scale(0.94);
+    transition-duration: 0.1s;
 }
 
 .theme-scroll-btn:disabled {
-    opacity: 0.26;
+    opacity: 0;
     cursor: default;
     transform: translateY(-50%);
+    pointer-events: none;
+}
+
+/* While the area is hovered, surface a faint disabled arrow so the
+   start/end boundary stays discoverable without being obtrusive. */
+.theme-options-viewport:hover .theme-scroll-btn:disabled,
+.theme-options-viewport:focus-within .theme-scroll-btn:disabled {
+    opacity: 0.2;
 }
 
 .theme-scroll-btn[hidden] {
@@ -49,27 +87,23 @@
 }
 
 .theme-scroll-btn__glyph {
-    width: 9px;
-    height: 9px;
-    border-top: 1.5px solid currentColor;
-    border-right: 1.5px solid currentColor;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    display: block;
     pointer-events: none;
 }
 
-.theme-scroll-btn-prev .theme-scroll-btn__glyph {
-    transform: rotate(-135deg);
-}
-
 .theme-scroll-btn-next .theme-scroll-btn__glyph {
-    transform: rotate(45deg);
+    transform: scaleX(-1);
 }
 
 .theme-scroll-btn-prev {
-    left: 17px;
+    left: 12px;
 }
 
 .theme-scroll-btn-next {
-    right: 17px;
+    right: 12px;
 }
 
 @media (max-width: 640px) {
@@ -82,17 +116,25 @@
         padding: 16px 20px 24px;
     }
 
+    /* No hover on touch devices — keep the buttons always reachable. */
     .theme-scroll-btn {
+        width: 36px;
+        height: 36px;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .theme-scroll-btn__glyph {
         width: 16px;
-        height: 48px;
+        height: 16px;
     }
 
     .theme-scroll-btn-prev {
-        left: 11px;
+        left: 10px;
     }
 
     .theme-scroll-btn-next {
-        right: 11px;
+        right: 10px;
     }
 
     .theme-card {
