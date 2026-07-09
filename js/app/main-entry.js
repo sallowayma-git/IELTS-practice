@@ -7,12 +7,251 @@
     var SESSION_GROUP = 'session-suite';
     var STATE_CORE_GROUP = 'state-core';
     var SETTINGS_GROUP = 'settings-tools';
+    var READING_CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
+    var READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
 
     function ensureLazyGroup(name) {
         if (!name || !global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
         }
         return global.AppLazyLoader.ensureGroup(name);
+    }
+
+    function hashReadingCandidateCode(sourceId) {
+        var source = String(sourceId || '');
+        if (!source) {
+            return '';
+        }
+        var hash = 0;
+        for (var index = 0; index < source.length; index += 1) {
+            hash = ((hash << 5) - hash) + source.charCodeAt(index);
+            hash |= 0;
+        }
+        return String(Math.abs(hash) % 900000 + 100000);
+    }
+
+    function createReadingCandidateCodeSeed() {
+        var parts = [String(Date.now()), String(Math.random())];
+        try {
+            if (global.crypto && typeof global.crypto.getRandomValues === 'function') {
+                var values = new Uint32Array(4);
+                global.crypto.getRandomValues(values);
+                parts.push(Array.prototype.join.call(values, ':'));
+            }
+        } catch (_) { }
+        try {
+            parts.push(String(global.navigator && global.navigator.userAgent || ''));
+        } catch (_) { }
+        return parts.join(':');
+    }
+
+    function readReadingCandidateCodePreferences() {
+        try {
+            var raw = global.localStorage && global.localStorage.getItem(READING_CANDIDATE_CODE_PREF_KEY);
+            var parsed = raw ? JSON.parse(raw) : null;
+            var mode = parsed && parsed.mode === 'custom' ? 'custom' : 'auto';
+            var customCode = parsed && typeof parsed.customCode === 'string'
+                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
+                : '';
+            return {
+                mode: mode,
+                customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
+            };
+        } catch (_) {
+            return { mode: 'auto', customCode: '' };
+        }
+    }
+
+    function saveReadingCandidateCodePreferences(preferences) {
+        var next = {
+            mode: preferences && preferences.mode === 'custom' ? 'custom' : 'auto',
+            customCode: preferences && typeof preferences.customCode === 'string'
+                ? preferences.customCode.replace(/\D/g, '').slice(0, 6)
+                : ''
+        };
+        try {
+            if (global.localStorage) {
+                global.localStorage.setItem(READING_CANDIDATE_CODE_PREF_KEY, JSON.stringify(next));
+            }
+        } catch (_) { }
+        return next;
+    }
+
+    function setReadingCandidateCodeStatus(element, message, state) {
+        if (!element) {
+            return;
+        }
+        element.textContent = message || '';
+        if (state) {
+            element.dataset.state = state;
+        } else {
+            delete element.dataset.state;
+        }
+    }
+
+    function setupReadingCandidateCodeSettings() {
+        var input = document.getElementById('reading-candidate-code-input');
+        var saveButton = document.getElementById('reading-candidate-code-save-btn');
+        var randomButton = document.getElementById('reading-candidate-code-random-btn');
+        var status = document.getElementById('reading-candidate-code-status');
+        var modeInputs = Array.prototype.slice.call(
+            document.querySelectorAll('input[name="reading-candidate-code-mode"]')
+        );
+        if (!input || !saveButton || !randomButton || !modeInputs.length) {
+            return;
+        }
+
+        function getSelectedMode() {
+            var selected = modeInputs.find(function findChecked(item) { return item.checked; });
+            return selected && selected.value === 'custom' ? 'custom' : 'auto';
+        }
+
+        function setSelectedMode(mode) {
+            modeInputs.forEach(function syncMode(item) {
+                item.checked = item.value === mode;
+            });
+            input.disabled = mode !== 'custom';
+        }
+
+        function syncFromStorage() {
+            var preferences = readReadingCandidateCodePreferences();
+            setSelectedMode(preferences.mode);
+            input.value = preferences.customCode || '';
+            setReadingCandidateCodeStatus(
+                status,
+                preferences.mode === 'custom' && preferences.customCode
+                    ? '当前使用自定义 code：' + preferences.customCode
+                    : '当前使用自动生成：按练习 session 生成 6 位 code。',
+                ''
+            );
+        }
+
+        modeInputs.forEach(function bindMode(item) {
+            item.addEventListener('change', function onModeChange() {
+                var mode = getSelectedMode();
+                input.disabled = mode !== 'custom';
+                if (mode === 'custom') {
+                    input.focus();
+                }
+            });
+        });
+
+        input.addEventListener('input', function sanitizeCandidateCodeInput() {
+            var cleaned = input.value.replace(/\D/g, '').slice(0, 6);
+            if (input.value !== cleaned) {
+                input.value = cleaned;
+            }
+            setReadingCandidateCodeStatus(status, '', '');
+        });
+
+        saveButton.addEventListener('click', function saveCandidateCodeSettings() {
+            var mode = getSelectedMode();
+            var code = input.value.replace(/\D/g, '').slice(0, 6);
+            if (mode === 'custom' && !READING_CANDIDATE_CODE_PATTERN.test(code)) {
+                setReadingCandidateCodeStatus(status, '请输入 6 位数字 code。', 'error');
+                input.focus();
+                return;
+            }
+            saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
+            setReadingCandidateCodeStatus(
+                status,
+                mode === 'custom' ? '已保存自定义 code：' + code : '已保存：自动生成。',
+                'success'
+            );
+        });
+
+        randomButton.addEventListener('click', function generateCandidateCode() {
+            var code = hashReadingCandidateCode(createReadingCandidateCodeSeed());
+            setSelectedMode('custom');
+            input.value = code;
+            saveReadingCandidateCodePreferences({ mode: 'custom', customCode: code });
+            setReadingCandidateCodeStatus(status, '已随机生成并保存：' + code, 'success');
+        });
+
+        syncFromStorage();
+    }
+
+    function setPracticeTimerStatus(element, message, state) {
+        if (!element) {
+            return;
+        }
+        element.textContent = message || '';
+        if (state) {
+            element.dataset.state = state;
+        } else {
+            delete element.dataset.state;
+        }
+    }
+
+    function setupPracticeTimerSettings() {
+        var manager = global.PracticeTimerPreferences;
+        if (!manager || typeof manager.read !== 'function' || typeof manager.save !== 'function') {
+            return;
+        }
+
+        Array.prototype.slice.call(document.querySelectorAll('.practice-timer-card[data-timer-scope]'))
+            .forEach(function bindTimerCard(card) {
+                var scope = String(card.dataset.timerScope || '').toLowerCase() === 'listening'
+                    ? 'listening'
+                    : 'reading';
+                var status = card.querySelector('.practice-timer-status');
+                var saveButton = card.querySelector('[data-timer-save]');
+                var fields = {
+                    mode: card.querySelector('[data-timer-field="mode"]'),
+                    countdownMinutes: card.querySelector('[data-timer-field="countdownMinutes"]'),
+                    limitEnabled: card.querySelector('[data-timer-field="limitEnabled"]'),
+                    limitMinutes: card.querySelector('[data-timer-field="limitMinutes"]'),
+                    expiryAction: card.querySelector('[data-timer-field="expiryAction"]')
+                };
+                if (!saveButton || !fields.mode || !fields.countdownMinutes || !fields.limitEnabled || !fields.limitMinutes || !fields.expiryAction) {
+                    return;
+                }
+
+                function syncLimitState() {
+                    fields.limitMinutes.disabled = !fields.limitEnabled.checked;
+                }
+
+                function apply(preferences) {
+                    var normalized = manager.normalize(preferences);
+                    fields.mode.value = normalized.mode;
+                    fields.countdownMinutes.value = String(normalized.countdownMinutes);
+                    fields.limitEnabled.checked = Boolean(normalized.limitEnabled);
+                    fields.limitMinutes.value = String(normalized.limitMinutes);
+                    fields.expiryAction.value = normalized.expiryAction;
+                    syncLimitState();
+                    setPracticeTimerStatus(status, 'Saved', '');
+                }
+
+                function collect() {
+                    return manager.normalize({
+                        mode: fields.mode.value,
+                        countdownMinutes: fields.countdownMinutes.value,
+                        limitEnabled: fields.limitEnabled.checked,
+                        limitMinutes: fields.limitMinutes.value,
+                        expiryAction: fields.expiryAction.value
+                    });
+                }
+
+                fields.limitEnabled.addEventListener('change', function onLimitToggle() {
+                    syncLimitState();
+                    setPracticeTimerStatus(status, '', '');
+                });
+                [fields.mode, fields.countdownMinutes, fields.limitMinutes, fields.expiryAction].forEach(function bindField(field) {
+                    field.addEventListener('input', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                    field.addEventListener('change', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                });
+                saveButton.addEventListener('click', function saveTimerPreferences() {
+                    var saved = manager.save(scope, collect());
+                    apply(saved);
+                    setPracticeTimerStatus(status, 'Saved', 'success');
+                });
+
+                apply(manager.read(scope));
+            });
     }
 
     var browseGroupPromise = null;
@@ -440,6 +679,8 @@
     function init() {
         setStorageNamespace();
         initializeNavigationShell();
+        setupReadingCandidateCodeSettings();
+        setupPracticeTimerSettings();
 
         if (STRICT_ON_DEMAND) {
             setTimeout(function () {

@@ -6873,6 +6873,34 @@
                 : url;
         },
 
+        _buildUnifiedListeningUrl(exam) {
+            if (!this._isListeningLibraryExam(exam) || !exam || !exam.id) {
+                return '';
+            }
+            const currentProtocol = (typeof window !== 'undefined' && window.location && window.location.protocol)
+                ? String(window.location.protocol).toLowerCase()
+                : '';
+            if (currentProtocol !== 'http:' && currentProtocol !== 'https:') {
+                return '';
+            }
+            const sourceUrl = (typeof window.buildResourcePath === 'function')
+                ? window.buildResourcePath(exam, 'html')
+                : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.filename || ''));
+            const resolvedSourceUrl = typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(sourceUrl)
+                : sourceUrl;
+            if (!resolvedSourceUrl) {
+                return '';
+            }
+            const params = new URLSearchParams();
+            params.set('examId', String(exam.id));
+            params.set('sourceUrl', resolvedSourceUrl);
+            const url = `assets/generated/listening-exams/listening-practice-unified.html?${params.toString()}`;
+            return typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(url)
+                : url;
+        },
+
         _buildReadingPdfUrl(exam) {
             if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
                 return '';
@@ -7089,6 +7117,11 @@
             }
 
             // 使用全局的路径构建器以确保阅读/听力路径正确
+            const listeningLaunchUrl = this._buildUnifiedListeningUrl(exam);
+            if (listeningLaunchUrl) {
+                return listeningLaunchUrl;
+            }
+
             if (typeof window.buildResourcePath === 'function') {
                 return window.buildResourcePath(exam, 'html');
             }
@@ -10103,9 +10136,8 @@
             // 更新题目状态
             this.updateExamStatus(examId, 'in-progress');
 
-            // 降级时使用已随发布包提供的占位页，避免打开不存在的旧模板。
-            const practiceUrl = this._buildExamPlaceholderUrl(exam, { examId })
-                || `templates/exam-placeholder.html?examId=${encodeURIComponent(examId)}`;
+            // 尝试打开练习页面
+            const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
             window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
         },
 
@@ -10678,7 +10710,7 @@
                     examEntry: exam,
                     metadata
                 }, exam, {
-                    currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '0.6.2-fix',
+                    currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0',
                     maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000,
                     updateStats: true
                 });
