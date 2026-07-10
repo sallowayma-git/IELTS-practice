@@ -1131,6 +1131,328 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/components/practiceSettingsPanel.js ===== */
+/**
+ * Practice settings panel component.
+ *
+ * Renders the "Practice header code" and "Practice timer" cards as secondary
+ * cards inside a modal, opened from an entry button on the settings page.
+ * This moves the previously-inline cards out of index.html into a component,
+ * matching the theme-switcher.js pattern (the component owns its markup and
+ * the open/close behaviour).
+ *
+ * All element ids / classes / data-attributes are preserved so the existing
+ * setup logic in js/app/main-entry.js keeps working once the modal is in the DOM.
+ */
+(function (global) {
+    'use strict';
+
+    var MODAL_ID = 'practice-settings-modal';
+    var ENTRY_ID = 'practice-settings-entry-btn';
+    var modal = null;
+
+    function buildModalMarkup() {
+        return [
+            '<div id="' + MODAL_ID + '" class="theme-modal" role="dialog" aria-modal="true" aria-labelledby="practice-settings-title">',
+            '    <div class="theme-modal-content">',
+            '        <div class="theme-modal-header">',
+            '            <h3 id="practice-settings-title">练习设置</h3>',
+            '            <button class="theme-modal-close" type="button" aria-label="关闭">&times;</button>',
+            '        </div>',
+            '        <div class="theme-modal-body">',
+            '            <div class="practice-settings-cards">',
+
+            '                <div class="practice-sub-card">',
+            '                    <h3>练习头部编码</h3>',
+            '                    <p class="hero-panel__muted">控制练习页顶部栏显示的 6 位编码。</p>',
+            '                    <div class="reading-candidate-code-settings">',
+            '                        <label class="reading-candidate-code-option">',
+            '                            <input type="radio" name="reading-candidate-code-mode" value="auto" checked />',
+            '                            <span><strong>自动</strong><small>根据当前练习会话自动生成 6 位编码。</small></span>',
+            '                        </label>',
+            '                        <label class="reading-candidate-code-option">',
+            '                            <input type="radio" name="reading-candidate-code-mode" value="custom" />',
+            '                            <span><strong>自定义</strong><small>始终显示你指定的 6 位编码。</small></span>',
+            '                        </label>',
+            '                        <div class="reading-candidate-code-controls">',
+            '                            <input id="reading-candidate-code-input" class="reading-candidate-code-input" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="797618" aria-label="练习页顶部栏 6 位编码" disabled />',
+            '                            <button class="btn hero-btn data-mgmt-btn" id="reading-candidate-code-random-btn" type="button">随机</button>',
+            '                            <button class="btn hero-btn data-mgmt-btn" id="reading-candidate-code-save-btn" type="button">保存</button>',
+            '                        </div>',
+            '                        <div class="reading-candidate-code-status" id="reading-candidate-code-status" role="status" aria-live="polite"></div>',
+            '                    </div>',
+            '                </div>',
+
+            '                <div class="practice-sub-card">',
+            '                    <h3>练习计时</h3>',
+            '                    <p class="hero-panel__muted">阅读与听力保持各自的计时偏好。</p>',
+            '                    <div class="practice-timer-settings">',
+            '                        <section class="practice-timer-card" data-timer-scope="reading">',
+            '                            <div class="practice-timer-card__header">',
+            '                                <h4>阅读计时</h4>',
+            '                                <span id="reading-timer-status" class="practice-timer-status" role="status" aria-live="polite"></span>',
+            '                            </div>',
+            '                            <div class="practice-timer-grid">',
+            '                                <label class="practice-timer-field"><span>计时模式</span><select data-timer-field="mode"><option value="elapsed">正计时</option><option value="countdown">倒计时</option></select></label>',
+            '                                <label class="practice-timer-field"><span>倒计时分钟数</span><input type="number" min="1" max="240" step="1" data-timer-field="countdownMinutes" /></label>',
+            '                                <label class="practice-timer-field practice-timer-check"><input type="checkbox" data-timer-field="limitEnabled" /><span>启用最长用时限制</span></label>',
+            '                                <label class="practice-timer-field"><span>最长用时分钟数</span><input type="number" min="1" max="240" step="1" data-timer-field="limitMinutes" /></label>',
+            '                                <label class="practice-timer-field"><span>到时处理</span><select data-timer-field="expiryAction"><option value="warn">仅提醒</option><option value="auto-submit">自动提交</option><option value="lock">锁定答案</option></select></label>',
+            '                            </div>',
+            '                            <button class="btn hero-btn data-mgmt-btn practice-timer-save" type="button" data-timer-save>保存阅读设置</button>',
+            '                        </section>',
+            '                        <section class="practice-timer-card" data-timer-scope="listening">',
+            '                            <div class="practice-timer-card__header">',
+            '                                <h4>听力计时</h4>',
+            '                                <span id="listening-timer-status" class="practice-timer-status" role="status" aria-live="polite"></span>',
+            '                            </div>',
+            '                            <div class="practice-timer-grid">',
+            '                                <label class="practice-timer-field"><span>计时模式</span><select data-timer-field="mode"><option value="elapsed">正计时</option><option value="countdown">倒计时</option></select></label>',
+            '                                <label class="practice-timer-field"><span>倒计时分钟数</span><input type="number" min="1" max="240" step="1" data-timer-field="countdownMinutes" /></label>',
+            '                                <label class="practice-timer-field practice-timer-check"><input type="checkbox" data-timer-field="limitEnabled" /><span>启用最长用时限制</span></label>',
+            '                                <label class="practice-timer-field"><span>最长用时分钟数</span><input type="number" min="1" max="240" step="1" data-timer-field="limitMinutes" /></label>',
+            '                                <label class="practice-timer-field"><span>到时处理</span><select data-timer-field="expiryAction"><option value="warn">仅提醒</option><option value="auto-submit">自动提交</option><option value="lock">锁定答案</option></select></label>',
+            '                            </div>',
+            '                            <button class="btn hero-btn data-mgmt-btn practice-timer-save" type="button" data-timer-save>保存听力设置</button>',
+            '                        </section>',
+            '                    </div>',
+            '                </div>',
+
+            '            </div>',
+            '        </div>',
+            '    </div>',
+            '</div>'
+        ].join('\n');
+    }
+
+    function openModal() {
+        if (modal) {
+            modal.classList.add('show');
+        }
+    }
+
+    function closeModal() {
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    function bindEvents() {
+        var entry = document.getElementById(ENTRY_ID);
+        if (entry) {
+            entry.addEventListener('click', openModal);
+        }
+        if (!modal) {
+            return;
+        }
+        var closeBtn = modal.querySelector('.theme-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+        // Click on the backdrop (but not the content) closes the modal.
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+    }
+
+    function init() {
+        if (global.__practiceSettingsPanelInitialized) {
+            return;
+        }
+        global.__practiceSettingsPanelInitialized = true;
+
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = buildModalMarkup();
+        modal = wrapper.firstElementChild;
+        if (modal && document.body) {
+            document.body.appendChild(modal);
+        }
+        bindEvents();
+    }
+
+    // Render synchronously at module load so the cards exist in the DOM before
+    // main-entry.js runs its setup logic (which queries them by id / class).
+    init();
+
+    global.PracticeSettingsPanel = {
+        open: openModal,
+        close: closeModal
+    };
+})(window);
+
+
+/* ===== js/components/libraryManagerPanel.js ===== */
+/**
+ * Library manager panel component.
+ *
+ * Unifies the three legacy settings buttons (#load-library-btn,
+ * #library-config-btn, #force-refresh-btn) into a single "题库管理" entry.
+ * Clicking the entry opens a theme-style modal that hosts:
+ *   - the library configuration list (previously rendered inline into
+ *     #settings-view, now mounted into the modal body),
+ *   - the "加载题库" action (delegates to showLibraryLoaderModal / loadLibrary),
+ *   - the "强制刷新题库" action (delegates to loadLibrary(true)).
+ *
+ * Follows the same modal pattern as practiceSettingsPanel.js: the component
+ * owns its markup, appends the modal to document.body at load time, and
+ * exposes open()/close() on a global. indexInteractions.js binds the entry
+ * button to open(). The existing renderLibraryConfigList() in main.js mounts
+ * the .library-config-list host into this modal's body container, so switching
+ * / deleting a config still refreshes the list in place.
+ *
+ * Element ids / classes inside the modal are preserved where they predate
+ * this component (the config list rendering depends on them). The two action
+ * buttons keep their original ids (#load-library-btn, #force-refresh-btn) so
+ * the existing indexInteractions.js bindings continue to resolve them after
+ * they move into the modal — only the dedicated #library-config-btn is removed
+ * (its handler is now the modal's own open() call).
+ */
+(function (global) {
+    'use strict';
+
+    var MODAL_ID = 'library-manager-modal';
+    var ENTRY_ID = 'library-manager-btn';
+    var BODY_ID = 'library-manager-modal-body';
+    var modal = null;
+
+    function buildModalMarkup() {
+        return [
+            '<div id="' + MODAL_ID + '" class="theme-modal library-manager-modal" role="dialog" aria-modal="true" aria-labelledby="library-manager-title">',
+            '    <div class="theme-modal-content">',
+            '        <div class="theme-modal-header">',
+            '            <h3 id="library-manager-title">📚 题库管理</h3>',
+            '            <button class="theme-modal-close" type="button" aria-label="关闭">&times;</button>',
+            '        </div>',
+            '        <div class="theme-modal-body library-manager-modal__body">',
+            '            <div class="library-manager-modal__section">',
+            '                <div class="library-manager-modal__section-head">',
+            '                    <h4>题库配置列表</h4>',
+            '                    <p class="library-manager-modal__hint">在下方切换或删除已导入的题库配置。</p>',
+            '                </div>',
+            '                <div id="' + BODY_ID + '" class="library-manager-modal__config-host"></div>',
+            '            </div>',
+            '            <div class="library-manager-modal__section library-manager-modal__actions">',
+            '                <div class="library-manager-modal__section-head">',
+            '                    <h4>题库操作</h4>',
+            '                    <p class="library-manager-modal__hint">加载新题库或强制刷新当前题库索引。</p>',
+            '                </div>',
+            '                <div class="library-manager-modal__action-row">',
+            '                    <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" type="button">📂 加载题库</button>',
+            '                    <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" type="button">🔄 强制刷新题库</button>',
+            '                </div>',
+            '            </div>',
+            '        </div>',
+            '    </div>',
+            '</div>'
+        ].join('\n');
+    }
+
+    function openModal() {
+        if (!modal) {
+            return;
+        }
+        modal.classList.add('show');
+        // Lazily render the config list once the modal is open, then refresh on
+        // every subsequent open so it reflects the latest storage state.
+        renderConfigListIntoModal();
+    }
+
+    function closeModal() {
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    function renderConfigListIntoModal() {
+        var body = modal && modal.querySelector('#' + BODY_ID);
+        if (!body) {
+            return;
+        }
+        // showLibraryConfigListV2 (boot-fallback, always available once
+        // legacy-app loads) accepts a containerId option and delegates to
+        // renderLibraryConfigList when main.js has loaded, falling back to its
+        // own inline renderer otherwise. Both paths mount the .library-config-list
+        // host into the container we pass here.
+        try {
+            if (typeof global.showLibraryConfigListV2 === 'function') {
+                global.showLibraryConfigListV2({ containerId: BODY_ID });
+                return;
+            }
+        } catch (error) {
+            console.warn('[LibraryManagerPanel] showLibraryConfigListV2 调用失败:', error);
+        }
+
+        // Direct fallback if the boot-fallback shim is somehow absent.
+        try {
+            if (typeof global.renderLibraryConfigList === 'function') {
+                global.renderLibraryConfigList({ containerId: BODY_ID, allowDelete: true });
+            }
+        } catch (error) {
+            console.warn('[LibraryManagerPanel] renderLibraryConfigList 调用失败:', error);
+        }
+    }
+
+    function bindEvents() {
+        var entry = document.getElementById(ENTRY_ID);
+        if (entry) {
+            entry.addEventListener('click', openModal);
+        }
+        if (!modal) {
+            return;
+        }
+        var closeBtn = modal.querySelector('.theme-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+        // Click on the backdrop (but not the content) closes the modal.
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+    }
+
+    function init() {
+        if (global.__libraryManagerPanelInitialized) {
+            return;
+        }
+        global.__libraryManagerPanelInitialized = true;
+
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = buildModalMarkup();
+        modal = wrapper.firstElementChild;
+        if (modal && document.body) {
+            document.body.appendChild(modal);
+        }
+        bindEvents();
+    }
+
+    // Render synchronously at module load so the modal exists in the DOM before
+    // indexInteractions.js binds the entry button and before the lazy-loaded
+    // main.js renderLibraryConfigList resolves the container.
+    init();
+
+    global.LibraryManagerPanel = {
+        open: openModal,
+        close: closeModal,
+        getBodyId: function () { return BODY_ID; },
+        renderConfigList: renderConfigListIntoModal
+    };
+})(window);
+
+
 /* ===== js/app/main-entry.js ===== */
 (function bootstrapApp(global) {
     'use strict';
@@ -1254,8 +1576,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             setReadingCandidateCodeStatus(
                 status,
                 preferences.mode === 'custom' && preferences.customCode
-                    ? '当前使用自定义 code：' + preferences.customCode
-                    : '当前使用自动生成：按练习 session 生成 6 位 code。',
+                    ? '当前使用自定义编码：' + preferences.customCode
+                    : '当前使用自动生成：按练习会话生成 6 位编码。',
                 ''
             );
         }
@@ -1282,14 +1604,14 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             var mode = getSelectedMode();
             var code = input.value.replace(/\D/g, '').slice(0, 6);
             if (mode === 'custom' && !READING_CANDIDATE_CODE_PATTERN.test(code)) {
-                setReadingCandidateCodeStatus(status, '请输入 6 位数字 code。', 'error');
+                setReadingCandidateCodeStatus(status, '请输入 6 位数字编码。', 'error');
                 input.focus();
                 return;
             }
             saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
             setReadingCandidateCodeStatus(
                 status,
-                mode === 'custom' ? '已保存自定义 code：' + code : '已保存：自动生成。',
+                mode === 'custom' ? '已保存自定义编码：' + code : '已保存：自动生成。',
                 'success'
             );
         });
@@ -1353,7 +1675,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     fields.limitMinutes.value = String(normalized.limitMinutes);
                     fields.expiryAction.value = normalized.expiryAction;
                     syncLimitState();
-                    setPracticeTimerStatus(status, 'Saved', '');
+                    setPracticeTimerStatus(status, '已保存', '');
                 }
 
                 function collect() {
@@ -1381,7 +1703,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 saveButton.addEventListener('click', function saveTimerPreferences() {
                     var saved = manager.save(scope, collect());
                     apply(saved);
-                    setPracticeTimerStatus(status, 'Saved', 'success');
+                    setPracticeTimerStatus(status, '已保存', 'success');
                 });
 
                 apply(manager.read(scope));
@@ -2048,6 +2370,21 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     function setupIndexSettingsButtons() {
         var bindings = [
             ['clear-cache-btn', function () { return typeof global.clearCache === 'function' && global.clearCache(); }],
+            // The three library buttons now live inside the library manager
+            // modal (#library-manager-modal). The entry button opens the modal;
+            // #load-library-btn and #force-refresh-btn keep their ids so the
+            // bindings below continue to resolve them after they moved. The
+            // legacy #library-config-btn is removed entirely (its open-modal
+            // job is now done by #library-manager-btn below).
+            ['library-manager-btn', function () {
+                if (global.LibraryManagerPanel && typeof global.LibraryManagerPanel.open === 'function') {
+                    return global.LibraryManagerPanel.open();
+                }
+                if (typeof global.showLibraryConfigListV2 === 'function') {
+                    return global.showLibraryConfigListV2();
+                }
+                return undefined;
+            }],
             ['load-library-btn', function () {
                 if (typeof global.showLibraryLoaderModal === 'function') {
                     global.showLibraryLoaderModal();
@@ -2055,7 +2392,6 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     global.loadLibrary(false);
                 }
             }],
-            ['library-config-btn', function () { return typeof global.showLibraryConfigListV2 === 'function' && global.showLibraryConfigListV2(); }],
             ['force-refresh-btn', function () {
                 var notify = function (type, msg) {
                     if (typeof global.showMessage === 'function') {
@@ -2917,6 +3253,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     "js/presentation/navigation-controller.js",
     "js/presentation/message-center.js",
     "js/utils/practiceTimerPreferences.js",
+    "js/components/practiceSettingsPanel.js",
+    "js/components/libraryManagerPanel.js",
     "js/app/main-entry.js",
     "js/presentation/indexInteractions.js",
     "js/presentation/emojiIconizer.js"

@@ -502,25 +502,21 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                             </button>
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
-                                id="load-library-btn"
-                            >
-                                📂 加载题库
-                            </button>
-                            <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
                                 id="theme-switcher-btn-entry"
                             >
                                 🎨 主题切换
                             </button>
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
-                                id="show-onboarding-btn"
+                                id="practice-settings-entry-btn"
+                                type="button"
                             >
-                                🎯 显示引导
+                                ⚙️ 练习设置
                             </button>
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
-                                id="library-config-btn"
+                                id="library-manager-btn"
+                                type="button"
                             >
                                 <svg
                                     viewBox="0 0 24 24"
@@ -559,13 +555,13 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                         y2="16"
                                     ></line>
                                 </svg>
-                                题库配置切换
+                                题库管理
                             </button>
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
-                                id="force-refresh-btn"
+                                id="show-onboarding-btn"
                             >
-                                🔄 强制刷新题库
+                                🎯 显示引导
                             </button>
                         </div>
                     </div>

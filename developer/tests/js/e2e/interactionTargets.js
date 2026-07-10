@@ -3,15 +3,14 @@
     "mainNavigationViews": ["overview", "browse", "practice", "settings", "more"],
     "settingsButtonIds": [
       "clear-cache-btn",
-      "load-library-btn",
-      "library-config-btn",
-      "force-refresh-btn",
       "theme-switcher-btn-entry",
+      "practice-settings-entry-btn",
+      "library-manager-btn",
+      "show-onboarding-btn",
       "create-backup-btn",
       "backup-list-btn",
       "export-data-btn",
-      "import-data-btn",
-      "show-onboarding-btn"
+      "import-data-btn"
     ]
   });
 

@@ -180,6 +180,21 @@
     function setupIndexSettingsButtons() {
         var bindings = [
             ['clear-cache-btn', function () { return typeof global.clearCache === 'function' && global.clearCache(); }],
+            // The three library buttons now live inside the library manager
+            // modal (#library-manager-modal). The entry button opens the modal;
+            // #load-library-btn and #force-refresh-btn keep their ids so the
+            // bindings below continue to resolve them after they moved. The
+            // legacy #library-config-btn is removed entirely (its open-modal
+            // job is now done by #library-manager-btn below).
+            ['library-manager-btn', function () {
+                if (global.LibraryManagerPanel && typeof global.LibraryManagerPanel.open === 'function') {
+                    return global.LibraryManagerPanel.open();
+                }
+                if (typeof global.showLibraryConfigListV2 === 'function') {
+                    return global.showLibraryConfigListV2();
+                }
+                return undefined;
+            }],
             ['load-library-btn', function () {
                 if (typeof global.showLibraryLoaderModal === 'function') {
                     global.showLibraryLoaderModal();
@@ -187,7 +202,6 @@
                     global.loadLibrary(false);
                 }
             }],
-            ['library-config-btn', function () { return typeof global.showLibraryConfigListV2 === 'function' && global.showLibraryConfigListV2(); }],
             ['force-refresh-btn', function () {
                 var notify = function (type, msg) {
                     if (typeof global.showMessage === 'function') {

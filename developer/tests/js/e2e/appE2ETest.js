@@ -2,14 +2,14 @@ const DEFAULT_INTERACTION_TARGETS = Object.freeze({
     mainNavigationViews: ['overview', 'browse', 'practice', 'settings'],
     settingsButtonIds: [
         'clear-cache-btn',
-        'load-library-btn',
-        'library-config-btn',
-        'force-refresh-btn',
+        'theme-switcher-btn-entry',
+        'practice-settings-entry-btn',
+        'library-manager-btn',
+        'show-onboarding-btn',
         'create-backup-btn',
         'backup-list-btn',
         'export-data-btn',
-        'import-data-btn',
-        'show-onboarding-btn'
+        'import-data-btn'
     ]
 });
 
@@ -38,22 +38,22 @@ const SETTINGS_BUTTON_TESTS = {
         stubbed: ['clearCache'],
         stubImplementation: () => Promise.resolve('cleared')
     },
-    'load-library-btn': {
-        name: '设置 - 加载题库按钮',
-        stubbed: ['showLibraryLoaderModal', 'loadLibrary'],
-        stubImplementation: () => Promise.resolve('loaded')
-    },
-    'library-config-btn': {
-        name: '设置 - 题库配置列表按钮',
+    'library-manager-btn': {
+        name: '设置 - 题库管理按钮',
         expectInvocation: false,
-        waitForSelector: '.library-config-list',
-        waitDescription: '题库配置列表渲染',
-        cleanupSelector: '.library-config-list'
-    },
-    'force-refresh-btn': {
-        name: '设置 - 强制刷新题库按钮',
-        stubbed: ['loadLibrary'],
-        stubImplementation: () => Promise.resolve('refreshed')
+        waitForSelector: '#library-manager-modal.show',
+        waitDescription: '题库管理弹窗显示',
+        // Close the modal (remove .show) via the condition hook rather than
+        // cleanupSelector, which would .remove() the modal element outright
+        // and prevent it from being reopened later in the suite.
+        waitForCondition: ({ doc }) => {
+            const modal = doc.getElementById('library-manager-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+            return true;
+        },
+        waitTimeout: 500
     },
     'create-backup-btn': {
         name: '设置 - 创建手动备份按钮',
@@ -384,7 +384,7 @@ class AppE2ETestSuite {
                 return false;
             }
             const buttons = settingsView.querySelectorAll('button');
-            return buttons && buttons.length >= 8;
+            return buttons && buttons.length >= 6;
         }, {
             timeout: 6000,
             description: '设置视图按钮渲染'

@@ -3677,9 +3677,27 @@ function renderLibraryConfigFallback(container, configs, options) {
     return host;
 }
 
+// Resolve the container for the library config list. The config list now lives
+// inside the library manager modal (#library-manager-modal-body); when the
+// modal is open we mount there, otherwise we fall back to #settings-view so
+// non-modal callers (e.g. silent refreshes) still find a valid container.
+function resolveLibraryConfigContainer(options) {
+    const requestedId = options && typeof options.containerId === 'string' ? options.containerId : null;
+    if (requestedId) {
+        const requested = document.getElementById(requestedId);
+        if (requested) {
+            return requested;
+        }
+    }
+    const modalHost = document.getElementById('library-manager-modal-body');
+    if (modalHost) {
+        return modalHost;
+    }
+    return document.getElementById('settings-view');
+}
+
 async function renderLibraryConfigList(options = {}) {
-    const containerId = options.containerId || 'settings-view';
-    const container = document.getElementById(containerId);
+    const container = resolveLibraryConfigContainer(options);
     if (!container) {
         return null;
     }

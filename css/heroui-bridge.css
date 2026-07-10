@@ -446,8 +446,7 @@ body.hero-body {
 }
 
 .practice-trend-card,
-.practice-custom-card,
-.practice-trend-reserved-card {
+.practice-custom-card {
     --practice-trend-radius: var(--shui-radius-lg);
     --practice-trend-line-start: var(--shui-accent);
     --practice-trend-line-mid: var(--shui-gradient-end);
@@ -457,8 +456,7 @@ body.hero-body {
     border-radius: var(--practice-trend-radius);
 }
 
-.practice-trend-card,
-.practice-trend-reserved-card {
+.practice-trend-card {
     grid-column: span 2;
     position: relative;
     perspective: 1600px;
@@ -495,9 +493,7 @@ body.hero-body {
     transform: rotateY(180deg);
 }
 
-.practice-trend-card__face,
-.practice-custom-card__face,
-.practice-trend-reserved-card {
+.practice-trend-card__face {
     background:
         linear-gradient(135deg, rgba(255, 255, 255, 0.54), rgba(255, 255, 255, 0.16)),
         radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.72), transparent 34%),
@@ -1294,22 +1290,6 @@ body.hero-body {
     opacity: 0.72;
 }
 
-.practice-trend-reserved-card {
-    grid-column: span 2;
-    position: relative;
-    overflow: hidden;
-    opacity: 0.62;
-}
-
-.practice-trend-reserved-card::after {
-    content: '';
-    position: absolute;
-    inset: 1px;
-    border: 1px dashed rgba(255, 255, 255, 0.46);
-    border-radius: calc(var(--shui-radius-lg) - 1px);
-    pointer-events: none;
-}
-
 .hero-panel {
     background: var(--shui-panel-bg);
     border-radius: var(--shui-radius-xl);
@@ -1350,14 +1330,8 @@ body.hero-body {
 .btn,
 .hero-btn,
 .hero-panel .btn,
-.shui-filter-btn,
 .exam-item-action-btn {
     color: #0f172a !important;
-}
-
-.shui-filter-btn {
-    border-radius: 999px;
-    padding: 8px 20px;
 }
 
 .hero-panel__muted {
@@ -1365,24 +1339,12 @@ body.hero-body {
     margin-top: 6px;
 }
 
-.hero-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.85rem;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: rgba(102, 126, 234, 0.15);
-    color: var(--shui-accent);
-}
-
 .hero-section {
     margin-bottom: 32px;
 }
 
 .hero-btn,
-.hero-panel .btn:not(.hero-btn),
-.shui-filter-btn {
+.hero-panel .btn:not(.hero-btn) {
     border-radius: var(--shui-radius-sm);
     border: none;
     background-image: linear-gradient(135deg, var(--shui-gradient-start), var(--shui-gradient-end));
@@ -1396,17 +1358,14 @@ body.hero-body {
 
 .hero-btn:hover,
 .hero-panel .btn:not(.hero-btn):hover,
-.shui-filter-btn:hover,
 .hero-btn:focus-visible,
-.hero-panel .btn:not(.hero-btn):focus-visible,
-.shui-filter-btn:focus-visible {
+.hero-panel .btn:not(.hero-btn):focus-visible {
     transform: translateY(-1px);
     box-shadow: 0 22px 45px rgba(0, 0, 0, 0.22);
 }
 
 .hero-btn--ghost,
-.hero-panel .btn.btn-secondary,
-.shui-filter-btn[data-tone="ghost"] {
+.hero-panel .btn.btn-secondary {
     background-image: none;
     background: rgba(255, 255, 255, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.5);
@@ -1812,10 +1771,6 @@ body.hero-body {
     box-shadow: 0 22px 45px rgba(15, 23, 42, 0.18);
 }
 
-.shui-filter-btn[data-tone="ghost"] {
-    padding: 8px 18px;
-}
-
 .category-grid .category-card,
 .category-grid .category-card::before {
     background: rgba(255, 255, 255, 0.3);
@@ -1954,8 +1909,7 @@ body.hero-body {
     }
 
     .practice-trend-card,
-    .practice-custom-card,
-    .practice-trend-reserved-card {
+    .practice-custom-card {
         grid-column: 1;
     }
 
@@ -1967,10 +1921,6 @@ body.hero-body {
 
     .practice-custom-card__rotor {
         min-height: 360px;
-    }
-
-    .practice-trend-reserved-card {
-        min-height: 120px;
     }
 
     .practice-trend-options {
@@ -2138,18 +2088,14 @@ body.hero-body {
     border-color: transparent;
 }
 
-#settings-view #load-library-btn,
-#settings-view #library-config-btn,
-#settings-view #force-refresh-btn,
+#settings-view #library-manager-btn,
 #settings-view #theme-switcher-btn-entry,
 #settings-view #show-onboarding-btn {
     color: var(--bauhaus-text-main) !important;
     border-color: rgba(255, 255, 255, 0.52);
 }
 
-#settings-view #load-library-btn:hover,
-#settings-view #library-config-btn:hover,
-#settings-view #force-refresh-btn:hover,
+#settings-view #library-manager-btn:hover,
 #settings-view #theme-switcher-btn-entry:hover,
 #settings-view #show-onboarding-btn:hover {
     background: var(--bauhaus-accent-blue);

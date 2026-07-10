@@ -120,8 +120,8 @@
             setReadingCandidateCodeStatus(
                 status,
                 preferences.mode === 'custom' && preferences.customCode
-                    ? '当前使用自定义 code：' + preferences.customCode
-                    : '当前使用自动生成：按练习 session 生成 6 位 code。',
+                    ? '当前使用自定义编码：' + preferences.customCode
+                    : '当前使用自动生成：按练习会话生成 6 位编码。',
                 ''
             );
         }
@@ -148,14 +148,14 @@
             var mode = getSelectedMode();
             var code = input.value.replace(/\D/g, '').slice(0, 6);
             if (mode === 'custom' && !READING_CANDIDATE_CODE_PATTERN.test(code)) {
-                setReadingCandidateCodeStatus(status, '请输入 6 位数字 code。', 'error');
+                setReadingCandidateCodeStatus(status, '请输入 6 位数字编码。', 'error');
                 input.focus();
                 return;
             }
             saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
             setReadingCandidateCodeStatus(
                 status,
-                mode === 'custom' ? '已保存自定义 code：' + code : '已保存：自动生成。',
+                mode === 'custom' ? '已保存自定义编码：' + code : '已保存：自动生成。',
                 'success'
             );
         });
@@ -219,7 +219,7 @@
                     fields.limitMinutes.value = String(normalized.limitMinutes);
                     fields.expiryAction.value = normalized.expiryAction;
                     syncLimitState();
-                    setPracticeTimerStatus(status, 'Saved', '');
+                    setPracticeTimerStatus(status, '已保存', '');
                 }
 
                 function collect() {
@@ -247,7 +247,7 @@
                 saveButton.addEventListener('click', function saveTimerPreferences() {
                     var saved = manager.save(scope, collect());
                     apply(saved);
-                    setPracticeTimerStatus(status, 'Saved', 'success');
+                    setPracticeTimerStatus(status, '已保存', 'success');
                 });
 
                 apply(manager.read(scope));

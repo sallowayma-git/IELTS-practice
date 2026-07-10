@@ -667,32 +667,35 @@ sequenceDiagram
 flowchart TD
 
 SettingsView["Settings View"]
+ManagerBtn["Library Manager Button<br>#library-manager-btn"]
+ManagerModal["Library Manager Modal<br>(#library-manager-modal)"]
 LoadBtn["Load Library Button<br>#load-library-btn"]
-ConfigBtn["Library Config Button<br>#library-config-btn"]
+ForceBtn["Force Refresh Button<br>#force-refresh-btn"]
 ShowLoader["showLibraryLoaderModal()"]
-ShowConfig["showLibraryConfigListV2()"]
+ConfigList["Configuration List<br>(renderLibraryConfigList)"]
 Modal["Library Loader Modal"]
-Panel["Configuration List Panel"]
 Upload["handleLibraryUpload()"]
 Switch["switchLibraryConfig()"]
 Delete["deleteLibraryConfig()"]
 
-SettingsView -.->|"onclick"| LoadBtn
-SettingsView -.->|"onclick"| ConfigBtn
+SettingsView -.->|"onclick"| ManagerBtn
+ManagerBtn -.-> ManagerModal
+ManagerModal --> LoadBtn
+ManagerModal --> ForceBtn
+ManagerModal --> ConfigList
 LoadBtn -.-> ShowLoader
-ConfigBtn -.-> ShowConfig
+ForceBtn -.->|"loadLibrary(true)"| SettingsView
 ShowLoader -.-> Modal
-ShowConfig -.-> Panel
 Modal -.-> Upload
-Panel -.-> Switch
-Panel -.-> Delete
+ConfigList -.-> Switch
+ConfigList -.-> Delete
 ```
 
 **HTML Elements**:
 
-* `#load-library-btn` [index.html L150](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L150-L150) : Opens library loader modal
-* `#library-config-btn` [index.html L151-L152](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L151-L152) : Opens configuration list
-* `#force-refresh-btn` [index.html L153-L154](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L153-L154) : Forces exam list refresh
+* `#library-manager-btn` : Opens the library manager modal (replaces the former load/config/force buttons on the settings view)
+* `#load-library-btn` (inside `#library-manager-modal`) : Opens the library loader modal
+* `#force-refresh-btn` (inside `#library-manager-modal`) : Forces exam index refresh via `loadLibrary(true)`
 
 **Sources:** [index.html L150-L154](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L150-L154)
 

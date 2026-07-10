@@ -867,9 +867,24 @@
     }
   }
 
+  // Resolve the container for the library config list. The config list now
+  // lives inside the library manager modal (#library-manager-modal-body); when
+  // the modal is open we mount there, otherwise we fall back to the legacy
+  // #settings-view host so the boot-fallback still renders somewhere visible.
+  function _resolveLibraryConfigContainer(options) {
+    var requestedId = options && typeof options.containerId === 'string' ? options.containerId : null;
+    if (requestedId) {
+      var requested = document.getElementById(requestedId);
+      if (requested) { return requested; }
+    }
+    var modalHost = document.getElementById('library-manager-modal-body');
+    if (modalHost) { return modalHost; }
+    return document.getElementById('settings-view');
+  }
+
   // Fallback for library config list
   if (typeof window.showLibraryConfigListV2 !== 'function') {
-    window.showLibraryConfigListV2 = async function () {
+    window.showLibraryConfigListV2 = async function (options) {
       var configs = [];
       try {
         configs = (window.storage && storage.get) ? await storage.get('exam_index_configurations', []) : [];
@@ -891,12 +906,18 @@
         }
       } catch (e) { }
 
+      var containerId = options && typeof options.containerId === 'string' ? options.containerId : null;
       if (typeof window.renderLibraryConfigList === 'function') {
-        window.renderLibraryConfigList({ configs: configs, activeKey: activeKey, allowDelete: true });
+        window.renderLibraryConfigList({
+          configs: configs,
+          activeKey: activeKey,
+          allowDelete: true,
+          containerId: containerId
+        });
         return;
       }
 
-      var container = document.getElementById('settings-view');
+      var container = _resolveLibraryConfigContainer(options);
       if (!container) { return; }
 
       if (typeof window.renderLibraryConfigFallback === 'function') {

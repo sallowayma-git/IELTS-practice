@@ -200,10 +200,15 @@ async def _exercise_practice(page: Page) -> None:
 
 
 async def _handle_library_panel(page: Page) -> None:
-    panel_close = page.locator(".library-config-panel__close")
-    if await panel_close.count():
-        await panel_close.first.click()
-        await asyncio.sleep(0.2)
+    # The config list now lives inside the library manager modal. Close the
+    # modal itself (rather than the nested panel's close button) so the
+    # 题库管理 overlay is dismissed for the rest of the click-through.
+    modal = page.locator("#library-manager-modal.show")
+    if await modal.count():
+        close_button = modal.locator(".theme-modal-close")
+        if await close_button.count():
+            await close_button.first.click()
+            await asyncio.sleep(0.2)
 
 
 async def _close_library_loader(page: Page) -> None:
@@ -274,9 +279,20 @@ async def _exercise_settings(page: Page) -> None:
         if handle:
             await handle(page)
 
-    await click_button("#load-library-btn", handle=_close_library_loader)
-    await click_button("#library-config-btn", handle=_handle_library_panel)
-    await click_button("#force-refresh-btn")
+    # 题库管理：open the unified modal, then drive the two in-modal actions
+    # (加载题库 -> loader overlay; 强制刷新题库) and close the modal.
+    await click_button("#library-manager-btn", handle=_handle_library_panel)
+    # 加载题库 button moved inside the modal; reopen to reach it, then close
+    # the loader overlay it spawns.
+    await click_button("#library-manager-btn")
+    await page.locator("#load-library-btn").click()
+    await asyncio.sleep(0.3)
+    await _close_library_loader(page)
+    # 强制刷新题库 inside the modal.
+    await page.locator("#library-manager-btn").click()
+    await page.locator("#force-refresh-btn").click()
+    await asyncio.sleep(0.3)
+    await _handle_library_panel(page)
 
     await click_button("#create-backup-btn")
     await asyncio.sleep(0.5)
