@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.pdf",
+    "pdf": "ReadingPractice/PDF/133. P2 - How to be Happy 如何获得幸福.pdf",
     "ieltsHtml": "IELTS/P2/How to be Happy.html"
   },
   "audit": {

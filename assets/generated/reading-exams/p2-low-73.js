@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/164. P2 - The Power of Smell 嗅觉的力量.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/164. P2 - The Power of Smell 嗅觉的力量.pdf",
+    "pdf": "ReadingPractice/PDF/164. P2 - The Power of Smell 嗅觉的力量.pdf",
     "ieltsHtml": "IELTS/P2/The Power of Smell.html"
   },
   "audit": {

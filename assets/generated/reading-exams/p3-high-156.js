@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/66. P3 - Elephant Communication 大象交流【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/66. P3 - Elephant Communication 大象交流【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/66. P3 - Elephant Communication 大象交流【高】.pdf",
     "ieltsHtml": "IELTS/P3/Elephant Communication.html"
   },
   "audit": {

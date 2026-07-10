@@ -326,7 +326,7 @@ def main() -> int:
             plastic_exam.get("meta", {}).get("pdfFilename", "")
         ),
         "source_ref_present": "116. P1 - The Development of Plastics 塑料的发展史【次】.pdf" in str(
-            plastic_exam.get("sourceRefs", {}).get("shuiPdf", "")
+            plastic_exam.get("sourceRefs", {}).get("pdf", "")
         ),
     }
 

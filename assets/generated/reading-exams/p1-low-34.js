@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/129. P1 - The Slow Food Organization 慢食运动组织.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
+    "pdf": "ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
     "ieltsHtml": "IELTS/P1/The Slow Food Organization.html"
   },
   "audit": {

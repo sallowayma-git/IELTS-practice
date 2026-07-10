@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/83. P3 - Termite Mounds 白蚁丘/83. P3 - Termite Mounds 白蚁丘.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/83. P3 - Termite Mounds 白蚁丘/83. P3 - Termite Mounds 白蚁丘.pdf",
+    "pdf": "ReadingPractice/PDF/83. P3 - Termite Mounds 白蚁丘.pdf",
     "ieltsHtml": "IELTS/P3/Termite Mounds.html"
   },
   "audit": {

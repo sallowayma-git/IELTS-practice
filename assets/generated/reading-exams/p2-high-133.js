@@ -85,7 +85,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/45. P2 - Playing soccer 街头足球【高】/45. P2 - Playing soccer 街头足球【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/45. P2 - Playing soccer 街头足球【高】/45. P2 - Playing soccer 街头足球【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/45. P2 - Playing soccer 街头足球【高】/45. P2 - Playing soccer 街头足球【高】.pdf",
     "ieltsHtml": "IELTS/P2/Playing soccer.html"
   },
   "audit": {

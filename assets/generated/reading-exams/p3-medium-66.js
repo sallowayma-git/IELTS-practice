@@ -73,7 +73,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/158. P3 - Mercator - The Map Maker 地理制图师【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/158. P3 - Mercator - The Map Maker 地理制图师【次】.pdf",
     "ieltsHtml": "IELTS/P3/Mercator - The Map Maker.html"
   },
   "audit": {

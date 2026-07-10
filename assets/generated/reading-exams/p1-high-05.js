@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/102. P1 - Katherine Mansfield 新西兰作家【高】/102. P1 - Katherine Mansfield 新西兰作家【高】.html",
-    "shuiPdf": "ReadingPractice/PDF/102. P1 - Katherine Mansfield 新西兰作家.pdf",
+    "pdf": "ReadingPractice/PDF/102. P1 - Katherine Mansfield 新西兰作家.pdf",
     "ieltsHtml": "IELTS/P1/Katherine Mansfield.html"
   },
   "audit": {

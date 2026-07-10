@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/2. P1 - A survivor’s story 新西兰猫头鹰【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/2. P1 - A survivor’s story 新西兰猫头鹰【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/2. P1 - A survivor’s story 新西兰猫头鹰【高】.pdf",
     "ieltsHtml": "IELTS/P1/A survivor’s story.html"
   },
   "audit": {

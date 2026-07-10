@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf",
+    "pdf": "ReadingPractice/PDF/163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf",
     "ieltsHtml": "IELTS/P1/How to find your way out of a food desert.html"
   },
   "audit": {

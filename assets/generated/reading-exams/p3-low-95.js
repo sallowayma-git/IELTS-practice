@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/184. P3 - The strange world of sight 奇异的视觉世界.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
+    "pdf": "ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
     "ieltsHtml": "IELTS/P3/The strange world of sight.html"
   },
   "audit": {

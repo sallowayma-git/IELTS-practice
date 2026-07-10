@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/97. P3 - The value of literary prizes 文学奖项的价值/97. P3 - The value of literary prizes 文学奖项的价值.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/97. P3 - The value of literary prizes 文学奖项的价值/97. P3 - The value of literary prizes 文学奖项的价值.pdf",
+    "pdf": "ReadingPractice/PDF/97. P3 - The value of literary prizes 文学奖项的价值.pdf",
     "ieltsHtml": null
   },
   "audit": {

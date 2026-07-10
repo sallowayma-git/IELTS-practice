@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/28. P1 - Triumph of the City 城市的胜利.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/28. P1 - Triumph of the City 城市的胜利.pdf",
+    "pdf": "ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf",
     "ieltsHtml": null
   },
   "audit": {

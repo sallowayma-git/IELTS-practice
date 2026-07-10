@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/153. P1 - Carnivorous plants 食虫植物.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/153. P1 - Carnivorous plants 食虫植物.pdf",
+    "pdf": "ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf",
     "ieltsHtml": "IELTS/P1/Carnivorous plants.html"
   },
   "audit": {

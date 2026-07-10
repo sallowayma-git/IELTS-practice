@@ -86,7 +86,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/176. P2 - Urban Regeneration 柏林公园改造.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/176. P2 - Urban Regeneration 柏林公园改造.pdf",
+    "pdf": "ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf",
     "ieltsHtml": "IELTS/P2/Urban Regeneration.html"
   },
   "audit": {
