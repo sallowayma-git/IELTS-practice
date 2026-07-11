@@ -1792,58 +1792,6 @@ body.no-scroll {
     width: 100%;
 }
 
-.vocab-bottom-bar__actions .btn-result {
-    width: 100%;
-    min-height: 48px;
-}
-
-.btn-result {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    min-width: 72px;
-    padding: 12px 16px;
-    border-radius: 16px;
-    border: 1px solid var(--vocab-line);
-    font-weight: var(--fw-medium, 500);
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    background: var(--vocab-surface);
-    color: var(--vocab-ink);
-    box-shadow: var(--vocab-shadow-fine);
-}
-
-.btn-result:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
-}
-
-.btn-result[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-
-.btn-result--danger {
-    background: rgba(196, 104, 75, 0.16);
-    color: #9b3f2d;
-    border-color: rgba(190, 95, 88, 0.55);
-}
-
-.btn-result--neutral {
-    background: rgba(150, 130, 110, 0.12);
-    color: var(--vocab-muted);
-    border-color: rgba(150, 130, 110, 0.4);
-}
-
-.btn-result--success {
-    background: rgba(120, 170, 140, 0.2);
-    color: #2f6b4f;
-    border-color: rgba(120, 170, 140, 0.5);
-}
-
 .vocab-bottom-spacer {
     height: 72px;
 }
@@ -1953,10 +1901,6 @@ body.no-scroll {
 
     .vocab-bottom-bar__actions {
         gap: var(--sp-2, 8px);
-    }
-
-    .vocab-bottom-bar__actions .btn-result {
-        min-height: 48px;
     }
 
     .vocab-card__actions--inline {
@@ -4315,27 +4259,6 @@ body.no-scroll {
     display: block;
 }
 
-.modal-close-btn {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-300);
-    color: var(--color-gray-700);
-    padding: var(--space-md) var(--space-xl);
-    border-radius: var(--border-radius-lg);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    transition: all var(--transition-normal);
-    display: block;
-    margin: 0 auto;
-}
-
-.modal-close-btn:hover {
-    background: var(--color-gray-50);
-    border-color: var(--color-gray-400);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-}
-
 /* Redesigned Theme Modal */
 .theme-modal {
     display: none;
@@ -5555,33 +5478,7 @@ body.no-scroll {
     min-height: 40px;
     font-weight: 700;
     letter-spacing: 0;
-}
-
-/* 题库加载卡片按钮：与 #create-backup-btn 一致的轻盈玻璃胶囊风格——
-   半透明白底、细描边、hover 轻微抬升并加深描边，不再使用陶土实色与旧色盘的强蓝/强青。 */
-.library-loader-primary,
-.library-loader-card--listening .library-loader-primary,
-.library-loader-secondary,
-.library-loader-card--listening .library-loader-secondary {
-    color: #0f172a;
-    background: rgba(255, 255, 255, 0.24);
-    background-image: none;
-    border: 1px solid rgba(255, 255, 255, 0.52);
-    box-shadow: none;
-}
-
-.library-loader-primary:hover,
-.library-loader-secondary:hover,
-.library-loader-card--listening .library-loader-primary:hover,
-.library-loader-card--listening .library-loader-secondary:hover {
-    background: rgba(255, 255, 255, 0.42);
-    background-image: none;
-    border-color: rgba(255, 255, 255, 0.7);
-    color: #0f172a;
-    transform: translateY(-1px);
-    box-shadow:
-        0 16px 30px rgba(15, 23, 42, 0.09),
-        inset 0 1px 1px rgba(255, 255, 255, 0.88);
+    /* 玻璃胶囊静止/hover 由 .shui-capsule-btn 共享规则提供（见文件末尾附近） */
 }
 
 .library-loader-hint {
@@ -6160,17 +6057,6 @@ body.blue-dark-mode,
     border-color: rgba(245, 178, 107, 0.45);
 }
 
-.bloom-dark-mode .modal-close-btn {
-    background: rgba(25, 46, 50, 0.92);
-    border: 1px solid rgba(53, 192, 161, 0.3);
-    color: #e7f0ea;
-}
-
-.bloom-dark-mode .modal-close-btn:hover {
-    background: rgba(34, 60, 64, 0.96);
-    border-color: rgba(245, 178, 107, 0.45);
-}
-
 .bloom-dark-mode .theme-modal-content {
     background: rgba(12, 24, 27, 0.98);
     border: 1px solid rgba(53, 192, 161, 0.28);
@@ -6239,29 +6125,6 @@ body.blue-dark-mode,
 
 .bloom-dark-mode ::-webkit-scrollbar-thumb:hover {
     background: rgba(245, 178, 107, 0.7);
-}
-
-/* Bloom theme dark mode button style */
-.btn-bloom-dark {
-    background: linear-gradient(135deg, #0f191b, #172828);
-    color: #e7f0ea;
-    border-color: rgba(53, 192, 161, 0.32);
-}
-
-.btn-bloom-dark:hover:not(:disabled) {
-    background: linear-gradient(135deg, #1b2d2f, #21403f);
-    border-color: rgba(245, 178, 107, 0.45);
-}
-
-.btn-bloom-light {
-    background: linear-gradient(135deg, #f6b26b, #35c0a1);
-    color: #0f1416;
-    border-color: rgba(245, 178, 107, 0.6);
-}
-
-.btn-bloom-light:hover:not(:disabled) {
-    background: linear-gradient(135deg, #ffc48c, #45d7b6);
-    border-color: rgba(245, 178, 107, 0.75);
 }
 
 /* =====================
@@ -8188,10 +8051,18 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     max-height: 85vh;
 }
 
-/* 练习设置弹窗内的按钮与 #create-backup-btn 一致的轻盈玻璃胶囊风格，
-   不沿用陶土实色（该版本设计已弃用陶土主按钮）。 */
+/* 共享玻璃胶囊按钮（静止态真值）
+   覆盖：练习设置弹窗 / 题库管理弹窗动作行 / 题库加载卡片 / 数据管理按钮。
+   settings 页系统管理区已有 #settings-view .btn 玻璃规则，语义 hover 仍在 heroui-bridge。 */
+.shui-capsule-btn,
 #practice-settings-modal .data-mgmt-btn,
-#practice-settings-modal .practice-timer-save {
+#practice-settings-modal .practice-timer-save,
+#library-manager-modal .library-manager-modal__action-row .btn,
+.library-loader-primary,
+.library-loader-card--listening .library-loader-primary,
+.library-loader-secondary,
+.library-loader-card--listening .library-loader-secondary,
+.data-management-panel .data-mgmt-btn {
     background: rgba(255, 255, 255, 0.24);
     background-image: none;
     color: #0f172a;
@@ -8199,8 +8070,18 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     box-shadow: none;
 }
 
+.shui-capsule-btn:hover,
+.shui-capsule-btn:focus-visible,
 #practice-settings-modal .data-mgmt-btn:hover,
-#practice-settings-modal .practice-timer-save:hover {
+#practice-settings-modal .practice-timer-save:hover,
+#library-manager-modal .library-manager-modal__action-row .btn:hover,
+#library-manager-modal .library-manager-modal__action-row .btn:focus-visible,
+.library-loader-primary:hover,
+.library-loader-secondary:hover,
+.library-loader-card--listening .library-loader-primary:hover,
+.library-loader-card--listening .library-loader-secondary:hover,
+.data-management-panel .data-mgmt-btn:hover,
+.data-management-panel .data-mgmt-btn:focus-visible {
     background: rgba(255, 255, 255, 0.42);
     background-image: none;
     color: #0f172a;
@@ -8209,6 +8090,23 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     box-shadow:
         0 16px 30px rgba(15, 23, 42, 0.09),
         inset 0 1px 1px rgba(255, 255, 255, 0.88);
+}
+
+/* 题库管理弹窗动作按钮：与 settings 系统管理区一致的蓝 hover */
+#library-manager-modal .library-manager-modal__action-row .btn:hover,
+#library-manager-modal .library-manager-modal__action-row .btn:focus-visible {
+    background: var(--bauhaus-accent-blue, #2563eb);
+    color: #fff !important;
+    border-color: transparent;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
+}
+
+/* 练习设置入口按钮：补齐与 theme/library-manager/onboarding 一致的蓝 hover */
+#settings-view #practice-settings-entry-btn:hover {
+    background: var(--bauhaus-accent-blue, #2563eb);
+    color: #fff !important;
+    border-color: transparent;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
 }
 
 .practice-sub-card {

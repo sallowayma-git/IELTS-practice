@@ -1328,7 +1328,6 @@ body.hero-body {
 }
 
 .btn,
-.hero-btn,
 .hero-panel .btn,
 .exam-item-action-btn {
     color: #0f172a !important;
@@ -1343,8 +1342,7 @@ body.hero-body {
     margin-bottom: 32px;
 }
 
-.hero-btn,
-.hero-panel .btn:not(.hero-btn) {
+.hero-panel .btn {
     border-radius: var(--shui-radius-sm);
     border: none;
     background-image: linear-gradient(135deg, var(--shui-gradient-start), var(--shui-gradient-end));
@@ -1356,15 +1354,12 @@ body.hero-body {
     box-shadow: 0 18px 35px rgba(0, 0, 0, 0.15);
 }
 
-.hero-btn:hover,
-.hero-panel .btn:not(.hero-btn):hover,
-.hero-btn:focus-visible,
-.hero-panel .btn:not(.hero-btn):focus-visible {
+.hero-panel .btn:hover,
+.hero-panel .btn:focus-visible {
     transform: translateY(-1px);
     box-shadow: 0 22px 45px rgba(0, 0, 0, 0.22);
 }
 
-.hero-btn--ghost,
 .hero-panel .btn.btn-secondary {
     background-image: none;
     background: rgba(255, 255, 255, 0.35);
@@ -1373,7 +1368,6 @@ body.hero-body {
     box-shadow: none;
 }
 
-.hero-btn--warn,
 .hero-panel .btn.btn-warning {
     background-image: linear-gradient(135deg, rgba(255, 216, 155, 0.85), rgba(255, 216, 155, 1));
     color: #3b1f00;
@@ -1737,20 +1731,8 @@ body.hero-body {
     color: rgba(51, 65, 85, 0.62);
 }
 
-.data-management-panel .data-mgmt-btn {
-    background: rgba(255, 255, 255, 0.24);
-    background-image: none;
-    border-color: rgba(255, 255, 255, 0.52);
-}
-
-.data-management-panel .data-mgmt-btn:hover,
-.data-management-panel .data-mgmt-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.42);
-    background-image: none;
-    box-shadow:
-        0 16px 30px rgba(15, 23, 42, 0.09),
-        inset 0 1px 1px rgba(255, 255, 255, 0.88);
-}
+/* data-mgmt-btn 静止态已并入 main.css .shui-capsule-btn 共享规则；
+   语义色 hover 见下方 #settings-view .data-mgmt-btn:hover */
 
 .category-card .btn[data-action="browse-category"],
 .category-card .btn[data-action="start-random-practice"] {
@@ -2104,11 +2086,10 @@ body.hero-body {
     border-color: transparent;
 }
 
+/* data-mgmt 静止态玻璃胶囊由 main.css .shui-capsule-btn 提供；
+   此处只保留深色语义文字 + 深色 hover */
 #settings-view .data-mgmt-btn {
-    background: rgba(255, 255, 255, 0.24);
-    background-image: none;
     color: var(--bauhaus-accent-dark) !important;
-    border-color: rgba(255, 255, 255, 0.52);
 }
 
 #settings-view .data-mgmt-btn:hover {

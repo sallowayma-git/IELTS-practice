@@ -423,13 +423,13 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         </div>
                         <div class="hero-panel__actions">
                             <button
-                                class="btn btn-secondary hero-btn hero-btn--ghost"
+                                class="btn btn-secondary"
                                 data-index-action="export-practice-markdown"
                             >
                                 📄 导出Markdown
                             </button>
                             <button
-                                class="btn btn-info hero-btn"
+                                class="btn btn-info"
                                 data-index-action="toggle-bulk-delete"
                                 id="bulk-delete-btn"
                             >
@@ -455,7 +455,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                 批量删除
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 data-index-action="clear-practice-data"
                             >
                                 🗑️ 清除记录
@@ -495,26 +495,26 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         <p class="hero-panel__muted">系统工具和设置选项</p>
                         <div class="hero-settings-actions">
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="clear-cache-btn"
                             >
                                 🗑️ 清除缓存
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="theme-switcher-btn-entry"
                             >
                                 🎨 主题切换
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="practice-settings-entry-btn"
                                 type="button"
                             >
                                 ⚙️ 练习设置
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="library-manager-btn"
                                 type="button"
                             >
@@ -558,7 +558,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                 题库管理
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="show-onboarding-btn"
                             >
                                 🎯 显示引导
@@ -573,25 +573,25 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         </p>
                         <div class="hero-settings-actions">
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="create-backup-btn"
                             >
                                 💾 创建备份
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="backup-list-btn"
                             >
                                 📋 备份列表
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="export-data-btn"
                             >
                                 📤 导出数据
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="import-data-btn"
                             >
                                 📥 导入数据
