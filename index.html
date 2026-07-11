@@ -858,26 +858,33 @@
                     <div class="hero-panel hero-section data-management-panel">
                         <h3>💾 数据管理</h3>
                         <p class="hero-panel__muted">
-                            数据备份、导入导出和完整性检查
+                            本地磁盘备份（推荐）、应用内快照、导入导出。清缓存不会删除你绑定文件夹里的备份文件。
                         </p>
                         <div class="hero-settings-actions">
                             <button
                                 class="btn data-mgmt-btn"
+                                id="external-backup-entry-btn"
+                                type="button"
+                            >
+                                📁 本地磁盘备份
+                            </button>
+                            <button
+                                class="btn data-mgmt-btn"
                                 id="create-backup-btn"
                             >
-                                💾 创建备份
+                                💾 创建应用内备份
                             </button>
                             <button
                                 class="btn data-mgmt-btn"
                                 id="backup-list-btn"
                             >
-                                📋 备份列表
+                                📋 应用内备份列表
                             </button>
                             <button
                                 class="btn data-mgmt-btn"
                                 id="export-data-btn"
                             >
-                                📤 导出数据
+                                📤 导出到下载
                             </button>
                             <button
                                 class="btn data-mgmt-btn"

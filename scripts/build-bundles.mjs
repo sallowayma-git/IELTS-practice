@@ -30,6 +30,7 @@ const bundles = {
         'js/core/practiceCore.js',
         'js/core/practiceRecordAPI.js',
         'js/core/backupAPI.js',
+        'js/core/externalBackupService.js',
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',

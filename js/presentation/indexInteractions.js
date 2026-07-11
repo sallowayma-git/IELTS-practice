@@ -43,18 +43,26 @@
         return morePrefetchPromise;
     }
 
-    function ensureSettings() {
+function ensureSettings() {
         if (settingsPrefetched) {
-            return settingsPrefetchPromise || Promise.resolve();
+            return (settingsPrefetchPromise || Promise.resolve()).then(function () {
+                if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
+                    try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
+                }
+            });
         }
         settingsPrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureSettingsToolsGroup === 'function'
             ? global.AppEntry.ensureSettingsToolsGroup
             : function fallback() { return Promise.resolve(); };
-        settingsPrefetchPromise = loader().catch(function swallow(error) {
+        settingsPrefetchPromise = loader().then(function () {
+            if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
+                try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
+            }
+        }).catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 settings-tools 失败:', error);
+            console.warn('[IndexInteractions] 预加载 settings 失败:', error);
         });
         return settingsPrefetchPromise;
     }

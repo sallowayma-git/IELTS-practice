@@ -2115,6 +2115,536 @@ body.hero-body {
     align-items: center;
 }
 
+/* Local disk backup — liquid glass secondary modal + frosted toast */
+
+#settings-view #external-backup-entry-btn[data-state="stale"],
+#settings-view #external-backup-entry-btn[data-state="need-auth"] {
+    border-color: rgba(245, 158, 11, 0.42) !important;
+    box-shadow:
+        0 10px 22px rgba(245, 158, 11, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.76);
+}
+
+/* Overlay: soft frosted dim, not heavy slate slab */
+#external-backup-modal.theme-modal {
+    background:
+        radial-gradient(120% 90% at 50% 20%, rgba(255, 255, 255, 0.18), transparent 55%),
+        linear-gradient(160deg, rgba(15, 23, 42, 0.28), rgba(30, 41, 59, 0.22));
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+#external-backup-modal .theme-modal-content,
+#external-backup-modal .external-backup-modal__content {
+    position: relative;
+    width: min(520px, 92vw);
+    max-width: min(520px, 92vw);
+    max-height: min(86vh, 720px);
+    overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38) 48%, rgba(255, 255, 255, 0.28)),
+        rgba(248, 250, 252, 0.42);
+    box-shadow:
+        0 28px 64px rgba(15, 23, 42, 0.14),
+        0 8px 24px rgba(15, 23, 42, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(28px) saturate(165%);
+    -webkit-backdrop-filter: blur(28px) saturate(165%);
+}
+
+/* Specular rim */
+#external-backup-modal .theme-modal-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.92),
+        rgba(255, 255, 255, 0.22) 42%,
+        rgba(37, 99, 235, 0.08) 72%,
+        rgba(255, 255, 255, 0.35)
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    z-index: 0;
+}
+
+#external-backup-modal .theme-modal-header,
+#external-backup-modal .theme-modal-body {
+    position: relative;
+    z-index: 1;
+}
+
+#external-backup-modal .external-backup-modal__header {
+    padding: 22px 24px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04));
+}
+
+#external-backup-modal .external-backup-modal__title-group {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+#external-backup-modal .external-backup-modal__eyebrow {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(37, 99, 235, 0.78);
+}
+
+#external-backup-modal .theme-modal-header h3,
+#external-backup-modal #external-backup-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+    color: #0f172a;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    background-clip: border-box;
+}
+
+#external-backup-modal .theme-modal-close {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.28);
+    color: #475569;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+#external-backup-modal .theme-modal-close:hover {
+    background: rgba(255, 255, 255, 0.48);
+    color: #0f172a;
+    transform: rotate(90deg);
+}
+
+#external-backup-modal .external-backup-modal__body {
+    padding: 8px 24px 24px;
+    overflow-y: auto;
+    display: block;
+}
+
+.external-backup-panel {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+.external-backup-panel--modal {
+    display: grid;
+    gap: 14px;
+}
+
+.external-backup-panel__desc {
+    margin: 0 !important;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: rgba(51, 65, 85, 0.78);
+    font-weight: 500;
+}
+
+.external-backup-status-card {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18)),
+        rgba(255, 255, 255, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        0 10px 24px rgba(15, 23, 42, 0.05);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+.external-backup-status-card__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(100, 116, 139, 0.9);
+}
+
+.external-backup-panel__status {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.external-backup-status-card:has(.external-backup-panel__status[data-state="ok"]) {
+    border-color: rgba(34, 197, 94, 0.28);
+    background:
+        linear-gradient(145deg, rgba(240, 253, 244, 0.65), rgba(255, 255, 255, 0.22)),
+        rgba(187, 247, 208, 0.12);
+}
+
+.external-backup-status-card:has(.external-backup-panel__status[data-state="stale"]),
+.external-backup-status-card:has(.external-backup-panel__status[data-state="need-auth"]) {
+    border-color: rgba(245, 158, 11, 0.32);
+    background:
+        linear-gradient(145deg, rgba(255, 251, 235, 0.7), rgba(255, 255, 255, 0.22)),
+        rgba(254, 243, 199, 0.14);
+}
+
+.external-backup-status-card:has(.external-backup-panel__status[data-state="unbound"]),
+.external-backup-status-card:has(.external-backup-panel__status[data-state="unsupported"]) {
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.external-backup-panel__tips {
+    margin: 0;
+    padding: 0 0 0 1.1rem;
+    display: grid;
+    gap: 6px;
+    color: rgba(71, 85, 105, 0.82);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.external-backup-panel__tips li::marker {
+    color: rgba(37, 99, 235, 0.55);
+}
+
+.external-backup-panel__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 2px !important;
+}
+
+#external-backup-modal .external-backup-panel__actions .btn,
+#external-backup-modal .data-mgmt-btn {
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.58) !important;
+    background: rgba(255, 255, 255, 0.28) !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-weight: 600;
+    box-shadow:
+        0 10px 22px rgba(15, 23, 42, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.8),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.14) !important;
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    transition:
+        transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+        background 220ms ease,
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        color 220ms ease;
+}
+
+#external-backup-modal .external-backup-panel__actions .btn:hover,
+#external-backup-modal .external-backup-panel__actions .btn:focus-visible,
+#external-backup-modal .data-mgmt-btn:hover,
+#external-backup-modal .data-mgmt-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.48) !important;
+    color: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.78) !important;
+    transform: translateY(-1px);
+    box-shadow:
+        0 16px 30px rgba(15, 23, 42, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.92) !important;
+}
+
+#external-backup-modal .external-backup-panel__actions .btn:disabled,
+#external-backup-modal .data-mgmt-btn:disabled {
+    opacity: 0.45;
+    transform: none;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+#external-backup-modal .external-backup-btn--ghost {
+    background: rgba(255, 255, 255, 0.14) !important;
+    color: rgba(71, 85, 105, 0.95) !important;
+}
+
+/* Soft primary: glass tint, not solid fill */
+#external-backup-modal #external-backup-bind-btn,
+#external-backup-modal #external-backup-write-btn {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.28)) !important;
+    border-color: rgba(147, 197, 253, 0.55) !important;
+    color: #1e3a8a !important;
+}
+
+#external-backup-modal #external-backup-bind-btn:hover,
+#external-backup-modal #external-backup-write-btn:hover,
+#external-backup-modal #external-backup-bind-btn:focus-visible,
+#external-backup-modal #external-backup-write-btn:focus-visible {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.42)) !important;
+    color: #1e3a8a !important;
+    border-color: rgba(147, 197, 253, 0.75) !important;
+}
+
+/* Daily reminder — floating liquid glass toast */
+.external-backup-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 12000;
+    width: min(680px, calc(100vw - 24px));
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.external-backup-banner__glass {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.28)),
+        rgba(248, 250, 252, 0.42);
+    color: #0f172a;
+    box-shadow:
+        0 22px 48px rgba(15, 23, 42, 0.14),
+        0 6px 16px rgba(15, 23, 42, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+
+.external-backup-banner--warning .external-backup-banner__glass {
+    border-color: rgba(251, 191, 36, 0.45);
+    background:
+        linear-gradient(145deg, rgba(255, 251, 235, 0.72), rgba(255, 255, 255, 0.32)),
+        rgba(254, 243, 199, 0.2);
+}
+
+.external-backup-banner__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.external-backup-banner__text strong {
+    font-size: 0.94rem;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+}
+
+.external-backup-banner__text span {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: rgba(51, 65, 85, 0.86);
+}
+
+.external-backup-banner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.external-backup-banner__btn {
+    min-width: 0 !important;
+    white-space: nowrap;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    padding: 8px 12px !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    background: rgba(255, 255, 255, 0.3) !important;
+    color: #0f172a !important;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.external-backup-banner__btn--primary {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(255, 255, 255, 0.36)) !important;
+    border-color: rgba(147, 197, 253, 0.6) !important;
+    color: #1e3a8a !important;
+}
+
+.external-backup-banner__btn--ghost {
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: rgba(71, 85, 105, 0.95) !important;
+}
+
+.external-backup-banner__btn:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.48) !important;
+}
+
+.external-backup-banner__dismiss {
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.22);
+    color: #64748b;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.external-backup-banner__dismiss:hover {
+    background: rgba(255, 255, 255, 0.42);
+    color: #0f172a;
+    transform: rotate(90deg);
+}
+
+/* Dark themes */
+body.bloom-dark-mode #external-backup-modal.theme-modal,
+body.blue-dark-mode #external-backup-modal.theme-modal {
+    background:
+        radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.08), transparent 50%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.55), rgba(15, 23, 42, 0.45));
+}
+
+body.bloom-dark-mode #external-backup-modal .theme-modal-content,
+body.blue-dark-mode #external-backup-modal .theme-modal-content {
+    background:
+        linear-gradient(155deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55)),
+        rgba(15, 23, 42, 0.48);
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow:
+        0 28px 64px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.bloom-dark-mode #external-backup-modal #external-backup-title,
+body.blue-dark-mode #external-backup-modal #external-backup-title,
+body.bloom-dark-mode #external-backup-modal .theme-modal-header h3,
+body.blue-dark-mode #external-backup-modal .theme-modal-header h3 {
+    color: #f1f5f9;
+    -webkit-text-fill-color: #f1f5f9;
+}
+
+body.bloom-dark-mode #external-backup-modal .external-backup-modal__eyebrow,
+body.blue-dark-mode #external-backup-modal .external-backup-modal__eyebrow {
+    color: rgba(147, 197, 253, 0.9);
+}
+
+body.bloom-dark-mode #external-backup-modal .external-backup-panel__desc,
+body.blue-dark-mode #external-backup-modal .external-backup-panel__desc,
+body.bloom-dark-mode #external-backup-modal .external-backup-panel__tips,
+body.blue-dark-mode #external-backup-modal .external-backup-panel__tips {
+    color: rgba(203, 213, 225, 0.82);
+}
+
+body.bloom-dark-mode .external-backup-status-card,
+body.blue-dark-mode .external-backup-status-card {
+    background: rgba(15, 23, 42, 0.45);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+body.bloom-dark-mode .external-backup-panel__status,
+body.blue-dark-mode .external-backup-panel__status {
+    color: #e2e8f0;
+}
+
+body.bloom-dark-mode #external-backup-modal .data-mgmt-btn,
+body.blue-dark-mode #external-backup-modal .data-mgmt-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+    color: #e2e8f0 !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+body.bloom-dark-mode #external-backup-modal #external-backup-bind-btn,
+body.bloom-dark-mode #external-backup-modal #external-backup-write-btn,
+body.blue-dark-mode #external-backup-modal #external-backup-bind-btn,
+body.blue-dark-mode #external-backup-modal #external-backup-write-btn {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.08)) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+    color: #dbeafe !important;
+}
+
+body.bloom-dark-mode .external-backup-banner__glass,
+body.blue-dark-mode .external-backup-banner__glass {
+    background:
+        linear-gradient(145deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.55)),
+        rgba(15, 23, 42, 0.5);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #f8fafc;
+}
+
+body.bloom-dark-mode .external-backup-banner__text span,
+body.blue-dark-mode .external-backup-banner__text span {
+    color: rgba(203, 213, 225, 0.88);
+}
+
+body.bloom-dark-mode .external-backup-banner__dismiss,
+body.blue-dark-mode .external-backup-banner__dismiss {
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+@media (max-width: 640px) {
+    #external-backup-modal .external-backup-panel__actions {
+        grid-template-columns: 1fr;
+    }
+
+    #external-backup-modal .external-backup-modal__header,
+    #external-backup-modal .external-backup-modal__body {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .external-backup-banner__glass {
+        flex-direction: column;
+    }
+
+    .external-backup-banner__actions {
+        width: 100%;
+    }
+
+    .external-backup-banner__btn {
+        flex: 1 1 auto;
+    }
+}
+
 #settings-view .hero-surface {
     background: rgba(255, 255, 255, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.6);
