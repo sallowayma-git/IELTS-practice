@@ -233,6 +233,7 @@ function createHarness() {
         Math,
         JSON
     };
+    sandboxWindow.storage = storage;
     sandbox.globalThis = sandbox.window;
     const context = vm.createContext(sandbox);
     loadScript('js/core/practiceCore.js', context);
@@ -244,6 +245,7 @@ function createHarness() {
             throw new Error('PracticeCore.store.replacePracticeRecords should not be called');
         }
     };
+    loadScript('js/core/backupAPI.js', context);
     loadScript('js/utils/dataBackupManager.js', context);
 
     return {
@@ -535,6 +537,94 @@ async function testNormalizeImportPayloadDoesNotDeepWalkNestedSnapshots() {
     }
 }
 
+async function testPreImportBackupKeepsNewestAndRestoresExamIndex() {
+    const harness = createHarness();
+    const manager = new harness.DataBackupManager();
+    manager.maxBackupHistory = 2;
+
+    try {
+        // 通过 storage 预置一条用户备份 + exam_index
+        harness.meta.set('manual_backups', [{
+            id: 'user-manual-1',
+            timestamp: '2026-05-20T00:00:00.000Z',
+            type: 'manual',
+            data: { practice_records: [], user_stats: {} }
+        }]);
+        harness.meta.set('exam_index', [{ id: 'exam-A', title: 'A' }]);
+
+        const backupId = await manager.createPreImportBackup();
+        assert(backupId, '应能创建预导入备份');
+        assert(String(backupId).startsWith('pre_import_'), 'pre_import 备份 id 应带前缀');
+
+        const backups = harness.meta.get('manual_backups');
+        assert.strictEqual(backups.length, 2, '达到 max 时应裁剪到 maxBackupHistory');
+        assert.strictEqual(backups[0].id, backupId, '新 pre_import 备份应 unshift 到头部(最新)');
+        assert.strictEqual(backups[0].type, 'pre_import');
+        assert.strictEqual(backups[1].id, 'user-manual-1', '应保留原有较新的用户备份，而不是误删头部');
+        assert.ok(
+            backups[0].data.practice_records || backups[0].data.practiceRecords,
+            '备份应包含 practice_records'
+        );
+        assert.ok(
+            Array.isArray(backups[0].data.exam_index) || Array.isArray(backups[0].data.examIndex),
+            '备份应包含 exam_index'
+        );
+
+        // 污染 exam_index 后恢复
+        harness.meta.set('exam_index', [{ id: 'exam-B', title: 'B' }]);
+        harness.records.splice(0, harness.records.length, {
+            id: 'mutated-1',
+            examId: 'reading-mutated',
+            startTime: '2026-05-22T10:00:00.000Z',
+            endTime: '2026-05-22T10:01:00.000Z',
+            duration: 60,
+            score: 0,
+            totalQuestions: 1,
+            correctAnswers: 0
+        });
+        harness.setUserStats({ totalPractices: 99 });
+
+        await manager.restoreBackup(backupId);
+
+        assert.deepStrictEqual(harness.records.map(r => r.id), ['existing-1'], '恢复应还原 records');
+        assert.strictEqual(harness.getUserStats().totalPractices, 1, '恢复应还原 user_stats');
+        const restoredIndex = harness.meta.get('exam_index');
+        assert.strictEqual(restoredIndex[0].id, 'exam-A', '恢复应还原 exam_index');
+    } finally {
+        if (manager.cleanupTimer) {
+            clearInterval(manager.cleanupTimer);
+        }
+    }
+}
+
+async function testExportIncludeBackupsReadsFullManualList() {
+    const harness = createHarness();
+    const manager = new harness.DataBackupManager();
+
+    try {
+        harness.meta.set('manual_backups', [
+            { id: 'manual-1', type: 'manual', timestamp: '2026-05-21T00:00:00.000Z', data: {} },
+            { id: 'pre-1', type: 'pre_import', timestamp: '2026-05-20T00:00:00.000Z', data: {} },
+            { id: 'score-1', type: 'score_storage', timestamp: '2026-05-19T00:00:00.000Z', data: {} }
+        ]);
+        const result = await manager.exportPracticeRecords({
+            includeBackups: true,
+            includeStats: false
+        });
+        assert.strictEqual(result.mimeType, 'application/json');
+        const parsed = JSON.parse(result.data);
+        assert.strictEqual(parsed.backups.length, 3, 'includeBackups 应导出全部 manual_backups，而非仅 score_storage');
+        assert.deepStrictEqual(
+            parsed.backups.map(b => b.id).sort(),
+            ['manual-1', 'pre-1', 'score-1']
+        );
+    } finally {
+        if (manager.cleanupTimer) {
+            clearInterval(manager.cleanupTimer);
+        }
+    }
+}
+
 async function main() {
     try {
         await testImportUsesPracticeRecordApiOnly();
@@ -545,9 +635,11 @@ async function main() {
         await testNormalizeRecordCanonicalCorrectAnswerMapWins();
         await testNormalizeRecordKeepsCoreAccuracyScale();
         await testNormalizeImportPayloadDoesNotDeepWalkNestedSnapshots();
+        await testPreImportBackupKeepsNewestAndRestoresExamIndex();
+        await testExportIncludeBackupsReadsFullManualList();
         process.stdout.write(JSON.stringify({
             status: 'pass',
-            detail: 'DataBackupManager 导入/合并/清空/备份恢复只走 PracticeRecordAPI 并同步统计，记录语义交给 Core 标准化'
+            detail: 'DataBackupManager 导入/合并/清空/备份恢复只走 PracticeRecordAPI 并同步统计，记录语义交给 Core 标准化；pre_import 裁剪与 exam_index/includeBackups 已覆盖'
         }));
     } catch (error) {
         process.stdout.write(JSON.stringify({

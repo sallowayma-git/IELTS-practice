@@ -362,7 +362,7 @@ class DataManagementPanel {
                     panel.querySelector('#importFile').click();
                     break;
                 case 'import':
-                    this.showImportModeModal();
+                    this.beginImportFlow();
                     break;
                 case 'cleanup':
                     this.handleCleanup();
@@ -399,12 +399,47 @@ class DataManagementPanel {
             settingsImportBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 this.show();
-                this.showImportModeModal();
+                this.beginImportFlow({ forceModePicker: true });
             });
         }
     }
 
-    showImportModeModal() {
+    hasImportSource() {
+        if (this.selectedFileContent != null) {
+            return true;
+        }
+        const fileInput = document.getElementById('importFile');
+        return Boolean(fileInput && fileInput.files && fileInput.files[0]);
+    }
+
+    resolveImportMode(selectedMode = null) {
+        const modeSelect = document.getElementById('importMode');
+        return selectedMode || this.pendingImportMode || (modeSelect ? modeSelect.value : null) || null;
+    }
+
+    /**
+     * 统一导入入口：先确保模式，再在有文件时真正执行导入。
+     * 旧实现点击「导入数据」只会打开模式弹窗，永远不调用 handleImport。
+     */
+    beginImportFlow(options = {}) {
+        const forceModePicker = options.forceModePicker === true;
+        const mode = this.resolveImportMode();
+
+        if (forceModePicker || !mode) {
+            this.showImportModeModal({ autoImportWhenReady: true });
+            return;
+        }
+
+        if (!this.hasImportSource()) {
+            this.showMessage('请先选择要导入的文件', 'warning');
+            return;
+        }
+
+        this.handleImport(mode);
+    }
+
+    showImportModeModal(options = {}) {
+        const autoImportWhenReady = options.autoImportWhenReady !== false;
         this.pendingImportMode = null;
         if (!this.importModeModal) {
             const overlay = createElement('div', { className: 'import-mode-overlay' });
@@ -433,7 +468,7 @@ class DataManagementPanel {
             title.style.marginTop = '0';
             modal.appendChild(title);
 
-            const desc = createElement('p', { text: '先确定导入策略，再选择文件并点击“导入数据”。' });
+            const desc = createElement('p', { text: '选择导入策略。若已选择文件，确认后将立即开始导入。' });
             modal.appendChild(desc);
 
             const options = createElement('div', { className: 'import-mode-options' });
@@ -464,7 +499,13 @@ class DataManagementPanel {
                         select.value = def.mode;
                     }
                     this.hideImportModeModal();
-                    this.showMessage(`已选择“${def.title}”，请继续选择文件并点击导入。`, 'info');
+
+                    if (autoImportWhenReady && this.hasImportSource()) {
+                        this.handleImport(def.mode);
+                        return;
+                    }
+
+                    this.showMessage(`已选择“${def.title}”，请选择文件后再次点击导入。`, 'info');
                 });
                 card.append(icon, titleEl, text, button);
                 options.appendChild(card);
@@ -583,11 +624,15 @@ class DataManagementPanel {
         console.log('[DataManagementPanel] handleFileSelect called');
         const file = event.target.files[0];
         const fileNameSpan = document.getElementById('selectedFileName');
-        const importBtn = document.querySelector('[data-action="import"]');
+        const importBtn = this.container
+            ? this.container.querySelector('[data-action="import"]')
+            : document.querySelector('[data-action="import"]');
 
         if (file) {
             fileNameSpan.textContent = file.name;
-            importBtn.disabled = false;
+            if (importBtn) {
+                importBtn.disabled = false;
+            }
 
             // 异步读取文件内容
             this.readFile(file).then(content => {
@@ -597,13 +642,20 @@ class DataManagementPanel {
                     this.selectedFileContent = content;
                 }
                 console.log('[DataManagementPanel] File content loaded');
+
+                // 若模式已通过弹窗选定，选完文件后可直接导入
+                if (this.pendingImportMode) {
+                    this.handleImport(this.pendingImportMode);
+                }
             }).catch(error => {
                 console.error('[DataManagementPanel] Failed to read file:', error);
                 this.showMessage('文件读取失败', 'error');
             });
         } else {
             fileNameSpan.textContent = '未选择文件';
-            importBtn.disabled = true;
+            if (importBtn) {
+                importBtn.disabled = true;
+            }
             this.selectedFileContent = null;
         }
     }
@@ -616,9 +668,9 @@ class DataManagementPanel {
         try {
             let fileContent;
             const fileInput = document.getElementById('importFile');
-            const file = fileInput.files[0];
+            const file = fileInput && fileInput.files ? fileInput.files[0] : null;
 
-            if (this.selectedFileContent) {
+            if (this.selectedFileContent != null) {
                 console.log('[DataManagementPanel] using cached file content');
                 fileContent = this.selectedFileContent;
             } else if (file) {
@@ -655,15 +707,15 @@ class DataManagementPanel {
 
             this.updateProgress('验证数据格式...');
 
-            const modeSelect = document.getElementById('importMode');
-            const resolvedMode = selectedMode || this.pendingImportMode || (modeSelect ? modeSelect.value : null);
+            const resolvedMode = this.resolveImportMode(selectedMode);
             if (!resolvedMode) {
                 this.hideProgress();
-                this.showMessage('请先选择导入模式（点击导入数据按钮）。', 'warning');
+                this.showImportModeModal({ autoImportWhenReady: true });
                 return;
             }
 
-            const createBackup = document.getElementById('createBackupBeforeImport').checked;
+            const createBackupEl = document.getElementById('createBackupBeforeImport');
+            const createBackup = createBackupEl ? createBackupEl.checked : true;
 
             const options = {
                 mergeMode: resolvedMode,
@@ -694,9 +746,19 @@ class DataManagementPanel {
                 this.loadHistory();
 
                 // 清空文件选择
-                fileInput.value = '';
-                document.getElementById('selectedFileName').textContent = '未选择文件';
-                document.querySelector('[data-action="import"]').disabled = true;
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+                const fileNameEl = document.getElementById('selectedFileName');
+                if (fileNameEl) {
+                    fileNameEl.textContent = '未选择文件';
+                }
+                const importBtn = this.container
+                    ? this.container.querySelector('[data-action="import"]')
+                    : document.querySelector('[data-action="import"]');
+                if (importBtn) {
+                    importBtn.disabled = true;
+                }
                 this.selectedFileContent = null;
                 this.pendingImportMode = null;
             }

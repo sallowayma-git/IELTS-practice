@@ -5390,54 +5390,61 @@ class ScoreStorage {
     }
 
     /**
-     * 创建数据备份 - 使用DataBackupManager
+     * 创建数据备份 - 统一走 BackupAPI → BackupRepository
      */
     async createBackup(backupName = null, options = {}) {
         const { allowDuringInit = false } = options;
         await this.ensureReady({ allowDuringInit });
-        if (window.DataBackupManager) {
-            const backupManager = new DataBackupManager();
+
+        if (window.BackupAPI && typeof window.BackupAPI.create === 'function') {
             const practiceRecords = await this.listPracticeRecordsCanonical();
             const userStats = await this.getUserStats({ allowDuringInit });
-
-            // 构建与DataBackupManager兼容的备份对象
-            const backup = {
-                id: backupName || `score_backup_${Date.now()}`,
-                timestamp: new Date().toISOString(),
+            const storageVersion = await this.storage.get(this.storageKeys.storageVersion);
+            const examIndex = await this.storage.get('exam_index', []);
+            const backupId = await window.BackupAPI.create({
+                id: backupName || undefined,
                 type: 'score_storage',
                 data: {
-                    practiceRecords,
-                    userStats,
-                    storageVersion: await this.storage.get(this.storageKeys.storageVersion)
+                    practice_records: practiceRecords,
+                    user_stats: userStats,
+                    exam_index: Array.isArray(examIndex) ? examIndex : [],
+                    storage_version: storageVersion
                 }
-            };
-
-            // 获取现有备份
-            const backups = await this.storage.get('manual_backups', []);
-            backups.unshift(backup);
-
-            // 保持最多20个备份
-            if (backups.length > 20) {
-                backups.splice(20);
-            }
-
-            await this.storage.set('manual_backups', backups);
-            console.log('[ScoreStorage] Backup created:', backup.id);
-            return backup.id;
-        } else {
-            // 降级：不创建备份
-            console.warn('[ScoreStorage] DataBackupManager not available, skipping backup');
-            return null;
+            });
+            console.log('[ScoreStorage] Backup created via BackupAPI:', backupId);
+            return backupId;
         }
+
+        // Fallback: DataBackupManager path (still ends at BackupAPI if loaded)
+        if (window.DataBackupManager) {
+            const backupManager = new DataBackupManager();
+            const backupId = await backupManager.createBackup(
+                backupName || `score_backup_${Date.now()}`,
+                'score_storage'
+            );
+            console.log('[ScoreStorage] Backup created via DataBackupManager:', backupId);
+            return backupId;
+        }
+
+        console.warn('[ScoreStorage] BackupAPI not available, skipping backup');
+        return null;
     }
 
     /**
-     * 恢复数据备份 - 直接操作manual_backups存储
+     * 恢复数据备份 - 统一走 BackupAPI
      */
     async restoreBackup(backupId, options = {}) {
         try {
             const { allowDuringInit = false } = options;
             await this.ensureReady({ allowDuringInit });
+
+            if (window.BackupAPI && typeof window.BackupAPI.restore === 'function') {
+                const result = await window.BackupAPI.restore(backupId);
+                console.log('[ScoreStorage] Backup restored via BackupAPI:', backupId);
+                return result.backup;
+            }
+
+            // Fallback dual-schema restore when BackupAPI missing
             const backups = await this.storage.get('manual_backups', []);
             const backup = backups.find(b => b.id === backupId);
 
@@ -5446,14 +5453,27 @@ class ScoreStorage {
             }
 
             if (backup.data) {
-                const hasStats = backup.data.userStats && typeof backup.data.userStats === 'object';
-                await this.replacePracticeRecordsCanonical(backup.data.practiceRecords || [], { updateStats: !hasStats });
+                const data = backup.data;
+                const records = Array.isArray(data.practiceRecords)
+                    ? data.practiceRecords
+                    : (Array.isArray(data.practice_records) ? data.practice_records : []);
+                const stats = (data.userStats && typeof data.userStats === 'object')
+                    ? data.userStats
+                    : ((data.user_stats && typeof data.user_stats === 'object') ? data.user_stats : null);
+                const hasStats = Boolean(stats);
+                await this.replacePracticeRecordsCanonical(records, { updateStats: !hasStats });
                 if (hasStats) {
                     const api = this.getPracticeRecordAPI(['resetStats']);
-                    await api.resetStats(backup.data.userStats);
+                    await api.resetStats(stats);
                 }
-                if (backup.data.storageVersion) {
-                    await this.storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
+                if (data.storageVersion || data.storage_version) {
+                    await this.storage.set(this.storageKeys.storageVersion, data.storageVersion || data.storage_version);
+                }
+                const examIndex = Array.isArray(data.exam_index)
+                    ? data.exam_index
+                    : (Array.isArray(data.examIndex) ? data.examIndex : null);
+                if (examIndex) {
+                    await this.storage.set('exam_index', examIndex);
                 }
             }
 
@@ -5466,15 +5486,20 @@ class ScoreStorage {
     }
 
     /**
-     * 获取备份列表 - 直接从manual_backups存储获取
+     * 获取备份列表 - 统一走 BackupAPI
      */
     async getBackups() {
         try {
             await this.ensureReady();
+            if (window.BackupAPI && typeof window.BackupAPI.list === 'function') {
+                const backups = await window.BackupAPI.list();
+                return (Array.isArray(backups) ? backups : [])
+                    .slice()
+                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            }
             const backups = await this.storage.get('manual_backups', []);
-            // 只返回score_storage类型的备份，按时间倒序排列
-            return backups
-                .filter(b => b.type === 'score_storage')
+            return (Array.isArray(backups) ? backups : [])
+                .slice()
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         } catch (error) {
             console.error('[ScoreStorage] Failed to get backups:', error);
@@ -7680,6 +7705,9 @@ class PracticeRecorder {
      */
     getBackups() {
         try {
+            if (window.BackupAPI && typeof window.BackupAPI.list === 'function') {
+                return window.BackupAPI.list();
+            }
             return this.scoreStorage.getBackups();
         } catch (error) {
             console.error('Failed to get backups:', error);

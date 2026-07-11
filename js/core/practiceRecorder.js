@@ -1850,6 +1850,9 @@ class PracticeRecorder {
      */
     getBackups() {
         try {
+            if (window.BackupAPI && typeof window.BackupAPI.list === 'function') {
+                return window.BackupAPI.list();
+            }
             return this.scoreStorage.getBackups();
         } catch (error) {
             console.error('Failed to get backups:', error);

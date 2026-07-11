@@ -117,6 +117,19 @@ class DataIntegrityManager {
             if (Object.keys(data).length === 0) {
                 throw new Error('无数据可备份');
             }
+
+            // 统一经 BackupAPI（内部仍落 BackupRepository），保证 schema 与裁剪一致
+            if (window.BackupAPI && typeof window.BackupAPI.create === 'function') {
+                const backupId = await window.BackupAPI.create({
+                    type,
+                    data,
+                    version: this.dataVersion
+                });
+                const backupObj = await window.BackupAPI.getById(backupId);
+                console.log(`[DataIntegrityManager] ${type} 备份创建成功: ${backupId}`);
+                return backupObj || { id: backupId, type, data, version: this.dataVersion };
+            }
+
             const id = `backup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const timestamp = new Date().toISOString();
             const backupObj = {
@@ -249,6 +262,19 @@ class DataIntegrityManager {
             if (!this.repositories) {
                 throw new Error('数据仓库不可用');
             }
+
+            // 优先走 BackupAPI：统一还原 records/stats/exam_index/settings
+            if (window.BackupAPI && typeof window.BackupAPI.restore === 'function') {
+                try {
+                    currentSnapshot = await this.getCriticalData();
+                } catch (snapshotError) {
+                    console.warn('[DataIntegrityManager] 恢复前快照采集失败:', snapshotError);
+                }
+                await window.BackupAPI.restore(backupId);
+                console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功 (BackupAPI)`);
+                return;
+            }
+
             const backup = await this.repositories.backups.getById(backupId);
             if (!backup) {
                 throw new Error('备份不存在');
@@ -762,14 +788,28 @@ class DataBackupManager {
     }
 
     async createBackup(backupName = null, type = 'manual') {
+        if (window.BackupAPI && typeof window.BackupAPI.create === 'function') {
+            return await window.BackupAPI.create({
+                id: backupName || undefined,
+                type
+            });
+        }
+
+        // Fallback when BackupAPI not loaded yet (early boot / isolated tests)
+        const practiceRecords = await this.listPracticeRecords();
+        const userStats = await this.readUserStats();
+        const examIndex = await storage.get('exam_index', []);
         const backup = {
             id: backupName || `backup_${Date.now()}`,
             timestamp: new Date().toISOString(),
             type,
             data: {
-                practice_records: await this.listPracticeRecords(),
-                user_stats: await this.readUserStats(),
-                exam_index: await storage.get('exam_index', [])
+                practice_records: practiceRecords,
+                practiceRecords,
+                user_stats: userStats,
+                userStats,
+                exam_index: examIndex,
+                examIndex
             }
         };
 
@@ -823,8 +863,21 @@ class DataBackupManager {
             exportPayload.userStats = await this.readUserStats();
         }
 
-        if (includeBackups && window.practiceRecorder && typeof window.practiceRecorder.getBackups === 'function') {
-            exportPayload.backups = window.practiceRecorder.getBackups();
+        if (includeBackups) {
+            try {
+                // 统一经 BackupAPI 读全量列表；不再经 scoreStorage 的类型过滤旁路
+                if (window.BackupAPI && typeof window.BackupAPI.list === 'function') {
+                    exportPayload.backups = await window.BackupAPI.list();
+                } else {
+                    exportPayload.backups = await storage.get(this.storageKeys.manualBackups, []);
+                }
+                if (!Array.isArray(exportPayload.backups)) {
+                    exportPayload.backups = [];
+                }
+            } catch (error) {
+                console.warn('[DataBackupManager] failed to include backups in export', error);
+                exportPayload.backups = [];
+            }
         }
 
         await this.recordExportHistory(exportPayload.exportInfo);
@@ -941,7 +994,14 @@ class DataBackupManager {
 
         let mergeResult;
         try {
-            mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
+            // 若备份同时携带 user_stats，导入 records 时禁止并发 recalculateStats，
+            // 否则会与后续 mergeUserStats 竞态，覆盖备份中的 practiceDays/streakDays 等字段。
+            const hasImportedStats = Boolean(normalized.userStats);
+            mergeResult = await this.mergePracticeRecords(
+                normalized.practiceRecords,
+                mergeMode,
+                { updateStats: !hasImportedStats }
+            );
             console.log('[DataBackupManager] Practice records imported through PracticeRecordAPI');
 
             if (normalized.userStats) {
@@ -1107,11 +1167,14 @@ class DataBackupManager {
         return sources;
     }
 
-    async mergePracticeRecords(newRecords, mergeMode = 'merge') {
+    async mergePracticeRecords(newRecords, mergeMode = 'merge', options = {}) {
         if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.mergeRecords === 'function') {
             return await window.PracticeRecordAPI.mergeRecords(
                 Array.isArray(newRecords) ? newRecords : [],
-                { mergeMode, updateStats: true }
+                {
+                    mergeMode,
+                    updateStats: options.updateStats !== false
+                }
             );
         }
 
@@ -1228,24 +1291,8 @@ class DataBackupManager {
     }
     async createPreImportBackup() {
         try {
-            const backup = {
-                id: `pre_import_${Date.now()}`,
-                timestamp: new Date().toISOString(),
-                type: 'pre_import',
-                data: {
-                    practice_records: await this.listPracticeRecords(),
-                    user_stats: await this.readUserStats(),
-                    exam_index: await storage.get('exam_index', [])
-                }
-            };
-
-            const backups = await storage.get(this.storageKeys.manualBackups, []);
-            backups.push(backup);
-            while (backups.length > this.maxBackupHistory) {
-                backups.shift();
-            }
-            await storage.set(this.storageKeys.manualBackups, backups);
-            return backup.id;
+            // 与 createBackup 共用 unshift + pop 裁剪，避免 push+shift 误删最新用户备份
+            return await this.createBackup(`pre_import_${Date.now()}`, 'pre_import');
         } catch (error) {
             console.error('[DataBackupManager] failed to create backup', error);
             return null;
@@ -1258,6 +1305,11 @@ class DataBackupManager {
         }
 
         try {
+            if (window.BackupAPI && typeof window.BackupAPI.restore === 'function') {
+                const result = await window.BackupAPI.restore(backupId);
+                return result.backup;
+            }
+
             const backups = await storage.get(this.storageKeys.manualBackups, []);
             const backup = backups.find(item => item.id === backupId);
             if (!backup) {
@@ -1273,6 +1325,13 @@ class DataBackupManager {
                 : (this.isPlainObject(data.userStats) ? data.userStats : null);
 
             await this.restorePracticeRecords(records, stats);
+
+            const examIndex = Array.isArray(data.exam_index)
+                ? data.exam_index
+                : (Array.isArray(data.examIndex) ? data.examIndex : null);
+            if (examIndex) {
+                await storage.set('exam_index', examIndex);
+            }
 
             return backup;
         } catch (error) {
@@ -1311,7 +1370,11 @@ class DataBackupManager {
         }
 
         if (clearBackups) {
-            await storage.set(this.storageKeys.manualBackups, []);
+            if (window.BackupAPI && typeof window.BackupAPI.clear === 'function') {
+                await window.BackupAPI.clear();
+            } else {
+                await storage.set(this.storageKeys.manualBackups, []);
+            }
             if (typeof storage.remove === 'function') {
                 await storage.remove('backup_data');
             }

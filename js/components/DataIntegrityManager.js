@@ -114,6 +114,19 @@ class DataIntegrityManager {
             if (Object.keys(data).length === 0) {
                 throw new Error('无数据可备份');
             }
+
+            // 统一经 BackupAPI（内部仍落 BackupRepository），保证 schema 与裁剪一致
+            if (window.BackupAPI && typeof window.BackupAPI.create === 'function') {
+                const backupId = await window.BackupAPI.create({
+                    type,
+                    data,
+                    version: this.dataVersion
+                });
+                const backupObj = await window.BackupAPI.getById(backupId);
+                console.log(`[DataIntegrityManager] ${type} 备份创建成功: ${backupId}`);
+                return backupObj || { id: backupId, type, data, version: this.dataVersion };
+            }
+
             const id = `backup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const timestamp = new Date().toISOString();
             const backupObj = {
@@ -246,6 +259,19 @@ class DataIntegrityManager {
             if (!this.repositories) {
                 throw new Error('数据仓库不可用');
             }
+
+            // 优先走 BackupAPI：统一还原 records/stats/exam_index/settings
+            if (window.BackupAPI && typeof window.BackupAPI.restore === 'function') {
+                try {
+                    currentSnapshot = await this.getCriticalData();
+                } catch (snapshotError) {
+                    console.warn('[DataIntegrityManager] 恢复前快照采集失败:', snapshotError);
+                }
+                await window.BackupAPI.restore(backupId);
+                console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功 (BackupAPI)`);
+                return;
+            }
+
             const backup = await this.repositories.backups.getById(backupId);
             if (!backup) {
                 throw new Error('备份不存在');
