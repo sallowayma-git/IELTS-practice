@@ -20,7 +20,7 @@ Field contracts: [Global-Field-Inventory](../doc/Wiki/Global-Field-Inventory.md)
 | A2 Drop `typeChecker.js` / `codeStandards.js` from diagnostics bundle; delete sources | done | Outdated `userAnswer` schemas; zero prod callers |
 | A3 Align wiki (ScoreStorage façade, dead legacy bridge / tracker links) | done | This file is the live tracker |
 | A4 ScoreStorage header + AchievementManager rename (`…PracticeRecordAPI`, keep ScoreStorage aliases) | done | |
-| A5 rebuild + commit + push `opensource` | in progress | |
+| A5 rebuild + commit + push `opensource` | done | `d5aa822` |
 
 ### Sprint A regression checklist
 
