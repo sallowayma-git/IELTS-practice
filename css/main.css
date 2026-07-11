@@ -4259,16 +4259,19 @@ body.no-scroll {
     display: block;
 }
 
-/* Redesigned Theme Modal */
+/* Liquid glass modal shell (single source of truth for all .theme-modal) */
 .theme-modal {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.65);
-    backdrop-filter: blur(8px);
     z-index: 2000;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.28s ease;
+    background:
+        radial-gradient(120% 90% at 50% 20%, rgba(255, 255, 255, 0.18), transparent 55%),
+        linear-gradient(160deg, rgba(15, 23, 42, 0.28), rgba(30, 41, 59, 0.22));
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
 .theme-modal.show {
@@ -4279,59 +4282,101 @@ body.no-scroll {
 }
 
 .theme-modal-content {
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 24px;
-    width: min(900px, 92vw);
-    max-height: 85vh;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(20px);
+    position: relative;
     display: flex;
     flex-direction: column;
-    transform: scale(0.95);
+    width: min(900px, 92vw);
+    max-width: min(900px, 92vw);
+    max-height: min(86vh, 900px);
+    overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38) 48%, rgba(255, 255, 255, 0.28)),
+        rgba(248, 250, 252, 0.42);
+    box-shadow:
+        0 28px 64px rgba(15, 23, 42, 0.14),
+        0 8px 24px rgba(15, 23, 42, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(28px) saturate(165%);
+    -webkit-backdrop-filter: blur(28px) saturate(165%);
+    transform: scale(0.96);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-modal-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.92),
+        rgba(255, 255, 255, 0.22) 42%,
+        rgba(37, 99, 235, 0.08) 72%,
+        rgba(255, 255, 255, 0.35)
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    z-index: 0;
 }
 
 .theme-modal.show .theme-modal-content {
     transform: scale(1);
 }
 
+.theme-modal-header,
+.theme-modal-body {
+    position: relative;
+    z-index: 1;
+}
+
 .theme-modal-header {
-    padding: 24px 32px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 22px 28px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04));
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
 }
 
 .theme-modal-header h3 {
-    font-size: 1.75rem;
+    font-size: clamp(1.25rem, 2vw, 1.55rem);
     font-weight: 800;
-    background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
     margin: 0;
     letter-spacing: -0.02em;
+    color: #0f172a;
+    background: none;
+    -webkit-text-fill-color: currentColor;
 }
 
 .theme-modal-close {
-    background: rgba(0, 0, 0, 0.05);
-    border: none;
-    color: #64748b;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.28);
+    color: #475569;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .theme-modal-close:hover {
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.48);
     color: #0f172a;
     transform: rotate(90deg);
 }
@@ -4339,9 +4384,72 @@ body.no-scroll {
 .theme-modal-body {
     padding: 0;
     flex: 1;
+    min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+}
+
+/* Size tokens for secondary/settings modals */
+.theme-modal.shui-secondary-modal--sm .theme-modal-content {
+    width: min(520px, 92vw);
+    max-width: min(520px, 92vw);
+    max-height: min(86vh, 720px);
+}
+
+.theme-modal.shui-secondary-modal--md .theme-modal-content {
+    width: min(640px, 94vw);
+    max-width: min(640px, 94vw);
+    max-height: min(86vh, 800px);
+}
+
+.theme-modal.shui-secondary-modal--lg .theme-modal-content {
+    width: min(720px, 94vw);
+    max-width: min(720px, 94vw);
+    max-height: min(86vh, 860px);
+}
+
+body.bloom-dark-mode .theme-modal,
+body.blue-dark-mode .theme-modal {
+    background:
+        radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.08), transparent 50%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.55), rgba(15, 23, 42, 0.45));
+}
+
+body.bloom-dark-mode .theme-modal-content,
+body.blue-dark-mode .theme-modal-content {
+    background:
+        linear-gradient(155deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55)),
+        rgba(15, 23, 42, 0.48);
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow:
+        0 28px 64px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.bloom-dark-mode .theme-modal-header,
+body.blue-dark-mode .theme-modal-header {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
+    border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+body.bloom-dark-mode .theme-modal-header h3,
+body.blue-dark-mode .theme-modal-header h3 {
+    color: #f1f5f9;
+    -webkit-text-fill-color: #f1f5f9;
+}
+
+body.bloom-dark-mode .theme-modal-close,
+body.blue-dark-mode .theme-modal-close {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #cbd5e1;
+}
+
+body.bloom-dark-mode .theme-modal-close:hover,
+body.blue-dark-mode .theme-modal-close:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #f8fafc;
 }
 
 .theme-options-viewport {
@@ -6046,28 +6154,6 @@ body.blue-dark-mode,
     border-color: rgba(245, 178, 107, 0.45);
 }
 
-.bloom-dark-mode .theme-modal-content {
-    background: rgba(12, 24, 27, 0.98);
-    border: 1px solid rgba(53, 192, 161, 0.28);
-}
-
-.bloom-dark-mode .theme-modal-header {
-    background: rgba(10, 18, 20, 0.95);
-    border-bottom: 1px solid rgba(53, 192, 161, 0.28);
-}
-
-.bloom-dark-mode .theme-modal-header h3 {
-    color: #e7f0ea;
-}
-
-.bloom-dark-mode .theme-modal-close {
-    color: #d5e7de;
-}
-
-.bloom-dark-mode .theme-modal-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e7f0ea;
-}
 
 .bloom-dark-mode .theme-option {
     background: rgba(13, 26, 29, 0.9);
@@ -7815,34 +7901,6 @@ body[data-bg-theme="ascii-flower"] #browse-view .browse-sort-select:focus {
     box-shadow: 0 18px 34px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Modals Override */
-body[data-bg-theme="ascii-flower"] .theme-modal-content {
-    background: rgba(22, 22, 26, 0.9) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
-    color: #e4e4e7 !important;
-}
-
-body[data-bg-theme="ascii-flower"] .theme-modal-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-}
-
-body[data-bg-theme="ascii-flower"] .theme-modal-header h3 {
-    background: linear-gradient(135deg, #f4f4f5 0%, #a1a1aa 100%) !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-}
-
-body[data-bg-theme="ascii-flower"] .theme-modal-close {
-    background: rgba(255, 255, 255, 0.05) !important;
-    color: #a1a1aa !important;
-}
-
-body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
-}
 
 .reading-candidate-code-settings {
     display: grid !important;
@@ -8034,18 +8092,11 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     display: none; /* Chrome/Edge/Safari: hide the scrollbar */
 }
 
-/* 练习设置：滚动容器在共享玻璃壳内 */
-#practice-settings-modal .theme-modal-content {
-    max-height: min(86vh, 800px);
-}
-
 /* 共享玻璃胶囊按钮（静止态真值）
    覆盖：练习设置弹窗 / 题库管理弹窗动作行 / 题库加载卡片 / 数据管理按钮。
    settings 页系统管理区已有 #settings-view .btn 玻璃规则，语义 hover 仍在 heroui-bridge。 */
+/* Shared glass capsule (settings page + loaders). Modal buttons use .theme-modal rules. */
 .shui-capsule-btn,
-#practice-settings-modal .data-mgmt-btn,
-#practice-settings-modal .practice-timer-save,
-#library-manager-modal .library-manager-modal__action-row .btn,
 .library-loader-primary,
 .library-loader-card--listening .library-loader-primary,
 .library-loader-secondary,
@@ -8060,10 +8111,6 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
 
 .shui-capsule-btn:hover,
 .shui-capsule-btn:focus-visible,
-#practice-settings-modal .data-mgmt-btn:hover,
-#practice-settings-modal .practice-timer-save:hover,
-#library-manager-modal .library-manager-modal__action-row .btn:hover,
-#library-manager-modal .library-manager-modal__action-row .btn:focus-visible,
 .library-loader-primary:hover,
 .library-loader-secondary:hover,
 .library-loader-card--listening .library-loader-primary:hover,
@@ -8078,15 +8125,6 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     box-shadow:
         0 16px 30px rgba(15, 23, 42, 0.09),
         inset 0 1px 1px rgba(255, 255, 255, 0.88);
-}
-
-/* 题库管理弹窗动作按钮：与 settings 系统管理区一致的蓝 hover */
-#library-manager-modal .library-manager-modal__action-row .btn:hover,
-#library-manager-modal .library-manager-modal__action-row .btn:focus-visible {
-    background: var(--bauhaus-accent-blue, #2563eb);
-    color: #fff !important;
-    border-color: transparent;
-    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
 }
 
 /* 练习设置入口按钮：补齐与 theme/library-manager/onboarding 一致的蓝 hover */

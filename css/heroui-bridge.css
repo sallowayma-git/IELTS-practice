@@ -2116,97 +2116,10 @@ body.hero-body {
 }
 
 /* ============================================================
-   Shared secondary liquid-glass modal shell
-   Used by: practice settings, library manager, external backup
+   Secondary modal content deltas
+   Shell (overlay/content/header/close) lives in css/main.css .theme-modal.
+   These rules only add title eyebrow, body padding, interior buttons/cards.
    ============================================================ */
-
-.shui-secondary-modal.theme-modal {
-    background:
-        radial-gradient(120% 90% at 50% 20%, rgba(255, 255, 255, 0.18), transparent 55%),
-        linear-gradient(160deg, rgba(15, 23, 42, 0.28), rgba(30, 41, 59, 0.22));
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-}
-
-.shui-secondary-modal .theme-modal-content,
-.shui-secondary-modal .shui-secondary-modal__content {
-    position: relative;
-    width: min(560px, 92vw);
-    max-width: min(560px, 92vw);
-    max-height: min(86vh, 760px);
-    overflow: hidden;
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.58);
-    background:
-        linear-gradient(155deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38) 48%, rgba(255, 255, 255, 0.28)),
-        rgba(248, 250, 252, 0.42);
-    box-shadow:
-        0 28px 64px rgba(15, 23, 42, 0.14),
-        0 8px 24px rgba(15, 23, 42, 0.06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.9),
-        inset 0 -1px 0 rgba(255, 255, 255, 0.25);
-    backdrop-filter: blur(28px) saturate(165%);
-    -webkit-backdrop-filter: blur(28px) saturate(165%);
-}
-
-.shui-secondary-modal.shui-secondary-modal--sm .theme-modal-content,
-.shui-secondary-modal.shui-secondary-modal--sm .shui-secondary-modal__content {
-    width: min(520px, 92vw);
-    max-width: min(520px, 92vw);
-    max-height: min(86vh, 720px);
-}
-
-.shui-secondary-modal.shui-secondary-modal--md .theme-modal-content,
-.shui-secondary-modal.shui-secondary-modal--md .shui-secondary-modal__content {
-    width: min(640px, 94vw);
-    max-width: min(640px, 94vw);
-    max-height: min(86vh, 800px);
-}
-
-.shui-secondary-modal.shui-secondary-modal--lg .theme-modal-content,
-.shui-secondary-modal.shui-secondary-modal--lg .shui-secondary-modal__content {
-    width: min(720px, 94vw);
-    max-width: min(720px, 94vw);
-    max-height: min(86vh, 860px);
-}
-
-/* Specular rim */
-.shui-secondary-modal .theme-modal-content::before,
-.shui-secondary-modal .shui-secondary-modal__content::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    pointer-events: none;
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.92),
-        rgba(255, 255, 255, 0.22) 42%,
-        rgba(37, 99, 235, 0.08) 72%,
-        rgba(255, 255, 255, 0.35)
-    );
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    z-index: 0;
-}
-
-.shui-secondary-modal .theme-modal-header,
-.shui-secondary-modal .theme-modal-body,
-.shui-secondary-modal .shui-secondary-modal__header,
-.shui-secondary-modal .shui-secondary-modal__body {
-    position: relative;
-    z-index: 1;
-}
-
-.shui-secondary-modal .theme-modal-header,
-.shui-secondary-modal .shui-secondary-modal__header {
-    padding: 22px 24px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.35);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04));
-}
 
 .shui-secondary-modal .shui-secondary-modal__title-group {
     display: grid;
@@ -2224,31 +2137,6 @@ body.hero-body {
 
 .shui-secondary-modal .theme-modal-header h3 {
     font-size: 1.35rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    margin: 0;
-    color: #0f172a;
-    background: none;
-    -webkit-text-fill-color: currentColor;
-    background-clip: border-box;
-}
-
-.shui-secondary-modal .theme-modal-close {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    background: rgba(255, 255, 255, 0.28);
-    color: #475569;
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-
-.shui-secondary-modal .theme-modal-close:hover {
-    background: rgba(255, 255, 255, 0.48);
-    color: #0f172a;
-    transform: rotate(90deg);
 }
 
 .shui-secondary-modal .theme-modal-body,
@@ -2314,7 +2202,7 @@ body.hero-body {
     box-shadow: none !important;
 }
 
-/* Soft primary tint for primary actions in secondary modals */
+/* Soft primary glass tint */
 .shui-secondary-modal .shui-secondary-btn--primary,
 .shui-secondary-modal #external-backup-bind-btn,
 .shui-secondary-modal #external-backup-write-btn,
@@ -2339,7 +2227,6 @@ body.hero-body {
     border-color: rgba(147, 197, 253, 0.75) !important;
 }
 
-/* Nested sub-cards inside secondary modals (practice settings) */
 .shui-secondary-modal .practice-sub-card,
 .shui-secondary-modal .practice-timer-card {
     border: 1px solid rgba(255, 255, 255, 0.5);
@@ -2368,47 +2255,9 @@ body.hero-body {
     font-weight: 750;
 }
 
-/* Dark themes for shared shell */
-body.bloom-dark-mode .shui-secondary-modal.theme-modal,
-body.blue-dark-mode .shui-secondary-modal.theme-modal {
-    background:
-        radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.08), transparent 50%),
-        linear-gradient(160deg, rgba(2, 6, 23, 0.55), rgba(15, 23, 42, 0.45));
-}
-
-body.bloom-dark-mode .shui-secondary-modal .theme-modal-content,
-body.blue-dark-mode .shui-secondary-modal .theme-modal-content {
-    background:
-        linear-gradient(155deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55)),
-        rgba(15, 23, 42, 0.48);
-    border-color: rgba(148, 163, 184, 0.28);
-    box-shadow:
-        0 28px 64px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-body.bloom-dark-mode .shui-secondary-modal .theme-modal-header h3,
-body.blue-dark-mode .shui-secondary-modal .theme-modal-header h3 {
-    color: #f1f5f9;
-    -webkit-text-fill-color: #f1f5f9;
-}
-
 body.bloom-dark-mode .shui-secondary-modal .shui-secondary-modal__eyebrow,
 body.blue-dark-mode .shui-secondary-modal .shui-secondary-modal__eyebrow {
     color: rgba(147, 197, 253, 0.9);
-}
-
-body.bloom-dark-mode .shui-secondary-modal .theme-modal-header,
-body.blue-dark-mode .shui-secondary-modal .theme-modal-header {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
-    border-bottom-color: rgba(148, 163, 184, 0.18);
-}
-
-body.bloom-dark-mode .shui-secondary-modal .theme-modal-close,
-body.blue-dark-mode .shui-secondary-modal .theme-modal-close {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(148, 163, 184, 0.28);
-    color: #cbd5e1;
 }
 
 body.bloom-dark-mode .shui-secondary-modal .data-mgmt-btn,
@@ -2463,12 +2312,6 @@ body.blue-dark-mode .shui-secondary-modal .library-manager-modal__hint {
     .shui-secondary-modal .shui-secondary-modal__body {
         padding-left: 18px;
         padding-right: 18px;
-    }
-
-    .shui-secondary-modal.shui-secondary-modal--md .theme-modal-content,
-    .shui-secondary-modal.shui-secondary-modal--lg .theme-modal-content {
-        width: min(96vw, 560px);
-        max-width: min(96vw, 560px);
     }
 }
 
