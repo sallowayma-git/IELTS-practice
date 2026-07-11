@@ -333,7 +333,7 @@
             return null;
         }
 
-        async _getUserStatsFromScoreStorage() {
+        async _getUserStatsFromPracticeRecordAPI() {
             if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
                 return await window.PracticeRecordAPI.readStats();
             }
@@ -344,7 +344,12 @@
             return this._getDefaultUserStats();
         }
 
-        async _getPracticeRecordsFromScoreStorage() {
+        /** @deprecated Use _getUserStatsFromPracticeRecordAPI */
+        async _getUserStatsFromScoreStorage() {
+            return this._getUserStatsFromPracticeRecordAPI();
+        }
+
+        async _getPracticeRecordsFromPracticeRecordAPI() {
             // 使用轻量 listSummary：achievementManager 只需 type/accuracy/duration 等元数据，
             // 不需要 answers/correctAnswerMap/suiteEntries 等重字段。listSummary 已从 scoreInfo 投影了
             // accuracy/duration/score 等字段，无需依赖 realData.scoreInfo 后备路径。
@@ -359,6 +364,11 @@
                 return await recorder.getPracticeRecords();
             }
             return [];
+        }
+
+        /** @deprecated Use _getPracticeRecordsFromPracticeRecordAPI */
+        async _getPracticeRecordsFromScoreStorage() {
+            return this._getPracticeRecordsFromPracticeRecordAPI();
         }
 
         _getCategoryPracticeCount(stats, targetKey) {
@@ -586,17 +596,17 @@
             }
         }
 
-        async syncFromScoreStorage(options = {}) {
+        async syncFromPracticeRecordAPI(options = {}) {
             const {
                 includeRecords = false,
                 latestRecord = null,
                 notify = false
             } = options;
 
-            const rawStats = await this._getUserStatsFromScoreStorage();
+            const rawStats = await this._getUserStatsFromPracticeRecordAPI();
             const derivedStats = this._buildDerivedStats(rawStats);
 
-            const records = await this._getPracticeRecordsFromScoreStorage();
+            const records = await this._getPracticeRecordsFromPracticeRecordAPI();
             this._applyRecordsToDerivedStats(derivedStats, records);
 
             if (!includeRecords) {
@@ -604,6 +614,11 @@
             }
 
             return this._unlockByStats(derivedStats, { notify });
+        }
+
+        /** @deprecated Use syncFromPracticeRecordAPI */
+        async syncFromScoreStorage(options = {}) {
+            return this.syncFromPracticeRecordAPI(options);
         }
 
         async _unlockByStats(stats, options = {}) {
@@ -641,7 +656,7 @@
          */
         async check(latestRecord) {
             if (!this.initialized) await this.init();
-            return this.syncFromScoreStorage({ includeRecords: true, latestRecord, notify: true });
+            return this.syncFromPracticeRecordAPI({ includeRecords: true, latestRecord, notify: true });
         }
 
         /**
@@ -698,7 +713,7 @@
             }
         }
 
-        await window.AchievementManager.syncFromScoreStorage({ includeRecords: true, notify: false });
+        await window.AchievementManager.syncFromPracticeRecordAPI({ includeRecords: true, notify: false });
         const all = window.AchievementManager.getAll();
         list.innerHTML = all.map(a => `
             <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''} ${a.tier ? 'tier-' + a.tier : ''}">

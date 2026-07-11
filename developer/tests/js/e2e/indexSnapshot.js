@@ -680,14 +680,6 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                     探索额外的学习辅助功能，助你高效备考。
                 </p>
                 <div class="more-tools-grid">
-                    <!-- <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
-                    <div class="tool-card-icon">✍️</div>
-                    <div class="tool-card-content">
-                        <h3>写作评分</h3>
-                        <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
-                    </div>
-                    <div class="tool-card-arrow">进入</div>
-                </button> -->
                     <button
                         class="tool-card"
                         type="button"

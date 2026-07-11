@@ -15,6 +15,13 @@ This document explains the legacy compatibility layer that enables the IELTS Pra
 
 For information about the core state service implementation, see [3.1 ExamSystemApp & State Management](/sallowayma-git/IELTS-practice/3.1-application-bootstrap-and-initialization-flow). For details on data persistence mechanisms, see [4.1 Storage Architecture & Repositories](/sallowayma-git/IELTS-practice/4.1-storage-architecture-and-multi-backend-system).
 
+## Current status (post-data-layer)
+
+> **`js/core/legacyStateBridge.js` and `js/utils/legacyStateAdapter.js` no longer exist in the tree.**
+> Live compatibility is property-descriptor bridges and globals installed from `js/main.js` / boot paths, plus AppStateService dual mirrors.
+> Dead source links to those two files below are historical DeepWiki residue — do not reintroduce the modules.
+> Active cleanup: [cleanup-tracker](../../docs/cleanup-tracker.md). Field inventory: [Global-Field-Inventory](./Global-Field-Inventory.md).
+
 ## Dual State Architecture Overview
 
 The system implements a property-descriptor-based bridging pattern where global variables are replaced with getter/setter pairs that route to modern services when available, falling back to legacy storage. This allows gradual migration from legacy code without breaking existing functionality.
@@ -982,9 +989,7 @@ This architecture has enabled the IELTS Practice System to modernize its state m
 
 **Sources:** [js/main.js L4-L298](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L4-L298)
 
- [js/core/legacyStateBridge.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/legacyStateBridge.js)
-
- [js/utils/legacyStateAdapter.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/legacyStateAdapter.js)
+ <!-- removed: legacyStateBridge.js / legacyStateAdapter.js (deleted from tree) -->
 
  [js/app/state-service.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/state-service.js)
 

@@ -1,6 +1,8 @@
 /**
- * 成绩记录和存储系统
- * 负责答题结果解析、标准化存储和数据备份恢复
+ * ScoreStorage — façade over PracticeRecordAPI / PracticeCore.
+ * No independent practice write path: saves must go through PracticeRecordAPI.
+ * Kept for PracticeRecorder UI helpers, stats/list adapters, and backup helpers
+ * during the post-data-layer transition (see Sprint B/C thinning).
  */
 class ScoreStorage {
     constructor(options = {}) {

@@ -77,9 +77,7 @@ const bundles = {
         'js/components/SystemDiagnostics.js',
         'js/components/PerformanceOptimizer.js',
         'js/utils/dataConsistencyManager.js',
-        'js/utils/performance.js',
-        'js/utils/typeChecker.js',
-        'js/utils/codeStandards.js'
+        'js/utils/performance.js'
     ],
     'js/bundles/settings.bundle.js': [
         'js/components/DataIntegrityManager.js',

@@ -204,7 +204,7 @@ Nested mirrors under `exam`, `practice`, `ui`, `components`, `system` — keep i
 | `exam_system_onboarding_step` | localStorage | Migrates from `onboardingStep` |
 | `exam_system_onboarding_last_shown` | localStorage | Migrates from `onboardingLastShown` |
 | GPL accept flag | localStorage via index interactions | Blocks core until accepted |
-| Theme preference | settings / preference store | Not `typeChecker` UserSettings |
+| Theme preference | settings / preference store | Preference store (not a dead typeChecker schema) |
 
 **Next-round candidate:** move onboarding completion into settings/meta repository so backup/export can include tour state.
 
@@ -230,15 +230,16 @@ History / modal selectors:
 
 ## 9. Subtractive optimization backlog
 
-Priority order for later rounds:
+Priority order (see also [cleanup-tracker](../../docs/cleanup-tracker.md)):
 
-1. **Onboarding** — aligned this pass (demo + copy + storage key prefix)
-2. **`js/utils/typeChecker.js`** — JSDoc schemas still describe old `userAnswer` / `ExamItem.content` / aspirational `UserSettings`; rewrite or delete
-3. **Dead product copy / entries** — writing scorer residual strings in HTML/comments
-4. **AppState dual mirrors** — reduce duplicated globals vs AppStateService where safe
-5. **Meta key audit** — confirm `temp_practice_records` / `interrupted_records` still have live producers
-6. **Wiki diagrams** — update pages that still imply ScoreStorage writes practice rows directly instead of PracticeRecordAPI
-7. **Onboarding → meta repo** — optional persistence unification
+1. **Onboarding** — done (demo + copy + storage key prefix + scroll lock)
+2. **`typeChecker` / `codeStandards`** — **done Sprint A** (removed from diagnostics + deleted)
+3. **Writing scorer residual** — **done Sprint A** (commented tool card removed)
+4. **ScoreStorage façade / listSummary paths** — Sprint B
+5. **Meta key audit** — `temp_practice_records` / `interrupted_records` (Sprint B)
+6. **Normalize only in PracticeCore** — Sprint C
+7. **AppState dual mirrors** — Sprint C
+8. **Onboarding → meta repo** — optional later
 
 ---
 
