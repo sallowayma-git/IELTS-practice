@@ -5339,6 +5339,8 @@ body.no-scroll {
 
 /* Liquid Glass treatment for the library import functional layer */
 .library-loader-overlay {
+    /* Must sit above .theme-modal (z-index: 2000), e.g. when opened from 题库管理 */
+    z-index: 2100;
     background: linear-gradient(135deg, rgba(10, 16, 26, 0.42), rgba(42, 54, 72, 0.3));
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
