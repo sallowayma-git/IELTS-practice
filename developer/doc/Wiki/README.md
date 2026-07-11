@@ -13,6 +13,7 @@
 - [Storage-Architecture-&-Multi-Backend-System](Storage-Architecture-&-Multi-Backend-System.md)
 - [PracticeRecorder-&-ScoreStorage](PracticeRecorder-&-ScoreStorage.md)
 - [Data-Repositories-&-Transactions](Data-Repositories-&-Transactions.md)
+- [Global-Field-Inventory](Global-Field-Inventory.md)
 - [Data-Backup,-Import-&-Export](Data-Backup,-Import-&-Export.md)
 - [Data-Normalization-&-Quality-Assurance](Data-Normalization-&-Quality-Assurance.md)
 - [Legacy-Compatibility-&-State-Bridges](Legacy-Compatibility-&-State-Bridges.md)

@@ -2,24 +2,70 @@
  * Onboarding Tour - 首次引导流程组件
  * 用于引导新用户了解系统各项功能
  * 兼容 file:// 协议
+ *
+ * 数据层约定（0.6.2-fix 之后）：
+ * - 示例记录必须经 PracticeRecordAPI.saveRecord，且具备 canonical examId
+ * - 回放依赖 realData.answers（object map）+ correctAnswerMap
+ * - 引导状态键使用 exam_system_ 前缀，并兼容迁移旧键
  */
 (function (global) {
   'use strict';
 
-  // 存储键名
+  const DEMO_RECORD_ID = 'demo-onboarding-record';
+  const PREFERRED_DEMO_EXAM_ID = 'p1-high-01';
+
+  // 与 p1-high-01.js answerKey 保持一致，供完整回放 demo 使用
+  const P1_HIGH_01_ANSWER_KEY = Object.freeze({
+    q1: 'viii',
+    q2: 'iv',
+    q3: 'ix',
+    q4: 'vi',
+    q5: 'v',
+    q6: 'vii',
+    q7: 'iii',
+    q8: 'x',
+    q9: 'D',
+    q10: 'E',
+    q11: 'B',
+    q12: 'G',
+    q13: 'A'
+  });
+
+  const P1_HIGH_01_META = Object.freeze({
+    examId: PREFERRED_DEMO_EXAM_ID,
+    examTitle: 'A Brief History of Tea 茶叶简史',
+    category: 'P1',
+    frequency: '高频',
+    type: 'reading'
+  });
+
+  // 存储键名（带前缀；读取时兼容旧键）
   const STORAGE_KEYS = {
+    COMPLETED: 'exam_system_onboarding_completed',
+    CURRENT_STEP: 'exam_system_onboarding_step',
+    LAST_SHOWN: 'exam_system_onboarding_last_shown'
+  };
+
+  const LEGACY_STORAGE_KEYS = {
     COMPLETED: 'onboardingCompleted',
     CURRENT_STEP: 'onboardingStep',
     LAST_SHOWN: 'onboardingLastShown'
   };
+
+  const HISTORY_ITEM_SELECTOR =
+    `#history-list .history-item.history-record-item[data-record-id="${DEMO_RECORD_ID}"]`;
+  const HISTORY_TITLE_SELECTOR =
+    `#history-list .history-record-item[data-record-id="${DEMO_RECORD_ID}"] .practice-record-title`;
+  const REPLAY_TRIGGER_SELECTOR =
+    '#practice-record-modal .record-summary-replay-trigger';
 
   // 默认步骤配置
   const DEFAULT_STEPS = [
     {
       id: 'welcome',
       target: null,
-      title: '👋 欢迎使用考试总览系统',
-      content: '这是一个专为雅思备考设计的练习系统，提供阅读、听力练习和词汇背诵等功能。让我们快速了解一下各项功能吧！',
+      title: '👋 欢迎使用 IELTS Atlas',
+      content: '这是一个专为雅思备考设计的练习系统，提供阅读练习、练习回顾、词汇背诵和数据备份等功能。让我们快速了解一下各项功能吧！',
       position: 'center',
       showSkip: false,
       showPrev: false,
@@ -73,66 +119,66 @@
     {
       id: 'review-mode',
       title: '📖 回顾模式',
-      content: '接下来我们将学习如何使用回顾模式查看练习解析。',
+      content: '接下来我们将用一条示例练习记录，演示如何打开详情并进入回顾回放。',
       position: 'right',
       showSkip: true,
       showPrev: true,
       nextText: '下一步',
       activateView: 'practice',
-      // 子步骤流程
       subSteps: [
         {
           id: 'inject-demo-record',
           action: 'injectDemoRecord',
           title: '📝 示例记录已添加',
-          content: '我们已为您添加了一条示例练习记录，请点击“我知道了”继续。',
-          target: '.history-item[data-record-id="demo-onboarding-record"]',
+          content: '我们已为您添加了一条可回放的示例练习记录，请点击“我知道了”继续。',
+          target: HISTORY_ITEM_SELECTOR,
           position: 'right',
           nextText: '我知道了',
-          lockScroll: true,     // 禁止用户滚动页面
-          lockPointer: true     // 禁止用户点击非引导元素
+          lockScroll: true,
+          lockPointer: true
         },
         {
           id: 'click-history-item',
           title: '👆 点击记录标题进入详情',
           content: '点击下方这条示例记录的标题，可以打开练习记录详情页。',
-          target: '#history-list .history-record-item[data-record-id="demo-onboarding-record"] .practice-record-title',
+          target: HISTORY_TITLE_SELECTOR,
           position: 'right',
           nextText: '下一步',
           lockScroll: true,
           waitForClick: true,
-          hideNext: true        // 隐藏下一步按钮，强制点击目标
+          hideNext: true
         },
         {
           id: 'modal-opened',
           title: '📋 练习记录详情',
-          content: '这里是练习记录详情弹窗，您可以看到本次练习的详细信息和成绩。',
+          content: '这里是练习记录详情弹窗，您可以看到本次练习的成绩与元数据。',
           target: '#practice-record-modal .modal-container',
           position: 'right',
           nextText: '下一步',
           waitForElement: '#practice-record-modal',
           lockScroll: true,
-          lockPointer: true     // 禁止点击详情内的入口
+          lockPointer: true
         },
         {
           id: 'click-review-mode',
           title: '📖 进入回顾模式',
-          content: '点击上方标题（回顾模式触发器），可以进入该记录的回放/回顾模式。',
-          target: '#practice-record-modal .record-summary-replay-trigger',
+          content: '点击标题上的回顾触发器，将打开该记录的回放窗口（需允许浏览器弹窗）。',
+          target: REPLAY_TRIGGER_SELECTOR,
           position: 'bottom',
           nextText: '下一步',
           waitForClick: true,
-          hideNext: true,       // 隐藏下一步按钮，强制点击触发器
+          hideNext: true,
           lockScroll: true
         },
         {
           id: 'review-mode-active',
-          title: '👋 小贴士',
-          content: '该练习记录缺少数据哦，等待您的数据后即可使用回顾模式。',
+          title: '✅ 回顾模式已打开',
+          content: '示例回放窗口应已打开。您可在回放中查看答案对错；关闭练习窗口后点“继续”完成引导。',
           target: null,
           position: 'center',
-          nextText: '我知道了',
-          lockScroll: true
+          nextText: '继续',
+          lockScroll: true,
+          lockPointer: false
         }
       ]
     },
@@ -140,7 +186,7 @@
       id: 'more',
       target: '#more-view',
       title: '🛠️ 更多工具',
-      content: '访问写作评分、全屏时钟、单词背诵和成就系统等辅助工具，全方位提升备考效率。',
+      content: '访问全屏时钟、单词背诵和成就系统等辅助工具，全方位提升备考效率。',
       position: 'right',
       showSkip: true,
       showPrev: true,
@@ -161,7 +207,7 @@
     {
       id: 'data-management',
       title: '💾 数据迁移与管理',
-      content: '这里是数据安全的核心。当系统发布新版本时，您可以通过导出和导入功能轻松搬家。',
+      content: '这里是数据安全的核心。可通过导出/导入 JSON，或使用本地磁盘备份在版本升级时搬家。',
       position: 'right',
       showSkip: true,
       showPrev: true,
@@ -172,7 +218,7 @@
           id: 'data-mgmt-intro',
           target: '.data-management-panel',
           title: '📂 数据管理面板',
-          content: '集中管理您的练习资产。在转移到新版本前，请务必先备份或导出。',
+          content: '集中管理您的练习资产。升级或更换设备前，请务必先备份或导出。',
           position: 'right',
           nextText: '下一步',
           lockScroll: true
@@ -181,7 +227,7 @@
           id: 'export-data',
           target: '#export-data-btn',
           title: '📤 导出数据',
-          content: '点击“导出数据”，系统会生成包含所有练习历史的 JSON 文件。请妥善保存此文件，它是您迁移到新版本的通行证。',
+          content: '点击“导出数据”，系统会生成包含练习历史的 JSON 文件。请妥善保存，它是迁移到新版本的通行证。',
           position: 'top',
           nextText: '下一步',
           lockScroll: true,
@@ -192,7 +238,17 @@
           id: 'import-data',
           target: '#import-data-btn',
           title: '📥 导入数据',
-          content: '在下载并运行新版本后，点击“导入数据”并选择之前导出的 JSON 文件，即可一键找回所有练习历史。',
+          content: '在新版本中点击“导入数据”并选择之前导出的 JSON 文件，即可找回练习历史。',
+          position: 'top',
+          nextText: '下一步',
+          lockScroll: true,
+          disableHighlightPointer: true
+        },
+        {
+          id: 'local-backup',
+          target: '#external-backup-entry-btn',
+          title: '💾 本地磁盘备份',
+          content: '若浏览器支持，可绑定本地文件夹做磁盘备份，与导出 JSON 互为补充。',
           position: 'top',
           nextText: '下一步',
           lockScroll: true,
@@ -204,7 +260,7 @@
       id: 'theme-switcher-guide',
       target: '#theme-switcher-btn-entry',
       title: '🎨 主题切换',
-      content: '当您使用动态背景遇到卡顿时可切换为静态主题',
+      content: '动态背景卡顿时可切换为静态主题，减轻设备负担。',
       position: 'top',
       showSkip: true,
       showPrev: true,
@@ -216,7 +272,7 @@
       id: 'completion',
       target: null,
       title: '🎉 恭喜完成！',
-      content: '您已了解系统的所有核心功能。现在开始您的雅思备考之旅吧！祝您取得理想的成绩。',
+      content: '您已了解系统的核心功能。现在开始您的雅思备考之旅吧！祝您取得理想的成绩。',
       position: 'center',
       showSkip: false,
       showPrev: true,
@@ -225,10 +281,29 @@
     }
   ];
 
+  function cloneMap(source) {
+    return Object.assign({}, source || {});
+  }
+
+  function cloneArray(list) {
+    return Array.isArray(list) ? list.slice() : [];
+  }
+
+  function cloneSteps(steps) {
+    return (Array.isArray(steps) ? steps : []).map((step) => {
+      const next = Object.assign({}, step);
+      if (Array.isArray(step.subSteps)) {
+        next.subSteps = step.subSteps.map((sub) => Object.assign({}, sub));
+      }
+      return next;
+    });
+  }
+
   // 状态管理器
   class TourStateManager {
     constructor() {
       this._storage = this._getStorage();
+      this._migrateLegacyKeys();
     }
 
     _getStorage() {
@@ -237,14 +312,31 @@
         localStorage.removeItem('__test__');
         return localStorage;
       } catch (e) {
-        // 降级到内存存储
         const mem = {};
         return {
-          getItem: (k) => mem[k] || null,
+          getItem: (k) => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null),
           setItem: (k, v) => { mem[k] = String(v); },
           removeItem: (k) => { delete mem[k]; }
         };
       }
+    }
+
+    _migrateLegacyKeys() {
+      Object.keys(STORAGE_KEYS).forEach((name) => {
+        const nextKey = STORAGE_KEYS[name];
+        const legacyKey = LEGACY_STORAGE_KEYS[name];
+        if (!legacyKey) return;
+        try {
+          const current = this._storage.getItem(nextKey);
+          if (current !== null && current !== undefined && current !== '') return;
+          const legacy = this._storage.getItem(legacyKey);
+          if (legacy === null || legacy === undefined || legacy === '') return;
+          this._storage.setItem(nextKey, legacy);
+          this._storage.removeItem(legacyKey);
+        } catch (_) {
+          // ignore migration failures
+        }
+      });
     }
 
     isCompleted() {
@@ -257,8 +349,8 @@
     }
 
     setStep(step) {
-      this._storage.setItem(STORAGE_KEYS.CURRENT_STEP, step);
-      this._storage.setItem(STORAGE_KEYS.LAST_SHOWN, Date.now());
+      this._storage.setItem(STORAGE_KEYS.CURRENT_STEP, String(step));
+      this._storage.setItem(STORAGE_KEYS.LAST_SHOWN, String(Date.now()));
     }
 
     markCompleted() {
@@ -270,6 +362,11 @@
       this._storage.removeItem(STORAGE_KEYS.COMPLETED);
       this._storage.removeItem(STORAGE_KEYS.CURRENT_STEP);
       this._storage.removeItem(STORAGE_KEYS.LAST_SHOWN);
+      try {
+        this._storage.removeItem(LEGACY_STORAGE_KEYS.COMPLETED);
+        this._storage.removeItem(LEGACY_STORAGE_KEYS.CURRENT_STEP);
+        this._storage.removeItem(LEGACY_STORAGE_KEYS.LAST_SHOWN);
+      } catch (_) {}
     }
   }
 
@@ -279,7 +376,7 @@
       this._overlay = null;
       this._tooltip = null;
       this._highlightEl = null;
-      this._holeEl = null;  // 新增：洞元素
+      this._holeEl = null;
     }
 
     createOverlay() {
@@ -287,11 +384,9 @@
 
       this._overlay = document.createElement('div');
       this._overlay.className = 'onboarding-overlay';
-      // 关键：遮罩层不阻止点击事件，允许点击穿透
       this._overlay.style.pointerEvents = 'none';
       document.body.appendChild(this._overlay);
 
-      // 创建洞元素
       this._holeEl = document.createElement('div');
       this._holeEl.className = 'onboarding-hole';
       document.body.appendChild(this._holeEl);
@@ -319,10 +414,13 @@
 
       this._highlightEl = el;
 
-      // 获取目标元素的位置和大小
+      // 由 OnboardingTour 在锁滚前完成 scrollIntoView；此处仅测量与高亮
+      if (!options.skipScroll) {
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      }
+
       const rect = el.getBoundingClientRect();
 
-      // 设置洞元素的位置和大小
       if (this._holeEl) {
         this._holeEl.style.display = 'block';
         this._holeEl.style.top = rect.top + 'px';
@@ -331,7 +429,6 @@
         this._holeEl.style.height = rect.height + 'px';
       }
 
-      // 保存原始样式以便恢复
       const originalStyles = {
         position: el.style.position,
         zIndex: el.style.zIndex,
@@ -347,13 +444,11 @@
         modalContainer.style.position = 'relative';
       }
 
-      // 强制设置目标元素样式使其在遮罩层之上
       el.style.position = 'relative';
       el.style.zIndex = '100006';
       el.style.pointerEvents = options.disablePointer ? 'none' : 'auto';
 
       el.classList.add('onboarding-highlight');
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     clearHighlight() {
@@ -361,7 +456,6 @@
         const el = this._highlightEl;
         el.classList.remove('onboarding-highlight');
 
-        // 恢复原始样式
         if (el._originalOnboardingStyles) {
           el.style.position = el._originalOnboardingStyles.position;
           el.style.zIndex = el._originalOnboardingStyles.zIndex;
@@ -380,7 +474,6 @@
         this._highlightEl = null;
       }
 
-      // 隐藏洞元素
       if (this._holeEl) {
         this._holeEl.style.display = 'none';
       }
@@ -389,12 +482,10 @@
     positionTooltip(target, position, offsetY = 0) {
       if (!this._tooltip) return;
 
-      // 清除旧箭头
       const oldArrow = this._tooltip.querySelector('.onboarding-tooltip__arrow');
       if (oldArrow) oldArrow.remove();
 
       if (!target || position === 'center') {
-        // 居中显示
         this._tooltip.style.position = 'fixed';
         this._tooltip.style.top = '50%';
         this._tooltip.style.left = '50%';
@@ -405,7 +496,8 @@
       const rect = target.getBoundingClientRect();
       const tooltipRect = this._tooltip.getBoundingClientRect();
 
-      let top, left;
+      let top;
+      let left;
       const gap = 12;
 
       switch (position) {
@@ -432,7 +524,6 @@
           break;
       }
 
-      // 边界检查
       left = Math.max(10, Math.min(left, window.innerWidth - tooltipRect.width - 10));
       top = Math.max(10, Math.min(top, window.innerHeight - tooltipRect.height - 10));
 
@@ -466,7 +557,7 @@
           ${step.showPrev ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--secondary" data-action="prev">上一步</button>' : '<div></div>'}
           <div>
             ${step.showSkip ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--skip" data-action="skip">跳过</button>' : ''}
-            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText}</button>`}
+            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText || '下一步'}</button>`}
           </div>
         </div>
       `;
@@ -517,13 +608,21 @@
     constructor(config = {}) {
       this._stateManager = new TourStateManager();
       this._renderer = new TourRenderer();
-      this._steps = config.steps || DEFAULT_STEPS;
+      this._baseSteps = config.steps || DEFAULT_STEPS;
+      this._steps = cloneSteps(this._baseSteps);
       this._currentStep = 0;
       this._isActive = false;
       this._boundKeyHandler = null;
-      // 子步骤状态
       this._currentSubStep = 0;
       this._inSubSteps = false;
+      this._demoInjectPromise = null;
+      this._lastDemoInjectResult = null;
+      this._clickWaitCleanup = null;
+      this._scrollBlocked = false;
+      this._boundWheelBlock = null;
+      this._boundTouchBlock = null;
+      this._boundKeyScrollBlock = null;
+      this._savedScrollTop = 0;
     }
 
     init() {
@@ -531,7 +630,6 @@
         return;
       }
 
-      // 延迟触发，等待页面渲染
       setTimeout(() => {
         this.start();
       }, 1500);
@@ -540,19 +638,24 @@
     start(fromBeginning = false) {
       if (this._isActive) return;
 
+      // 每次启动使用步骤副本，避免限级回放补丁污染默认配置
+      this._steps = cloneSteps(this._baseSteps);
       this._currentStep = fromBeginning ? 0 : this._stateManager.getCurrentStep();
       this._isActive = true;
+      this._inSubSteps = false;
+      this._currentSubStep = 0;
+      this._lastDemoInjectResult = null;
 
       this._renderer.createOverlay();
       this._renderer.createTooltip();
 
-      // 绑定键盘事件
+      // 全程滚动锁：启动即锁，仅在 stop 时解除，避免用户滚动导致高亮错位
+      this._lockScroll();
+
       this._boundKeyHandler = this._handleKeydown.bind(this);
       document.addEventListener('keydown', this._boundKeyHandler);
 
-      // 绑定点击事件
       this._renderer._overlay.addEventListener('click', (e) => {
-        // 阻止点击遮罩层关闭
         e.stopPropagation();
       });
 
@@ -561,6 +664,7 @@
 
     stop() {
       this._isActive = false;
+      this._clearClickWait();
       this._unlockScroll();
       this._unlockPointer();
       this._renderer.destroy();
@@ -576,28 +680,129 @@
       this._stateManager.reset();
     }
 
-    // ===== 滚动与指针锁定 =====
     _lockScroll() {
       if (!document.body.classList.contains('onboarding-scroll-locked')) {
-        this._savedScrollTop = window.scrollY || document.documentElement.scrollTop;
+        this._savedScrollTop = window.scrollY || document.documentElement.scrollTop || 0;
         document.body.classList.add('onboarding-scroll-locked');
+        document.documentElement.classList.add('onboarding-scroll-locked');
         document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
         document.body.style.top = `-${this._savedScrollTop}px`;
+        document.body.style.left = '0';
+        document.body.style.right = '0';
         document.body.style.width = '100%';
       }
+      this._attachScrollBlockers();
     }
 
     _unlockScroll() {
+      this._detachScrollBlockers();
       if (document.body.classList.contains('onboarding-scroll-locked')) {
         document.body.classList.remove('onboarding-scroll-locked');
+        document.documentElement.classList.remove('onboarding-scroll-locked');
         document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
         document.body.style.position = '';
         document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
         document.body.style.width = '';
         const savedTop = this._savedScrollTop || 0;
         window.scrollTo(0, savedTop);
         this._savedScrollTop = 0;
+      }
+    }
+
+    /**
+     * 短暂解除 body fixed，以便 scrollIntoView 能把目标滚入视口，
+     * 随即按新滚动位置重新上锁。引导期间用户滚动仍被拦截。
+     */
+    _scrollTargetIntoView(el) {
+      if (!el || typeof el.scrollIntoView !== 'function') return;
+
+      const wasLocked = document.body.classList.contains('onboarding-scroll-locked');
+      if (wasLocked) {
+        this._detachScrollBlockers();
+        document.body.classList.remove('onboarding-scroll-locked');
+        document.documentElement.classList.remove('onboarding-scroll-locked');
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.width = '';
+        window.scrollTo(0, this._savedScrollTop || 0);
+      }
+
+      try {
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      } catch (_) {
+        try {
+          el.scrollIntoView(true);
+        } catch (__) {}
+      }
+
+      // 无论是否曾锁定，引导激活期间都重新上锁到当前视口
+      if (this._isActive) {
+        this._lockScroll();
+      }
+    }
+
+    _highlightTarget(el, options = {}) {
+      if (el) {
+        this._scrollTargetIntoView(el);
+      } else if (this._isActive) {
+        this._lockScroll();
+      }
+      this._renderer.highlightElement(el, Object.assign({}, options, { skipScroll: true }));
+    }
+
+    _attachScrollBlockers() {
+      if (this._scrollBlocked) return;
+      this._scrollBlocked = true;
+
+      this._boundWheelBlock = (e) => {
+        if (!this._isActive) return;
+        // 提示框内部也不允许带动页面/列表滚动
+        e.preventDefault();
+      };
+      this._boundTouchBlock = (e) => {
+        if (!this._isActive) return;
+        e.preventDefault();
+      };
+      this._boundKeyScrollBlock = (e) => {
+        if (!this._isActive) return;
+        const key = e.key;
+        const scrollKeys = new Set([
+          'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar',
+          'ArrowUp', 'ArrowDown'
+        ]);
+        if (!scrollKeys.has(key)) return;
+        // 左右方向键留给引导翻步；上下/空格/Pg 禁止滚动
+        e.preventDefault();
+      };
+
+      document.addEventListener('wheel', this._boundWheelBlock, { passive: false, capture: true });
+      document.addEventListener('touchmove', this._boundTouchBlock, { passive: false, capture: true });
+      document.addEventListener('keydown', this._boundKeyScrollBlock, { capture: true });
+    }
+
+    _detachScrollBlockers() {
+      if (!this._scrollBlocked) return;
+      this._scrollBlocked = false;
+      if (this._boundWheelBlock) {
+        document.removeEventListener('wheel', this._boundWheelBlock, { capture: true });
+        this._boundWheelBlock = null;
+      }
+      if (this._boundTouchBlock) {
+        document.removeEventListener('touchmove', this._boundTouchBlock, { capture: true });
+        this._boundTouchBlock = null;
+      }
+      if (this._boundKeyScrollBlock) {
+        document.removeEventListener('keydown', this._boundKeyScrollBlock, { capture: true });
+        this._boundKeyScrollBlock = null;
       }
     }
 
@@ -608,12 +813,11 @@
         intercept.style.cssText = [
           'position: fixed',
           'inset: 0',
-          'z-index: 99998',   // 在遮罩层之下，在普通元素之上',
+          'z-index: 99998',
           'background: transparent',
           'pointer-events: all',
           'cursor: not-allowed'
         ].join(';');
-        // 防止有意的引导点击被拦截
         intercept.addEventListener('click', e => e.stopPropagation());
         document.body.appendChild(intercept);
       }
@@ -628,31 +832,34 @@
       return {
         completed: this._stateManager.isCompleted(),
         currentStep: this._currentStep,
-        totalSteps: this._steps.length
+        totalSteps: this._steps.length,
+        demoInject: this._lastDemoInjectResult
       };
     }
 
     goToStep(step) {
       if (step < 0 || step >= this._steps.length) return;
       this._currentStep = step;
+      this._inSubSteps = false;
+      this._currentSubStep = 0;
       this._stateManager.setStep(step);
       this._showCurrentStep();
     }
 
     registerSteps(steps) {
-      this._steps = steps;
+      this._baseSteps = steps;
+      this._steps = cloneSteps(steps);
     }
 
     _activateView(viewId) {
       if (!viewId) return;
 
-      // 方法 1: 尝试点击对应的导航按钮
       const navMap = {
-        'overview': '[data-view="overview"]',
-        'browse': '[data-view="browse"]',
-        'practice': '[data-view="practice"]',
-        'more': '[data-view="more"]',
-        'settings': '[data-view="settings"]'
+        overview: '[data-view="overview"]',
+        browse: '[data-view="browse"]',
+        practice: '[data-view="practice"]',
+        more: '[data-view="more"]',
+        settings: '[data-view="settings"]'
       };
 
       const selector = navMap[viewId];
@@ -664,30 +871,29 @@
         }
       }
 
-      // 方法 2: 直接显示目标视图（如果导航按钮不存在）
       const viewMap = {
-        'overview': '#overview-view',
-        'browse': '#browse-view',
-        'practice': '#practice-view',
-        'more': '#more-view',
-        'settings': '#settings-view'
+        overview: '#overview-view',
+        browse: '#browse-view',
+        practice: '#practice-view',
+        more: '#more-view',
+        settings: '#settings-view'
       };
 
       const viewSelector = viewMap[viewId];
       if (viewSelector) {
         const targetView = document.querySelector(viewSelector);
         if (targetView) {
-          // 隐藏所有视图
           document.querySelectorAll('.view-container, [id$="-view"]').forEach(v => {
             v.style.display = 'none';
           });
-          // 显示目标视图
           targetView.style.display = 'block';
         }
       }
     }
 
     _showCurrentStep() {
+      if (!this._isActive) return;
+
       const step = this._steps[this._currentStep];
       if (!step) {
         this._complete();
@@ -695,25 +901,20 @@
       }
 
       this._stateManager.setStep(this._currentStep);
-
-      // 先激活对应视图
+      this._clearClickWait();
       this._activateView(step.activateView);
 
-      // 检查是否有子步骤
       if (step.subSteps && !this._inSubSteps) {
         this._inSubSteps = true;
         this._currentSubStep = 0;
       }
 
-      // 如果当前在子步骤中
       if (this._inSubSteps && step.subSteps) {
         this._showSubStep(step);
         return;
       }
 
-      // 如果需要等待元素出现
       if (step.waitForElement && step.target) {
-        // 先触发按钮打开模态框
         if (step.triggerElement) {
           const triggerEl = document.querySelector(step.triggerElement);
           if (triggerEl) {
@@ -726,12 +927,8 @@
         return;
       }
 
-      // 应用滚动锁与指针锁
-      if (step.lockScroll) {
-        this._lockScroll();
-      } else {
-        this._unlockScroll();
-      }
+      // 全程保持滚动锁；仅按步骤控制指针锁
+      this._lockScroll();
 
       if (step.lockPointer && !step.waitForClick) {
         this._lockPointer();
@@ -743,6 +940,8 @@
     }
 
     _showSubStep(parentStep) {
+      if (!this._isActive) return;
+
       const subStep = parentStep.subSteps[this._currentSubStep];
       if (!subStep) {
         this._inSubSteps = false;
@@ -751,36 +950,128 @@
         return;
       }
 
-      // 执行子步骤动作
-      if (subStep.action === 'injectDemoRecord') {
-        this._injectDemoRecord();
-      }
+      this._clearClickWait();
 
-      // 等待元素出现
-      if (subStep.waitForElement) {
-        this._waitForElement(subStep.waitForElement, () => {
-          this._showSubStepContent(subStep, parentStep);
-        });
+      const proceed = () => {
+        if (!this._isActive) return;
+
+        if (subStep.waitForElement) {
+          this._waitForElement(subStep.waitForElement, () => {
+            this._showSubStepContent(subStep, parentStep);
+          });
+          return;
+        }
+
+        this._showSubStepContent(subStep, parentStep);
+      };
+
+      if (subStep.action === 'injectDemoRecord') {
+        Promise.resolve(this._injectDemoRecord())
+          .then((result) => {
+            this._lastDemoInjectResult = result;
+            if (!result || !result.ok) {
+              this._showInjectFailureSubStep(parentStep, result);
+              return;
+            }
+            if (!result.replayable) {
+              // 已写入历史，但 exam 不在题库中：保留点击详情，跳过强制回放
+              this._patchReviewSubStepsForLimitedDemo(parentStep);
+            }
+            proceed();
+          })
+          .catch((err) => {
+            console.error('[Onboarding] 注入示例记录失败:', err);
+            this._lastDemoInjectResult = { ok: false, reason: 'exception', error: err };
+            this._showInjectFailureSubStep(parentStep, this._lastDemoInjectResult);
+          });
         return;
       }
 
-      this._showSubStepContent(subStep, parentStep);
+      proceed();
+    }
+
+    _patchReviewSubStepsForLimitedDemo(parentStep) {
+      if (!parentStep || !Array.isArray(parentStep.subSteps)) return;
+      parentStep.subSteps = parentStep.subSteps.map((step) => {
+        if (step.id === 'inject-demo-record') {
+          return Object.assign({}, step, {
+            content: '示例记录已写入练习历史。当前题库中未找到对应题目，详情可打开，完整回放需先加载阅读题库。'
+          });
+        }
+        if (step.id === 'click-review-mode') {
+          return Object.assign({}, step, {
+            content: '可尝试点击回顾触发器。若提示题目不存在，请先在题库浏览中加载阅读题库后再体验完整回放。',
+            waitForClick: false,
+            hideNext: false,
+            nextText: '跳过回放',
+            lockPointer: true
+          });
+        }
+        if (step.id === 'review-mode-active') {
+          return Object.assign({}, step, {
+            title: 'ℹ️ 回放需完整题库',
+            content: '示例记录已保存。加载阅读题库后，可从练习记录详情再次进入回顾模式。',
+            nextText: '继续'
+          });
+        }
+        return step;
+      });
+    }
+
+    _showInjectFailureSubStep(parentStep, result) {
+      // 失败提示仍保持滚动锁，避免页面漂移
+      this._lockScroll();
+      this._unlockPointer();
+      this._renderer.clearHighlight();
+      this._renderer.positionTooltip(null, 'center');
+
+      const reason = result && result.reason ? String(result.reason) : 'unknown';
+      const failureStep = {
+        id: 'inject-demo-failed',
+        title: '示例记录未能写入',
+        content: `练习数据层暂不可用（${reason}）。您可跳过回顾演示，继续了解其他功能。`,
+        showSkip: true,
+        showPrev: false,
+        nextText: '跳过回顾',
+        hideNext: false
+      };
+
+      this._renderer.renderTooltipContent(failureStep, this._currentSubStep, parentStep.subSteps.length);
+      const tooltip = this._renderer._tooltip;
+      if (!tooltip) {
+        this._skipReviewMode(parentStep);
+        return;
+      }
+
+      tooltip.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const action = e.target.dataset.action;
+          if (action === 'skip' || action === 'next') {
+            this._skipReviewMode(parentStep);
+          }
+        });
+      });
+    }
+
+    _skipReviewMode(parentStep) {
+      this._inSubSteps = false;
+      this._currentSubStep = 0;
+      this._currentStep++;
+      this._cleanupDemoRecord();
+      this._showCurrentStep();
     }
 
     _showSubStepContent(subStep, parentStep) {
-      // inject-demo-record 需要等待 DOM 刷新后再定位
-      const delay = (subStep.action === 'injectDemoRecord') ? 800 : 100;
+      const delay = (subStep.action === 'injectDemoRecord') ? 120 : 100;
       setTimeout(() => {
+        if (!this._isActive) return;
+
         this._renderer._tooltip?.classList.remove('is-visible');
 
-        // 应用滚动锁
-        if (subStep.lockScroll) {
-          this._lockScroll();
-        } else {
-          this._unlockScroll();
-        }
+        // 全程滚动锁；步骤切换时重新确认锁定
+        this._lockScroll();
 
-        // 应用指针锁（不是 waitForClick 步骤才锁，防止误操作）
         if (subStep.lockPointer) {
           this._lockPointer();
         } else {
@@ -788,19 +1079,20 @@
         }
 
         const targetEl = subStep.target ? document.querySelector(subStep.target) : null;
-        this._renderer.highlightElement(targetEl, { disablePointer: subStep.disableHighlightPointer });
+        this._highlightTarget(targetEl, { disablePointer: subStep.disableHighlightPointer });
         this._renderer.positionTooltip(targetEl, subStep.position, subStep.offsetY);
 
         const totalSteps = parentStep.subSteps.length;
         this._renderer.renderTooltipContent(subStep, this._currentSubStep, totalSteps);
-
-        // 绑定子步骤按钮事件
         this._bindSubStepButtonActions(parentStep);
 
-        // 如果需要等待点击
-        if (subStep.waitForClick && targetEl) {
+        if (subStep.waitForClick) {
+          if (!targetEl) {
+            // 目标丢失时不卡死：显示下一步
+            return;
+          }
           this._waitForElementClick(targetEl, () => {
-            this._unlockScroll();
+            // 点击后不解锁滚动，保持高亮坐标系稳定
             this._unlockPointer();
             this._currentSubStep++;
             this._showSubStep(parentStep);
@@ -843,97 +1135,340 @@
       });
     }
 
+    _clearClickWait() {
+      if (typeof this._clickWaitCleanup === 'function') {
+        try {
+          this._clickWaitCleanup();
+        } catch (_) {}
+      }
+      this._clickWaitCleanup = null;
+    }
+
     _waitForElementClick(element, callback) {
+      this._clearClickWait();
       if (!element) {
         callback();
         return;
       }
 
-      const handler = (e) => {
-        element.removeEventListener('click', handler);
+      const handler = () => {
+        this._clearClickWait();
         callback();
       };
 
       element.addEventListener('click', handler);
+      this._clickWaitCleanup = () => {
+        element.removeEventListener('click', handler);
+      };
     }
 
-    _injectDemoRecord() {
-      const demoRecordObj = {
-        id: 'demo-onboarding-record',
+    async _resolveDemoExamContext() {
+      const preferredId = PREFERRED_DEMO_EXAM_ID;
+      let list = [];
+
+      try {
+        if (typeof global.getExamIndexState === 'function') {
+          list = global.getExamIndexState();
+        } else if (Array.isArray(global.examIndex)) {
+          list = global.examIndex;
+        }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const storage = global.persistentStore || global.storage;
+          if (storage && typeof storage.get === 'function') {
+            let activeKey = 'exam_index';
+            try {
+              activeKey = await storage.get('active_exam_index_key', 'exam_index') || 'exam_index';
+            } catch (_) {}
+            list = await storage.get(activeKey, []) || [];
+            if ((!Array.isArray(list) || list.length === 0) && activeKey !== 'exam_index') {
+              list = await storage.get('exam_index', []) || [];
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!Array.isArray(list)) list = [];
+
+      const preferred = list.find((exam) => exam && String(exam.id) === preferredId);
+      if (preferred) {
+        return {
+          examId: preferredId,
+          title: preferred.title || P1_HIGH_01_META.examTitle,
+          category: preferred.category || P1_HIGH_01_META.category,
+          frequency: preferred.frequency || P1_HIGH_01_META.frequency,
+          type: preferred.type || 'reading',
+          inIndex: true,
+          useFullAnswerKey: true
+        };
+      }
+
+      const reading = list.find((exam) => {
+        if (!exam || !exam.id) return false;
+        const type = String(exam.type || exam.examType || '').toLowerCase();
+        const category = String(exam.category || '').toUpperCase();
+        return type === 'reading' || category === 'P1' || category === 'P2' || category === 'P3';
+      });
+
+      if (reading) {
+        return {
+          examId: String(reading.id),
+          title: reading.title || String(reading.id),
+          category: reading.category || 'P1',
+          frequency: reading.frequency || 'unknown',
+          type: reading.type || 'reading',
+          inIndex: true,
+          useFullAnswerKey: String(reading.id) === preferredId
+        };
+      }
+
+      // 题库未加载：仍写入 preferred examId，便于用户稍后加载题库后回放
+      return {
+        examId: preferredId,
+        title: P1_HIGH_01_META.examTitle,
+        category: P1_HIGH_01_META.category,
+        frequency: P1_HIGH_01_META.frequency,
         type: 'reading',
-        title: '示例练习 - 阅读 Passage 1',
-        metadata: {
-          examTitle: '示例练习 - 阅读 Passage 1',
-          category: '官方真题'
-        },
-        score: 25,
-        totalQuestions: 40,
-        accuracy: 0.625,
-        percentage: 62.5,
-        correctAnswers: 25,
-        duration: 1200,
-        date: new Date().toISOString(),
-        questions: []
+        inIndex: false,
+        useFullAnswerKey: true
+      };
+    }
+
+    _buildDemoUserAnswers(correctMap) {
+      const userAnswers = cloneMap(correctMap);
+      // 故意答错若干题，便于回放中看到对错对比
+      if (userAnswers.q3) userAnswers.q3 = 'ii';
+      if (userAnswers.q7) userAnswers.q7 = 'i';
+      if (userAnswers.q9) userAnswers.q9 = 'A';
+      if (userAnswers.q12) userAnswers.q12 = 'C';
+      if (userAnswers.q13) userAnswers.q13 = 'B';
+      return userAnswers;
+    }
+
+    _countCorrect(userAnswers, correctMap) {
+      const keys = Object.keys(correctMap || {});
+      let correct = 0;
+      keys.forEach((key) => {
+        const user = String(userAnswers[key] == null ? '' : userAnswers[key]).trim().toLowerCase();
+        const expected = String(correctMap[key] == null ? '' : correctMap[key]).trim().toLowerCase();
+        if (user && expected && user === expected) {
+          correct += 1;
+        }
+      });
+      return correct;
+    }
+
+    _buildDemoRecord(examContext) {
+      const end = new Date();
+      const start = new Date(end.getTime() - 20 * 60 * 1000);
+      const correctMap = examContext.useFullAnswerKey
+        ? cloneMap(P1_HIGH_01_ANSWER_KEY)
+        : {
+            q1: 'A',
+            q2: 'B',
+            q3: 'C'
+          };
+      const userAnswers = this._buildDemoUserAnswers(correctMap);
+      const totalQuestions = Object.keys(correctMap).length;
+      const correctAnswers = this._countCorrect(userAnswers, correctMap);
+      const accuracy = totalQuestions > 0 ? correctAnswers / totalQuestions : 0;
+      const percentage = Math.round(accuracy * 100);
+      const markedQuestions = ['q3', 'q9'].filter((key) => Object.prototype.hasOwnProperty.call(correctMap, key));
+      const examId = examContext.examId;
+      const title = `示例练习 - ${examContext.title || examId}`;
+      const scoreInfo = {
+        correct: correctAnswers,
+        total: totalQuestions,
+        accuracy,
+        percentage,
+        source: 'onboarding-demo'
       };
 
-      const api = window.PracticeRecordAPI;
-      if (api && typeof api.saveRecord === 'function') {
-        api.saveRecord(demoRecordObj, { updateStats: true }).then(() => {
-          // 尝试触发界面刷新
-          if (typeof window.syncPracticeRecords === 'function') {
-            window.syncPracticeRecords({ forceRender: true });
-          } else if (window.app && typeof window.app.renderPracticeHistory === 'function') {
-            window.app.renderPracticeHistory();
-          } else {
-            // 广播事件，主应用处监听并重载
-            window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding' } }));
+      const answerComparison = {};
+      Object.keys(correctMap).forEach((key) => {
+        const userAnswer = userAnswers[key] || '';
+        const correctAnswer = correctMap[key] || '';
+        answerComparison[key] = {
+          userAnswer,
+          correctAnswer,
+          isCorrect: String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase()
+        };
+      });
+
+      return {
+        id: DEMO_RECORD_ID,
+        examId,
+        type: examContext.type || 'reading',
+        title,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        date: end.toISOString(),
+        duration: 1200,
+        status: 'completed',
+        score: correctAnswers,
+        totalQuestions,
+        correctAnswers,
+        accuracy,
+        metadata: {
+          examId,
+          examTitle: examContext.title || title,
+          category: examContext.category || 'P1',
+          frequency: examContext.frequency || '高频',
+          type: examContext.type || 'reading',
+          markedQuestions: cloneArray(markedQuestions),
+          source: 'onboarding-demo'
+        },
+        frequency: examContext.frequency || '高频',
+        // 顶层 map 会被 standardize 转为 answers[]；回放仍依赖 realData.answers
+        answers: cloneMap(userAnswers),
+        correctAnswerMap: cloneMap(correctMap),
+        answerComparison,
+        markedQuestions: cloneArray(markedQuestions),
+        scoreInfo: Object.assign({}, scoreInfo),
+        realData: {
+          examId,
+          answers: cloneMap(userAnswers),
+          correctAnswerMap: cloneMap(correctMap),
+          answerComparison,
+          highlights: [],
+          markedQuestions: cloneArray(markedQuestions),
+          scrollY: 0,
+          scoreInfo: Object.assign({}, scoreInfo),
+          isRealData: true,
+          source: 'onboarding-demo'
+        },
+        version: '0.6.2-fix'
+      };
+    }
+
+    async _refreshPracticeHistory() {
+      if (typeof global.syncPracticeRecords === 'function') {
+        await Promise.resolve(global.syncPracticeRecords({ forceRender: true }));
+        return;
+      }
+      if (global.app && typeof global.app.renderPracticeHistory === 'function') {
+        await Promise.resolve(global.app.renderPracticeHistory());
+        return;
+      }
+      global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
+        detail: { source: 'onboarding' }
+      }));
+    }
+
+    _waitForSelector(selector, maxWait = 4000) {
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+        const check = () => {
+          const el = document.querySelector(selector);
+          if (el) {
+            resolve(el);
+            return;
           }
-        }).catch(err => {
+          if (Date.now() - startTime > maxWait) {
+            resolve(null);
+            return;
+          }
+          setTimeout(check, 120);
+        };
+        check();
+      });
+    }
+
+    async _injectDemoRecord() {
+      if (this._demoInjectPromise) {
+        return this._demoInjectPromise;
+      }
+
+      this._demoInjectPromise = (async () => {
+        const api = global.PracticeRecordAPI;
+        if (!api || typeof api.saveRecord !== 'function') {
+          return { ok: false, reason: 'PracticeRecordAPI unavailable' };
+        }
+
+        const examContext = await this._resolveDemoExamContext();
+        const demoRecordObj = this._buildDemoRecord(examContext);
+
+        try {
+          // 避免污染 user_stats
+          await api.saveRecord(demoRecordObj, { updateStats: false });
+        } catch (err) {
           console.error('[Onboarding] 注入示例记录失败:', err);
-        });
-      } else {
-        console.warn('[Onboarding] PracticeRecordAPI 不可用，无法注入示例记录');
+          return {
+            ok: false,
+            reason: err && err.message ? err.message : 'saveRecord failed',
+            error: err
+          };
+        }
+
+        await this._refreshPracticeHistory();
+        const row = await this._waitForSelector(HISTORY_ITEM_SELECTOR, 5000);
+        if (!row) {
+          return {
+            ok: false,
+            reason: 'history row not rendered',
+            examId: examContext.examId,
+            replayable: false
+          };
+        }
+
+        return {
+          ok: true,
+          examId: examContext.examId,
+          inIndex: Boolean(examContext.inIndex),
+          replayable: Boolean(examContext.inIndex && examContext.useFullAnswerKey)
+            || Boolean(examContext.inIndex),
+          recordId: DEMO_RECORD_ID
+        };
+      })();
+
+      try {
+        return await this._demoInjectPromise;
+      } finally {
+        this._demoInjectPromise = null;
       }
     }
 
-    _cleanupDemoRecord() {
-      const api = window.PracticeRecordAPI;
-      if (api && typeof api.deleteById === 'function') {
-        api.deleteById('demo-onboarding-record', { updateStats: true }).then(() => {
-          if (typeof window.syncPracticeRecords === 'function') {
-            window.syncPracticeRecords({ forceRender: true });
-          } else if (window.app && typeof window.app.renderPracticeHistory === 'function') {
-            window.app.renderPracticeHistory();
-          } else {
-            window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding-cleanup' } }));
-          }
-        }).catch(err => {
-          console.warn('[Onboarding] 清理示例记录失败:', err);
-        });
+    async _cleanupDemoRecord() {
+      const api = global.PracticeRecordAPI;
+      if (!api || typeof api.deleteById !== 'function') {
+        return;
+      }
+
+      try {
+        await api.deleteById(DEMO_RECORD_ID, { updateStats: false });
+        if (typeof global.syncPracticeRecords === 'function') {
+          await Promise.resolve(global.syncPracticeRecords({ forceRender: true }));
+        } else if (global.app && typeof global.app.renderPracticeHistory === 'function') {
+          await Promise.resolve(global.app.renderPracticeHistory());
+        } else {
+          global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
+            detail: { source: 'onboarding-cleanup' }
+          }));
+        }
+      } catch (err) {
+        console.warn('[Onboarding] 清理示例记录失败:', err);
       }
     }
 
     _showStepContent(step) {
-      // 等待视图切换完成后再显示提示
       setTimeout(() => {
-        // 隐藏提示框以重新定位
+        if (!this._isActive) return;
+
         this._renderer._tooltip?.classList.remove('is-visible');
+        this._lockScroll();
 
-        // 高亮目标元素
         const targetEl = step.target ? document.querySelector(step.target) : null;
-        this._renderer.highlightElement(targetEl, { disablePointer: step.disableHighlightPointer });
-
-        // 定位提示框
+        this._highlightTarget(targetEl, { disablePointer: step.disableHighlightPointer });
         this._renderer.positionTooltip(targetEl, step.position, step.offsetY);
 
-        // 渲染内容
         if (step.id === 'welcome') {
           this._renderer.showWelcome(step);
         } else {
           this._renderer.renderTooltipContent(step, this._currentStep, this._steps.length);
         }
 
-        // 绑定按钮事件
         this._bindButtonActions();
       }, 100);
     }
@@ -942,6 +1477,8 @@
       const startTime = Date.now();
 
       const check = () => {
+        if (!this._isActive) return;
+
         const el = document.querySelector(selector);
         if (el) {
           callback();
@@ -949,7 +1486,6 @@
         }
 
         if (Date.now() - startTime > maxWait) {
-          // 超时后跳过该步骤
           console.warn(`[Onboarding] 等待元素超时: ${selector}`);
           if (this._inSubSteps) {
             this._currentSubStep++;
@@ -998,7 +1534,6 @@
     }
 
     _next() {
-      // 如果当前在子步骤中
       if (this._inSubSteps) {
         const parentStep = this._steps[this._currentStep];
         if (parentStep && parentStep.subSteps) {
@@ -1021,7 +1556,6 @@
     }
 
     _prev() {
-      // 如果当前在子步骤中
       if (this._inSubSteps) {
         if (this._currentSubStep > 0) {
           this._currentSubStep--;
@@ -1031,7 +1565,6 @@
           }
           return;
         }
-        // 如果已经在第一个子步骤，返回到上一个主步骤
         this._inSubSteps = false;
       }
 
@@ -1041,7 +1574,6 @@
     }
 
     _skip() {
-      this._cleanupDemoRecord();
       this._complete();
     }
 
@@ -1066,7 +1598,6 @@
     }
   }
 
-  // 全局暴露
   const tour = new OnboardingTour();
 
   global.OnboardingTour = {
