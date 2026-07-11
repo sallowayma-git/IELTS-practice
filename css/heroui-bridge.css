@@ -2158,7 +2158,10 @@ body.hero-body {
 /* Glass capsule buttons inside secondary modals */
 .shui-secondary-modal .data-mgmt-btn,
 .shui-secondary-modal .practice-timer-save,
-.shui-secondary-modal .library-manager-modal__action-row .btn {
+.shui-secondary-modal .library-manager-modal__action-row .btn,
+.shui-secondary-modal .library-loader-primary,
+.shui-secondary-modal .library-loader-secondary,
+.shui-secondary-modal .backup-entry-restore {
     border-radius: 999px !important;
     border: 1px solid rgba(255, 255, 255, 0.58) !important;
     background: rgba(255, 255, 255, 0.28) !important;
@@ -2184,7 +2187,13 @@ body.hero-body {
 .shui-secondary-modal .practice-timer-save:hover,
 .shui-secondary-modal .practice-timer-save:focus-visible,
 .shui-secondary-modal .library-manager-modal__action-row .btn:hover,
-.shui-secondary-modal .library-manager-modal__action-row .btn:focus-visible {
+.shui-secondary-modal .library-manager-modal__action-row .btn:focus-visible,
+.shui-secondary-modal .library-loader-primary:hover,
+.shui-secondary-modal .library-loader-primary:focus-visible,
+.shui-secondary-modal .library-loader-secondary:hover,
+.shui-secondary-modal .library-loader-secondary:focus-visible,
+.shui-secondary-modal .backup-entry-restore:hover,
+.shui-secondary-modal .backup-entry-restore:focus-visible {
     background: rgba(255, 255, 255, 0.48) !important;
     color: #0f172a !important;
     border-color: rgba(255, 255, 255, 0.78) !important;
@@ -2227,8 +2236,8 @@ body.hero-body {
     border-color: rgba(147, 197, 253, 0.75) !important;
 }
 
-.shui-secondary-modal .practice-sub-card,
-.shui-secondary-modal .practice-timer-card {
+.shui-secondary-modal .practice-settings-block,
+.shui-secondary-modal .practice-settings-cards > .practice-timer-card {
     border: 1px solid rgba(255, 255, 255, 0.5);
     border-radius: 16px;
     background:
@@ -2241,7 +2250,8 @@ body.hero-body {
     -webkit-backdrop-filter: blur(14px) saturate(150%);
 }
 
-.shui-secondary-modal .practice-sub-card > h3 {
+.shui-secondary-modal .practice-settings-block__head h4,
+.shui-secondary-modal .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4 {
     color: #0f172a;
 }
 
@@ -2283,16 +2293,18 @@ body.blue-dark-mode .shui-secondary-modal #load-library-btn {
     color: #dbeafe !important;
 }
 
-body.bloom-dark-mode .shui-secondary-modal .practice-sub-card,
-body.blue-dark-mode .shui-secondary-modal .practice-sub-card,
-body.bloom-dark-mode .shui-secondary-modal .practice-timer-card,
-body.blue-dark-mode .shui-secondary-modal .practice-timer-card {
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-block,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-block,
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card {
     background: rgba(15, 23, 42, 0.4);
     border-color: rgba(148, 163, 184, 0.22);
 }
 
-body.bloom-dark-mode .shui-secondary-modal .practice-sub-card > h3,
-body.blue-dark-mode .shui-secondary-modal .practice-sub-card > h3,
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-block__head h4,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-block__head h4,
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4,
 body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__section-head h4,
 body.blue-dark-mode .shui-secondary-modal .library-manager-modal__section-head h4 {
     color: #f1f5f9;
