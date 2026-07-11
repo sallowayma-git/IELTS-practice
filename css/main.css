@@ -5589,18 +5589,9 @@ body.no-scroll {
 }
 
 /* --- Library manager modal --- */
-/* The 题库管理 modal hosts the library config list plus the load/refresh
- * action buttons. Reuses the .theme-modal glass surface, so we only need to
- * tune the body layout and neutralize the nested .library-config-panel chrome
- * (it was originally a standalone card on #settings-view; inside the modal it
- * would otherwise duplicate the glass background and header). */
-.library-manager-modal .theme-modal-content {
-    width: min(720px, 94vw);
-    max-height: 86vh;
-}
-
+/* Body layout only; glass shell is provided by .shui-secondary-modal. */
 .library-manager-modal__body {
-    padding: 22px 28px 26px;
+    padding: 16px 24px 24px;
     display: flex;
     flex-direction: column;
     gap: 22px;
@@ -5676,12 +5667,8 @@ body.no-scroll {
 }
 
 @media (max-width: 900px) {
-    .library-manager-modal .theme-modal-content {
-        width: min(96vw, 560px);
-    }
-
     .library-manager-modal__body {
-        padding: 18px 18px 22px;
+        padding: 16px 18px 22px;
     }
 }
 
@@ -8047,10 +8034,9 @@ body[data-bg-theme="ascii-flower"] .theme-modal-close:hover {
     display: none; /* Chrome/Edge/Safari: hide the scrollbar */
 }
 
-/* 练习设置弹窗内使用滚轮 + 玻璃弥散风格的细滚动条（不破坏圆润外观）。
-   通过保留滚动但隐藏原生条；如内容溢出，用户用滚轮 / 触控板滚动即可。 */
+/* 练习设置：滚动容器在共享玻璃壳内 */
 #practice-settings-modal .theme-modal-content {
-    max-height: 85vh;
+    max-height: min(86vh, 800px);
 }
 
 /* 共享玻璃胶囊按钮（静止态真值）

@@ -19,13 +19,16 @@
 
     function buildModalMarkup() {
         return [
-            '<div id="' + MODAL_ID + '" class="theme-modal" role="dialog" aria-modal="true" aria-labelledby="practice-settings-title">',
-            '    <div class="theme-modal-content">',
-            '        <div class="theme-modal-header">',
-            '            <h3 id="practice-settings-title">练习设置</h3>',
+            '<div id="' + MODAL_ID + '" class="theme-modal shui-secondary-modal shui-secondary-modal--md" role="dialog" aria-modal="true" aria-labelledby="practice-settings-title">',
+            '    <div class="theme-modal-content shui-secondary-modal__content">',
+            '        <div class="theme-modal-header shui-secondary-modal__header">',
+            '            <div class="shui-secondary-modal__title-group">',
+            '                <div class="shui-secondary-modal__eyebrow">PRACTICE</div>',
+            '                <h3 id="practice-settings-title">练习设置</h3>',
+            '            </div>',
             '            <button class="theme-modal-close" type="button" aria-label="关闭">&times;</button>',
             '        </div>',
-            '        <div class="theme-modal-body">',
+            '        <div class="theme-modal-body shui-secondary-modal__body">',
             '            <div class="practice-settings-cards">',
 
             '                <div class="practice-sub-card">',

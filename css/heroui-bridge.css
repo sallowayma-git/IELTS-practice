@@ -2115,18 +2115,12 @@ body.hero-body {
     align-items: center;
 }
 
-/* Local disk backup — liquid glass secondary modal + frosted toast */
+/* ============================================================
+   Shared secondary liquid-glass modal shell
+   Used by: practice settings, library manager, external backup
+   ============================================================ */
 
-#settings-view #external-backup-entry-btn[data-state="stale"],
-#settings-view #external-backup-entry-btn[data-state="need-auth"] {
-    border-color: rgba(245, 158, 11, 0.42) !important;
-    box-shadow:
-        0 10px 22px rgba(245, 158, 11, 0.08),
-        inset 0 1px 1px rgba(255, 255, 255, 0.76);
-}
-
-/* Overlay: soft frosted dim, not heavy slate slab */
-#external-backup-modal.theme-modal {
+.shui-secondary-modal.theme-modal {
     background:
         radial-gradient(120% 90% at 50% 20%, rgba(255, 255, 255, 0.18), transparent 55%),
         linear-gradient(160deg, rgba(15, 23, 42, 0.28), rgba(30, 41, 59, 0.22));
@@ -2134,12 +2128,12 @@ body.hero-body {
     -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
-#external-backup-modal .theme-modal-content,
-#external-backup-modal .external-backup-modal__content {
+.shui-secondary-modal .theme-modal-content,
+.shui-secondary-modal .shui-secondary-modal__content {
     position: relative;
-    width: min(520px, 92vw);
-    max-width: min(520px, 92vw);
-    max-height: min(86vh, 720px);
+    width: min(560px, 92vw);
+    max-width: min(560px, 92vw);
+    max-height: min(86vh, 760px);
     overflow: hidden;
     border-radius: 24px;
     border: 1px solid rgba(255, 255, 255, 0.58);
@@ -2155,8 +2149,30 @@ body.hero-body {
     -webkit-backdrop-filter: blur(28px) saturate(165%);
 }
 
+.shui-secondary-modal.shui-secondary-modal--sm .theme-modal-content,
+.shui-secondary-modal.shui-secondary-modal--sm .shui-secondary-modal__content {
+    width: min(520px, 92vw);
+    max-width: min(520px, 92vw);
+    max-height: min(86vh, 720px);
+}
+
+.shui-secondary-modal.shui-secondary-modal--md .theme-modal-content,
+.shui-secondary-modal.shui-secondary-modal--md .shui-secondary-modal__content {
+    width: min(640px, 94vw);
+    max-width: min(640px, 94vw);
+    max-height: min(86vh, 800px);
+}
+
+.shui-secondary-modal.shui-secondary-modal--lg .theme-modal-content,
+.shui-secondary-modal.shui-secondary-modal--lg .shui-secondary-modal__content {
+    width: min(720px, 94vw);
+    max-width: min(720px, 94vw);
+    max-height: min(86vh, 860px);
+}
+
 /* Specular rim */
-#external-backup-modal .theme-modal-content::before {
+.shui-secondary-modal .theme-modal-content::before,
+.shui-secondary-modal .shui-secondary-modal__content::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -2177,25 +2193,28 @@ body.hero-body {
     z-index: 0;
 }
 
-#external-backup-modal .theme-modal-header,
-#external-backup-modal .theme-modal-body {
+.shui-secondary-modal .theme-modal-header,
+.shui-secondary-modal .theme-modal-body,
+.shui-secondary-modal .shui-secondary-modal__header,
+.shui-secondary-modal .shui-secondary-modal__body {
     position: relative;
     z-index: 1;
 }
 
-#external-backup-modal .external-backup-modal__header {
+.shui-secondary-modal .theme-modal-header,
+.shui-secondary-modal .shui-secondary-modal__header {
     padding: 22px 24px 14px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.35);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04));
 }
 
-#external-backup-modal .external-backup-modal__title-group {
+.shui-secondary-modal .shui-secondary-modal__title-group {
     display: grid;
     gap: 4px;
     min-width: 0;
 }
 
-#external-backup-modal .external-backup-modal__eyebrow {
+.shui-secondary-modal .shui-secondary-modal__eyebrow {
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.14em;
@@ -2203,8 +2222,7 @@ body.hero-body {
     color: rgba(37, 99, 235, 0.78);
 }
 
-#external-backup-modal .theme-modal-header h3,
-#external-backup-modal #external-backup-title {
+.shui-secondary-modal .theme-modal-header h3 {
     font-size: 1.35rem;
     font-weight: 800;
     letter-spacing: -0.02em;
@@ -2215,7 +2233,7 @@ body.hero-body {
     background-clip: border-box;
 }
 
-#external-backup-modal .theme-modal-close {
+.shui-secondary-modal .theme-modal-close {
     width: 34px;
     height: 34px;
     border-radius: 999px;
@@ -2227,16 +2245,244 @@ body.hero-body {
     -webkit-backdrop-filter: blur(12px);
 }
 
-#external-backup-modal .theme-modal-close:hover {
+.shui-secondary-modal .theme-modal-close:hover {
     background: rgba(255, 255, 255, 0.48);
     color: #0f172a;
     transform: rotate(90deg);
 }
 
-#external-backup-modal .external-backup-modal__body {
-    padding: 8px 24px 24px;
+.shui-secondary-modal .theme-modal-body,
+.shui-secondary-modal .shui-secondary-modal__body {
+    padding: 16px 24px 24px;
     overflow-y: auto;
+    flex: 1 1 auto;
     display: block;
+    scrollbar-width: none;
+}
+
+.shui-secondary-modal .theme-modal-body::-webkit-scrollbar,
+.shui-secondary-modal .shui-secondary-modal__body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+/* Glass capsule buttons inside secondary modals */
+.shui-secondary-modal .data-mgmt-btn,
+.shui-secondary-modal .practice-timer-save,
+.shui-secondary-modal .library-manager-modal__action-row .btn {
+    border-radius: 999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.58) !important;
+    background: rgba(255, 255, 255, 0.28) !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-weight: 600;
+    box-shadow:
+        0 10px 22px rgba(15, 23, 42, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.8),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.14) !important;
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    transition:
+        transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+        background 220ms ease,
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        color 220ms ease;
+}
+
+.shui-secondary-modal .data-mgmt-btn:hover,
+.shui-secondary-modal .data-mgmt-btn:focus-visible,
+.shui-secondary-modal .practice-timer-save:hover,
+.shui-secondary-modal .practice-timer-save:focus-visible,
+.shui-secondary-modal .library-manager-modal__action-row .btn:hover,
+.shui-secondary-modal .library-manager-modal__action-row .btn:focus-visible {
+    background: rgba(255, 255, 255, 0.48) !important;
+    color: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.78) !important;
+    transform: translateY(-1px);
+    box-shadow:
+        0 16px 30px rgba(15, 23, 42, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.92) !important;
+}
+
+.shui-secondary-modal .data-mgmt-btn:disabled,
+.shui-secondary-modal .practice-timer-save:disabled {
+    opacity: 0.45;
+    transform: none;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+/* Soft primary tint for primary actions in secondary modals */
+.shui-secondary-modal .shui-secondary-btn--primary,
+.shui-secondary-modal #external-backup-bind-btn,
+.shui-secondary-modal #external-backup-write-btn,
+.shui-secondary-modal #load-library-btn {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.28)) !important;
+    border-color: rgba(147, 197, 253, 0.55) !important;
+    color: #1e3a8a !important;
+}
+
+.shui-secondary-modal .shui-secondary-btn--primary:hover,
+.shui-secondary-modal .shui-secondary-btn--primary:focus-visible,
+.shui-secondary-modal #external-backup-bind-btn:hover,
+.shui-secondary-modal #external-backup-write-btn:hover,
+.shui-secondary-modal #load-library-btn:hover,
+.shui-secondary-modal #external-backup-bind-btn:focus-visible,
+.shui-secondary-modal #external-backup-write-btn:focus-visible,
+.shui-secondary-modal #load-library-btn:focus-visible {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.42)) !important;
+    color: #1e3a8a !important;
+    border-color: rgba(147, 197, 253, 0.75) !important;
+}
+
+/* Nested sub-cards inside secondary modals (practice settings) */
+.shui-secondary-modal .practice-sub-card,
+.shui-secondary-modal .practice-timer-card {
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 16px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.16)),
+        rgba(255, 255, 255, 0.18);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        0 10px 24px rgba(15, 23, 42, 0.04);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+.shui-secondary-modal .practice-sub-card > h3 {
+    color: #0f172a;
+}
+
+.shui-secondary-modal .hero-panel__muted,
+.shui-secondary-modal .library-manager-modal__hint {
+    color: rgba(51, 65, 85, 0.78) !important;
+}
+
+.shui-secondary-modal .library-manager-modal__section-head h4 {
+    color: #0f172a;
+    font-weight: 750;
+}
+
+/* Dark themes for shared shell */
+body.bloom-dark-mode .shui-secondary-modal.theme-modal,
+body.blue-dark-mode .shui-secondary-modal.theme-modal {
+    background:
+        radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.08), transparent 50%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.55), rgba(15, 23, 42, 0.45));
+}
+
+body.bloom-dark-mode .shui-secondary-modal .theme-modal-content,
+body.blue-dark-mode .shui-secondary-modal .theme-modal-content {
+    background:
+        linear-gradient(155deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55)),
+        rgba(15, 23, 42, 0.48);
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow:
+        0 28px 64px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body.bloom-dark-mode .shui-secondary-modal .theme-modal-header h3,
+body.blue-dark-mode .shui-secondary-modal .theme-modal-header h3 {
+    color: #f1f5f9;
+    -webkit-text-fill-color: #f1f5f9;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .shui-secondary-modal__eyebrow,
+body.blue-dark-mode .shui-secondary-modal .shui-secondary-modal__eyebrow {
+    color: rgba(147, 197, 253, 0.9);
+}
+
+body.bloom-dark-mode .shui-secondary-modal .theme-modal-header,
+body.blue-dark-mode .shui-secondary-modal .theme-modal-header {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
+    border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+body.bloom-dark-mode .shui-secondary-modal .theme-modal-close,
+body.blue-dark-mode .shui-secondary-modal .theme-modal-close {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #cbd5e1;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .data-mgmt-btn,
+body.blue-dark-mode .shui-secondary-modal .data-mgmt-btn,
+body.bloom-dark-mode .shui-secondary-modal .practice-timer-save,
+body.blue-dark-mode .shui-secondary-modal .practice-timer-save,
+body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__action-row .btn,
+body.blue-dark-mode .shui-secondary-modal .library-manager-modal__action-row .btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+    color: #e2e8f0 !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+body.bloom-dark-mode .shui-secondary-modal #external-backup-bind-btn,
+body.bloom-dark-mode .shui-secondary-modal #external-backup-write-btn,
+body.bloom-dark-mode .shui-secondary-modal #load-library-btn,
+body.blue-dark-mode .shui-secondary-modal #external-backup-bind-btn,
+body.blue-dark-mode .shui-secondary-modal #external-backup-write-btn,
+body.blue-dark-mode .shui-secondary-modal #load-library-btn {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.08)) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+    color: #dbeafe !important;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .practice-sub-card,
+body.blue-dark-mode .shui-secondary-modal .practice-sub-card,
+body.bloom-dark-mode .shui-secondary-modal .practice-timer-card,
+body.blue-dark-mode .shui-secondary-modal .practice-timer-card {
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(148, 163, 184, 0.22);
+}
+
+body.bloom-dark-mode .shui-secondary-modal .practice-sub-card > h3,
+body.blue-dark-mode .shui-secondary-modal .practice-sub-card > h3,
+body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__section-head h4,
+body.blue-dark-mode .shui-secondary-modal .library-manager-modal__section-head h4 {
+    color: #f1f5f9;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .hero-panel__muted,
+body.blue-dark-mode .shui-secondary-modal .hero-panel__muted,
+body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__hint,
+body.blue-dark-mode .shui-secondary-modal .library-manager-modal__hint {
+    color: rgba(203, 213, 225, 0.82) !important;
+}
+
+@media (max-width: 640px) {
+    .shui-secondary-modal .theme-modal-header,
+    .shui-secondary-modal .shui-secondary-modal__header,
+    .shui-secondary-modal .theme-modal-body,
+    .shui-secondary-modal .shui-secondary-modal__body {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .shui-secondary-modal.shui-secondary-modal--md .theme-modal-content,
+    .shui-secondary-modal.shui-secondary-modal--lg .theme-modal-content {
+        width: min(96vw, 560px);
+        max-width: min(96vw, 560px);
+    }
+}
+
+/* ============================================================
+   Local disk backup — content + frosted toast
+   (shell comes from .shui-secondary-modal)
+   ============================================================ */
+
+#settings-view #external-backup-entry-btn[data-state="stale"],
+#settings-view #external-backup-entry-btn[data-state="need-auth"] {
+    border-color: rgba(245, 158, 11, 0.42) !important;
+    box-shadow:
+        0 10px 22px rgba(245, 158, 11, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.76);
 }
 
 .external-backup-panel {
@@ -2337,76 +2583,17 @@ body.hero-body {
     margin-top: 2px !important;
 }
 
-#external-backup-modal .external-backup-panel__actions .btn,
-#external-backup-modal .data-mgmt-btn {
+#external-backup-modal .external-backup-panel__actions .btn {
     min-width: 0;
     width: 100%;
     justify-content: center;
     display: inline-flex;
     align-items: center;
-    border-radius: 999px !important;
-    border: 1px solid rgba(255, 255, 255, 0.58) !important;
-    background: rgba(255, 255, 255, 0.28) !important;
-    background-image: none !important;
-    color: #0f172a !important;
-    font-weight: 600;
-    box-shadow:
-        0 10px 22px rgba(15, 23, 42, 0.05),
-        inset 0 1px 1px rgba(255, 255, 255, 0.8),
-        inset 0 -1px 1px rgba(255, 255, 255, 0.14) !important;
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
-    transition:
-        transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
-        background 220ms ease,
-        border-color 220ms ease,
-        box-shadow 220ms ease,
-        color 220ms ease;
-}
-
-#external-backup-modal .external-backup-panel__actions .btn:hover,
-#external-backup-modal .external-backup-panel__actions .btn:focus-visible,
-#external-backup-modal .data-mgmt-btn:hover,
-#external-backup-modal .data-mgmt-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.48) !important;
-    color: #0f172a !important;
-    border-color: rgba(255, 255, 255, 0.78) !important;
-    transform: translateY(-1px);
-    box-shadow:
-        0 16px 30px rgba(15, 23, 42, 0.08),
-        inset 0 1px 1px rgba(255, 255, 255, 0.92) !important;
-}
-
-#external-backup-modal .external-backup-panel__actions .btn:disabled,
-#external-backup-modal .data-mgmt-btn:disabled {
-    opacity: 0.45;
-    transform: none;
-    cursor: not-allowed;
-    box-shadow: none !important;
 }
 
 #external-backup-modal .external-backup-btn--ghost {
     background: rgba(255, 255, 255, 0.14) !important;
     color: rgba(71, 85, 105, 0.95) !important;
-}
-
-/* Soft primary: glass tint, not solid fill */
-#external-backup-modal #external-backup-bind-btn,
-#external-backup-modal #external-backup-write-btn {
-    background:
-        linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.28)) !important;
-    border-color: rgba(147, 197, 253, 0.55) !important;
-    color: #1e3a8a !important;
-}
-
-#external-backup-modal #external-backup-bind-btn:hover,
-#external-backup-modal #external-backup-write-btn:hover,
-#external-backup-modal #external-backup-bind-btn:focus-visible,
-#external-backup-modal #external-backup-write-btn:focus-visible {
-    background:
-        linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.42)) !important;
-    color: #1e3a8a !important;
-    border-color: rgba(147, 197, 253, 0.75) !important;
 }
 
 /* Daily reminder — floating liquid glass toast */
@@ -2533,42 +2720,10 @@ body.hero-body {
     transform: rotate(90deg);
 }
 
-/* Dark themes */
-body.bloom-dark-mode #external-backup-modal.theme-modal,
-body.blue-dark-mode #external-backup-modal.theme-modal {
-    background:
-        radial-gradient(120% 90% at 50% 15%, rgba(56, 189, 248, 0.08), transparent 50%),
-        linear-gradient(160deg, rgba(2, 6, 23, 0.55), rgba(15, 23, 42, 0.45));
-}
-
-body.bloom-dark-mode #external-backup-modal .theme-modal-content,
-body.blue-dark-mode #external-backup-modal .theme-modal-content {
-    background:
-        linear-gradient(155deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55)),
-        rgba(15, 23, 42, 0.48);
-    border-color: rgba(148, 163, 184, 0.28);
-    box-shadow:
-        0 28px 64px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-body.bloom-dark-mode #external-backup-modal #external-backup-title,
-body.blue-dark-mode #external-backup-modal #external-backup-title,
-body.bloom-dark-mode #external-backup-modal .theme-modal-header h3,
-body.blue-dark-mode #external-backup-modal .theme-modal-header h3 {
-    color: #f1f5f9;
-    -webkit-text-fill-color: #f1f5f9;
-}
-
-body.bloom-dark-mode #external-backup-modal .external-backup-modal__eyebrow,
-body.blue-dark-mode #external-backup-modal .external-backup-modal__eyebrow {
-    color: rgba(147, 197, 253, 0.9);
-}
-
-body.bloom-dark-mode #external-backup-modal .external-backup-panel__desc,
-body.blue-dark-mode #external-backup-modal .external-backup-panel__desc,
-body.bloom-dark-mode #external-backup-modal .external-backup-panel__tips,
-body.blue-dark-mode #external-backup-modal .external-backup-panel__tips {
+body.bloom-dark-mode .external-backup-panel__desc,
+body.blue-dark-mode .external-backup-panel__desc,
+body.bloom-dark-mode .external-backup-panel__tips,
+body.blue-dark-mode .external-backup-panel__tips {
     color: rgba(203, 213, 225, 0.82);
 }
 
@@ -2581,23 +2736,6 @@ body.blue-dark-mode .external-backup-status-card {
 body.bloom-dark-mode .external-backup-panel__status,
 body.blue-dark-mode .external-backup-panel__status {
     color: #e2e8f0;
-}
-
-body.bloom-dark-mode #external-backup-modal .data-mgmt-btn,
-body.blue-dark-mode #external-backup-modal .data-mgmt-btn {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border-color: rgba(148, 163, 184, 0.28) !important;
-    color: #e2e8f0 !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-}
-
-body.bloom-dark-mode #external-backup-modal #external-backup-bind-btn,
-body.bloom-dark-mode #external-backup-modal #external-backup-write-btn,
-body.blue-dark-mode #external-backup-modal #external-backup-bind-btn,
-body.blue-dark-mode #external-backup-modal #external-backup-write-btn {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.08)) !important;
-    border-color: rgba(96, 165, 250, 0.4) !important;
-    color: #dbeafe !important;
 }
 
 body.bloom-dark-mode .external-backup-banner__glass,
@@ -2624,12 +2762,6 @@ body.blue-dark-mode .external-backup-banner__dismiss {
 @media (max-width: 640px) {
     #external-backup-modal .external-backup-panel__actions {
         grid-template-columns: 1fr;
-    }
-
-    #external-backup-modal .external-backup-modal__header,
-    #external-backup-modal .external-backup-modal__body {
-        padding-left: 18px;
-        padding-right: 18px;
     }
 
     .external-backup-banner__glass {

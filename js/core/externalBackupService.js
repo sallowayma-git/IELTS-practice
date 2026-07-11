@@ -1016,22 +1016,22 @@
 
         modal = global.document.createElement('div');
         modal.id = MODAL_ID;
-        modal.className = 'theme-modal external-backup-modal';
+        modal.className = 'theme-modal external-backup-modal shui-secondary-modal shui-secondary-modal--sm';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
         modal.setAttribute('aria-labelledby', 'external-backup-title');
 
         var content = global.document.createElement('div');
-        content.className = 'theme-modal-content external-backup-modal__content';
+        content.className = 'theme-modal-content external-backup-modal__content shui-secondary-modal__content';
 
         var header = global.document.createElement('div');
-        header.className = 'theme-modal-header external-backup-modal__header';
+        header.className = 'theme-modal-header external-backup-modal__header shui-secondary-modal__header';
 
         var titleGroup = global.document.createElement('div');
-        titleGroup.className = 'external-backup-modal__title-group';
+        titleGroup.className = 'external-backup-modal__title-group shui-secondary-modal__title-group';
 
         var eyebrow = global.document.createElement('div');
-        eyebrow.className = 'external-backup-modal__eyebrow';
+        eyebrow.className = 'external-backup-modal__eyebrow shui-secondary-modal__eyebrow';
         eyebrow.textContent = 'DISK BACKUP';
 
         var title = global.document.createElement('h3');
@@ -1051,7 +1051,7 @@
         header.appendChild(closeBtn);
 
         var body = global.document.createElement('div');
-        body.className = 'theme-modal-body external-backup-modal__body';
+        body.className = 'theme-modal-body external-backup-modal__body shui-secondary-modal__body';
 
         var host = global.document.createElement('div');
         host.id = 'external-backup-panel';
