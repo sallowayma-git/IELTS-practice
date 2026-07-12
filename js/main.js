@@ -516,10 +516,8 @@ async function replaceCanonicalPracticeRecords(records) {
 }
 
 function cleanupLegacyPracticeRecordArtifacts() {
+    // Unprefixed legacy keys only — never the active backend key.
     const legacyRawKeys = ['practice_records', 'old_prefix_practice_records'];
-    const shadowKey = window.storage && typeof window.storage.getKey === 'function'
-        ? window.storage.getKey('practice_records')
-        : null;
 
     try {
         legacyRawKeys.forEach((key) => {
@@ -530,10 +528,25 @@ function cleanupLegacyPracticeRecordArtifacts() {
         console.warn('[System] 清理 legacy 练习记录影子键失败:', error);
     }
 
-    if (shadowKey) {
-        try { localStorage.removeItem(shadowKey); } catch (_) { }
-        try { sessionStorage.removeItem(shadowKey); } catch (_) { }
+    const storage = window.storage;
+    const shadowKey = storage && typeof storage.getKey === 'function'
+        ? storage.getKey('practice_records')
+        : null;
+    if (!shadowKey) {
+        return;
     }
+
+    // When IndexedDB is blocked/unavailable, writePersistentValue stores canonical
+    // practice_records under exam_system_practice_records in localStorage/sessionStorage.
+    // Removing that key after replace/delete would wipe the just-persisted history.
+    const mode = storage && storage.mode;
+    const usesWebStorageBackend = mode === 'localStorage' || mode === 'sessionStorage';
+    if (usesWebStorageBackend || storage.indexedDBBlocked || !storage.indexedDB) {
+        return;
+    }
+
+    try { localStorage.removeItem(shadowKey); } catch (_) { }
+    try { sessionStorage.removeItem(shadowKey); } catch (_) { }
 }
 
 async function persistPracticeRecordsAndRefresh(records, trigger = 'manual-update') {

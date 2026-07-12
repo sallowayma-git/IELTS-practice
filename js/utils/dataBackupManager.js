@@ -482,8 +482,26 @@ class DataBackupManager {
             }
         });
 
+        // Dual-schema payloads and multi-path recovery can surface the same id twice;
+        // keep first occurrence so replace-mode import does not invent duplicates.
+        const seenIds = new Set();
+        const dedupedPracticeRecords = [];
+        practiceRecords.forEach((record) => {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            const id = record.id != null ? String(record.id) : null;
+            if (id) {
+                if (seenIds.has(id)) {
+                    return;
+                }
+                seenIds.add(id);
+            }
+            dedupedPracticeRecords.push(record);
+        });
+
         return {
-            practiceRecords,
+            practiceRecords: dedupedPracticeRecords,
             userStats,
             sources
         };
@@ -496,6 +514,17 @@ class DataBackupManager {
                 sources.push({ source, records });
             }
         };
+        // App backups write dual aliases (practice_records + practiceRecords) for the same list.
+        // Prefer the first non-empty array so replace-mode import does not double-append.
+        const addPreferred = (candidates) => {
+            for (const { source, records } of candidates) {
+                if (Array.isArray(records) && records.some(item => this.isPlainObject(item))) {
+                    add(source, records);
+                    return true;
+                }
+            }
+            return false;
+        };
 
         if (Array.isArray(payload)) {
             add('(root array)', payload);
@@ -505,14 +534,21 @@ class DataBackupManager {
             return sources;
         }
 
-        add('practice_records', payload.practice_records);
-        add('practiceRecords', payload.practiceRecords);
+        addPreferred([
+            { source: 'practice_records', records: payload.practice_records },
+            { source: 'practiceRecords', records: payload.practiceRecords }
+        ]);
 
         const data = this.isPlainObject(payload.data) ? payload.data : {};
-        add('data.practice_records', data.practice_records);
-        add('data.practiceRecords', data.practiceRecords);
-        if (this.isPlainObject(data.practice_records)) {
+        const dataArrayPicked = addPreferred([
+            { source: 'data.practice_records', records: data.practice_records },
+            { source: 'data.practiceRecords', records: data.practiceRecords }
+        ]);
+        // Envelope form only when the preferred alias was not already a plain array source.
+        if (!dataArrayPicked && this.isPlainObject(data.practice_records)) {
             add('data.practice_records.data', data.practice_records.data);
+        } else if (!dataArrayPicked && this.isPlainObject(data.practiceRecords)) {
+            add('data.practiceRecords.data', data.practiceRecords.data);
         }
         if (this.isPlainObject(data.exam_system_practice_records)) {
             add('data.exam_system_practice_records.data', data.exam_system_practice_records.data);

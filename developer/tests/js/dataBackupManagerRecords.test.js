@@ -537,6 +537,43 @@ async function testNormalizeImportPayloadDoesNotDeepWalkNestedSnapshots() {
     }
 }
 
+async function testNormalizeImportPayloadDedupesDualSchemaAliases() {
+    const harness = createHarness();
+    const manager = new harness.DataBackupManager();
+
+    try {
+        const shared = [{
+            id: 'dual-alias-1',
+            examId: 'reading-dual',
+            startTime: '2026-05-25T10:00:00.000Z',
+            endTime: '2026-05-25T10:05:00.000Z',
+            duration: 300,
+            score: 1,
+            totalQuestions: 2,
+            correctAnswers: 1
+        }];
+        const normalized = manager.normalizeImportPayload({
+            practice_records: shared,
+            practiceRecords: shared,
+            data: {
+                practice_records: shared,
+                practiceRecords: shared
+            }
+        });
+
+        assert.strictEqual(
+            normalized.practiceRecords.length,
+            1,
+            'app 备份双 schema 别名不应在 replace 导入前拼成重复记录'
+        );
+        assert.strictEqual(normalized.practiceRecords[0].id, 'dual-alias-1');
+    } finally {
+        if (manager.cleanupTimer) {
+            clearInterval(manager.cleanupTimer);
+        }
+    }
+}
+
 async function testPreImportBackupKeepsNewestAndRestoresExamIndex() {
     const harness = createHarness();
     const manager = new harness.DataBackupManager();
@@ -635,11 +672,12 @@ async function main() {
         await testNormalizeRecordCanonicalCorrectAnswerMapWins();
         await testNormalizeRecordKeepsCoreAccuracyScale();
         await testNormalizeImportPayloadDoesNotDeepWalkNestedSnapshots();
+        await testNormalizeImportPayloadDedupesDualSchemaAliases();
         await testPreImportBackupKeepsNewestAndRestoresExamIndex();
         await testExportIncludeBackupsReadsFullManualList();
         process.stdout.write(JSON.stringify({
             status: 'pass',
-            detail: 'DataBackupManager 导入/合并/清空/备份恢复只走 PracticeRecordAPI 并同步统计，记录语义交给 Core 标准化；pre_import 裁剪与 exam_index/includeBackups 已覆盖'
+            detail: 'DataBackupManager 导入/合并/清空/备份恢复只走 PracticeRecordAPI 并同步统计，记录语义交给 Core 标准化；pre_import 裁剪、双 schema 去重与 exam_index/includeBackups 已覆盖'
         }));
     } catch (error) {
         process.stdout.write(JSON.stringify({
