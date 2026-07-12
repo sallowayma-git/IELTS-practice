@@ -44,6 +44,18 @@ async def safe_exam_id(page) -> str:
         try:
             return await page.evaluate(
                 """() => {
+                    try {
+                        const testApi = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+                        if (testApi && typeof testApi.getTestState === 'function') {
+                            const state = testApi.getTestState() || {};
+                            const activeExamId = state.activeExamId || state.simulationCtx?.examId || '';
+                            if (activeExamId) return String(activeExamId);
+                        }
+                    } catch (_) {}
+                    try {
+                        const openerExamId = window.opener?.app?.currentSuiteSession?.activeExamId || '';
+                        if (openerExamId) return String(openerExamId);
+                    } catch (_) {}
                     try { return new URL(location.href).searchParams.get('examId') || ''; }
                     catch (_) { return ''; }
                 }"""
@@ -70,11 +82,11 @@ async def click_and_wait_change(page, selector: str, old_exam_id: str) -> str:
     return await wait_exam_change(page, old_exam_id)
 
 
-async def add_highlight(page) -> int:
+async def add_highlight(page) -> Dict[str, Any]:
     return await page.evaluate(
         """() => {
             const left = document.getElementById('left');
-            if (!left) return 0;
+            if (!left) return { count: 0, text: '' };
             const walker = document.createTreeWalker(left, NodeFilter.SHOW_TEXT);
             let node = null;
             while ((node = walker.nextNode())) {
@@ -90,11 +102,25 @@ async def add_highlight(page) -> int:
                 span.className = 'hl';
                 try {
                     range.surroundContents(span);
-                    return document.querySelectorAll('.hl').length;
+                    return {
+                        count: document.querySelectorAll('.hl').length,
+                        text: String(span.textContent || '').trim()
+                    };
                 } catch (_) {}
             }
-            return document.querySelectorAll('.hl').length;
+            return {
+                count: document.querySelectorAll('.hl').length,
+                text: ''
+            };
         }"""
+    )
+
+
+async def read_highlight_texts(page) -> List[str]:
+    return await page.evaluate(
+        """() => Array.from(document.querySelectorAll('.hl'))
+            .map((node) => String(node.textContent || '').trim())
+            .filter(Boolean)"""
     )
 
 
@@ -251,9 +277,10 @@ async def run() -> Dict[str, Any]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--allow-file-access-from-files"])
         context = await browser.new_context(user_agent=UA)
+        await context.add_init_script(script="window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;")
 
         page = await context.new_page()
-        page.on("console", lambda msg: print(f"[PAGE CONSOLE] {msg.text}"))
+        page.on("console", lambda msg: print(f"[PAGE CONSOLE] {msg.text}", file=sys.stderr))
         await page.goto(INDEX_URL)
         await page.wait_for_function("() => window.app && window.app.isInitialized", timeout=60000)
         await dismiss_license_modal_if_present(page)
@@ -267,7 +294,7 @@ async def run() -> Dict[str, Any]:
             await page.locator("#suite-mode-selector-modal").wait_for(state="hidden", timeout=10000)
  
         suite_page = await popup_wait.value
-        suite_page.on("console", lambda msg: print(f"[POPUP CONSOLE] {msg.text}"))
+        suite_page.on("console", lambda msg: print(f"[POPUP CONSOLE] {msg.text}", file=sys.stderr))
         await suite_page.wait_for_load_state("load")
         await suite_page.wait_for_selector("#submit-btn", state="attached", timeout=30000)
         await suite_page.wait_for_timeout(600)
@@ -280,12 +307,17 @@ async def run() -> Dict[str, Any]:
         if marker_p1[0] == "none":
             raise RuntimeError("p1_marker_missing")
         hl_initial = await add_highlight(suite_page)
+        if not hl_initial.get("text"):
+            raise RuntimeError("p1_highlight_missing")
 
         second_exam = await click_and_wait_change(suite_page, "#float-next-btn", first_exam)
         if second_exam != TARGET_EXAMS[1]:
             raise RuntimeError(f"unexpected_second_exam:{second_exam}")
 
         await suite_page.wait_for_timeout(700)
+        p2_highlights_before = await read_highlight_texts(suite_page)
+        if hl_initial["text"] in p2_highlights_before:
+            raise RuntimeError("p1_highlight_leaked_into_p2")
         marker_p2 = await mark_first_answer(suite_page, "p2")
         if marker_p2[0] == "none":
             raise RuntimeError("p2_marker_missing")
@@ -306,7 +338,9 @@ async def run() -> Dict[str, Any]:
 
         await suite_page.wait_for_timeout(800)
         restored_p1 = await read_marker(suite_page, marker_p1)
-        hl_restored = await suite_page.evaluate("() => document.querySelectorAll('.hl').length")
+        hl_restored = await read_highlight_texts(suite_page)
+        if hl_initial["text"] not in hl_restored:
+            raise RuntimeError("p1_highlight_not_restored")
 
         p2_back = await click_and_wait_change(suite_page, "#float-next-btn", p1_back)
         if p2_back != TARGET_EXAMS[1]:
@@ -314,6 +348,9 @@ async def run() -> Dict[str, Any]:
 
         await suite_page.wait_for_timeout(800)
         restored_p2 = await read_marker(suite_page, marker_p2)
+        p2_highlights_after = await read_highlight_texts(suite_page)
+        if hl_initial["text"] in p2_highlights_after:
+            raise RuntimeError("p1_highlight_leaked_back_into_p2")
         grouped_restored = await read_grouped_checkbox_answers(suite_page)
 
         # move to p3 and stress P3<->P2 roundtrip to catch dead nav buttons
@@ -381,15 +418,16 @@ async def main() -> int:
     restored_p2 = data.get("restoredP2")
     grouped_expected = data.get("groupedExpected") or {}
     grouped_restored = data.get("groupedRestored") or {}
-    hl_initial = int(data.get("hlInitial") or 0)
-    hl_restored = int(data.get("hlRestored") or 0)
+    hl_initial = data.get("hlInitial") or {}
+    hl_restored = data.get("hlRestored") or []
 
     checks = [
         (restored_p1 == marker_p1[2], "p1_answer_not_restored"),
         (restored_p2 == marker_p2[2], "p2_answer_not_restored"),
         (grouped_restored.get("q10_11") == grouped_expected.get("q10_11"), "group_q10_11_not_restored"),
         (grouped_restored.get("q12_13") == grouped_expected.get("q12_13"), "group_q12_13_not_restored"),
-        (hl_initial > 0 and hl_restored > 0, "highlight_not_restored"),
+        (int(hl_initial.get("count") or 0) > 0, "highlight_not_created"),
+        (bool(hl_initial.get("text")) and hl_initial.get("text") in hl_restored, "highlight_not_restored"),
     ]
 
     failed = [label for ok, label in checks if not ok]

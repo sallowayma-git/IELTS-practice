@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/150. P2 - Insect Decision-Making 昆虫决策【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/150. P2 - Insect Decision-Making 昆虫决策【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/150. P2 - Insect Decision-Making 昆虫决策【次】.pdf",
     "ieltsHtml": null
   },
   "audit": {

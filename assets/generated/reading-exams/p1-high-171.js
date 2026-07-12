@@ -77,7 +77,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.pdf",
     "ieltsHtml": "IELTS/P1/Fishbourne Roman Palace.html"
   },
   "audit": {

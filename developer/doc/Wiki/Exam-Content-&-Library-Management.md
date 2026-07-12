@@ -208,7 +208,8 @@ The system supports multiple library configurations, allowing users to load diff
 flowchart TD
 
 FolderPick["Folder Picker<br>(#folder-picker)"]
-LibConfigBtn["Library Config Button<br>(#library-config-btn)"]
+LibMgrBtn["Library Manager Button<br>(#library-manager-btn)"]
+LibMgrModal["Library Manager Modal<br>(#library-manager-modal)"]
 ForceRefresh["Force Refresh Button<br>(#force-refresh-btn)"]
 LibMgr["window.LibraryManager"]
 GetInst["getInstance()"]
@@ -226,8 +227,9 @@ LazyLoader["AppLazyLoader"]
 BrowseScripts["browse-view scripts"]
 
 FolderPick -.->|"handleFolderSelection()"| LoadLibInternal
-LibConfigBtn -.->|"click"| SwitchWrapper
-ForceRefresh -.->|"click"| LoadLibInternal
+LibMgrBtn -.->|"click"| LibMgrModal
+LibMgrModal -.->|"renders config list"| SwitchWrapper
+ForceRefresh -.->|"click (in modal)"| LoadLibInternal
 SwitchWrapper -.->|"check"| LibMgr
 EnsureReady -.->|"loads"| LibMgr
 EnsureReady -.-> EnsureBrowse

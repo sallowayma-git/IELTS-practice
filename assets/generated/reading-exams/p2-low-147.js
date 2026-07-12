@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
+    "pdf": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
     "ieltsHtml": "IELTS/P2/Who wrote Shakespeare's plays.html"
   },
   "audit": {

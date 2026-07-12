@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/67. P3 - Flower Power 鲜花的力量(花之力)【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/67. P3 - Flower Power 鲜花的力量(花之力)【高】.pdf",
     "ieltsHtml": "IELTS/P3/Flower Power.html"
   },
   "audit": {

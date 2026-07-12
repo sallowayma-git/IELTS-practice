@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/20. P1 - The Importance of Business Cards 名片的重要性.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/20. P1 - The Importance of Business Cards 名片的重要性.pdf",
+    "pdf": "ReadingPractice/PDF/20. P1 - The Importance of Business Cards 名片的重要性.pdf",
     "ieltsHtml": "IELTS/P1/The Importance of Business Cards.html"
   },
   "audit": {

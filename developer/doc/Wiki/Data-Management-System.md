@@ -336,7 +336,7 @@ buildAnswerDetailsFromMaps["buildAnswerDetailsFromMaps()<br>- Merge answerMap + 
 deriveTotalQuestionCount["deriveTotalQuestionCount()<br>- Check totalQuestions, scoreInfo.total<br>- Count answerDetails keys<br>- Fallback: answers.length"]
 deriveCorrectAnswerCount["deriveCorrectAnswerCount()<br>- Check correctAnswers, score<br>- Count correct in answerDetails<br>- Count correct in answers array"]
 calculateAccuracy["Calculate Accuracy<br>- accuracy = correct / total<br>- Ensure valid number"]
-StandardizedRecord["Standardized Record<br>- All required fields<br>- Normalized formats<br>- Consistent types<br>- version: '1.0.0'"]
+StandardizedRecord["Standardized Record<br>- All required fields<br>- Normalized formats<br>- Consistent types<br>- version: '0.6.2-fix'"]
 
 RecordData -.-> inferPracticeType
 RecordData -.-> resolveRecordDate
@@ -767,7 +767,7 @@ The system performs automatic backups every 10 minutes and maintains up to 5 bac
 | --- | --- | --- |
 | `backupInterval` | 600000ms (10 min) | Frequency of auto-backups |
 | `maxBackups` | 5 | Maximum backup retention |
-| `dataVersion` | '1.0.0' | Backup format version |
+| `dataVersion` | '0.6.2-fix' | Backup format version |
 
 ```mermaid
 flowchart TD

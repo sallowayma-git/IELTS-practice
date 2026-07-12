@@ -209,7 +209,7 @@ sequenceDiagram
   p2->>p2: get('system_version')
   alt No version found
     p2->>p2: initializeDefaultData()
-    p2->>p2: set('system_version', '1.0.0')
+    p2->>p2: set('system_version', '0.6.2-fix')
   else Version mismatch
     p2->>p2: handleVersionUpgrade(oldVersion)
   end

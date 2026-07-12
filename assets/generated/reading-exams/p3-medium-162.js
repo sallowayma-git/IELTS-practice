@@ -65,7 +65,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.pdf",
     "ieltsHtml": "IELTS/P3/Jean Piaget (1896–1980).html"
   },
   "audit": {

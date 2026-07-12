@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/165. P3 - The Placebo Effect5 安慰剂效应/165. P3 - The Placebo Effect5 安慰剂效应.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/165. P3 - The Placebo Effect5 安慰剂效应/165. P3 - The Placebo Effect5 安慰剂效应.pdf",
+    "pdf": "ReadingPractice/PDF/165. P3 - The Placebo Effect5 安慰剂效应.pdf",
     "ieltsHtml": null
   },
   "audit": {

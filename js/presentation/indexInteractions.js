@@ -43,18 +43,26 @@
         return morePrefetchPromise;
     }
 
-    function ensureSettings() {
+function ensureSettings() {
         if (settingsPrefetched) {
-            return settingsPrefetchPromise || Promise.resolve();
+            return (settingsPrefetchPromise || Promise.resolve()).then(function () {
+                if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
+                    try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
+                }
+            });
         }
         settingsPrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureSettingsToolsGroup === 'function'
             ? global.AppEntry.ensureSettingsToolsGroup
             : function fallback() { return Promise.resolve(); };
-        settingsPrefetchPromise = loader().catch(function swallow(error) {
+        settingsPrefetchPromise = loader().then(function () {
+            if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
+                try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
+            }
+        }).catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 settings-tools 失败:', error);
+            console.warn('[IndexInteractions] 预加载 settings 失败:', error);
         });
         return settingsPrefetchPromise;
     }
@@ -180,6 +188,21 @@
     function setupIndexSettingsButtons() {
         var bindings = [
             ['clear-cache-btn', function () { return typeof global.clearCache === 'function' && global.clearCache(); }],
+            // The three library buttons now live inside the library manager
+            // modal (#library-manager-modal). The entry button opens the modal;
+            // #load-library-btn and #force-refresh-btn keep their ids so the
+            // bindings below continue to resolve them after they moved. The
+            // legacy #library-config-btn is removed entirely (its open-modal
+            // job is now done by #library-manager-btn below).
+            ['library-manager-btn', function () {
+                if (global.LibraryManagerPanel && typeof global.LibraryManagerPanel.open === 'function') {
+                    return global.LibraryManagerPanel.open();
+                }
+                if (typeof global.showLibraryConfigListV2 === 'function') {
+                    return global.showLibraryConfigListV2();
+                }
+                return undefined;
+            }],
             ['load-library-btn', function () {
                 if (typeof global.showLibraryLoaderModal === 'function') {
                     global.showLibraryLoaderModal();
@@ -187,7 +210,6 @@
                     global.loadLibrary(false);
                 }
             }],
-            ['library-config-btn', function () { return typeof global.showLibraryConfigListV2 === 'function' && global.showLibraryConfigListV2(); }],
             ['force-refresh-btn', function () {
                 var notify = function (type, msg) {
                     if (typeof global.showMessage === 'function') {
@@ -336,6 +358,10 @@
             return;
         }
 
+        function isExamSearchTarget(target) {
+            return !!(target && target.dataset && target.dataset.indexAction === 'search-exams');
+        }
+
         document.addEventListener('click', function (event) {
             var target = event.target && event.target.closest
                 ? event.target.closest('[data-index-action]')
@@ -349,8 +375,21 @@
 
         document.addEventListener('input', function (event) {
             var target = event.target;
-            if (!target || !target.dataset || target.dataset.indexAction !== 'search-exams') {
+            if (!isExamSearchTarget(target)) {
                 return;
+            }
+            if (typeof global.searchExams === 'function') {
+                global.searchExams(target.value);
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            var target = event.target;
+            if (!isExamSearchTarget(target) || event.isComposing || event.keyCode === 229 || event.key !== 'Enter') {
+                return;
+            }
+            if (typeof event.preventDefault === 'function') {
+                event.preventDefault();
             }
             if (typeof global.searchExams === 'function') {
                 global.searchExams(target.value);

@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/81. P3 - Robert Louis Stevenson 苏格兰作家【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/81. P3 - Robert Louis Stevenson 苏格兰作家【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/81. P3 - Robert Louis Stevenson 苏格兰作家【高】.pdf",
     "ieltsHtml": "IELTS/P3/Robert Louis Stevenson.html"
   },
   "audit": {

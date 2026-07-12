@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/10. P1 - Maori Fish Hooks 毛利鱼钩/10. P1 - Maori Fish Hooks 毛利鱼钩.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/10. P1 - Maori Fish Hooks 毛利鱼钩/10. P1 - Maori Fish Hooks 毛利鱼钩.pdf",
+    "pdf": "ReadingPractice/PDF/10. P1 - Maori Fish Hooks 毛利鱼钩.pdf",
     "ieltsHtml": "IELTS/P1/Maori Fish Hooks.html"
   },
   "audit": {

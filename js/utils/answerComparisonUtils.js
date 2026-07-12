@@ -49,6 +49,13 @@
         return core;
     }
 
+    function getPracticeCoreContracts() {
+        const core = global.PracticeCore;
+        return core && core.contracts && typeof core.contracts === 'object'
+            ? core.contracts
+            : null;
+    }
+
     function toStringKey(value) {
         if (value == null) {
             return '';
@@ -170,12 +177,12 @@
         }
 
         const collapsed = str.replace(/\s+/g, ' ').trim();
-        
+
         // 过滤 [object Object] 这样的无效字符串
         if (/^\[object\s/i.test(collapsed)) {
             return { display: null, normalized: null };
         }
-        
+
         const lowered = collapsed.toLowerCase();
 
         if (NO_ANSWER_MARKERS.has(lowered)) {
@@ -230,10 +237,14 @@
         return String(userInfo.normalized) === String(correctInfo.normalized);
     }
 
+    function isPlainObject(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function mergeSourceMaps(sources) {
         const target = {};
         sources.forEach(source => {
-            if (!source || typeof source !== 'object') {
+            if (!isPlainObject(source)) {
                 return;
             }
             Object.keys(source).forEach(key => {
@@ -398,18 +409,14 @@
             extractFromDetails(record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details, entry => entry.userAnswer ?? entry.user)
         ].filter(Boolean);
 
-        const correctSources = [
-            extractFromComparison(record.answerComparison, entry => entry.correctAnswer ?? entry.correct),
-            extractFromComparison(record.realData && record.realData.answerComparison, entry => entry.correctAnswer ?? entry.correct),
-            record.correctAnswers,
-            record.realData && record.realData.correctAnswers,
-            extractFromDetails(record.scoreInfo && record.scoreInfo.details, entry => entry.correctAnswer ?? entry.correct),
-            extractFromDetails(record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details, entry => entry.correctAnswer ?? entry.correct)
-        ].filter(Boolean);
+        const coreContracts = getPracticeCoreContracts();
+        if (!coreContracts || typeof coreContracts.resolveRecordCorrectAnswerMap !== 'function') {
+            throw new Error('AnswerComparisonUtils requires PracticeCore.contracts.resolveRecordCorrectAnswerMap');
+        }
+        const correctMap = coreContracts.resolveRecordCorrectAnswerMap(record);
 
         const comparisonMap = mergeSourceMaps(comparisonSources);
         const userMap = mergeSourceMaps(userSources);
-        const correctMap = mergeSourceMaps(correctSources);
 
         const allKeys = new Set([
             ...Object.keys(comparisonMap),
@@ -642,7 +649,7 @@
                 // 提取 URL 中的文件夹名称
                 const urlParts = urlPath.split('/').filter(Boolean);
                 const pathParts = itemPath.split('/').filter(Boolean);
-                
+
                 // 检查是否有共同的文件夹路径
                 for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
                     if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
@@ -685,7 +692,7 @@
                     return titleLookup.get(title);
                 }
             }
-            
+
             // 4. 模糊标题匹配（移除标签前缀后比较）
             for (const candidateTitle of candidateTitles) {
                 const match = indexes.find(item => {
@@ -694,7 +701,7 @@
                     // 移除标签前缀，如 "[听力全量-...] City Development" vs "City Development"
                     const cleanCandidate = candidateTitle.replace(/^\[.*?\]\s*/, '');
                     const cleanItem = itemTitle.replace(/^\[.*?\]\s*/, '');
-                    return cleanCandidate === cleanItem || 
+                    return cleanCandidate === cleanItem ||
                            (cleanCandidate.length > 5 && cleanItem.includes(cleanCandidate)) ||
                            (cleanItem.length > 5 && cleanCandidate.includes(cleanItem));
                 });

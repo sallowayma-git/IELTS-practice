@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.pdf",
     "ieltsHtml": "IELTS/P2/Mind Music.html"
   },
   "audit": {

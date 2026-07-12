@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/160. P1 - An important language development 楔形文字.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/160. P1 - An important language development 楔形文字.pdf",
+    "pdf": "ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf",
     "ieltsHtml": "IELTS/P1/An important language development.html"
   },
   "audit": {

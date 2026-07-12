@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/117. P2 - Stress Less 工作压力【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/117. P2 - Stress Less 工作压力【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/117. P2 - Stress Less 工作压力【高】.pdf",
     "ieltsHtml": "IELTS/P2/Stress Less.html"
   },
   "audit": {

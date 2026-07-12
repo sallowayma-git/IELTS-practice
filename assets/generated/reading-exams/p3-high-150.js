@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.pdf",
     "ieltsHtml": "IELTS/P3/A closer examination of a study on verbal and non-verbal messages.html"
   },
   "audit": {

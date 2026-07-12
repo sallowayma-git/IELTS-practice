@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/74. P3 - Let’s teach them how to teach 教他们如何教学/74. P3 - Let’s teach them how to teach 教他们如何教学.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/74. P3 - Let’s teach them how to teach 教他们如何教学/74. P3 - Let’s teach them how to teach 教他们如何教学.pdf",
+    "pdf": "ReadingPractice/PDF/74. P3 - Let’s teach them how to teach 教他们如何教学.pdf",
     "ieltsHtml": null
   },
   "audit": {

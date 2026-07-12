@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
+    "pdf": "ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
     "ieltsHtml": null
   },
   "audit": {

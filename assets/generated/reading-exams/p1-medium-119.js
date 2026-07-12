@@ -75,7 +75,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/32. P1 - Wood 新西兰木材产业【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/32. P1 - Wood 新西兰木材产业【次】.pdf",
+    "pdf": "ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf",
     "ieltsHtml": null
   },
   "audit": {

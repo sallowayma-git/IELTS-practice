@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/140. P1 - The Burgess Shale fossils 伯吉斯页岩/140. P1 - The Burgess Shale fossils 伯吉斯页岩.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/140. P1 - The Burgess Shale fossils 伯吉斯页岩/140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf",
+    "pdf": "ReadingPractice/PDF/140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf",
     "ieltsHtml": "IELTS/P1/The Burgess Shale fossils.html"
   },
   "audit": {

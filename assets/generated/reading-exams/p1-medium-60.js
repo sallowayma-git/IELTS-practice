@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/152. P1 - Sorry—who are you 脸盲症【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/152. P1 - Sorry—who are you 脸盲症【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/152. P1 - Sorry—who are you 脸盲症【次】.pdf",
     "ieltsHtml": "IELTS/P1/Sorry—who are you.html"
   },
   "audit": {

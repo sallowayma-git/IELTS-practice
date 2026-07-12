@@ -270,21 +270,15 @@
         return;
       }
 
-      if (action === 'close-modal') {
+      if (action === 'close-modal' || action === 'dismiss-inline') {
         event.preventDefault();
-        var overlay = document.querySelector('.backup-modal-overlay');
+        var overlay = document.getElementById('backup-list-modal')
+          || document.querySelector('.backup-modal-overlay')
+          || document.querySelector('.backup-list-container');
         if (overlay) {
           overlay.remove();
         }
         return;
-      }
-
-      if (action === 'dismiss-inline') {
-        event.preventDefault();
-        var inline = document.querySelector('.backup-list-container');
-        if (inline) {
-          inline.remove();
-        }
       }
     });
 
@@ -712,17 +706,15 @@
         return;
       }
 
-      var container = document.getElementById('settings-view');
       var create = _fallbackCreateElement;
+      var MODAL_ID = 'backup-list-modal';
 
-      // 防止重复渲染多个列表/遮罩
-      var existingInline = (container && container.querySelector('.backup-list-container')) || document.querySelector('.backup-list-container');
-      if (existingInline) {
-        existingInline.remove();
-      }
-      var existingOverlay = document.querySelector('.backup-modal-overlay');
-      if (existingOverlay) {
-        existingOverlay.remove();
+      // Single glass modal — drop legacy inline/list dual path
+      var existing = document.getElementById(MODAL_ID)
+        || document.querySelector('.backup-modal-overlay')
+        || document.querySelector('.backup-list-container');
+      if (existing && existing.remove) {
+        existing.remove();
       }
 
       var buildEntries = function () {
@@ -737,19 +729,21 @@
         }
 
         return backups.map(function (backup) {
+          var metaParts = [];
+          try { metaParts.push(new Date(backup.timestamp).toLocaleString()); } catch (_) {}
+          if (backup.type) { metaParts.push(String(backup.type)); }
           return create('div', {
             className: 'backup-entry',
             dataset: { backupId: backup.id }
           }, [
             create('div', { className: 'backup-entry-info' }, [
               create('strong', { className: 'backup-entry-id' }, backup.id),
-              create('div', { className: 'backup-entry-meta' }, new Date(backup.timestamp).toLocaleString()),
-              create('div', { className: 'backup-entry-meta' }, '类型: ' + backup.type + ' | 版本: ' + backup.version)
+              create('div', { className: 'backup-entry-meta' }, metaParts.join(' · '))
             ]),
             create('div', { className: 'backup-entry-actions' }, [
               create('button', {
                 type: 'button',
-                className: 'btn btn-success backup-entry-restore',
+                className: 'btn data-mgmt-btn backup-entry-restore',
                 dataset: { backupAction: 'restore', backupId: backup.id }
               }, '恢复')
             ])
@@ -757,64 +751,39 @@
         });
       };
 
-      var existing = document.querySelector('.backup-modal-overlay');
-      if (existing) existing.remove();
+      var overlay = create('div', {
+        className: 'theme-modal show backup-list-modal shui-secondary-modal shui-secondary-modal--md backup-modal-overlay',
+        id: MODAL_ID,
+        role: 'dialog',
+        ariaModal: 'true',
+        ariaLabelledby: 'backup-list-title'
+      });
 
-      var card = create('div', { className: 'backup-list-card' }, [
-        create('div', { className: 'backup-list-header' }, [
-          create('h3', { className: 'backup-list-title' }, [
-            create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
-            create('span', { className: 'backup-list-title-text' }, '备份列表')
+      var content = create('div', { className: 'theme-modal-content shui-secondary-modal__content' }, [
+        create('div', { className: 'theme-modal-header shui-secondary-modal__header' }, [
+          create('div', { className: 'shui-secondary-modal__title-group' }, [
+            create('div', { className: 'shui-secondary-modal__eyebrow' }, 'BACKUP'),
+            create('h3', { id: 'backup-list-title' }, '备份列表')
           ]),
           create('button', {
             type: 'button',
-            className: 'btn btn-secondary backup-list-dismiss',
-            dataset: { backupAction: 'dismiss-inline' }
-          }, '收起')
+            className: 'theme-modal-close backup-modal-close',
+            dataset: { backupAction: 'close-modal' },
+            ariaLabel: '关闭备份列表'
+          }, '\u00d7')
         ]),
-        create('div', { className: 'backup-list-scroll' }, buildEntries())
+        create('div', { className: 'theme-modal-body shui-secondary-modal__body backup-list-body' }, buildEntries())
       ]);
 
-      if (container) {
-        var holder = create('div', { className: 'backup-list-container' }, card);
-        var settingsGroup = container.querySelector('.hero-settings-group');
-        if (settingsGroup && settingsGroup.parentElement === container) {
-          settingsGroup.insertAdjacentElement('afterend', holder);
-        } else {
-          container.appendChild(holder);
+      overlay.appendChild(content);
+      overlay.addEventListener('click', function (event) {
+        if (event.target === overlay) {
+          overlay.remove();
         }
-        if (!Array.isArray(backups) || backups.length === 0) {
-          window.showMessage && window.showMessage('暂无备份记录', 'info');
-        }
-        return;
+      });
+      if (document.body) {
+        document.body.appendChild(overlay);
       }
-
-      var overlay = create('div', { className: 'backup-modal-overlay' }, [
-        create('div', { className: 'backup-modal' }, [
-          create('div', { className: 'backup-modal-header' }, [
-            create('h3', { className: 'backup-modal-title' }, [
-              create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
-              create('span', { className: 'backup-list-title-text' }, '备份列表')
-            ]),
-            create('button', {
-              type: 'button',
-              className: 'btn btn-secondary backup-modal-close',
-              dataset: { backupAction: 'close-modal' },
-              ariaLabel: '关闭备份列表'
-            }, '关闭')
-          ]),
-          create('div', { className: 'backup-modal-body' }, buildEntries()),
-          create('div', { className: 'backup-modal-footer' }, [
-            create('button', {
-              type: 'button',
-              className: 'btn btn-secondary backup-modal-close',
-              dataset: { backupAction: 'close-modal' }
-            }, '关闭')
-          ])
-        ])
-      ]);
-
-      document.body.appendChild(overlay);
       if (!Array.isArray(backups) || backups.length === 0) {
         window.showMessage && window.showMessage('暂无备份记录', 'info');
       }
@@ -867,9 +836,24 @@
     }
   }
 
+  // Resolve the container for the library config list. The config list now
+  // lives inside the library manager modal (#library-manager-modal-body); when
+  // the modal is open we mount there, otherwise we fall back to the legacy
+  // #settings-view host so the boot-fallback still renders somewhere visible.
+  function _resolveLibraryConfigContainer(options) {
+    var requestedId = options && typeof options.containerId === 'string' ? options.containerId : null;
+    if (requestedId) {
+      var requested = document.getElementById(requestedId);
+      if (requested) { return requested; }
+    }
+    var modalHost = document.getElementById('library-manager-modal-body');
+    if (modalHost) { return modalHost; }
+    return document.getElementById('settings-view');
+  }
+
   // Fallback for library config list
   if (typeof window.showLibraryConfigListV2 !== 'function') {
-    window.showLibraryConfigListV2 = async function () {
+    window.showLibraryConfigListV2 = async function (options) {
       var configs = [];
       try {
         configs = (window.storage && storage.get) ? await storage.get('exam_index_configurations', []) : [];
@@ -891,12 +875,18 @@
         }
       } catch (e) { }
 
+      var containerId = options && typeof options.containerId === 'string' ? options.containerId : null;
       if (typeof window.renderLibraryConfigList === 'function') {
-        window.renderLibraryConfigList({ configs: configs, activeKey: activeKey, allowDelete: true });
+        window.renderLibraryConfigList({
+          configs: configs,
+          activeKey: activeKey,
+          allowDelete: true,
+          containerId: containerId
+        });
         return;
       }
 
-      var container = document.getElementById('settings-view');
+      var container = _resolveLibraryConfigContainer(options);
       if (!container) { return; }
 
       if (typeof window.renderLibraryConfigFallback === 'function') {
@@ -1119,7 +1109,7 @@
           create('div', { className: 'library-loader-actions' }, [
             create('button', {
               type: 'button',
-              className: 'btn library-loader-primary',
+              className: 'btn data-mgmt-btn library-loader-primary',
               id: prefix + '-full-btn',
               dataset: {
                 libraryAction: 'trigger-input',
@@ -1128,7 +1118,7 @@
             }, '创建全量配置'),
             create('button', {
               type: 'button',
-              className: 'btn btn-secondary library-loader-secondary',
+              className: 'btn data-mgmt-btn library-loader-secondary',
               id: prefix + '-inc-btn',
               dataset: {
                 libraryAction: 'trigger-input',
@@ -1163,7 +1153,7 @@
       };
 
       var overlay = create('div', {
-        className: 'modal-overlay show library-loader-overlay',
+        className: 'theme-modal show library-loader-overlay shui-secondary-modal shui-secondary-modal--lg',
         id: 'library-loader-overlay',
         role: 'dialog',
         ariaModal: 'true',
@@ -1171,24 +1161,24 @@
       });
 
       var modal = create('div', {
-        className: 'modal library-loader-modal',
+        className: 'theme-modal-content library-loader-modal shui-secondary-modal__content',
         role: 'document'
       });
 
-      var header = create('div', { className: 'modal-header library-loader-header' }, [
-        create('div', { className: 'library-loader-title-group' }, [
-          create('div', { className: 'library-loader-eyebrow' }, 'LIBRARY IMPORT'),
-          create('h2', { className: 'modal-title', id: 'library-loader-title' }, '加载题库')
+      var header = create('div', { className: 'theme-modal-header library-loader-header shui-secondary-modal__header' }, [
+        create('div', { className: 'library-loader-title-group shui-secondary-modal__title-group' }, [
+          create('div', { className: 'library-loader-eyebrow shui-secondary-modal__eyebrow' }, 'LIBRARY IMPORT'),
+          create('h3', { className: 'modal-title', id: 'library-loader-title' }, '加载题库')
         ]),
         create('button', {
           type: 'button',
-          className: 'modal-close library-loader-close',
+          className: 'theme-modal-close library-loader-close',
           ariaLabel: '关闭',
           dataset: { libraryAction: 'close' }
-        }, '×')
+        }, '\u00d7')
       ]);
 
-      var body = create('div', { className: 'modal-body library-loader-body' }, [
+      var body = create('div', { className: 'theme-modal-body library-loader-body shui-secondary-modal__body' }, [
         create('div', { className: 'library-loader-grid' }, [
           createLoaderCard('reading', '阅读题库', '从所选文件夹递归识别 HTML/PDF 题源。', '全量只替换阅读索引；增量只追加或更新新阅读题。'),
           createLoaderCard('listening', '听力题库', '从任意层级识别带答案链路的听力 HTML 和音频。', '全量只替换听力索引；增量只追加或更新新听力题。')
@@ -1207,16 +1197,7 @@
         })
       ]);
 
-      var footer = create('div', { className: 'modal-footer library-loader-footer' }, [
-        create('button', {
-          type: 'button',
-          className: 'btn btn-secondary library-loader-close-btn',
-          id: 'close-loader',
-          dataset: { libraryAction: 'close' }
-        }, '关闭')
-      ]);
-
-      ensureArray([header, body, footer]).forEach(function (section) {
+      ensureArray([header, body]).forEach(function (section) {
         if (section) {
           modal.appendChild(section);
         }
@@ -1319,8 +1300,21 @@
         }
       }
 
+      var backdropHandler = function (event) {
+        if (event.target === overlay) {
+          cleanup();
+        }
+      };
+
       overlay.addEventListener('click', clickHandler);
+      overlay.addEventListener('click', backdropHandler);
       overlay.addEventListener('change', changeHandler);
+
+      var prevCleanup = cleanup;
+      cleanup = function () {
+        overlay.removeEventListener('click', backdropHandler);
+        prevCleanup();
+      };
     };
   }
 

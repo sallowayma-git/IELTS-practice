@@ -48,7 +48,7 @@
         {
           "questionNumber": 1,
           "questionId": "q1",
-          "text": "题目：Cuneiform tablets were produced in different shapes and sizes。\n题目翻译：楔形文字泥板被制作成不同的形状和尺寸。\n答案：TRUE\n解析：定位 Paragraph A 中 “It was most often inscribed on palm-sized, rectangular clay tablets ... although occasionally larger tablets or cylinders were used.” 文中明确说既有常见的小型长方形泥板，也偶尔有更大的泥板或圆柱体，说明形状和大小都不止一种，所以答案是 TRUE。"
+          "text": "题目：Cuneiform tablets were produced in different shapes and sizes。\n题目翻译：楔形文字泥板被制作成不同的形状和尺寸。\n答案：TRUE\n解析：定位 Paragraph A。原文写道 “It was most often inscribed on palm-sized, rectangular clay tablets measuring several centimetres across, although occasionally larger tablets or cylinders were used.” 这句话同时给出了常见的小型长方形泥板和偶尔出现的更大泥板或圆柱体，既体现尺寸不同，也体现形状不同，因此答案是 TRUE。"
         },
         {
           "questionNumber": 2,
@@ -68,7 +68,7 @@
         {
           "questionNumber": 5,
           "questionId": "q5",
-          "text": "题目：Cuneiform signs can be found in some modern alphabets。\n题目翻译：一些现代字母表中仍能找到楔形文字符号。\n答案：NOT GIVEN\n解析：文章只说楔形文字被多种语言使用，并拿今天的拉丁字母作类比，但没有说现代字母表中仍包含楔形文字符号。因此该信息文中没有给出，答案是 NOT GIVEN。"
+          "text": "题目：Cuneiform signs can be found in some modern alphabets。\n题目翻译：一些现代字母表中仍能找到楔形文字符号。\n答案：NOT GIVEN\n解析：定位 Paragraph B。原文只说 “Cuneiform signs were used for the writing of at least a dozen languages. This is similar to how the Latin alphabet is used today ...” 这里是在说明“像拉丁字母一样可被多种语言采用”的相似性，并没有说现代字母表里仍然包含楔形文字符号，因此该信息文中没有给出，答案是 NOT GIVEN。"
         }
       ],
       "questionRange": {

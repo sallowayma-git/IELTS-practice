@@ -9,7 +9,7 @@
         'application/csv'
     ]);
 
-    const DEFAULT_EXPORT_VERSION = '1.0.0';
+    const DEFAULT_EXPORT_VERSION = '0.6.2-fix';
 
     function normalizeFrequency(value) {
         if (value == null || value === '') {

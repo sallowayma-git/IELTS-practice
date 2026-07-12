@@ -99,7 +99,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/147. P3 - Movement Underwater 水下运动/147. P3 - Movement Underwater 水下运动.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/147. P3 - Movement Underwater 水下运动/147. P3 - Movement Underwater 水下运动.pdf",
+    "pdf": "ReadingPractice/PDF/147. P3 - Movement Underwater 水下运动.pdf",
     "ieltsHtml": "IELTS/P3/Movement Underwater.html"
   },
   "audit": {

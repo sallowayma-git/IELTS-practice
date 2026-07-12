@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.pdf",
     "ieltsHtml": "IELTS/P1/The Development of The Silk Industry.html"
   },
   "audit": {

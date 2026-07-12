@@ -83,7 +83,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.pdf",
     "ieltsHtml": null
   },
   "audit": {

@@ -73,7 +73,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.pdf",
     "ieltsHtml": "IELTS/P2/Intelligent behaviour in birds.html"
   },
   "audit": {

@@ -728,7 +728,7 @@ class VirtualScroller {
 
         this.initialize();
     }
-    
+
     /**
      * 初始化虚拟滚动器
      */
@@ -738,13 +738,13 @@ class VirtualScroller {
             itemHeight: this.itemHeight,
             containerHeight: this.containerHeight
         });
-        
+
         this.setupScrollContainer();
         this.calculateVisibleRange();
         this.renderVisible();
         this.setupScrollListener();
     }
-    
+
     /**
      * 设置滚动容器
      */
@@ -773,7 +773,7 @@ class VirtualScroller {
         this.container.innerHTML = '';
         this.container.appendChild(this.viewport);
     }
-    
+
     /**
      * 计算可见范围
      */
@@ -794,7 +794,7 @@ class VirtualScroller {
 
         this.scrollTop = scrollTop;
     }
-    
+
     /**
      * 渲染可见元素
      */
@@ -833,7 +833,7 @@ class VirtualScroller {
                 this.renderedItems.delete(index);
             }
         });
-        
+
         // 渲染可见的元素
         for (let i = this.visibleStart; i <= this.visibleEnd; i++) {
             let element = this.renderedItems.get(i);
@@ -847,7 +847,7 @@ class VirtualScroller {
             }
         }
     }
-    
+
     /**
      * 设置滚动监听器
      */
@@ -909,7 +909,7 @@ class VirtualScroller {
     recalculate() {
         this.recalculateLayout();
     }
-    
+
     /**
      * 滚动到指定索引
      */
@@ -917,7 +917,7 @@ class VirtualScroller {
         const targetScrollTop = index * this.itemHeight;
         this.container.scrollTop = targetScrollTop;
     }
-    
+
     /**
      * 获取容器高度
      */
@@ -926,7 +926,7 @@ class VirtualScroller {
         const height = parseFloat(computedStyle.height);
         return height > 0 ? height : 600; // 默认600px
     }
-    
+
     /**
      * 销毁虚拟滚动器
      */
@@ -1022,7 +1022,7 @@ class PerformanceOptimizer {
         this.cache = new Map();
         this.cacheTTL = new Map();
         this.observers = new Map();
-        
+
         // 性能监控
         this.performanceMetrics = {
             renderTime: [],
@@ -1030,44 +1030,44 @@ class PerformanceOptimizer {
             cacheHits: 0,
             cacheMisses: 0
         };
-        
+
         this.initialize();
     }
-    
+
     /**
      * 初始化性能优化器
      */
     initialize() {
         console.log('[PerformanceOptimizer] 初始化性能优化器');
-        
+
         // 设置缓存清理定时器
         setInterval(() => {
             this.cleanExpiredCache();
         }, 60000); // 每分钟清理一次过期缓存
-        
+
         // 监控性能指标
         this.setupPerformanceMonitoring();
     }
-    
+
     /**
      * 设置缓存
      */
     setCache(key, value, options = {}) {
         const ttl = options.ttl || 300000; // 默认5分钟
-        
+
         this.cache.set(key, value);
         this.cacheTTL.set(key, Date.now() + ttl);
-        
+
         console.log(`[PerformanceOptimizer] 缓存已设置: ${key}`);
     }
-    
+
     /**
      * 获取缓存
      */
     getCache(key) {
         const now = Date.now();
         const expiry = this.cacheTTL.get(key);
-        
+
         if (expiry && now > expiry) {
             // 缓存已过期
             this.cache.delete(key);
@@ -1075,23 +1075,23 @@ class PerformanceOptimizer {
             this.performanceMetrics.cacheMisses++;
             return null;
         }
-        
+
         if (this.cache.has(key)) {
             this.performanceMetrics.cacheHits++;
             return this.cache.get(key);
         }
-        
+
         this.performanceMetrics.cacheMisses++;
         return null;
     }
-    
+
     /**
      * 清理过期缓存
      */
     cleanExpiredCache() {
         const now = Date.now();
         let cleanedCount = 0;
-        
+
         this.cacheTTL.forEach((expiry, key) => {
             if (now > expiry) {
                 this.cache.delete(key);
@@ -1099,12 +1099,12 @@ class PerformanceOptimizer {
                 cleanedCount++;
             }
         });
-        
+
         if (cleanedCount > 0) {
             console.log(`[PerformanceOptimizer] 清理了 ${cleanedCount} 个过期缓存项`);
         }
     }
-    
+
     /**
      * 批量处理大数据
      */
@@ -1112,28 +1112,28 @@ class PerformanceOptimizer {
         return new Promise((resolve) => {
             let index = 0;
             const results = [];
-            
+
             const processBatch = () => {
                 const endIndex = Math.min(index + batchSize, items.length);
-                
+
                 for (let i = index; i < endIndex; i++) {
                     const result = processor(items[i], i);
                     results.push(result);
                 }
-                
+
                 index = endIndex;
-                
+
                 if (index < items.length) {
                     setTimeout(processBatch, delay);
                 } else {
                     resolve(results);
                 }
             };
-            
+
             processBatch();
         });
     }
-    
+
     /**
      * 防抖函数
      */
@@ -1148,7 +1148,7 @@ class PerformanceOptimizer {
             timeout = setTimeout(later, wait);
         };
     }
-    
+
     /**
      * 节流函数
      */
@@ -1162,7 +1162,7 @@ class PerformanceOptimizer {
             }
         };
     }
-    
+
     /**
      * 预加载图片
      */
@@ -1175,33 +1175,33 @@ class PerformanceOptimizer {
                 img.src = url;
             });
         });
-        
+
         return Promise.allSettled(promises);
     }
-    
+
     /**
      * 创建虚拟滚动器
      */
     createVirtualScroller(container, items, renderer, options) {
         return new VirtualScroller(container, items, renderer, options);
     }
-    
+
     /**
      * 优化渲染性能
      */
     optimizeRender(renderFunc) {
         return (...args) => {
             const startTime = performance.now();
-            
+
             // 使用requestAnimationFrame优化渲染
             requestAnimationFrame(() => {
                 renderFunc(...args);
-                
+
                 const endTime = performance.now();
                 const renderTime = endTime - startTime;
-                
+
                 this.performanceMetrics.renderTime.push(renderTime);
-                
+
                 // 只保留最近100次的性能数据
                 if (this.performanceMetrics.renderTime.length > 100) {
                     this.performanceMetrics.renderTime.shift();
@@ -1209,7 +1209,7 @@ class PerformanceOptimizer {
             });
         };
     }
-    
+
     /**
      * 设置性能监控
      */
@@ -1223,25 +1223,25 @@ class PerformanceOptimizer {
                     }
                 }
             });
-            
+
             observer.observe({ entryTypes: ['measure'] });
             this.observers.set('performance', observer);
         }
     }
-    
+
     /**
      * 获取性能统计
      */
     getPerformanceStats() {
         const renderTimes = this.performanceMetrics.renderTime;
-        const avgRenderTime = renderTimes.length > 0 
-            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length 
+        const avgRenderTime = renderTimes.length > 0
+            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length
             : 0;
-            
+
         const cacheHitRate = this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses > 0
             ? (this.performanceMetrics.cacheHits / (this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses)) * 100
             : 0;
-            
+
         return {
             averageRenderTime: avgRenderTime.toFixed(2),
             cacheHitRate: cacheHitRate.toFixed(2),
@@ -1250,7 +1250,7 @@ class PerformanceOptimizer {
             totalCacheMisses: this.performanceMetrics.cacheMisses
         };
     }
-    
+
     /**
      * 记录加载时间 - 向后兼容API修复
      */
@@ -1425,10 +1425,51 @@ class DataConsistencyManager {
         };
     }
 
+    cloneRecordData(value) {
+        if (value == null || typeof value !== 'object') {
+            return value;
+        }
+        if (typeof structuredClone === 'function') {
+            try {
+                return structuredClone(value);
+            } catch (_) {
+                // Fall through to plain JSON cloning for file:// compatible data.
+            }
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            if (Array.isArray(value)) {
+                return value.map(item => this.cloneRecordData(item));
+            }
+            const clone = {};
+            Object.keys(value).forEach(key => {
+                clone[key] = this.cloneRecordData(value[key]);
+            });
+            return clone;
+        }
+    }
+
+    isAnswerMap(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    getCorrectAnswerMap(record) {
+        if (!record || typeof record !== 'object') {
+            return {};
+        }
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.resolveRecordCorrectAnswerMap === 'function') {
+            return coreContracts.resolveRecordCorrectAnswerMap(record);
+        }
+        throw new Error('DataConsistencyManager requires PracticeCore.contracts.resolveRecordCorrectAnswerMap');
+    }
+
     /**
      * 验证记录数据完整性
      */
     validateRecordData(record) {
+        const target = record && typeof record === 'object' ? record : {};
         const validation = {
             isValid: true,
             errors: [],
@@ -1439,7 +1480,7 @@ class DataConsistencyManager {
 
         // 检查必需字段
         this.validationRules.requiredFields.forEach(field => {
-            if (!record[field]) {
+            if (!target[field]) {
                 validation.errors.push(`缺少必需字段: ${field}`);
                 validation.missingFields.push(field);
                 validation.isValid = false;
@@ -1447,8 +1488,8 @@ class DataConsistencyManager {
         });
 
         // 检查答案数据
-        if (record.answers) {
-            const answerValidation = this.validateAnswers(record.answers);
+        if (this.isAnswerMap(target.answers)) {
+            const answerValidation = this.validateAnswers(target.answers);
             if (!answerValidation.isValid) {
                 validation.warnings.push('用户答案数据存在问题');
                 validation.dataQuality = 'fair';
@@ -1456,8 +1497,9 @@ class DataConsistencyManager {
         }
 
         // 检查正确答案数据
-        if (record.correctAnswers) {
-            const correctAnswerValidation = this.validateAnswers(record.correctAnswers);
+        const correctAnswerMap = this.getCorrectAnswerMap(target);
+        if (Object.keys(correctAnswerMap).length > 0) {
+            const correctAnswerValidation = this.validateAnswers(correctAnswerMap);
             if (!correctAnswerValidation.isValid) {
                 validation.warnings.push('正确答案数据存在问题');
             }
@@ -1467,7 +1509,7 @@ class DataConsistencyManager {
         }
 
         // 检查答案比较数据
-        if (!record.answerComparison && record.answers && record.correctAnswers) {
+        if (!target.answerComparison && target.answers && Object.keys(correctAnswerMap).length > 0) {
             validation.warnings.push('缺少答案比较数据，将自动生成');
         }
 
@@ -1488,24 +1530,25 @@ class DataConsistencyManager {
      * 补充缺失的数据
      */
     enrichRecordData(record) {
-        console.log('[DataConsistencyManager] 开始数据补充:', record.id);
-        
-        const enriched = { ...record };
+        console.log('[DataConsistencyManager] 开始数据补充:', record && record.id);
+
+        const enriched = this.cloneRecordData(record) || {};
+        const numericCorrectCount = typeof enriched.correctAnswers === 'number'
+            ? enriched.correctAnswers
+            : null;
 
         // 标准化答案格式
-        if (enriched.answers) {
+        if (this.isAnswerMap(enriched.answers)) {
             enriched.answers = this.standardizeAnswerFormat(enriched.answers);
         }
 
-        if (enriched.correctAnswers) {
-            enriched.correctAnswers = this.standardizeAnswerFormat(enriched.correctAnswers);
-        }
+        const correctAnswerMap = this.getCorrectAnswerMap(enriched);
 
         // 生成缺失的答案比较数据
-        if (!enriched.answerComparison && enriched.answers) {
+        if (!enriched.answerComparison && this.isAnswerMap(enriched.answers) && Object.keys(correctAnswerMap).length > 0) {
             enriched.answerComparison = this.generateAnswerComparison(
-                enriched.answers, 
-                enriched.correctAnswers || {}
+                enriched.answers,
+                correctAnswerMap
             );
             console.log('[DataConsistencyManager] 生成答案比较数据');
         }
@@ -1524,16 +1567,16 @@ class DataConsistencyManager {
         if (typeof enriched.score !== 'number') {
             if (enriched.scoreInfo && typeof enriched.scoreInfo.correct === 'number') {
                 enriched.score = enriched.scoreInfo.correct;
-            } else if (typeof enriched.correctAnswers === 'number') {
-                enriched.score = enriched.correctAnswers;
+            } else if (typeof numericCorrectCount === 'number') {
+                enriched.score = numericCorrectCount;
             }
         }
         if (typeof enriched.totalQuestions !== 'number') {
             if (enriched.scoreInfo && typeof enriched.scoreInfo.total === 'number') {
                 enriched.totalQuestions = enriched.scoreInfo.total;
-            } else if (enriched.answers) {
+            } else if (this.isAnswerMap(enriched.answers)) {
                 enriched.totalQuestions = Object.keys(enriched.answers).length;
-            } else if (enriched.realData && enriched.realData.answers) {
+            } else if (enriched.realData && this.isAnswerMap(enriched.realData.answers)) {
                 enriched.totalQuestions = Object.keys(enriched.realData.answers).length;
             }
         }
@@ -1581,14 +1624,20 @@ class DataConsistencyManager {
         // 确保realData结构的兼容性
         if (!enriched.realData) {
             enriched.realData = {
-                answers: enriched.answers || {},
-                correctAnswers: enriched.correctAnswers || {},
+                answers: this.isAnswerMap(enriched.answers) ? enriched.answers : {},
+                correctAnswers: correctAnswerMap,
+                correctAnswerMap: correctAnswerMap,
                 answerComparison: enriched.answerComparison || {},
                 scoreInfo: enriched.scoreInfo || null
             };
         } else {
             // 更新realData以包含新数据
-            enriched.realData.correctAnswers = enriched.correctAnswers || enriched.realData.correctAnswers || {};
+            enriched.realData.correctAnswers = Object.keys(correctAnswerMap).length > 0
+                ? correctAnswerMap
+                : (this.isAnswerMap(enriched.realData.correctAnswers) ? enriched.realData.correctAnswers : {});
+            enriched.realData.correctAnswerMap = Object.keys(correctAnswerMap).length > 0
+                ? correctAnswerMap
+                : (this.isAnswerMap(enriched.realData.correctAnswerMap) ? enriched.realData.correctAnswerMap : {});
             enriched.realData.answerComparison = enriched.answerComparison || enriched.realData.answerComparison || {};
         }
 
@@ -1601,7 +1650,7 @@ class DataConsistencyManager {
      */
     standardizeAnswerFormat(answers) {
         const standardized = {};
-        
+
         Object.keys(answers).forEach(key => {
             let normalizedKey = key;
             let value = answers[key];
@@ -1616,12 +1665,12 @@ class DataConsistencyManager {
             // 标准化值
             if (value !== null && value !== undefined) {
                 value = String(value).trim();
-                
+
                 // 标准化常见答案格式
                 if (value.toLowerCase() === 'true') value = 'TRUE';
                 if (value.toLowerCase() === 'false') value = 'FALSE';
                 if (value.toLowerCase() === 'not given') value = 'NOT GIVEN';
-                
+
                 standardized[normalizedKey] = value;
             }
         });
@@ -1649,12 +1698,12 @@ class DataConsistencyManager {
 
         Object.keys(answers).forEach(key => {
             validation.answerCount++;
-            
+
             // 检查键名格式
             if (!key.match(/^q\d+$/) && !key.match(/^question\d+$/)) {
                 validation.invalidKeys.push(key);
             }
-            
+
             // 检查值
             const value = answers[key];
             if (!value || String(value).trim() === '') {
@@ -1679,7 +1728,7 @@ class DataConsistencyManager {
      */
     generateAnswerComparison(userAnswers, correctAnswers) {
         const comparison = {};
-        
+
         // 获取所有问题键
         const allKeys = new Set([
             ...Object.keys(userAnswers || {}),
@@ -1689,7 +1738,7 @@ class DataConsistencyManager {
         allKeys.forEach(key => {
             const userAnswer = userAnswers[key];
             const correctAnswer = correctAnswers[key];
-            
+
             comparison[key] = {
                 userAnswer: userAnswer || null,
                 correctAnswer: correctAnswer || null,
@@ -1715,7 +1764,7 @@ class DataConsistencyManager {
         });
 
         const accuracy = total > 0 ? correct / total : 0;
-        
+
         return {
             correct: correct,
             total: total,
@@ -1743,16 +1792,17 @@ class DataConsistencyManager {
      */
     fixDataInconsistencies(records) {
         console.log('[DataConsistencyManager] 开始修复数据不一致问题');
-        
+
         const fixed = records.map(record => {
-            const validation = this.validateRecordData(record);
-            
-            if (!validation.isValid || validation.dataQuality === 'poor') {
+            const projection = this.cloneRecordData(record);
+            const validation = this.validateRecordData(projection);
+
+            if (!validation.isValid || validation.dataQuality !== 'good') {
                 console.log(`[DataConsistencyManager] 修复记录: ${record.id}`);
-                return this.enrichRecordData(record);
+                return this.enrichRecordData(projection);
             }
-            
-            return record;
+
+            return projection;
         });
 
         console.log('[DataConsistencyManager] 数据修复完成');
@@ -1763,15 +1813,17 @@ class DataConsistencyManager {
      * 确保弹窗和导出数据一致性
      */
     ensureConsistency(record) {
+        const projection = this.cloneRecordData(record);
+
         // 验证数据
-        const validation = this.validateRecordData(record);
-        
+        const validation = this.validateRecordData(projection);
+
         // 如果数据有问题，进行修复
         if (!validation.isValid || validation.dataQuality !== 'good') {
-            return this.enrichRecordData(record);
+            return this.enrichRecordData(projection);
         }
-        
-        return record;
+
+        return projection;
     }
 
     /**
@@ -1798,23 +1850,23 @@ class DataConsistencyManager {
 
         list.forEach(record => {
             const validation = this.validateRecordData(record);
-            
+
             if (validation.isValid) {
                 report.validRecords++;
             }
-            
-            if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+
+            if (this.getCorrectAnswerMap(record) && Object.keys(this.getCorrectAnswerMap(record)).length > 0) {
                 report.recordsWithCorrectAnswers++;
             }
-            
+
             if (record.answerComparison) {
                 report.recordsWithComparison++;
             }
-            
-            if (record.answers) {
+
+            if (this.isAnswerMap(record.answers)) {
                 totalAnswers += Object.keys(record.answers).length;
             }
-            
+
             report.qualityDistribution[validation.dataQuality]++;
         });
 
@@ -2283,736 +2335,6 @@ window.MemoryLeakDetector = MemoryLeakDetector;
 console.log('[AppPerformance] 性能工具库已加载，统一缓存、防抖节流、渲染监控和内存管理');
 
 
-/* ===== js/utils/typeChecker.js ===== */
-/**
- * IELTS系统类型检查工具 - JSDoc实现
- * 无需构建工具，IDE自动支持类型检查
- */
-
-/**
- * JSDoc类型定义模板
- * 使用VS Code + JSDoc可获得完整的类型支持
- */
-
-/**
- * @typedef {Object} ExamItem 题目数据结构
- * @property {string} id - 题目ID
- * @property {string} type - 题目类型: reading|listening
- * @property {string} category - 题目分类: P1|P2|P3|P4
- * @property {string} title - 题目标题
- * @property {string} content - 题目内容
- * @property {Object} options - 选项对象
- * @property {string} answer - 正确答案
- * @property {string} explanation - 解释说明
- * @property {number} difficulty - 难度等级 1-5
- * @property {Date} createdAt - 创建时间
- * @property {Date} updatedAt - 更新时间
- */
-
-/**
- * @typedef {Object} PracticeRecord 练习记录数据结构
- * @property {string} id - 记录ID
- * @property {string} examId - 题目ID
- * @property {string} userAnswer - 用户答案
- * @property {boolean} isCorrect - 是否正确
- * @property {number} score - 得分
- * @property {number} timeSpent - 耗时(秒)
- * @property {Date} startTime - 开始时间
- * @property {Date} endTime - 结束时间
- * @property {Object} metadata - 元数据
- */
-
-/**
- * @typedef {Object} UserSettings 用户设置数据结构
- * @property {Object} preferences - 用户偏好
- * @property {string} preferences.theme - 主题: light|dark
- * @property {string} preferences.language - 语言: zh-CN|en-US
- * @property {Object} practice - 练习设置
- * @property {number} practice.dailyGoal - 每日目标
- * @property {boolean} practice.showTimer - 显示计时器
- * @property {boolean} practice.showScore - 显示分数
- * @property {Object} ui - UI设置
- * @property {boolean} ui.showHints - 显示提示
- * @property {boolean} ui.autoSave - 自动保存
- */
-
-/**
- * @typedef {Object} PerformanceStats 性能统计数据结构
- * @property {Object} cache - 缓存统计
- * @property {number} cache.size - 缓存大小
- * @property {number} cache.hitRate - 命中率
- * @property {Object} render - 渲染统计
- * @property {number} render.count - 渲染次数
- * @property {number} render.averageTime - 平均渲染时间
- * @property {Object} memory - 内存统计
- * @property {number} memory.used - 已使用内存
- * @property {number} memory.limit - 内存限制
- */
-
-/**
- * 类型检查工具类
- */
-class TypeChecker {
-    constructor() {
-        this.errors = [];
-        this.warnings = [];
-        this.typeDefinitions = new Map();
-        this.setupTypeDefinitions();
-    }
-
-    /**
-     * 设置基础类型定义
-     */
-    setupTypeDefinitions() {
-        // 基础类型验证器
-        this.typeDefinitions.set('string', (value) => typeof value === 'string');
-        this.typeDefinitions.set('number', (value) => typeof value === 'number' && !isNaN(value));
-        this.typeDefinitions.set('boolean', (value) => typeof value === 'boolean');
-        this.typeDefinitions.set('object', (value) => typeof value === 'object' && value !== null);
-        this.typeDefinitions.set('array', (value) => Array.isArray(value));
-        this.typeDefinitions.set('function', (value) => typeof value === 'function');
-        this.typeDefinitions.set('date', (value) => value instanceof Date);
-        this.typeDefinitions.set('element', (value) => value instanceof Element);
-
-        // 自定义类型验证器
-        this.typeDefinitions.set('ExamItem', this.validateExamItem.bind(this));
-        this.typeDefinitions.set('PracticeRecord', this.validatePracticeRecord.bind(this));
-        this.typeDefinitions.set('UserSettings', this.validateUserSettings.bind(this));
-    }
-
-    /**
-     * 验证ExamItem类型
-     * @param {any} value 要验证的值
-     * @returns {boolean} 是否为有效的ExamItem
-     */
-    validateExamItem(value) {
-        if (!value || typeof value !== 'object') return false;
-
-        const requiredFields = ['id', 'type', 'category', 'title', 'content'];
-        for (const field of requiredFields) {
-            if (typeof value[field] !== 'string') return false;
-        }
-
-        if (!['reading', 'listening'].includes(value.type)) return false;
-        if (!['P1', 'P2', 'P3', 'P4'].includes(value.category)) return false;
-        if (typeof value.difficulty !== 'number' || value.difficulty < 1 || value.difficulty > 5) return false;
-
-        return true;
-    }
-
-    /**
-     * 验证PracticeRecord类型
-     * @param {any} value 要验证的值
-     * @returns {boolean} 是否为有效的PracticeRecord
-     */
-    validatePracticeRecord(value) {
-        if (!value || typeof value !== 'object') return false;
-
-        const requiredFields = ['id', 'examId', 'userAnswer', 'isCorrect', 'score', 'timeSpent'];
-        for (const field of requiredFields) {
-            if (field === 'isCorrect') {
-                if (typeof value[field] !== 'boolean') return false;
-            } else if (field === 'score' || field === 'timeSpent') {
-                if (typeof value[field] !== 'number' || value[field] < 0) return false;
-            } else {
-                if (typeof value[field] !== 'string') return false;
-            }
-        }
-
-        if (!(value.startTime instanceof Date) || !(value.endTime instanceof Date)) return false;
-        if (value.endTime < value.startTime) return false;
-
-        return true;
-    }
-
-    /**
-     * 验证UserSettings类型
-     * @param {any} value 要验证的值
-     * @returns {boolean} 是否为有效的UserSettings
-     */
-    validateUserSettings(value) {
-        if (!value || typeof value !== 'object') return false;
-
-        // 验证preferences
-        if (!value.preferences || typeof value.preferences !== 'object') return false;
-        if (!['light', 'dark'].includes(value.preferences.theme)) return false;
-        if (!['zh-CN', 'en-US'].includes(value.preferences.language)) return false;
-
-        // 验证practice设置
-        if (!value.practice || typeof value.practice !== 'object') return false;
-        if (typeof value.practice.dailyGoal !== 'number' || value.practice.dailyGoal <= 0) return false;
-
-        return true;
-    }
-
-    /**
-     * 验证单个值的类型
-     * @param {any} value 要验证的值
-     * @param {string} expectedType 期望的类型
-     * @param {string} context 上下文信息
-     * @returns {boolean} 验证是否通过
-     */
-    validateType(value, expectedType, context = '') {
-        const validator = this.typeDefinitions.get(expectedType);
-        if (!validator) {
-            this.warnings.push(`Unknown type: ${expectedType} at ${context}`);
-            return true; // 未知类型不报错
-        }
-
-        const isValid = validator(value);
-        if (!isValid) {
-            const actualType = Array.isArray(value) ? 'array' :
-                            value instanceof Date ? 'date' :
-                            value instanceof Element ? 'element' :
-                            typeof value;
-            this.errors.push(`Type mismatch at ${context}: expected ${expectedType}, got ${actualType}`);
-        }
-
-        return isValid;
-    }
-
-    /**
-     * 验证函数参数
-     * @param {function} func 要验证的函数
-     * @param {Array} args 实际参数
-     * @param {Array} expectedTypes 期望的类型数组
-     */
-    validateFunctionArguments(func, args, expectedTypes) {
-        const funcName = func.name || 'anonymous';
-
-        for (let i = 0; i < Math.min(args.length, expectedTypes.length); i++) {
-            this.validateType(args[i], expectedTypes[i], `${funcName} argument ${i + 1}`);
-        }
-
-        if (args.length < expectedTypes.length) {
-            this.warnings.push(`Function ${funcName} missing ${expectedTypes.length - args.length} arguments`);
-        }
-    }
-
-    /**
-     * 验证对象属性类型
-     * @param {Object} obj 要验证的对象
-     * @param {Object} schema 类型模式
-     * @param {string} context 上下文
-     */
-    validateObjectSchema(obj, schema, context = 'object') {
-        if (!obj || typeof obj !== 'object') {
-            this.errors.push(`Expected object at ${context}, got ${typeof obj}`);
-            return false;
-        }
-
-        let isValid = true;
-
-        for (const [key, expectedType] of Object.entries(schema)) {
-            if (!(key in obj)) {
-                this.warnings.push(`Missing required property '${key}' at ${context}`);
-                isValid = false;
-                continue;
-            }
-
-            if (!this.validateType(obj[key], expectedType, `${context}.${key}`)) {
-                isValid = false;
-            }
-        }
-
-        return isValid;
-    }
-
-    /**
-     * 检查函数返回值类型
-     * @param {function} func 要检查的函数
-     * @param {any} returnValue 返回值
-     * @param {string} expectedType 期望的返回类型
-     */
-    validateReturnValue(func, returnValue, expectedType) {
-        const funcName = func.name || 'anonymous';
-        this.validateType(returnValue, expectedType, `${funcName} return value`);
-    }
-
-    /**
-     * 运行时类型检查装饰器
-     * @param {Object} schema 类型模式
-     */
-    runtimeTypeCheck(schema) {
-        return (target, propertyName, descriptor) => {
-            const method = descriptor.value;
-
-            descriptor.value = function(...args) {
-                // 检查参数类型
-                if (schema.args) {
-                    for (let i = 0; i < schema.args.length; i++) {
-                        const expectedType = schema.args[i];
-                        if (i < args.length) {
-                            if (!window.typeChecker.validateType(args[i], expectedType, `${target.constructor.name}.${propertyName} arg ${i}`)) {
-                                throw new TypeError(`Argument ${i} type mismatch`);
-                            }
-                        }
-                    }
-                }
-
-                // 调用原方法
-                const result = method.apply(this, args);
-
-                // 检查返回值类型
-                if (schema.returns) {
-                    if (!window.typeChecker.validateType(result, schema.returns, `${target.constructor.name}.${propertyName} return`)) {
-                        throw new TypeError(`Return value type mismatch`);
-                    }
-                }
-
-                return result;
-            };
-        };
-    }
-
-    /**
-     * 获取验证报告
-     */
-    getReport() {
-        return {
-            errors: [...this.errors],
-            warnings: [...this.warnings],
-            isValid: this.errors.length === 0,
-            timestamp: Date.now()
-        };
-    }
-
-    /**
-     * 清理错误和警告
-     */
-    clear() {
-        this.errors = [];
-        this.warnings = [];
-    }
-}
-
-/**
- * JSDoc类型注释生成器
- */
-class JSDocGenerator {
-    /**
-     * 生成函数类型注释
-     * @param {string} functionName 函数名
-     * @param {Array} parameters 参数数组
-     * @param {string} returnType 返回类型
-     * @param {string} description 描述
-     */
-    static generateFunctionDoc(functionName, parameters, returnType, description = '') {
-        let doc = `/**\n`;
-
-        if (description) {
-            doc += ` * ${description}\n`;
-        }
-
-        parameters.forEach((param, index) => {
-            const { name, type, description: paramDesc } = param;
-            doc += ` * @param {${type}} ${name}`;
-            if (paramDesc) doc += ` - ${paramDesc}`;
-            doc += `\n`;
-        });
-
-        if (returnType && returnType !== 'void') {
-            doc += ` * @returns {${returnType}} 返回值\n`;
-        }
-
-        doc += ` */`;
-        return doc;
-    }
-
-    /**
-     * 生成类类型注释
-     * @param {string} className 类名
-     * @param {Array} properties 属性数组
-     * @param {Array} methods 方法数组
-     * @param {string} description 描述
-     */
-    static generateClassDoc(className, properties, methods, description = '') {
-        let doc = `/**\n`;
-
-        if (description) {
-            doc += ` * ${description}\n`;
-        }
-
-        properties.forEach(prop => {
-            const { name, type, description: propDesc } = prop;
-            doc += ` * @property {${type}} ${name}`;
-            if (propDesc) doc += ` - ${propDesc}`;
-            doc += `\n`;
-        });
-
-        methods.forEach(method => {
-            const { name, parameters, returnType, description: methodDesc } = method;
-            doc += ` * @method {${returnType}} ${name}`;
-            if (methodDesc) doc += ` - ${methodDesc}`;
-            doc += `\n`;
-        });
-
-        doc += ` */`;
-        return doc;
-    }
-}
-
-// 导出到全局
-window.TypeChecker = TypeChecker;
-window.JSDocGenerator = JSDocGenerator;
-
-// 创建全局实例
-window.typeChecker = new TypeChecker();
-
-console.log('[TypeChecker] JSDoc类型检查工具已加载');
-
-
-/* ===== js/utils/codeStandards.js ===== */
-/**
- * IELTS系统代码规范 - Linus式简洁标准
- * 消除中文化注释，统一命名和代码风格
- */
-
-/**
- * Linus式代码质量原则
- *
- * 1. 好品味 > 复杂设计
- *    - 消除特殊情况，而不是处理它们
- *    - 数据结构优于代码逻辑
- *    - 简单直接永远正确
- *
- * 2. Never break userspace
- *    - 向后兼容是铁律
- *    - API设计要谨慎
- *    - 破坏性改动 = Bug
- *
- * 3. 实用主义至上
- *    - 解决真实问题，不是理论问题
- *    - 性能优化基于测量，不是猜测
- *    - 简单可维护 > 理论完美
- */
-
-/**
- * 命名规范
- */
-
-// 函数命名：动词开头，驼峰命名，描述行为
-const NAMING_CONVENTIONS = {
-    // ✅ 好的命名
-    goodFunctionNames: [
-        'getUserData',           // 清晰的动词+名词
-        'calculateScore',        // 明确的计算动作
-        'renderList',           // 渲染动作
-        'validateInput',        // 验证动作
-        'cacheResults',         // 缓存动作
-        'filterByType',         // 过滤动作
-        'initComponents'        // 初始化动作
-    ],
-
-    // ❌ 垃圾命名
-    badFunctionNames: [
-        'data',                 // 名词，不是动词
-        'handleClick',          // 太通用
-        'process',              // 模糊不清
-        'doStuff',             // 完全无意义
-        'temp',                // 临时变量思维
-        'helper',              // 辅助函数思维
-        'func1',               // 数字后缀
-        '处理数据'              // 中文命名
-    ],
-
-    // 变量命名：名词或形容词，驼峰命名
-    goodVariableNames: [
-        'userScore',            // 描述性名词
-        'isLoading',            // 布尔值以is开头
-        'examList',            // 集合以复数或List结尾
-        'currentIndex',         // 索引清晰
-        'hasPermission',        // 布尔值以has开头
-        'maxAttempts'          // 极限值以max开头
-    ],
-
-    // 常量命名：全大写，下划线分隔
-    goodConstantNames: [
-        'MAX_RETRY_ATTEMPTS',    // 清晰的常量
-        'DEFAULT_TIMEOUT',       // 默认值
-        'API_BASE_URL',         // 配置常量
-        'CACHE_SIZE_LIMIT'      // 限制常量
-    ],
-
-    // 类命名：PascalCase，描述实体
-    goodClassNames: [
-        'PerformanceMonitor',    // 监控器类
-        'CacheManager',         // 管理器类
-        'DOMBuilder',           // 构建器类
-        'ValidationError'       // 错误类
-    ]
-};
-
-/**
- * 注释规范
- */
-
-// Linus式注释原则：
-// 1. 解释"为什么"，不是"是什么"
-// 2. 消除特殊情况，而不是注释它们
-// 3. 好代码不需要注释，差代码注释也没用
-
-const COMMENT_STANDARDS = {
-    // ✅ 好的注释 - 解释设计决策
-    goodComments: [
-        // 使用事件委托而不是直接绑定，避免内存泄漏
-        'DOM.delegate("click", ".item", handler)',
-
-        // 缓存结果避免重复计算，数据量大时性能提升明显
-        'const cached = this.cache.get(key)',
-
-        // 强制使用DocumentFragment，避免多次DOM重排
-        'DOM.replaceContent(container, fragment)',
-
-        // 防抖处理，避免用户快速点击导致的重复请求
-        'Performance.debounce("submit", handleSubmit, 1000)'
-    ],
-
-    // ❌ 垃圾注释 - 重复代码内容
-    badComments: [
-        // 定义变量
-        'let count = 0;',
-
-        // 返回结果
-        'return result;',
-
-        // 获取用户数据
-        'function getUserData() {',
-
-        // 如果存在则处理
-        'if (element) { process(element); }'
-    ],
-
-    // ❌ 中文化注释 - 统一使用英文
-    chineseComments: [
-        '// 获取数据',
-        '// 处理逻辑',
-        '// 返回结果',
-        '// 初始化组件',
-        '// 检查条件'
-    ]
-};
-
-/**
- * 代码结构规范
- */
-
-const STRUCTURE_STANDARDS = {
-    // 函数长度：不超过30行，理想情况<15行
-    functionLength: {
-        max: 30,
-        ideal: 15,
-        reason: '超过3层缩进就该重写'
-    },
-
-    // 函数复杂度：单一职责
-    singleResponsibility: [
-        '✅ 一个函数只做一件事',
-        '✅ 参数不超过5个',
-        '✅ 嵌套不超过3层',
-        '✅ 圈复杂度<10'
-    ],
-
-    // 数据结构优先
-    dataStructureFirst: [
-        '✅ 先设计数据结构，再写逻辑',
-        '✅ 用对象参数代替多个参数',
-        '✅ 用配置对象代替硬编码',
-        '✅ 用枚举代替魔法数字'
-    ]
-};
-
-/**
- * 错误处理规范
- */
-
-const ERROR_HANDLING_STANDARDS = {
-    // ✅ 好的错误处理
-    goodErrorHandling: [
-        // 具体的错误类型
-        'throw new ValidationError("Invalid input: email required")',
-
-        // 有意义的错误消息
-        'console.error("[CacheManager] Failed to save data:", error)',
-
-        // 优雅降级
-        'return defaultValue || null',
-
-        // 错误边界处理
-        'try { riskyOperation() } catch (error) { fallback() }'
-    ],
-
-    // ❌ 垃圾错误处理
-    badErrorHandling: [
-        // 吞掉所有错误
-        'try { something() } catch (e) {}',
-
-        // 无意义的错误消息
-        'console.log("error")',
-
-        // 重复的错误处理
-        'if (!data) return null; // 数据为空返回null'
-    ]
-};
-
-/**
- * 性能规范
- */
-
-const PERFORMANCE_STANDARDS = {
-    // DOM操作规范
-    domOperations: [
-        '✅ 使用事件委托，不是直接绑定',
-        '✅ 使用DocumentFragment，不是多次appendChild',
-        '✅ 批量样式更新，不是单独设置',
-        '✅ 避免innerHTML，使用DOM构建器'
-    ],
-
-    // 内存管理规范
-    memoryManagement: [
-        '✅ 及时清理事件监听器',
-        '✅ 清理定时器和引用',
-        '✅ 使用WeakMap避免内存泄漏',
-        '✅ 避免闭包中的循环引用'
-    ],
-
-    // 异步操作规范
-    asyncOperations: [
-        '✅ 使用防抖节流控制频率',
-        '✅ 使用Promise处理异步',
-        '✅ 避免回调地狱',
-        '✅ 合理使用缓存'
-    ]
-};
-
-/**
- * 代码审查检查清单
- */
-
-const CODE_REVIEW_CHECKLIST = {
-    // 必须回答的问题
-    mandatoryQuestions: [
-        '这个改动是否解决了真实问题？',
-        '能否用更简单的方式实现？',
-        '是否会破坏现有功能？',
-        '数据结构是否正确？',
-        '是否消除了特殊情况？'
-    ],
-
-    // 拒绝标准
-    rejectCriteria: [
-        '❌ 增加不必要的复杂性',
-        '❌ 破坏现有功能',
-        '❌ 引入全局状态',
-        '❌ 创建循环依赖',
-        '❌ 代码难以理解',
-        '❌ 中文化注释',
-        '❌ 魔法数字和硬编码'
-    ],
-
-    // 接受标准
-    acceptCriteria: [
-        '✅ 简单直接的数据结构',
-        '✅ 清晰的职责分离',
-        '✅ 消除特殊情况',
-        '✅ 保持向后兼容',
-        '✅ 代码自文档化',
-        '✅ 性能可测量',
-        '✅ 错误处理合理'
-    ]
-};
-
-/**
- * 实用工具函数
- */
-
-class CodeStandards {
-    /**
-     * 验证函数命名
-     */
-    static validateFunctionName(name) {
-        const isCamelCase = /^[a-z][a-zA-Z0-9]*$/.test(name);
-        const isVerb = /^[a-z]+(Action|Handler|Manager|Builder|Validator)?$/.test(name);
-        return isCamelCase && isVerb;
-    }
-
-    /**
-     * 验证变量命名
-     */
-    static validateVariableName(name) {
-        const isCamelCase = /^[a-z][a-zA-Z0-9]*$/.test(name);
-        const isNotVerb = !/^[a-z]+(Action|Handler|Manager|Builder|Validator)?$/.test(name);
-        return isCamelCase && isNotVerb;
-    }
-
-    /**
-     * 验证常量命名
-     */
-    static validateConstantName(name) {
-        return /^[A-Z][A-Z0-9_]*$/.test(name);
-    }
-
-    /**
-     * 检查函数复杂度
-     */
-    static checkFunctionComplexity(func) {
-        const source = func.toString();
-        const lines = source.split('\n').length;
-        const nesting = (source.match(/if|for|while/g) || []).length;
-        const cyclomaticComplexity = (source.match(/if|for|while|catch|\&\&|\|\|/g) || []).length + 1;
-
-        return {
-            lines,
-            nesting,
-            cyclomaticComplexity,
-            isTooLong: lines > 30,
-            isTooComplex: cyclomaticComplexity > 10,
-            isTooNested: nesting > 3
-        };
-    }
-
-    /**
-     * 检查代码风格
-     */
-    static checkCodeStyle(code) {
-        const issues = [];
-
-        // 检查中文化注释
-        if (/\/\/[\u4e00-\u9fa5]/.test(code)) {
-            issues.push('发现中文化注释，请使用英文注释');
-        }
-
-        // 检查console.log
-        if (/\bconsole\.log\b/.test(code)) {
-            issues.push('发现console.log，生产环境请移除');
-        }
-
-        // 检查innerHTML
-        if (/\.innerHTML\s*=/.test(code)) {
-            issues.push('发现innerHTML赋值，请使用DOM构建器');
-        }
-
-        // 检查魔法数字
-        if (/\b\d{2,}\b/.test(code) && !/\b(1000|60|24|365)\b/.test(code)) {
-            issues.push('发现可能的魔法数字，请使用常量');
-        }
-
-        return issues;
-    }
-}
-
-// 导出到全局
-window.CodeStandards = CodeStandards;
-window.NAMING_CONVENTIONS = NAMING_CONVENTIONS;
-window.COMMENT_STANDARDS = COMMENT_STANDARDS;
-window.STRUCTURE_STANDARDS = STRUCTURE_STANDARDS;
-window.ERROR_HANDLING_STANDARDS = ERROR_HANDLING_STANDARDS;
-window.PERFORMANCE_STANDARDS = PERFORMANCE_STANDARDS;
-window.CODE_REVIEW_CHECKLIST = CODE_REVIEW_CHECKLIST;
-
-console.log('[CodeStandards] 代码规范已加载，Linus式简洁标准生效');
-
-
 /* ===== bundle provided script markers ===== */
 (function markBundleProvided(global) {
     if (global.AppLazyLoader && typeof global.AppLazyLoader.markProvided === "function") {
@@ -3020,9 +2342,7 @@ console.log('[CodeStandards] 代码规范已加载，Linus式简洁标准生效'
     "js/components/SystemDiagnostics.js",
     "js/components/PerformanceOptimizer.js",
     "js/utils/dataConsistencyManager.js",
-    "js/utils/performance.js",
-    "js/utils/typeChecker.js",
-    "js/utils/codeStandards.js"
+    "js/utils/performance.js"
 ]);
     }
 })(typeof window !== "undefined" ? window : this);

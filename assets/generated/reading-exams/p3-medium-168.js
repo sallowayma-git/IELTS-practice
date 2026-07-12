@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/77. P3 - Marketing and the information age 信息时代营销【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/77. P3 - Marketing and the information age 信息时代营销【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/77. P3 - Marketing and the information age 信息时代营销【次】.pdf",
     "ieltsHtml": "IELTS/P3/Marketing and the information age.html"
   },
   "audit": {

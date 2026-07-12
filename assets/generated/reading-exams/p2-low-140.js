@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/51. P2 - The dingo debate 澳洲野犬.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/51. P2 - The dingo debate 澳洲野犬.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/51. P2 - The dingo debate 澳洲野犬.pdf",
     "ieltsHtml": "IELTS/P2/The dingo debate.html"
   },
   "audit": {

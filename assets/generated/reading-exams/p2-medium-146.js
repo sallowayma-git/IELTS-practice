@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/57. P2 - The Tasmanian Tiger 袋狼【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/57. P2 - The Tasmanian Tiger 袋狼【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/57. P2 - The Tasmanian Tiger 袋狼【次】.pdf",
     "ieltsHtml": "IELTS/P2/The Tasmanian Tiger.html"
   },
   "audit": {

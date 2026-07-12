@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/23. P1 - The Origin of Paper 造纸术起源.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/23. P1 - The Origin of Paper 造纸术起源.pdf",
+    "pdf": "ReadingPractice/PDF/23. P1 - The Origin of Paper 造纸术起源.pdf",
     "ieltsHtml": "IELTS/P1/The Origin of Paper.html"
   },
   "audit": {

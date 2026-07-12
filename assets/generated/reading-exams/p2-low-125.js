@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/38. P2 - Egypt’s ancient boat-builders 古埃及造船/38. P2 - Egypt’s ancient boat-builders 古埃及造船.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/38. P2 - Egypt’s ancient boat-builders 古埃及造船/38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf",
+    "pdf": "ReadingPractice/PDF/38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf",
     "ieltsHtml": null
   },
   "audit": {

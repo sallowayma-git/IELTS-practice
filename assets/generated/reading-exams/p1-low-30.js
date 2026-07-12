@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/125. P1 - Investing in the Future 投资未来.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/125. P1 - Investing in the Future 投资未来.pdf",
+    "pdf": "ReadingPractice/PDF/125. P1 - Investing in the Future 投资未来.pdf",
     "ieltsHtml": null
   },
   "audit": {

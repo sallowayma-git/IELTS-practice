@@ -77,7 +77,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf",
+    "pdf": "ReadingPractice/PDF/156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf",
     "ieltsHtml": null
   },
   "audit": {

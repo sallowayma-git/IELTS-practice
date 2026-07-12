@@ -30,7 +30,7 @@ class DataManagementPanel {
         this.isVisible = false;
         this.selectedFileContent = null;
         this.pendingImportMode = null;
-        
+
         this.initialize();
     }
 
@@ -42,7 +42,7 @@ class DataManagementPanel {
         this.bindEvents();
         this.loadDataStats();
         await this.loadHistory();
-        
+
         console.log('DataManagementPanel initialized');
     }
 
@@ -362,7 +362,7 @@ class DataManagementPanel {
                     panel.querySelector('#importFile').click();
                     break;
                 case 'import':
-                    this.showImportModeModal();
+                    this.beginImportFlow();
                     break;
                 case 'cleanup':
                     this.handleCleanup();
@@ -399,12 +399,47 @@ class DataManagementPanel {
             settingsImportBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 this.show();
-                this.showImportModeModal();
+                this.beginImportFlow({ forceModePicker: true });
             });
         }
     }
 
-    showImportModeModal() {
+    hasImportSource() {
+        if (this.selectedFileContent != null) {
+            return true;
+        }
+        const fileInput = document.getElementById('importFile');
+        return Boolean(fileInput && fileInput.files && fileInput.files[0]);
+    }
+
+    resolveImportMode(selectedMode = null) {
+        const modeSelect = document.getElementById('importMode');
+        return selectedMode || this.pendingImportMode || (modeSelect ? modeSelect.value : null) || null;
+    }
+
+    /**
+     * 统一导入入口：先确保模式，再在有文件时真正执行导入。
+     * 旧实现点击「导入数据」只会打开模式弹窗，永远不调用 handleImport。
+     */
+    beginImportFlow(options = {}) {
+        const forceModePicker = options.forceModePicker === true;
+        const mode = this.resolveImportMode();
+
+        if (forceModePicker || !mode) {
+            this.showImportModeModal({ autoImportWhenReady: true });
+            return;
+        }
+
+        if (!this.hasImportSource()) {
+            this.showMessage('请先选择要导入的文件', 'warning');
+            return;
+        }
+
+        this.handleImport(mode);
+    }
+
+    showImportModeModal(options = {}) {
+        const autoImportWhenReady = options.autoImportWhenReady !== false;
         this.pendingImportMode = null;
         if (!this.importModeModal) {
             const overlay = createElement('div', { className: 'import-mode-overlay' });
@@ -433,7 +468,7 @@ class DataManagementPanel {
             title.style.marginTop = '0';
             modal.appendChild(title);
 
-            const desc = createElement('p', { text: '先确定导入策略，再选择文件并点击“导入数据”。' });
+            const desc = createElement('p', { text: '选择导入策略。若已选择文件，确认后将立即开始导入。' });
             modal.appendChild(desc);
 
             const options = createElement('div', { className: 'import-mode-options' });
@@ -464,7 +499,13 @@ class DataManagementPanel {
                         select.value = def.mode;
                     }
                     this.hideImportModeModal();
-                    this.showMessage(`已选择“${def.title}”，请继续选择文件并点击导入。`, 'info');
+
+                    if (autoImportWhenReady && this.hasImportSource()) {
+                        this.handleImport(def.mode);
+                        return;
+                    }
+
+                    this.showMessage(`已选择“${def.title}”，请选择文件后再次点击导入。`, 'info');
                 });
                 card.append(icon, titleEl, text, button);
                 options.appendChild(card);
@@ -521,12 +562,12 @@ class DataManagementPanel {
     async loadDataStats() {
         try {
             const stats = await this.backupManager.getDataStats();
-            
+
             if (stats) {
                 document.getElementById('recordCount').textContent = stats.practiceRecords.count;
                 document.getElementById('totalTime').textContent = this.formatTime(stats.userStats.totalTimeSpent);
                 document.getElementById('avgScore').textContent = Math.round(stats.userStats.averageScore * 100) + '%';
-                
+
                 if (stats.storage) {
                     const usageKB = Math.round(stats.storage.used / 1024);
                     document.getElementById('storageUsage').textContent = `${usageKB} KB`;
@@ -547,10 +588,10 @@ class DataManagementPanel {
             const format = document.getElementById('exportFormat').value;
             const includeStats = document.getElementById('includeStats').checked;
             const includeBackups = document.getElementById('includeBackups').checked;
-            
+
             const startDate = document.getElementById('exportStartDate').value;
             const endDate = document.getElementById('exportEndDate').value;
-            
+
             const options = {
                 format,
                 includeStats,
@@ -562,10 +603,10 @@ class DataManagementPanel {
             }
 
             const exportResult = await this.backupManager.exportPracticeRecords(options);
-            
+
             // 下载文件
             this.downloadFile(exportResult.data, exportResult.filename, exportResult.mimeType);
-            
+
             this.hideProgress();
             this.showMessage('数据导出成功！', 'success');
             this.loadHistory();
@@ -583,12 +624,16 @@ class DataManagementPanel {
         console.log('[DataManagementPanel] handleFileSelect called');
         const file = event.target.files[0];
         const fileNameSpan = document.getElementById('selectedFileName');
-        const importBtn = document.querySelector('[data-action="import"]');
+        const importBtn = this.container
+            ? this.container.querySelector('[data-action="import"]')
+            : document.querySelector('[data-action="import"]');
 
         if (file) {
             fileNameSpan.textContent = file.name;
-            importBtn.disabled = false;
-            
+            if (importBtn) {
+                importBtn.disabled = false;
+            }
+
             // 异步读取文件内容
             this.readFile(file).then(content => {
                 try {
@@ -597,13 +642,20 @@ class DataManagementPanel {
                     this.selectedFileContent = content;
                 }
                 console.log('[DataManagementPanel] File content loaded');
+
+                // 若模式已通过弹窗选定，选完文件后可直接导入
+                if (this.pendingImportMode) {
+                    this.handleImport(this.pendingImportMode);
+                }
             }).catch(error => {
                 console.error('[DataManagementPanel] Failed to read file:', error);
                 this.showMessage('文件读取失败', 'error');
             });
         } else {
             fileNameSpan.textContent = '未选择文件';
-            importBtn.disabled = true;
+            if (importBtn) {
+                importBtn.disabled = true;
+            }
             this.selectedFileContent = null;
         }
     }
@@ -616,9 +668,9 @@ class DataManagementPanel {
         try {
             let fileContent;
             const fileInput = document.getElementById('importFile');
-            const file = fileInput.files[0];
+            const file = fileInput && fileInput.files ? fileInput.files[0] : null;
 
-            if (this.selectedFileContent) {
+            if (this.selectedFileContent != null) {
                 console.log('[DataManagementPanel] using cached file content');
                 fileContent = this.selectedFileContent;
             } else if (file) {
@@ -655,15 +707,15 @@ class DataManagementPanel {
 
             this.updateProgress('验证数据格式...');
 
-            const modeSelect = document.getElementById('importMode');
-            const resolvedMode = selectedMode || this.pendingImportMode || (modeSelect ? modeSelect.value : null);
+            const resolvedMode = this.resolveImportMode(selectedMode);
             if (!resolvedMode) {
                 this.hideProgress();
-                this.showMessage('请先选择导入模式（点击导入数据按钮）。', 'warning');
+                this.showImportModeModal({ autoImportWhenReady: true });
                 return;
             }
 
-            const createBackup = document.getElementById('createBackupBeforeImport').checked;
+            const createBackupEl = document.getElementById('createBackupBeforeImport');
+            const createBackup = createBackupEl ? createBackupEl.checked : true;
 
             const options = {
                 mergeMode: resolvedMode,
@@ -692,11 +744,21 @@ class DataManagementPanel {
                 );
                 this.loadDataStats();
                 this.loadHistory();
-                
+
                 // 清空文件选择
-                fileInput.value = '';
-                document.getElementById('selectedFileName').textContent = '未选择文件';
-                document.querySelector('[data-action="import"]').disabled = true;
+                if (fileInput) {
+                    fileInput.value = '';
+                }
+                const fileNameEl = document.getElementById('selectedFileName');
+                if (fileNameEl) {
+                    fileNameEl.textContent = '未选择文件';
+                }
+                const importBtn = this.container
+                    ? this.container.querySelector('[data-action="import"]')
+                    : document.querySelector('[data-action="import"]');
+                if (importBtn) {
+                    importBtn.disabled = true;
+                }
                 this.selectedFileContent = null;
                 this.pendingImportMode = null;
             }
@@ -759,7 +821,7 @@ class DataManagementPanel {
                 );
                 this.loadDataStats();
                 this.loadHistory();
-                
+
                 // 重置清理选项
                 document.querySelectorAll('.cleanup-checkboxes input[type="checkbox"]').forEach(cb => {
                     cb.checked = false;
@@ -900,7 +962,7 @@ class DataManagementPanel {
     updateCleanupButton() {
         const checkboxes = document.querySelectorAll('.cleanup-checkboxes input[type="checkbox"]');
         const cleanupBtn = document.querySelector('[data-action="cleanup"]');
-        
+
         const hasSelection = Array.from(checkboxes).some(cb => cb.checked);
         cleanupBtn.disabled = !hasSelection;
     }
@@ -911,7 +973,7 @@ class DataManagementPanel {
     showProgress(text) {
         const overlay = document.getElementById('progressOverlay');
         const progressText = document.getElementById('progressText');
-        
+
         progressText.textContent = text;
         overlay.style.display = 'flex';
     }
@@ -970,15 +1032,15 @@ class DataManagementPanel {
     readFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            
+
             reader.onload = (e) => {
                 resolve(e.target.result);
             };
-            
+
             reader.onerror = () => {
                 reject(new Error('文件读取失败'));
             };
-            
+
             reader.readAsText(file);
         });
     }
@@ -1014,10 +1076,10 @@ class DataManagementPanel {
      */
     formatTime(seconds) {
         if (!seconds) return '0分钟';
-        
+
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
-        
+
         if (hours > 0) {
             return `${hours}小时${minutes}分钟`;
         } else {
