@@ -3384,7 +3384,7 @@
         const checkboxGroups = getCheckboxAnswers();
 
         checkboxGroups.forEach((values, name) => {
-            const questionIds = expandQuestionSequence(name);
+            const questionIds = resolveCheckboxQuestionIds(name);
             if (!questionIds.length) {
                 return;
             }
@@ -3417,6 +3417,26 @@
         });
 
         return answers;
+    }
+
+    function resolveCheckboxQuestionIds(name) {
+        const questionIds = expandQuestionSequence(name);
+        if (questionIds.length <= 1) {
+            return questionIds;
+        }
+        const firstQuestionId = questionIds[0];
+        const answerKey = state.dataset?.answerKey || {};
+        const questionGroup = buildQuestionGroupLookup(state.dataset).get(firstQuestionId) || null;
+        if (
+            questionGroup
+            && questionGroup.kind === 'multi_choice'
+            && Array.isArray(questionGroup.questionIds)
+            && questionGroup.questionIds.length === 1
+            && Array.isArray(answerKey[firstQuestionId])
+        ) {
+            return [firstQuestionId];
+        }
+        return questionIds;
     }
 
     function normalizeAnswerValue(value) {
@@ -3554,8 +3574,14 @@
             : splitAnswerTokens(value);
         const normalized = [];
         rawTokens.forEach((entry) => {
-            const token = canonicalizeAnswerToken(entry);
+            const rawChoiceToken = String(entry ?? '').trim().toUpperCase();
+            const token = /^[A-Z]$/.test(rawChoiceToken)
+                ? rawChoiceToken
+                : canonicalizeAnswerToken(entry);
             if (!token) {
+                return;
+            }
+            if (!/^[A-Z]$/.test(token)) {
                 return;
             }
             if (!normalized.some((existing) => areAnswerTokensEquivalent(existing, token))) {
@@ -3575,6 +3601,46 @@
             });
         });
         return tokens.sort((left, right) => left.localeCompare(right, 'en'));
+    }
+
+    function resolveSplitMultiChoiceSelection(answers, answerKey, questionGroup, targetQuestionId) {
+        const questionIds = Array.isArray(questionGroup?.questionIds)
+            ? questionGroup.questionIds.map((entry) => normalizeQuestionId(entry)).filter(Boolean)
+            : [];
+        const selectedTokens = collectGroupChoiceTokens(answers, questionIds);
+        const remainingTokens = selectedTokens.slice();
+        const assignments = new Map();
+
+        questionIds.forEach((questionId) => {
+            const expectedToken = canonicalizeAnswerToken(answerKey[questionId]);
+            if (!expectedToken) {
+                return;
+            }
+            const matchedIndex = remainingTokens.findIndex((token) => areAnswerTokensEquivalent(token, expectedToken));
+            if (matchedIndex >= 0) {
+                assignments.set(questionId, remainingTokens[matchedIndex]);
+                remainingTokens.splice(matchedIndex, 1);
+            }
+        });
+
+        questionIds.forEach((questionId) => {
+            if (assignments.has(questionId)) {
+                return;
+            }
+            const fallbackToken = remainingTokens.shift();
+            if (fallbackToken) {
+                assignments.set(questionId, fallbackToken);
+            }
+        });
+
+        const normalizedTargetId = normalizeQuestionId(targetQuestionId) || targetQuestionId;
+        const expectedToken = canonicalizeAnswerToken(answerKey[normalizedTargetId]);
+        const assignedToken = assignments.get(normalizedTargetId) || '';
+        return {
+            displayUserAnswer: assignedToken || answers[normalizedTargetId] || '',
+            expectedToken,
+            isCorrect: Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
+        };
     }
 
     function questionWeight(correctAnswer, questionGroup = null) {
@@ -3637,14 +3703,13 @@
             let partialCorrectCount = isCorrect ? weight : 0;
 
             if (isSplitMultiChoiceGroup) {
-                const selectedTokens = collectGroupChoiceTokens(answers, questionGroup.questionIds);
-                const expectedToken = canonicalizeAnswerToken(correctAnswer);
-                displayUserAnswer = selectedTokens.length ? selectedTokens : userAnswer;
-                if (!expectedToken) {
+                const splitSelection = resolveSplitMultiChoiceSelection(answers, answerKey, questionGroup, normalizedQuestionId);
+                displayUserAnswer = splitSelection.displayUserAnswer || userAnswer;
+                if (!splitSelection.expectedToken) {
                     isCorrect = null;
                     partialCorrectCount = 0;
                 } else {
-                    isCorrect = selectedTokens.some((token) => areAnswerTokensEquivalent(token, expectedToken));
+                    isCorrect = splitSelection.isCorrect;
                     partialCorrectCount = isCorrect ? 1 : 0;
                 }
                 weight = 1;
@@ -3729,13 +3794,17 @@
             const label = escapeHtml(displayLabel(entry.questionId));
             const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
             const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
-            const status = entry.isCorrect ? '✓' : '✗';
+            const partial = Number(entry.partialCorrectCount) || 0;
+            const weight = Number(entry.weight) || 1;
+            const isPartial = !entry.isCorrect && partial > 0 && weight > 1;
+            const status = entry.isCorrect ? '✓' : (isPartial ? `${partial}/${weight}` : '✗');
+            const statusClass = entry.isCorrect ? 'result-correct' : (isPartial ? 'result-partial' : 'result-incorrect');
             return `
                 <tr>
                     <td>${label}</td>
                     <td>${userAnswer}</td>
                     <td>${correctAnswer || ''}</td>
-                    <td class="${entry.isCorrect ? 'result-correct' : 'result-incorrect'}">${status}</td>
+                    <td class="${statusClass}">${status}</td>
                 </tr>
             `;
         }).join('');
