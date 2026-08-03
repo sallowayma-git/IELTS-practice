@@ -9,7 +9,7 @@
   "meta": {
     "title": "Why good ideas fail TF公司",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "次高频",
     "pdfFilename": "174. P1 - Why good ideas fail TF公司.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/",
     "legacyFilename": "174. P1 - Why good ideas fail TF公司.html",
