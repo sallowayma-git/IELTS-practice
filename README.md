@@ -1,5 +1,33 @@
 # IELTS Atlas / IELTS Practice
 
+## 分支用途与范围说明
+
+> 本分支是面向原上游仓库的轻量级 PR 分支，目标是提供最小化的单用户多设备后端部署能力。它适合运行在 NAS、小型私人服务器或类似自托管环境中，用简单模型保存并同步个人练习记录。
+
+### 本分支包含
+
+| 能力 | 说明 |
+| --- | --- |
+| 单一后端入口 | 通过一个后端应用入口提供静态资源、登录会话和练习记录 API。 |
+| PostgreSQL 持久化 | 使用一个 PostgreSQL 数据库保存账号、会话和练习记录。 |
+| 小型自托管部署 | 面向 NAS、私人服务器和可信局域网环境，避免复杂运维假设。 |
+| 可选 Tor 入口 | 可选一个 Tor onion service，并且只指向同一个后端应用入口。 |
+
+### 本分支不包含
+
+| 排除项 | 原因 |
+| --- | --- |
+| 管理员 UI/API、TOTP 或管理员加固 | 保持 PR 聚焦在单用户多设备部署。 |
+| auth/admin/business 分地址架构 | 不引入多入口、多域名或多服务拆分。 |
+| 多个 public URL 或多个 onion service | 避免把轻量部署变成完整生产代理架构。 |
+| 代理层拆分 | 不加入独立 auth、admin、business proxy。 |
+| 大范围 UI/样式/主题改动 | 减少与上游界面代码的冲突。 |
+| 生成的听力或运行时 bundle 改动 | 避免无关生成产物扩大 PR 范围。 |
+
+### 完整版仓库
+
+需要完整独立仓库架构、更多服务端能力或更重部署方案的使用者，可以查看：[k-undurkhaan-2/IELTS-Project](https://github.com/k-undurkhaan-2/IELTS-Project)。
+
 ## 重要使用声明
 
 本项目允许个人基于学习、研究和自用目的进行本地运行、私人部署或在个人控制的网页环境中使用。使用者可以将项目部署到自己的电脑、私人服务器、NAS 或个人网页空间，但应确保访问范围和传播范围可控。
@@ -12,7 +40,7 @@
 
 ## 项目概述
 
-IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
+IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的练习系统。默认静态模式的主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。本分支额外提供轻量 `backend/` 部署路径，用于个人多设备练习记录同步。
 
 系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
 
@@ -60,6 +88,36 @@ http://localhost:8000/
 可以将运行时文件部署到静态网页空间，但应仅用于个人或小范围自用场景。部署时必须保留目录层级，避免 bundle、题库、字体、图片、PDF、音频或生成资产出现 404。
 
 公开部署前请重新阅读顶部使用声明。部署可行不等于适合公开传播，尤其不要将包含题源的网页用于商业化、宣传或大规模分发。
+
+### 可选多设备后端部署
+
+如果需要在手机、平板和桌面浏览器之间共享练习记录，可以使用 `backend/` 中的轻量后端。该模式使用单一应用入口、PostgreSQL 和浏览器 session 保存同一账号的练习记录，适合个人 NAS、小型自托管服务器或只在可信局域网内使用的环境。
+
+Docker Compose 快速启动：
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+# 编辑 backend\.env，至少替换 POSTGRES_PASSWORD 和 SESSION_SECRET
+docker compose --env-file backend\.env -f backend\docker-compose.yml up --build
+```
+
+如果不使用 Docker，需要先准备 PostgreSQL，然后运行：
+
+```powershell
+npm --prefix backend install
+npm --prefix backend run migrate
+npm --prefix backend start
+```
+
+默认只暴露一个应用服务：`http://127.0.0.1:3000/`。如果需要在局域网访问，可以在确认防火墙、访问范围和反向代理设置后，将 `APP_BIND_ADDRESS` 改为合适的监听地址。`REGISTRATION_MODE=first-user` 会限制只有第一个账号可以自行注册；创建账号后可改为 `disabled`。
+
+可选 Tor hidden service 使用同一个后端应用入口，不需要拆分 auth、admin 或 business 域名：
+
+```powershell
+docker compose --profile onion --env-file backend\.env -f backend\docker-compose.yml up --build
+```
+
+该轻量后端不包含管理员页面、TOTP、独立认证域、多个 public URL 或多层代理架构。普通静态模式仍可继续直接打开 `index.html` 使用。
 
 ## 功能说明
 
@@ -534,4 +592,3 @@ ReadingPractice/
 代码许可证见 [LICENSE](LICENSE)。使用、修改和再分发代码时，应遵守许可证条款。
 
 题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有。本项目不授予这些内容的商业使用权或公开传播权。使用者应自行承担因复制、部署、传播或商业化使用相关内容产生的法律和平台风险。
-

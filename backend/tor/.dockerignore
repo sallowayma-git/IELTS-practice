@@ -1,0 +1,7 @@
+hidden_service
+hidden_service/
+bridges.local.txt
+webtunnel.local.txt
+*.identity
+*.pub
+*.agekey

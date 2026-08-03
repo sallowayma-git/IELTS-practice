@@ -2,8 +2,15 @@
 /.kiro/
 /.workbuddy/
 
+# 本地 Agent 指令文件，不上传到仓库
+/AGENT.md
+/AGENTS.md
+
 # 构建产物由 scripts/build-bundles.mjs 生成，运行时依赖这些 bundle，必须纳入版本控制
 /.qoder/
+/.codex/
+/.npm-cache/
+/.pnpm-store/
 /.vscode/
 /documents/
 /docs/
@@ -26,12 +33,34 @@
 /templates/hp/
 /ielts-writing-assistant/
 /BACKUP/
+/deploy-artifacts/
 
 # 三月 folder rules: ignore all pdfs, but don't ignore the folder itself
 /三月/**/*.pdf
 
 
 package-lock.json
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/logs/
+backend/node_modules/
+backend/tor/hidden_service/
+backend/tor/bridges.local.txt
+backend/tor/webtunnel.local.txt
+backend/tor/*.identity
+backend/tor/*.pub
+backend/tor/*.agekey
+*.dump
+*.sql
+!backend/migrations/*.sql
+*.sql.gz
+*.tar
+*.tar.gz
+!backend/package-lock.json
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
@@ -42,6 +71,8 @@ Thumbs.db
 *9.4*
 *睡着过项目组*
 developer/tests/e2e/reports/static-ci-report.json
+__pycache__/
+*.py[cod]
 # 忽略 E2E 运行产物
 developer/tests/e2e/.pw-browsers/
 developer/tests/e2e/__pycache__/
