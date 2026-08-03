@@ -65,7 +65,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/228. P3 - On art and artists 艺术与艺术家/228. P3 - On art and artists 艺术与艺术家.html",
-    "shuiPdf": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
+    "pdf": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
     "ieltsHtml": null
   },
   "audit": {

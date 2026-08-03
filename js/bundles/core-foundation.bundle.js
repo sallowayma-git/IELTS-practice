@@ -367,20 +367,40 @@
 
 
 /* ===== js/utils/storage.js ===== */
+(function initStorage(window) {
+'use strict';
+
 /**
  * 本地存储工具类
  * 提供统一的数据存储和检索接口
  */
+const STORAGE_INTERNAL_ACCESS_TOKEN = Symbol('StorageManager.internalAccessToken');
+
+const createInternalAccessOptions = (options = {}) => {
+    return Object.assign({}, options, {
+        skipPracticeCoreRedirect: true,
+        internalAccessToken: STORAGE_INTERNAL_ACCESS_TOKEN
+    });
+};
+
+const hasInternalAccessOptions = (options = {}) => {
+    return Boolean(options && options.internalAccessToken === STORAGE_INTERNAL_ACCESS_TOKEN);
+};
+
 class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
-        this.version = '1.0.0';
+        this.version = '0.6.2-fix';
         this.localStorageAvailable = false;
         this.sessionStorageAvailable = false;
         this.backendPreferenceKey = this.prefix + 'storage_backend';
         this.indexedDBBlocked = false;
         this.volatileMode = false;
         this.mode = 'indexeddb';
+        this.protectedDataKeys = new Set([
+            'practice_records',
+            'user_stats'
+        ]);
         this.persistentKeys = new Set([
             'practice_records',
             'user_stats',
@@ -404,6 +424,52 @@ class StorageManager {
         if (!skipReady) {
             await this.ready;
         }
+    }
+
+    isProtectedDataKey(key) {
+        return this.protectedDataKeys.has(String(key || ''));
+    }
+
+    isProtectedStorageKey(storageKey) {
+        const key = String(storageKey || '');
+        if (!key.startsWith(this.prefix)) {
+            return false;
+        }
+        return this.isProtectedDataKey(key.slice(this.prefix.length));
+    }
+
+    async getPracticeRecordAPI(options = {}) {
+        const api = window.PracticeRecordAPI;
+        if (api) {
+            return api;
+        }
+        if (options.skipReady || !this.ready || this._resolvingPracticeRecordAPI) {
+            return null;
+        }
+        this._resolvingPracticeRecordAPI = true;
+        try {
+            await this.ready;
+            return window.PracticeRecordAPI || null;
+        } finally {
+            this._resolvingPracticeRecordAPI = false;
+        }
+    }
+
+    async readProtectedDataKey(key, defaultValue = null, options = {}) {
+        const api = await this.getPracticeRecordAPI(options);
+        if (key === 'practice_records') {
+            if (api && typeof api.list === 'function') {
+                return await api.list();
+            }
+            throw new Error('Storage.get(practice_records): PracticeRecordAPI.list not ready');
+        }
+        if (key === 'user_stats') {
+            if (api && typeof api.readStats === 'function') {
+                return await api.readStats({ fallback: defaultValue });
+            }
+            throw new Error('Storage.get(user_stats): PracticeRecordAPI.readStats not ready');
+        }
+        return defaultValue;
     }
 
     /**
@@ -797,16 +863,6 @@ class StorageManager {
         const { skipReady = false } = options;
         await this.waitForInitialization(skipReady);
         const defaultData = {
-            user_stats: {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                lastPracticeDate: null,
-                achievements: []
-            },
             settings: {
                 theme: 'light',
                 notifications: true,
@@ -814,7 +870,6 @@ class StorageManager {
                 reminderTime: '19:00'
             },
             exam_index: null,
-            practice_records: [],
             learning_goals: []
         };
 
@@ -891,7 +946,10 @@ class StorageManager {
         }
     }
 
-    async writePersistentValue(key, value) {
+    async writePersistentValue(key, value, options = {}) {
+        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+            throw new Error(`Storage.writePersistentValue(${key}) is internal-only`);
+        }
         const serializedValue = this.createStoredEnvelope(value);
         const storageKey = this.getKey(key);
 
@@ -929,7 +987,10 @@ class StorageManager {
         return true;
     }
 
-    async readPersistentValue(key, defaultValue = undefined) {
+    async readPersistentValue(key, defaultValue = undefined, options = {}) {
+        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+            throw new Error(`Storage.readPersistentValue(${key}) is internal-only`);
+        }
         const storageKey = this.getKey(key);
 
         if (this.fallbackStorage && this.fallbackStorage.has(storageKey)) {
@@ -952,7 +1013,10 @@ class StorageManager {
         return defaultValue;
     }
 
-    async removePersistentValue(key) {
+    async removePersistentValue(key, options = {}) {
+        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+            throw new Error(`Storage.removePersistentValue(${key}) is internal-only`);
+        }
         const storageKey = this.getKey(key);
 
         if (this.fallbackStorage) {
@@ -969,7 +1033,10 @@ class StorageManager {
         return true;
     }
 
-    async clearPersistentStorage() {
+    async clearPersistentStorage(options = {}) {
+        if (!hasInternalAccessOptions(options)) {
+            throw new Error('Storage.clearPersistentStorage is internal-only');
+        }
         if (this.fallbackStorage) {
             this.fallbackStorage.clear();
         }
@@ -1027,10 +1094,10 @@ class StorageManager {
      * 压缩对象数据
      */
     compressObject(obj) {
-        // 只保留核心字段：用户答案、正确答案、正误、得分、正确率、答题时长、答题时间
+        // 只保留核心字段：用户答案、canonical 正确答案表、正误、得分、正确率、答题时长、答题时间
         const coreFields = [
             'id', 'examId', 'title', 'category', 'frequency',
-            'score', 'totalQuestions', 'accuracy', 'percentage', 'duration',
+            'score', 'totalQuestions', 'correctAnswers', 'correctAnswerMap', 'accuracy', 'percentage', 'duration',
             'startTime', 'endTime', 'date', 'sessionId', 'timestamp',
             'dataSource', 'realData'
         ];
@@ -1054,17 +1121,38 @@ class StorageManager {
 
     /**
      * 合并记录数组，避免重复
-     * 基于 id 去重，保留 timestamp 最新的
+     * 基于 id 去重，保留最新的记录（按 updatedAt/createdAt/endTime/startTime 多字段回退）
      */
     mergeRecords(current, legacy) {
         if (!Array.isArray(current)) current = [];
         if (!Array.isArray(legacy)) return current;
 
+        // canonical 记录的主要时间字段是 updatedAt/createdAt/endTime/startTime，
+        // 不保证有顶层 timestamp。用多字段回退取最大时间戳，避免保留旧副本丢新副本。
+        const resolveTimestamp = (record) => {
+            if (!record || typeof record !== 'object') return 0;
+            const candidates = [
+                record.updatedAt,
+                record.createdAt,
+                record.endTime,
+                record.startTime,
+                record.date,
+                record.timestamp
+            ];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const value = candidates[i];
+                if (!value) continue;
+                const time = new Date(value).getTime();
+                if (Number.isFinite(time)) return time;
+            }
+            return 0;
+        };
+
         const mergedMap = new Map();
         [...current, ...legacy].forEach(record => {
             if (record && record.id) {
                 const existing = mergedMap.get(record.id);
-                if (!existing || (record.timestamp > existing.timestamp)) {
+                if (!existing || (resolveTimestamp(record) > resolveTimestamp(existing))) {
                     mergedMap.set(record.id, record);
                 }
             } else if (record && record.timestamp) {
@@ -1073,7 +1161,56 @@ class StorageManager {
             }
         });
 
-        return Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return Array.from(mergedMap.values()).sort((a, b) => resolveTimestamp(b) - resolveTimestamp(a));
+    }
+
+    async listPracticeRecordsCanonical(options = {}) {
+        const { skipReady = false } = options;
+
+        const api = await this.getPracticeRecordAPI({ skipReady });
+        if (api && typeof api.list === 'function') {
+            const records = await api.list();
+            return Array.isArray(records) ? records : [];
+        }
+
+        throw new Error('Storage.listPracticeRecordsCanonical: unified store not ready');
+    }
+
+    async replacePracticeRecordsCanonical(records, options = {}) {
+        const { skipReady = false, updateStats } = options;
+        if (!Array.isArray(records)) {
+            throw new Error('Storage.replacePracticeRecordsCanonical requires an array of records');
+        }
+
+        const api = await this.getPracticeRecordAPI({ skipReady });
+        if (api && typeof api.replace === 'function') {
+            // 透传 updateStats 选项：导入/回滚场景同时写入 user_stats，
+            // 若此处 recalculateStats 会和并发 writeUserStatsCanonical 竞争，谁后写谁生效。
+            // 默认 undefined 让 api.replace 自行决定（保存路径会重算），导入路径传 false 跳过。
+            await api.replace(records, { maxRecords: 1000, updateStats });
+            return true;
+        }
+
+        throw new Error('Storage.replacePracticeRecordsCanonical: unified store not ready');
+    }
+
+    async writeUserStatsCanonical(stats, options = {}) {
+        const { skipReady = false } = options;
+        const api = await this.getPracticeRecordAPI({ skipReady });
+        if (api && typeof api.writeStats === 'function') {
+            return await api.writeStats(stats);
+        }
+        throw new Error('Storage.writeUserStatsCanonical: unified stats store not ready');
+    }
+
+    async mergePracticeRecordsCanonical(records, options = {}) {
+        if (!Array.isArray(records)) {
+            throw new Error('Storage.mergePracticeRecordsCanonical requires an array of records');
+        }
+        const current = await this.listPracticeRecordsCanonical(options);
+        const merged = this.mergeRecords(current, records);
+        await this.replacePracticeRecordsCanonical(merged, options);
+        return merged;
     }
 
     /**
@@ -1087,7 +1224,7 @@ class StorageManager {
             percentage: realData.percentage,
             duration: realData.duration,
             answers: realData.answers || {},
-            correctAnswers: realData.correctAnswers || {},
+            correctAnswerMap: realData.correctAnswerMap || {},
             isRealData: realData.isRealData,
             source: realData.source
         };
@@ -1114,8 +1251,7 @@ class StorageManager {
             Object.entries(realData.answerComparison).forEach(([questionId, comparison]) => {
                 simplifiedComparison[questionId] = {
                     userAnswer: comparison.userAnswer || '',
-                    correctAnswer: comparison.correctAnswer || '',
-                    isCorrect: comparison.isCorrect || false
+                    isCorrect: typeof comparison.isCorrect === 'boolean' ? comparison.isCorrect : null
                 };
             });
             compressed.answerComparison = simplifiedComparison;
@@ -1128,21 +1264,21 @@ class StorageManager {
      * 存储数据
      */
     async set(key, value, options = {}) {
-        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
+        const { skipReady = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            const allowPracticeCoreRedirect = !skipReady && !skipPracticeCoreRedirect;
-            if (allowPracticeCoreRedirect && window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.handlesStorageKey === 'function' && window.PracticeCore.store.handlesStorageKey(key)) {
-                const redirected = await window.PracticeCore.store.routeStorageSet(this, key, value, options);
-                if (redirected !== null && redirected !== undefined) {
-                    return redirected;
-                }
+            if (protectedPublicAccess) {
+                throw new Error(`Storage.set(${key}) is disabled; use PracticeRecordAPI`);
             }
-            return await this.writePersistentValue(key, value);
+            return await this.writePersistentValue(key, value, options);
         } catch (error) {
             console.error('[Storage] set 操作错误:', error);
-            this.handleStorageError(key, value, error);
+            this.handleStorageError(key, value, error, options);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return false;
         }
     }
@@ -1155,30 +1291,44 @@ class StorageManager {
      */
     async append(key, value, options = {}) {
         const { skipReady = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            let currentList = await this.readPersistentValue(key, []);
+            if (protectedPublicAccess) {
+                throw new Error(`Storage.append(${key}) is disabled; use PracticeRecordAPI`);
+            }
+            let currentList = await this.readPersistentValue(key, [], options);
             if (!Array.isArray(currentList)) {
                 currentList = [];
             }
             currentList.push(value);
-            return await this.writePersistentValue(key, currentList);
+            return await this.writePersistentValue(key, currentList, options);
         } catch (error) {
             console.error('[Storage] Append error:', error);
-            this.handleStorageError(key, value, error);
+            this.handleStorageError(key, value, error, options);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return false;
         }
     }
 
     async get(key, defaultValue = null, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            return await this.readPersistentValue(key, defaultValue);
+            if (protectedPublicAccess) {
+                return await this.readProtectedDataKey(key, defaultValue, options);
+            }
+            return await this.readPersistentValue(key, defaultValue, options);
         } catch (error) {
             console.error('Storage get error:', error);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return defaultValue;
         }
     }
@@ -1187,20 +1337,20 @@ class StorageManager {
      * 删除数据
      */
     async remove(key, options = {}) {
-        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
+        const { skipReady = false } = options;
+        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            const allowPracticeCoreRedirect = !skipReady && !skipPracticeCoreRedirect;
-            if (allowPracticeCoreRedirect && window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.handlesStorageKey === 'function' && window.PracticeCore.store.handlesStorageKey(key)) {
-                const redirected = await window.PracticeCore.store.routeStorageRemove(this, key, options);
-                if (redirected !== null && redirected !== undefined) {
-                    return redirected;
-                }
+            if (protectedPublicAccess) {
+                throw new Error(`Storage.remove(${key}) is disabled; use PracticeRecordAPI`);
             }
-            return await this.removePersistentValue(key);
+            return await this.removePersistentValue(key, options);
         } catch (error) {
             console.error('Storage remove error:', error);
+            if (protectedPublicAccess) {
+                throw error;
+            }
             return false;
         }
     }
@@ -1213,7 +1363,15 @@ class StorageManager {
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            return await this.clearPersistentStorage();
+            if (!hasInternalAccessOptions(options)) {
+                const api = await this.getPracticeRecordAPI(options);
+                if (!api || typeof api.clear !== 'function' || typeof api.resetStats !== 'function') {
+                    throw new Error('Storage.clear: PracticeRecordAPI clear/resetStats not ready');
+                }
+                await api.clear({ updateStats: false });
+                await api.resetStats();
+            }
+            return await this.clearPersistentStorage(createInternalAccessOptions(options));
         } catch (error) {
             console.error('Storage clear error:', error);
             return false;
@@ -1409,7 +1567,7 @@ class StorageManager {
         try {
             console.log('[Storage] 开始清理旧数据...');
 
-            const practiceRecords = await this.get('practice_records', [], { skipReady });
+            const practiceRecords = await this.listPracticeRecordsCanonical({ skipReady });
             if (practiceRecords.length > 0) {
                 console.log(`[Storage] 练习记录数据保留${practiceRecords.length}条记录，跳过压缩以保护答案数据完整性`);
             }
@@ -1469,6 +1627,7 @@ class StorageManager {
                 await this.set('migration_completed', true, { skipReady });
             } else {
                 let migratedCount = 0;
+                let deferredPracticeMigration = false;
                 for (const oldKey of legacyKeys) {
                     try {
                         const legacyDataStr = localStorage.getItem(oldKey);
@@ -1494,84 +1653,47 @@ class StorageManager {
 
                         // 对应新键（去除 old_prefix_ 如果存在）
                         let newKey = oldKey.replace(/^old_prefix_/, '');
-                        const current = await this.get(newKey, [], { skipReady });
-
-                        // 对于关键键额外检查
-                        const criticalKeys = ['practice_records'];
-                        if (criticalKeys.includes(newKey) && legacyData.length === 0 && current.length > 0) {
-                            console.log('[Storage] 发现空旧数据但新数据存在，跳过以避免覆盖');
-                            continue;
+                        const isPracticeRecordsKey = newKey === 'practice_records';
+                        if (isPracticeRecordsKey) {
+                            await this.mergePracticeRecordsCanonical(legacyData, { skipReady });
+                        } else {
+                            const current = await this.get(newKey, [], { skipReady });
+                            const merged = this.mergeRecords(current, legacyData);
+                            await this.set(newKey, merged, { skipReady });
                         }
-
-                        const merged = this.mergeRecords(current, legacyData);
-                        await this.set(newKey, merged, { skipReady });
 
                         // 删除旧键
                         localStorage.removeItem(oldKey);
                         migratedCount++;
                         console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
                     } catch (migrateError) {
+                        const newKey = oldKey.replace(/^old_prefix_/, '');
+                        if (newKey === 'practice_records') {
+                            deferredPracticeMigration = true;
+                        }
                         console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
                     }
                 }
 
                 console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
-                await this.set('migration_completed', true, { skipReady });
+                if (deferredPracticeMigration) {
+                    console.warn('[Storage] 练习记录迁移已延后，等待 PracticeRecordAPI 就绪后重试');
+                } else {
+                    await this.set('migration_completed', true, { skipReady });
+                }
             }
 
-            // 迁移 MyMelody 遗留键（IndexedDB 中的旧键）
             if (!await this.get('my_melody_migration_completed', null, { skipReady })) {
                 console.log('[Storage] 检查 MyMelody 遗留键迁移...');
-                const oldMyMelodyKey = this.getKey('practice_records'); // 'exam_system_practice_records'
-                try {
-                    const legacyMyMelodyData = await this.getFromIndexedDB(oldMyMelodyKey);
-                    if (legacyMyMelodyData) {
-                        let legacyData;
-                        try {
-                            const parsed = JSON.parse(legacyMyMelodyData);
-                            legacyData = parsed.data || parsed;
-                        } catch (parseError) {
-                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        if (!Array.isArray(legacyData)) {
-                            console.warn('[Storage] MyMelody 遗留数据非数组，跳过');
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        if (legacyData.length === 0) {
-                            console.log('[Storage] MyMelody 旧数据为空，跳过迁移');
-                            await this.set('my_melody_migration_completed', true, { skipReady });
-                            return;
-                        }
-
-                        const currentPracticeRecords = await this.get('practice_records', [], { skipReady });
-                        const merged = this.mergeRecords(currentPracticeRecords, legacyData);
-                        await this.set('practice_records', merged, { skipReady });
-
-                        // 删除旧键
-                        await this.removeFromIndexedDB(oldMyMelodyKey);
-                        console.log(`[Storage] 成功迁移 MyMelody 数据: ${legacyData.length} 项合并到 practice_records`);
-                    } else {
-                        console.log('[Storage] 无 MyMelody 遗留数据需要迁移');
-                    }
-                    await this.set('my_melody_migration_completed', true, { skipReady });
-                } catch (migrateError) {
-                    console.error('[Storage] MyMelody 迁移失败:', migrateError);
-                    await this.set('my_melody_migration_completed', true, { skipReady }); // 避免无限重试
-                }
-            } else {
-                console.log('[Storage] MyMelody 迁移已完成，跳过');
+                const canonicalPracticeKey = this.getKey('practice_records');
+                console.warn('[Storage] 跳过 MyMelody 遗留键迁移：旧键与 canonical practice_records 键相同，继续迁移会误删当前记录', canonicalPracticeKey);
+                await this.set('my_melody_migration_completed', true, { skipReady });
             }
 
         } catch (error) {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true, { skipReady });
-            await this.set('my_melody_migration_completed', true, { skipReady });
         }
     }
 
@@ -1604,8 +1726,8 @@ class StorageManager {
                 console.warn('[Storage] 备份数据格式无效');
                 return false;
             }
-            // 恢复 practice_records
-            await this.set('practice_records', backupData.practice_records, { skipReady });
+            // 运行期恢复必须走统一记录 API；raw practice_records 只允许启动迁移兼容使用。
+            await this.replacePracticeRecordsCanonical(backupData.practice_records, { skipReady });
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
@@ -1615,31 +1737,14 @@ class StorageManager {
     }
 
     /**
-     * 处理存储配额超限
-     */
-    handleStorageQuotaExceeded(key, value) {
-        console.error('[Storage] 存储配额超限，无法保存数据:', key);
-
-        // 显示用户警告
-        if (window.showMessage) {
-            window.showMessage('存储空间不足，系统已自动清理旧数据，请稍后重试', 'warning');
-        }
-
-        // 触发存储不足事件
-        document.dispatchEvent(new CustomEvent('storageQuotaExceeded', {
-            detail: { key, value, storageInfo: this.getStorageInfo() }
-        }));
-    }
-
-    /**
      * 处理存储错误
      */
-    handleStorageError(key, value, error) {
+    handleStorageError(key, value, error, options = {}) {
         console.error('[Storage] 存储错误:', error);
 
         // 如果是配额错误，尝试切换到备用存储
         if (error.name === 'QuotaExceededError') {
-            this.handleStorageQuotaExceeded(key, value);
+            this.handleStorageQuotaExceeded(key, value, options);
         } else {
             // 其他错误
             if (window.showMessage) {
@@ -1666,6 +1771,9 @@ class StorageManager {
             if (this.fallbackStorage) {
                 this.fallbackStorage.forEach((value, key) => {
                     if (key.startsWith(this.prefix)) {
+                        if (this.isProtectedStorageKey(key)) {
+                            return;
+                        }
                         const cleanKey = key.replace(this.prefix, '');
                         data[cleanKey] = JSON.parse(value);
                     }
@@ -1679,7 +1787,7 @@ class StorageManager {
                     const items = await this.getAllFromIndexedDB();
                     const indexedDBData = {};
                     items.forEach(item => {
-                        if (item.key.startsWith(this.prefix)) {
+                        if (item.key.startsWith(this.prefix) && !this.isProtectedStorageKey(item.key)) {
                             const cleanKey = item.key.replace(this.prefix, '');
                             indexedDBData[cleanKey] = JSON.parse(item.value);
                         }
@@ -1697,6 +1805,9 @@ class StorageManager {
             const appKeys = localStorageKeys.filter(key => key.startsWith(this.prefix));
             appKeys.forEach(key => {
                 const cleanKey = key.replace(this.prefix, '');
+                if (this.isProtectedDataKey(cleanKey)) {
+                    return;
+                }
                 try {
                     const value = localStorage.getItem(key);
                     if (value) {
@@ -1707,6 +1818,9 @@ class StorageManager {
                 }
             });
             console.log(`[Storage] 已导出localStorage数据 ${appKeys.length} 条`);
+
+            data.practice_records = await this.readProtectedDataKey('practice_records', [], { skipReady });
+            data.user_stats = await this.readProtectedDataKey('user_stats', null, { skipReady });
 
             console.log(`[Storage] 数据导出完成，总计 ${Object.keys(data).length} 条记录`);
 
@@ -1759,17 +1873,40 @@ class StorageManager {
                 throw new Error('Invalid import data format');
             }
 
+            const importEntries = Object.entries(importedData.data);
+            const api = await this.getPracticeRecordAPI({ skipReady });
+            const hasPracticeRecords = importEntries.some(([key]) => key === 'practice_records');
+            const hasUserStats = importEntries.some(([key]) => key === 'user_stats');
+            if (hasPracticeRecords && (!api || typeof api.replace !== 'function')) {
+                throw new Error('Storage.importData: unified practice record store not ready');
+            }
+            if (hasUserStats && (!api || typeof api.writeStats !== 'function')) {
+                throw new Error('Storage.importData: unified user stats store not ready');
+            }
+
             // 备份当前数据
             const backup = await this.exportData({ skipReady });
+            const importEntry = ([key, value]) => {
+                const nextValue = value && Object.prototype.hasOwnProperty.call(value, 'data')
+                    ? value.data
+                    : value;
+                if (key === 'practice_records') {
+                    // updateStats: false — 导入时 user_stats 会通过 writeUserStatsCanonical 独立写入，
+                    // 若此处 recalculateStats 会和并发写入竞争，导致备份中的统计值被覆盖。
+                    return this.replacePracticeRecordsCanonical(nextValue, { skipReady, updateStats: false });
+                }
+                if (key === 'user_stats') {
+                    return this.writeUserStatsCanonical(nextValue, { skipReady });
+                }
+                return this.set(key, nextValue, { skipReady });
+            };
 
             try {
                 // 清空现有数据
                 await this.clear({ skipReady });
 
                 // 导入新数据
-                const importPromises = Object.entries(importedData.data).map(([key, value]) => {
-                    return this.set(key, value.data, { skipReady });
-                });
+                const importPromises = importEntries.map(importEntry);
 
                 await Promise.all(importPromises);
 
@@ -1780,9 +1917,7 @@ class StorageManager {
                 await this.clear({ skipReady });
 
                 if (backup && backup.data) {
-                    const restorePromises = Object.entries(backup.data).map(([key, value]) => {
-                        return this.set(key, value.data, { skipReady });
-                    });
+                    const restorePromises = Object.entries(backup.data).map(importEntry);
                     await Promise.all(restorePromises);
                 }
 
@@ -1800,7 +1935,7 @@ class StorageManager {
     validateData(key, data) {
         const validators = {
             practice_records: (records) => {
-                return Array.isArray(records) && records.every(record => 
+                return Array.isArray(records) && records.every(record =>
                     record.id && record.examId && record.startTime && record.endTime
                 );
             },
@@ -1808,7 +1943,7 @@ class StorageManager {
                 return stats && typeof stats.totalPractices === 'number';
             },
             exam_index: (index) => {
-                return !index || (Array.isArray(index) && index.every(exam => 
+                return !index || (Array.isArray(index) && index.every(exam =>
                     exam.id && exam.title && exam.category
                 ));
             }
@@ -1937,12 +2072,12 @@ class StorageManager {
         }
 
         const wordMap = new Map();
-        
+
         // 按时间戳排序，保留最新的
         vocabList.words.forEach(word => {
             const key = word.word.toLowerCase().trim();
             const existing = wordMap.get(key);
-            
+
             if (!existing || word.timestamp > existing.timestamp) {
                 wordMap.set(key, word);
             }
@@ -1959,7 +2094,7 @@ class StorageManager {
      */
     async saveVocabList(vocabList, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             // 验证数据
             const validation = this.validateVocabList(vocabList);
@@ -2016,7 +2151,7 @@ class StorageManager {
      */
     async loadVocabList(listId, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             const keys = this.getVocabStorageKeys();
             let storageKey;
@@ -2091,7 +2226,7 @@ class StorageManager {
      */
     async getVocabListWordCount(listId, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             const vocabList = await this.loadVocabList(listId, { skipReady });
             return vocabList ? vocabList.words.length : 0;
@@ -2106,7 +2241,7 @@ class StorageManager {
      */
     async addWordToVocabList(listId, word, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             let vocabList = await this.loadVocabList(listId, { skipReady });
 
@@ -2123,7 +2258,7 @@ class StorageManager {
             }
 
             // 检查单词是否已存在
-            const existingIndex = vocabList.words.findIndex(w => 
+            const existingIndex = vocabList.words.findIndex(w =>
                 w.word.toLowerCase() === word.word.toLowerCase()
             );
 
@@ -2158,7 +2293,7 @@ class StorageManager {
      */
     async removeWordFromVocabList(listId, word, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             const vocabList = await this.loadVocabList(listId, { skipReady });
 
@@ -2167,7 +2302,7 @@ class StorageManager {
             }
 
             const normalizedWord = word.toLowerCase().trim();
-            vocabList.words = vocabList.words.filter(w => 
+            vocabList.words = vocabList.words.filter(w =>
                 w.word.toLowerCase().trim() !== normalizedWord
             );
 
@@ -2208,7 +2343,7 @@ class StorageManager {
      */
     async getAllVocabListsMetadata(options = {}) {
         const { skipReady = false } = options;
-        
+
         const keys = this.getVocabStorageKeys();
         const listIds = [
             'spelling-errors-p1',
@@ -2240,7 +2375,7 @@ class StorageManager {
      */
     async syncVocabList(listId, newData, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             console.log(`[Storage] 开始同步词表: ${listId}`);
 
@@ -2315,7 +2450,7 @@ class StorageManager {
      */
     async syncAllVocabLists(options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             console.log('[Storage] 开始批量同步所有词表');
 
@@ -2349,7 +2484,7 @@ class StorageManager {
      */
     async ensureDataPersisted(options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             console.log('[Storage] 确保数据持久化');
 
@@ -2378,10 +2513,10 @@ class StorageManager {
         window.addEventListener('beforeunload', async (event) => {
             try {
                 console.log('[Storage] 页面即将关闭，确保数据持久化');
-                
+
                 // 同步保存所有待写入的数据
                 await this.ensureDataPersisted({ skipReady: true });
-                
+
                 console.log('[Storage] 数据持久化完成');
             } catch (error) {
                 console.error('[Storage] beforeunload 数据持久化失败:', error);
@@ -2493,10 +2628,18 @@ class StorageManager {
     /**
      * 处理存储空间不足
      */
-    async handleStorageQuotaExceeded(key, value) {
+    async handleStorageQuotaExceeded(key, value, options = {}) {
         console.warn('[Storage] 存储空间不足，尝试清理');
 
         try {
+            if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
+                console.error(`[Storage] ${key} 空间不足时禁止 raw fallback`);
+                if (window.showMessage) {
+                    window.showMessage('练习数据保存空间不足，请先导出备份并清理空间', 'error');
+                }
+                return false;
+            }
+
             // 1. 清理旧数据
             await this.cleanupOldData({ skipReady: true });
 
@@ -2509,9 +2652,9 @@ class StorageManager {
 
             // 3. 如果仍然失败，尝试降级存储
             console.warn('[Storage] 清理后仍然失败，尝试降级存储');
-            
+
             const storageType = this.getCurrentStorageType();
-            
+
             if (storageType === 'indexedDB') {
                 // 降级到 localStorage
                 console.log('[Storage] 从 IndexedDB 降级到 localStorage');
@@ -2540,7 +2683,7 @@ class StorageManager {
                 version: this.version
             });
             this.fallbackStorage.set(this.getKey(key), serializedValue);
-            
+
             // 提示用户
             if (window.showMessage) {
                 window.showMessage('存储空间不足，数据已保存到临时存储，请导出备份', 'warning');
@@ -2549,12 +2692,12 @@ class StorageManager {
             return true;
         } catch (error) {
             console.error('[Storage] 处理存储空间不足失败:', error);
-            
+
             // 最终失败，提示用户
             if (window.showMessage) {
                 window.showMessage('存储空间严重不足，无法保存数据，请清理旧数据', 'error');
             }
-            
+
             return false;
         }
     }
@@ -2564,11 +2707,11 @@ class StorageManager {
      */
     async saveVocabListWithFallback(vocabList, options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             // 首先尝试正常保存
             const success = await this.saveVocabList(vocabList, { skipReady });
-            
+
             if (success) {
                 return true;
             }
@@ -2623,12 +2766,12 @@ class StorageManager {
      */
     getVocabStorageKey(listId) {
         const keys = this.getVocabStorageKeys();
-        
+
         if (listId === 'spelling-errors-p1') return keys.P1_ERRORS;
         if (listId === 'spelling-errors-p4') return keys.P4_ERRORS;
         if (listId === 'spelling-errors-master') return keys.MASTER_ERRORS;
         if (listId === 'custom') return keys.CUSTOM;
-        
+
         return listId;
     }
 
@@ -2637,7 +2780,7 @@ class StorageManager {
      */
     async checkStorageHealth(options = {}) {
         const { skipReady = false } = options;
-        
+
         try {
             const health = {
                 indexedDB: this.isIndexedDBAvailable(),
@@ -2685,12 +2828,11 @@ class StorageManager {
      */
     async exportPracticeRecords(options = {}) {
         const { skipReady = false, format = 'json' } = options;
-        
+
         try {
             console.log('[Storage] 开始导出练习记录');
 
-            // 加载练习记录
-            const records = await this.get('practice_records', [], { skipReady });
+            const records = await this.listPracticeRecordsCanonical({ skipReady });
 
             const exportData = {
                 type: 'practice_records',
@@ -2718,7 +2860,7 @@ class StorageManager {
      */
     async exportVocabLists(options = {}) {
         const { skipReady = false, format = 'json', listIds = null } = options;
-        
+
         try {
             console.log('[Storage] 开始导出词表数据');
 
@@ -2764,7 +2906,7 @@ class StorageManager {
      */
     async exportSingleVocabList(listId, options = {}) {
         const { skipReady = false, format = 'json' } = options;
-        
+
         try {
             console.log(`[Storage] 开始导出词表: ${listId}`);
 
@@ -2800,7 +2942,7 @@ class StorageManager {
      */
     async exportCompleteData(options = {}) {
         const { skipReady = false, format = 'json' } = options;
-        
+
         try {
             console.log('[Storage] 开始导出完整数据');
 
@@ -2808,15 +2950,15 @@ class StorageManager {
             const allData = await this.exportData({ skipReady });
 
             // 导出练习记录
-            const practiceRecords = await this.exportPracticeRecords({ 
-                skipReady, 
-                format: 'object' 
+            const practiceRecords = await this.exportPracticeRecords({
+                skipReady,
+                format: 'object'
             });
 
             // 导出词表
-            const vocabLists = await this.exportVocabLists({ 
-                skipReady, 
-                format: 'object' 
+            const vocabLists = await this.exportVocabLists({
+                skipReady,
+                format: 'object'
             });
 
             const exportData = {
@@ -2947,7 +3089,7 @@ class StorageManager {
      */
     async importVocabLists(importData, options = {}) {
         const { skipReady = false, merge = true } = options;
-        
+
         try {
             console.log('[Storage] 开始导入词表数据');
 
@@ -3092,11 +3234,9 @@ class StorageKeyRegistry {
             'blue-theme-mode',
             'browse_state',
             'hasSeenGplLicense',
-            'hp.theme',
             'preferred_theme_portal'
         ]);
         this.sessionKeys = new Set([
-            'hp.portal.pendingView',
             'preferred_theme_skip_session'
         ]);
     }
@@ -3190,6 +3330,25 @@ window.persistentStore = storageManager;
 window.preferenceStore = preferenceStore;
 window.storageKeyRegistry = storageKeyRegistry;
 window.storage = storageFacade;
+Object.defineProperty(window, '__installStorageInternalAccess', {
+    value(install) {
+        if (typeof install !== 'function') {
+            throw new Error('__installStorageInternalAccess requires an installer function');
+        }
+        const result = install(createInternalAccessOptions, hasInternalAccessOptions);
+        if (result !== false) {
+            try {
+                delete window.__installStorageInternalAccess;
+            } catch (_) {
+                window.__installStorageInternalAccess = undefined;
+            }
+        }
+        return result;
+    },
+    enumerable: false,
+    configurable: true,
+    writable: false
+});
 
 // 启动存储监控和数据同步
 storageManager.ready
@@ -3200,6 +3359,7 @@ storageManager.ready
     .catch(error => {
         console.error('[Storage] 存储初始化失败，监控未启动:', error);
     });
+})(typeof window !== 'undefined' ? window : globalThis);
 
 
 /* ===== js/core/storageProviderRegistry.js ===== */
@@ -3292,11 +3452,28 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
 
+    function isProtectedPracticeDataKey(key) {
+        return key === 'practice_records' || key === 'user_stats';
+    }
+
     class StorageTransactionContext {
-        constructor(storageManager) {
+        constructor(storageManager, options = {}) {
             this.storage = storageManager;
+            this.createInternalOptions = typeof options.createInternalOptions === 'function'
+                ? options.createInternalOptions
+                : null;
             this.operations = [];
             this.cache = new Map();
+        }
+
+        _internalOptions(key) {
+            if (this.createInternalOptions) {
+                return this.createInternalOptions();
+            }
+            if (isProtectedPracticeDataKey(key)) {
+                throw new Error(`StorageTransactionContext cannot access protected key ${key} without internal storage access`);
+            }
+            return { skipPracticeCoreRedirect: true };
         }
 
         async get(key, defaultValue) {
@@ -3304,7 +3481,7 @@ storageManager.ready
                 return this.cache.get(key);
             }
             const resolvedDefault = typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-            const value = await this.storage.get(key, resolvedDefault);
+            const value = await this.storage.get(key, resolvedDefault, this._internalOptions(key));
             const finalValue = value === undefined ? resolvedDefault : value;
             this.cache.set(key, finalValue);
             return finalValue;
@@ -3323,9 +3500,9 @@ storageManager.ready
         async commit() {
             for (const op of this.operations) {
                 if (op.type === 'set') {
-                    await this.storage.set(op.key, op.value, { skipPracticeCoreRedirect: true });
+                    await this.storage.set(op.key, op.value, this._internalOptions(op.key));
                 } else if (op.type === 'remove') {
-                    await this.storage.remove(op.key, { skipPracticeCoreRedirect: true });
+                    await this.storage.remove(op.key, this._internalOptions(op.key));
                 }
             }
             this.operations = [];
@@ -3337,30 +3514,43 @@ storageManager.ready
     }
 
     class StorageDataSource {
-        constructor(storageManager) {
+        constructor(storageManager, options = {}) {
             if (!storageManager) {
                 throw new Error('StorageDataSource requires a StorageManager instance');
             }
             this.storage = storageManager;
+            this.createInternalOptions = typeof options.createInternalOptions === 'function'
+                ? options.createInternalOptions
+                : null;
             this._queue = Promise.resolve();
+        }
+
+        _internalOptions(key) {
+            if (this.createInternalOptions) {
+                return this.createInternalOptions();
+            }
+            if (isProtectedPracticeDataKey(key)) {
+                throw new Error(`StorageDataSource cannot access protected key ${key} without internal storage access`);
+            }
+            return { skipPracticeCoreRedirect: true };
         }
 
         async read(key, defaultValue) {
             const resolvedDefault = typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-            const value = await this.storage.get(key, resolvedDefault);
+            const value = await this.storage.get(key, resolvedDefault, this._internalOptions(key));
             return value === undefined ? resolvedDefault : value;
         }
 
         async write(key, value) {
             return this._enqueue(async () => {
-                await this.storage.set(key, value, { skipPracticeCoreRedirect: true });
+                await this.storage.set(key, value, this._internalOptions(key));
                 return true;
             });
         }
 
         async remove(key) {
             return this._enqueue(async () => {
-                await this.storage.remove(key, { skipPracticeCoreRedirect: true });
+                await this.storage.remove(key, this._internalOptions(key));
                 return true;
             });
         }
@@ -3371,7 +3561,9 @@ storageManager.ready
             }
             const label = options.label || 'storage-transaction';
             return this._enqueue(async () => {
-                const context = new StorageTransactionContext(this.storage);
+                const context = new StorageTransactionContext(this.storage, {
+                    createInternalOptions: this.createInternalOptions
+                });
                 try {
                     const result = await handler(context);
                     await context.commit();
@@ -3963,7 +4155,7 @@ storageManager.ready
             normalized.id = normalized.id ? String(normalized.id) : `backup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
-            normalized.version = normalized.version || '1.0.0';
+            normalized.version = normalized.version || '0.6.2-fix';
             normalized.data = normalized.data || {};
             normalized.size = normalized.size || JSON.stringify(normalized.data).length;
             return normalized;
@@ -4174,6 +4366,35 @@ storageManager.ready
         };
     }
 
+    function createMetaFacade(metaRepo) {
+        function assertAllowedKey(key) {
+            if (key === 'user_stats') {
+                throw new Error('user_stats must go through PracticeRecordAPI');
+            }
+        }
+
+        return Object.freeze({
+            async get(key, defaultValue, options = {}) {
+                assertAllowedKey(key);
+                return await metaRepo.get(key, defaultValue, options);
+            },
+            async set(key, value, options = {}) {
+                assertAllowedKey(key);
+                return await metaRepo.set(key, value, options);
+            },
+            async remove(key, options = {}) {
+                assertAllowedKey(key);
+                return await metaRepo.remove(key, options);
+            },
+            async runConsistencyCheck(keys) {
+                const targetKeys = Array.isArray(keys)
+                    ? keys.filter((key) => key !== 'user_stats')
+                    : undefined;
+                return await metaRepo.runConsistencyCheck(targetKeys);
+            }
+        });
+    }
+
     function bootstrap() {
         if (!window.persistentStore) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
@@ -4185,7 +4406,28 @@ storageManager.ready
             return;
         }
 
-        const dataSource = new ExamData.StorageDataSource(window.persistentStore);
+        if (!window.PracticeCore || typeof window.PracticeCore.__installInternalRepositories !== 'function') {
+            console.warn('[data/index] PracticeCore internal installer 未就绪，延迟初始化数据仓库');
+            setTimeout(bootstrap, 100);
+            return;
+        }
+
+        let createInternalOptions = null;
+        if (typeof window.__installStorageInternalAccess === 'function') {
+            window.__installStorageInternalAccess((factory) => {
+                createInternalOptions = typeof factory === 'function' ? factory : null;
+                return Boolean(createInternalOptions);
+            });
+        }
+        if (!createInternalOptions) {
+            console.warn('[data/index] Storage internal access 未就绪，延迟初始化数据仓库');
+            setTimeout(bootstrap, 100);
+            return;
+        }
+
+        const dataSource = new ExamData.StorageDataSource(window.persistentStore, {
+            createInternalOptions
+        });
         const registry = new ExamData.DataRepositoryRegistry(dataSource);
 
         const practiceRepo = new ExamData.PracticeRepository(dataSource, { maxRecords: 1000 });
@@ -4277,7 +4519,7 @@ storageManager.ready
         registry.register('backups', backupRepo);
         registry.register('meta', metaRepo);
 
-        const api = {
+        const internalApi = {
             get practice() { return practiceRepo; },
             get settings() { return settingsRepo; },
             get backups() { return backupRepo; },
@@ -4289,7 +4531,33 @@ storageManager.ready
                 return registry.runConsistencyChecks(names);
             }
         };
-
+        window.PracticeCore.__installInternalRepositories(internalApi, { createInternalOptions });
+        if (window.__installStorageInternalAccess) {
+            try {
+                delete window.__installStorageInternalAccess;
+            } catch (_) {
+                window.__installStorageInternalAccess = undefined;
+            }
+        }
+        const metaFacade = createMetaFacade(metaRepo);
+        const api = {
+            get settings() { return settingsRepo; },
+            get backups() { return backupRepo; },
+            get meta() { return metaFacade; },
+            transaction(names, handler) {
+                const targetNames = Array.isArray(names) ? names : [];
+                if (targetNames.includes('practice')) {
+                    throw new Error('practice_records transactions must go through PracticeRecordAPI');
+                }
+                return registry.transaction(names, handler);
+            },
+            runConsistencyChecks(names) {
+                const targetNames = Array.isArray(names)
+                    ? names.filter((name) => name !== 'practice')
+                    : undefined;
+                return registry.runConsistencyChecks(targetNames);
+            }
+        };
         const registryApi = window.StorageProviderRegistry;
         if (registryApi && typeof registryApi.registerStorageProviders === 'function') {
             registryApi.registerStorageProviders({
@@ -4371,6 +4639,10 @@ storageManager.ready
         activeSessions: 'active_sessions',
         tempPracticeRecords: 'temp_practice_records'
     });
+    let internalRepositories = null;
+    // 由 data/index.js 在仓库注入时通过 __installInternalRepositories 第二参数传入，
+    // 使仓库未注入前的 fallback 路径也能拿到 storage internal token，避免被新保护层拒绝。
+    let internalStorageAccess = null;
 
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
@@ -4406,6 +4678,115 @@ storageManager.ready
         return Number.isFinite(numeric) ? numeric : fallback;
     }
 
+    function normalizeDateCandidate(value) {
+        if (!value) {
+            return null;
+        }
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            return value.toISOString();
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return new Date(value).toISOString();
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            if (/^\d+$/.test(trimmed)) {
+                const numeric = Number(trimmed);
+                if (Number.isFinite(numeric)) {
+                    return new Date(trimmed.length > 10 ? numeric : numeric * 1000).toISOString();
+                }
+            }
+            const parsed = new Date(trimmed);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString();
+            }
+        }
+        return null;
+    }
+
+    function firstDateCandidate() {
+        for (let index = 0; index < arguments.length; index += 1) {
+            const normalized = normalizeDateCandidate(arguments[index]);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    function firstStringCandidate() {
+        for (let index = 0; index < arguments.length; index += 1) {
+            const value = arguments[index];
+            if (value === undefined || value === null) {
+                continue;
+            }
+            const trimmed = String(value).trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    function resolveDurationSeconds(recordData = {}, startTime = null, endTime = null) {
+        const realData = isPlainObject(recordData.realData) ? recordData.realData : {};
+        const scoreInfo = isPlainObject(recordData.scoreInfo)
+            ? recordData.scoreInfo
+            : (isPlainObject(realData.scoreInfo) ? realData.scoreInfo : {});
+        const candidates = [
+            recordData.duration,
+            realData.duration,
+            recordData.durationSeconds,
+            recordData.duration_seconds,
+            recordData.elapsedSeconds,
+            recordData.elapsed_seconds,
+            recordData.timeSpent,
+            recordData.time_spent,
+            realData.durationSeconds,
+            realData.elapsedSeconds,
+            realData.timeSpent,
+            scoreInfo.duration,
+            scoreInfo.timeSpent
+        ];
+
+        for (let index = 0; index < candidates.length; index += 1) {
+            const numeric = Number(candidates[index]);
+            if (Number.isFinite(numeric) && numeric > 0) {
+                return numeric;
+            }
+        }
+
+        const start = startTime ? new Date(startTime).getTime() : NaN;
+        const end = endTime ? new Date(endTime).getTime() : NaN;
+        if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+            return Math.round((end - start) / 1000);
+        }
+
+        if (Array.isArray(realData.interactions) && realData.interactions.length) {
+            const timestamps = realData.interactions
+                .map(item => item && Number(item.timestamp))
+                .filter(value => Number.isFinite(value));
+            if (timestamps.length) {
+                const span = Math.max(...timestamps) - Math.min(...timestamps);
+                if (Number.isFinite(span) && span > 0) {
+                    return Math.floor(span / 1000);
+                }
+            }
+        }
+
+        for (let index = 0; index < candidates.length; index += 1) {
+            const numeric = Number(candidates[index]);
+            if (Number.isFinite(numeric) && numeric >= 0) {
+                return numeric;
+            }
+        }
+
+        return 0;
+    }
+
     function normalizePracticeType(rawType) {
         if (!rawType) return null;
         const normalized = String(rawType).toLowerCase();
@@ -4415,22 +4796,27 @@ storageManager.ready
     }
 
     function resolveRecordDate(recordData = {}, now = new Date().toISOString()) {
+        const metadata = isPlainObject(recordData.metadata) ? recordData.metadata : {};
         const candidates = [
-            recordData.metadata && recordData.metadata.date,
+            metadata.date,
             recordData.date,
             recordData.endTime,
+            recordData.end_time,
             recordData.completedAt,
+            recordData.finishedAt,
+            recordData.finishTime,
             recordData.startTime,
+            recordData.start_time,
+            recordData.startedAt,
+            recordData.createdAt,
             recordData.timestamp,
             now
         ];
 
         for (let i = 0; i < candidates.length; i += 1) {
-            const candidate = candidates[i];
-            if (!candidate) continue;
-            const parsed = new Date(candidate);
-            if (!Number.isNaN(parsed.getTime())) {
-                return parsed.toISOString();
+            const normalized = normalizeDateCandidate(candidates[i]);
+            if (normalized) {
+                return normalized;
             }
         }
 
@@ -4442,11 +4828,16 @@ storageManager.ready
             return null;
         }
 
-        if (recordData.examId) {
-            return recordData.examId;
-        }
-        if (recordData.metadata && recordData.metadata.examId) {
-            return recordData.metadata.examId;
+        const metadata = isPlainObject(recordData.metadata) ? recordData.metadata : {};
+        const direct = firstStringCandidate(
+            recordData.examId,
+            recordData.exam_id,
+            recordData.examID,
+            metadata.examId,
+            metadata.exam_id
+        );
+        if (direct) {
+            return direct;
         }
         if (Array.isArray(recordData.suiteEntries)) {
             const suiteExam = recordData.suiteEntries.find((entry) => entry && entry.examId);
@@ -4512,25 +4903,6 @@ storageManager.ready
         return String(value).trim();
     }
 
-    function normalizeAnswerValueList(value) {
-        const sanitizer = global.AnswerSanitizer;
-        if (sanitizer && typeof sanitizer.normalizeValueList === 'function') {
-            return sanitizer.normalizeValueList(value);
-        }
-        const values = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
-        const normalized = [];
-        values.forEach((item) => {
-            const text = normalizeAnswerValue(item);
-            if (!text) {
-                return;
-            }
-            if (!normalized.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
-                normalized.push(text);
-            }
-        });
-        return normalized;
-    }
-
     function isNoiseKey(key) {
         if (!key) return true;
 
@@ -4573,6 +4945,78 @@ storageManager.ready
         }
         const key = String(rawKey).trim();
         return key.startsWith('q') ? key : `q${key}`;
+    }
+
+    function normalizeReplayQuestionKey(rawKey, index) {
+        if (rawKey == null || rawKey === '') {
+            return Number.isInteger(index) ? `q${index + 1}` : '';
+        }
+        const raw = String(rawKey).trim();
+        if (!raw) {
+            return Number.isInteger(index) ? `q${index + 1}` : '';
+        }
+        const splitIndex = raw.lastIndexOf('::');
+        const value = splitIndex >= 0 ? raw.slice(splitIndex + 2).trim() : raw;
+        if (!value) {
+            return Number.isInteger(index) ? `q${index + 1}` : '';
+        }
+        const explicitQuestion = value.match(/^q\s*[-_ ]?(\d+)$/i) || value.match(/\bq\s*[-_ ]?(\d+)\b/i);
+        if (explicitQuestion) {
+            return `q${explicitQuestion[1]}`;
+        }
+        if (/^\d+$/.test(value)) {
+            return `q${value}`;
+        }
+        const trailingNumber = value.match(/(\d+)(?!.*\d)/);
+        if (trailingNumber) {
+            return `q${trailingNumber[1]}`;
+        }
+        return value.toLowerCase();
+    }
+
+    function normalizeReplayMap(rawMap = {}) {
+        const normalized = {};
+        if (Array.isArray(rawMap)) {
+            rawMap.forEach((entry, index) => {
+                if (entry == null) {
+                    return;
+                }
+                if (typeof entry !== 'object') {
+                    normalized[`q${index + 1}`] = entry;
+                    return;
+                }
+                const normalizedKey = normalizeReplayQuestionKey(
+                    entry.questionId ?? entry.question ?? entry.id,
+                    index
+                );
+                if (!normalizedKey) {
+                    return;
+                }
+                const hasAnswerValue = Object.prototype.hasOwnProperty.call(entry, 'answer')
+                    || Object.prototype.hasOwnProperty.call(entry, 'value');
+                const isComparisonEntry = !hasAnswerValue && (
+                    Object.prototype.hasOwnProperty.call(entry, 'userAnswer')
+                    || Object.prototype.hasOwnProperty.call(entry, 'correctAnswer')
+                    || Object.prototype.hasOwnProperty.call(entry, 'isCorrect')
+                );
+                normalized[normalizedKey] = isComparisonEntry
+                    ? clonePlainObject(entry)
+                    : (Object.prototype.hasOwnProperty.call(entry, 'answer')
+                        ? entry.answer
+                        : (Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : clonePlainObject(entry)));
+            });
+            return normalized;
+        }
+        if (!rawMap || typeof rawMap !== 'object') {
+            return normalized;
+        }
+        Object.entries(rawMap).forEach(([key, value], index) => {
+            const normalizedKey = normalizeReplayQuestionKey(key, index);
+            if (normalizedKey) {
+                normalized[normalizedKey] = value;
+            }
+        });
+        return normalized;
     }
 
     function normalizeAnswerMap(rawAnswers = {}) {
@@ -4632,14 +5076,6 @@ storageManager.ready
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
-            const acceptedAnswers = normalizeAnswerValueList(entry.acceptedAnswers);
-            if (acceptedAnswers.length) {
-                normalized[questionId].acceptedAnswers = acceptedAnswers;
-            }
-            const canonicalAnswer = normalizeAnswerValue(entry.canonicalAnswer);
-            if (canonicalAnswer) {
-                normalized[questionId].canonicalAnswer = canonicalAnswer;
-            }
         });
 
         return normalized;
@@ -4703,6 +5139,131 @@ storageManager.ready
         return details;
     }
 
+    function compareAnswerValues(userAnswer, correctAnswer) {
+        if (userAnswer == null || correctAnswer == null) {
+            return false;
+        }
+        const matchCore = global.AnswerMatchCore;
+        if (matchCore && typeof matchCore.compareAnswers === 'function') {
+            return matchCore.compareAnswers(userAnswer, correctAnswer) === true;
+        }
+        return String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+    }
+
+    function mergeReplayMapFirstWins() {
+        const merged = {};
+        Array.prototype.slice.call(arguments).forEach((source) => {
+            if (!source || typeof source !== 'object' || Array.isArray(source)) {
+                return;
+            }
+            const normalized = normalizeReplayMap(source);
+            Object.entries(normalized).forEach(([key, value]) => {
+                if (!Object.prototype.hasOwnProperty.call(merged, key)) {
+                    merged[key] = value;
+                }
+            });
+        });
+        return merged;
+    }
+
+    function buildReplayCorrectAnswerMap(entry = {}) {
+        const realData = isPlainObject(entry.realData) ? entry.realData : {};
+        const rawData = isPlainObject(entry.rawData) ? entry.rawData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        return mergeReplayMapFirstWins(
+            entry.correctAnswerMap,
+            realData.correctAnswerMap,
+            rawData.correctAnswerMap,
+            rawRealData.correctAnswerMap
+        );
+    }
+
+    function buildReplayResultSnapshot(entry = {}) {
+        const realData = isPlainObject(entry.realData) ? entry.realData : {};
+        const rawData = isPlainObject(entry.rawData) ? entry.rawData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        const answers = mergeReplayMapFirstWins(
+            entry.answers,
+            realData.answers,
+            rawData.answers,
+            rawRealData.answers
+        );
+        const correctAnswerMap = buildReplayCorrectAnswerMap(entry);
+        const rawComparison = mergeReplayMapFirstWins(
+            entry.answerComparison,
+            realData.answerComparison,
+            rawData.answerComparison,
+            rawRealData.answerComparison
+        );
+        const questionIds = new Set([
+            ...Object.keys(answers),
+            ...Object.keys(correctAnswerMap),
+            ...Object.keys(rawComparison),
+            ...(Array.isArray(entry.allQuestionIds)
+                ? entry.allQuestionIds.map((item, index) => normalizeReplayQuestionKey(item, index)).filter(Boolean)
+                : [])
+        ]);
+
+        let correctCount = 0;
+        const answerComparison = {};
+        questionIds.forEach((questionId) => {
+            const rawEntry = rawComparison[questionId];
+            const comparisonEntry = isPlainObject(rawEntry) ? rawEntry : {};
+            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+                ? comparisonEntry.userAnswer
+                : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(correctAnswerMap, questionId);
+            const correctAnswer = hasCanonicalCorrectAnswer ? correctAnswerMap[questionId] : '';
+            const isCorrect = hasCanonicalCorrectAnswer
+                ? compareAnswerValues(userAnswer, correctAnswer)
+                : null;
+            if (isCorrect) {
+                correctCount += 1;
+            }
+            answerComparison[questionId] = {
+                questionId,
+                userAnswer,
+                correctAnswer,
+                isCorrect
+            };
+        });
+
+        const totalQuestions = questionIds.size;
+        const sourceScoreInfo = isPlainObject(entry.scoreInfo)
+            ? entry.scoreInfo
+            : (isPlainObject(realData.scoreInfo)
+                ? realData.scoreInfo
+                : (isPlainObject(rawData.scoreInfo) ? rawData.scoreInfo : {}));
+        const scoreInfo = clonePlainObject(sourceScoreInfo) || {};
+        const hasCompleteCanonicalCorrectAnswers = totalQuestions > 0
+            && Array.from(questionIds).every(questionId => Object.prototype.hasOwnProperty.call(correctAnswerMap, questionId));
+        scoreInfo.correct = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct))
+            ? correctCount
+            : Number(scoreInfo.correct);
+        scoreInfo.total = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total))
+            ? totalQuestions
+            : Number(scoreInfo.total);
+        scoreInfo.totalQuestions = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions))
+            ? scoreInfo.total
+            : Number(scoreInfo.totalQuestions);
+        const existingAccuracy = Number(scoreInfo.accuracy);
+        scoreInfo.accuracy = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(existingAccuracy)
+            ? (scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0)
+            : existingAccuracy;
+        scoreInfo.percentage = hasCompleteCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+            ? Math.round(scoreInfo.accuracy * 100)
+            : Number(scoreInfo.percentage);
+        scoreInfo.answerKeyComplete = hasCompleteCanonicalCorrectAnswers;
+
+        return {
+            answers,
+            correctAnswers: correctAnswerMap,
+            correctAnswerMap,
+            answerComparison,
+            scoreInfo
+        };
+    }
+
     function deriveCorrectMapFromDetails(details) {
         if (!details || typeof details !== 'object') {
             return {};
@@ -4720,15 +5281,20 @@ storageManager.ready
 
     function buildAnswerArray(answers, correctMap = {}) {
         if (Array.isArray(answers)) {
-            return answers.map((answer, index) => ({
-                questionId: answer.questionId || `q${index + 1}`,
-                answer: normalizeAnswerValue(answer.answer),
-                correctAnswer: normalizeAnswerValue(answer.correctAnswer ?? correctMap[answer.questionId || `q${index + 1}`]),
-                correct: Boolean(answer.correct),
-                timeSpent: ensureNumber(answer.timeSpent, 0),
-                questionType: answer.questionType || 'unknown',
-                timestamp: answer.timestamp || new Date().toISOString()
-            }));
+            return answers.map((answer, index) => {
+                const questionId = answer.questionId || `q${index + 1}`;
+                const userAnswer = normalizeAnswerValue(answer.answer);
+                const normalizedCorrect = normalizeAnswerValue(answer.correctAnswer ?? correctMap[questionId]);
+                return {
+                    questionId,
+                    answer: userAnswer,
+                    correctAnswer: normalizedCorrect,
+                    correct: normalizedCorrect ? compareAnswerValues(userAnswer, normalizedCorrect) : Boolean(answer.correct),
+                    timeSpent: ensureNumber(answer.timeSpent, 0),
+                    questionType: answer.questionType || 'unknown',
+                    timestamp: answer.timestamp || new Date().toISOString()
+                };
+            });
         }
 
         const answerMap = normalizeAnswerMap(answers);
@@ -4741,9 +5307,7 @@ storageManager.ready
         keys.forEach((questionId, index) => {
             const userAnswer = normalizeAnswerValue(answerMap[questionId]);
             const normalizedCorrect = normalizeAnswerValue(correctMap[questionId]);
-            const isCorrect = normalizedCorrect
-                ? userAnswer.toLowerCase() === normalizedCorrect.toLowerCase()
-                : false;
+            const isCorrect = normalizedCorrect ? compareAnswerValues(userAnswer, normalizedCorrect) : false;
             list.push({
                 questionId: questionId || `q${index + 1}`,
                 answer: userAnswer,
@@ -4761,10 +5325,14 @@ storageManager.ready
         const candidates = [
             recordData.totalQuestions,
             recordData.questionCount,
+            recordData.question_count,
+            typeof recordData.questions === 'number' ? recordData.questions : null,
             recordData.scoreInfo && recordData.scoreInfo.total,
             recordData.scoreInfo && recordData.scoreInfo.totalQuestions,
             recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.totalQuestions,
-            recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.total
+            recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.total,
+            recordData.realData && recordData.realData.totalQuestions,
+            recordData.realData && recordData.realData.questionCount
         ];
         for (let i = 0; i < candidates.length; i += 1) {
             const numeric = Number(candidates[i]);
@@ -4797,10 +5365,15 @@ storageManager.ready
     function deriveCorrectAnswerCount(recordData = {}, answers = []) {
         const numericCandidates = [
             recordData.correctAnswers,
+            recordData.correctAnswersCount,
+            recordData.correctCount,
             recordData.correct,
             recordData.score,
             recordData.scoreInfo && recordData.scoreInfo.correct,
             recordData.scoreInfo && recordData.scoreInfo.score,
+            recordData.realData && recordData.realData.correctAnswersCount,
+            recordData.realData && recordData.realData.correctCount,
+            recordData.realData && recordData.realData.correct,
             recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.correct,
             recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.score
         ];
@@ -4852,8 +5425,8 @@ storageManager.ready
     function buildMetadata(recordData = {}, type) {
         const metadata = Object.assign({}, recordData.metadata || {});
         const examId = recordData.examId;
-        const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
-        const fallbackCategory = recordData.category || metadata.category || 'Unknown';
+        const fallbackTitle = recordData.title || recordData.examTitle || recordData.examName || recordData.name || examId || 'Unknown Exam';
+        const fallbackCategory = recordData.category || recordData.examCategory || recordData.section || recordData.mode || metadata.category || 'Unknown';
         const fallbackFrequency = recordData.frequency || metadata.frequency || 'unknown';
 
         metadata.examTitle = metadata.examTitle || metadata.title || fallbackTitle;
@@ -4876,6 +5449,9 @@ storageManager.ready
             recordData.type
             || metadata.type
             || metadata.examType
+            || recordData.category
+            || recordData.mode
+            || recordData.section
             || (recordData.examId && String(recordData.examId).toLowerCase().includes('listening') ? 'listening' : null)
         );
         return normalized || 'reading';
@@ -4889,17 +5465,19 @@ storageManager.ready
             if (!entry || typeof entry !== 'object') {
                 return null;
             }
-            const normalizedAnswers = buildAnswerArray(entry.answers || entry.answerList || [], entry.correctAnswerMap || {});
+            const answerComparisonSource = entry.answerComparison
+                || (entry.realData && entry.realData.answerComparison)
+                || (entry.rawData && entry.rawData.answerComparison)
+                || (entry.scoreInfo && entry.scoreInfo.details)
+                || null;
+            const entryCorrectMap = resolveRecordCorrectAnswerMap(entry, { comparison: answerComparisonSource });
+            const normalizedAnswers = buildAnswerArray(entry.answers || entry.answerList || [], entryCorrectMap);
             const answerMap = normalizedAnswers.reduce((map, item) => {
                 if (item && item.questionId) {
                     map[item.questionId] = item.answer || '';
                 }
                 return map;
             }, {});
-            const answerComparisonSource = entry.answerComparison
-                || (entry.scoreInfo && entry.scoreInfo.details)
-                || (entry.rawData && entry.rawData.answerComparison)
-                || null;
             const highlights = Array.isArray(entry.highlights)
                 ? entry.highlights.slice()
                 : (Array.isArray(entry.rawData && entry.rawData.highlights) ? entry.rawData.highlights.slice() : []);
@@ -4913,6 +5491,7 @@ storageManager.ready
                 duration: ensureNumber(entry.duration, 0),
                 scoreInfo: entry.scoreInfo ? clonePlainObject(entry.scoreInfo) : null,
                 answers: answerMap,
+                correctAnswerMap: entryCorrectMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
                 highlights,
@@ -4937,10 +5516,52 @@ storageManager.ready
                 if (!trimmed) {
                     return;
                 }
-                merged[key] = trimmed;
+                if (!Object.prototype.hasOwnProperty.call(merged, key)) {
+                    merged[key] = trimmed;
+                }
             });
         });
         return merged;
+    }
+
+    function resolveCorrectAnswerMap() {
+        const sources = Array.prototype.slice.call(arguments).filter((source) => isPlainObject(source));
+        return mergeAnswerSources.apply(null, sources);
+    }
+
+    function resolveRecordCorrectAnswerMap(recordData = {}, options = {}) {
+        if (!isPlainObject(recordData)) {
+            return {};
+        }
+        const realData = isPlainObject(recordData.realData) ? recordData.realData : {};
+        const rawData = isPlainObject(recordData.rawData) ? recordData.rawData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        const comparisonSource = options.comparison
+            || recordData.answerComparison
+            || realData.answerComparison
+            || rawData.answerComparison
+            || rawRealData.answerComparison
+            || null;
+        return resolveCorrectAnswerMap(
+            ...(Array.isArray(options.prioritySources) ? options.prioritySources : []),
+            recordData.correctAnswerMap,
+            realData.correctAnswerMap,
+            rawData.correctAnswerMap,
+            rawRealData.correctAnswerMap,
+            recordData.correctAnswers,
+            realData.correctAnswers,
+            rawData.correctAnswers,
+            rawRealData.correctAnswers,
+            deriveCorrectMapFromDetails(recordData.answerDetails),
+            deriveCorrectMapFromDetails(recordData.scoreInfo && recordData.scoreInfo.details),
+            deriveCorrectMapFromDetails(realData.scoreInfo && realData.scoreInfo.details),
+            deriveCorrectMapFromDetails(rawData.scoreInfo && rawData.scoreInfo.details),
+            deriveCorrectMapFromDetails(rawRealData.scoreInfo && rawRealData.scoreInfo.details),
+            ...(Array.isArray(options.detailSources)
+                ? options.detailSources.map((details) => deriveCorrectMapFromDetails(details))
+                : []),
+            convertComparisonToMap(comparisonSource, 'correctAnswer')
+        );
     }
 
     function defaultGenerateRecordId() {
@@ -4952,6 +5573,14 @@ storageManager.ready
         const type = inferPracticeType(recordData);
         const recordDate = resolveRecordDate(recordData, now);
         const resolvedExamId = inferExamId(recordData);
+        const recordId = firstStringCandidate(
+            recordData.id,
+            recordData.recordId,
+            recordData.record_id,
+            recordData.practiceId,
+            recordData.practice_id,
+            recordData.uuid
+        );
         const metadata = buildMetadata(
             Object.assign({}, recordData, { examId: resolvedExamId }),
             type
@@ -4959,7 +5588,9 @@ storageManager.ready
         const comparisonSource = recordData.answerComparison
             || (recordData.realData && recordData.realData.answerComparison)
             || null;
-        const normalizedAnswers = buildAnswerArray(recordData.answers || recordData.answerList || [], recordData.correctAnswerMap || {});
+        let normalizedCorrectMap = resolveRecordCorrectAnswerMap(recordData, { comparison: comparisonSource });
+
+        const normalizedAnswers = buildAnswerArray(recordData.answers || recordData.answerList || [], normalizedCorrectMap);
         let answerMap = normalizedAnswers.reduce((map, item) => {
             if (item && item.questionId) {
                 map[item.questionId] = item.answer || '';
@@ -4970,23 +5601,19 @@ storageManager.ready
             answerMap = convertComparisonToMap(comparisonSource, 'userAnswer');
         }
 
-        let normalizedCorrectMap = (
-            recordData.correctAnswerMap && typeof recordData.correctAnswerMap === 'object'
-        )
-            ? normalizeAnswerMap(recordData.correctAnswerMap)
-            : ((recordData.realData && recordData.realData.correctAnswers && typeof recordData.realData.correctAnswers === 'object')
-                ? normalizeAnswerMap(recordData.realData.correctAnswers)
-                : {});
-
-        if ((!normalizedCorrectMap || Object.keys(normalizedCorrectMap).length === 0) && comparisonSource) {
-            normalizedCorrectMap = convertComparisonToMap(comparisonSource, 'correctAnswer');
-        }
-
         const derivedTotalQuestions = deriveTotalQuestionCount(recordData, normalizedAnswers.length);
         const derivedCorrectAnswers = deriveCorrectAnswerCount(recordData, normalizedAnswers);
         const totalQuestions = ensureNumber(recordData.totalQuestions, derivedTotalQuestions);
         const correctAnswers = ensureNumber(recordData.correctAnswers, derivedCorrectAnswers);
-        let accuracy = ensureNumber(recordData.accuracy, totalQuestions > 0 ? correctAnswers / totalQuestions : 0);
+        let accuracy = ensureNumber(
+            recordData.accuracy
+            ?? (recordData.realData && recordData.realData.accuracy)
+            ?? (recordData.scoreInfo && recordData.scoreInfo.accuracy)
+            ?? (recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.accuracy)
+            ?? recordData.percentage
+            ?? (recordData.scoreInfo && recordData.scoreInfo.percentage),
+            totalQuestions > 0 ? correctAnswers / totalQuestions : 0
+        );
         if (accuracy > 1 && accuracy <= 100) {
             accuracy = accuracy / 100;
         }
@@ -5002,77 +5629,64 @@ storageManager.ready
             || (comparisonSource ? convertComparisonToDetails(comparisonSource) : null)
             || buildAnswerDetails(answerMap, normalizedCorrectMap);
 
-        const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
-            ? new Date(recordData.startTime).toISOString()
-            : recordDate;
-        const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
-            ? new Date(recordData.endTime).toISOString()
-            : recordDate;
+        const startTime = firstDateCandidate(
+            recordData.startTime,
+            recordData.start_time,
+            recordData.startedAt,
+            recordData.createdAt,
+            recordData.timestamp,
+            recordData.date,
+            recordDate
+        ) || recordDate;
+        const endTime = firstDateCandidate(
+            recordData.endTime,
+            recordData.end_time,
+            recordData.completedAt,
+            recordData.finishedAt,
+            recordData.finishTime,
+            recordDate
+        ) || recordDate;
         const resolvedTitle = recordData.title
             || metadata.examTitle
             || metadata.title
             || recordData.examTitle
+            || recordData.examName
+            || recordData.name
             || recordData.examId
             || '未命名练习';
         const normalizedSuiteEntries = standardizeSuiteEntries(recordData.suiteEntries || []);
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? clonePlainObject(comparisonSource)
             : null;
-        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
-            ? clonePlainObject(recordData.questionTypeMap)
-            : ((recordData.realData && recordData.realData.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object')
-                ? clonePlainObject(recordData.realData.questionTypeMap)
-                : {});
-        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
-            ? clonePlainObject(recordData.questionTypePerformance)
-            : ((recordData.realData && recordData.realData.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object')
-                ? clonePlainObject(recordData.realData.questionTypePerformance)
-                : {});
-        const highlights = Array.isArray(recordData.highlights)
-            ? recordData.highlights.slice()
-            : (Array.isArray(recordData.rawData && recordData.rawData.highlights)
-                ? recordData.rawData.highlights.slice()
-                : (Array.isArray(recordData.realData && recordData.realData.highlights)
-                    ? recordData.realData.highlights.slice()
-                    : []));
-        const scrollY = Number.isFinite(Number(recordData.scrollY))
-            ? Number(recordData.scrollY)
-            : (Number.isFinite(Number(recordData.rawData && recordData.rawData.scrollY))
-                ? Number(recordData.rawData.scrollY)
-                : (Number.isFinite(Number(recordData.realData && recordData.realData.scrollY))
-                    ? Number(recordData.realData.scrollY)
-                    : 0));
+        const realDataCorrectAnswers = clonePlainObject(normalizedCorrectMap || {});
         const generateRecordId = typeof options.generateRecordId === 'function'
             ? options.generateRecordId
             : defaultGenerateRecordId;
 
         return {
-            id: recordData.id || generateRecordId(),
+            id: recordId || generateRecordId(),
             examId: resolvedExamId,
-            sessionId: recordData.sessionId || null,
+            sessionId: recordData.sessionId || recordData.sessionID || null,
             title: resolvedTitle,
             type,
             startTime,
             endTime,
-            duration: ensureNumber(recordData.duration, 0),
+            duration: resolveDurationSeconds(recordData, startTime, endTime),
             date: recordDate,
             status: recordData.status || 'completed',
-            score: ensureNumber(recordData.score, correctAnswers),
+            score: ensureNumber(recordData.score ?? recordData.finalScore ?? (recordData.realData && recordData.realData.score), correctAnswers),
             totalQuestions,
             correctAnswers,
             accuracy,
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypeMap,
-            questionTypePerformance,
+            questionTypePerformance: recordData.questionTypePerformance || {},
             metadata,
             frequency: recordData.frequency || metadata.frequency || null,
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
             suiteSessionId: recordData.suiteSessionId || (metadata && metadata.suiteSessionId) || null,
             suiteEntries: normalizedSuiteEntries,
-            highlights,
-            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -5081,23 +5695,20 @@ storageManager.ready
             realData: recordData.realData
                 ? Object.assign({}, recordData.realData, {
                     answers: (recordData.realData && recordData.realData.answers) || answerMap,
-                    correctAnswers: (recordData.realData && recordData.realData.correctAnswers) || normalizedCorrectMap,
+                    correctAnswers: realDataCorrectAnswers,
+                    correctAnswerMap: clonePlainObject(normalizedCorrectMap || {}),
                     scoreInfo: Object.assign({}, (recordData.realData && recordData.realData.scoreInfo) || {}, {
                         details: (recordData.realData && recordData.realData.scoreInfo && recordData.realData.scoreInfo.details) || detailSource || null
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null),
-                    questionTypeMap,
-                    questionTypePerformance,
-                    highlights,
-                    scrollY
+                        : (normalizedComparison || null)
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,
-            version: options.currentVersion || recordData.version || '1.0.0',
-            createdAt: recordData.createdAt || now,
-            updatedAt: now
+            version: options.currentVersion || recordData.version || '0.6.2-fix',
+            createdAt: firstDateCandidate(recordData.createdAt, recordData.startTime, recordData.start_time, recordDate) || now,
+            updatedAt: firstDateCandidate(recordData.updatedAt, recordData.endTime, recordData.end_time, now) || now
         };
     }
 
@@ -5246,9 +5857,10 @@ storageManager.ready
         );
         const correctAnswerMap = mergeAnswerSources(
             rawPayload.correctAnswerMap,
+            rawPayload.realData && rawPayload.realData.correctAnswerMap,
+            sessionContext.correctAnswerMap,
             rawPayload.correctAnswers,
             rawPayload.realData && rawPayload.realData.correctAnswers,
-            sessionContext.correctAnswerMap,
             deriveCorrectMapFromDetails(scoreInfo.details),
             deriveCorrectMapFromDetails(rawPayload.realData && rawPayload.realData.scoreInfo && rawPayload.realData.scoreInfo.details),
             convertComparisonToMap(answerComparison, 'correctAnswer')
@@ -5307,18 +5919,33 @@ storageManager.ready
             || (examEntry && examEntry.title)
             || resolvedExamId
             || '未命名练习';
+        const resolvedHighlights = Array.isArray(rawPayload.highlights)
+            ? rawPayload.highlights.slice()
+            : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights)
+                ? rawPayload.realData.highlights.slice()
+                : (Array.isArray(sessionContext.highlights) ? sessionContext.highlights.slice() : []));
+        const resolvedMarkedQuestions = Array.isArray(rawPayload.markedQuestions)
+            ? rawPayload.markedQuestions.slice()
+            : (Array.isArray(rawPayload.realData && rawPayload.realData.markedQuestions)
+                ? rawPayload.realData.markedQuestions.slice()
+                : (Array.isArray(sessionContext.markedQuestions) ? sessionContext.markedQuestions.slice() : []));
+        const resolvedScrollY = Number.isFinite(Number(rawPayload.scrollY))
+            ? Number(rawPayload.scrollY)
+            : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY))
+                ? Number(rawPayload.realData.scrollY)
+                : (Number.isFinite(Number(sessionContext.scrollY)) ? Number(sessionContext.scrollY) : 0));
+        const resolvedNoteText = typeof rawPayload.noteText === 'string'
+            ? rawPayload.noteText
+            : (typeof rawPayload.realData?.noteText === 'string'
+                ? rawPayload.realData.noteText
+                : (typeof sessionContext.noteText === 'string' ? sessionContext.noteText : ''));
+        const resolvedQuestionTypeMap = isPlainObject(rawPayload.questionTypeMap)
+            ? clonePlainObject(rawPayload.questionTypeMap)
+            : (isPlainObject(rawPayload.realData && rawPayload.realData.questionTypeMap)
+                ? clonePlainObject(rawPayload.realData.questionTypeMap)
+                : {});
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
-        const questionTypeMap = (rawPayload.questionTypeMap && typeof rawPayload.questionTypeMap === 'object')
-            ? rawPayload.questionTypeMap
-            : ((rawPayload.realData && rawPayload.realData.questionTypeMap && typeof rawPayload.realData.questionTypeMap === 'object')
-                ? rawPayload.realData.questionTypeMap
-                : {});
-        const questionTypePerformance = (rawPayload.questionTypePerformance && typeof rawPayload.questionTypePerformance === 'object')
-            ? rawPayload.questionTypePerformance
-            : ((rawPayload.realData && rawPayload.realData.questionTypePerformance && typeof rawPayload.realData.questionTypePerformance === 'object')
-                ? rawPayload.realData.questionTypePerformance
-                : {});
 
         return standardizeRecord({
             id: rawPayload.id,
@@ -5339,24 +5966,23 @@ storageManager.ready
             answerDetails,
             correctAnswerMap,
             answerComparison,
-            questionTypeMap,
-            questionTypePerformance,
+            questionTypePerformance: rawPayload.questionTypePerformance || {},
             metadata: Object.assign({}, metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
                 category,
-                frequency
+                frequency,
+                markedQuestions: resolvedMarkedQuestions.slice()
             }),
             frequency,
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
-            highlights: Array.isArray(rawPayload.highlights)
-                ? rawPayload.highlights.slice()
-                : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
-            scrollY: Number.isFinite(Number(rawPayload.scrollY))
-                ? Number(rawPayload.scrollY)
-                : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0),
+            highlights: resolvedHighlights.slice(),
+            scrollY: resolvedScrollY,
+            markedQuestions: resolvedMarkedQuestions.slice(),
+            noteText: resolvedNoteText,
+            questionTypeMap: resolvedQuestionTypeMap,
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
@@ -5369,8 +5995,12 @@ storageManager.ready
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
-                questionTypeMap,
-                questionTypePerformance,
+                correctAnswerMap,
+                highlights: resolvedHighlights.slice(),
+                scrollY: resolvedScrollY,
+                markedQuestions: resolvedMarkedQuestions.slice(),
+                noteText: resolvedNoteText,
+                questionTypeMap: resolvedQuestionTypeMap,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,
@@ -5382,23 +6012,29 @@ storageManager.ready
                 interactions: rawPayload.interactions || [],
                 isRealData: true,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page',
-                sessionId: rawPayload.sessionId || sessionContext.sessionId || null,
-                highlights: Array.isArray(rawPayload.highlights)
-                    ? rawPayload.highlights.slice()
-                    : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
-                scrollY: Number.isFinite(Number(rawPayload.scrollY))
-                    ? Number(rawPayload.scrollY)
-                    : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0)
+                sessionId: rawPayload.sessionId || sessionContext.sessionId || null
             })
         }, options);
     }
 
     function getRepositories() {
-        return global.dataRepositories || null;
+        return internalRepositories;
     }
 
     function getStorageManager(storageManager) {
-        return storageManager || global.storage || null;
+        return storageManager || global.persistentStore || global.storage || null;
+    }
+
+    function getStorageInternalOptions(storage) {
+        // 仓库注入后用 token 化选项，确保 fallback 读写能通过 storage 的 internal-only 保护。
+        if (internalStorageAccess && typeof internalStorageAccess.createInternalOptions === 'function') {
+            try {
+                return internalStorageAccess.createInternalOptions({});
+            } catch (_) {
+                // fallthrough 到旧行为
+            }
+        }
+        return { skipPracticeCoreRedirect: true };
     }
 
     function syncPracticeRecordState(records) {
@@ -5414,18 +6050,12 @@ storageManager.ready
             try {
                 const finalRecords = global.setPracticeRecordsState(records);
                 syncAppState(finalRecords);
-                try {
-                    global.practiceRecords = Array.isArray(finalRecords) ? finalRecords.slice() : [];
-                } catch (_) {}
                 return;
             } catch (error) {
                 console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
             }
         }
         syncAppState(records);
-        try {
-            global.practiceRecords = Array.isArray(records) ? records.slice() : [];
-        } catch (_) {}
     }
 
     async function readPracticeRecords(storageManager) {
@@ -5434,10 +6064,118 @@ storageManager.ready
             return await repos.practice.list();
         }
         const storage = getStorageManager(storageManager);
+        if (storage && typeof storage.readPersistentValue === 'function') {
+            return await storage.readPersistentValue(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
+        }
         if (storage && typeof storage.get === 'function') {
-            return await storage.get(STORAGE_KEYS.practiceRecords, [], { skipPracticeCoreRedirect: true });
+            return await storage.get(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
         }
         return [];
+    }
+
+    /**
+     * 轻量投影：读取原始数组（clone:false 跳过 structuredClone），映射为精简 summary 对象。
+     * 排除 answers/answerDetails/correctAnswerMap/suiteEntries[]/realData/answerComparison 等重字段，
+     * 供练习历史列表、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用，
+     * 避免大数据量下反序列化+克隆全部记录导致的前端渲染卡顿和内存溢出。
+     */
+    function projectRecordSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scoreInfo = record.scoreInfo || {};
+        const metadata = record.metadata || {};
+        // 轻量 suiteEntries 投影：仅保留签名字段，不含 answers/correctAnswerMap/realData
+        const rawSuiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+        const suiteEntries = rawSuiteEntries.map(function (entry) {
+            if (!entry || typeof entry !== 'object') { return null; }
+            const entryMeta = entry.metadata || {};
+            const entryScore = entry.scoreInfo || {};
+            return {
+                id: entry.id || '',
+                examId: entry.examId || entryMeta.examId || '',
+                title: entry.title || entryMeta.examTitle || '',
+                percentage: Number(entry.percentage != null ? entry.percentage : entryScore.percentage) || 0,
+                duration: Number(entry.duration != null ? entry.duration : (entry.rawData && entry.rawData.duration)) || 0
+            };
+        }).filter(Boolean);
+        return {
+            id: record.id || record.sessionId || '',
+            sessionId: record.sessionId || null,
+            examId: record.examId || metadata.examId || null,
+            title: record.title || metadata.examTitle || '',
+            type: record.type || metadata.type || 'reading',
+            practiceType: record.practiceType || metadata.practiceType || metadata.examType || null,
+            url: record.url || metadata.url || null,
+            startTime: record.startTime || null,
+            endTime: record.endTime || null,
+            date: record.date || null,
+            duration: Number(record.duration ?? scoreInfo.duration ?? scoreInfo.timeSpent) || 0,
+            percentage: Number(record.percentage ?? scoreInfo.percentage) || 0,
+            accuracy: Number(record.accuracy ?? scoreInfo.accuracy) || 0,
+            score: Number(record.score ?? scoreInfo.score) || 0,
+            totalQuestions: Number(record.totalQuestions ?? scoreInfo.total) || 0,
+            correctAnswers: Number(record.correctAnswers ?? scoreInfo.correct) || 0,
+            status: record.status || 'completed',
+            suiteMode: Boolean(record.suiteMode),
+            suiteEntryCount: rawSuiteEntries.length,
+            suiteEntries: suiteEntries,
+            suiteSessionId: record.suiteSessionId || (metadata.suiteSessionId) || null,
+            // questionTypePerformance 是小对象（每题型 {total,correct}），不是重字段，保留供 recalculateStats 使用
+            questionTypePerformance: record.questionTypePerformance || null,
+            // 轻量 scoreInfo 子集：供 accuracy/duration 等 fallback 读取
+            scoreInfo: {
+                accuracy: scoreInfo.accuracy != null ? scoreInfo.accuracy : null,
+                duration: scoreInfo.duration != null ? scoreInfo.duration : null,
+                timeSpent: scoreInfo.timeSpent != null ? scoreInfo.timeSpent : null,
+                percentage: scoreInfo.percentage != null ? scoreInfo.percentage : null,
+                score: scoreInfo.score != null ? scoreInfo.score : null,
+                total: scoreInfo.total != null ? scoreInfo.total : null,
+                correct: scoreInfo.correct != null ? scoreInfo.correct : null
+            },
+            metadata: {
+                category: metadata.category || record.category || null,
+                examTitle: metadata.examTitle || record.title || '',
+                frequency: metadata.frequency || record.frequency || 'unknown',
+                type: metadata.type || record.type || null,
+                examType: metadata.examType || null,
+                practiceType: metadata.practiceType || null,
+                examId: metadata.examId || null,
+                title: metadata.title || null,
+                url: metadata.url || null
+            },
+            updatedAt: record.updatedAt || null,
+            createdAt: record.createdAt || null
+        };
+    }
+
+    async function readPracticeRecordSummaries(storageManager) {
+        const repos = getRepositories();
+        let records;
+        if (repos && repos.practice && typeof repos.practice.read === 'function') {
+            // clone:false 跳过 structuredClone，在投影后原始重字段不会进入返回值
+            records = await repos.practice.read({ clone: false });
+        } else {
+            records = await readPracticeRecords(storageManager);
+        }
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map(projectRecordSummary)
+            .filter(Boolean);
+    }
+
+    /**
+     * 轻量计数：使用 repository.count()（clone:false + .length），不构造 summary 数组。
+     */
+    async function countPracticeRecords(storageManager) {
+        const repos = getRepositories();
+        if (repos && repos.practice && typeof repos.practice.count === 'function') {
+            return await repos.practice.count();
+        }
+        const records = await readPracticeRecords(storageManager);
+        return Array.isArray(records) ? records.length : 0;
     }
 
     async function writePracticeRecords(records, storageManager) {
@@ -5450,11 +6188,26 @@ storageManager.ready
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.writePersistentValue === 'function') {
-            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords);
+            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords, getStorageInternalOptions(storage));
             syncPracticeRecordState(finalRecords);
             return result;
         }
         return false;
+    }
+
+    async function readMeta(key, defaultValue, storageManager) {
+        const repos = getRepositories();
+        if (repos && repos.meta && typeof repos.meta.get === 'function') {
+            return await repos.meta.get(key, defaultValue);
+        }
+        const storage = getStorageManager(storageManager);
+        if (storage && typeof storage.readPersistentValue === 'function') {
+            return await storage.readPersistentValue(key, defaultValue, getStorageInternalOptions(storage));
+        }
+        if (storage && typeof storage.get === 'function') {
+            return await storage.get(key, defaultValue, getStorageInternalOptions(storage));
+        }
+        return defaultValue;
     }
 
     async function writeMeta(key, value, storageManager) {
@@ -5465,7 +6218,7 @@ storageManager.ready
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.writePersistentValue === 'function') {
-            return await storage.writePersistentValue(key, value);
+            return await storage.writePersistentValue(key, value, getStorageInternalOptions(storage));
         }
         return false;
     }
@@ -5478,7 +6231,7 @@ storageManager.ready
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.removePersistentValue === 'function') {
-            return await storage.removePersistentValue(key);
+            return await storage.removePersistentValue(key, getStorageInternalOptions(storage));
         }
         return false;
     }
@@ -5496,8 +6249,11 @@ storageManager.ready
     }
 
     function dedupePracticeRecords(records) {
+        // 仅按 record.id 去重，不按 sessionId 全局去重。
+        // sessionId 在套题场景中是容器标识，不是 attempt 唯一键；
+        // 多条不同 id 的记录可能共享同一 sessionId（如同一套题的不同 passage），
+        // 按 sessionId 去重会永久丢弃合法记录。
         const seenIds = new Set();
-        const seenSessions = new Set();
         const deduped = [];
 
         (Array.isArray(records) ? records : []).forEach((record) => {
@@ -5505,21 +6261,41 @@ storageManager.ready
                 return;
             }
             const recordId = record.id != null ? String(record.id) : null;
-            const sessionId = extractSessionId(record);
 
             if (recordId && seenIds.has(recordId)) {
                 return;
             }
-            if (sessionId && seenSessions.has(sessionId)) {
-                return;
-            }
 
             if (recordId) seenIds.add(recordId);
-            if (sessionId) seenSessions.add(sessionId);
             deduped.push(record);
         });
 
         return deduped;
+    }
+
+    function getRecordTimestamp(record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        const candidates = [
+            record.updatedAt,
+            record.createdAt,
+            record.endTime,
+            record.startTime,
+            record.date,
+            record.timestamp
+        ];
+        for (let index = 0; index < candidates.length; index += 1) {
+            const value = candidates[index];
+            if (!value) {
+                continue;
+            }
+            const time = new Date(value).getTime();
+            if (Number.isFinite(time)) {
+                return time;
+            }
+        }
+        return 0;
     }
 
     function handlesStorageKey(key) {
@@ -5533,6 +6309,7 @@ storageManager.ready
         const canonical = dedupePracticeRecords(
             (Array.isArray(records) ? records : []).map((record) => standardizeRecord(record, options))
         );
+        canonical.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
         if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && canonical.length > options.maxRecords) {
             canonical.splice(options.maxRecords);
         }
@@ -5551,18 +6328,25 @@ storageManager.ready
             records.unshift(standardizedRecord);
         }
 
+        // 仅当同一 sessionId 且同一 examId 时才移除旧记录（同一篇练习的重复提交覆盖）。
+        // 不同 examId 但共享 sessionId 的记录（如套题不同 passage）必须保留。
         const standardizedSessionId = extractSessionId(standardizedRecord);
+        const standardizedExamId = standardizedRecord.examId || null;
         if (standardizedSessionId) {
             records = records.filter((entry, index) => {
                 if (index === 0) {
                     return true;
                 }
                 const sessionId = extractSessionId(entry);
-                return !(sessionId && sessionId === standardizedSessionId && String(entry.id) !== String(standardizedRecord.id));
+                const examId = entry && entry.examId || null;
+                const sameSession = sessionId && sessionId === standardizedSessionId;
+                const sameExam = standardizedExamId && examId && examId === standardizedExamId;
+                return !(sameSession && sameExam && String(entry.id) !== String(standardizedRecord.id));
             });
         }
 
         records = dedupePracticeRecords(records);
+        records.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
         if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && records.length > options.maxRecords) {
             records.splice(options.maxRecords);
         }
@@ -5573,7 +6357,7 @@ storageManager.ready
     async function routeStorageSet(storageManager, key, value, options = {}) {
         if (key === STORAGE_KEYS.practiceRecords) {
             return await replacePracticeRecords(value, {
-                currentVersion: options.currentVersion || '1.0.0',
+                currentVersion: options.currentVersion || '0.6.2-fix',
                 maxRecords: options.maxRecords || 1000,
                 storageManager
             });
@@ -5601,11 +6385,17 @@ storageManager.ready
         resolveRecordDate,
         inferExamId,
         normalizeAnswerValue,
-        normalizeAnswerValueList,
         isNoiseKey,
         normalizeAnswerMap,
+        normalizeReplayQuestionKey,
+        normalizeReplayMap,
         normalizeAnswerComparison,
         mergeAnswerSources,
+        buildReplayCorrectAnswerMap,
+        buildReplayResultSnapshot,
+        resolveCorrectAnswerMap,
+        resolveRecordCorrectAnswerMap,
+        compareAnswerValues,
         buildAnswerArray,
         buildAnswerDetails,
         deriveCorrectMapFromDetails,
@@ -5632,27 +6422,2764 @@ storageManager.ready
         fromCompletion
     });
 
-    const store = Object.freeze({
+    const internalStore = Object.freeze({
         STORAGE_KEYS,
         handlesStorageKey,
         listPracticeRecords: readPracticeRecords,
+        listPracticeRecordSummaries: readPracticeRecordSummaries,
+        countPracticeRecords,
         replacePracticeRecords,
         savePracticeRecord,
         routeStorageSet,
         routeStorageRemove,
+        readMeta,
         writeMeta,
         removeMeta,
         syncPracticeRecordState
     });
 
-    global.PracticeCore = {
+    const publicStore = Object.freeze({
+        STORAGE_KEYS,
+        handlesStorageKey,
+        listPracticeRecords: readPracticeRecords,
+        listPracticeRecordSummaries: readPracticeRecordSummaries,
+        countPracticeRecords,
+        readMeta,
+        syncPracticeRecordState
+    });
+
+    const practiceCore = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         contracts,
         protocol,
         ingestor,
-        store
+        store: publicStore
     };
+    Object.defineProperty(practiceCore, '__installRecordAPI', {
+        value: function(install) {
+            if (typeof install !== 'function') {
+                throw new Error('PracticeCore.__installRecordAPI requires an installer function');
+            }
+            return install(internalStore);
+        },
+        enumerable: false,
+        configurable: true,
+        writable: false
+    });
+    Object.defineProperty(practiceCore, '__installInternalRepositories', {
+        value: function(repositories, installers) {
+            if (!repositories || typeof repositories !== 'object') {
+                throw new Error('PracticeCore.__installInternalRepositories requires repositories');
+            }
+            internalRepositories = repositories;
+            // 接收 storage internal token factory，供 fallback 路径使用。
+            if (installers && typeof installers.createInternalOptions === 'function') {
+                internalStorageAccess = { createInternalOptions: installers.createInternalOptions };
+            }
+            try {
+                delete practiceCore.__installInternalRepositories;
+            } catch (_) {
+                practiceCore.__installInternalRepositories = undefined;
+            }
+            return true;
+        },
+        enumerable: false,
+        configurable: true,
+        writable: false
+    });
+    global.PracticeCore = practiceCore;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/practiceRecordAPI.js ===== */
+(function initPracticeRecordAPI(global) {
+    'use strict';
+
+    const DEFAULT_VERSION = '0.6.2-fix';
+    const DEFAULT_MAX_RECORDS = 1000;
+
+    if (global.PracticeRecordAPI && global.PracticeRecordAPI.__stable === true) {
+        return;
+    }
+
+    let recordStore = null;
+
+    function getPracticeCore() {
+        return global.PracticeCore || null;
+    }
+
+    function installRecordStore() {
+        if (recordStore) {
+            return recordStore;
+        }
+        const core = getPracticeCore();
+        if (!core || typeof core.__installRecordAPI !== 'function') {
+            return null;
+        }
+        recordStore = core.__installRecordAPI((store) => store || null);
+        try {
+            delete core.__installRecordAPI;
+        } catch (_) {
+            core.__installRecordAPI = undefined;
+        }
+        return recordStore;
+    }
+
+    function getRecordStore() {
+        return recordStore || installRecordStore();
+    }
+
+    installRecordStore();
+
+    function getDefaultSaveOptions(options = {}) {
+        const source = options && typeof options === 'object' ? options : {};
+        const normalized = {
+            currentVersion: source.currentVersion || DEFAULT_VERSION,
+            maxRecords: DEFAULT_MAX_RECORDS
+        };
+        const maxRecords = Number(source.maxRecords);
+        if (Number.isFinite(maxRecords) && maxRecords > 0) {
+            normalized.maxRecords = maxRecords;
+        }
+        Object.keys(source).forEach((key) => {
+            if (source[key] !== undefined) {
+                normalized[key] = source[key];
+            }
+        });
+        normalized.currentVersion = normalized.currentVersion || DEFAULT_VERSION;
+        normalized.maxRecords = Number.isFinite(Number(normalized.maxRecords)) && Number(normalized.maxRecords) > 0
+            ? Number(normalized.maxRecords)
+            : DEFAULT_MAX_RECORDS;
+        return normalized;
+    }
+
+    function toIdString(value) {
+        return value == null ? '' : String(value);
+    }
+
+    function isPlainObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function clonePlainObject(value) {
+        if (value == null || typeof value !== 'object') {
+            return value ?? null;
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => clonePlainObject(item));
+        }
+        const clone = {};
+        Object.keys(value).forEach((key) => {
+            clone[key] = clonePlainObject(value[key]);
+        });
+        return clone;
+    }
+
+    function getDefaultStats() {
+        if (global.ExamData && typeof global.ExamData.createDefaultUserStats === 'function') {
+            return clonePlainObject(global.ExamData.createDefaultUserStats());
+        }
+        const now = new Date().toISOString();
+        return {
+            totalPractices: 0,
+            totalTimeSpent: 0,
+            averageScore: 0,
+            categoryStats: {},
+            questionTypeStats: {},
+            streakDays: 0,
+            practiceDays: [],
+            lastPracticeDate: null,
+            achievements: [],
+            createdAt: now,
+            updatedAt: now
+        };
+    }
+
+    function toCamelCaseKey(key) {
+        return String(key)
+            .replace(/[-_\s]+([a-zA-Z0-9])/g, (_, group) => group.toUpperCase())
+            .replace(/^[A-Z]/, match => match.toLowerCase());
+    }
+
+    function normalizeStatsAliases(stats) {
+        if (!isPlainObject(stats)) {
+            return {};
+        }
+        const normalized = {};
+        Object.entries(stats).forEach(([key, value]) => {
+            normalized[toCamelCaseKey(key)] = value;
+        });
+        return normalized;
+    }
+
+    function prepareStats(stats) {
+        const source = normalizeStatsAliases(stats);
+        const prepared = Object.assign({}, getDefaultStats(), clonePlainObject(source));
+        prepared.categoryStats = isPlainObject(source.categoryStats) ? clonePlainObject(source.categoryStats) : {};
+        prepared.questionTypeStats = isPlainObject(source.questionTypeStats) ? clonePlainObject(source.questionTypeStats) : {};
+        prepared.practiceDays = Array.isArray(source.practiceDays) ? source.practiceDays.slice() : [];
+        prepared.achievements = Array.isArray(source.achievements) ? source.achievements.slice() : [];
+        prepared.updatedAt = source.updatedAt || new Date().toISOString();
+        return prepared;
+    }
+
+    function getCoreContracts() {
+        const core = getPracticeCore();
+        return core && core.contracts ? core.contracts : null;
+    }
+
+    function normalizeRecord(record, options = {}) {
+        if (!isPlainObject(record)) {
+            return null;
+        }
+
+        const contracts = getCoreContracts();
+        if (!contracts || typeof contracts.standardizeRecord !== 'function') {
+            throw new Error('PracticeRecordAPI.normalizeRecord: PracticeCore.contracts.standardizeRecord not ready');
+        }
+
+        const preserveIds = options.preserveIds !== false;
+        const safePrefix = options.fallbackIdPrefix || 'record';
+        const sourceId = record.id
+            ?? record.recordId
+            ?? record.record_id
+            ?? record.practiceId
+            ?? record.practice_id
+            ?? record.sessionId
+            ?? record.sessionID
+            ?? record.timestamp
+            ?? record.uuid;
+        const candidate = clonePlainObject(record) || {};
+
+        let id = preserveIds && sourceId ? String(sourceId).trim() : '';
+        if (!id) {
+            const index = Number.isFinite(Number(options.index)) ? Number(options.index) : 0;
+            id = `${safePrefix}_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+        candidate.id = id;
+
+        if (record.recordStatus !== undefined && candidate.status === undefined) {
+            candidate.status = record.recordStatus;
+        }
+
+        const generateRecordId = typeof options.generateRecordId === 'function'
+            ? options.generateRecordId
+            : () => id;
+        const standardized = contracts.standardizeRecord(candidate, Object.assign({}, options, {
+            currentVersion: options.currentVersion || DEFAULT_VERSION,
+            generateRecordId
+        }));
+        return standardized && standardized.examId ? standardized : null;
+    }
+
+    function normalizeDateValue(value) {
+        if (!value) {
+            return null;
+        }
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            return value.toISOString();
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return new Date(value).toISOString();
+        }
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return null;
+            }
+            if (/^\d+$/.test(trimmed)) {
+                const numeric = Number(trimmed);
+                if (Number.isFinite(numeric)) {
+                    const milliseconds = trimmed.length > 10 ? numeric : numeric * 1000;
+                    return new Date(milliseconds).toISOString();
+                }
+            }
+            const parsed = new Date(trimmed);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString();
+            }
+        }
+        return null;
+    }
+
+    function getRecordTimestamp(record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        const candidates = [
+            record.updatedAt,
+            record.createdAt,
+            record.endTime,
+            record.startTime,
+            record.timestamp,
+            record.date
+        ];
+        for (let index = 0; index < candidates.length; index += 1) {
+            const iso = normalizeDateValue(candidates[index]);
+            if (iso) {
+                const time = new Date(iso).getTime();
+                if (Number.isFinite(time)) {
+                    return time;
+                }
+            }
+        }
+        return 0;
+    }
+
+    function mergeRecordDetails(existing, incoming, options = {}) {
+        const merged = Object.assign({}, existing || {}, incoming || {});
+        if (isPlainObject(existing && existing.metadata) || isPlainObject(incoming && incoming.metadata)) {
+            merged.metadata = Object.assign(
+                {},
+                isPlainObject(existing && existing.metadata) ? existing.metadata : {},
+                isPlainObject(incoming && incoming.metadata) ? incoming.metadata : {}
+            );
+        }
+        if (isPlainObject(existing && existing.realData) || isPlainObject(incoming && incoming.realData)) {
+            merged.realData = Object.assign(
+                {},
+                isPlainObject(existing && existing.realData) ? existing.realData : {},
+                isPlainObject(incoming && incoming.realData) ? incoming.realData : {}
+            );
+        }
+        return normalizeRecord(merged, Object.assign({}, options, {
+            generateRecordId: () => String(merged.id || (incoming && incoming.id) || (existing && existing.id) || `record_${Date.now()}`)
+        }));
+    }
+
+    async function readStats(options = {}) {
+        const fallback = Object.prototype.hasOwnProperty.call(options, 'fallback')
+            ? options.fallback
+            : getDefaultStats();
+
+        const store = getRecordStore();
+        if (!store || typeof store.readMeta !== 'function') {
+            throw new Error('PracticeRecordAPI.readStats: unified meta store not ready');
+        }
+
+        return prepareStats(await store.readMeta('user_stats', fallback));
+    }
+
+    async function writeStats(stats) {
+        const finalStats = prepareStats(stats);
+        const store = getRecordStore();
+
+        if (store && typeof store.writeMeta === 'function') {
+            await store.writeMeta('user_stats', finalStats);
+            return finalStats;
+        }
+
+        throw new Error('PracticeRecordAPI.writeStats: unified meta store not ready');
+    }
+
+    function normalizeDay(value) {
+        if (!value) return null;
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        return date.toISOString().slice(0, 10);
+    }
+
+    function calculateStreakDays(days) {
+        const sorted = Array.isArray(days) ? days.slice().sort() : [];
+        if (sorted.length === 0) return 0;
+        let streak = 1;
+        for (let index = sorted.length - 1; index > 0; index -= 1) {
+            const current = new Date(sorted[index]);
+            const previous = new Date(sorted[index - 1]);
+            const diffDays = Math.round((current - previous) / 86400000);
+            if (diffDays === 1) {
+                streak += 1;
+                continue;
+            }
+            if (diffDays > 1) break;
+        }
+        return streak;
+    }
+
+    function normalizeAccuracyForStats(record) {
+        const values = [
+            record && record.accuracy,
+            record && record.scoreInfo && record.scoreInfo.accuracy,
+            record && record.realData && record.realData.scoreInfo && record.realData.scoreInfo.accuracy
+        ];
+        for (let index = 0; index < values.length; index += 1) {
+            const numeric = Number(values[index]);
+            if (Number.isFinite(numeric)) {
+                if (numeric > 1 && numeric <= 100) {
+                    return numeric / 100;
+                }
+                return Math.max(0, Math.min(1, numeric));
+            }
+        }
+        const correct = Number(record && (record.correctAnswers ?? record.scoreInfo?.correct ?? record.score));
+        const total = Number(record && (record.totalQuestions ?? record.scoreInfo?.total));
+        return Number.isFinite(correct) && Number.isFinite(total) && total > 0
+            ? Math.max(0, Math.min(1, correct / total))
+            : 0;
+    }
+
+    function applyRecordToStats(stats, record) {
+        if (!stats || !record || typeof record !== 'object') {
+            return;
+        }
+
+        const duration = Math.max(0, Number(record.duration) || 0);
+        const accuracy = normalizeAccuracyForStats(record);
+        const category = String((record.metadata && record.metadata.category) || record.category || record.type || '').trim();
+        const day = normalizeDay(record.date || record.endTime || record.startTime || record.createdAt);
+
+        stats.totalPractices += 1;
+        stats.totalTimeSpent += duration;
+        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
+        stats.averageScore = stats.totalPractices > 0 ? totalScore / stats.totalPractices : 0;
+
+        stats.categoryStats = isPlainObject(stats.categoryStats) ? stats.categoryStats : {};
+        if (category) {
+            if (!stats.categoryStats[category]) {
+                stats.categoryStats[category] = {
+                    practices: 0,
+                    avgScore: 0,
+                    timeSpent: 0,
+                    bestScore: 0,
+                    totalQuestions: 0,
+                    correctAnswers: 0
+                };
+            }
+            const categoryStats = stats.categoryStats[category];
+            categoryStats.practices += 1;
+            categoryStats.timeSpent += duration;
+            categoryStats.bestScore = Math.max(categoryStats.bestScore || 0, accuracy);
+            categoryStats.totalQuestions += Number(record.totalQuestions) || 0;
+            categoryStats.correctAnswers += Number(record.correctAnswers) || 0;
+            categoryStats.avgScore = ((categoryStats.avgScore || 0) * (categoryStats.practices - 1) + accuracy) / categoryStats.practices;
+        }
+
+        stats.questionTypeStats = isPlainObject(stats.questionTypeStats) ? stats.questionTypeStats : {};
+        if (isPlainObject(record.questionTypePerformance)) {
+            Object.entries(record.questionTypePerformance).forEach(([type, performance]) => {
+                if (!stats.questionTypeStats[type]) {
+                    stats.questionTypeStats[type] = {
+                        practices: 0,
+                        accuracy: 0,
+                        totalQuestions: 0,
+                        correctAnswers: 0
+                    };
+                }
+                const typeStats = stats.questionTypeStats[type];
+                typeStats.practices += 1;
+                typeStats.totalQuestions += Number(performance && performance.total) || 0;
+                typeStats.correctAnswers += Number(performance && performance.correct) || 0;
+                typeStats.accuracy = typeStats.totalQuestions > 0
+                    ? typeStats.correctAnswers / typeStats.totalQuestions
+                    : 0;
+            });
+        }
+
+        if (day) {
+            const days = new Set(Array.isArray(stats.practiceDays) ? stats.practiceDays : []);
+            days.add(day);
+            stats.practiceDays = Array.from(days).sort();
+            stats.lastPracticeDate = stats.practiceDays[stats.practiceDays.length - 1] || null;
+            stats.streakDays = calculateStreakDays(stats.practiceDays);
+        }
+        stats.updatedAt = new Date().toISOString();
+    }
+
+    async function recalculateStats() {
+        // 使用轻量 listSummary 避免反序列化+克隆完整记录（answers/suiteEntries/realData 等重字段）。
+        // summary 已包含 applyRecordToStats 所需的全部字段：duration, accuracy, metadata.category,
+        // date/endTime/startTime/createdAt, totalQuestions, correctAnswers, questionTypePerformance。
+        const records = await listSummary();
+        const stats = getDefaultStats();
+        (Array.isArray(records) ? records : []).forEach((record) => applyRecordToStats(stats, record));
+        return await writeStats(stats);
+    }
+
+    async function resetStats(stats = null) {
+        return await writeStats(isPlainObject(stats) ? stats : getDefaultStats());
+    }
+
+    async function mergeStats(stats, options = {}) {
+        if (!isPlainObject(stats)) {
+            return await readStats();
+        }
+
+        const mergeMode = options.mergeMode || options.mode || 'merge';
+        if (mergeMode === 'replace') {
+            return await writeStats(stats);
+        }
+
+        const existing = await readStats({ fallback: {} });
+        const merged = Object.assign({}, existing);
+        Object.entries(stats).forEach(([key, value]) => {
+            if (value === undefined || value === null) {
+                return;
+            }
+            const current = existing[key];
+            if (typeof value === 'number' && typeof current === 'number') {
+                merged[key] = Math.max(value, current);
+                return;
+            }
+            if (isPlainObject(value) && isPlainObject(current)) {
+                merged[key] = Object.assign({}, current, value);
+                return;
+            }
+            merged[key] = clonePlainObject(value);
+        });
+
+        return await writeStats(merged);
+    }
+
+    async function updateStatsForSavedRecord(record, options = {}) {
+        if (!record || options.updateStats === false) {
+            return false;
+        }
+
+        await recalculateStats();
+        return true;
+    }
+
+    async function list() {
+        const store = getRecordStore();
+        if (!store || typeof store.listPracticeRecords !== 'function') {
+            throw new Error('PracticeRecordAPI.list: unified store not ready');
+        }
+
+        const records = await store.listPracticeRecords();
+        return Array.isArray(records) ? records : [];
+    }
+
+    /**
+     * 轻量投影查询：返回每条记录的元数据摘要，不含 answers/correctAnswerMap/
+     * suiteEntries[]/realData 等重字段。底层以 clone:false 读取原始数组后即时映射，
+     * 避免大数据量下 structuredClone 全部记录导致内存溢出和渲染卡顿。
+     * 供练习历史列表签名、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用。
+     */
+    async function listSummary(options = {}) {
+        const store = getRecordStore();
+        if (!store || typeof store.listPracticeRecordSummaries !== 'function') {
+            // 回退：store 尚未支持 summary 时从完整记录投影
+            const records = await list();
+            return records.map(_projectSummary).filter(Boolean);
+        }
+        const summaries = await store.listPracticeRecordSummaries();
+        return Array.isArray(summaries) ? summaries : [];
+    }
+
+    /** 返回记录总数，不加载记录数组到内存 */
+    async function count(options = {}) {
+        const store = getRecordStore();
+        if (store && typeof store.countPracticeRecords === 'function') {
+            return await store.countPracticeRecords();
+        }
+        // 回退：store 不支持 count 时从 summary 长度获取
+        if (store && typeof store.listPracticeRecordSummaries === 'function') {
+            const summaries = await store.listPracticeRecordSummaries();
+            return Array.isArray(summaries) ? summaries.length : 0;
+        }
+        const records = await list();
+        return Array.isArray(records) ? records.length : 0;
+    }
+
+    /** 返回去重后的 examId 列表，供 overview 统计使用 */
+    async function distinctExamIds(options = {}) {
+        const summaries = await listSummary(options);
+        const seen = new Set();
+        const result = [];
+        for (let i = 0; i < summaries.length; i += 1) {
+            const examId = summaries[i] && summaries[i].examId;
+            if (examId && !seen.has(examId)) {
+                seen.add(examId);
+                result.push(examId);
+            }
+        }
+        return result;
+    }
+
+    /** 纯函数投影：从单条完整记录提取轻量 summary */
+    function _projectSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scoreInfo = record.scoreInfo || {};
+        const metadata = record.metadata || {};
+        // 轻量 suiteEntries 投影：仅保留签名字段，不含 answers/correctAnswerMap/realData
+        const rawSuiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+        const suiteEntries = rawSuiteEntries.map(function (entry) {
+            if (!entry || typeof entry !== 'object') { return null; }
+            const entryMeta = entry.metadata || {};
+            const entryScore = entry.scoreInfo || {};
+            return {
+                id: entry.id || '',
+                examId: entry.examId || entryMeta.examId || '',
+                title: entry.title || entryMeta.examTitle || '',
+                percentage: Number(entry.percentage != null ? entry.percentage : entryScore.percentage) || 0,
+                duration: Number(entry.duration != null ? entry.duration : (entry.rawData && entry.rawData.duration)) || 0
+            };
+        }).filter(Boolean);
+        return {
+            id: record.id || record.sessionId || '',
+            sessionId: record.sessionId || null,
+            examId: record.examId || metadata.examId || null,
+            title: record.title || metadata.examTitle || '',
+            type: record.type || metadata.type || 'reading',
+            practiceType: record.practiceType || metadata.practiceType || metadata.examType || null,
+            url: record.url || metadata.url || null,
+            startTime: record.startTime || null,
+            endTime: record.endTime || null,
+            date: record.date || null,
+            duration: Number(record.duration != null ? record.duration : (scoreInfo.duration != null ? scoreInfo.duration : scoreInfo.timeSpent)) || 0,
+            percentage: Number(record.percentage != null ? record.percentage : scoreInfo.percentage) || 0,
+            accuracy: Number(record.accuracy != null ? record.accuracy : scoreInfo.accuracy) || 0,
+            score: Number(record.score != null ? record.score : scoreInfo.score) || 0,
+            totalQuestions: Number(record.totalQuestions != null ? record.totalQuestions : scoreInfo.total) || 0,
+            correctAnswers: Number(record.correctAnswers != null ? record.correctAnswers : scoreInfo.correct) || 0,
+            status: record.status || 'completed',
+            suiteMode: Boolean(record.suiteMode),
+            suiteEntryCount: rawSuiteEntries.length,
+            suiteEntries: suiteEntries,
+            suiteSessionId: record.suiteSessionId || metadata.suiteSessionId || null,
+            questionTypePerformance: record.questionTypePerformance || null,
+            scoreInfo: {
+                accuracy: scoreInfo.accuracy != null ? scoreInfo.accuracy : null,
+                duration: scoreInfo.duration != null ? scoreInfo.duration : null,
+                timeSpent: scoreInfo.timeSpent != null ? scoreInfo.timeSpent : null,
+                percentage: scoreInfo.percentage != null ? scoreInfo.percentage : null,
+                score: scoreInfo.score != null ? scoreInfo.score : null,
+                total: scoreInfo.total != null ? scoreInfo.total : null,
+                correct: scoreInfo.correct != null ? scoreInfo.correct : null
+            },
+            metadata: {
+                category: metadata.category || record.category || null,
+                examTitle: metadata.examTitle || record.title || '',
+                frequency: metadata.frequency || record.frequency || 'unknown',
+                type: metadata.type || record.type || null,
+                examType: metadata.examType || null,
+                practiceType: metadata.practiceType || null,
+                examId: metadata.examId || null,
+                title: metadata.title || null,
+                url: metadata.url || null
+            },
+            updatedAt: record.updatedAt || null,
+            createdAt: record.createdAt || null
+        };
+    }
+
+    async function getById(recordId) {
+        const targetId = toIdString(recordId);
+        if (!targetId) {
+            return null;
+        }
+        const records = await list();
+        return records.find((record) => {
+            if (!record || typeof record !== 'object') {
+                return false;
+            }
+            return toIdString(record.id) === targetId || toIdString(record.sessionId) === targetId;
+        }) || null;
+    }
+
+    async function replace(records, options = {}) {
+        if (!Array.isArray(records)) {
+            throw new Error('PracticeRecordAPI.replace requires an array of records');
+        }
+        const finalRecords = records;
+        const saveOptions = getDefaultSaveOptions(options);
+        const store = getRecordStore();
+        if (store && typeof store.replacePracticeRecords === 'function') {
+            await store.replacePracticeRecords(finalRecords, saveOptions);
+            if (options.updateStats !== false) {
+                await recalculateStats();
+            }
+            return finalRecords;
+        }
+
+        throw new Error('PracticeRecordAPI.replace: unified store not ready');
+    }
+
+    async function mergeRecords(records, options = {}) {
+        if (!Array.isArray(records)) {
+            throw new Error('PracticeRecordAPI.mergeRecords requires an array of records');
+        }
+
+        const mergeMode = options.mergeMode || options.mode || 'merge';
+        const normalizeOptions = getDefaultSaveOptions(options);
+        const incomingRecords = records
+            .map((record, index) => normalizeRecord(record, Object.assign({}, normalizeOptions, {
+                preserveIds: options.preserveIds !== false,
+                fallbackIdPrefix: options.fallbackIdPrefix || 'record',
+                index
+            })))
+            .filter(Boolean);
+        const existingRecords = await list();
+
+        if (mergeMode === 'replace') {
+            await replace(incomingRecords, Object.assign({}, options, { updateStats: options.updateStats !== false }));
+            return {
+                importedCount: incomingRecords.length,
+                updatedCount: existingRecords.length,
+                skippedCount: 0,
+                finalCount: incomingRecords.length,
+                records: incomingRecords
+            };
+        }
+
+        const indexMap = new Map();
+        existingRecords.forEach((record, index) => {
+            if (record && record.id !== undefined && record.id !== null) {
+                indexMap.set(String(record.id), { record, index });
+            }
+        });
+
+        const mergedRecords = existingRecords.slice();
+        let importedCount = 0;
+        let updatedCount = 0;
+        let skippedCount = 0;
+
+        incomingRecords.forEach((record) => {
+            if (!record || record.id === undefined || record.id === null) {
+                return;
+            }
+
+            const key = String(record.id);
+            const existing = indexMap.get(key);
+
+            if (!existing) {
+                mergedRecords.push(record);
+                indexMap.set(key, { record, index: mergedRecords.length - 1 });
+                importedCount += 1;
+                return;
+            }
+
+            if (mergeMode === 'skip') {
+                skippedCount += 1;
+                return;
+            }
+
+            const existingTimestamp = getRecordTimestamp(existing.record);
+            const incomingTimestamp = getRecordTimestamp(record);
+            if (incomingTimestamp >= existingTimestamp) {
+                const merged = mergeRecordDetails(existing.record, record, normalizeOptions);
+                mergedRecords[existing.index] = merged;
+                indexMap.set(key, { record: merged, index: existing.index });
+                updatedCount += 1;
+                return;
+            }
+
+            skippedCount += 1;
+        });
+
+        mergedRecords.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+        await replace(mergedRecords, Object.assign({}, options, { updateStats: options.updateStats !== false }));
+
+        return {
+            importedCount,
+            updatedCount,
+            skippedCount,
+            finalCount: mergedRecords.length,
+            records: mergedRecords
+        };
+    }
+
+    async function restoreRecords(records, options = {}) {
+        if (!Array.isArray(records)) {
+            throw new Error('PracticeRecordAPI.restoreRecords requires an array of records');
+        }
+
+        await replace(records, Object.assign({}, options, { updateStats: false }));
+        if (isPlainObject(options.stats)) {
+            await writeStats(options.stats);
+        } else if (options.updateStats !== false) {
+            await recalculateStats();
+        }
+        return {
+            restoredCount: records.length,
+            statsRestored: isPlainObject(options.stats)
+        };
+    }
+
+    async function clear(options = {}) {
+        await replace([], Object.assign({}, options, { updateStats: false }));
+        if (options.updateStats === true) {
+            await resetStats();
+        }
+        return true;
+    }
+
+    async function deleteMany(recordIds, options = {}) {
+        const ids = Array.isArray(recordIds) ? recordIds.map(toIdString).filter(Boolean) : [];
+        if (ids.length === 0) {
+            return { deletedCount: 0, deletedRecords: [], records: await list() };
+        }
+
+        const idSet = new Set(ids);
+        // 默认仅按 record.id 删除，避免共享 sessionId 的不同记录被误删。
+        // matchBy: 'sessionId' 时才按 sessionId 匹配（用于 suite 子记录清理等显式场景）。
+        const matchBySessionId = options.matchBy === 'sessionId';
+        const records = await list();
+        const deletedRecords = [];
+        const remainingRecords = [];
+
+        (Array.isArray(records) ? records : []).forEach((record) => {
+            const recordId = toIdString(record && record.id);
+            const sessionId = toIdString(record && record.sessionId);
+            const idMatch = recordId && idSet.has(recordId);
+            const sessionMatch = matchBySessionId && sessionId && idSet.has(sessionId);
+            if (idMatch || sessionMatch) {
+                deletedRecords.push(record);
+                return;
+            }
+            remainingRecords.push(record);
+        });
+
+        if (deletedRecords.length > 0) {
+            await replace(remainingRecords, options);
+        }
+
+        return {
+            deletedCount: deletedRecords.length,
+            deletedRecords,
+            records: remainingRecords
+        };
+    }
+
+    async function deleteById(recordId, options = {}) {
+        const result = await deleteMany([recordId], options);
+        return {
+            deleted: result.deletedCount > 0,
+            record: result.deletedRecords[0] || null,
+            records: result.records
+        };
+    }
+
+    async function saveRecord(record, options = {}) {
+        if (!record || typeof record !== 'object') {
+            throw new Error('PracticeRecordAPI.saveRecord requires a record object');
+        }
+
+        const saveOptions = getDefaultSaveOptions(options);
+        const store = getRecordStore();
+        if (!store || typeof store.savePracticeRecord !== 'function') {
+            throw new Error('PracticeRecordAPI.saveRecord: PracticeCore store not ready');
+        }
+        const normalizedRecord = normalizeRecord(record, saveOptions);
+        if (!normalizedRecord || !normalizedRecord.examId) {
+            throw new Error('PracticeRecordAPI.saveRecord requires a canonical examId');
+        }
+
+        const savedRecord = await store.savePracticeRecord(normalizedRecord, saveOptions);
+
+        if (options.updateStats !== false) {
+            await updateStatsForSavedRecord(savedRecord, options);
+        }
+
+        return savedRecord;
+    }
+
+    function fromCompletion(payload, context = {}, examEntry = null, options = {}) {
+        const core = getPracticeCore();
+        if (!core || !core.ingestor || typeof core.ingestor.fromCompletion !== 'function') {
+            return null;
+        }
+        return core.ingestor.fromCompletion(payload, context || {}, examEntry || null, getDefaultSaveOptions(options));
+    }
+
+    async function saveCompletion(payload, context = {}, examEntry = null, options = {}) {
+        const record = fromCompletion(payload, context, examEntry, options);
+        if (!record) {
+            throw new Error('PracticeRecordAPI.saveCompletion could not build canonical record');
+        }
+        return await saveRecord(record, options);
+    }
+
+    function normalizeAccuracy(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0) {
+            return 0;
+        }
+        if (numeric > 1 && numeric <= 100) {
+            return numeric / 100;
+        }
+        return Math.min(numeric, 1);
+    }
+
+    function toSummaryMetrics(record = {}) {
+        const total = Number(record.totalQuestions ?? record.scoreInfo?.total ?? record.scoreInfo?.totalQuestions ?? record.realData?.scoreInfo?.total ?? record.realData?.totalQuestions);
+        const correct = Number(record.correctAnswers ?? record.score ?? record.scoreInfo?.correct ?? record.scoreInfo?.score ?? record.realData?.scoreInfo?.correct ?? record.realData?.score);
+        const safeTotal = Number.isFinite(total) && total >= 0 ? total : 0;
+        const safeCorrect = Number.isFinite(correct) && correct >= 0 ? correct : 0;
+
+        let accuracy = normalizeAccuracy(record.accuracy ?? record.scoreInfo?.accuracy ?? record.realData?.scoreInfo?.accuracy ?? (safeTotal > 0 ? safeCorrect / safeTotal : 0));
+        const percentageCandidate = Number(record.percentage ?? record.scoreInfo?.percentage ?? record.realData?.scoreInfo?.percentage);
+        const percentage = Number.isFinite(percentageCandidate) && percentageCandidate >= 0 && percentageCandidate <= 100
+            ? percentageCandidate
+            : Math.round(accuracy * 100);
+        const hasExplicitAccuracy = record.accuracy != null
+            || record.scoreInfo?.accuracy != null
+            || record.realData?.scoreInfo?.accuracy != null;
+        accuracy = percentage > 1 && !hasExplicitAccuracy
+            ? percentage / 100
+            : accuracy;
+
+        return {
+            totalQuestions: safeTotal,
+            correctAnswers: safeCorrect,
+            accuracy,
+            percentage,
+            duration: Number(record.duration ?? record.realData?.duration) || 0
+        };
+    }
+
+    function toReplayEntries(record, projector) {
+        if (typeof projector === 'function') {
+            return projector(record);
+        }
+        return [];
+    }
+
+    global.PracticeRecordAPI = {
+        __stable: true,
+        version: '0.6.2-fix',
+        list,
+        listSummary,
+        count,
+        distinctExamIds,
+        getById,
+        replace,
+        mergeRecords,
+        restoreRecords,
+        clear,
+        deleteById,
+        deleteMany,
+        saveRecord,
+        normalizeRecord,
+        fromCompletion,
+        saveCompletion,
+        toSummaryMetrics,
+        toReplayEntries,
+        getDefaultStats,
+        prepareStats,
+        readStats,
+        writeStats,
+        mergeStats,
+        resetStats,
+        recalculateStats,
+        updateStatsForSavedRecord
+    };
+
+    if (global.persistentStore && typeof global.persistentStore.migrateLegacyData === 'function') {
+        Promise.resolve()
+            .then(() => global.persistentStore.migrateLegacyData({ skipReady: true }))
+            .catch((error) => {
+                console.warn('[PracticeRecordAPI] 延后练习记录迁移失败:', error);
+            });
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/backupAPI.js ===== */
+(function initBackupAPI(global) {
+    'use strict';
+
+    if (global.BackupAPI && global.BackupAPI.__stable === true) {
+        return;
+    }
+
+    const DEFAULT_VERSION = '0.6.2-form';
+    const DEFAULT_MAX_BACKUPS = 20;
+
+    function isPlainObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function cloneJson(value) {
+        if (value == null) return value;
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            return value;
+        }
+    }
+
+    function getStorageFacade() {
+        if (global.storage && typeof global.storage.get === 'function') {
+            return global.storage;
+        }
+        // Some boot paths / VM tests expose bare global storage without attaching to window
+        try {
+            if (typeof storage !== 'undefined' && storage && typeof storage.get === 'function') {
+                return storage;
+            }
+        } catch (_) { /* ignore ReferenceError in strict scopes */ }
+        return null;
+    }
+
+    function getRepositories() {
+        if (global.dataRepositories && global.dataRepositories.backups) {
+            return global.dataRepositories;
+        }
+        const registry = global.StorageProviderRegistry;
+        if (registry && typeof registry.getCurrentProviders === 'function') {
+            const current = registry.getCurrentProviders();
+            if (current && current.repositories && current.repositories.backups) {
+                return current.repositories;
+            }
+        }
+        if (global.simpleStorageWrapper && global.simpleStorageWrapper.backupRepo) {
+            return {
+                backups: global.simpleStorageWrapper.backupRepo,
+                meta: global.simpleStorageWrapper.metaRepo || null,
+                settings: global.simpleStorageWrapper.settingsRepo || null
+            };
+        }
+        return null;
+    }
+
+    function getBackupRepo() {
+        const repos = getRepositories();
+        return repos && repos.backups ? repos.backups : null;
+    }
+
+    function getMetaRepo() {
+        const repos = getRepositories();
+        return repos && repos.meta ? repos.meta : null;
+    }
+
+    async function readMeta(key, fallback = null) {
+        const meta = getMetaRepo();
+        if (meta && typeof meta.get === 'function') {
+            return await meta.get(key, fallback);
+        }
+        const storageFacade = getStorageFacade();
+        if (storageFacade) {
+            return await storageFacade.get(key, fallback);
+        }
+        return fallback;
+    }
+
+    async function writeMeta(key, value) {
+        const meta = getMetaRepo();
+        if (meta && typeof meta.set === 'function') {
+            await meta.set(key, value);
+            return true;
+        }
+        const storageFacade = getStorageFacade();
+        if (storageFacade) {
+            await storageFacade.set(key, value);
+            return true;
+        }
+        throw new Error('BackupAPI: meta store not ready');
+    }
+
+    function resolvePracticeRecords(data) {
+        if (!data || typeof data !== 'object') return null;
+        if (Array.isArray(data.practice_records)) return data.practice_records;
+        if (Array.isArray(data.practiceRecords)) return data.practiceRecords;
+        return null;
+    }
+
+    function resolveUserStats(data) {
+        if (!data || typeof data !== 'object') return null;
+        if (isPlainObject(data.user_stats)) return data.user_stats;
+        if (isPlainObject(data.userStats)) return data.userStats;
+        return null;
+    }
+
+    function resolveExamIndex(data) {
+        if (!data || typeof data !== 'object') return null;
+        if (Array.isArray(data.exam_index)) return data.exam_index;
+        if (Array.isArray(data.examIndex)) return data.examIndex;
+        return null;
+    }
+
+    function resolveStorageVersion(data) {
+        if (!data || typeof data !== 'object') return null;
+        if (data.storage_version != null) return data.storage_version;
+        if (data.storageVersion != null) return data.storageVersion;
+        return null;
+    }
+
+    /**
+     * Canonical dual-schema payload so any legacy restore path can read snake or camel keys.
+     */
+    function normalizePayload(data = {}) {
+        const source = isPlainObject(data) ? data : {};
+        const records = resolvePracticeRecords(source);
+        const stats = resolveUserStats(source);
+        const examIndex = resolveExamIndex(source);
+        const storageVersion = resolveStorageVersion(source);
+        const payload = { ...source };
+
+        if (records) {
+            payload.practice_records = records;
+            payload.practiceRecords = records;
+        }
+        if (stats) {
+            payload.user_stats = stats;
+            payload.userStats = stats;
+        }
+        if (examIndex) {
+            payload.exam_index = examIndex;
+            payload.examIndex = examIndex;
+        }
+        if (storageVersion != null) {
+            payload.storage_version = storageVersion;
+            payload.storageVersion = storageVersion;
+        }
+        return payload;
+    }
+
+    async function captureSnapshot(extra = {}) {
+        let practiceRecords = [];
+        let userStats = null;
+
+        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
+            const listed = await global.PracticeRecordAPI.list();
+            practiceRecords = Array.isArray(listed) ? listed : [];
+        }
+        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.readStats === 'function') {
+            userStats = await global.PracticeRecordAPI.readStats();
+        }
+
+        const examIndex = await readMeta('exam_index', []);
+        const storageVersion = await readMeta('storage_version', null);
+
+        return normalizePayload({
+            practice_records: practiceRecords,
+            user_stats: userStats,
+            exam_index: Array.isArray(examIndex) ? examIndex : [],
+            storage_version: storageVersion,
+            ...(isPlainObject(extra) ? extra : {})
+        });
+    }
+
+    async function list(options = {}) {
+        const repo = getBackupRepo();
+        if (repo && typeof repo.list === 'function') {
+            const backups = await repo.list(options);
+            return Array.isArray(backups) ? backups : [];
+        }
+        const storageFacade = getStorageFacade();
+        if (storageFacade) {
+            const backups = await storageFacade.get('manual_backups', []);
+            return Array.isArray(backups) ? backups : [];
+        }
+        throw new Error('BackupAPI.list: backup repository not ready');
+    }
+
+    async function getById(id, options = {}) {
+        if (!id) return null;
+        const repo = getBackupRepo();
+        if (repo && typeof repo.getById === 'function') {
+            return await repo.getById(id, options);
+        }
+        const backups = await list(options);
+        return backups.find((item) => item && String(item.id) === String(id)) || null;
+    }
+
+    async function add(backup, options = {}) {
+        const repo = getBackupRepo();
+        const normalizedData = normalizePayload(backup && backup.data ? backup.data : {});
+        const entry = {
+            ...(backup && typeof backup === 'object' ? backup : {}),
+            id: (backup && backup.id) || `backup_${Date.now()}`,
+            timestamp: (backup && backup.timestamp) || new Date().toISOString(),
+            type: (backup && backup.type) || 'manual',
+            version: (backup && backup.version) || DEFAULT_VERSION,
+            data: normalizedData
+        };
+        entry.size = entry.size || JSON.stringify(entry.data).length;
+
+        if (repo && typeof repo.add === 'function') {
+            return await repo.add(entry, options);
+        }
+
+        // Fallback: raw storage (tests / early boot)
+        const storageFacade = getStorageFacade();
+        if (storageFacade) {
+            const backups = await storageFacade.get('manual_backups', []);
+            const list = Array.isArray(backups) ? backups.slice() : [];
+            list.unshift(entry);
+            const max = options.maxBackups || DEFAULT_MAX_BACKUPS;
+            while (list.length > max) {
+                list.pop();
+            }
+            await storageFacade.set('manual_backups', list);
+            return entry;
+        }
+
+        throw new Error('BackupAPI.add: backup repository not ready');
+    }
+
+    async function create(options = {}) {
+        const {
+            id = null,
+            type = 'manual',
+            data = null,
+            extra = null,
+            version = DEFAULT_VERSION
+        } = options;
+
+        const snapshot = data != null
+            ? normalizePayload(data)
+            : await captureSnapshot(extra || {});
+
+        const backupId = id || `backup_${Date.now()}`;
+        const entry = await add({
+            id: backupId,
+            timestamp: new Date().toISOString(),
+            type,
+            version,
+            data: snapshot
+        });
+
+        return entry && entry.id ? entry.id : backupId;
+    }
+
+    async function restorePayload(data, options = {}) {
+        const payload = normalizePayload(data || {});
+        const records = resolvePracticeRecords(payload);
+        const stats = resolveUserStats(payload);
+        const examIndex = resolveExamIndex(payload);
+        const storageVersion = resolveStorageVersion(payload);
+        const restoreRecords = options.restoreRecords !== false;
+        const restoreExamIndex = options.restoreExamIndex !== false;
+        const restoreStorageVersion = options.restoreStorageVersion !== false;
+
+        if (restoreRecords && records != null) {
+            if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.restoreRecords === 'function') {
+                await global.PracticeRecordAPI.restoreRecords(records, {
+                    stats: isPlainObject(stats) ? stats : null,
+                    updateStats: true
+                });
+            } else {
+                throw new Error('BackupAPI.restore: PracticeRecordAPI.restoreRecords not ready');
+            }
+        } else if (isPlainObject(stats) && global.PracticeRecordAPI && typeof global.PracticeRecordAPI.resetStats === 'function') {
+            await global.PracticeRecordAPI.resetStats(stats);
+        }
+
+        if (restoreExamIndex && examIndex) {
+            await writeMeta('exam_index', examIndex);
+        }
+
+        if (restoreStorageVersion && storageVersion != null) {
+            await writeMeta('storage_version', storageVersion);
+        }
+
+        // Optional system settings (DataIntegrityManager snapshots)
+        if (isPlainObject(payload.system_settings)) {
+            const repos = getRepositories();
+            if (repos && repos.settings && typeof repos.settings.getAll === 'function') {
+                const current = await repos.settings.getAll();
+                await repos.settings.saveAll({ ...current, ...payload.system_settings });
+            }
+        }
+
+        return {
+            restoredRecords: records != null,
+            restoredStats: isPlainObject(stats),
+            restoredExamIndex: Boolean(restoreExamIndex && examIndex),
+            restoredStorageVersion: Boolean(restoreStorageVersion && storageVersion != null)
+        };
+    }
+
+    async function restore(backupId, options = {}) {
+        if (!backupId) {
+            throw new Error('BackupAPI.restore: invalid backup id');
+        }
+        const backup = await getById(backupId);
+        if (!backup) {
+            throw new Error(`BackupAPI.restore: backup ${backupId} not found`);
+        }
+        const result = await restorePayload(backup.data || {}, options);
+        return { backup, ...result };
+    }
+
+    async function clear(options = {}) {
+        const repo = getBackupRepo();
+        if (repo && typeof repo.clear === 'function') {
+            await repo.clear(options);
+            return true;
+        }
+        const storageFacade = getStorageFacade();
+        if (storageFacade) {
+            await storageFacade.set('manual_backups', []);
+            return true;
+        }
+        throw new Error('BackupAPI.clear: backup repository not ready');
+    }
+
+    async function remove(id, options = {}) {
+        const repo = getBackupRepo();
+        if (repo && typeof repo.delete === 'function') {
+            return await repo.delete(id, options);
+        }
+        const backups = await list();
+        const next = backups.filter((item) => item && String(item.id) !== String(id));
+        if (next.length === backups.length) return false;
+        if (repo && typeof repo.saveAll === 'function') {
+            await repo.saveAll(next, options);
+            return true;
+        }
+        const storageFacade = getStorageFacade();
+        if (storageFacade) {
+            await storageFacade.set('manual_backups', next);
+            return true;
+        }
+        return false;
+    }
+
+    async function prune(limit, options = {}) {
+        const repo = getBackupRepo();
+        if (repo && typeof repo.prune === 'function') {
+            return await repo.prune(limit, options);
+        }
+        const max = typeof limit === 'number' && limit > 0 ? limit : DEFAULT_MAX_BACKUPS;
+        const backups = await list();
+        if (backups.length <= max) return backups.length;
+        const next = backups.slice(0, max);
+        if (repo && typeof repo.saveAll === 'function') {
+            await repo.saveAll(next, options);
+        } else {
+            const storageFacade = getStorageFacade();
+            if (storageFacade) {
+                await storageFacade.set('manual_backups', next);
+            }
+        }
+        return next.length;
+    }
+
+    global.BackupAPI = {
+        __stable: true,
+        version: DEFAULT_VERSION,
+        list,
+        getById,
+        add,
+        create,
+        captureSnapshot,
+        normalizePayload,
+        restore,
+        restorePayload,
+        clear,
+        remove,
+        prune,
+        resolvePracticeRecords,
+        resolveUserStats,
+        resolveExamIndex,
+        resolveStorageVersion
+    };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/externalBackupService.js ===== */
+/**
+ * External disk backup via File System Access API.
+ * Browser-internal backups (manual_backups) cannot survive site-data clears;
+ * this service writes JSON into a user-chosen local folder.
+ *
+ * Policy:
+ * - Silent write only when a directory handle already has granted permission.
+ * - Daily reminder at most once per calendar day (permission / bind / stale write).
+ * - Download export is never auto-triggered; only after explicit user click.
+ */
+(function initExternalBackupService(global) {
+    'use strict';
+
+    if (global.ExternalBackupService && global.ExternalBackupService.__stable === true) {
+        return;
+    }
+
+    var META_KEY = 'exam_system_external_backup_meta';
+    var DB_NAME = 'ExamSystemExternalBackup';
+    var DB_VERSION = 1;
+    var STORE_NAME = 'handles';
+    var HANDLE_KEY = 'backup_directory';
+    var LATEST_FILENAME = 'practice-backup-latest.json';
+    var DAY_MS = 24 * 60 * 60 * 1000;
+    var STALE_WRITE_MS = DAY_MS;
+    var REMIND_BANNER_ID = 'external-backup-remind-banner';
+    var VERSION = '0.6.2-fix';
+
+    var state = {
+        ready: false,
+        readyPromise: null,
+        directoryHandle: null,
+        meta: null,
+        dirty: false,
+        writing: false,
+        lastSnapshotHash: null,
+        silentFlushTimer: null
+    };
+
+    function nowIso() {
+        return new Date().toISOString();
+    }
+
+    function dayKey(date) {
+        var d = date instanceof Date ? date : new Date(date || Date.now());
+        if (Number.isNaN(d.getTime())) {
+            d = new Date();
+        }
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+
+    function isPlainObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function notify(message, type) {
+        if (typeof global.showMessage === 'function') {
+            global.showMessage(message, type || 'info');
+        }
+    }
+
+    function defaultMeta() {
+        return {
+            enabled: false,
+            directoryName: null,
+            lastWriteAt: null,
+            lastWriteOk: false,
+            lastWriteError: null,
+            lastRemindDay: null,
+            lastPermissionOk: false,
+            lastRestorePromptDay: null,
+            recordCountAtLastWrite: 0,
+            createdAt: nowIso(),
+            updatedAt: nowIso()
+        };
+    }
+
+    function readMeta() {
+        try {
+            var raw = global.localStorage && global.localStorage.getItem(META_KEY);
+            if (!raw) {
+                return defaultMeta();
+            }
+            var parsed = JSON.parse(raw);
+            return Object.assign(defaultMeta(), isPlainObject(parsed) ? parsed : {});
+        } catch (_) {
+            return defaultMeta();
+        }
+    }
+
+    function writeMeta(patch) {
+        var next = Object.assign({}, state.meta || readMeta(), isPlainObject(patch) ? patch : {}, {
+            updatedAt: nowIso()
+        });
+        state.meta = next;
+        try {
+            if (global.localStorage) {
+                global.localStorage.setItem(META_KEY, JSON.stringify(next));
+            }
+        } catch (error) {
+            console.warn('[ExternalBackup] meta write failed:', error);
+        }
+        dispatchStatus();
+        return next;
+    }
+
+    function dispatchStatus() {
+        try {
+            global.dispatchEvent(new CustomEvent('external-backup-status', {
+                detail: getStatus()
+            }));
+        } catch (_) { /* ignore */ }
+    }
+
+    function supportsFileSystemAccess() {
+        return !!(
+            global.showDirectoryPicker &&
+            typeof global.showDirectoryPicker === 'function' &&
+            global.isSecureContext !== false
+        );
+    }
+
+    function supportsFilePickerRead() {
+        return !!(global.showOpenFilePicker && typeof global.showOpenFilePicker === 'function');
+    }
+
+    function openHandleDb() {
+        return new Promise(function (resolve, reject) {
+            if (!global.indexedDB) {
+                reject(new Error('IndexedDB unavailable'));
+                return;
+            }
+            var request = global.indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = function () {
+                reject(request.error || new Error('Failed to open external backup DB'));
+            };
+            request.onupgradeneeded = function (event) {
+                var db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME);
+                }
+            };
+            request.onsuccess = function () {
+                resolve(request.result);
+            };
+        });
+    }
+
+    function idbRequest(request) {
+        return new Promise(function (resolve, reject) {
+            request.onsuccess = function () { resolve(request.result); };
+            request.onerror = function () { reject(request.error); };
+        });
+    }
+
+    async function saveDirectoryHandle(handle) {
+        var db = await openHandleDb();
+        try {
+            var tx = db.transaction(STORE_NAME, 'readwrite');
+            var store = tx.objectStore(STORE_NAME);
+            await idbRequest(store.put(handle, HANDLE_KEY));
+        } finally {
+            try { db.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    async function loadDirectoryHandle() {
+        var db = await openHandleDb();
+        try {
+            var tx = db.transaction(STORE_NAME, 'readonly');
+            var store = tx.objectStore(STORE_NAME);
+            return await idbRequest(store.get(HANDLE_KEY));
+        } finally {
+            try { db.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    async function clearDirectoryHandle() {
+        var db = await openHandleDb();
+        try {
+            var tx = db.transaction(STORE_NAME, 'readwrite');
+            var store = tx.objectStore(STORE_NAME);
+            await idbRequest(store.delete(HANDLE_KEY));
+        } finally {
+            try { db.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    async function queryHandlePermission(handle, mode) {
+        if (!handle) {
+            return 'denied';
+        }
+        try {
+            if (typeof handle.queryPermission === 'function') {
+                return await handle.queryPermission({ mode: mode || 'readwrite' });
+            }
+        } catch (_) { /* ignore */ }
+        return 'prompt';
+    }
+
+    async function requestHandlePermission(handle, mode) {
+        if (!handle) {
+            return 'denied';
+        }
+        try {
+            if (typeof handle.requestPermission === 'function') {
+                return await handle.requestPermission({ mode: mode || 'readwrite' });
+            }
+        } catch (_) { /* ignore */ }
+        // Some Chromium builds treat existing handles as usable without requestPermission.
+        return await queryHandlePermission(handle, mode);
+    }
+
+    async function ensurePermission(handle, interactive) {
+        if (!handle) {
+            return false;
+        }
+        var current = await queryHandlePermission(handle, 'readwrite');
+        if (current === 'granted') {
+            writeMeta({ lastPermissionOk: true });
+            return true;
+        }
+        if (!interactive) {
+            writeMeta({ lastPermissionOk: false });
+            return false;
+        }
+        var next = await requestHandlePermission(handle, 'readwrite');
+        var ok = next === 'granted';
+        writeMeta({ lastPermissionOk: ok });
+        return ok;
+    }
+
+    async function requestPersistentStorage() {
+        try {
+            if (!global.navigator || !global.navigator.storage || typeof global.navigator.storage.persist !== 'function') {
+                return false;
+            }
+            var already = typeof global.navigator.storage.persisted === 'function'
+                ? await global.navigator.storage.persisted()
+                : false;
+            if (already) {
+                return true;
+            }
+            return await global.navigator.storage.persist();
+        } catch (error) {
+            console.warn('[ExternalBackup] persist() failed:', error);
+            return false;
+        }
+    }
+
+    async function captureSnapshot() {
+        if (global.BackupAPI && typeof global.BackupAPI.captureSnapshot === 'function') {
+            var snapshot = await global.BackupAPI.captureSnapshot();
+            return global.BackupAPI.normalizePayload
+                ? global.BackupAPI.normalizePayload(snapshot)
+                : snapshot;
+        }
+
+        var practiceRecords = [];
+        var userStats = null;
+        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
+            var listed = await global.PracticeRecordAPI.list();
+            practiceRecords = Array.isArray(listed) ? listed : [];
+        }
+        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.readStats === 'function') {
+            userStats = await global.PracticeRecordAPI.readStats();
+        }
+
+        var examIndex = [];
+        var storageVersion = null;
+        try {
+            if (global.storage && typeof global.storage.get === 'function') {
+                examIndex = await global.storage.get('exam_index', []);
+                storageVersion = await global.storage.get('storage_version', null);
+            }
+        } catch (_) { /* ignore */ }
+
+        return {
+            practice_records: practiceRecords,
+            practiceRecords: practiceRecords,
+            user_stats: userStats,
+            userStats: userStats,
+            exam_index: Array.isArray(examIndex) ? examIndex : [],
+            examIndex: Array.isArray(examIndex) ? examIndex : [],
+            storage_version: storageVersion,
+            storageVersion: storageVersion
+        };
+    }
+
+    function buildExportDocument(snapshot) {
+        return {
+            exportDate: nowIso(),
+            version: VERSION,
+            source: 'external-backup-service',
+            note: 'Disk backup for IELTS Atlas. Survives browser cache clears. Import via 设置 → 导入数据.',
+            data: snapshot
+        };
+    }
+
+    function stableHash(payload) {
+        try {
+            var text = JSON.stringify(payload);
+            var hash = 0;
+            for (var i = 0; i < text.length; i += 1) {
+                hash = ((hash << 5) - hash) + text.charCodeAt(i);
+                hash |= 0;
+            }
+            return String(hash);
+        } catch (_) {
+            return String(Date.now());
+        }
+    }
+
+    async function writeTextFile(directoryHandle, filename, text) {
+        var fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+        var writable = await fileHandle.createWritable();
+        try {
+            await writable.write(text);
+            await writable.close();
+        } catch (error) {
+            try { await writable.abort(); } catch (_) { /* ignore */ }
+            throw error;
+        }
+    }
+
+    async function readTextFile(directoryHandle, filename) {
+        var fileHandle = await directoryHandle.getFileHandle(filename, { create: false });
+        var file = await fileHandle.getFile();
+        return await file.text();
+    }
+
+    async function writeToBoundDirectory(options) {
+        var opts = options || {};
+        if (state.writing) {
+            return { success: false, reason: 'busy' };
+        }
+        if (!state.directoryHandle) {
+            return { success: false, reason: 'unbound' };
+        }
+
+        state.writing = true;
+        try {
+            var interactive = opts.interactive === true;
+            var permitted = await ensurePermission(state.directoryHandle, interactive);
+            if (!permitted) {
+                writeMeta({ lastWriteOk: false, lastWriteError: 'permission_denied' });
+                return { success: false, reason: 'permission_denied' };
+            }
+
+            var snapshot = await captureSnapshot();
+            var doc = buildExportDocument(snapshot);
+            var text = JSON.stringify(doc, null, 2);
+            var hash = stableHash(doc.data);
+
+            if (!opts.force && hash === state.lastSnapshotHash && state.meta && state.meta.lastWriteOk) {
+                return { success: true, reason: 'unchanged', skipped: true };
+            }
+
+            await writeTextFile(state.directoryHandle, LATEST_FILENAME, text);
+
+            if (opts.datedCopy !== false) {
+                try {
+                    var dated = 'practice-backup-' + dayKey(new Date()) + '.json';
+                    await writeTextFile(state.directoryHandle, dated, text);
+                } catch (datedError) {
+                    console.warn('[ExternalBackup] dated copy failed:', datedError);
+                }
+            }
+
+            var recordCount = Array.isArray(snapshot.practice_records)
+                ? snapshot.practice_records.length
+                : (Array.isArray(snapshot.practiceRecords) ? snapshot.practiceRecords.length : 0);
+
+            state.lastSnapshotHash = hash;
+            state.dirty = false;
+            writeMeta({
+                enabled: true,
+                lastWriteAt: nowIso(),
+                lastWriteOk: true,
+                lastWriteError: null,
+                lastPermissionOk: true,
+                recordCountAtLastWrite: recordCount
+            });
+
+            return {
+                success: true,
+                reason: 'written',
+                filename: LATEST_FILENAME,
+                recordCount: recordCount,
+                bytes: text.length
+            };
+        } catch (error) {
+            console.error('[ExternalBackup] write failed:', error);
+            writeMeta({
+                lastWriteOk: false,
+                lastWriteError: error && error.message ? error.message : String(error)
+            });
+            return {
+                success: false,
+                reason: 'write_error',
+                error: error
+            };
+        } finally {
+            state.writing = false;
+        }
+    }
+
+    async function bindDirectory(options) {
+        if (!supportsFileSystemAccess()) {
+            throw new Error('当前浏览器不支持绑定本地文件夹（需要 Chrome/Edge，且非 file:// 打开）');
+        }
+
+        var handle = await global.showDirectoryPicker({
+            id: 'ielts-atlas-external-backup',
+            mode: 'readwrite',
+            startIn: 'documents'
+        });
+
+        if (!handle) {
+            throw new Error('未选择文件夹');
+        }
+
+        var permitted = await ensurePermission(handle, true);
+        if (!permitted) {
+            throw new Error('未获得文件夹读写权限');
+        }
+
+        await saveDirectoryHandle(handle);
+        state.directoryHandle = handle;
+        writeMeta({
+            enabled: true,
+            directoryName: handle.name || 'backup',
+            lastPermissionOk: true,
+            lastWriteError: null
+        });
+
+        var writeNow = !options || options.writeNow !== false;
+        var writeResult = null;
+        if (writeNow) {
+            writeResult = await writeToBoundDirectory({ interactive: true, force: true });
+        }
+
+        await requestPersistentStorage();
+        return {
+            directoryName: handle.name || 'backup',
+            writeResult: writeResult
+        };
+    }
+
+    async function unbindDirectory() {
+        state.directoryHandle = null;
+        state.lastSnapshotHash = null;
+        try {
+            await clearDirectoryHandle();
+        } catch (error) {
+            console.warn('[ExternalBackup] clear handle failed:', error);
+        }
+        writeMeta({
+            enabled: false,
+            directoryName: null,
+            lastPermissionOk: false,
+            lastWriteError: null
+        });
+        return true;
+    }
+
+    async function restoreFromLatest(options) {
+        var opts = options || {};
+        if (!state.directoryHandle) {
+            throw new Error('尚未绑定备份文件夹');
+        }
+        var permitted = await ensurePermission(state.directoryHandle, opts.interactive !== false);
+        if (!permitted) {
+            throw new Error('需要文件夹读取权限才能恢复');
+        }
+
+        var text = await readTextFile(state.directoryHandle, LATEST_FILENAME);
+        var payload = JSON.parse(text);
+        var data = payload && payload.data ? payload.data : payload;
+
+        if (global.BackupAPI && typeof global.BackupAPI.restorePayload === 'function') {
+            await global.BackupAPI.restorePayload(data, opts);
+        } else if (global.DataBackupManager || global.dataBackupManager) {
+            throw new Error('请使用设置页「导入数据」选择备份文件完成恢复');
+        } else {
+            throw new Error('恢复 API 未就绪');
+        }
+
+        writeMeta({ lastRestorePromptDay: dayKey(new Date()) });
+        return true;
+    }
+
+    async function pickAndRestoreFile() {
+        if (supportsFilePickerRead()) {
+            var handles = await global.showOpenFilePicker({
+                multiple: false,
+                types: [{
+                    description: 'IELTS Atlas backup JSON',
+                    accept: { 'application/json': ['.json'] }
+                }]
+            });
+            var fileHandle = handles && handles[0];
+            if (!fileHandle) {
+                throw new Error('未选择文件');
+            }
+            var file = await fileHandle.getFile();
+            var text = await file.text();
+            var payload = JSON.parse(text);
+            var data = payload && payload.data ? payload.data : payload;
+            if (global.BackupAPI && typeof global.BackupAPI.restorePayload === 'function') {
+                await global.BackupAPI.restorePayload(data);
+                return true;
+            }
+            throw new Error('恢复 API 未就绪');
+        }
+
+        // Fallback: reuse existing import flow
+        if (typeof global.importData === 'function') {
+            global.importData();
+            return false;
+        }
+        throw new Error('当前环境不支持文件选择器，请使用「导入数据」');
+    }
+
+    async function countPracticeRecords() {
+        try {
+            if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
+                var list = await global.PracticeRecordAPI.list();
+                return Array.isArray(list) ? list.length : 0;
+            }
+        } catch (_) { /* ignore */ }
+        return 0;
+    }
+
+    async function hasReadableLatestBackup() {
+        if (!state.directoryHandle) {
+            return false;
+        }
+        try {
+            var permitted = await ensurePermission(state.directoryHandle, false);
+            if (!permitted) {
+                return false;
+            }
+            await state.directoryHandle.getFileHandle(LATEST_FILENAME, { create: false });
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function buildReminder(status) {
+        if (!status) {
+            return null;
+        }
+
+        if (!status.supported) {
+            return null;
+        }
+
+        if (!status.bound) {
+            return {
+                level: 'info',
+                code: 'bind',
+                title: '建议绑定本地备份文件夹',
+                message: '练习数据只存在浏览器内，清缓存会丢失。绑定文件夹后可一键写入磁盘备份。',
+                primaryAction: 'bind',
+                primaryLabel: '绑定文件夹',
+                secondaryAction: null,
+                secondaryLabel: null
+            };
+        }
+
+        if (!status.permissionGranted) {
+            return {
+                level: 'warning',
+                code: 'permission',
+                title: '本地备份需要重新授权',
+                message: '已绑定「' + (status.directoryName || '备份文件夹') + '」，但当前没有写入权限。',
+                primaryAction: 'reauth',
+                primaryLabel: '重新授权并写入',
+                secondaryAction: 'unbind',
+                secondaryLabel: '解除绑定'
+            };
+        }
+
+        if (status.staleWrite || status.dirty) {
+            return {
+                level: 'info',
+                code: 'write',
+                title: '本地备份可更新',
+                message: status.lastWriteAt
+                    ? ('距上次写入已超过一天或有新练习数据（上次：' + formatTime(status.lastWriteAt) + '）。')
+                    : '尚未写入磁盘备份，建议现在写入。',
+                primaryAction: 'write',
+                primaryLabel: '立即写入备份',
+                secondaryAction: null,
+                secondaryLabel: null
+            };
+        }
+
+        return null;
+    }
+
+    function formatTime(iso) {
+        if (!iso) return '—';
+        try {
+            return new Date(iso).toLocaleString();
+        } catch (_) {
+            return String(iso);
+        }
+    }
+
+    function shouldShowDailyReminder(reminder) {
+        if (!reminder) {
+            return false;
+        }
+        var meta = state.meta || readMeta();
+        var today = dayKey(new Date());
+        if (meta.lastRemindDay === today) {
+            return false;
+        }
+        return true;
+    }
+
+    function markReminded() {
+        writeMeta({ lastRemindDay: dayKey(new Date()) });
+    }
+
+    function removeRemindBanner() {
+        var el = global.document && global.document.getElementById(REMIND_BANNER_ID);
+        if (el && el.parentNode) {
+            el.parentNode.removeChild(el);
+        }
+    }
+
+    function renderRemindBanner(reminder) {
+        if (!global.document || !global.document.body || !reminder) {
+            return;
+        }
+
+        removeRemindBanner();
+
+        var banner = global.document.createElement('div');
+        banner.id = REMIND_BANNER_ID;
+        banner.className = 'external-backup-banner external-backup-banner--' + (reminder.level || 'info');
+        banner.setAttribute('role', 'status');
+
+        var glass = global.document.createElement('div');
+        glass.className = 'external-backup-banner__glass';
+
+        var text = global.document.createElement('div');
+        text.className = 'external-backup-banner__text';
+        var title = global.document.createElement('strong');
+        title.textContent = reminder.title;
+        var msg = global.document.createElement('span');
+        msg.textContent = reminder.message;
+        text.appendChild(title);
+        text.appendChild(msg);
+
+        var actions = global.document.createElement('div');
+        actions.className = 'external-backup-banner__actions';
+
+        function makeBtn(label, action, primary) {
+            var btn = global.document.createElement('button');
+            btn.type = 'button';
+            btn.className = primary
+                ? 'btn external-backup-banner__btn external-backup-banner__btn--primary'
+                : 'btn external-backup-banner__btn external-backup-banner__btn--ghost';
+            btn.textContent = label;
+            btn.addEventListener('click', function () {
+                handleReminderAction(action);
+            });
+            return btn;
+        }
+
+        if (reminder.primaryAction) {
+            actions.appendChild(makeBtn(reminder.primaryLabel || '确定', reminder.primaryAction, true));
+        }
+        if (reminder.secondaryAction) {
+            actions.appendChild(makeBtn(reminder.secondaryLabel || '取消', reminder.secondaryAction, false));
+        }
+
+        var dismiss = global.document.createElement('button');
+        dismiss.type = 'button';
+        dismiss.className = 'external-backup-banner__dismiss';
+        dismiss.setAttribute('aria-label', '关闭提醒');
+        dismiss.textContent = '×';
+        dismiss.addEventListener('click', function () {
+            markReminded();
+            removeRemindBanner();
+        });
+
+        glass.appendChild(text);
+        glass.appendChild(actions);
+        glass.appendChild(dismiss);
+        banner.appendChild(glass);
+        global.document.body.appendChild(banner);
+        markReminded();
+    }
+
+    async function handleReminderAction(action) {
+        try {
+            if (action === 'bind') {
+                var bound = await bindDirectory({ writeNow: true });
+                removeRemindBanner();
+                if (bound.writeResult && bound.writeResult.success) {
+                    notify('已绑定并写入本地备份：' + (bound.directoryName || ''), 'success');
+                } else {
+                    notify('已绑定文件夹：' + (bound.directoryName || '') + '，请点击「立即写入备份」', 'info');
+                }
+                refreshUi();
+                return;
+            }
+            if (action === 'reauth' || action === 'write') {
+                var result = await writeToBoundDirectory({ interactive: true, force: true });
+                removeRemindBanner();
+                if (result.success) {
+                    notify(result.skipped ? '备份已是最新' : '本地备份已写入', 'success');
+                } else if (result.reason === 'permission_denied') {
+                    notify('仍未获得文件夹权限，请在浏览器弹窗中允许访问', 'warning');
+                } else if (result.reason === 'unbound') {
+                    notify('尚未绑定备份文件夹', 'warning');
+                } else {
+                    notify('写入失败：' + (result.error && result.error.message ? result.error.message : result.reason), 'error');
+                }
+                refreshUi();
+                return;
+            }
+            if (action === 'unbind') {
+                await unbindDirectory();
+                removeRemindBanner();
+                notify('已解除本地备份文件夹绑定', 'info');
+                refreshUi();
+            }
+        } catch (error) {
+            if (error && error.name === 'AbortError') {
+                notify('已取消', 'info');
+                return;
+            }
+            console.error('[ExternalBackup] reminder action failed:', error);
+            notify(error && error.message ? error.message : '操作失败', 'error');
+        }
+    }
+
+    function getStatus() {
+        var meta = state.meta || readMeta();
+        var lastWriteAt = meta.lastWriteAt || null;
+        var lastWriteAge = lastWriteAt ? (Date.now() - new Date(lastWriteAt).getTime()) : Infinity;
+        var staleWrite = !lastWriteAt || !Number.isFinite(lastWriteAge) || lastWriteAge >= STALE_WRITE_MS;
+        var permissionGranted = !!(state.directoryHandle && meta.lastPermissionOk);
+
+        return {
+            supported: supportsFileSystemAccess(),
+            secureContext: global.isSecureContext !== false,
+            bound: !!(state.directoryHandle && meta.enabled),
+            directoryName: meta.directoryName || null,
+            permissionGranted: permissionGranted,
+            lastWriteAt: lastWriteAt,
+            lastWriteOk: !!meta.lastWriteOk,
+            lastWriteError: meta.lastWriteError || null,
+            lastWriteAgeMs: Number.isFinite(lastWriteAge) ? lastWriteAge : null,
+            staleWrite: staleWrite,
+            dirty: !!state.dirty,
+            writing: !!state.writing,
+            recordCountAtLastWrite: meta.recordCountAtLastWrite || 0,
+            latestFilename: LATEST_FILENAME,
+            lastRemindDay: meta.lastRemindDay || null
+        };
+    }
+
+    async function refreshPermissionFlag() {
+        if (!state.directoryHandle) {
+            writeMeta({ lastPermissionOk: false });
+            return false;
+        }
+        var ok = await ensurePermission(state.directoryHandle, false);
+        return ok;
+    }
+
+    async function maybeShowDailyReminder(options) {
+        var opts = options || {};
+        await ensureReady();
+        await refreshPermissionFlag();
+        var status = getStatus();
+        var reminder = buildReminder(status);
+        if (!reminder) {
+            if (opts.force) {
+                removeRemindBanner();
+            }
+            return null;
+        }
+        if (opts.force || shouldShowDailyReminder(reminder)) {
+            if (opts.render !== false) {
+                renderRemindBanner(reminder);
+            }
+            return reminder;
+        }
+        return null;
+    }
+
+    async function maybePromptEmptyStoreRecovery() {
+        await ensureReady();
+        var count = await countPracticeRecords();
+        if (count > 0) {
+            return false;
+        }
+        var readable = await hasReadableLatestBackup();
+        if (!readable) {
+            return false;
+        }
+
+        var meta = state.meta || readMeta();
+        var today = dayKey(new Date());
+        if (meta.lastRestorePromptDay === today) {
+            return false;
+        }
+        writeMeta({ lastRestorePromptDay: today });
+
+        var dirName = (state.meta && state.meta.directoryName) || '备份文件夹';
+        var ok = false;
+        try {
+            ok = global.confirm(
+                '检测到浏览器内练习记录为空，但本地备份文件夹「' + dirName +
+                '」中有 ' + LATEST_FILENAME + '。是否立即恢复？'
+            );
+        } catch (_) {
+            ok = false;
+        }
+        if (!ok) {
+            return false;
+        }
+        try {
+            await restoreFromLatest({ interactive: true });
+            notify('已从本地备份文件夹恢复数据', 'success');
+            try {
+                if (typeof global.updateOverview === 'function') {
+                    global.updateOverview();
+                }
+            } catch (_) { /* ignore */ }
+            try {
+                global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
+                    detail: { source: 'external-backup-restore' }
+                }));
+            } catch (_) { /* ignore */ }
+            return true;
+        } catch (error) {
+            console.error('[ExternalBackup] restore failed:', error);
+            notify('恢复失败：' + (error && error.message ? error.message : error), 'error');
+            return false;
+        }
+    }
+
+    function markDirty() {
+        state.dirty = true;
+        dispatchStatus();
+        scheduleSilentFlush();
+    }
+
+    /**
+     * When folder permission is already granted, write silently after data changes.
+     * Never auto-downloads; never prompts for permission here.
+     */
+    function scheduleSilentFlush() {
+        if (state.silentFlushTimer) {
+            global.clearTimeout(state.silentFlushTimer);
+        }
+        state.silentFlushTimer = global.setTimeout(function () {
+            state.silentFlushTimer = null;
+            flushSilentlyIfPermitted().catch(function (error) {
+                console.warn('[ExternalBackup] silent flush failed:', error);
+            });
+        }, 8000);
+    }
+
+    async function flushSilentlyIfPermitted() {
+        await ensureReady();
+        if (!state.directoryHandle || !state.dirty || state.writing) {
+            return { success: false, reason: 'skip' };
+        }
+        var permitted = await ensurePermission(state.directoryHandle, false);
+        if (!permitted) {
+            // Permission missing: daily banner handles re-auth; do not prompt here.
+            return { success: false, reason: 'permission_denied' };
+        }
+        return writeToBoundDirectory({ interactive: false, force: false });
+    }
+
+    function refreshUi() {
+        try {
+            if (typeof global.refreshExternalBackupPanel === 'function') {
+                global.refreshExternalBackupPanel();
+            }
+        } catch (_) { /* ignore */ }
+        dispatchStatus();
+    }
+
+    function formatStatusText(status) {
+        if (!status.supported) {
+            return '当前环境不支持文件夹绑定（请用 Chrome/Edge 通过 http(s) 打开；file:// 下请用「导出到下载」）。';
+        }
+        if (!status.bound) {
+            return '未绑定本地备份文件夹。绑定后可一键写入磁盘，避免清缓存丢数据。';
+        }
+        var parts = [];
+        parts.push('已绑定：' + (status.directoryName || '文件夹'));
+        if (!status.permissionGranted) {
+            parts.push('权限失效，需重新授权');
+        } else if (status.lastWriteAt) {
+            parts.push('上次写入 ' + formatTime(status.lastWriteAt));
+            if (status.lastWriteOk === false) {
+                parts.push('最近一次写入失败');
+            }
+        } else {
+            parts.push('尚未写入');
+        }
+        if (status.dirty) {
+            parts.push('有未备份的新数据');
+        }
+        return parts.join(' · ');
+    }
+
+    function formatEntryLabel(status) {
+        if (!status.supported) {
+            return '📁 本地磁盘备份';
+        }
+        if (!status.bound) {
+            return '📁 本地磁盘备份';
+        }
+        if (!status.permissionGranted) {
+            return '📁 本地备份 · 需授权';
+        }
+        if (status.staleWrite || status.dirty) {
+            return '📁 本地备份 · 待更新';
+        }
+        return '📁 本地备份 · 已就绪';
+    }
+
+    var ENTRY_ID = 'external-backup-entry-btn';
+    var MODAL_ID = 'external-backup-modal';
+    var modalBound = false;
+
+    function getModal() {
+        return global.document ? global.document.getElementById(MODAL_ID) : null;
+    }
+
+    function openModal() {
+        ensureModalDom();
+        var modal = getModal();
+        if (modal) {
+            modal.classList.add('show');
+            refreshExternalBackupPanel();
+        }
+    }
+
+    function closeModal() {
+        var modal = getModal();
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    function makeActionButton(id, label) {
+        var btn = global.document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn data-mgmt-btn';
+        btn.id = id;
+        btn.textContent = label;
+        return btn;
+    }
+
+    function ensureEntryButton() {
+        var panel = global.document && global.document.querySelector('#settings-view .data-management-panel');
+        if (!panel) {
+            return null;
+        }
+        var entry = global.document.getElementById(ENTRY_ID);
+        if (entry) {
+            return entry;
+        }
+
+        var actions = panel.querySelector('.hero-settings-actions');
+        if (!actions) {
+            return null;
+        }
+
+        entry = global.document.createElement('button');
+        entry.type = 'button';
+        entry.className = 'btn data-mgmt-btn';
+        entry.id = ENTRY_ID;
+        entry.textContent = '📁 本地磁盘备份';
+
+        // Prefer leading position so the recommended action is easy to find.
+        if (actions.firstChild) {
+            actions.insertBefore(entry, actions.firstChild);
+        } else {
+            actions.appendChild(entry);
+        }
+        return entry;
+    }
+
+    function ensureModalDom() {
+        if (!global.document || !global.document.body) {
+            return null;
+        }
+
+        var modal = getModal();
+        if (modal) {
+            if (!modalBound) {
+                bindModalEvents(modal);
+            }
+            return modal;
+        }
+
+        modal = global.document.createElement('div');
+        modal.id = MODAL_ID;
+        modal.className = 'theme-modal external-backup-modal shui-secondary-modal shui-secondary-modal--sm';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'external-backup-title');
+
+        var content = global.document.createElement('div');
+        content.className = 'theme-modal-content external-backup-modal__content shui-secondary-modal__content';
+
+        var header = global.document.createElement('div');
+        header.className = 'theme-modal-header external-backup-modal__header shui-secondary-modal__header';
+
+        var titleGroup = global.document.createElement('div');
+        titleGroup.className = 'external-backup-modal__title-group shui-secondary-modal__title-group';
+
+        var eyebrow = global.document.createElement('div');
+        eyebrow.className = 'external-backup-modal__eyebrow shui-secondary-modal__eyebrow';
+        eyebrow.textContent = 'DISK BACKUP';
+
+        var title = global.document.createElement('h3');
+        title.id = 'external-backup-title';
+        title.textContent = '本地磁盘备份';
+
+        titleGroup.appendChild(eyebrow);
+        titleGroup.appendChild(title);
+
+        var closeBtn = global.document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'theme-modal-close';
+        closeBtn.setAttribute('aria-label', '关闭');
+        closeBtn.innerHTML = '&times;';
+
+        header.appendChild(titleGroup);
+        header.appendChild(closeBtn);
+
+        var body = global.document.createElement('div');
+        body.className = 'theme-modal-body external-backup-modal__body shui-secondary-modal__body';
+
+        var host = global.document.createElement('div');
+        host.id = 'external-backup-panel';
+        host.className = 'external-backup-panel external-backup-panel--modal';
+
+        var desc = global.document.createElement('p');
+        desc.className = 'external-backup-panel__desc';
+        desc.textContent = '绑定本地文件夹后，可把练习数据写入磁盘 JSON。清浏览器缓存不会删除该文件夹中的文件；已授权时可在后台静默更新；每天最多提醒一次，且不会自动下载。';
+
+        var statusCard = global.document.createElement('div');
+        statusCard.className = 'external-backup-status-card';
+
+        var statusLabel = global.document.createElement('div');
+        statusLabel.className = 'external-backup-status-card__label';
+        statusLabel.textContent = '当前状态';
+
+        var status = global.document.createElement('div');
+        status.id = 'external-backup-status';
+        status.className = 'external-backup-panel__status';
+        status.textContent = '状态加载中…';
+
+        statusCard.appendChild(statusLabel);
+        statusCard.appendChild(status);
+
+        var tips = global.document.createElement('ul');
+        tips.className = 'external-backup-panel__tips';
+        [
+            '推荐使用 Chrome / Edge，通过 http(s) 或 localhost 打开',
+            'file:// 环境通常无法绑定文件夹，请改用「导出到下载」',
+            '应用内备份只防导入误操作，防不了清缓存'
+        ].forEach(function (line) {
+            var li = global.document.createElement('li');
+            li.textContent = line;
+            tips.appendChild(li);
+        });
+
+        var actions = global.document.createElement('div');
+        actions.className = 'external-backup-panel__actions';
+
+        var bindBtn = makeActionButton('external-backup-bind-btn', '📁 绑定备份文件夹');
+        var writeBtn = makeActionButton('external-backup-write-btn', '💾 立即写入备份');
+        var restoreBtn = makeActionButton('external-backup-restore-btn', '♻️ 从文件夹恢复');
+        var unbindBtn = makeActionButton('external-backup-unbind-btn', '🔓 解除绑定');
+        unbindBtn.classList.add('external-backup-btn--ghost');
+
+        actions.appendChild(bindBtn);
+        actions.appendChild(writeBtn);
+        actions.appendChild(restoreBtn);
+        actions.appendChild(unbindBtn);
+
+        host.appendChild(desc);
+        host.appendChild(statusCard);
+        host.appendChild(tips);
+        host.appendChild(actions);
+        body.appendChild(host);
+
+        content.appendChild(header);
+        content.appendChild(body);
+        modal.appendChild(content);
+        global.document.body.appendChild(modal);
+
+        bindBtn.addEventListener('click', async function () {
+            try {
+                await ensureReady();
+                var result = await bindDirectory({ writeNow: true });
+                if (result.writeResult && result.writeResult.success) {
+                    notify('已绑定并写入：' + result.directoryName, 'success');
+                } else {
+                    notify('已绑定：' + result.directoryName, 'success');
+                }
+            } catch (error) {
+                if (error && error.name === 'AbortError') {
+                    notify('已取消选择文件夹', 'info');
+                } else {
+                    notify(error && error.message ? error.message : '绑定失败', 'error');
+                }
+            } finally {
+                refreshExternalBackupPanel();
+            }
+        });
+
+        writeBtn.addEventListener('click', async function () {
+            try {
+                await ensureReady();
+                var result = await writeToBoundDirectory({ interactive: true, force: true });
+                if (result.success) {
+                    notify(result.skipped ? '备份内容无变化' : ('已写入 ' + (result.filename || LATEST_FILENAME)), 'success');
+                } else if (result.reason === 'unbound') {
+                    notify('请先绑定备份文件夹', 'warning');
+                } else if (result.reason === 'permission_denied') {
+                    notify('需要允许文件夹访问权限', 'warning');
+                } else {
+                    notify('写入失败：' + (result.error && result.error.message ? result.error.message : result.reason), 'error');
+                }
+            } catch (error) {
+                notify(error && error.message ? error.message : '写入失败', 'error');
+            } finally {
+                refreshExternalBackupPanel();
+            }
+        });
+
+        restoreBtn.addEventListener('click', async function () {
+            try {
+                await ensureReady();
+                var statusNow = getStatus();
+                if (!statusNow.bound) {
+                    await pickAndRestoreFile();
+                    notify('已从文件恢复（或已打开导入流程）', 'success');
+                    return;
+                }
+                var ok = true;
+                try {
+                    ok = global.confirm('将用文件夹中的 ' + LATEST_FILENAME + ' 覆盖/恢复练习数据，是否继续？');
+                } catch (_) { /* ignore */ }
+                if (!ok) {
+                    return;
+                }
+                await restoreFromLatest({ interactive: true });
+                notify('已从本地备份文件夹恢复', 'success');
+                try {
+                    if (typeof global.updateOverview === 'function') {
+                        global.updateOverview();
+                    }
+                } catch (_) { /* ignore */ }
+            } catch (error) {
+                if (error && error.name === 'AbortError') {
+                    notify('已取消', 'info');
+                } else {
+                    notify(error && error.message ? error.message : '恢复失败', 'error');
+                }
+            } finally {
+                refreshExternalBackupPanel();
+            }
+        });
+
+        unbindBtn.addEventListener('click', async function () {
+            try {
+                await ensureReady();
+                var ok = true;
+                try {
+                    ok = global.confirm('解除绑定后将不再写入该文件夹（磁盘上的备份文件仍保留）。确定？');
+                } catch (_) { /* ignore */ }
+                if (!ok) {
+                    return;
+                }
+                await unbindDirectory();
+                notify('已解除绑定', 'info');
+            } catch (error) {
+                notify(error && error.message ? error.message : '解除绑定失败', 'error');
+            } finally {
+                refreshExternalBackupPanel();
+            }
+        });
+
+        bindModalEvents(modal);
+        return modal;
+    }
+
+    function bindModalEvents(modal) {
+        if (!modal || modalBound) {
+            return;
+        }
+        modalBound = true;
+
+        var closeBtn = modal.querySelector('.theme-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        global.document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+
+        var entry = ensureEntryButton();
+        if (entry && !entry.__externalBackupBound) {
+            entry.__externalBackupBound = true;
+            entry.addEventListener('click', function (event) {
+                event.preventDefault();
+                openModal();
+            });
+        }
+    }
+
+    function ensurePanelDom() {
+        // Compact entry on settings page + secondary modal body.
+        ensureEntryButton();
+        var modal = ensureModalDom();
+        return modal ? modal.querySelector('#external-backup-panel') : null;
+    }
+
+    function refreshExternalBackupPanel() {
+        var host = ensurePanelDom();
+        var status = getStatus();
+
+        var entry = global.document && global.document.getElementById(ENTRY_ID);
+        if (entry) {
+            entry.textContent = formatEntryLabel(status);
+            entry.dataset.state = status.bound
+                ? (status.permissionGranted ? (status.staleWrite || status.dirty ? 'stale' : 'ok') : 'need-auth')
+                : (status.supported ? 'unbound' : 'unsupported');
+            entry.title = formatStatusText(status);
+        }
+
+        if (!host) {
+            return;
+        }
+
+        var statusEl = host.querySelector('#external-backup-status');
+        if (statusEl) {
+            statusEl.textContent = formatStatusText(status);
+            statusEl.dataset.state = status.bound
+                ? (status.permissionGranted ? (status.staleWrite || status.dirty ? 'stale' : 'ok') : 'need-auth')
+                : (status.supported ? 'unbound' : 'unsupported');
+        }
+
+        var writeBtn = host.querySelector('#external-backup-write-btn');
+        var unbindBtn = host.querySelector('#external-backup-unbind-btn');
+        var restoreBtn = host.querySelector('#external-backup-restore-btn');
+        var bindBtn = host.querySelector('#external-backup-bind-btn');
+
+        if (bindBtn) {
+            bindBtn.disabled = !status.supported;
+            bindBtn.textContent = status.bound ? '📁 更换备份文件夹' : '📁 绑定备份文件夹';
+        }
+        if (writeBtn) {
+            writeBtn.disabled = !status.bound || status.writing;
+        }
+        if (unbindBtn) {
+            unbindBtn.disabled = !status.bound;
+        }
+        if (restoreBtn) {
+            restoreBtn.disabled = false;
+        }
+    }
+
+    function onStorageSync(event) {
+        var key = event && event.detail ? event.detail.key : null;
+        if (!key || key === '*' || key === 'practice_records' || key === 'user_stats' ||
+            String(key).indexOf('practice') !== -1 || String(key).indexOf('vocab') !== -1) {
+            markDirty();
+        }
+    }
+
+    async function ensureReady() {
+        if (state.ready) {
+            return true;
+        }
+        if (state.readyPromise) {
+            return state.readyPromise;
+        }
+        state.readyPromise = (async function () {
+            state.meta = readMeta();
+            try {
+                var handle = await loadDirectoryHandle();
+                if (handle) {
+                    state.directoryHandle = handle;
+                    var ok = await ensurePermission(handle, false);
+                    writeMeta({
+                        enabled: true,
+                        directoryName: handle.name || state.meta.directoryName || 'backup',
+                        lastPermissionOk: ok
+                    });
+                }
+            } catch (error) {
+                console.warn('[ExternalBackup] load handle failed:', error);
+            }
+            state.ready = true;
+            return true;
+        })();
+        return state.readyPromise;
+    }
+
+    async function init() {
+        await ensureReady();
+        ensurePanelDom();
+        refreshExternalBackupPanel();
+        await requestPersistentStorage();
+
+        // Daily reminder + empty-store recovery (deferred so PracticeRecordAPI can boot)
+        global.setTimeout(function () {
+            maybeShowDailyReminder({ render: true }).catch(function (error) {
+                console.warn('[ExternalBackup] daily reminder failed:', error);
+            });
+            maybePromptEmptyStoreRecovery().catch(function (error) {
+                console.warn('[ExternalBackup] recovery prompt failed:', error);
+            });
+        }, 1800);
+
+        // Re-check when user returns to the tab (still at most once/day)
+        if (global.document) {
+            global.document.addEventListener('visibilitychange', function () {
+                if (global.document.visibilityState === 'visible') {
+                    maybeShowDailyReminder({ render: true }).catch(function () { /* ignore */ });
+                    refreshExternalBackupPanel();
+                } else if (global.document.visibilityState === 'hidden') {
+                    // Best-effort silent write when leaving the tab (no permission prompt)
+                    flushSilentlyIfPermitted().catch(function () { /* ignore */ });
+                }
+            });
+        }
+    }
+
+    // Listen for data changes early
+    try {
+        global.addEventListener('storage-sync', onStorageSync);
+        global.addEventListener('practiceRecordsUpdated', markDirty);
+    } catch (_) { /* ignore */ }
+
+    global.ExternalBackupService = {
+        __stable: true,
+        LATEST_FILENAME: LATEST_FILENAME,
+        supportsFileSystemAccess: supportsFileSystemAccess,
+        ensureReady: ensureReady,
+        init: init,
+        openModal: openModal,
+        closeModal: closeModal,
+        bindDirectory: bindDirectory,
+        unbindDirectory: unbindDirectory,
+        writeNow: function (options) {
+            return writeToBoundDirectory(Object.assign({ interactive: true, force: true }, options || {}));
+        },
+        restoreFromLatest: restoreFromLatest,
+        pickAndRestoreFile: pickAndRestoreFile,
+        getStatus: getStatus,
+        formatStatusText: formatStatusText,
+        maybeShowDailyReminder: maybeShowDailyReminder,
+        maybePromptEmptyStoreRecovery: maybePromptEmptyStoreRecovery,
+        markDirty: markDirty,
+        flushSilentlyIfPermitted: flushSilentlyIfPermitted,
+        refreshPanel: refreshExternalBackupPanel,
+        requestPersistentStorage: requestPersistentStorage
+    };
+
+    global.refreshExternalBackupPanel = refreshExternalBackupPanel;
+
+    function boot() {
+        init().catch(function (error) {
+            console.warn('[ExternalBackup] init failed:', error);
+        });
+    }
+
+    if (global.document && global.document.readyState === 'loading') {
+        global.document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -5660,88 +9187,47 @@ storageManager.ready
 (function initPracticeStore(global) {
     'use strict';
 
-    var PRACTICE_RECORDS_KEY = ['practice', 'records'].join('_');
-
-    function getCoreStore() {
-        return global.PracticeCore && global.PracticeCore.store
-            ? global.PracticeCore.store
-            : null;
-    }
-
-    function getLegacyWrapper() {
-        return global.simpleStorageWrapper || null;
-    }
-
-    function getStorage() {
-        return global.storage || null;
+    function getPracticeRecordAPI() {
+        if (!global.PracticeRecordAPI) {
+            throw new Error('PracticeStore: PracticeRecordAPI not ready');
+        }
+        return global.PracticeRecordAPI;
     }
 
     async function list() {
-        var coreStore = getCoreStore();
-        if (coreStore && typeof coreStore.listPracticeRecords === 'function') {
-            return coreStore.listPracticeRecords();
+        var api = getPracticeRecordAPI();
+        if (typeof api.list !== 'function') {
+            throw new Error('PracticeStore.list: PracticeRecordAPI.list not ready');
         }
-
-        var wrapper = getLegacyWrapper();
-        if (wrapper && typeof wrapper.getPracticeRecords === 'function') {
-            return wrapper.getPracticeRecords();
-        }
-
-        var storage = getStorage();
-        if (storage && typeof storage.get === 'function') {
-            var records = await storage.get(PRACTICE_RECORDS_KEY, []);
-            return Array.isArray(records) ? records : [];
-        }
-
-        return [];
+        var records = await api.list();
+        return Array.isArray(records) ? records : [];
     }
 
     async function replace(records, options) {
         var finalRecords = Array.isArray(records) ? records : [];
-        var coreStore = getCoreStore();
-        if (coreStore && typeof coreStore.replacePracticeRecords === 'function') {
-            return coreStore.replacePracticeRecords(finalRecords, options || {});
+        var api = getPracticeRecordAPI();
+        if (typeof api.replace !== 'function') {
+            throw new Error('PracticeStore.replace: PracticeRecordAPI.replace not ready');
         }
-
-        var wrapper = getLegacyWrapper();
-        if (wrapper && typeof wrapper.savePracticeRecords === 'function') {
-            return wrapper.savePracticeRecords(finalRecords);
-        }
-
-        var storage = getStorage();
-        if (storage && typeof storage.set === 'function') {
-            await storage.set(PRACTICE_RECORDS_KEY, finalRecords);
-            return true;
-        }
-
-        throw new Error('PracticeStore.replace: storage not ready');
+        await api.replace(finalRecords, Object.assign({ updateStats: true }, options || {}));
+        return true;
     }
 
     async function save(record, options) {
-        var coreStore = getCoreStore();
-        if (coreStore && typeof coreStore.savePracticeRecord === 'function') {
-            return coreStore.savePracticeRecord(record, options || {});
+        var api = getPracticeRecordAPI();
+        if (typeof api.saveRecord !== 'function') {
+            throw new Error('PracticeStore.save: PracticeRecordAPI.saveRecord not ready');
         }
-
-        var current = await list();
-        var next = Array.isArray(current) ? current.slice() : [];
-        var recordId = record && record.id != null ? String(record.id) : '';
-        var existingIndex = recordId
-            ? next.findIndex(function (entry) { return entry && String(entry.id) === recordId; })
-            : -1;
-
-        if (existingIndex >= 0) {
-            next[existingIndex] = record;
-        } else {
-            next.unshift(record);
-        }
-
-        await replace(next, options || {});
-        return record;
+        return api.saveRecord(record, Object.assign({ updateStats: true }, options || {}));
     }
 
-    async function clear() {
-        return replace([]);
+    async function clear(options) {
+        var api = getPracticeRecordAPI();
+        if (typeof api.clear === 'function') {
+            await api.clear(Object.assign({ updateStats: true }, options || {}));
+            return true;
+        }
+        return replace([], options || {});
     }
 
     global.PracticeStore = Object.assign({}, global.PracticeStore || {}, {
@@ -5760,7 +9246,7 @@ storageManager.ready
     const PATH_PROTOCOL_RE = /^(?:[a-z]+:)?\/\//i;
     const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
     const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-    const BASE_PREFIX_STORAGE_KEY = 'hp.basePrefix';
+    const BASE_PREFIX_STORAGE_KEY = 'resource.basePrefix';
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
@@ -6079,7 +9565,7 @@ storageManager.ready
         return withoutHash.split('?', 1)[0];
     }
 
-    function normalizeThemeBasePrefix(prefix) {
+    function normalizeBasePrefix(prefix) {
         if (prefix == null) {
             return './';
         }
@@ -6100,8 +9586,7 @@ storageManager.ready
                 'js/core/resourceCore.js',
                 'js/main.js',
                 'js/app.js',
-                'js/boot-fallbacks.js',
-                'js/plugins/hp/hp-path.js'
+                'js/boot-fallbacks.js'
             ];
 
             for (let i = scripts.length - 1; i >= 0; i -= 1) {
@@ -6152,20 +9637,20 @@ storageManager.ready
     }
 
     function getBasePrefix() {
-        const direct = normalizeThemeBasePrefix(global.HP_BASE_PREFIX);
+        const direct = normalizeBasePrefix(global.RESOURCE_BASE_PREFIX);
         if (direct && direct !== './') {
             return direct;
         }
 
-        const stored = normalizeThemeBasePrefix(loadStoredBasePrefix());
+        const stored = normalizeBasePrefix(loadStoredBasePrefix());
         if (stored && stored !== './') {
-            global.HP_BASE_PREFIX = stored;
+            global.RESOURCE_BASE_PREFIX = stored;
             return stored;
         }
 
-        const detected = normalizeThemeBasePrefix(detectScriptBasePrefix());
+        const detected = normalizeBasePrefix(detectScriptBasePrefix());
         if (detected && detected !== './') {
-            global.HP_BASE_PREFIX = detected;
+            global.RESOURCE_BASE_PREFIX = detected;
             return detected;
         }
 
@@ -6173,10 +9658,32 @@ storageManager.ready
     }
 
     function setBasePrefix(value) {
-        const normalized = normalizeThemeBasePrefix(value);
-        global.HP_BASE_PREFIX = normalized;
+        const normalized = normalizeBasePrefix(value);
+        global.RESOURCE_BASE_PREFIX = normalized;
         storeBasePrefix(normalized === './' ? '' : normalized);
         return normalized;
+    }
+
+    function resolveGeneratedReadingRuntimeUrl(exam, kind = 'html') {
+        if (!exam || kind === 'pdf') {
+            return '';
+        }
+        const manifest = global.__READING_EXAM_MANIFEST__;
+        const examId = exam.id || exam.examId || exam.dataKey || '';
+        const entry = manifest && examId ? manifest[examId] : null;
+        if (!entry || !entry.script) {
+            return '';
+        }
+        const resolvedDataKey = entry.dataKey || entry.examId || examId;
+        if (!resolvedDataKey) {
+            return '';
+        }
+        const params = new URLSearchParams();
+        if (examId) {
+            params.set('examId', String(examId));
+        }
+        params.set('dataKey', String(resolvedDataKey));
+        return `assets/generated/reading-exams/reading-practice-unified.html?${params.toString()}`;
     }
 
     function resolveExamBasePath(exam) {
@@ -6233,6 +9740,10 @@ storageManager.ready
             return '';
         }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const generatedReadingRuntimeUrl = resolveGeneratedReadingRuntimeUrl(exam, resourceKind);
+        if (generatedReadingRuntimeUrl) {
+            return generatedReadingRuntimeUrl;
+        }
         try {
             if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
                 const runtimeUrl = global.LibraryDiscovery.resolveRuntimeResource(exam, resourceKind);
@@ -6253,7 +9764,7 @@ storageManager.ready
         }
 
         // Support centralized PDF storage paths such as "ReadingPractice/PDF/*.pdf".
-        // These paths are repository-root relative and must not inherit cached HP_BASE_PREFIX.
+        // These paths are repository-root relative and must not inherit a cached base prefix.
         if (resourceKind === 'pdf' && /^readingpractice\/pdf\//i.test(normalizedFile)) {
             const rootedPdfPath = normalizedFile.replace(/^\/+/, '');
             const encodedPdfPath = encodePathSegments(rootedPdfPath);
@@ -6384,7 +9895,7 @@ storageManager.ready
 
     global.ResourceCore = {
         __stable: true,
-        version: '1.0.0',
+        version: '0.6.2-fix',
         RAW_DEFAULT_PATH_MAP,
         DEFAULT_PATH_MAP,
         PATH_MAP_STORAGE_PREFIX,
@@ -6410,7 +9921,7 @@ storageManager.ready
         sanitizeFilename,
         encodePathSegments,
         detectScriptBasePrefix,
-        normalizeThemeBasePrefix
+        normalizeBasePrefix
     };
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -6797,21 +10308,6 @@ storageManager.ready
       "hasPdf": true,
       "pdfFilename": "ReadingPractice/PDF/120. P2 - Will Eating Less Make You Live Longer 节食与长寿.pdf",
       "sourceKind": "generated-reading"
-    },
-    "p2-high-26": {
-      "examId": "p2-high-26",
-      "dataKey": null,
-      "script": null,
-      "title": "（无题目） Muscle Loss 肌肉流失",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/121.（无题目） P2 - Muscle Loss 肌肉流失【高】/",
-      "filename": "",
-      "hasHtml": false,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/121. P2(仅原文无题) - Muscle Loss 肌肉流失.pdf",
-      "sourceKind": "pdf-only"
     },
     "p1-high-27": {
       "examId": "p1-high-27",
@@ -9802,7 +13298,7 @@ storageManager.ready
       "examId": "p2-high-236",
       "dataKey": "p2-high-236",
       "script": "./p2-high-236.js",
-      "title": "War of the Plants",
+      "title": "War of the Plants 植物的战争",
       "category": "P2",
       "frequency": "高频",
       "difficultyScore": null,
@@ -9841,6 +13337,81 @@ storageManager.ready
       "hasHtml": true,
       "hasPdf": true,
       "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
+      "sourceKind": "generated-reading"
+    },
+    "p2-low-240": {
+      "examId": "p2-low-240",
+      "dataKey": "p2-low-240",
+      "script": "./p2-low-240.js",
+      "title": "Coins - the first form of money 硬币起源",
+      "category": "P2",
+      "frequency": "low",
+      "difficultyScore": null,
+      "path": "assets/generated/reading-exams/",
+      "filename": "reading-practice-unified.html",
+      "hasHtml": true,
+      "hasPdf": false,
+      "pdfFilename": "",
+      "sourceKind": "generated-reading"
+    },
+    "p1-high-240": {
+      "examId": "p1-high-240",
+      "dataKey": "p1-high-240",
+      "script": "./p1-high-240.js",
+      "title": "The Origins of Weather Forecasting 天气预报",
+      "category": "P1",
+      "frequency": "high",
+      "difficultyScore": null,
+      "path": "ReadingPractice/PDF/",
+      "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
+      "hasHtml": true,
+      "hasPdf": true,
+      "pdfFilename": "ReadingPractice/PDF/240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
+      "sourceKind": "generated-reading"
+    },
+    "p2-low-242": {
+      "examId": "p2-low-242",
+      "dataKey": "p2-low-242",
+      "script": "./p2-low-242.js",
+      "title": "Walking and shoes in eighteenth-century London 伦敦鞋子的发展史",
+      "category": "P2",
+      "frequency": "low",
+      "difficultyScore": null,
+      "path": "ReadingPractice/PDF/",
+      "filename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
+      "hasHtml": true,
+      "hasPdf": true,
+      "pdfFilename": "ReadingPractice/PDF/242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
+      "sourceKind": "generated-reading"
+    },
+    "p3-low-240": {
+      "examId": "p3-low-240",
+      "dataKey": "p3-low-240",
+      "script": "./p3-low-240.js",
+      "title": "How a prehistoric predator took to the skies 翼龙飞行",
+      "category": "P3",
+      "frequency": "low",
+      "difficultyScore": null,
+      "path": "ReadingPractice/PDF/",
+      "filename": "P3 - How a prehistoric predator took to the skies.pdf",
+      "hasHtml": true,
+      "hasPdf": true,
+      "pdfFilename": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf",
+      "sourceKind": "generated-reading"
+    },
+    "p3-medium-241": {
+      "examId": "p3-medium-241",
+      "dataKey": "p3-medium-241",
+      "script": "./p3-medium-241.js",
+      "title": "Who looks after the children in today's Britain? 育儿分工",
+      "category": "P3",
+      "frequency": "medium",
+      "difficultyScore": null,
+      "path": "ReadingPractice/PDF/",
+      "filename": "P3 - Who looks after the children in today's Britain.pdf",
+      "hasHtml": true,
+      "hasPdf": true,
+      "pdfFilename": "ReadingPractice/PDF/P3 - Who looks after the children in today's Britain.pdf",
       "sourceKind": "generated-reading"
     }
   };
@@ -10077,39 +13648,105 @@ if (typeof module !== 'undefined' && module.exports) {
             this.repos = repositories;
         }
 
-        get practiceRepo() { return this.repos.practice; }
         get settingsRepo() { return this.repos.settings; }
         get backupRepo() { return this.repos.backups; }
         get metaRepo() { return this.repos.meta; }
 
+        isPracticeDataKey(key) {
+            return key === 'practice_records' || key === 'user_stats';
+        }
+
+        getPracticeRecordAPI() {
+            const api = window.PracticeRecordAPI;
+            if (!api) {
+                throw new Error('PracticeRecordAPI unavailable');
+            }
+            return api;
+        }
+
+        rejectPracticeDataWrite(methodName, targetName) {
+            throw new Error(`SimpleStorageWrapper.${methodName} is disabled; use ${targetName}`);
+        }
+
         async getPracticeRecords() {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
-                return await window.PracticeCore.store.listPracticeRecords();
+            const api = this.getPracticeRecordAPI();
+            if (typeof api.list !== 'function') {
+                throw new Error('PracticeRecordAPI.list unavailable');
             }
-            return await this.practiceRepo.list();
+            return await api.list();
         }
-        async savePracticeRecords(records) {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                return await window.PracticeCore.store.replacePracticeRecords(records, { maxRecords: this.practiceRepo.maxRecords || 1000 });
+
+        async savePracticeRecords() {
+            this.rejectPracticeDataWrite('savePracticeRecords', 'PracticeRecordAPI.replace');
+        }
+
+        async addPracticeRecord() {
+            this.rejectPracticeDataWrite('addPracticeRecord', 'PracticeRecordAPI.saveRecord');
+        }
+
+        async getById(id) {
+            const api = this.getPracticeRecordAPI();
+            if (typeof api.getById !== 'function') {
+                throw new Error('PracticeRecordAPI.getById unavailable');
             }
-            await this.practiceRepo.overwrite(records);
-            return true;
+            return await api.getById(id);
         }
-        async addPracticeRecord(record) {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                await window.PracticeCore.store.savePracticeRecord(record, { maxRecords: this.practiceRepo.maxRecords || 1000 });
-                return true;
+
+        async update() {
+            this.rejectPracticeDataWrite('update', 'PracticeRecordAPI.saveRecord');
+        }
+
+        async delete() {
+            this.rejectPracticeDataWrite('delete', 'PracticeRecordAPI.deleteById');
+        }
+
+        async deletePracticeRecord() {
+            this.rejectPracticeDataWrite('deletePracticeRecord', 'PracticeRecordAPI.deleteById');
+        }
+
+        async deletePracticeRecords() {
+            this.rejectPracticeDataWrite('deletePracticeRecords', 'PracticeRecordAPI.deleteMany');
+        }
+
+        async getPracticeRecordsCount() {
+            const records = await this.getPracticeRecords();
+            return Array.isArray(records) ? records.length : 0;
+        }
+
+        validatePracticeRecord(record) {
+            const errors = [];
+            if (!record || typeof record !== 'object') {
+                errors.push('记录必须是对象');
+            } else {
+                if (!record.id || typeof record.id !== 'string') {
+                    errors.push('记录缺少有效的 id');
+                }
+                if (!record.type || typeof record.type !== 'string') {
+                    errors.push('记录缺少有效的 type');
+                }
+                if (record.score === undefined || record.score === null || typeof record.score !== 'number') {
+                    errors.push('记录缺少有效的 score');
+                }
+                if (record.totalQuestions !== undefined && typeof record.totalQuestions !== 'number') {
+                    errors.push('totalQuestions 必须是数字');
+                }
+                if (record.correctAnswers !== undefined && typeof record.correctAnswers !== 'number') {
+                    errors.push('correctAnswers 必须是数字');
+                }
+                if (record.duration !== undefined && typeof record.duration !== 'number') {
+                    errors.push('duration 必须是数字');
+                }
+                if (!record.date) {
+                    errors.push('记录缺少有效的 date');
+                } else if (Number.isNaN(new Date(record.date).getTime())) {
+                    errors.push('date 格式无效');
+                }
             }
-            await this.practiceRepo.upsert(record);
-            return true;
+            return {
+                isValid: errors.length === 0,
+                errors
+            };
         }
-        async getById(id) { return await this.practiceRepo.getById(id); }
-        async update(id, updates) { return await this.practiceRepo.update(id, updates); }
-        async delete(id) { const removed = await this.practiceRepo.removeById(id); return removed > 0; }
-        async deletePracticeRecord(id) { return await this.delete(id); }
-        async deletePracticeRecords(ids) { return await this.practiceRepo.removeByIds(ids); }
-        async getPracticeRecordsCount() { return await this.practiceRepo.count(); }
-        validatePracticeRecord(record) { return this.practiceRepo.validatePracticeRecord(record); }
 
         async getUserSettings() { return await this.settingsRepo.getAll(); }
         async saveUserSettings(settings) { await this.settingsRepo.saveAll(settings); return true; }
@@ -10122,9 +13759,44 @@ if (typeof module !== 'undefined' && module.exports) {
         async deleteBackup(id) { return await this.backupRepo.delete(id); }
         async clearBackups() { await this.backupRepo.clear(); return true; }
 
-        async get(key, defaultValue = null) { return await this.metaRepo.get(key, defaultValue); }
-        async set(key, value) { await this.metaRepo.set(key, value); return true; }
-        async remove(key) { await this.metaRepo.remove(key); return true; }
+        async get(key, defaultValue = null) {
+            if (this.isPracticeDataKey(key)) {
+                const api = this.getPracticeRecordAPI();
+                if (key === 'practice_records') {
+                    if (typeof api.list !== 'function') {
+                        throw new Error('PracticeRecordAPI.list unavailable');
+                    }
+                    return await api.list();
+                }
+                if (typeof api.readStats !== 'function') {
+                    throw new Error('PracticeRecordAPI.readStats unavailable');
+                }
+                return await api.readStats({ fallback: defaultValue });
+            }
+            return await this.metaRepo.get(key, defaultValue);
+        }
+
+        async set(key, value) {
+            if (this.isPracticeDataKey(key)) {
+                if (key === 'practice_records') {
+                    this.rejectPracticeDataWrite('set(practice_records)', 'PracticeRecordAPI.replace');
+                }
+                this.rejectPracticeDataWrite('set(user_stats)', 'PracticeRecordAPI.writeStats');
+            }
+            await this.metaRepo.set(key, value);
+            return true;
+        }
+
+        async remove(key) {
+            if (this.isPracticeDataKey(key)) {
+                if (key === 'practice_records') {
+                    this.rejectPracticeDataWrite('remove(practice_records)', 'PracticeRecordAPI.clear');
+                }
+                this.rejectPracticeDataWrite('remove(user_stats)', 'PracticeRecordAPI.resetStats');
+            }
+            await this.metaRepo.remove(key);
+            return true;
+        }
     }
 
     function connectWrapper(repositories) {
@@ -10161,6 +13833,32 @@ if (typeof module !== 'undefined' && module.exports) {
 
     function cloneArray(value) {
         return Array.isArray(value) ? value.slice() : [];
+    }
+
+    function cloneValue(value) {
+        if (value === null || value === undefined) {
+            return value;
+        }
+        if (typeof global.structuredClone === 'function') {
+            try {
+                return global.structuredClone(value);
+            } catch (_) { }
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            if (Array.isArray(value)) {
+                return value.map((item) => cloneValue(item));
+            }
+            if (value && typeof value === 'object') {
+                return Object.assign({}, value);
+            }
+            return value;
+        }
+    }
+
+    function clonePracticeRecords(records) {
+        return Array.isArray(records) ? records.map((record) => cloneValue(record)) : [];
     }
 
     function cloneSet(value) {
@@ -10280,21 +13978,6 @@ if (typeof module !== 'undefined' && module.exports) {
         }
     }
 
-    function enrichPracticeRecordForUI(record) {
-        if (!record || typeof record !== 'object') {
-            return record;
-        }
-        if (global.DataConsistencyManager) {
-            try {
-                const manager = new global.DataConsistencyManager();
-                return manager.enrichRecordData(record);
-            } catch (error) {
-                console.warn('[AppStateService] enrichPracticeRecordForUI failed:', error);
-            }
-        }
-        return record;
-    }
-
     function assignExamSequenceNumbers(exams) {
         if (!Array.isArray(exams)) {
             return [];
@@ -10319,7 +14002,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
             this.state = {
                 examIndex: cloneArray(global.examIndex),
-                practiceRecords: cloneArray(global.practiceRecords),
+                practiceRecords: [],
                 filteredExams: Array.isArray(global.filteredExams) ? global.filteredExams : [],
                 browseFilter: normalizeFilter(global.__browseFilter),
                 bulkDeleteMode: !!global.bulkDeleteMode,
@@ -10393,7 +14076,7 @@ if (typeof module !== 'undefined' && module.exports) {
                     app.state.exam.filteredExams = this.state.filteredExams;
                 }
                 if (app.state.practice) {
-                    app.state.practice.records = this.state.practiceRecords;
+                    app.state.practice.records = clonePracticeRecords(this.state.practiceRecords);
                     app.state.practice.selectedRecords = this.state.selectedRecords;
                     app.state.practice.bulkDeleteMode = this.state.bulkDeleteMode;
                 }
@@ -10473,24 +14156,24 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         getPracticeRecords() {
-            return this.state.practiceRecords;
+            return clonePracticeRecords(this.state.practiceRecords);
         }
 
         setPracticeRecords(records, options = {}) {
-            const normalized = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
+            const normalized = clonePracticeRecords(records);
             this.state.practiceRecords = normalized;
             if (options.syncApp !== false) {
                 this.applyToApp();
             }
-            emit(this.listeners, 'practiceRecords', this.state.practiceRecords);
+            emit(this.listeners, 'practiceRecords', clonePracticeRecords(this.state.practiceRecords));
             if (typeof global.updateBrowseAnchorsFromRecords === 'function') {
                 try {
-                    global.updateBrowseAnchorsFromRecords(this.state.practiceRecords);
+                    global.updateBrowseAnchorsFromRecords(clonePracticeRecords(this.state.practiceRecords));
                 } catch (error) {
                     console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', error);
                 }
             }
-            return this.state.practiceRecords;
+            return clonePracticeRecords(this.state.practiceRecords);
         }
 
         getFilteredExams() {
@@ -12511,6 +16194,9 @@ if (typeof module !== 'undefined' && module.exports) {
     "js/data/repositories/metaRepository.js",
     "js/data/index.js",
     "js/core/practiceCore.js",
+    "js/core/practiceRecordAPI.js",
+    "js/core/backupAPI.js",
+    "js/core/externalBackupService.js",
     "js/core/practiceStore.js",
     "js/core/resourceCore.js",
     "assets/generated/reading-exams/manifest.js",

@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/122. P1 - Footprints in the Mud 恐龙脚印【高】/122. P1 - Footprints in the Mud 恐龙脚印【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/122. P1 - Footprints in the Mud 恐龙脚印【高】/122. P1 - Footprints in the Mud 恐龙脚印【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/122. P1 - Footprints in the Mud 恐龙脚印【高】/122. P1 - Footprints in the Mud 恐龙脚印【高】.pdf",
     "ieltsHtml": "IELTS/P1/Footprints in the Mud.html"
   },
   "audit": {

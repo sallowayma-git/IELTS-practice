@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/68. P3 - Game theory 博弈论/68. P3 - Game theory 博弈论.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/68. P3 - Game theory 博弈论/68. P3 - Game theory 博弈论.pdf",
+    "pdf": "ReadingPractice/PDF/68. P3 - Game theory 博弈论.pdf",
     "ieltsHtml": null
   },
   "audit": {

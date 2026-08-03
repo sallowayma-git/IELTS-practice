@@ -85,7 +85,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.pdf",
     "ieltsHtml": null
   },
   "audit": {

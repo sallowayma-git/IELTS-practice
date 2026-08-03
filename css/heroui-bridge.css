@@ -446,8 +446,7 @@ body.hero-body {
 }
 
 .practice-trend-card,
-.practice-custom-card,
-.practice-trend-reserved-card {
+.practice-custom-card {
     --practice-trend-radius: var(--shui-radius-lg);
     --practice-trend-line-start: var(--shui-accent);
     --practice-trend-line-mid: var(--shui-gradient-end);
@@ -457,8 +456,7 @@ body.hero-body {
     border-radius: var(--practice-trend-radius);
 }
 
-.practice-trend-card,
-.practice-trend-reserved-card {
+.practice-trend-card {
     grid-column: span 2;
     position: relative;
     perspective: 1600px;
@@ -495,9 +493,7 @@ body.hero-body {
     transform: rotateY(180deg);
 }
 
-.practice-trend-card__face,
-.practice-custom-card__face,
-.practice-trend-reserved-card {
+.practice-trend-card__face {
     background:
         linear-gradient(135deg, rgba(255, 255, 255, 0.54), rgba(255, 255, 255, 0.16)),
         radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.72), transparent 34%),
@@ -1294,22 +1290,6 @@ body.hero-body {
     opacity: 0.72;
 }
 
-.practice-trend-reserved-card {
-    grid-column: span 2;
-    position: relative;
-    overflow: hidden;
-    opacity: 0.62;
-}
-
-.practice-trend-reserved-card::after {
-    content: '';
-    position: absolute;
-    inset: 1px;
-    border: 1px dashed rgba(255, 255, 255, 0.46);
-    border-radius: calc(var(--shui-radius-lg) - 1px);
-    pointer-events: none;
-}
-
 .hero-panel {
     background: var(--shui-panel-bg);
     border-radius: var(--shui-radius-xl);
@@ -1348,16 +1328,9 @@ body.hero-body {
 }
 
 .btn,
-.hero-btn,
 .hero-panel .btn,
-.shui-filter-btn,
 .exam-item-action-btn {
     color: #0f172a !important;
-}
-
-.shui-filter-btn {
-    border-radius: 999px;
-    padding: 8px 20px;
 }
 
 .hero-panel__muted {
@@ -1365,24 +1338,11 @@ body.hero-body {
     margin-top: 6px;
 }
 
-.hero-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.85rem;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: rgba(102, 126, 234, 0.15);
-    color: var(--shui-accent);
-}
-
 .hero-section {
     margin-bottom: 32px;
 }
 
-.hero-btn,
-.hero-panel .btn:not(.hero-btn),
-.shui-filter-btn {
+.hero-panel .btn {
     border-radius: var(--shui-radius-sm);
     border: none;
     background-image: linear-gradient(135deg, var(--shui-gradient-start), var(--shui-gradient-end));
@@ -1394,19 +1354,13 @@ body.hero-body {
     box-shadow: 0 18px 35px rgba(0, 0, 0, 0.15);
 }
 
-.hero-btn:hover,
-.hero-panel .btn:not(.hero-btn):hover,
-.shui-filter-btn:hover,
-.hero-btn:focus-visible,
-.hero-panel .btn:not(.hero-btn):focus-visible,
-.shui-filter-btn:focus-visible {
+.hero-panel .btn:hover,
+.hero-panel .btn:focus-visible {
     transform: translateY(-1px);
     box-shadow: 0 22px 45px rgba(0, 0, 0, 0.22);
 }
 
-.hero-btn--ghost,
-.hero-panel .btn.btn-secondary,
-.shui-filter-btn[data-tone="ghost"] {
+.hero-panel .btn.btn-secondary {
     background-image: none;
     background: rgba(255, 255, 255, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.5);
@@ -1414,7 +1368,6 @@ body.hero-body {
     box-shadow: none;
 }
 
-.hero-btn--warn,
 .hero-panel .btn.btn-warning {
     background-image: linear-gradient(135deg, rgba(255, 216, 155, 0.85), rgba(255, 216, 155, 1));
     color: #3b1f00;
@@ -1778,20 +1731,8 @@ body.hero-body {
     color: rgba(51, 65, 85, 0.62);
 }
 
-.data-management-panel .data-mgmt-btn {
-    background: rgba(255, 255, 255, 0.24);
-    background-image: none;
-    border-color: rgba(255, 255, 255, 0.52);
-}
-
-.data-management-panel .data-mgmt-btn:hover,
-.data-management-panel .data-mgmt-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.42);
-    background-image: none;
-    box-shadow:
-        0 16px 30px rgba(15, 23, 42, 0.09),
-        inset 0 1px 1px rgba(255, 255, 255, 0.88);
-}
+/* data-mgmt-btn 静止态已并入 main.css .shui-capsule-btn 共享规则；
+   语义色 hover 见下方 #settings-view .data-mgmt-btn:hover */
 
 .category-card .btn[data-action="browse-category"],
 .category-card .btn[data-action="start-random-practice"] {
@@ -1810,10 +1751,6 @@ body.hero-body {
     background: rgba(255, 255, 255, 0.5);
     transform: translateY(-1px);
     box-shadow: 0 22px 45px rgba(15, 23, 42, 0.18);
-}
-
-.shui-filter-btn[data-tone="ghost"] {
-    padding: 8px 18px;
 }
 
 .category-grid .category-card,
@@ -1954,8 +1891,7 @@ body.hero-body {
     }
 
     .practice-trend-card,
-    .practice-custom-card,
-    .practice-trend-reserved-card {
+    .practice-custom-card {
         grid-column: 1;
     }
 
@@ -1967,10 +1903,6 @@ body.hero-body {
 
     .practice-custom-card__rotor {
         min-height: 360px;
-    }
-
-    .practice-trend-reserved-card {
-        min-height: 120px;
     }
 
     .practice-trend-options {
@@ -2138,18 +2070,14 @@ body.hero-body {
     border-color: transparent;
 }
 
-#settings-view #load-library-btn,
-#settings-view #library-config-btn,
-#settings-view #force-refresh-btn,
+#settings-view #library-manager-btn,
 #settings-view #theme-switcher-btn-entry,
 #settings-view #show-onboarding-btn {
     color: var(--bauhaus-text-main) !important;
     border-color: rgba(255, 255, 255, 0.52);
 }
 
-#settings-view #load-library-btn:hover,
-#settings-view #library-config-btn:hover,
-#settings-view #force-refresh-btn:hover,
+#settings-view #library-manager-btn:hover,
 #settings-view #theme-switcher-btn-entry:hover,
 #settings-view #show-onboarding-btn:hover {
     background: var(--bauhaus-accent-blue);
@@ -2158,11 +2086,10 @@ body.hero-body {
     border-color: transparent;
 }
 
+/* data-mgmt 静止态玻璃胶囊由 main.css .shui-capsule-btn 提供；
+   此处只保留深色语义文字 + 深色 hover */
 #settings-view .data-mgmt-btn {
-    background: rgba(255, 255, 255, 0.24);
-    background-image: none;
     color: var(--bauhaus-accent-dark) !important;
-    border-color: rgba(255, 255, 255, 0.52);
 }
 
 #settings-view .data-mgmt-btn:hover {
@@ -2186,6 +2113,523 @@ body.hero-body {
     justify-content: center;
     display: flex;
     align-items: center;
+}
+
+/* ============================================================
+   Secondary modal content deltas
+   Shell (overlay/content/header/close) lives in css/main.css .theme-modal.
+   These rules only add title eyebrow, body padding, interior buttons/cards.
+   ============================================================ */
+
+.shui-secondary-modal .shui-secondary-modal__title-group {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.shui-secondary-modal .shui-secondary-modal__eyebrow {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(37, 99, 235, 0.78);
+}
+
+.shui-secondary-modal .theme-modal-header h3 {
+    font-size: 1.35rem;
+}
+
+.shui-secondary-modal .theme-modal-body,
+.shui-secondary-modal .shui-secondary-modal__body {
+    padding: 16px 24px 24px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    display: block;
+    scrollbar-width: none;
+}
+
+.shui-secondary-modal .theme-modal-body::-webkit-scrollbar,
+.shui-secondary-modal .shui-secondary-modal__body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+/* Glass capsule buttons inside secondary modals */
+.shui-secondary-modal .data-mgmt-btn,
+.shui-secondary-modal .practice-timer-save,
+.shui-secondary-modal .library-manager-modal__action-row .btn,
+.shui-secondary-modal .library-loader-primary,
+.shui-secondary-modal .library-loader-secondary,
+.shui-secondary-modal .backup-entry-restore {
+    border-radius: 999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.58) !important;
+    background: rgba(255, 255, 255, 0.28) !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-weight: 600;
+    box-shadow:
+        0 10px 22px rgba(15, 23, 42, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.8),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.14) !important;
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    transition:
+        transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+        background 220ms ease,
+        border-color 220ms ease,
+        box-shadow 220ms ease,
+        color 220ms ease;
+}
+
+.shui-secondary-modal .data-mgmt-btn:hover,
+.shui-secondary-modal .data-mgmt-btn:focus-visible,
+.shui-secondary-modal .practice-timer-save:hover,
+.shui-secondary-modal .practice-timer-save:focus-visible,
+.shui-secondary-modal .library-manager-modal__action-row .btn:hover,
+.shui-secondary-modal .library-manager-modal__action-row .btn:focus-visible,
+.shui-secondary-modal .library-loader-primary:hover,
+.shui-secondary-modal .library-loader-primary:focus-visible,
+.shui-secondary-modal .library-loader-secondary:hover,
+.shui-secondary-modal .library-loader-secondary:focus-visible,
+.shui-secondary-modal .backup-entry-restore:hover,
+.shui-secondary-modal .backup-entry-restore:focus-visible {
+    background: rgba(255, 255, 255, 0.48) !important;
+    color: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.78) !important;
+    transform: translateY(-1px);
+    box-shadow:
+        0 16px 30px rgba(15, 23, 42, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.92) !important;
+}
+
+.shui-secondary-modal .data-mgmt-btn:disabled,
+.shui-secondary-modal .practice-timer-save:disabled {
+    opacity: 0.45;
+    transform: none;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+/* Soft primary glass tint */
+.shui-secondary-modal .shui-secondary-btn--primary,
+.shui-secondary-modal #external-backup-bind-btn,
+.shui-secondary-modal #external-backup-write-btn,
+.shui-secondary-modal #load-library-btn {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(255, 255, 255, 0.28)) !important;
+    border-color: rgba(147, 197, 253, 0.55) !important;
+    color: #1e3a8a !important;
+}
+
+.shui-secondary-modal .shui-secondary-btn--primary:hover,
+.shui-secondary-modal .shui-secondary-btn--primary:focus-visible,
+.shui-secondary-modal #external-backup-bind-btn:hover,
+.shui-secondary-modal #external-backup-write-btn:hover,
+.shui-secondary-modal #load-library-btn:hover,
+.shui-secondary-modal #external-backup-bind-btn:focus-visible,
+.shui-secondary-modal #external-backup-write-btn:focus-visible,
+.shui-secondary-modal #load-library-btn:focus-visible {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.42)) !important;
+    color: #1e3a8a !important;
+    border-color: rgba(147, 197, 253, 0.75) !important;
+}
+
+.shui-secondary-modal .practice-settings-block,
+.shui-secondary-modal .practice-settings-cards > .practice-timer-card {
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 16px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.16)),
+        rgba(255, 255, 255, 0.18);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        0 10px 24px rgba(15, 23, 42, 0.04);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+.shui-secondary-modal .practice-settings-block__head h4,
+.shui-secondary-modal .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4 {
+    color: #0f172a;
+}
+
+.shui-secondary-modal .hero-panel__muted,
+.shui-secondary-modal .library-manager-modal__hint {
+    color: rgba(51, 65, 85, 0.78) !important;
+}
+
+.shui-secondary-modal .library-manager-modal__section-head h4 {
+    color: #0f172a;
+    font-weight: 750;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .shui-secondary-modal__eyebrow,
+body.blue-dark-mode .shui-secondary-modal .shui-secondary-modal__eyebrow {
+    color: rgba(147, 197, 253, 0.9);
+}
+
+body.bloom-dark-mode .shui-secondary-modal .data-mgmt-btn,
+body.blue-dark-mode .shui-secondary-modal .data-mgmt-btn,
+body.bloom-dark-mode .shui-secondary-modal .practice-timer-save,
+body.blue-dark-mode .shui-secondary-modal .practice-timer-save,
+body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__action-row .btn,
+body.blue-dark-mode .shui-secondary-modal .library-manager-modal__action-row .btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+    color: #e2e8f0 !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+body.bloom-dark-mode .shui-secondary-modal #external-backup-bind-btn,
+body.bloom-dark-mode .shui-secondary-modal #external-backup-write-btn,
+body.bloom-dark-mode .shui-secondary-modal #load-library-btn,
+body.blue-dark-mode .shui-secondary-modal #external-backup-bind-btn,
+body.blue-dark-mode .shui-secondary-modal #external-backup-write-btn,
+body.blue-dark-mode .shui-secondary-modal #load-library-btn {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(255, 255, 255, 0.08)) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+    color: #dbeafe !important;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-block,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-block,
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card {
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(148, 163, 184, 0.22);
+}
+
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-block__head h4,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-block__head h4,
+body.bloom-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4,
+body.blue-dark-mode .shui-secondary-modal .practice-settings-cards > .practice-timer-card .practice-timer-card__header h4,
+body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__section-head h4,
+body.blue-dark-mode .shui-secondary-modal .library-manager-modal__section-head h4 {
+    color: #f1f5f9;
+}
+
+body.bloom-dark-mode .shui-secondary-modal .hero-panel__muted,
+body.blue-dark-mode .shui-secondary-modal .hero-panel__muted,
+body.bloom-dark-mode .shui-secondary-modal .library-manager-modal__hint,
+body.blue-dark-mode .shui-secondary-modal .library-manager-modal__hint {
+    color: rgba(203, 213, 225, 0.82) !important;
+}
+
+@media (max-width: 640px) {
+    .shui-secondary-modal .theme-modal-header,
+    .shui-secondary-modal .shui-secondary-modal__header,
+    .shui-secondary-modal .theme-modal-body,
+    .shui-secondary-modal .shui-secondary-modal__body {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+}
+
+/* ============================================================
+   Local disk backup — content + frosted toast
+   (shell comes from .shui-secondary-modal)
+   ============================================================ */
+
+#settings-view #external-backup-entry-btn[data-state="stale"],
+#settings-view #external-backup-entry-btn[data-state="need-auth"] {
+    border-color: rgba(245, 158, 11, 0.42) !important;
+    box-shadow:
+        0 10px 22px rgba(245, 158, 11, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.76);
+}
+
+.external-backup-panel {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+.external-backup-panel--modal {
+    display: grid;
+    gap: 14px;
+}
+
+.external-backup-panel__desc {
+    margin: 0 !important;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: rgba(51, 65, 85, 0.78);
+    font-weight: 500;
+}
+
+.external-backup-status-card {
+    position: relative;
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18)),
+        rgba(255, 255, 255, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        0 10px 24px rgba(15, 23, 42, 0.05);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+.external-backup-status-card__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(100, 116, 139, 0.9);
+}
+
+.external-backup-panel__status {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.external-backup-status-card:has(.external-backup-panel__status[data-state="ok"]) {
+    border-color: rgba(34, 197, 94, 0.28);
+    background:
+        linear-gradient(145deg, rgba(240, 253, 244, 0.65), rgba(255, 255, 255, 0.22)),
+        rgba(187, 247, 208, 0.12);
+}
+
+.external-backup-status-card:has(.external-backup-panel__status[data-state="stale"]),
+.external-backup-status-card:has(.external-backup-panel__status[data-state="need-auth"]) {
+    border-color: rgba(245, 158, 11, 0.32);
+    background:
+        linear-gradient(145deg, rgba(255, 251, 235, 0.7), rgba(255, 255, 255, 0.22)),
+        rgba(254, 243, 199, 0.14);
+}
+
+.external-backup-status-card:has(.external-backup-panel__status[data-state="unbound"]),
+.external-backup-status-card:has(.external-backup-panel__status[data-state="unsupported"]) {
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+.external-backup-panel__tips {
+    margin: 0;
+    padding: 0 0 0 1.1rem;
+    display: grid;
+    gap: 6px;
+    color: rgba(71, 85, 105, 0.82);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.external-backup-panel__tips li::marker {
+    color: rgba(37, 99, 235, 0.55);
+}
+
+.external-backup-panel__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 2px !important;
+}
+
+#external-backup-modal .external-backup-panel__actions .btn {
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
+    display: inline-flex;
+    align-items: center;
+}
+
+#external-backup-modal .external-backup-btn--ghost {
+    background: rgba(255, 255, 255, 0.14) !important;
+    color: rgba(71, 85, 105, 0.95) !important;
+}
+
+/* Daily reminder — floating liquid glass toast */
+.external-backup-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 12000;
+    width: min(680px, calc(100vw - 24px));
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.external-backup-banner__glass {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.28)),
+        rgba(248, 250, 252, 0.42);
+    color: #0f172a;
+    box-shadow:
+        0 22px 48px rgba(15, 23, 42, 0.14),
+        0 6px 16px rgba(15, 23, 42, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+
+.external-backup-banner--warning .external-backup-banner__glass {
+    border-color: rgba(251, 191, 36, 0.45);
+    background:
+        linear-gradient(145deg, rgba(255, 251, 235, 0.72), rgba(255, 255, 255, 0.32)),
+        rgba(254, 243, 199, 0.2);
+}
+
+.external-backup-banner__text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.external-backup-banner__text strong {
+    font-size: 0.94rem;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+}
+
+.external-backup-banner__text span {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: rgba(51, 65, 85, 0.86);
+}
+
+.external-backup-banner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.external-backup-banner__btn {
+    min-width: 0 !important;
+    white-space: nowrap;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    padding: 8px 12px !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    background: rgba(255, 255, 255, 0.3) !important;
+    color: #0f172a !important;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.external-backup-banner__btn--primary {
+    background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(255, 255, 255, 0.36)) !important;
+    border-color: rgba(147, 197, 253, 0.6) !important;
+    color: #1e3a8a !important;
+}
+
+.external-backup-banner__btn--ghost {
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: rgba(71, 85, 105, 0.95) !important;
+}
+
+.external-backup-banner__btn:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.48) !important;
+}
+
+.external-backup-banner__dismiss {
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.22);
+    color: #64748b;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.external-backup-banner__dismiss:hover {
+    background: rgba(255, 255, 255, 0.42);
+    color: #0f172a;
+    transform: rotate(90deg);
+}
+
+body.bloom-dark-mode .external-backup-panel__desc,
+body.blue-dark-mode .external-backup-panel__desc,
+body.bloom-dark-mode .external-backup-panel__tips,
+body.blue-dark-mode .external-backup-panel__tips {
+    color: rgba(203, 213, 225, 0.82);
+}
+
+body.bloom-dark-mode .external-backup-status-card,
+body.blue-dark-mode .external-backup-status-card {
+    background: rgba(15, 23, 42, 0.45);
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+body.bloom-dark-mode .external-backup-panel__status,
+body.blue-dark-mode .external-backup-panel__status {
+    color: #e2e8f0;
+}
+
+body.bloom-dark-mode .external-backup-banner__glass,
+body.blue-dark-mode .external-backup-banner__glass {
+    background:
+        linear-gradient(145deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.55)),
+        rgba(15, 23, 42, 0.5);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #f8fafc;
+}
+
+body.bloom-dark-mode .external-backup-banner__text span,
+body.blue-dark-mode .external-backup-banner__text span {
+    color: rgba(203, 213, 225, 0.88);
+}
+
+body.bloom-dark-mode .external-backup-banner__dismiss,
+body.blue-dark-mode .external-backup-banner__dismiss {
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+@media (max-width: 640px) {
+    #external-backup-modal .external-backup-panel__actions {
+        grid-template-columns: 1fr;
+    }
+
+    .external-backup-banner__glass {
+        flex-direction: column;
+    }
+
+    .external-backup-banner__actions {
+        width: 100%;
+    }
+
+    .external-backup-banner__btn {
+        flex: 1 1 auto;
+    }
 }
 
 #settings-view .hero-surface {

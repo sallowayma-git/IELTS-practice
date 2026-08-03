@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/16. P1 - The Clipper Races 帆船竞速.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/16. P1 - The Clipper Races 帆船竞速.pdf",
+    "pdf": "ReadingPractice/PDF/16. P1 - The Clipper Races 帆船竞速.pdf",
     "ieltsHtml": "IELTS/P1/The Clipper Races.html"
   },
   "audit": {

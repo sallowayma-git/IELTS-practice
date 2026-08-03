@@ -183,7 +183,7 @@ FallbackGlobal["Fallback to global variables"]
 WriteReq["_writeToStorage(key, value)"]
 TryWindowStorage["Try window.storage.set()"]
 TryLocalStorage["Try localStorage.setItem()"]
-Format["{ data: value, timestamp: ms, version: '1.0.0' }"]
+Format["{ data: value, timestamp: ms, version: '0.6.2-fix' }"]
 Return["Return data"]
 Done["Complete"]
 

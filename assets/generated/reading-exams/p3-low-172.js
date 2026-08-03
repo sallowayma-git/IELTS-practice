@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/80. P3 - Rebranding art museums 博物馆品牌重塑/80. P3 - Rebranding art museums 博物馆品牌重塑.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/80. P3 - Rebranding art museums 博物馆品牌重塑/80. P3 - Rebranding art museums 博物馆品牌重塑.pdf",
+    "pdf": "ReadingPractice/PDF/80. P3 - Rebranding art museums 博物馆品牌重塑.pdf",
     "ieltsHtml": "IELTS/P3/Rebranding art museums.html"
   },
   "audit": {

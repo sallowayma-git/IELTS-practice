@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/13. P1 - Sweet Trouble 澳洲制糖产业/13. P1 - Sweet Trouble 澳洲制糖产业.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/13. P1 - Sweet Trouble 澳洲制糖产业/13. P1 - Sweet Trouble 澳洲制糖产业.pdf",
+    "pdf": "ReadingPractice/PDF/13. P1 - Sweet Trouble 澳洲制糖产业.pdf",
     "ieltsHtml": null
   },
   "audit": {

@@ -88,7 +88,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/105. P2 - How the Petri dish supports scientific advances 培养皿/105. P2 - How the Petri dish supports scientific advances 培养皿.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/105. P2 - How the Petri dish supports scientific advances 培养皿/105. P2 - How the Petri dish supports scientific advances 培养皿.pdf",
+    "pdf": "ReadingPractice/PDF/105. P2 - How the Petri dish supports scientific advances 培养皿.pdf",
     "ieltsHtml": null
   },
   "audit": {

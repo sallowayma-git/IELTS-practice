@@ -47,17 +47,15 @@ function isForwardOnlyFeatureSource(source) {
 async function testPracticeStore() {
     const records = [];
     const windowStub = {
-        PracticeCore: {
-            store: {
-                async listPracticeRecords() { return records.slice(); },
-                async replacePracticeRecords(next) {
-                    records.splice(0, records.length, ...next);
-                    return true;
-                },
-                async savePracticeRecord(record) {
-                    records.unshift(record);
-                    return record;
-                }
+        PracticeRecordAPI: {
+            async list() { return records.slice(); },
+            async replace(next) {
+                records.splice(0, records.length, ...next);
+                return true;
+            },
+            async saveRecord(record) {
+                records.unshift(record);
+                return record;
             }
         }
     };

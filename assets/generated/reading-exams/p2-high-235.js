@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
+    "pdf": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "ieltsHtml": null
   },
   "audit": {

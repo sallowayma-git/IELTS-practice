@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/172. P1 - Think Small 微观科学.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/172. P1 - Think Small 微观科学.pdf",
+    "pdf": "ReadingPractice/PDF/172. P1 - Think Small 微观科学.pdf",
     "ieltsHtml": "IELTS/P1/Think Small.html"
   },
   "audit": {

@@ -28,6 +28,9 @@ const bundles = {
         'js/data/repositories/metaRepository.js',
         'js/data/index.js',
         'js/core/practiceCore.js',
+        'js/core/practiceRecordAPI.js',
+        'js/core/backupAPI.js',
+        'js/core/externalBackupService.js',
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
@@ -43,6 +46,9 @@ const bundles = {
         'js/views/overviewView.js',
         'js/presentation/navigation-controller.js',
         'js/presentation/message-center.js',
+        'js/utils/practiceTimerPreferences.js',
+        'js/components/practiceSettingsPanel.js',
+        'js/components/libraryManagerPanel.js',
         'js/app/main-entry.js',
         'js/presentation/indexInteractions.js',
         'js/presentation/emojiIconizer.js'
@@ -71,9 +77,7 @@ const bundles = {
         'js/components/SystemDiagnostics.js',
         'js/components/PerformanceOptimizer.js',
         'js/utils/dataConsistencyManager.js',
-        'js/utils/performance.js',
-        'js/utils/typeChecker.js',
-        'js/utils/codeStandards.js'
+        'js/utils/performance.js'
     ],
     'js/bundles/settings.bundle.js': [
         'js/components/DataIntegrityManager.js',
@@ -101,6 +105,7 @@ const bundles = {
         'assets/wordlists/ecdict_reading.bundle.js',
         'js/core/dictionaryService.js',
         'js/runtime/reviewHighlightDictionary.js',
+        'js/utils/practiceTimerPreferences.js',
         'js/runtime/unifiedReadingPage.js'
     ],
     'js/bundles/practice-page-enhancer.bundle.js': [
@@ -113,6 +118,10 @@ const bundles = {
         'js/utils/answerMatchCore.js',
         'js/app/spellingErrorCollector.js',
         'js/listeningRecordBridge.js'
+    ],
+    'js/bundles/listening-wrapper.bundle.js': [
+        'js/utils/practiceTimerPreferences.js',
+        'js/listeningUnifiedWrapper.js'
     ],
     'js/bundles/more.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',
@@ -136,7 +145,12 @@ function readSource(relativePath) {
     if (!fs.existsSync(absolutePath)) {
         throw new Error(`Missing bundle input: ${relativePath}`);
     }
-    return fs.readFileSync(absolutePath, 'utf8').replace(/\s*$/, '\n');
+    return fs.readFileSync(absolutePath, 'utf8')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/g, ''))
+        .join('\n')
+        .replace(/\s*$/, '\n');
 }
 
 function renderBundle(outputPath, inputs) {

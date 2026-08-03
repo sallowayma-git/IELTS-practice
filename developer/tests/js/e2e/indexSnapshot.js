@@ -423,13 +423,13 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         </div>
                         <div class="hero-panel__actions">
                             <button
-                                class="btn btn-secondary hero-btn hero-btn--ghost"
+                                class="btn btn-secondary"
                                 data-index-action="export-practice-markdown"
                             >
                                 📄 导出Markdown
                             </button>
                             <button
-                                class="btn btn-info hero-btn"
+                                class="btn btn-info"
                                 data-index-action="toggle-bulk-delete"
                                 id="bulk-delete-btn"
                             >
@@ -455,7 +455,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                 批量删除
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 data-index-action="clear-practice-data"
                             >
                                 🗑️ 清除记录
@@ -495,32 +495,28 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         <p class="hero-panel__muted">系统工具和设置选项</p>
                         <div class="hero-settings-actions">
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="clear-cache-btn"
                             >
                                 🗑️ 清除缓存
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="load-library-btn"
-                            >
-                                📂 加载题库
-                            </button>
-                            <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="theme-switcher-btn-entry"
                             >
                                 🎨 主题切换
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="show-onboarding-btn"
+                                class="btn btn-warning"
+                                id="practice-settings-entry-btn"
+                                type="button"
                             >
-                                🎯 显示引导
+                                ⚙️ 练习设置
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="library-config-btn"
+                                class="btn btn-warning"
+                                id="library-manager-btn"
+                                type="button"
                             >
                                 <svg
                                     viewBox="0 0 24 24"
@@ -559,13 +555,13 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                         y2="16"
                                     ></line>
                                 </svg>
-                                题库配置切换
+                                题库管理
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="force-refresh-btn"
+                                class="btn btn-warning"
+                                id="show-onboarding-btn"
                             >
-                                🔄 强制刷新题库
+                                🎯 显示引导
                             </button>
                         </div>
                     </div>
@@ -577,25 +573,25 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         </p>
                         <div class="hero-settings-actions">
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="create-backup-btn"
                             >
                                 💾 创建备份
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="backup-list-btn"
                             >
                                 📋 备份列表
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="export-data-btn"
                             >
                                 📤 导出数据
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="import-data-btn"
                             >
                                 📥 导入数据
@@ -684,14 +680,6 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                     探索额外的学习辅助功能，助你高效备考。
                 </p>
                 <div class="more-tools-grid">
-                    <!-- <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
-                    <div class="tool-card-icon">✍️</div>
-                    <div class="tool-card-content">
-                        <h3>写作评分</h3>
-                        <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
-                    </div>
-                    <div class="tool-card-arrow">进入</div>
-                </button> -->
                     <button
                         class="tool-card"
                         type="button"

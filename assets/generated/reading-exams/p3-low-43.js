@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/137. P3 - What is social history 社会史/137. P3 - What is social history 社会史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/137. P3 - What is social history 社会史/137. P3 - What is social history 社会史.pdf",
+    "pdf": "ReadingPractice/PDF/137. P3 - What is social history 社会史.pdf",
     "ieltsHtml": "IELTS/P3/What is social history.html"
   },
   "audit": {

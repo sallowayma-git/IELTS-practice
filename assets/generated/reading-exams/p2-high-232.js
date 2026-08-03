@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
+    "pdf": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
     "ieltsHtml": null
   },
   "audit": {

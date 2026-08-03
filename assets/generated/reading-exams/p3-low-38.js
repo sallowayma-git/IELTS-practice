@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/132. P3 - Research into the effects of different teaching styles 教学风格研究/132. P3 - Research into the effects of different teaching styles 教学风格研究.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/132. P3 - Research into the effects of different teaching styles 教学风格研究/132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf",
+    "pdf": "ReadingPractice/PDF/132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf",
     "ieltsHtml": "IELTS/P3/Research into the effects of different teaching styles.html"
   },
   "audit": {

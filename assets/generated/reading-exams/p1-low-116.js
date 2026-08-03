@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/3. P1 - Advertising Needs Attention 广告的吸引力/3. P1 - Advertising Needs Attention 广告的吸引力.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/3. P1 - Advertising Needs Attention 广告的吸引力/3. P1 - Advertising Needs Attention 广告的吸引力.pdf",
+    "pdf": "ReadingPractice/PDF/3. P1 - Advertising Needs Attention 广告的吸引力.pdf",
     "ieltsHtml": null
   },
   "audit": {

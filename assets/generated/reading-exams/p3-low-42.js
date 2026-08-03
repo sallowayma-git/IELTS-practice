@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf",
+    "pdf": "ReadingPractice/PDF/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf",
     "ieltsHtml": "IELTS/P3/The peopling of Patagonia.html"
   },
   "audit": {

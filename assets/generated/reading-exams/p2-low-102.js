@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/190. P2 - The power of music 音乐的力量/190. P2 - The power of music 音乐的力量.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/190. P2 - The power of music 音乐的力量/190. P2 - The power of music 音乐的力量.pdf",
+    "pdf": "ReadingPractice/PDF/190. P2 - The power of music 音乐的力量.pdf",
     "ieltsHtml": "IELTS/P2/The power of music.html"
   },
   "audit": {

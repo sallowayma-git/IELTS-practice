@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
+    "pdf": "ReadingPractice/PDF/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
     "ieltsHtml": "IELTS/P3/The Costs of Brand Loyalty.html"
   },
   "audit": {

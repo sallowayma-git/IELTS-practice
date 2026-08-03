@@ -34,7 +34,7 @@
             normalized.id = normalized.id ? String(normalized.id) : `backup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             normalized.timestamp = normalized.timestamp || new Date().toISOString();
             normalized.type = normalized.type || 'manual';
-            normalized.version = normalized.version || '1.0.0';
+            normalized.version = normalized.version || '0.6.2-fix';
             normalized.data = normalized.data || {};
             normalized.size = normalized.size || JSON.stringify(normalized.data).length;
             return normalized;

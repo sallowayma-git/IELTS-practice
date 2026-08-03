@@ -90,7 +90,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/70. P3 - Insect-inspired robots 昆虫机器人【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/70. P3 - Insect-inspired robots 昆虫机器人【高】.pdf",
     "ieltsHtml": "IELTS/P3/Insect-inspired robots.html"
   },
   "audit": {

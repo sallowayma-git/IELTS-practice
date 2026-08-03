@@ -22,6 +22,15 @@ This document provides a comprehensive overview of the ongoing and completed ref
 
 ---
 
+
+> **Live tracker:** [developer/docs/cleanup-tracker.md](../../docs/cleanup-tracker.md) (Sprint A/B/C subtractive cleanup).
+> **Field contracts:** [Global-Field-Inventory](./Global-Field-Inventory.md).
+>
+> The historical `developer/docs/cleanup-tracker.md` link is **dead** (file not in tree). Treat completed phases below as archive; do not reintroduce deleted modules:
+> * `js/utils/legacyStateAdapter.js` / `js/core/legacyStateBridge.js` — removed
+> * `js/utils/typeChecker.js` / `js/utils/codeStandards.js` — removed from diagnostics (Sprint A)
+> * Practice writes: **PracticeRecordAPI**, not ScoreStorage
+
 ## Purpose and Structure
 
 The refactoring roadmap is designed to:
@@ -35,7 +44,7 @@ The refactoring roadmap is designed to:
 The roadmap is organized into **phases** (urgent fixes, architecture, data, performance, code quality), each with granular tasks, status, and acceptance criteria.
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L1-L74](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L1-L74)
+[developer/docs/cleanup-tracker.md L1-L74](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L1-L74)
 
 ---
 
@@ -53,7 +62,7 @@ The refactoring effort is structured into six main phases, each targeting a spec
 | 6 | Test Coverage & CI | Ongoing | E2E, static, and regression test coverage |
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L5-L74](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L5-L74)
+[developer/docs/cleanup-tracker.md L5-L74](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L5-L74)
 
 ---
 
@@ -73,8 +82,8 @@ Phase2["Phase 2: Architecture Refactoring"]
 StateMixin["js/app/stateMixin.js"]
 ExamSessionMixin["js/app/examSessionMixin.js"]
 LifecycleMixin["js/app/lifecycleMixin.js"]
-LegacyAdapter["js/utils/legacyStateAdapter.js"]
-LegacyBridge["js/core/legacyStateBridge.js"]
+AppStateBridge["js/main.js + appStateService"]
+MainBridges["js/main.js property bridges"]
 Phase3["Phase 3: Data Layer Optimization"]
 DataIndex["js/data/index.js"]
 PracticeRepo["js/data/repositories/practiceRepository.js"]
@@ -86,8 +95,8 @@ SettingsPanel["js/components/settingsPanel.js"]
 MaintenancePanel["js/components/systemMaintenancePanel.js"]
 HPPortal["js/plugins/hp/hp-portal.js"]
 Phase5["Phase 5: Code Quality"]
-CodeStandards["js/utils/codeStandards.js"]
-TypeChecker["js/utils/typeChecker.js"]
+FieldInventory["Global-Field-Inventory.md"]
+CleanupTracker["cleanup-tracker.md"]
 PerformanceUtils["js/utils/performance.js"]
 Phase6["Phase 6: Test Coverage"]
 E2ETests["developer/tests/js/e2e/appE2ETest.js"]
@@ -101,8 +110,8 @@ Phase2 -.-> AppJS
 Phase2 -.-> StateMixin
 Phase2 -.-> ExamSessionMixin
 Phase2 -.-> LifecycleMixin
-Phase2 -.-> LegacyAdapter
-Phase2 -.-> LegacyBridge
+Phase2 -.-> AppStateBridge
+Phase2 -.-> MainBridges
 Phase3 -.-> DataIndex
 Phase3 -.-> PracticeRepo
 Phase3 -.-> PracticeRecorder
@@ -112,15 +121,15 @@ Phase4 -.-> DomUtils
 Phase4 -.-> SettingsPanel
 Phase4 -.-> MaintenancePanel
 Phase4 -.-> HPPortal
-Phase5 -.-> CodeStandards
-Phase5 -.-> TypeChecker
+Phase5 -.-> FieldInventory
+Phase5 -.-> CleanupTracker
 Phase5 -.-> PerformanceUtils
 Phase6 -.-> E2ETests
 Phase6 -.-> StaticSuite
 ```
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L75-L74](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L75-L74)
+[developer/docs/cleanup-tracker.md L75-L74](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L75-L74)
 
 ---
 
@@ -141,21 +150,21 @@ Phase6 -.-> StaticSuite
 | Practice record rendering bug | ✅ | js/components/practiceHistoryEnhancer.js |
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L75-L152](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L75-L152)
+[developer/docs/cleanup-tracker.md L75-L152](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L75-L152)
 
 ---
 
 ### Phase 2: Architecture Refactoring
 
 * **Monolith Split:** `js/app.js` split into mixins (state, navigation, session, lifecycle).
-* **State Unification:** All state access via `AppStateService` and `LegacyStateAdapter`.
-* **Legacy Bridge:** `LegacyStateBridge` ensures legacy code and new app state remain in sync.
+* **State Unification:** AppStateService + property-descriptor bridges in `js/main.js`.
+* **Legacy modules:** `LegacyStateAdapter` / `LegacyStateBridge` files **removed**; do not reintroduce.
 * **Component Modularization:** All major UI and logic modules refactored for testability.
 
 | Task | Status | Key Files |
 | --- | --- | --- |
 | Split monolith | ✅ | js/app.js, js/app/stateMixin.js, js/app/examSessionMixin.js, js/app/lifecycleMixin.js |
-| Unify state | ✅ | js/utils/legacyStateAdapter.js, js/core/legacyStateBridge.js, js/core/appStateService.js |
+| Unify state | ✅ | js/main.js bridges, js/core/appStateService.js (legacyStateAdapter/Bridge removed) |
 | Modularize components | ✅ | js/components/settingsPanel.js, js/components/systemMaintenancePanel.js |
 
 The `lifecycleMixin.js` ([js/app/lifecycleMixin.js L6-L70](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L6-L70)
@@ -169,7 +178,7 @@ The `lifecycleMixin.js` ([js/app/lifecycleMixin.js L6-L70](https://github.com/sa
 * Global error handling setup ([js/app/lifecycleMixin.js L109-L167](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L109-L167) )
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L196-L311](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L196-L311)
+[developer/docs/cleanup-tracker.md L196-L311](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L196-L311)
 
  [js/app/lifecycleMixin.js L1-L607](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L1-L607)
 
@@ -188,7 +197,7 @@ The `lifecycleMixin.js` ([js/app/lifecycleMixin.js L6-L70](https://github.com/sa
 | Data integrity | ✅ | js/components/DataIntegrityManager.js |
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L413-L446](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L413-L446)
+[developer/docs/cleanup-tracker.md L413-L446](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L413-L446)
 
 ---
 
@@ -205,24 +214,24 @@ The `lifecycleMixin.js` ([js/app/lifecycleMixin.js L6-L70](https://github.com/sa
 | Batch DOM ops | ✅ | js/utils/dom.js |
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L447-L476](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L447-L476)
+[developer/docs/cleanup-tracker.md L447-L476](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L447-L476)
 
 ---
 
 ### Phase 5: Code Quality Improvements
 
 * **Deduplication:** All repeated code patterns replaced with utility classes (DOM, performance, type checking).
-* **Naming and Type Standards:** Linus-style naming, JSDoc type annotations, and runtime type checks.
-* **Static Analysis:** Code standards and complexity checks enforced.
+* **Naming and Type Standards:** Prefer field inventory + PracticeRecordAPI contracts; runtime typeChecker **removed** (Sprint A).
+* **Static Analysis:** CI static suite where present.
 
 | Task | Status | Key Files |
 | --- | --- | --- |
 | Remove duplicate code | ✅ | js/utils/dom.js, js/utils/performance.js |
-| Enforce naming/type standards | ✅ | js/utils/codeStandards.js, js/utils/typeChecker.js |
+| Enforce naming/type standards | ✅→archived | typeChecker/codeStandards removed Sprint A; contracts in Global-Field-Inventory |
 | Static analysis | ✅ | developer/tests/ci/run_static_suite.py |
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L505-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L505-L683)
+[developer/docs/cleanup-tracker.md L505-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L505-L683)
 
  [developer/docs/10-06 L43-L150](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/10-06 log.md#L43-L150)
 
@@ -247,8 +256,8 @@ Task21["Task 2.1: Split Monolith"]
 StateMixin["js/app/stateMixin.js"]
 ExamSessionMixin["js/app/examSessionMixin.js"]
 Task22["Task 2.2: Unify State"]
-LegacyAdapter["js/utils/legacyStateAdapter.js"]
-LegacyBridge["js/core/legacyStateBridge.js"]
+AppStateBridge["js/main.js + appStateService"]
+MainBridges["js/main.js property bridges"]
 AppStateService["js/core/appStateService.js"]
 Task31["Task 3.1: Implement Repositories"]
 PracticeRepo["js/data/repositories/practiceRepository.js"]
@@ -261,8 +270,8 @@ HPPortal["js/plugins/hp/hp-portal.js"]
 Task51["Task 5.1: Deduplication"]
 PerformanceUtils["js/utils/performance.js"]
 Task52["Task 5.2: Naming and Type Standards"]
-CodeStandards["js/utils/codeStandards.js"]
-TypeChecker["js/utils/typeChecker.js"]
+FieldInventory["Global-Field-Inventory.md"]
+CleanupTracker["cleanup-tracker.md"]
 
 Task11 -.-> AppJS
 Task11 -.-> MainJS
@@ -273,8 +282,8 @@ Task21 -.-> AppJS
 Task21 -.-> StateMixin
 Task21 -.-> ExamSessionMixin
 Task21 -.-> LifecycleMixin
-Task22 -.-> LegacyAdapter
-Task22 -.-> LegacyBridge
+Task22 -.-> AppStateBridge
+Task22 -.-> MainBridges
 Task22 -.-> AppStateService
 Task31 -.-> PracticeRepo
 Task31 -.-> DataIndex
@@ -284,12 +293,12 @@ Task41 -.-> SettingsPanel
 Task41 -.-> HPPortal
 Task51 -.-> DomUtils
 Task51 -.-> PerformanceUtils
-Task52 -.-> CodeStandards
-Task52 -.-> TypeChecker
+Task52 -.-> FieldInventory
+Task52 -.-> CleanupTracker
 ```
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L75-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L75-L683)
+[developer/docs/cleanup-tracker.md L75-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L75-L683)
 
 ---
 
@@ -322,7 +331,7 @@ Below is a summary of all tracked tasks, their status, and verification method:
 | 6.x | Test coverage | Ongoing | E2E, CI |
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L75-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L75-L683)
+[developer/docs/cleanup-tracker.md L75-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L75-L683)
 
 ---
 
@@ -348,7 +357,7 @@ All major refactoring tasks are protected by a multi-layered verification strate
 * **Error Tracking:** `globalErrors` array maintains a sliding window of recent errors for frequency analysis ([js/app/lifecycleMixin.js L136-L150](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L136-L150) ).
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L214-L590](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L214-L590)
+[developer/docs/cleanup-tracker.md L214-L590](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L214-L590)
 
  [developer/tests/js/e2e/appE2ETest.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/tests/js/e2e/appE2ETest.js)
 
@@ -377,28 +386,19 @@ The refactoring effort introduced and standardized several key patterns:
 **Data Access:**
 
 * **Repository Pattern:** All persistent data access is routed through repositories ([js/data/repositories/practiceRepository.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/data/repositories/practiceRepository.js) ).
-* **State Bridge:** `LegacyStateAdapter` and `LegacyStateBridge` synchronize legacy and modern state ([js/utils/legacyStateAdapter.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/legacyStateAdapter.js)  [js/core/legacyStateBridge.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/legacyStateBridge.js) ).
+* **State Bridge:** Property-descriptor bridges in `js/main.js` + AppStateService (standalone legacyState* modules removed).
 
 **Code Quality:**
 
-* **Type Checking:** JSDoc and runtime type checks via `typeChecker.js` ([js/utils/typeChecker.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/typeChecker.js) ).
-* **Code Standards:** Linus-style code standards enforced via `codeStandards.js` ([js/utils/codeStandards.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/codeStandards.js) ).
+* **Type / field contracts:** [Global-Field-Inventory](./Global-Field-Inventory.md); dead typeChecker/codeStandards removed from diagnostics.
 * **Responsive Features:** `initializeResponsiveFeatures()` sets up `ResponsiveManager`, `TouchHandler`, `ThemeManager`, and `KeyboardShortcuts` ([js/app/lifecycleMixin.js L193-L228](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L193-L228) ).
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L75-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L75-L683)
+[developer/docs/cleanup-tracker.md L75-L683](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L75-L683)
 
  [js/app/lifecycleMixin.js L1-L607](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L1-L607)
 
  [js/utils/dom.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dom.js)
-
- [js/utils/legacyStateAdapter.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/legacyStateAdapter.js)
-
- [js/core/legacyStateBridge.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/legacyStateBridge.js)
-
- [js/utils/typeChecker.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/typeChecker.js)
-
- [js/utils/codeStandards.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/codeStandards.js)
 
 ---
 
@@ -612,7 +612,7 @@ end
 
 ### Technical Debt Tracking
 
-The optimization task tracker serves as the single source of truth for all technical debt items, refactoring plans, and improvement initiatives. Regular audits ensure that completed tasks are verified and new issues are promptly added to the roadmap.
+The live subtractive cleanup checklist is [cleanup-tracker.md](../../docs/cleanup-tracker.md). Historical phases above are archive; new debt goes on that tracker + Global-Field-Inventory.
 
 **Tracking Process:**
 
@@ -631,7 +631,7 @@ The optimization task tracker serves as the single source of truth for all techn
 * Static analysis rule violations
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md L469-L605](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md#L469-L605)
+[developer/docs/cleanup-tracker.md L469-L605](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md#L469-L605)
 
 ---
 
@@ -642,23 +642,19 @@ The optimization task tracker serves as the single source of truth for all techn
 * [E2E Test Suite](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/E2E Test Suite)
 * [Static Analysis Suite](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/Static Analysis Suite)
 * [DOM Utilities](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/DOM Utilities)
-* [Type Checking Utilities](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/Type Checking Utilities)
-* [Code Standards](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/Code Standards)
+* [Global-Field-Inventory](./Global-Field-Inventory.md)
+* [cleanup-tracker](../../docs/cleanup-tracker.md)
 
 ---
 
-**This document is updated as new refactoring tasks are completed and as the codebase evolves. For the latest status, always refer to the most recent entries in the optimization task tracker.**
+**For the latest subtractive cleanup status, use [cleanup-tracker.md](../../docs/cleanup-tracker.md).**
 
 **Sources:**
-[developer/docs/optimization-task-tracker.md](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/optimization-task-tracker.md)
+[developer/docs/cleanup-tracker.md](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/cleanup-tracker.md)
 
  [developer/docs/10-06 log.md](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/docs/10-06 log.md)
 
  [js/utils/dom.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dom.js)
-
- [js/utils/typeChecker.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/typeChecker.js)
-
- [js/utils/codeStandards.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/codeStandards.js)
 
  [developer/tests/js/e2e/appE2ETest.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/developer/tests/js/e2e/appE2ETest.js)
 

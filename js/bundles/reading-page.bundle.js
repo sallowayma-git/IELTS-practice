@@ -705,7 +705,7 @@
         if (/^[a-z]$/i.test(cleaned)) {
             return cleaned.toUpperCase();
         }
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }
@@ -1553,7 +1553,17 @@
             document.addEventListener('click', handleOutsideClick, true);
             document.addEventListener('keydown', handleDocumentKeydown, true);
             window.addEventListener('resize', closeBubble);
-            window.addEventListener('scroll', closeBubble, true);
+            window.addEventListener('scroll', handleOutsideScroll, true);
+        }
+    }
+
+    function detachOutsideHandlers() {
+        if (outsideHandlerAttached) {
+            outsideHandlerAttached = false;
+            document.removeEventListener('click', handleOutsideClick, true);
+            document.removeEventListener('keydown', handleDocumentKeydown, true);
+            window.removeEventListener('resize', closeBubble);
+            window.removeEventListener('scroll', handleOutsideScroll, true);
         }
     }
 
@@ -1563,8 +1573,41 @@
             bubble.style.display = 'none';
             bubble.innerHTML = '';
         }
+        detachOutsideHandlers();
         activeHighlight = null;
         activeLookup = null;
+    }
+
+    function isScrollbarClick(event, bubble) {
+        if (!bubble || bubble.style.display === 'none') {
+            return false;
+        }
+        const rect = bubble.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) {
+            return false;
+        }
+        const style = window.getComputedStyle(bubble);
+        const overflowY = style.overflowY;
+        if (overflowY !== 'auto' && overflowY !== 'scroll') {
+            return false;
+        }
+        const clientX = event.clientX != null ? event.clientX : 0;
+        const clientY = event.clientY != null ? event.clientY : 0;
+        if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+            return false;
+        }
+        var scrollbarWidth = bubble.offsetWidth - bubble.clientWidth;
+        if (scrollbarWidth > 0 && clientX >= rect.right - scrollbarWidth && clientX <= rect.right) {
+            return true;
+        }
+        var overflowX = style.overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll') {
+            var scrollbarHeight = bubble.offsetHeight - bubble.clientHeight;
+            if (scrollbarHeight > 0 && clientY >= rect.bottom - scrollbarHeight && clientY <= rect.bottom) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function handleOutsideClick(event) {
@@ -1574,6 +1617,9 @@
             return;
         }
         if (bubble.contains(target) || target.closest(`.${INTERACTIVE_CLASS}`)) {
+            return;
+        }
+        if (isScrollbarClick(event, bubble)) {
             return;
         }
         closeBubble();
@@ -1592,6 +1638,17 @@
             event.preventDefault();
             openBubble(highlight);
         }
+    }
+
+    function handleOutsideScroll(event) {
+        const bubble = document.getElementById(BUBBLE_ID);
+        if (!bubble || bubble.style.display === 'none') {
+            return;
+        }
+        if (event.target instanceof Node && bubble.contains(event.target)) {
+            return;
+        }
+        closeBubble();
     }
 
     function buildVocabPayload() {
@@ -1620,7 +1677,7 @@
         return JSON.stringify({
             data,
             timestamp: Date.now(),
-            version: '1.0.0',
+            version: '0.6.2-fix',
             compressed: false
         });
     }
@@ -1793,6 +1850,89 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/utils/practiceTimerPreferences.js ===== */
+(function initPracticeTimerPreferences(global) {
+    'use strict';
+
+    var READING_KEY = 'ielts_reading_timer_preferences_v2';
+    var LISTENING_KEY = 'ielts_listening_timer_preferences_v1';
+    var VERSION = 1;
+    var DEFAULTS = {
+        version: VERSION,
+        mode: 'elapsed',
+        countdownMinutes: 60,
+        limitEnabled: false,
+        limitMinutes: 60,
+        expiryAction: 'warn'
+    };
+    var VALID_MODES = { elapsed: true, countdown: true };
+    var VALID_ACTIONS = { warn: true, 'auto-submit': true, lock: true };
+    var MAX_MINUTES = 240;
+    var MIN_MINUTES = 1;
+
+    function clampMinutes(value, fallback) {
+        var number = Number(value);
+        if (!Number.isFinite(number)) {
+            number = fallback;
+        }
+        return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Math.round(number)));
+    }
+
+    function normalize(raw) {
+        var source = raw && typeof raw === 'object' ? raw : {};
+        var mode = VALID_MODES[source.mode] ? source.mode : DEFAULTS.mode;
+        var expiryAction = VALID_ACTIONS[source.expiryAction] ? source.expiryAction : DEFAULTS.expiryAction;
+        return {
+            version: VERSION,
+            mode: mode,
+            countdownMinutes: clampMinutes(source.countdownMinutes, DEFAULTS.countdownMinutes),
+            limitEnabled: Boolean(source.limitEnabled),
+            limitMinutes: clampMinutes(source.limitMinutes, DEFAULTS.limitMinutes),
+            expiryAction: expiryAction
+        };
+    }
+
+    function keyFor(scope) {
+        return String(scope || '').toLowerCase() === 'listening' ? LISTENING_KEY : READING_KEY;
+    }
+
+    function read(scope) {
+        try {
+            var raw = global.localStorage && global.localStorage.getItem(keyFor(scope));
+            return normalize(raw ? JSON.parse(raw) : null);
+        } catch (_) {
+            return normalize(null);
+        }
+    }
+
+    function save(scope, preferences) {
+        var next = normalize(preferences);
+        try {
+            if (global.localStorage) {
+                global.localStorage.setItem(keyFor(scope), JSON.stringify(next));
+            }
+        } catch (_) { }
+        return next;
+    }
+
+    function minutesToSeconds(value) {
+        return clampMinutes(value, DEFAULTS.countdownMinutes) * 60;
+    }
+
+    global.PracticeTimerPreferences = {
+        VERSION: VERSION,
+        READING_KEY: READING_KEY,
+        LISTENING_KEY: LISTENING_KEY,
+        DEFAULTS: Object.freeze(Object.assign({}, DEFAULTS)),
+        normalize: normalize,
+        read: read,
+        save: save,
+        keyFor: keyFor,
+        minutesToSeconds: minutesToSeconds
+    };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/runtime/unifiedReadingPage.js ===== */
 (function initUnifiedReadingPage(global) {
     'use strict';
@@ -1804,6 +1944,8 @@
     const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
+    const READING_CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
+    const READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
     const EXPLANATION_NODE_SELECTOR = [
         '.reading-explanation-card',
         '.reading-group-explanation',
@@ -1816,6 +1958,7 @@
         'true_false_not_given',
         'yes_no_not_given'
     ]);
+    const PART_ORDER = ['p1', 'p2', 'p3'];
     const navStatus = new Map();
     const scriptCache = new Map();
     const LOCATOR_HIGHLIGHT_SELECTOR = '.reading-locator-highlight, .reading-locator-block';
@@ -1867,6 +2010,9 @@
         endlessCountdownSeconds: 0,
         endlessCountdownEndTime: null,
         suiteTimerLimitSeconds: null,
+        timerExpired: false,
+        timerExpiryHandled: false,
+        timerLocked: false,
         ready: false,
         submitted: false,
         initTimer: null,
@@ -1893,7 +2039,9 @@
         lastInitSignature: '',
         lastReplaySignature: '',
         sessionReadySent: false,
-        parentWindow: global.opener || global.parent || null
+        parentWindow: global.opener || global.parent || null,
+        windowSessionToken: '',
+        windowSessionIssuedAtMs: 0
     };
 
     const dom = {
@@ -1918,6 +2066,28 @@
         currentHighlightNode: null,
         keepToolbar: false
     };
+    const testOverrides = {
+        renderExplanations: null
+    };
+
+    function parseOptionalNumber(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (typeof value === 'string' && !value.trim()) {
+            return null;
+        }
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    function parseOptionalNonNegativeInteger(value) {
+        const numeric = parseOptionalNumber(value);
+        if (!Number.isFinite(numeric) || numeric < 0) {
+            return null;
+        }
+        return Math.floor(numeric);
+    }
 
     function ensurePracticeTimerBridge() {
         if (global[PRACTICE_TIMER_BRIDGE_KEY] && typeof global[PRACTICE_TIMER_BRIDGE_KEY].getSnapshot === 'function') {
@@ -2027,11 +2197,117 @@
         return `${minutes}:${seconds}`;
     }
 
+    function readReadingTimerPreferences() {
+        const manager = global.PracticeTimerPreferences;
+        if (manager && typeof manager.read === 'function') {
+            return manager.read('reading');
+        }
+        return {
+            version: 1,
+            mode: 'elapsed',
+            countdownMinutes: 60,
+            limitEnabled: false,
+            limitMinutes: 60,
+            expiryAction: 'warn'
+        };
+    }
+
+    function minutesToSeconds(value, fallbackMinutes = 60) {
+        const manager = global.PracticeTimerPreferences;
+        if (manager && typeof manager.minutesToSeconds === 'function') {
+            return manager.minutesToSeconds(value);
+        }
+        const numeric = Number(value);
+        const minutes = Number.isFinite(numeric)
+            ? Math.min(240, Math.max(1, Math.round(numeric)))
+            : fallbackMinutes;
+        return minutes * 60;
+    }
+
+    function setTimerLockMode(enabled) {
+        const locked = Boolean(enabled);
+        state.timerLocked = locked;
+        document.body.classList.toggle('timer-locked-mode', locked);
+        document.querySelectorAll('input, textarea, select').forEach((control) => {
+            if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                control.disabled = locked || state.readOnly;
+            }
+        });
+        disableDragInteractions();
+    }
+
+    function handleTimerExpired(preferences) {
+        if (state.timerExpiryHandled || state.submitted || state.readOnly || state.reviewMode || state.memorizeMode) {
+            return;
+        }
+        state.timerExpiryHandled = true;
+        const action = preferences && preferences.expiryAction ? preferences.expiryAction : 'warn';
+        if (action === 'auto-submit') {
+            global.setTimeout(() => {
+                if (!state.submitted && !state.readOnly) {
+                    handleSubmit();
+                }
+            }, 0);
+            return;
+        }
+        if (action === 'lock') {
+            setTimerLockMode(true);
+        }
+    }
+
+    function hashReadingCandidateCode(sourceId) {
+        const source = String(sourceId || '');
+        if (!source) {
+            return '';
+        }
+        let hash = 0;
+        source.split('').forEach((char) => {
+            hash = ((hash << 5) - hash) + char.charCodeAt(0);
+            hash |= 0;
+        });
+        return String(Math.abs(hash) % 900000 + 100000);
+    }
+
+    function readReadingCandidateCodePreferences() {
+        try {
+            const raw = global.localStorage?.getItem(READING_CANDIDATE_CODE_PREF_KEY);
+            const parsed = raw ? JSON.parse(raw) : null;
+            const mode = parsed?.mode === 'custom' ? 'custom' : 'auto';
+            const customCode = typeof parsed?.customCode === 'string'
+                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
+                : '';
+            return {
+                mode,
+                customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
+            };
+        } catch (_) {
+            return { mode: 'auto', customCode: '' };
+        }
+    }
+
+    function resolveReadingCandidateCode() {
+        const preferences = readReadingCandidateCodePreferences();
+        if (preferences.mode === 'custom' && preferences.customCode) {
+            return preferences.customCode;
+        }
+        return hashReadingCandidateCode(state.suiteSessionId || state.sessionId || '');
+    }
+
     function renderTimer() {
         const timer = document.getElementById('timer');
         if (!timer) return;
+        const preferences = readReadingTimerPreferences();
         var displaySeconds;
-        var limitSeconds = Number.isFinite(Number(state.suiteTimerLimitSeconds)) ? Number(state.suiteTimerLimitSeconds) : 3600;
+        var elapsed = getPageElapsedSeconds();
+        var limitSeconds;
+        const rawLimitSeconds = Number(state.suiteTimerLimitSeconds);
+        if (Number.isFinite(rawLimitSeconds) && rawLimitSeconds > 0) {
+            limitSeconds = Math.floor(rawLimitSeconds);
+        } else if (preferences.limitEnabled) {
+            limitSeconds = minutesToSeconds(preferences.limitMinutes, 60);
+        } else {
+            limitSeconds = null;
+        }
         if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
             var remainingMs = state.endlessCountdownEndTime - Date.now();
             displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -2042,26 +2318,45 @@
             }
             var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
             timer.textContent = remainingMinutes + ' minutes remaining';
-        } else if (!state.suiteSessionId) {
-            var elapsed = getPageElapsedSeconds();
-            timer.textContent = formatTimerSeconds(elapsed);
-        } else {
-            var elapsed = getPageElapsedSeconds();
+        } else if (preferences.mode === 'countdown') {
+            const countdownSeconds = minutesToSeconds(preferences.countdownMinutes, 60);
+            displaySeconds = Math.max(0, countdownSeconds - elapsed);
+            timer.textContent = formatTimerSeconds(displaySeconds);
+        } else if (state.suiteSessionId && Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0) {
             displaySeconds = Math.max(0, limitSeconds - elapsed);
             var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
             timer.textContent = remainingMinutes + ' minutes remaining';
+        } else {
+            displaySeconds = elapsed;
+            timer.textContent = formatTimerSeconds(displaySeconds);
         }
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
+        var countdownExpired = preferences.mode === 'countdown' && !hasEndlessCountdown && displaySeconds <= 0;
+        var limitExpired = Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds);
+        var expired = Boolean(countdownExpired || limitExpired);
+        state.timerExpired = expired;
+        if (expired) {
+            handleTimerExpired(preferences);
+        }
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
+        timer.classList.toggle('timer-expired', expired);
+        timer.dataset.timerMode = preferences.mode;
+        timer.dataset.expiryAction = preferences.expiryAction;
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
-        var _warnRemaining = state.suiteTimerMode === 'countdown' && state.suiteTimerLimitSeconds !== null && state.suiteTimerLimitSeconds > 0
-            ? Math.max(0, state.suiteTimerLimitSeconds - getPageElapsedSeconds())
+        var _warnRemaining = !hasEndlessCountdown
+            && (preferences.mode === 'countdown' || (Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0))
+            && Number.isFinite(Number(displaySeconds))
+            ? Math.max(0, Number(displaySeconds))
             : null;
         if (_warnRemaining !== null) {
             timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
             if (_warnRemaining <= 0) {
                 timer.classList.add('countdown-expired');
-                if (!state.countdownExpiredAutoSubmit && !state.submitted) {
+                if (state.suiteTimerMode === 'countdown'
+                    && Number.isFinite(rawLimitSeconds)
+                    && rawLimitSeconds > 0
+                    && !state.countdownExpiredAutoSubmit
+                    && !state.submitted) {
                     state.countdownExpiredAutoSubmit = true;
                     handleCountdownExpired();
                 }
@@ -2190,7 +2485,7 @@
         const leftPane = dom.left;
         const rightPane = document.getElementById('right');
         const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
-        
+
         let highlightNode = container instanceof HTMLElement
             ? (container.matches('.hl') ? container : container.closest('.hl'))
             : null;
@@ -2645,25 +2940,60 @@
         };
     }
 
+    function cloneDraftRecord(draft) {
+        const source = draft && typeof draft === 'object' ? draft : {};
+        return {
+            answers: source.answers && typeof source.answers === 'object'
+                ? { ...source.answers }
+                : {},
+            highlights: Array.isArray(source.highlights)
+                ? source.highlights.slice()
+                : [],
+            noteText: typeof source.noteText === 'string'
+                ? source.noteText
+                : '',
+            scrollY: Number.isFinite(Number(source.scrollY))
+                ? Number(source.scrollY)
+                : 0,
+            updatedAt: Number.isFinite(Number(source.updatedAt))
+                ? Number(source.updatedAt)
+                : null
+        };
+    }
+
+    function shouldKeepBaseDraft(baseDraft, nextDraft) {
+        const baseUpdatedAt = Number(baseDraft && baseDraft.updatedAt);
+        const nextUpdatedAt = Number(nextDraft && nextDraft.updatedAt);
+        return Number.isFinite(baseUpdatedAt)
+            && Number.isFinite(nextUpdatedAt)
+            && nextUpdatedAt < baseUpdatedAt;
+    }
+
     function mergeDraft(baseDraft, nextDraft) {
-        const base = baseDraft && typeof baseDraft === 'object' ? baseDraft : {};
-        const next = nextDraft && typeof nextDraft === 'object' ? nextDraft : {};
+        const base = cloneDraftRecord(baseDraft);
+        const next = cloneDraftRecord(nextDraft);
+        if (shouldKeepBaseDraft(base, next)) {
+            return Object.assign(buildEmptyDraft(), base, {
+                updatedAt: Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now()
+            });
+        }
+        const mergedUpdatedAt = Number.isFinite(Number(next.updatedAt))
+            ? Number(next.updatedAt)
+            : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now());
         return Object.assign(buildEmptyDraft(), base, next, {
             answers: next.answers && typeof next.answers === 'object'
                 ? { ...next.answers }
-                : (base.answers && typeof base.answers === 'object' ? { ...base.answers } : {}),
+                : { ...base.answers },
             highlights: Array.isArray(next.highlights)
                 ? next.highlights.slice()
-                : (Array.isArray(base.highlights) ? base.highlights.slice() : []),
+                : base.highlights.slice(),
             noteText: typeof next.noteText === 'string'
                 ? next.noteText
-                : (typeof base.noteText === 'string' ? base.noteText : ''),
+                : base.noteText,
             scrollY: Number.isFinite(Number(next.scrollY))
                 ? Number(next.scrollY)
-                : (Number.isFinite(Number(base.scrollY)) ? Number(base.scrollY) : 0),
-            updatedAt: Number.isFinite(Number(next.updatedAt))
-                ? Number(next.updatedAt)
-                : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now())
+                : base.scrollY,
+            updatedAt: mergedUpdatedAt
         });
     }
 
@@ -2693,6 +3023,42 @@
                 slot.draft = mergeDraft(slot.draft, draft);
             }
         }
+    }
+
+    function captureInlineSuiteDraftBeforeReinit(reason = 'reinit') {
+        if (!state.suite?.inline || !state.suiteSessionId) {
+            return null;
+        }
+        const draft = updateActiveSlotFromCurrentDom(reason);
+        if (!draft) {
+            return null;
+        }
+        persistSimulationDraftMirror(cloneDraftSafely(draft));
+        return draft;
+    }
+
+    function shouldIgnoreInlineSuiteEnvelope(data = {}) {
+        if (!state.suite?.inline) {
+            return false;
+        }
+        const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
+        const currentExamId = state.suite?.activeExamId != null
+            ? String(state.suite.activeExamId).trim()
+            : (state.examId != null ? String(state.examId).trim() : '');
+        if (incomingExamId && currentExamId && incomingExamId !== currentExamId) {
+            return true;
+        }
+        const incomingSuiteSessionId = data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '';
+        const currentSuiteSessionId = state.suiteSessionId != null ? String(state.suiteSessionId).trim() : '';
+        if (state.sessionReadySent && incomingSuiteSessionId && currentSuiteSessionId && incomingSuiteSessionId !== currentSuiteSessionId) {
+            return true;
+        }
+        const incomingSessionId = data && data.sessionId != null ? String(data.sessionId).trim() : '';
+        const currentSessionId = state.sessionId != null ? String(state.sessionId).trim() : '';
+        if (state.sessionReadySent && incomingSessionId && currentSessionId && incomingSessionId !== currentSessionId) {
+            return true;
+        }
+        return false;
     }
 
     function resolveSuiteTargetExamId(data = {}, options = {}) {
@@ -2770,6 +3136,34 @@
             canPrev: currentIndex > 0,
             canNext: currentIndex < total - 1
         });
+    }
+
+    function syncInlineSuiteIdentity() {
+        if (!state.suite?.inline || !state.examId) {
+            return;
+        }
+        try {
+            document.body.dataset.examId = state.examId;
+        } catch (_) {
+            // ignore DOM dataset failures
+        }
+        try {
+            if (!global.history || typeof global.history.replaceState !== 'function') {
+                return;
+            }
+            const url = new URL(global.location.href);
+            url.searchParams.set('examId', state.examId);
+            url.searchParams.set('dataKey', state.dataKey || state.examId);
+            if (Number.isInteger(state.suite.currentIndex)) {
+                url.searchParams.set('suiteSequenceIndex', String(state.suite.currentIndex));
+            }
+            if (Array.isArray(state.suite.sequence) && state.suite.sequence.length) {
+                url.searchParams.set('suiteSequenceTotal', String(state.suite.sequence.length));
+            }
+            global.history.replaceState(global.history.state, '', url.toString());
+        } catch (_) {
+            // keep navigation working even when URL mutation is unavailable
+        }
     }
 
     async function ensureSuiteDatasets(rawSequence = []) {
@@ -2857,12 +3251,14 @@
         if (slot.navStatus instanceof Map) {
             slot.navStatus.forEach((value, key) => navStatus.set(key, value));
         }
+        interaction.currentHighlightNode = null;
         renderDataset(slot.dataset);
         refreshDynamicQuestionEnhancements();
         clearCurrentAnswers();
         applyDraftToDom(slot.draft || buildEmptyDraft());
         setNotesText(slot.draft?.noteText || '');
         syncSimulationCtxForActiveSlot();
+        syncInlineSuiteIdentity();
         state.simulationMode = true;
         state.simulationContextReady = true;
         updateNavStatuses(slot.lastResults || null);
@@ -3235,10 +3631,43 @@
             if (category === 'P2') partName = 'Part 2';
             else if (category === 'P3') partName = 'Part 3';
             partEl.textContent = partName;
-            
+
             const range = getQuestionRangeText();
             instEl.textContent = range ? `Read the text and answer questions ${range}.` : '';
         }
+    }
+
+    function getPartIndex(partKey) {
+        return PART_ORDER.indexOf(partKey);
+    }
+
+    function getPartKeyFromCategory(category, fallbackIndex = 0) {
+        const normalized = String(category || '').toUpperCase();
+        if (normalized === 'P2') return 'p2';
+        if (normalized === 'P3') return 'p3';
+        if (normalized === 'P1') return 'p1';
+        return PART_ORDER[Math.min(PART_ORDER.length - 1, Math.max(0, fallbackIndex))] || 'p1';
+    }
+
+    function getCurrentPartKey() {
+        return getPartKeyFromCategory(state.dataset?.meta?.category || '', 0);
+    }
+
+    function getSuiteEntryPartKey(entry, index = 0) {
+        const slot = entry?.examId ? getSuiteSlot(entry.examId) : null;
+        return getPartKeyFromCategory(entry?.category || slot?.dataset?.meta?.category || '', index);
+    }
+
+    function getSuiteEntryForPart(partKey) {
+        if (!state.suite?.inline || !Array.isArray(state.suite.sequence)) {
+            return null;
+        }
+        const matchedEntry = state.suite.sequence.find((entry, index) => getSuiteEntryPartKey(entry, index) === partKey);
+        if (matchedEntry) {
+            return matchedEntry;
+        }
+        const index = getPartIndex(partKey);
+        return index >= 0 ? (state.suite.sequence[index] || null) : null;
     }
 
     function getPassageQuestionStates() {
@@ -3253,8 +3682,7 @@
             state.suite.sequence.forEach((entry, index) => {
                 const slot = getSuiteSlot(entry.examId);
                 const dataset = slot?.dataset;
-                const category = String(entry.category || dataset?.meta?.category || '').toUpperCase();
-                const partKey = category === 'P2' ? 'p2' : (category === 'P3' ? 'p3' : `p${Math.min(3, index + 1)}`);
+                const partKey = getPartKeyFromCategory(entry.category || dataset?.meta?.category || '', index);
                 if (entry.examId === activeExamId) {
                     currentPart = partKey;
                 }
@@ -3313,9 +3741,7 @@
         } catch (_) {}
 
         const category = (state.dataset?.meta?.category || '').toUpperCase();
-        let currentPart = 'p1';
-        if (category === 'P2') currentPart = 'p2';
-        else if (category === 'P3') currentPart = 'p3';
+        const currentPart = getPartKeyFromCategory(category, 0);
 
         // Part 1
         if (currentPart === 'p1') {
@@ -3333,7 +3759,7 @@
             const draftAnswers = draft ? (draft.answers || {}) : {};
             const result = examId ? resultsByExam[examId] : null;
             const comparison = result ? (result.answerComparison || {}) : {};
-            
+
             info.p1.questions = p1PlaceholderOrder.map(qId => {
                 const label = qId.replace(/^q/i, '');
                 let status = '';
@@ -3365,7 +3791,7 @@
             const draftAnswers = draft ? (draft.answers || {}) : {};
             const result = examId ? resultsByExam[examId] : null;
             const comparison = result ? (result.answerComparison || {}) : {};
-            
+
             info.p2.questions = p2PlaceholderOrder.map(qId => {
                 const label = qId.replace(/^q/i, '');
                 let status = '';
@@ -3397,7 +3823,7 @@
             const draftAnswers = draft ? (draft.answers || {}) : {};
             const result = examId ? resultsByExam[examId] : null;
             const comparison = result ? (result.answerComparison || {}) : {};
-            
+
             info.p3.questions = p3PlaceholderOrder.map(qId => {
                 const label = qId.replace(/^q/i, '');
                 let status = '';
@@ -3429,7 +3855,7 @@
 
     function buildQuestionNav() {
         const { info, currentPart } = getPassageQuestionStates();
-        
+
         const renderQuestionsHtml = (partKey, questions, isCurrent) => {
             return questions.map(q => {
                 const segmentClass = q.status ? q.status : '';
@@ -3437,7 +3863,7 @@
                 const disabledClass = isCurrent || state.suite?.inline ? '' : 'disabled';
                 const qidAttr = isCurrent ? `data-question-id="${q.qId}"` : '';
                 const examAttr = q.examId ? ` data-exam-id="${escapeHtml(q.examId)}"` : '';
-                
+
                 return `
                     <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}"${examAttr}>
                         <div class="q-bar-segment ${segmentClass}"></div>
@@ -3446,21 +3872,21 @@
                 `;
             }).join('');
         };
-        
+
         const p1Status = document.getElementById('part1-status-text');
         const p1QuestionsContainer = document.getElementById('part1-questions');
         if (p1Status) p1Status.textContent = `${info.p1.answeredCount} of ${info.p1.total}`;
         if (p1QuestionsContainer) {
             p1QuestionsContainer.innerHTML = renderQuestionsHtml('p1', info.p1.questions, currentPart === 'p1');
         }
-        
+
         const p2Status = document.getElementById('part2-status-text');
         const p2QuestionsContainer = document.getElementById('part2-questions');
         if (p2Status) p2Status.textContent = `${info.p2.answeredCount} of ${info.p2.total}`;
         if (p2QuestionsContainer) {
             p2QuestionsContainer.innerHTML = renderQuestionsHtml('p2', info.p2.questions, currentPart === 'p2');
         }
-        
+
         const p3Status = document.getElementById('part3-status-text');
         const p3QuestionsContainer = document.getElementById('part3-questions');
         if (p3Status) p3Status.textContent = `${info.p3.answeredCount} of ${info.p3.total}`;
@@ -3469,9 +3895,17 @@
         }
 
         const isSingleMode = !state.suiteSessionId;
+        const canSwitchParts = state.suite?.inline || state.simulationMode;
         const p1Section = document.getElementById('part-section-1');
         if (p1Section) {
+            const canSwitchToPart = canSwitchParts && currentPart !== 'p1';
+            p1Section.dataset.part = 'p1';
             p1Section.classList.toggle('active', currentPart === 'p1');
+            p1Section.classList.toggle('is-switchable', canSwitchToPart);
+            p1Section.tabIndex = canSwitchToPart ? 0 : -1;
+            p1Section.setAttribute('role', canSwitchToPart ? 'button' : 'group');
+            p1Section.setAttribute('aria-label', canSwitchToPart ? 'Go to Part 1' : 'Part 1 questions');
+            p1Section.setAttribute('aria-expanded', currentPart === 'p1' ? 'true' : 'false');
         }
         const p1Name = document.querySelector('#part-section-1 .part-nav-name');
         if (p1Name) {
@@ -3479,7 +3913,14 @@
         }
         const p2Section = document.getElementById('part-section-2');
         if (p2Section) {
+            const canSwitchToPart = canSwitchParts && currentPart !== 'p2';
+            p2Section.dataset.part = 'p2';
             p2Section.classList.toggle('active', currentPart === 'p2');
+            p2Section.classList.toggle('is-switchable', canSwitchToPart);
+            p2Section.tabIndex = canSwitchToPart ? 0 : -1;
+            p2Section.setAttribute('role', canSwitchToPart ? 'button' : 'group');
+            p2Section.setAttribute('aria-label', canSwitchToPart ? 'Go to Part 2' : 'Part 2 questions');
+            p2Section.setAttribute('aria-expanded', currentPart === 'p2' ? 'true' : 'false');
         }
         const p2Name = document.querySelector('#part-section-2 .part-nav-name');
         if (p2Name) {
@@ -3487,7 +3928,14 @@
         }
         const p3Section = document.getElementById('part-section-3');
         if (p3Section) {
+            const canSwitchToPart = canSwitchParts && currentPart !== 'p3';
+            p3Section.dataset.part = 'p3';
             p3Section.classList.toggle('active', currentPart === 'p3');
+            p3Section.classList.toggle('is-switchable', canSwitchToPart);
+            p3Section.tabIndex = canSwitchToPart ? 0 : -1;
+            p3Section.setAttribute('role', canSwitchToPart ? 'button' : 'group');
+            p3Section.setAttribute('aria-label', canSwitchToPart ? 'Go to Part 3' : 'Part 3 questions');
+            p3Section.setAttribute('aria-expanded', currentPart === 'p3' ? 'true' : 'false');
         }
         const p3Name = document.querySelector('#part-section-3 .part-nav-name');
         if (p3Name) {
@@ -3859,64 +4307,81 @@
         syncPrimaryActionButtons();
     }
 
+    function scrollToQuestion(questionId) {
+        if (!questionId) return;
+        const target = findQuestionAnchor(questionId);
+        if (target && typeof global.scrollToElement === 'function') {
+            global.scrollToElement(target);
+        } else {
+            target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        }
+        updateActiveQuestionHighlight(questionId);
+    }
+
+    function navigateToPart(partKey, options = {}) {
+        const targetPartKey = PART_ORDER.includes(partKey) ? partKey : '';
+        if (!targetPartKey) return;
+        const questionId = options.questionId || '';
+        const currentPartKey = getCurrentPartKey();
+
+        if (targetPartKey === currentPartKey) {
+            if (questionId) {
+                scrollToQuestion(questionId);
+            }
+            return;
+        }
+
+        if (state.suite?.inline) {
+            const targetExamId = options.examId || getSuiteEntryForPart(targetPartKey)?.examId || '';
+            if (targetExamId) {
+                activateSuiteSlot(targetExamId).then((activated) => {
+                    if (activated && questionId) {
+                        scrollToQuestion(questionId);
+                    }
+                }).catch((error) => {
+                    console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
+                });
+            }
+            return;
+        }
+
+        if (state.simulationMode) {
+            const currentIndex = getPartIndex(currentPartKey);
+            const targetIndex = getPartIndex(targetPartKey);
+            if (currentIndex < 0 || targetIndex < 0 || currentIndex === targetIndex) {
+                return;
+            }
+            dispatchSimulationNavigate(targetIndex < currentIndex ? 'prev' : 'next', null, {
+                targetIndex,
+                targetPartKey
+            });
+        }
+    }
+
     function attachNavListeners() {
         const handler = (event) => {
+            const section = event.currentTarget;
             const column = event.target.closest('.q-column');
-            if (!column) return;
-            const questionId = column.dataset.questionId;
-            const partKey = column.dataset.part;
-            
-            const category = (state.dataset?.meta?.category || '').toUpperCase();
-            let currentPartKey = 'p1';
-            if (category === 'P2') currentPartKey = 'p2';
-            else if (category === 'P3') currentPartKey = 'p3';
-            
-            if (partKey === currentPartKey) {
-                const target = findQuestionAnchor(questionId);
-                if (target && typeof global.scrollToElement === 'function') {
-                    global.scrollToElement(target);
-                } else {
-                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-                }
-                updateActiveQuestionHighlight(questionId);
-            } else {
-                if (state.suite?.inline) {
-                    const targetExamId = column.dataset.examId || '';
-                    if (targetExamId) {
-                        activateSuiteSlot(targetExamId).then((activated) => {
-                            if (activated && questionId) {
-                                const target = findQuestionAnchor(questionId);
-                                if (target && typeof global.scrollToElement === 'function') {
-                                    global.scrollToElement(target);
-                                } else {
-                                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-                                }
-                                updateActiveQuestionHighlight(questionId);
-                            }
-                        }).catch((error) => {
-                            console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
-                        });
-                    }
-                    return;
-                }
-                if (state.simulationMode) {
-                    if (partKey === 'p1' && currentPartKey === 'p2') dispatchSimulationNavigate('prev');
-                    else if (partKey === 'p2' && currentPartKey === 'p3') dispatchSimulationNavigate('prev');
-                    else if (partKey === 'p2' && currentPartKey === 'p1') dispatchSimulationNavigate('next');
-                    else if (partKey === 'p3' && currentPartKey === 'p2') dispatchSimulationNavigate('next');
-                    else if (partKey === 'p3' && currentPartKey === 'p1') {
-                        dispatchSimulationNavigate('next');
-                    }
-                    else if (partKey === 'p1' && currentPartKey === 'p3') {
-                        dispatchSimulationNavigate('prev');
-                    }
-                }
-            }
+            const partKey = column?.dataset.part || section?.dataset.part || '';
+            navigateToPart(partKey, {
+                questionId: column?.dataset.questionId || '',
+                examId: column?.dataset.examId || ''
+            });
         };
-        
-        document.getElementById('part1-questions')?.addEventListener('click', handler);
-        document.getElementById('part2-questions')?.addEventListener('click', handler);
-        document.getElementById('part3-questions')?.addEventListener('click', handler);
+
+        const keyboardHandler = (event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            navigateToPart(event.currentTarget.dataset.part || '');
+        };
+
+        document.getElementById('part-section-1')?.addEventListener('click', handler);
+        document.getElementById('part-section-2')?.addEventListener('click', handler);
+        document.getElementById('part-section-3')?.addEventListener('click', handler);
+        document.getElementById('part-section-1')?.addEventListener('keydown', keyboardHandler);
+        document.getElementById('part-section-2')?.addEventListener('keydown', keyboardHandler);
+        document.getElementById('part-section-3')?.addEventListener('keydown', keyboardHandler);
 
         dom.right?.addEventListener('focusin', (event) => {
             const input = event.target.closest('input, select, textarea');
@@ -3939,7 +4404,7 @@
     function attachFloatingNavListeners() {
         const prevBtn = document.getElementById('float-prev-btn');
         const nextBtn = document.getElementById('float-next-btn');
-        
+
         prevBtn?.addEventListener('click', () => {
             if (state.simulationMode && state.simulationCtx) {
                 if (state.simulationCtx.canPrev) {
@@ -3951,7 +4416,7 @@
                 }
             }
         });
-        
+
         nextBtn?.addEventListener('click', () => {
             if (state.simulationMode && state.simulationCtx) {
                 if (!state.simulationCtx.isLast) {
@@ -4139,6 +4604,10 @@
     }
 
     async function renderExplanations() {
+        if (typeof testOverrides.renderExplanations === 'function') {
+            await testOverrides.renderExplanations();
+            return;
+        }
         clearExplanations();
         const explanation = await ensureExplanationDataset();
         if (!explanation) {
@@ -4915,7 +5384,7 @@
         if (['false', 'f', 'no', 'n'].includes(lowered)) return 'false';
         if (['ng', 'notgiven', 'not-given'].includes(lowered)) return 'not given';
         if (/^[a-z]$/i.test(cleaned)) return cleaned.toUpperCase();
-        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/);
         if (leadingOption && cleaned.length > 2) {
             return leadingOption[1].toUpperCase();
         }
@@ -4970,10 +5439,92 @@
         return tokenEquivalent(actualTokens[0], expectedTokens[0]);
     }
 
-    function questionWeight(correctAnswer) {
-        const normalized = normalizeAnswerValue(correctAnswer);
-        if (Array.isArray(normalized) && normalized.length > 0) {
-            return normalized.length;
+    function buildQuestionGroupLookup(dataset) {
+        const lookup = new Map();
+        const groups = Array.isArray(dataset?.questionGroups) ? dataset.questionGroups : [];
+        groups.forEach((group, index) => {
+            if (!group || !Array.isArray(group.questionIds) || !group.questionIds.length) {
+                return;
+            }
+            const normalizedIds = group.questionIds
+                .map((entry) => normalizeQuestionId(entry))
+                .filter(Boolean);
+            if (!normalizedIds.length) {
+                return;
+            }
+            const normalizedGroup = Object.assign({}, group, {
+                groupId: group.groupId || `group-${index + 1}`,
+                questionIds: normalizedIds
+            });
+            normalizedIds.forEach((questionId) => {
+                lookup.set(questionId, normalizedGroup);
+            });
+        });
+        return lookup;
+    }
+
+    function areAnswerTokensEquivalent(left, right) {
+        const core = getAnswerMatchCore();
+        if (core && typeof core.areTokensEquivalent === 'function') {
+            return core.areTokensEquivalent(left, right);
+        }
+        const normalizedLeft = canonicalizeAnswerToken(left);
+        const normalizedRight = canonicalizeAnswerToken(right);
+        if (!normalizedLeft || !normalizedRight) {
+            return false;
+        }
+        if (normalizedLeft === normalizedRight) {
+            return true;
+        }
+        if (/^[A-Z]$/.test(normalizedLeft) || /^[A-Z]$/.test(normalizedRight)) {
+            return false;
+        }
+        const looseLeft = String(normalizedLeft).toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const looseRight = String(normalizedRight).toLowerCase().replace(/[^a-z0-9]+/g, '');
+        return !!looseLeft && looseLeft === looseRight;
+    }
+
+    function normalizeChoiceTokenList(value) {
+        const rawTokens = Array.isArray(value)
+            ? value.flatMap((entry) => splitAnswerTokens(entry))
+            : splitAnswerTokens(value);
+        const normalized = [];
+        rawTokens.forEach((entry) => {
+            const token = canonicalizeAnswerToken(entry);
+            if (!token) {
+                return;
+            }
+            if (!normalized.some((existing) => areAnswerTokensEquivalent(existing, token))) {
+                normalized.push(token);
+            }
+        });
+        return normalized.sort((left, right) => left.localeCompare(right, 'en'));
+    }
+
+    function collectGroupChoiceTokens(answers, questionIds) {
+        const tokens = [];
+        questionIds.forEach((questionId) => {
+            normalizeChoiceTokenList(answers[questionId]).forEach((token) => {
+                if (!tokens.some((existing) => areAnswerTokensEquivalent(existing, token))) {
+                    tokens.push(token);
+                }
+            });
+        });
+        return tokens.sort((left, right) => left.localeCompare(right, 'en'));
+    }
+
+    function questionWeight(correctAnswer, questionGroup = null) {
+        if (Array.isArray(correctAnswer)) {
+            const normalized = normalizeAnswerValue(correctAnswer);
+            const isMultiChoiceGroup = Boolean(
+                questionGroup
+                && questionGroup.kind === 'multi_choice'
+                && Array.isArray(questionGroup.questionIds)
+            );
+            if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
+                return normalized.length;
+            }
+            return 1;
         }
         return 1;
     }
@@ -4988,6 +5539,7 @@
         const answerKey = dataset?.answerKey || {};
         const questionOrder = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : Object.keys(answerKey);
         const questionTypeMap = buildQuestionTypeMap(dataset);
+        const questionGroupLookup = buildQuestionGroupLookup(dataset);
         const questionTypePerformance = {};
         const answerComparison = {};
         const details = {};
@@ -4995,12 +5547,57 @@
         let totalQuestions = 0;
 
         questionOrder.forEach((questionId) => {
-            const userAnswer = answers[questionId] || '';
+            const userAnswer = Object.prototype.hasOwnProperty.call(answers, questionId)
+                ? answers[questionId]
+                : '';
             const correctAnswer = answerKey[questionId];
-            const isCorrect = compareAnswers(userAnswer, correctAnswer);
-            const weight = questionWeight(correctAnswer);
             const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+            const questionGroup = questionGroupLookup.get(normalizedQuestionId) || null;
             const questionType = questionTypeMap[normalizedQuestionId] || 'other';
+            const isSplitMultiChoiceGroup = Boolean(
+                questionGroup
+                && questionGroup.kind === 'multi_choice'
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length > 1
+            );
+            const isSingleKeyMultiChoiceGroup = Boolean(
+                questionGroup
+                && questionGroup.kind === 'multi_choice'
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length === 1
+                && Array.isArray(correctAnswer)
+            );
+            let displayUserAnswer = userAnswer;
+            let isCorrect = compareAnswers(userAnswer, correctAnswer);
+            let weight = questionWeight(correctAnswer, questionGroup);
+            let partialCorrectCount = isCorrect ? weight : 0;
+
+            if (isSplitMultiChoiceGroup) {
+                const selectedTokens = collectGroupChoiceTokens(answers, questionGroup.questionIds);
+                const expectedToken = canonicalizeAnswerToken(correctAnswer);
+                displayUserAnswer = selectedTokens.length ? selectedTokens : userAnswer;
+                if (!expectedToken) {
+                    isCorrect = null;
+                    partialCorrectCount = 0;
+                } else {
+                    isCorrect = selectedTokens.some((token) => areAnswerTokensEquivalent(token, expectedToken));
+                    partialCorrectCount = isCorrect ? 1 : 0;
+                }
+                weight = 1;
+            } else if (isSingleKeyMultiChoiceGroup) {
+                const selectedTokens = normalizeChoiceTokenList(userAnswer);
+                const expectedTokens = normalizeChoiceTokenList(correctAnswer);
+                const matchedTokens = expectedTokens.filter((expectedToken) => (
+                    selectedTokens.some((token) => areAnswerTokensEquivalent(token, expectedToken))
+                ));
+                displayUserAnswer = selectedTokens.length ? selectedTokens : userAnswer;
+                partialCorrectCount = matchedTokens.length;
+                isCorrect = expectedTokens.length > 0
+                    && matchedTokens.length === expectedTokens.length
+                    && selectedTokens.length === expectedTokens.length;
+                weight = expectedTokens.length || 1;
+            }
+
             if (!questionTypePerformance[questionType]) {
                 questionTypePerformance[questionType] = {
                     total: 0,
@@ -5010,23 +5607,27 @@
             }
             totalQuestions += weight;
             questionTypePerformance[questionType].total += weight;
-            if (isCorrect) {
-                correctCount += weight;
-                questionTypePerformance[questionType].correct += weight;
+            if (partialCorrectCount > 0) {
+                correctCount += partialCorrectCount;
+                questionTypePerformance[questionType].correct += partialCorrectCount;
             }
             answerComparison[questionId] = {
                 questionId,
-                userAnswer,
+                userAnswer: displayUserAnswer,
                 correctAnswer,
                 isCorrect,
-                questionType
+                questionType,
+                partialCorrectCount,
+                weight
             };
             details[questionId] = {
                 questionId,
-                userAnswer,
+                userAnswer: displayUserAnswer,
                 correctAnswer,
                 isCorrect,
-                questionType
+                questionType,
+                partialCorrectCount,
+                weight
             };
         });
 
@@ -5130,7 +5731,7 @@
 
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
-        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswers || {});
+        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
         const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
@@ -5151,12 +5752,9 @@
             const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                 ? comparisonEntry.userAnswer
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const correctAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'correctAnswer')
-                ? comparisonEntry.correctAnswer
-                : (Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId) ? normalizedCorrectAnswers[questionId] : '');
-            let isCorrect = typeof comparisonEntry.isCorrect === 'boolean'
-                ? comparisonEntry.isCorrect
-                : compareAnswers(userAnswer, correctAnswer);
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
+            const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
+            let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
             if (isCorrect) {
                 correctCount += 1;
             }
@@ -5170,10 +5768,14 @@
 
         const totalQuestions = questionIds.size;
         const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : correctCount;
-        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
-        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
+        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
+        scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? correctCount : Number(scoreInfo.correct);
+        scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? totalQuestions : Number(scoreInfo.total);
+        scoreInfo.totalQuestions = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions)) ? scoreInfo.total : Number(scoreInfo.totalQuestions);
         scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
+        scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+            ? Math.round(scoreInfo.accuracy * 100)
+            : Number(scoreInfo.percentage);
         scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
             ? Number(scoreInfo.percentage)
             : Math.round(scoreInfo.accuracy * 100);
@@ -5184,6 +5786,18 @@
             answerComparison: normalizedComparison,
             scoreInfo
         };
+    }
+
+    if (global.__IELTS_READING_PAGE_TEST_HOOKS__ === true) {
+        global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.assign(
+            global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
+            {
+                buildReplayResults,
+                buildResultsFromAnswers,
+                renderTimer,
+                handleSubmit
+            }
+        );
     }
 
     function applyReplayAnswersToDom(answers = {}) {
@@ -5261,7 +5875,7 @@
         const controls = document.querySelectorAll('input, textarea, select');
         controls.forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
-                control.disabled = state.readOnly;
+                control.disabled = state.readOnly || state.timerLocked;
             }
         });
         syncPrimaryActionButtons();
@@ -5270,10 +5884,11 @@
     }
 
     function disableDragInteractions() {
+        const locked = Boolean(state.readOnly || state.timerLocked);
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
-            item.setAttribute('draggable', state.readOnly ? 'false' : 'true');
-            item.classList.toggle('drag-item-locked', state.readOnly);
+            item.setAttribute('draggable', locked ? 'false' : 'true');
+            item.classList.toggle('drag-item-locked', locked);
         });
     }
 
@@ -5295,6 +5910,99 @@
         syncPrimaryActionButtons();
     }
 
+    if (global.__IELTS_READING_PAGE_TEST_HOOKS__ === true) {
+        global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.assign(
+            global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
+            {
+                buildReplayResults,
+                mergeDraft,
+                mergeSuiteDraftPayload,
+                captureInlineSuiteDraftBeforeReinit,
+                shouldIgnoreInlineSuiteEnvelope,
+                shouldAcceptWindowSessionMessage,
+                adoptWindowSessionMessage,
+                handleIncoming,
+                initializeInlineSimulationSuite,
+                buildResultsFromAnswers,
+                renderTimer,
+                handleSubmit,
+                getTestState() {
+                    return {
+                        examId: state.examId,
+                        dataKey: state.dataKey,
+                        sessionId: state.sessionId,
+                        suiteSessionId: state.suiteSessionId,
+                        simulationMode: state.simulationMode,
+                        simulationContextReady: state.simulationContextReady,
+                        simulationCtx: state.simulationCtx && typeof state.simulationCtx === 'object'
+                            ? JSON.parse(JSON.stringify(state.simulationCtx))
+                            : state.simulationCtx,
+                        windowSessionToken: state.windowSessionToken,
+                        windowSessionIssuedAtMs: state.windowSessionIssuedAtMs,
+                        sessionReadySent: state.sessionReadySent,
+                        lastInitSignature: state.lastInitSignature,
+                        activeExamId: state.suite?.activeExamId || null,
+                        currentIndex: state.suite?.currentIndex || 0,
+                        suiteInline: Boolean(state.suite?.inline),
+                        suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
+                        suiteSequence: Array.isArray(state.suite?.sequence)
+                            ? state.suite.sequence.map((entry) => ({ ...entry }))
+                            : [],
+                        slotsByExamId: state.suite?.slotsByExamId instanceof Map
+                            ? Array.from(state.suite.slotsByExamId.entries()).map(([examId, slot]) => [
+                                examId,
+                                {
+                                    ...slot,
+                                    draft: slot?.draft ? cloneDraftSafely(slot.draft) : slot?.draft
+                                }
+                            ])
+                            : []
+                    };
+                },
+                setTestState(patch = {}) {
+                    if (!patch || typeof patch !== 'object') {
+                        return;
+                    }
+                    Object.entries(patch).forEach(([key, value]) => {
+                        if (key === 'suite' || key === 'suiteSlots') {
+                            return;
+                        }
+                        state[key] = value;
+                    });
+                    if (patch.suite && typeof patch.suite === 'object') {
+                        Object.assign(state.suite, patch.suite);
+                        if (Object.prototype.hasOwnProperty.call(patch.suite, 'slotsByExamId')) {
+                            const slots = patch.suite.slotsByExamId;
+                            if (slots instanceof Map) {
+                                state.suite.slotsByExamId = slots;
+                            } else if (Array.isArray(slots)) {
+                                state.suite.slotsByExamId = new Map(slots);
+                            } else if (slots && typeof slots === 'object') {
+                                state.suite.slotsByExamId = new Map(Object.entries(slots));
+                            }
+                        }
+                    }
+                    if (Object.prototype.hasOwnProperty.call(patch, 'suiteSlots')) {
+                        const slots = patch.suiteSlots;
+                        if (slots instanceof Map) {
+                            state.suite.slotsByExamId = slots;
+                        } else if (Array.isArray(slots)) {
+                            state.suite.slotsByExamId = new Map(slots);
+                        } else if (slots && typeof slots === 'object') {
+                            state.suite.slotsByExamId = new Map(Object.entries(slots));
+                        }
+                    }
+                },
+                setTestOverride(name, value) {
+                    if (!Object.prototype.hasOwnProperty.call(testOverrides, name)) {
+                        return;
+                    }
+                    testOverrides[name] = typeof value === 'function' ? value : null;
+                }
+            }
+        );
+    }
+
     function syncSimulationRuntimeFlags() {
         try {
             global.__UNIFIED_READING_SIMULATION_MODE__ = Boolean(state.simulationMode);
@@ -5306,8 +6014,8 @@
 
     function syncPrimaryActionButtons() {
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn') 
-                ? 'Submit' 
+            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn')
+                ? 'Submit'
                 : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
@@ -5322,7 +6030,7 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
-        
+
         const setSubmitLabel = (label) => {
             if (!dom.submitBtn) return;
             if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
@@ -5424,6 +6132,7 @@
                 );
                 postMessage('REVIEW_NAVIGATE', {
                     direction,
+                    examId: document.body.dataset.examId || state.examId || null,
                     sessionId: null,
                     reviewSessionId: state.reviewSessionId || state.reviewContext?.reviewSessionId || null,
                     suiteSessionId: state.suiteSessionId || state.reviewContext?.suiteSessionId || null,
@@ -5459,6 +6168,9 @@
         state.lastResults = null;
         state.submitted = false;
         state.readOnly = false;
+        state.timerLocked = false;
+        state.timerExpired = false;
+        state.timerExpiryHandled = false;
         closeReviewHighlightDictionary();
         if (dom.results) {
             dom.results.style.display = 'none';
@@ -5466,6 +6178,7 @@
         }
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
+        document.body.classList.remove('timer-locked-mode');
         enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
@@ -5574,6 +6287,7 @@
     }
 
     function buildEnvelope(type, payload) {
+        const messageIssuedAtMs = Date.now();
         return {
             type,
             data: Object.assign({
@@ -5585,10 +6299,86 @@
                 globalTimerAnchorMs: state.suiteTimerAnchorMs,
                 suiteTimerMode: state.suiteTimerMode,
                 suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
+                windowSessionToken: state.windowSessionToken || null,
+                messageIssuedAtMs,
                 source: MESSAGE_SOURCE
             }, payload || {}),
             source: MESSAGE_SOURCE
         };
+    }
+
+    function normalizeWindowSessionToken(value) {
+        return typeof value === 'string' ? value.trim() : '';
+    }
+
+    function readMessageIssuedAtMs(data = {}) {
+        const value = Number(data && (data.messageIssuedAtMs ?? data.timestamp));
+        return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    }
+
+    function readDraftUpdatedAt(draft = null) {
+        if (!draft || typeof draft !== 'object') {
+            return 0;
+        }
+        const value = Number(draft.updatedAt);
+        return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function shouldAcceptIncomingDraft(baseDraft = null, nextDraft = null, options = {}) {
+        const baseUpdatedAt = readDraftUpdatedAt(baseDraft);
+        const nextUpdatedAt = readDraftUpdatedAt(nextDraft);
+        if (!nextDraft || typeof nextDraft !== 'object') {
+            return false;
+        }
+        if (!baseUpdatedAt) {
+            return true;
+        }
+        if (!nextUpdatedAt) {
+            return Boolean(options.allowUntimedOverride);
+        }
+        return nextUpdatedAt >= baseUpdatedAt;
+    }
+
+    function shouldAcceptWindowSessionMessage(data = {}, sourceWindow = null) {
+        const incomingToken = normalizeWindowSessionToken(data && data.windowSessionToken);
+        const currentToken = normalizeWindowSessionToken(state.windowSessionToken);
+        const incomingIssuedAtMs = readMessageIssuedAtMs(data);
+        const currentIssuedAtMs = Number.isFinite(Number(state.windowSessionIssuedAtMs))
+            ? Number(state.windowSessionIssuedAtMs)
+            : 0;
+
+        if (sourceWindow && state.parentWindow && sourceWindow !== state.parentWindow && currentToken) {
+            return false;
+        }
+        if (!incomingToken) {
+            return !currentToken;
+        }
+        if (!currentToken) {
+            return true;
+        }
+        if (incomingToken === currentToken) {
+            return true;
+        }
+        if (incomingIssuedAtMs && currentIssuedAtMs && incomingIssuedAtMs >= currentIssuedAtMs) {
+            return true;
+        }
+        return false;
+    }
+
+    function adoptWindowSessionMessage(data = {}, sourceWindow = null) {
+        const incomingToken = normalizeWindowSessionToken(data && data.windowSessionToken);
+        const incomingIssuedAtMs = readMessageIssuedAtMs(data);
+        if (sourceWindow) {
+            state.parentWindow = sourceWindow;
+        }
+        if (incomingToken) {
+            state.windowSessionToken = incomingToken;
+        }
+        if (incomingIssuedAtMs > 0) {
+            state.windowSessionIssuedAtMs = incomingIssuedAtMs;
+        } else if (incomingToken && !state.windowSessionIssuedAtMs) {
+            state.windowSessionIssuedAtMs = Date.now();
+        }
     }
 
     function postMessage(type, payload) {
@@ -5650,7 +6440,7 @@
             suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '',
             suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
             suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
-            suiteTimerLimitSeconds: Number.isFinite(Number(data && data.suiteTimerLimitSeconds)) ? Number(data.suiteTimerLimitSeconds) : null,
+            suiteTimerLimitSeconds: parseOptionalNonNegativeInteger(data && data.suiteTimerLimitSeconds),
             globalTimerAnchorMs: Number.isFinite(Number(data && data.globalTimerAnchorMs)) ? Number(data.globalTimerAnchorMs) : null
         });
     }
@@ -6177,24 +6967,30 @@
         });
     }
 
-    function dispatchSimulationNavigate(direction, submissionSnapshot = null) {
+    function dispatchSimulationNavigate(direction, submissionSnapshot = null, options = {}) {
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
         }
         const snapshot = submissionSnapshot || buildSubmissionSnapshot();
+        const requestedTargetIndex = Number(options.targetIndex);
+        const hasRequestedTarget = options.targetIndex !== null
+            && options.targetIndex !== undefined
+            && Number.isInteger(requestedTargetIndex);
         if (state.suite?.inline) {
             updateActiveSlotFromCurrentDom('navigate');
             const currentIndex = state.suite.currentIndex;
-            const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            const targetIndex = hasRequestedTarget
+                ? requestedTargetIndex
+                : (direction === 'prev' ? currentIndex - 1 : currentIndex + 1);
             const targetEntry = state.suite.sequence[targetIndex];
             if (targetEntry && targetEntry.examId) {
-                activateSuiteSlot(targetEntry.examId).catch((error) => {
+                activateSuiteSlot(targetEntry.examId, { skipSave: true }).catch((error) => {
                     console.warn('[UnifiedReadingPage] inline simulation navigation failed:', error);
                 });
             }
             return;
         }
-        postMessage('SIMULATION_NAVIGATE', {
+        const payload = {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
                 answers: snapshot.answers || {},
@@ -6211,7 +7007,14 @@
             scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
             elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
             timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
-        });
+        };
+        if (hasRequestedTarget) {
+            payload.targetIndex = requestedTargetIndex;
+        }
+        if (typeof options.targetPartKey === 'string' && options.targetPartKey) {
+            payload.targetPartKey = options.targetPartKey;
+        }
+        postMessage('SIMULATION_NAVIGATE', payload);
     }
     async function handleSubmit() {
         if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
@@ -6239,10 +7042,6 @@
         }
         renderResults(results);
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
-        await renderExplanations();
-        applyHighlights(highlightSnapshot);
-        enhanceReviewHighlights();
-        updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         postMessage(messageType, Object.assign({
@@ -6275,6 +7074,10 @@
             suiteSubmission: true,
             suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
         } : {}, postedResults));
+        await renderExplanations();
+        applyHighlights(highlightSnapshot);
+        enhanceReviewHighlights();
+        updateNavStatuses(results);
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
@@ -6356,14 +7159,9 @@
         }
         const candidateId = document.getElementById('candidate-id');
         if (candidateId) {
-            const sourceId = state.suiteSessionId || state.sessionId || '';
-            if (sourceId) {
-                let hash = 0;
-                String(sourceId).split('').forEach((char) => {
-                    hash = ((hash << 5) - hash) + char.charCodeAt(0);
-                    hash |= 0;
-                });
-                candidateId.textContent = String(Math.abs(hash) % 900000 + 100000);
+            const candidateCode = resolveReadingCandidateCode();
+            if (candidateCode) {
+                candidateId.textContent = candidateCode;
                 candidateId.hidden = false;
             } else {
                 candidateId.textContent = '';
@@ -6391,6 +7189,7 @@
             return false;
         }
         await ensureSuiteDatasets(sequence);
+        captureInlineSuiteDraftBeforeReinit('reinit');
         mergeSuiteDraftPayload(data || {});
         const targetExamId = resolveSuiteTargetExamId(data || {}, options);
         if (!targetExamId) {
@@ -6418,7 +7217,11 @@
         }
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
+        const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
+                return;
+            }
             const initSignature = buildInitSignature(data);
             const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
@@ -6432,9 +7235,13 @@
             if (incomingExamId && currentExamId && incomingExamId !== currentExamId && !incomingExamInSuiteSequence) {
                 return;
             }
+            if (shouldIgnoreInlineSuiteEnvelope(data || {})) {
+                return;
+            }
             if (isDuplicateInit && state.sessionReadySent) {
                 return;
             }
+            adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
             }
@@ -6456,8 +7263,9 @@
                     state.suiteTimerMode = normalizedTimerMode;
                 }
             }
-            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
-                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
+            const initTimerLimitSeconds = parseOptionalNonNegativeInteger(data.suiteTimerLimitSeconds);
+            if (initTimerLimitSeconds !== null) {
+                state.suiteTimerLimitSeconds = initTimerLimitSeconds;
             }
             const initPausedOffsetMs = Number(data.suiteTimerPausedOffsetMs ?? data.pausedOffsetMs);
             if (Number.isFinite(initPausedOffsetMs) && initPausedOffsetMs >= 0) {
@@ -6554,6 +7362,9 @@
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {
+            if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
+                return;
+            }
             const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
             const contextSuiteSequence = normalizeSuiteSequence(data && data.suiteSequence);
@@ -6562,6 +7373,9 @@
                 && contextSuiteSequence.length
                 && contextSuiteSequence.some((entry) => entry.examId === contextExamId)
             );
+            if (shouldIgnoreInlineSuiteEnvelope(data || {})) {
+                return;
+            }
             if (contextExamId && currentExamId && contextExamId !== currentExamId && !contextExamInSuiteSequence && !state.suite?.inline) {
                 return;
             }
@@ -6578,6 +7392,7 @@
                 syncPrimaryActionButtons();
                 return;
             }
+            adoptWindowSessionMessage(data, sourceWindow);
             state.simulationMode = true;
             state.simulationContextReady = true;
             state.simulationCtx = data;
@@ -6598,8 +7413,9 @@
                     state.suiteTimerMode = normalizedTimerMode;
                 }
             }
-            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
-                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
+            const contextTimerLimitSeconds = parseOptionalNonNegativeInteger(data.suiteTimerLimitSeconds);
+            if (contextTimerLimitSeconds !== null) {
+                state.suiteTimerLimitSeconds = contextTimerLimitSeconds;
             }
             const timerSnapshot = data && data.timerSnapshot && typeof data.timerSnapshot === 'object'
                 ? data.timerSnapshot
@@ -6776,6 +7592,7 @@
     "assets/wordlists/ecdict_reading.bundle.js",
     "js/core/dictionaryService.js",
     "js/runtime/reviewHighlightDictionary.js",
+    "js/utils/practiceTimerPreferences.js",
     "js/runtime/unifiedReadingPage.js"
 ]);
     }

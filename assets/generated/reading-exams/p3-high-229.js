@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
+    "pdf": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "ieltsHtml": null
   },
   "audit": {

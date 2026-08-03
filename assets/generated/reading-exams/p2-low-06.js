@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/103. P2 - Biomimicry 仿生学.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/103. P2 - Biomimicry 仿生学.pdf",
+    "pdf": "ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf",
     "ieltsHtml": null
   },
   "audit": {

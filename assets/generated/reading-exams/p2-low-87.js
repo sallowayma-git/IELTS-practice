@@ -89,7 +89,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.pdf",
     "ieltsHtml": null
   },
   "audit": {

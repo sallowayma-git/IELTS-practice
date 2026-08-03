@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/221. P3 - The Animal Connection 动物联结.pdf",
+    "pdf": "ReadingPractice/PDF/221. P3 - The Animal Connection 动物联结.pdf",
     "ieltsHtml": null
   },
   "audit": {

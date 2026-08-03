@@ -1,27 +1,75 @@
 # Practice Recorder & Score Storage
 
 > **Relevant source files**
-> * [js/core/practiceRecorder.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js)
-> * [js/core/scoreStorage.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js)
-> * [js/utils/dataBackupManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js)
-> * [js/utils/storage.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/storage.js)
+> * [js/core/practiceRecorder.js](../../../js/core/practiceRecorder.js)
+> * [js/core/scoreStorage.js](../../../js/core/scoreStorage.js)
+> * [js/core/practiceRecordAPI.js](../../../js/core/practiceRecordAPI.js)
+> * [js/core/practiceCore.js](../../../js/core/practiceCore.js)
+> * [js/utils/dataBackupManager.js](../../../js/utils/dataBackupManager.js)
+> * [js/utils/storage.js](../../../js/utils/storage.js)
 
 ## Purpose and Scope
+
+> **Post-data-layer contract (canonical):**
+>
+> * **Write gate:** UI / session code → **`PracticeRecordAPI`** (sole public practice write path) → **`PracticeCore`** (`standardizeRecord`, internal store) → repositories → `StorageManager`.
+> * **`ScoreStorage`** is a **façade / compatibility adapter**. It does **not** own an independent practice write path. Prefer `PracticeRecordAPI.saveRecord` / `deleteRecord` / `list` / `listSummary` / `readStats` from new code.
+> * **`PracticeRecorder`** still constructs `ScoreStorage` for session orchestration helpers and UI-adjacent reads during the transition (Sprint B/C thins this further).
+> * Field shapes: [Global-Field-Inventory](./Global-Field-Inventory.md). Live cleanup checklist: [cleanup-tracker](../../docs/cleanup-tracker.md).
 
 The practice recording system consists of two complementary classes that manage the complete practice session lifecycle and data persistence:
 
 * **`PracticeRecorder`**: Manages active practice sessions, coordinates cross-window communication, handles session state transitions, and implements automatic recovery mechanisms.
-* **`ScoreStorage`**: Provides standardized data persistence, record normalization, user statistics aggregation, and backup/restore functionality.
+* **`ScoreStorage`**: Façade over repositories + PracticeRecordAPI for list/normalize/stats/backup helpers — **not** the write authority.
 
-Together, these classes form the core of the practice data management system, with `PracticeRecorder` orchestrating session workflows and `ScoreStorage` ensuring data integrity and persistence. The system employs multi-tiered storage strategies with automatic fallback mechanisms to guarantee data safety under various failure conditions.
+Together, `PracticeRecorder` orchestrates session workflows while durable practice writes go through PracticeRecordAPI. Multi-tiered storage (IDB→LS→SS→memory) remains under `StorageManager`.
 
-For information about the practice page enhancement and data collection mechanisms that interact with practice sessions, see [Practice Page Enhancement & Data Collection](/sallowayma-git/IELTS-practice/5.2-practice-page-enhancement-and-data-collection). For details about the underlying cross-window communication protocols, see [Cross-Window Communication Protocol](/sallowayma-git/IELTS-practice/5.3-cross-window-communication-protocol). For broader data management and storage systems, see [Data Management System](/sallowayma-git/IELTS-practice/4-data-management-system).
+For information about the practice page enhancement and data collection mechanisms that interact with practice sessions, see [Practice Page Enhancement & Data Collection](./Practice-Page-Enhancement-&-Data-Collection.md). For details about the underlying cross-window communication protocols, see [Cross-Window Communication Protocol](./Cross-Window-Communication-Protocol.md). For broader data management and storage systems, see [Data Management System](./Data-Management-System.md).
 
-Sources: [js/core/practiceRecorder.js L1-L27](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L1-L27)
-
- [js/core/scoreStorage.js L1-L24](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L1-L24)
+Sources: [js/core/practiceRecorder.js](../../../js/core/practiceRecorder.js), [js/core/scoreStorage.js](../../../js/core/scoreStorage.js), [js/core/practiceRecordAPI.js](../../../js/core/practiceRecordAPI.js)
 
 ## Class Relationship and Architecture
+
+The system architecture separates concerns between session orchestration (`PracticeRecorder`) and data access adapters (`ScoreStorage`), with the **public write gate** on `PracticeRecordAPI`.
+
+### High-Level Component Relationship
+
+```mermaid
+flowchart TD
+
+APP["ExamSystemApp"]
+VIEWS["UI Components"]
+PR["PracticeRecorder"]
+API["PracticeRecordAPI (sole public write gate)"]
+CORE["PracticeCore standardizeRecord"]
+SS["ScoreStorage (façade / helpers)"]
+PREPO["PracticeRepository (internal)"]
+MREPO["MetaRepository"]
+SDS["StorageDataSource"]
+SM["StorageManager"]
+
+APP -.-> PR
+VIEWS -.-> PR
+VIEWS -->|"save/list/stats"| API
+PR -.-> SS
+SS -.-> API
+API --> CORE
+CORE --> PREPO
+CORE --> MREPO
+PREPO --> SDS
+MREPO --> SDS
+SDS --> SM
+```
+
+**Notes:** Public meta blocks `user_stats`; public transactions block `practice`. Replay needs `examId` + `correctAnswerMap` + `realData.answers` (object map). Historical diagrams further down may still show pre-gate shapes — treat this section + Global-Field-Inventory as source of truth.
+
+---
+
+## Historical architecture notes (pre–PracticeRecordAPI gate)
+
+> Prefer the contract and diagram in **Purpose and Scope** above. ScoreStorage is a façade; writes go through PracticeRecordAPI.
+
+## Historical Class Relationship and Architecture
 
 The system architecture separates concerns between session orchestration (`PracticeRecorder`) and data persistence (`ScoreStorage`), with clearly defined integration points.
 
@@ -821,7 +869,7 @@ end
 
 ```yaml
 {
-  version: '1.0.0',
+  version: '0.6.2-fix',
   savedBy: 'fallback',              // Indicates fallback save path
   fallbackReason: 'ScoreStorage unavailable'
 }
