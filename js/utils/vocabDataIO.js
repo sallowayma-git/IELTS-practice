@@ -235,10 +235,12 @@
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
+                    listId: typeof payload.listId === 'string' && payload.listId.trim()
+                        ? payload.listId.trim()
+                        : undefined,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
                     config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
-                    reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
@@ -309,17 +311,17 @@
     }
 
     async function exportProgress() {
-        const store = window.VocabStore;
-        if (!store || typeof store.init !== 'function') {
-            throw new Error('VocabStore 未加载');
-        }
-        await store.init();
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
+        await window.AppData.ready;
+        const config = await window.AppData.vocab.getConfig();
+        const listId = config.activeListId || 'default';
+        const list = await window.AppData.vocab.readList(listId);
         const payload = {
             version: DEFAULT_EXPORT_VERSION,
             exportedAt: new Date().toISOString(),
-            config: store.getConfig(),
-            words: store.getWords(),
-            reviewQueue: store.getReviewQueue()
+            listId,
+            config,
+            words: Array.isArray(list) ? list : (list && Array.isArray(list.words) ? list.words : [])
         };
         return new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     }
