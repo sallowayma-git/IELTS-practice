@@ -1,0 +1,143 @@
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import vm from 'vm';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '../../..');
+const sourcePath = path.join(repoRoot, 'js/runtime/reviewHighlightDictionary.js');
+const source = fs.readFileSync(sourcePath, 'utf8');
+const instrumentedSource = source.replace(
+    '    const api = {',
+    `    global.__reviewHighlightDictionaryTestHooks = {
+        configure(options) {
+            currentOptions = { ...currentOptions, ...(options || {}) };
+        },
+        setActiveLookup(lookup, selectedText) {
+            activeLookup = lookup || null;
+            activeHighlight = { textContent: selectedText || '' };
+        },
+        saveActiveLookup
+    };
+
+    const api = {`
+);
+assert.notStrictEqual(instrumentedSource, source, 'test instrumentation marker must match production source');
+
+class HTMLElement {}
+class HTMLButtonElement extends HTMLElement {
+    constructor() {
+        super();
+        this.textContent = '加入生词';
+        this.disabled = false;
+    }
+}
+
+function createHarness() {
+    let uuidSequence = 0;
+    const sandbox = {
+        window: null,
+        document: {},
+        HTMLElement,
+        HTMLButtonElement,
+        Node: class Node {},
+        crypto: {
+            randomUUID() {
+                uuidSequence += 1;
+                return `request-${uuidSequence}`;
+            }
+        },
+        console,
+        setTimeout,
+        clearTimeout
+    };
+    sandbox.window = sandbox;
+    sandbox.globalThis = sandbox;
+    vm.runInContext(instrumentedSource, vm.createContext(sandbox), {
+        filename: 'js/runtime/reviewHighlightDictionary.js'
+    });
+    return sandbox;
+}
+
+async function run() {
+    const harness = createHarness();
+    const hooks = harness.__reviewHighlightDictionaryTestHooks;
+    const dictionary = harness.ReviewHighlightDictionary;
+    const posted = [];
+
+    hooks.configure({
+        postMessage(type, payload) {
+            posted.push({ type, payload });
+            return true;
+        }
+    });
+    hooks.setActiveLookup({
+        term: 'resilient',
+        zh: '有韧性的',
+        en: 'able to recover quickly',
+        source: 'local'
+    }, 'resilient');
+
+    const failedButton = new HTMLButtonElement();
+    const failedSave = hooks.saveActiveLookup(failedButton);
+    assert.strictEqual(posted.length, 1);
+    assert.strictEqual(posted[0].type, 'VOCAB_HIGHLIGHT_SAVE');
+    assert.strictEqual(posted[0].payload.requestId, 'vocab-highlight-request-1');
+    assert.strictEqual(failedButton.textContent, '加入生词', 'bare postMessage delivery must not show success');
+    assert.strictEqual(
+        dictionary.handleSaveOutcome({ requestId: 'unknown-request' }, true),
+        false,
+        'unknown ACK must not settle another request'
+    );
+    assert.strictEqual(failedButton.textContent, '加入生词');
+    assert.strictEqual(
+        dictionary.handleSaveOutcome({ requestId: posted[0].payload.requestId }, false),
+        true,
+        'matching FAILED must settle the pending request'
+    );
+    await failedSave;
+    assert.strictEqual(failedButton.textContent, '保存失败');
+    assert.strictEqual(failedButton.disabled, false);
+
+    const ackButton = new HTMLButtonElement();
+    const ackSave = hooks.saveActiveLookup(ackButton);
+    assert.strictEqual(posted[1].payload.requestId, 'vocab-highlight-request-2');
+    dictionary.handleSaveOutcome({ requestId: posted[1].payload.requestId }, true);
+    await ackSave;
+    assert.strictEqual(ackButton.textContent, '已加入');
+    assert.strictEqual(ackButton.disabled, true);
+
+    const directWrites = [];
+    harness.AppData = {
+        ready: Promise.resolve(),
+        vocab: {
+            async upsertCollectionWord(collectionId, word) {
+                directWrites.push({ collectionId, word });
+            }
+        }
+    };
+    hooks.configure({
+        postMessage() {
+            return false;
+        }
+    });
+    hooks.setActiveLookup({ term: 'durable', zh: '持久的' }, 'durable');
+    const directButton = new HTMLButtonElement();
+    await hooks.saveActiveLookup(directButton);
+    assert.strictEqual(directWrites.length, 1, 'unavailable host route must commit through direct AppData');
+    assert.strictEqual(directWrites[0].collectionId, 'reading-highlights');
+    assert.strictEqual(directButton.textContent, '已加入');
+    assert.strictEqual(directButton.disabled, true);
+
+    console.log(JSON.stringify({
+        status: 'pass',
+        detail: 'vocab requestId ACK/FAILED and direct-commit UI checks passed'
+    }));
+}
+
+run().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});

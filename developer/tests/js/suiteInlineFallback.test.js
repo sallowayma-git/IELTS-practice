@@ -4,6 +4,7 @@ import fs from 'fs';
 import vm from 'vm';
 import assert from 'assert';
 import { fileURLToPath } from 'url';
+import { webcrypto } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +42,7 @@ function createExamWindow(parentWindow) {
                     Date,
                     Array,
                     JSON,
+                    URL,
                 });
                 scriptContext.globalThis = examWindow;
                 examWindow.window = examWindow;
@@ -78,6 +80,7 @@ function createExamWindow(parentWindow) {
         querySelectorAll() {
             return [buttonStub];
         },
+        referrer: 'http://localhost/index.html',
         readyState: 'complete',
         defaultView: null
     };
@@ -87,7 +90,7 @@ function createExamWindow(parentWindow) {
         document: doc,
         opener: parentWindow,
         parent: parentWindow,
-        location: { href: 'http://localhost/p1.html' },
+        location: { href: 'http://localhost/p1.html', protocol: 'http:' },
         closed: false,
         _messageListeners: messageListeners,
         _messages: [],
@@ -101,7 +104,7 @@ function createExamWindow(parentWindow) {
         postMessage(message) {
             this._messages.push(message);
             messageListeners.slice().forEach(listener => {
-                listener({ data: message, source: parentWindow });
+                listener({ data: message, source: parentWindow, origin: 'http://localhost' });
             });
         },
         focus() {},
@@ -135,6 +138,7 @@ async function main() {
         location: { origin: 'http://localhost', href: 'http://localhost/index.html' },
         screen: { availWidth: 1920, availHeight: 1080 },
         document: { title: 'IELTS Practice' },
+        crypto: webcrypto,
         postMessage(message) {
             this._messages.push(message);
         }
@@ -151,6 +155,8 @@ async function main() {
         Date,
         JSON,
         Array,
+        URL,
+        Uint8Array,
     };
     sandbox.globalThis = sandbox.window;
 
@@ -191,6 +197,13 @@ async function main() {
     app.suiteExamMap = new Map([[examId, suiteSessionId]]);
 
     const examWindow = createExamWindow(parentWindow);
+    app.examWindows = new Map([[examId, {
+        window: examWindow,
+        expectedSessionId: `session-${examId}`,
+        expectedUrl: examWindow.location.href,
+        expectedOrigin: 'http://localhost',
+        allowOpaqueOrigin: false
+    }]]);
     app.injectInlineScript(examWindow, examId);
 
     const initMessage = examWindow._messages.find(msg => msg && msg.type === 'INIT_SESSION');
@@ -209,12 +222,32 @@ async function main() {
     assert.strictEqual(examWindow._nativeCloseCalled, false, '窗口不应真正关闭');
     assert.strictEqual(examWindow.closed, false, '窗口状态应保持开启');
 
-    const navigateMessage = { type: 'SUITE_NAVIGATE', data: { url: 'http://localhost/p2.html', examId: 'reading-inline-2' } };
-    examWindow._messageListeners.forEach(listener => listener({ data: navigateMessage }));
+    const navigateMessage = {
+        type: 'SUITE_NAVIGATE',
+        source: 'exam_host',
+        data: {
+            url: 'http://localhost/p2.html',
+            examId: 'reading-inline-2',
+            windowSessionToken: initMessage.data.windowSessionToken
+        }
+    };
+    examWindow._messageListeners.forEach(listener => listener({
+        data: navigateMessage,
+        source: parentWindow,
+        origin: 'http://localhost'
+    }));
     assert.strictEqual(examWindow.location.href, 'http://localhost/p2.html', '应在标签页内导航至下一篇');
 
-    const forceCloseMessage = { type: 'SUITE_FORCE_CLOSE', data: { suiteSessionId } };
-    examWindow._messageListeners.forEach(listener => listener({ data: forceCloseMessage }));
+    const forceCloseMessage = {
+        type: 'SUITE_FORCE_CLOSE',
+        source: 'exam_host',
+        data: { suiteSessionId, windowSessionToken: initMessage.data.windowSessionToken }
+    };
+    examWindow._messageListeners.forEach(listener => listener({
+        data: forceCloseMessage,
+        source: parentWindow,
+        origin: 'http://localhost'
+    }));
     assert.strictEqual(examWindow._nativeCloseCalled, true, '强制关闭应调用原生 close');
     assert.strictEqual(examWindow.closed, true, '强制关闭后窗口应标记为关闭');
 

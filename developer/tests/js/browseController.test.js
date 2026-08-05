@@ -19,7 +19,8 @@ const __dirname = path.dirname(__filename);
 // 模拟 DOM 环境
 global.window = {
     __browseFilterMode: null,
-    __browsePath: null
+    __browsePath: null,
+    filterByType() {}
 };
 
 global.document = {
@@ -58,6 +59,8 @@ const controllerCode = fs.readFileSync(controllerPath, 'utf-8');
 
 // 执行代码
 eval(controllerCode);
+
+const activeListeningIndex = [{ id: 'active-listening', type: 'listening', path: 'ListeningPractice/' }];
 
 // 测试套件
 function testBrowseModeConfiguration() {
@@ -111,13 +114,13 @@ function testModeSwitch() {
     const controller = new window.BrowseController();
 
     // 切换到 P1 模式
-    controller.setMode('frequency-p1');
+    controller.setMode('frequency-p1', activeListeningIndex);
     assert.strictEqual(controller.currentMode, 'frequency-p1', '应该切换到 P1 模式');
     assert.strictEqual(controller.activeFilter, 'all', '切换模式后应该重置筛选器');
     assert.strictEqual(window.__browseFilterMode, 'frequency-p1', '应该保存模式到全局状态');
 
     // 切换到 P4 模式
-    controller.setMode('frequency-p4');
+    controller.setMode('frequency-p4', activeListeningIndex);
     assert.strictEqual(controller.currentMode, 'frequency-p4', '应该切换到 P4 模式');
     assert.strictEqual(window.__browseFilterMode, 'frequency-p4', '应该更新全局状态');
 
@@ -136,7 +139,7 @@ function testModeConfig() {
     let config = controller.getCurrentModeConfig();
     assert.strictEqual(config.id, 'default', '应该返回 default 配置');
 
-    controller.setMode('frequency-p1');
+    controller.setMode('frequency-p1', activeListeningIndex);
     config = controller.getCurrentModeConfig();
     assert.strictEqual(config.id, 'frequency-p1', '应该返回 P1 配置');
     assert.strictEqual(config.basePath, 'ListeningPractice/100 P1', 'P1 配置应该有正确的 basePath');
@@ -150,12 +153,12 @@ function testStatePersistence() {
     const controller = new window.BrowseController();
 
     // 设置模式
-    controller.setMode('frequency-p4');
+    controller.setMode('frequency-p4', activeListeningIndex);
     assert.strictEqual(window.__browseFilterMode, 'frequency-p4', '应该保存到全局状态');
 
     // 创建新实例并恢复状态
     const newController = new window.BrowseController();
-    newController.restoreMode();
+    newController.restoreMode(activeListeningIndex);
     assert.strictEqual(newController.currentMode, 'frequency-p4', '应该从全局状态恢复模式');
 
     console.log('  ✓ 状态持久化功能正常');
@@ -186,19 +189,19 @@ function testButtonRendering() {
     // 测试默认模式按钮
     buttons = [];
     mockContainer.innerHTML = '';
-    controller.setMode('default');
+    controller.setMode('default', activeListeningIndex);
     assert.strictEqual(buttons.length, 3, 'default 模式应该渲染 3 个按钮');
 
     // 测试 P1 模式按钮
     buttons = [];
     mockContainer.innerHTML = '';
-    controller.setMode('frequency-p1');
+    controller.setMode('frequency-p1', activeListeningIndex);
     assert.strictEqual(buttons.length, 3, 'P1 模式应该渲染 3 个按钮');
 
     // 测试 P4 模式按钮
     buttons = [];
     mockContainer.innerHTML = '';
-    controller.setMode('frequency-p4');
+    controller.setMode('frequency-p4', activeListeningIndex);
     assert.strictEqual(buttons.length, 4, 'P4 模式应该渲染 4 个按钮（包括全部）');
 
     console.log('  ✓ 按钮渲染功能正常');
@@ -217,13 +220,10 @@ function testFrequencyFiltering() {
         { id: '4', path: 'ListeningPractice/100 P4/P4 超高频(51)/exam4.html', title: 'Exam 4' },
         { id: '5', path: 'ListeningPractice/100 P4/1-10/exam5.html', title: 'Exam 5' },
         { id: '6', path: 'ListeningPractice/100 P4/51-60/exam6.html', title: 'Exam 6' }
-    ];
-
-    // Mock getExamIndex
-    controller.getExamIndex = () => mockExamIndex;
+    ].map((exam) => Object.assign({ type: 'listening' }, exam));
 
     // 测试 P1 超高频筛选
-    controller.setMode('frequency-p1');
+    controller.setMode('frequency-p1', mockExamIndex);
     const p1Config = controller.getCurrentModeConfig();
     const ultraHighFolders = p1Config.folderMap['ultra-high'];
 
@@ -265,12 +265,10 @@ function testP4AllButtonLogic() {
         { id: '4', path: 'ListeningPractice/100 P4/91-100/exam4.html', title: 'Exam 4' },
         { id: '5', path: 'ListeningPractice/100 P4/P4 超高频(51)/exam5.html', title: 'Exam 5' },
         { id: '6', path: 'ListeningPractice/100 P4/P4 高频(52)/exam6.html', title: 'Exam 6' }
-    ];
-
-    controller.getExamIndex = () => mockExamIndex;
+    ].map((exam) => Object.assign({ type: 'listening' }, exam));
 
     // 切换到 P4 模式
-    controller.setMode('frequency-p4');
+    controller.setMode('frequency-p4', mockExamIndex);
     const p4Config = controller.getCurrentModeConfig();
 
     // 测试 "全部" 按钮：应该包含 1-100 编号文件夹
@@ -326,8 +324,8 @@ function testFilterButtonStates() {
     controller.buttonContainer = mockContainer;
 
     // 渲染按钮
-    controller.setMode('frequency-p1');
-    controller.renderFilterButtons();
+    controller.setMode('frequency-p1', activeListeningIndex);
+    controller.renderFilterButtons(activeListeningIndex);
 
     // 验证初始激活状态
     const activeButtons = buttons.filter(btn =>

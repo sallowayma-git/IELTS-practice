@@ -14,39 +14,40 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
-function createHarness({ examIndex = [], records = [] } = {}) {
-    const localStorageState = new Map();
+function createHarness({ examIndex = [], records = [], initialBrowse = null, browseReadGate = null } = {}) {
+    let persistedBrowse = initialBrowse ? structuredClone(initialBrowse) : null;
+    let failNextWrite = false;
     const documentStub = {
         addEventListener() {},
         getElementById() { return null; },
         querySelector() { return null; }
     };
     const windowStub = {
-        localStorage: {
-            getItem(key) {
-                return localStorageState.has(key) ? localStorageState.get(key) : null;
-            },
-            setItem(key, value) {
-                localStorageState.set(key, String(value));
-            },
-            removeItem(key) {
-                localStorageState.delete(key);
+        AppData: {
+            ready: Promise.resolve(),
+            preferences: {
+                async getBrowse() {
+                    if (browseReadGate) await browseReadGate;
+                    return persistedBrowse ? structuredClone(persistedBrowse) : null;
+                },
+                async patchBrowse(value) {
+                    if (failNextWrite) {
+                        failNextWrite = false;
+                        throw new Error('injected preference commit failure');
+                    }
+                    persistedBrowse = structuredClone(value);
+                    return { committed: true };
+                }
             }
         },
         addEventListener() {},
-        getExamIndexState() {
-            return examIndex.slice();
-        },
-        getPracticeRecordsState() {
-            return records.slice();
-        }
+        failNextBrowsePreferenceWrite() { failNextWrite = true; }
     };
 
     const sandbox = {
         window: windowStub,
         globalThis: windowStub,
         document: documentStub,
-        localStorage: windowStub.localStorage,
         console: { log() {}, warn() {}, error() {}, info() {} },
         Date,
         Math,
@@ -64,7 +65,7 @@ function createHarness({ examIndex = [], records = [] } = {}) {
     };
     const context = vm.createContext(sandbox);
     loadScript('js/utils/BrowsePreferencesUtils.js', context);
-    return { window: windowStub, localStorageState };
+    return { window: windowStub, examIndex, records };
 }
 
 const results = [];
@@ -73,11 +74,11 @@ function recordResult(name, detail) {
 }
 
 function readPreferences(windowStub) {
-    return JSON.parse(windowStub.localStorage.getItem('browse_view_preferences_v2') || '{}');
+    return windowStub.getBrowseViewPreferences();
 }
 
-function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
-    const { window } = createHarness({
+async function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
+    const { window, examIndex } = createHarness({
         examIndex: [{
             id: 'unrelated-current-config-exam',
             title: 'Unrelated Current Config',
@@ -96,7 +97,8 @@ function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
         endTime: '2026-05-22T08:00:00.000Z'
     };
 
-    window.updateBrowseAnchorsFromRecords([record]);
+    window.updateBrowseAnchorsFromRecords([record], examIndex);
+    await window.flushBrowsePreferenceWrites();
     const prefs = readPreferences(window);
     assert(prefs.listAnchors, '应写入浏览锚点');
     assert(prefs.listAnchors['P1|reading'], '历史阅读记录应在当前题库不含该题时仍产生 P1|reading 锚点');
@@ -106,8 +108,8 @@ function testRecordMetadataBuildsAnchorWithoutCurrentExamIndex() {
     recordResult('历史记录不依赖当前题库也能生成浏览锚点', prefs.listAnchors['P1|reading']);
 }
 
-function testExplicitMetadataOutranksCurrentExamIndex() {
-    const { window } = createHarness({
+async function testExplicitMetadataOutranksCurrentExamIndex() {
+    const { window, examIndex } = createHarness({
         examIndex: [{
             id: 'recorded-exam',
             title: 'Wrong Current Index Match',
@@ -127,11 +129,12 @@ function testExplicitMetadataOutranksCurrentExamIndex() {
         timestamp: 1770000000000
     };
 
-    const info = window.resolveRecordExamInfo(record, window.getExamIndexState());
+    const info = window.resolveRecordExamInfo(record, examIndex);
     assert.strictEqual(info.category, 'P2', '记录自身 metadata.category 必须优先于当前题库索引');
     assert.strictEqual(info.type, 'reading', '记录自身 metadata.examType 必须优先于当前题库索引');
 
-    window.updateBrowseAnchorsFromRecords([record]);
+    window.updateBrowseAnchorsFromRecords([record], examIndex);
+    await window.flushBrowsePreferenceWrites();
     const prefs = readPreferences(window);
     assert(prefs.listAnchors['P2|reading'], '锚点 key 应来自历史记录自身 metadata');
     assert(!prefs.listAnchors['P4|listening'], '当前活动题库的同 id 元数据不能污染历史记录锚点');
@@ -139,8 +142,8 @@ function testExplicitMetadataOutranksCurrentExamIndex() {
     recordResult('历史记录 metadata 优先于当前题库索引', info);
 }
 
-function testLatestTimestampWinsPerFilter() {
-    const { window } = createHarness();
+async function testLatestTimestampWinsPerFilter() {
+    const { window, examIndex } = createHarness();
     window.updateBrowseAnchorsFromRecords([
         {
             id: 'old',
@@ -156,7 +159,8 @@ function testLatestTimestampWinsPerFilter() {
             metadata: { category: 'P3', examType: 'reading' },
             timestamp: 1800000000000
         }
-    ]);
+    ], examIndex);
+    await window.flushBrowsePreferenceWrites();
 
     const prefs = readPreferences(window);
     assert.strictEqual(prefs.listAnchors['P3|reading'].examId, 'new-p3', '同一筛选下应保留最新练习记录锚点');
@@ -164,11 +168,64 @@ function testLatestTimestampWinsPerFilter() {
     recordResult('浏览锚点按时间保留最新记录', prefs.listAnchors['P3|reading']);
 }
 
-function main() {
+async function testFailedPreferenceWriteDoesNotReplaceCommittedCache() {
+    const { window } = createHarness();
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(window.getBrowseViewPreferences().autoScrollEnabled, true);
+
+    window.failNextBrowsePreferenceWrite();
+    const preview = window.saveBrowseViewPreferences({ autoScrollEnabled: false });
+    assert.strictEqual(preview.autoScrollEnabled, false, 'UI preview may reflect the requested value');
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(window.getBrowseViewPreferences().autoScrollEnabled, true, 'failed commit must not become the cached fact');
+    recordResult('偏好提交失败不会污染已提交缓存', { autoScrollEnabled: true });
+}
+
+async function testFirstReadCanAwaitPersistedPreferences() {
+    let releaseRead;
+    const browseReadGate = new Promise((resolve) => { releaseRead = resolve; });
+    const { window } = createHarness({
+        initialBrowse: {
+            autoScrollEnabled: false,
+            lastFilter: { category: 'P2', type: 'reading' },
+            listAnchors: {
+                'P2|reading': { examId: 'saved-reading', title: 'Saved Reading', timestamp: 1 }
+            }
+        },
+        browseReadGate
+    });
+
+    assert.strictEqual(
+        window.getBrowseViewPreferences().autoScrollEnabled,
+        true,
+        '同步兼容读取在 hydration 前仍可返回默认值'
+    );
+    let settled = false;
+    const ready = window.whenBrowseViewPreferencesReady().then((preferences) => {
+        settled = true;
+        return preferences;
+    });
+    await Promise.resolve();
+    assert.strictEqual(settled, false, '首次 UI 读取必须等待 AppData hydration');
+    releaseRead();
+    const hydrated = await ready;
+    assert.strictEqual(hydrated.autoScrollEnabled, false, 'hydration 后必须返回持久化开关');
+    assert.deepStrictEqual(
+        structuredClone(hydrated.lastFilter),
+        { category: 'P2', type: 'reading' },
+        '首次筛选恢复必须使用持久化值'
+    );
+    assert.strictEqual(hydrated.listAnchors['P2|reading'].examId, 'saved-reading');
+    recordResult('首次浏览状态等待 AppData hydration', hydrated);
+}
+
+async function main() {
     try {
-        testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
-        testExplicitMetadataOutranksCurrentExamIndex();
-        testLatestTimestampWinsPerFilter();
+        await testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
+        await testExplicitMetadataOutranksCurrentExamIndex();
+        await testLatestTimestampWinsPerFilter();
+        await testFailedPreferenceWriteDoesNotReplaceCommittedCache();
+        await testFirstReadCanAwaitPersistedPreferences();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,
@@ -187,4 +244,4 @@ function main() {
     }
 }
 
-main();
+await main();

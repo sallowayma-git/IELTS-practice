@@ -22,37 +22,20 @@ function recordResult(name, passed, detail) {
 }
 
 function createResourceCoreHarness() {
-    const storageState = new Map();
-    const localStorageState = new Map();
-
-    const localStorage = {
-        getItem(key) {
-            return localStorageState.has(key) ? localStorageState.get(key) : null;
-        },
-        setItem(key, value) {
-            localStorageState.set(key, String(value));
-        },
-        removeItem(key) {
-            localStorageState.delete(key);
-        }
-    };
+    const libraryIndexes = new Map();
 
     const windowStub = {
         console,
-        localStorage,
-        storage: {
-            async get(key, fallback = null) {
-                return storageState.has(key) ? storageState.get(key) : fallback;
-            },
-            async set(key, value) {
-                storageState.set(key, JSON.parse(JSON.stringify(value)));
-                return true;
-            },
-            async remove(key) {
-                storageState.delete(key);
-                return true;
+        AppData: {
+            ready: Promise.resolve(),
+            library: {
+                async getIndex(configurationId) {
+                    return JSON.parse(JSON.stringify(libraryIndexes.get(String(configurationId)) || []));
+                },
+                async getActive() { return null; }
             }
         },
+        __libraryIndexes: libraryIndexes,
         location: {
             href: 'file:///Users/test/index.html'
         },
@@ -62,7 +45,6 @@ function createResourceCoreHarness() {
     const sandbox = {
         window: windowStub,
         console,
-        localStorage,
         location: windowStub.location,
         fetch: async () => ({ ok: true, status: 200 }),
         setTimeout,
@@ -242,19 +224,20 @@ function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
     });
 }
 
-async function testDeletePathMapForConfiguration(context, ResourceCore) {
-    const key = ResourceCore.getPathMapStorageKey('custom_config');
-    await context.window.storage.set(key, {
-        reading: { root: 'ReadingCustom/', exceptions: {} },
-        listening: { root: 'ListeningCustom/', exceptions: {} }
-    });
+async function testPathMapDerivedFromLibraryIndex(context, ResourceCore) {
+    const index = [
+        { id: 'custom-reading', type: 'reading', path: 'ReadingCustom/set-a/', filename: 'index.html' },
+        { id: 'custom-listening', type: 'listening', path: 'ListeningCustom/set-b/', filename: 'index.html' }
+    ];
+    context.window.__libraryIndexes.set('custom_config', index);
 
-    const deleted = await ResourceCore.deletePathMapForConfiguration('custom_config');
+    const pathMap = await ResourceCore.loadPathMapForConfiguration('custom_config');
+    assert.strictEqual(pathMap.reading.root, 'ReadingCustom/set-a/');
+    assert.strictEqual(pathMap.listening.root, 'ListeningCustom/set-b/');
+    assert.strictEqual(await ResourceCore.deletePathMapForConfiguration('custom_config'), true, '删除派生缓存应是无状态操作');
+    assert.deepStrictEqual(await context.window.AppData.library.getIndex('custom_config'), index, '派生 path map 操作不得修改题库权威 index');
 
-    assert.strictEqual(deleted, true, '删除 path map 应返回 true');
-    assert.strictEqual(await context.window.storage.get(key, null), null, '删除配置时 path map 存储键必须被移除');
-
-    recordResult('ResourceCore 删除指定配置 path map', true, { key });
+    recordResult('ResourceCore 从 AppData.library index 派生 path map', true, { pathMap });
 }
 
 async function main() {
@@ -268,7 +251,7 @@ async function main() {
         testDefaultRootStillWorks(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
-        await testDeletePathMapForConfiguration(context, ResourceCore);
+        await testPathMapDerivedFromLibraryIndex(context, ResourceCore);
 
         console.log(JSON.stringify({
             status: 'pass',

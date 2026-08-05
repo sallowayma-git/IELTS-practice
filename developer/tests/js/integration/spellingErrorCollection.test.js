@@ -65,14 +65,31 @@ global.__EMBEDDED_WORDLISTS__ = {
     ]
 };
 
-// Mock存储系统
-const mockStorage = new Map();
-global.storage = {
+function clone(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+const vocabCollections = {};
+let rejectCollectionWrites = false;
+global.AppData = {
     ready: Promise.resolve(),
-    setNamespace: () => {},
-    get: async (key) => mockStorage.get(key),
-    set: async (key, value) => mockStorage.set(key, value),
-    remove: async (key) => mockStorage.delete(key)
+    vocab: {
+        async listCollections() {
+            return clone(vocabCollections);
+        },
+        async saveCollection(id, value) {
+            if (rejectCollectionWrites) throw new Error('injected commit failure');
+            vocabCollections[id] = clone(value);
+            return { committed: true };
+        },
+        async saveCollections(values) {
+            if (rejectCollectionWrites) throw new Error('injected commit failure');
+            Object.entries(values).forEach(([id, value]) => {
+                vocabCollections[id] = clone(value);
+            });
+            return { committed: true };
+        }
+    }
 };
 
 // 加载SpellingErrorCollector
@@ -208,6 +225,7 @@ async function runTests() {
         await collector.saveErrors(errors);
         
         const p1List = await collector.loadVocabList('p1');
+        assert.ok(vocabCollections['spelling-errors-p1'], '必须写入 canonical P1 collection');
         assert.ok(p1List, 'P1词表应该存在');
         assert.strictEqual(p1List.words.length, 2, 'P1词表应该有2个单词');
         const savedAccommodationInitial = p1List.words.find(
@@ -259,6 +277,7 @@ async function runTests() {
         console.log('测试7: 综合词表同步');
         const masterList = await collector.loadVocabList('master');
         assert.ok(masterList, '综合词表应该存在');
+        assert.ok(vocabCollections['spelling-errors-master'], '必须写入 canonical master collection');
         assert.ok(masterList.words.length >= 2, '综合词表应该包含所有错误');
         
         results.push({ name: '综合词表同步', status: 'pass' });
@@ -341,6 +360,23 @@ async function runTests() {
         assert.strictEqual(savedGarden.reasonCode, candidateErrors[0].reasonCode);
 
         results.push({ name: '候选答案字段保存到错词词表', status: 'pass' });
+
+        // 测试14: 权威提交失败不得伪成功或污染 committed state
+        const snapshotBeforeFailure = clone(vocabCollections);
+        rejectCollectionWrites = true;
+        const failed = await collector.saveErrors([{
+            word: 'receive',
+            userInput: 'recieve',
+            questionId: 'q-failure',
+            examId: testData.examId,
+            timestamp: Date.now(),
+            errorCount: 1,
+            source: 'p1'
+        }]);
+        rejectCollectionWrites = false;
+        assert.strictEqual(failed, false, '提交失败必须明确返回失败');
+        assert.deepStrictEqual(vocabCollections, snapshotBeforeFailure, '提交失败不得污染权威 collection');
+        results.push({ name: '提交失败不伪成功', status: 'pass' });
         
     } catch (error) {
         results.push({

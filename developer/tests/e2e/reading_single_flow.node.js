@@ -56,27 +56,24 @@ function collectConsole(page, store) {
 
 async function ensureAppReady(page) {
   await page.waitForLoadState('load');
-  await page.waitForFunction(
-    () => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function',
-    { timeout: 60_000 }
-  );
+  await page.waitForFunction(() => !!window.AppData, null, { timeout: 60_000 });
+  await page.evaluate(async () => { await window.AppData.ready; });
+  await page.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60_000 });
 }
 
 async function dismissOverlays(page) {
-  try {
-    await page.evaluate(() => {
-      try {
-        localStorage.setItem('hasSeenGplLicense', 'true');
-      } catch (_) { }
-      if (typeof window.acceptGplLicense === 'function') {
-        try { window.acceptGplLicense(); } catch (_) { }
-      }
-      const modal = document.getElementById('license-modal');
-      if (modal) {
-        modal.classList.remove('show');
-      }
-    });
-  } catch (_) { }
+  const accepted = await page.evaluate(async () => {
+    if (!window.LicenseModal || typeof window.LicenseModal.accept !== 'function') {
+      throw new Error('LicenseModal.accept is unavailable');
+    }
+    return window.LicenseModal.accept();
+  });
+  if (!accepted) throw new Error('GPL license consent was not committed');
+  await page.waitForFunction(
+    () => !document.getElementById('license-modal')?.classList.contains('show'),
+    null,
+    { timeout: 5_000 }
+  );
 
   const overlay = page.locator('#library-loader-overlay');
   if (await overlay.count()) {
@@ -98,21 +95,13 @@ async function clickNav(page, view) {
 
 async function waitExamIndexReady(page) {
   await page.waitForFunction(
-    () => {
-      const candidates = [];
-      if (window.appStateService && typeof window.appStateService.getExamIndex === 'function') {
-        candidates.push(window.appStateService.getExamIndex());
+    async () => {
+      try {
+        const index = await window.resolveActiveLibraryIndex();
+        return Array.isArray(index) && index.length > 0;
+      } catch (_) {
+        return false;
       }
-      if (typeof window.getExamIndexState === 'function') {
-        candidates.push(window.getExamIndexState());
-      }
-      if (window.app && window.app.state && Array.isArray(window.app.state.examIndex)) {
-        candidates.push(window.app.state.examIndex);
-      }
-      if (Array.isArray(window.examIndex)) {
-        candidates.push(window.examIndex);
-      }
-      return candidates.some((item) => Array.isArray(item) && item.length > 0);
     },
     { timeout: 60_000 }
   );
@@ -229,7 +218,16 @@ async function openManualPdfExam(page, examId) {
       if (!window.app || typeof window.app.openExam !== 'function') {
         throw new Error('openExam_missing');
       }
-      await window.app.openExam(targetExamId, { target: 'tab' });
+      await window.app.openExam(targetExamId, {
+        target: 'tab',
+        examDefinition: {
+          id: targetExamId,
+          type: 'reading',
+          title: 'Manual PDF regression fixture',
+          hasHtml: false,
+          pdfFilename: 'ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf',
+        },
+      });
     }, examId);
     await page.waitForTimeout(300);
     const popupUrl = await page.evaluate(
@@ -347,22 +345,14 @@ async function run() {
 
     await clickNav(page, 'practice');
     await page.waitForFunction(
-      (targetExamId) => {
-        const recordsFromState = window.app?.state?.practice?.records;
-        if (Array.isArray(recordsFromState) &&
-          recordsFromState.some((r) => String(r?.examId || '') === targetExamId)) {
-          return true;
+      async (targetExamId) => {
+        try {
+          const records = await window.AppData.practice.list({ projection: 'light' });
+          return Array.isArray(records) &&
+            records.some((r) => String(r?.examId || '') === targetExamId);
+        } catch (_) {
+          return false;
         }
-        if (typeof window.getPracticeRecordsState === 'function') {
-          try {
-            const records = window.getPracticeRecordsState();
-            return Array.isArray(records) &&
-              records.some((r) => String(r?.examId || '') === targetExamId);
-          } catch (_) {
-            return false;
-          }
-        }
-        return false;
       },
       examId,
       { timeout: 30_000 }

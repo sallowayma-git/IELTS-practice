@@ -89,7 +89,7 @@ describe('LegacyExamListView._getCompletionStatus', () => {
             title: 'Passage 2',
             path: 'Reading/P2/passage-2.html'
         };
-        windowStub.getPracticeRecordsState = () => ([
+        const records = [
             {
                 id: 'suite-record-1',
                 examId: 'suite-suite-record-1',
@@ -104,7 +104,8 @@ describe('LegacyExamListView._getCompletionStatus', () => {
                     }
                 ]
             }
-        ]);
+        ];
+        windowStub.rebuildBrowseCompletionIndex(records);
 
         const status = view._getCompletionStatus(exam);
 
@@ -113,37 +114,37 @@ describe('LegacyExamListView._getCompletionStatus', () => {
         assert.strictEqual(status.date, '2026-07-01T09:58:00.000Z', '应优先读取 suiteEntries 子条目的时间');
     });
 
-    it('uses suite child scoreInfo and parent timestamp fallback for lightweight summaries', () => {
+    it('uses suiteEntrySummaries score and parent timestamp fallback for light records', () => {
         const { windowStub, LegacyExamListView } = loadLegacyExamListView();
         const view = new LegacyExamListView();
         const exam = {
             id: 'reading-p3',
             title: 'Passage 3'
         };
-        windowStub.getPracticeRecordsState = () => ([
+        const records = [
             {
                 id: 'suite-record-2',
                 examId: 'suite-suite-record-2',
                 title: '2026-07-02 套题',
                 date: '2026-07-02T12:30:00.000Z',
-                suiteEntries: [
+                suiteEntrySummaries: [
                     {
                         examId: 'reading-p3',
                         title: 'Passage 3',
-                        scoreInfo: {
-                            correct: 9,
-                            total: 10,
-                            percentage: 90
-                        }
+                        correctAnswers: 9,
+                        totalQuestions: 10,
+                        accuracy: 0.9,
+                        percentage: 90
                     }
                 ]
             }
-        ]);
+        ];
+        windowStub.rebuildBrowseCompletionIndex(records);
 
         const status = view._getCompletionStatus(exam);
 
-        assert(status, '轻量 suiteEntries 子条目也应产生完成状态');
-        assert.strictEqual(status.percentage, 90, '应从 suiteEntries.scoreInfo 读取分数');
+        assert(status, 'light.suiteEntrySummaries 子条目也应产生完成状态');
+        assert.strictEqual(status.percentage, 90, '应从 suiteEntrySummaries 读取分数');
         assert.strictEqual(status.date, '2026-07-02T12:30:00.000Z', '子条目缺失时间时应回退到父记录时间');
     });
 });

@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * 全量题库记录匹配测试
- * 确保 AnswerComparisonUtils 的全量题库匹配与 metadata 填充逻辑在 Node 环境下可被静态校验。
+ * 记录元数据补全契约测试
+ * AnswerComparisonUtils 只能使用记录快照和调用方显式解析出的 exam definition。
  */
 
 import path from 'path';
@@ -16,22 +16,6 @@ const __dirname = path.dirname(__filename);
 const AnswerComparisonUtils = require(path.join(__dirname, '..', '..', '..', 'js', 'utils', 'answerComparisonUtils.js'));
 
 const results = [];
-
-function resetGlobalIndexes() {
-    delete global.getReadingExamIndex;
-    delete global.__READING_EXAM_INDEX__;
-    delete global.examIndex;
-    delete global.readingExamIndex;
-    delete global.listeningExamIndex;
-    delete global.fullExamIndex;
-    delete global.practiceExamIndex;
-}
-
-function setReadingManifestIndex(items) {
-    const index = Array.isArray(items) ? items : [];
-    global.__READING_EXAM_INDEX__ = index;
-    global.getReadingExamIndex = () => index.map((entry) => Object.assign({}, entry));
-}
 
 function recordResult(name, passed, detail) {
     results.push({ name, passed, detail, timestamp: new Date().toISOString() });
@@ -49,31 +33,22 @@ function assertTruthy(value, message) {
     }
 }
 
-async function testUrlPathMatching() {
-    const testName = 'URL 路径匹配填充 metadata';
-    resetGlobalIndexes();
-
-    setReadingManifestIndex([
-        {
-            id: 'custom_listening_1699999999_0',
-            title: 'City Development',
-            category: 'P4',
-            type: 'listening',
-            path: 'ListeningPractice/P4/2. PART4 City Development/',
-            frequency: 'high'
-        }
-    ]);
-
+async function testExplicitExamDefinitionFillsMissingMetadata() {
+    const testName = '显式 exam definition 填充缺失 metadata';
     const record = {
-        examId: 'p4-city-development',
-        url: 'file:///tmp/ListeningPractice/P4/2.%20PART4%20City%20Development/2.%20PART4%20City%20Development.html',
-        title: 'City Development'
+        examId: 'source-exam'
     };
+    const examDefinition = {
+        id: 'source-exam',
+        title: 'Source title',
+        category: 'P4',
+        type: 'listening',
+        frequency: 'high'
+    };
+    const enriched = AnswerComparisonUtils.withEnrichedMetadata(record, examDefinition);
 
-    const enriched = AnswerComparisonUtils.withEnrichedMetadata(record);
-
-    assertStrictEqual(enriched.metadata.examTitle, 'City Development', '应通过路径匹配补齐 examTitle');
-    assertStrictEqual(enriched.metadata.category, 'P4', '应通过路径匹配补齐 category');
+    assertStrictEqual(enriched.metadata.examTitle, 'Source title', '应从显式 exam definition 补齐 examTitle');
+    assertStrictEqual(enriched.metadata.category, 'P4', '应从显式 exam definition 补齐 category');
     assertStrictEqual(enriched.metadata.frequency, 'high', '应透传频次信息');
     assertStrictEqual(enriched.category, 'P4', '记录应同步更新 category');
     assertTruthy(enriched.metadata.__enrichedMetadata, 'metadata 应标记为已填充');
@@ -81,40 +56,34 @@ async function testUrlPathMatching() {
     recordResult(testName, true, { enriched });
 }
 
-async function testFuzzyTitleMatching() {
-    const testName = '模糊标题匹配带标签前缀';
-    resetGlobalIndexes();
-
-    setReadingManifestIndex([
-        {
-            id: 'custom_listening_1699999999_1',
-            title: '[听力全量-2024-11-13] City Development',
-            category: 'P4',
-            type: 'listening',
-            path: 'ListeningPractice/P4/2. PART4 City Development/'
-        }
-    ]);
-
+async function testSavedMetadataWinsOverResolvedExam() {
+    const testName = '保存的 metadata 优先于解析出的题库条目';
     const record = {
-        examId: 'unknown_id',
-        title: 'City Development'
+        examId: 'shared-id',
+        title: 'Saved title',
+        metadata: {
+            examTitle: 'Saved title',
+            category: 'P1',
+            frequency: 'saved-frequency'
+        }
     };
+    const conflictingExam = {
+        id: 'shared-id',
+        title: 'Current library title',
+        category: 'P4',
+        frequency: 'current-frequency'
+    };
+    const enriched = AnswerComparisonUtils.withEnrichedMetadata(record, conflictingExam);
 
-    const enriched = AnswerComparisonUtils.withEnrichedMetadata(record);
-
-    assertStrictEqual(enriched.metadata.category, 'P4', '应通过模糊标题匹配补齐 category');
-    assertStrictEqual(
-        enriched.metadata.examTitle,
-        '[听力全量-2024-11-13] City Development',
-        '应保留索引中的带标签标题'
-    );
+    assertStrictEqual(enriched.metadata.category, 'P1', '显式题库条目不得覆盖历史 category');
+    assertStrictEqual(enriched.metadata.examTitle, 'Saved title', '显式题库条目不得覆盖历史 title');
+    assertStrictEqual(enriched.metadata.frequency, 'saved-frequency', '显式题库条目不得覆盖历史 frequency');
 
     recordResult(testName, true, { enriched });
 }
 
 async function testCategoryInferenceFromId() {
     const testName = 'examId 中的类别推断';
-    resetGlobalIndexes();
 
     const record = {
         examId: 'custom_reading_p2_section1',
@@ -131,7 +100,6 @@ async function testCategoryInferenceFromId() {
 
 async function testEnrichedMetadataGuard() {
     const testName = '__enrichedMetadata 重入保护';
-    resetGlobalIndexes();
 
     const record = {
         examId: 'p3-saved-record',
@@ -155,7 +123,6 @@ async function testEnrichedMetadataGuard() {
 
 async function testUnknownFallbacks() {
     const testName = '无索引信息时的兜底';
-    resetGlobalIndexes();
 
     const record = {};
 
@@ -170,8 +137,8 @@ async function testUnknownFallbacks() {
 
 async function runAllTests() {
     const suite = [
-        testUrlPathMatching,
-        testFuzzyTitleMatching,
+        testExplicitExamDefinitionFillsMissingMetadata,
+        testSavedMetadataWinsOverResolvedExam,
         testCategoryInferenceFromId,
         testEnrichedMetadataGuard,
         testUnknownFallbacks

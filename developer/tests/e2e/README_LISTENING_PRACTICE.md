@@ -131,10 +131,9 @@ E2E测试完成
     └── suite_practice_flow.py (现有)
            ↑
     集成测试 (Node.js)
-    ├── multiSuiteSubmission.test.js
     ├── spellingErrorCollection.test.js
     ├── vocabListSwitching.test.js
-    └── performance.benchmark.js
+    └── vocabSessionView.test.js
            ↑
     单元测试 (Node.js)
     ├── answerSanitizer.test.js
