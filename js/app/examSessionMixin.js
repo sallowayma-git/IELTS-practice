@@ -1507,7 +1507,7 @@
                                     state.parentOrigin = expectedParentOrigin;
                                     state.parentOriginIsOpaque = false;
                                 } else if (window.location.protocol === 'file:') {
-                                    var trustedFileOrigin = incomingOrigin === 'null'
+                                    var trustedFileOrigin = (incomingOrigin === 'null' || incomingOrigin === 'file://')
                                         && (declaredOrigin === 'null' || declaredOrigin === '' || declaredOrigin === 'file://');
                                     if (!trustedFileOrigin) return;
                                     state.parentOrigin = 'null';
@@ -1532,7 +1532,7 @@
                                 : '';
                             var messageOrigin = event && typeof event.origin === 'string' ? event.origin : '';
                             var originMatches = state.parentOriginIsOpaque
-                                ? messageOrigin === 'null'
+                                ? (messageOrigin === 'null' || messageOrigin === 'file://')
                                 : Boolean(state.parentOrigin && messageOrigin === state.parentOrigin);
                             if (!event || event.source !== parentWindow || message.source !== 'exam_host'
                                 || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) {
