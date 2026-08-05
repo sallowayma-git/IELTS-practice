@@ -286,6 +286,18 @@
 <script>
 (function() {
     const opener = window.opener || window.parent;
+    const expectedParentOrigin = (() => {
+        try {
+            if (!document.referrer) return '';
+            const parsed = new URL(document.referrer, window.location.href);
+            // Chromium: file URL.origin is "file://", postMessage event.origin is "null".
+            if (parsed.protocol === 'file:') return '';
+            if (!parsed.origin || parsed.origin === 'null' || parsed.origin === 'file://') return '';
+            return parsed.origin;
+        } catch (_) {
+            return '';
+        }
+    })();
     const overlay = document.getElementById('access-denied-overlay');
     const detector = window.EnvironmentDetector;
     const isTestEnv = detector && typeof detector.isInTestEnvironment === 'function'
@@ -316,13 +328,19 @@
         reviewMode: false,
         reviewViewMode: 'answering',
         suiteReviewMode: false,
+        autoAdvanceAfterSubmit: true,
         reviewContext: null,
         reviewEntryIndex: 0,
         baseDuration: 11 * 60,
         correctCount: 8,
         totalCount: 13,
         simulationMode: false,
-        simulationCtx: null
+        simulationCtx: null,
+        expectedParentOrigin,
+        parentOrigin: '',
+        parentOriginIsOpaque: false,
+        windowSessionToken: '',
+        submissionId: ''
     };
 
     const dom = {
@@ -391,15 +409,7 @@
     }
 
     function isManualReviewModeEnabled() {
-        try {
-            const fromStorage = window.localStorage && window.localStorage.getItem('suite_auto_advance_after_submit');
-            if (fromStorage === 'false') {
-                return true;
-            }
-        } catch (_) {
-            // ignore storage access errors
-        }
-        return false;
+        return state.autoAdvanceAfterSubmit === false;
     }
 
     function applyFallbackManualNavContext() {
@@ -438,6 +448,7 @@
         const examId = decodeParam(params.get('examId')) || null;
         const category = decodeParam(params.get('category')) || 'P1';
         const suiteSessionId = decodeParam(params.get('suiteSessionId')) || null;
+        const suiteFlowMode = decodeParam(params.get('suiteFlowMode')) || '';
         const seq = params.get('index');
 
         state.title = title;
@@ -445,6 +456,22 @@
         state.category = category;
         state.suiteSessionId = suiteSessionId;
         state.sequenceIndex = seq != null ? Number(seq) : null;
+        // 占位页在复用窗口切换时可能先于 INIT_SESSION 完成首帧渲染；
+        // 从受宿主签名的 URL 上下文恢复手动回看开关，确保导航栏不丢失。
+        if (suiteFlowMode.toLowerCase() === 'stationary') {
+            state.autoAdvanceAfterSubmit = false;
+            state.suiteReviewMode = true;
+        }
+        if (suiteFlowMode.toLowerCase() === 'simulation') {
+            const total = Number(params.get('suiteSequenceTotal')) || 3;
+            const currentIndex = Number.isFinite(state.sequenceIndex) ? state.sequenceIndex : 0;
+            state.simulationMode = true;
+            state.simulationCtx = {
+                currentIndex,
+                total,
+                isLast: currentIndex >= total - 1
+            };
+        }
 
         document.body.dataset.examId = examId || '';
         dom.title.textContent = title || 'IELTS 阅读练习占位页';
@@ -469,6 +496,17 @@
         dom.log.prepend(entry);
     }
 
+    function createSubmissionId() {
+        try {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return `placeholder-submit-${window.crypto.randomUUID()}`;
+            }
+        } catch (_) {
+            // Fall through to a session-bound identifier.
+        }
+        return `placeholder-submit-${state.sessionId || state.examId || 'session'}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
     function buildEnvelope(type, payload) {
         const data = Object.assign({
             examId: state.examId,
@@ -476,9 +514,14 @@
             category: state.category,
             suiteSessionId: state.suiteSessionId,
             sessionId: state.sessionId,
+            windowSessionToken: state.windowSessionToken || null,
             source: 'suite_placeholder',
             timestamp: Date.now()
         }, payload || {});
+        if (type === 'PRACTICE_COMPLETE') {
+            state.submissionId = data.submissionId || state.submissionId || createSubmissionId();
+            data.submissionId = state.submissionId;
+        }
         return { type, data, source: 'suite_placeholder' };
     }
 
@@ -488,7 +531,14 @@
             return;
         }
         try {
-            opener.postMessage(buildEnvelope(type, payload), '*');
+            const targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
+                ? state.parentOrigin
+                : (state.expectedParentOrigin || (window.location.protocol === 'file:' ? '*' : ''));
+            if (!targetOrigin) {
+                log(`缺少可信父窗口 origin，未发送 ${type}`, 'warn');
+                return;
+            }
+            opener.postMessage(buildEnvelope(type, payload), targetOrigin);
             log(`已发送 ${type} 消息`, 'info');
         } catch (error) {
             log(`发送 ${type} 消息失败: ${error}`, 'error');
@@ -820,6 +870,9 @@
 
         const sessionId = normalizeId(scope && scope.sessionId);
         if (sessionId) {
+            if (normalizeId(state.sessionId) && normalizeId(state.sessionId) !== sessionId) {
+                state.submissionId = '';
+            }
             state.sessionId = sessionId;
             dom.metaSession.textContent = sessionId;
         }
@@ -982,7 +1035,8 @@
         }
         applyPayloadScope(scope);
         state.reviewContext = context;
-        state.suiteReviewMode = Boolean(context.suiteReviewMode);
+        state.suiteReviewMode = context.suiteReviewMode === true || state.suiteReviewMode === true;
+        const submittedBeforeContext = state.submitted === true;
         const previousFinalizeOnNext = state.finalizeOnNext === true;
         const previousReviewEntryIndex = Number.isFinite(Number(state.reviewEntryIndex))
             ? Number(state.reviewEntryIndex)
@@ -1008,14 +1062,19 @@
             prevBtn.disabled = !context.canPrev;
         }
         if (nextBtn) {
-            nextBtn.disabled = !(context.canNext || state.finalizeOnNext);
+            const preserveFinalNext = state.suiteReviewMode
+                && submittedBeforeContext
+                && Number(currentIndex) >= Number(total) - 1;
+            nextBtn.disabled = !(context.canNext || state.finalizeOnNext || preserveFinalNext);
         }
         setReviewNavVisibility(context.showNav !== false);
 
         if (state.reviewViewMode === 'answering') {
-            state.submitted = false;
-            state.finalizeOnNext = false;
-            setReadOnlyMode(false);
+            if (!submittedBeforeContext) {
+                state.submitted = false;
+                state.finalizeOnNext = false;
+                setReadOnlyMode(false);
+            }
             markState('当前为作答态', '请完成当前篇章后点击“提交本篇成绩”。');
             return;
         }
@@ -1135,6 +1194,7 @@
         if (state.simulationMode && state.simulationCtx && !state.simulationCtx.isLast) {
             const updatedAt = Date.now();
             postMessage('SIMULATION_NAVIGATE', {
+                sessionId: state.sessionId,
                 direction: 'next',
                 draft: {
                     answers,
@@ -1163,6 +1223,10 @@
         postMessage(msgType, payload);
         state.submitted = true;
         state.reviewViewMode = 'review';
+        if (state.suiteSessionId && isManualReviewModeEnabled()) {
+            // 即使宿主 REVIEW_CONTEXT 尚未回到当前帧，stationary 提交也必须立即进入套题回看态。
+            state.suiteReviewMode = true;
+        }
         setReadOnlyMode(true);
         if (state.suiteReviewMode) {
             const bar = ensureReviewNavBar();
@@ -1206,6 +1270,37 @@
         const data = envelope.data || {};
 
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+            const declaredOrigin = typeof data.parentOrigin === 'string' ? data.parentOrigin : '';
+            const incomingToken = typeof data.windowSessionToken === 'string' ? data.windowSessionToken.trim() : '';
+            if (event.source !== opener || envelope.source !== 'exam_host' || !incomingToken) {
+                return;
+            }
+            const expectedOrigin = state.expectedParentOrigin
+                && state.expectedParentOrigin !== 'file://'
+                && !String(state.expectedParentOrigin).startsWith('file:')
+                ? state.expectedParentOrigin
+                : '';
+            if (expectedOrigin) {
+                if (incomingOrigin !== expectedOrigin || declaredOrigin !== expectedOrigin) return;
+                state.parentOrigin = expectedOrigin;
+                state.parentOriginIsOpaque = false;
+            } else if (window.location.protocol === 'file:') {
+                const trustedFileOrigin = incomingOrigin === 'null'
+                    && (declaredOrigin === 'null' || declaredOrigin === '' || declaredOrigin === 'file://');
+                if (!trustedFileOrigin) return;
+                state.parentOrigin = 'null';
+                state.parentOriginIsOpaque = true;
+            } else {
+                const trustedWebOrigin = Boolean(incomingOrigin)
+                    && incomingOrigin !== 'null'
+                    && incomingOrigin !== 'file://'
+                    && declaredOrigin === incomingOrigin;
+                if (!trustedWebOrigin) return;
+                state.parentOrigin = incomingOrigin;
+                state.parentOriginIsOpaque = false;
+            }
+            state.windowSessionToken = incomingToken;
             const previousExamId = state.examId;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
@@ -1214,6 +1309,9 @@
                 return;
             }
             if (data.sessionId) {
+                if (state.sessionId && String(state.sessionId) !== String(data.sessionId)) {
+                    state.submissionId = '';
+                }
                 state.sessionId = data.sessionId;
                 dom.metaSession.textContent = data.sessionId;
             }
@@ -1230,7 +1328,12 @@
             if (Number.isInteger(data.reviewEntryIndex)) {
                 state.reviewEntryIndex = data.reviewEntryIndex;
             }
-            state.suiteReviewMode = Boolean(data.suiteReviewMode);
+            // URL 上下文可能已在 INIT_SESSION 前把 stationary 模式设为套题回看；
+            // INIT 未携带该可选字段时不能把已有标记清零。
+            state.suiteReviewMode = data.suiteReviewMode === true || state.suiteReviewMode === true;
+            if (typeof data.autoAdvanceAfterSubmit === 'boolean') {
+                state.autoAdvanceAfterSubmit = data.autoAdvanceAfterSubmit;
+            }
             state.reviewViewMode = data.viewMode === 'review' || data.reviewMode ? 'review' : 'answering';
             state.handshakeReady = true;
             if (state.reviewViewMode === 'review') {
@@ -1252,6 +1355,17 @@
 
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
             sendSessionReady();
+            return;
+        }
+
+        const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+        const incomingToken = typeof data.windowSessionToken === 'string' ? data.windowSessionToken.trim() : '';
+        const originMatches = state.parentOriginIsOpaque
+            ? incomingOrigin === 'null'
+            : Boolean(state.parentOrigin && incomingOrigin === state.parentOrigin);
+        if (event.source !== opener || envelope.source !== 'exam_host'
+            || !originMatches || !state.windowSessionToken || incomingToken !== state.windowSessionToken) {
+            return;
         }
 
         if (type === 'REVIEW_CONTEXT') {

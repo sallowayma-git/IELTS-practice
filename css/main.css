@@ -4505,9 +4505,14 @@ body.blue-dark-mode .theme-modal-close:hover {
     background: rgba(28, 28, 28, 0.45);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 36%, rgba(0, 0, 0, 1) 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 36%, rgba(0, 0, 0, 1) 100%);
+    /* 末段在 92%→100% 渐隐为透明，使深色 glass 在贴到卡片圆角之前淡出，
+       避免在卡片底边留下直边 silhouette 把父级 18px 圆角撑成方角。 */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 36%, rgba(0, 0, 0, 1) 92%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 36%, rgba(0, 0, 0, 1) 92%, transparent 100%);
     color: #fff;
+    /* 自身底角圆角与 .theme-card 的 18px 对齐，让 glass layer 不再用直边顶到父级圆角处。 */
+    border-radius: 0 0 18px 18px;
+    overflow: hidden;
 }
 
 .theme-card-header {

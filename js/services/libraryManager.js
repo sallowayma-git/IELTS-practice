@@ -60,23 +60,14 @@
             && global.listeningExamIndex.length > 0;
     }
 
-    function getActiveExamIndexSnapshot() {
-        try {
-            if (typeof global.getExamIndexState === 'function') {
-                return global.getExamIndexState();
-            }
-        } catch (_) { }
-        return Array.isArray(global.examIndex) ? global.examIndex : [];
-    }
-
     function hasActiveListeningLibrary(index) {
-        return hasListeningEntries(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+        return hasListeningEntries(index);
     }
 
     function refreshListeningAvailabilityUI(index) {
         if (typeof global.refreshListeningAvailabilityUI === 'function') {
             try {
-                global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+                global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : []);
                 return;
             } catch (error) {
                 console.warn('[LibraryManager] 刷新听力入口状态失败:', error);
@@ -165,36 +156,26 @@
         }
 
         async getActiveLibraryConfigurationKey() {
-            return global.storage.get('active_exam_index_key', 'exam_index');
+            return global.AppData.library.getActive();
         }
 
         async setActiveLibraryConfiguration(key) {
-            try {
-                await global.storage.set('active_exam_index_key', key);
-            } catch (error) {
-                console.error('[LibraryManager] 设置活动题库配置失败:', error);
-            }
+            return global.AppData.library.activate(typeof key === 'string' && key.trim() ? key.trim() : null);
         }
 
         async getLibraryConfigurations() {
-            return global.storage.get('exam_index_configurations', []);
+            const configurations = await global.AppData.library.listConfigurations();
+            return [{ name: '默认题库', key: '', id: null, builtIn: true, sourceType: 'built-in-manifest' }]
+                .concat(Array.isArray(configurations) ? configurations : []);
         }
 
         async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
             try {
-                let configs = await global.storage.get('exam_index_configurations', []);
-                if (!Array.isArray(configs)) {
-                    configs = [];
-                }
+                if (!key) return;
                 const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
-                const entry = Object.assign({}, safeMetadata, { name, key, examCount, timestamp: Date.now() });
-                const existingIndex = configs.findIndex((item) => item && item.key === key);
-                if (existingIndex >= 0) {
-                    configs[existingIndex] = Object.assign({}, configs[existingIndex], entry);
-                } else {
-                    configs.push(entry);
-                }
-                await global.storage.set('exam_index_configurations', configs);
+                await global.AppData.library.updateConfiguration(Object.assign({}, safeMetadata, {
+                    id: key, key, name, examCount, timestamp: Date.now()
+                }));
             } catch (error) {
                 console.error('[LibraryManager] 保存题库配置失败:', error);
             }
@@ -290,18 +271,98 @@
                 : [];
         }
 
-        finishLibraryLoading(startTime) {
+        finishLibraryLoading(startTime, index) {
             const loadTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() - startTime : 0;
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('题库装载完成', 75);
             }
-            try { global.updateOverview && global.updateOverview(); } catch (_) { }
-            refreshListeningAvailabilityUI();
-            try { global.refreshBrowseProgressFromRecords && global.refreshBrowseProgressFromRecords(); } catch (_) { }
+            try { global.updateOverview && global.updateOverview(index); } catch (_) { }
+            refreshListeningAvailabilityUI(index);
+            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+            }
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded'));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { index: cloneArray(index) } }));
             } catch (_) { }
             return loadTime;
+        }
+
+        async resolveDefaultIndex() {
+            await global.AppData.ready;
+            if (global.ensureExamDataScripts) {
+                try { await global.ensureExamDataScripts(); } catch (_) { }
+            }
+            return this.normalizeIndexForCustomConfig(
+                this.getDefaultReadingIndex().concat(this.resolveDefaultTypeIndex('listening'))
+            );
+        }
+
+        async resolveIndexForConfiguration(configurationId) {
+            await global.AppData.ready;
+            const id = typeof configurationId === 'string' && configurationId.trim()
+                ? configurationId.trim()
+                : null;
+            if (id === null) return this.resolveDefaultIndex();
+            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id));
+        }
+
+        getRecordLibraryProvenance(record) {
+            const metadata = record && record.metadata && typeof record.metadata === 'object'
+                ? record.metadata
+                : {};
+            if (Object.prototype.hasOwnProperty.call(metadata, 'libraryConfigurationId')) {
+                const value = metadata.libraryConfigurationId;
+                return { known: true, configurationId: typeof value === 'string' && value.trim() ? value.trim() : null };
+            }
+            if (record && Object.prototype.hasOwnProperty.call(record, 'libraryConfigurationId')) {
+                const value = record.libraryConfigurationId;
+                return { known: true, configurationId: typeof value === 'string' && value.trim() ? value.trim() : null };
+            }
+            return { known: false, configurationId: null };
+        }
+
+        async resolveIndexForRecord(record) {
+            const provenance = this.getRecordLibraryProvenance(record);
+            // 记录带明确题库来源时严格按来源解析——多题库场景下这能防止同一 examId
+            // 被解析到别的库里的错误题目。
+            if (provenance.known) {
+                return this.resolveIndexForConfiguration(provenance.configurationId);
+            }
+            // 来源未知（几乎都是 v1 迁移来的旧记录：迁移时无法唯一确定来源就不会补
+            // libraryConfigurationId）。条件降级：只有当用户没有任何自定义题库时，
+            // examId 只可能对应默认库里的唯一题目，回退到当前活动题库解析是安全的
+            // （即 v1 一贯行为，修复旧记录回顾/详情/导出全部失败）。一旦存在自定义
+            // 题库，同一 examId 可能在多个库指向不同题目，无来源就无法安全判定，
+            // 保守返回空索引，由调用方按“题目不可用”提示，绝不静默解析到错题。
+            let customConfigCount = 0;
+            try {
+                const configurations = await global.AppData.library.listConfigurations();
+                customConfigCount = Array.isArray(configurations) ? configurations.length : 0;
+            } catch (_) {
+                // 读配置失败时按保守处理，不回退。
+                return [];
+            }
+            if (customConfigCount === 0) {
+                return this.resolveActiveIndex();
+            }
+            return [];
+        }
+
+        async resolveExamForRecord(record) {
+            if (!record || typeof record !== 'object') return null;
+            const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+            const candidateIds = [record.examId, metadata.examId]
+                .filter((value) => value !== null && value !== undefined && String(value).trim())
+                .map((value) => String(value));
+            if (!candidateIds.length) return null;
+            const index = await this.resolveIndexForRecord(record);
+            return index.find((exam) => exam && candidateIds.includes(String(exam.id))) || null;
+        }
+
+        async resolveActiveIndex() {
+            await global.AppData.ready;
+            const activeId = await global.AppData.library.getActive();
+            return this.resolveIndexForConfiguration(activeId);
         }
 
         async loadActiveLibrary(forceReload = false) {
@@ -311,37 +372,36 @@
             }
 
             const rawKey = await this.getActiveLibraryConfigurationKey();
-            const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : 'exam_index';
-            const isDefaultConfig = activeConfigKey === 'exam_index';
+            const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : null;
+            const isDefaultConfig = activeConfigKey === null;
 
             let cachedData = null;
             try {
                 if (!isDefaultConfig) {
-                    cachedData = await global.storage.get(activeConfigKey);
+                    cachedData = await global.AppData.library.getIndex(activeConfigKey);
                 } else {
-                    await global.storage.set('active_exam_index_key', 'exam_index');
+                    await global.AppData.library.activate(null);
                 }
             } catch (error) {
                 console.warn('[LibraryManager] 读取题库缓存失败:', error);
             }
 
-            if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = global.setExamIndexState ? global.setExamIndexState(cachedData) : cachedData;
+            if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
+                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData);
+                if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
                 await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-                this.finishLibraryLoading(startTime);
+                this.finishLibraryLoading(startTime, updatedIndex);
                 return updatedIndex;
             }
 
             if (!isDefaultConfig) {
                 const normalized = Array.isArray(cachedData) ? cachedData : [];
-                if (global.setExamIndexState) {
-                    global.setExamIndexState(normalized);
-                }
                 if (!normalized.length && typeof global.showMessage === 'function') {
-                    global.showMessage('当前题库配置没有数据，请重新导入或切换至默认题库。', 'warning');
+                    global.showMessage('当前题库配置没有数据，已自动切换至默认题库。', 'warning');
                 }
-                this.finishLibraryLoading(startTime);
-                return normalized;
+                // Continue through the built-in manifest path.  Returning the empty
+                // custom index here used to dispatch examIndexLoaded([]) and left an
+                // otherwise valid generated Reading manifest invisible.
             }
 
             try {
@@ -360,11 +420,8 @@
                 const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
-                    if (global.setExamIndexState) {
-                        global.setExamIndexState([]);
-                    }
                     console.warn('[LibraryManager] 未检测到默认题库脚本中的题源数据');
-                    this.finishLibraryLoading(startTime);
+                    this.finishLibraryLoading(startTime, []);
                     return [];
                 }
 
@@ -372,7 +429,7 @@
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
-                const updatedIndex = global.setExamIndexState ? global.setExamIndexState(combined) : combined;
+                const updatedIndex = combined;
 
                 const metadata = {
                     source: 'default-script',
@@ -391,22 +448,19 @@
 
                 const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
 
-                await global.storage.set('exam_index', updatedIndex);
-                await this.saveLibraryConfiguration('默认题库', 'exam_index', updatedIndex.length);
-                await this.setActiveLibraryConfiguration('exam_index');
-                await this.savePathMapForConfiguration('exam_index', updatedIndex, { setActive: true, overrideMap });
+                if (isDefaultConfig) {
+                    await this.setActiveLibraryConfiguration(null);
+                }
+                this.setActivePathMap(overrideMap);
 
-                this.finishLibraryLoading(startTime);
+                this.finishLibraryLoading(startTime, updatedIndex);
                 return updatedIndex;
             } catch (error) {
                 console.error('[LibraryManager] 加载默认题库失败:', error);
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
-                if (global.setExamIndexState) {
-                    global.setExamIndexState([]);
-                }
-                this.finishLibraryLoading(startTime);
+                this.finishLibraryLoading(startTime, []);
                 return [];
             }
         }
@@ -430,7 +484,7 @@
                         if (entry.trim() === key) {
                             mutated = true;
                             return {
-                                name: key === 'exam_index' ? '默认题库' : key,
+                                name: key,
                                 key,
                                 examCount,
                                 timestamp: now
@@ -448,7 +502,8 @@
                     return entry;
                 });
                 if (mutated) {
-                    await global.storage.set('exam_index_configurations', updated);
+                    const target = updated.find((entry) => entry && entry.key === key);
+                    if (target) await global.AppData.library.updateConfiguration(target);
                 }
             } catch (error) {
                 console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
@@ -456,11 +511,10 @@
         }
 
         async fetchLibraryDataset(key) {
-            if (!key) {
-                return [];
-            }
             try {
-                const dataset = await global.storage.get(key);
+                const dataset = !key
+                    ? this.resolveDefaultTypeIndex('reading').concat(this.resolveDefaultTypeIndex('listening'))
+                    : await global.AppData.library.getIndex(key);
                 return Array.isArray(dataset) ? dataset : [];
             } catch (error) {
                 console.warn('[LibraryManager] 无法读取题库数据:', key, error);
@@ -486,20 +540,13 @@
 
         async resolveBaseLibraryIndex(activeKey) {
             let currentIndex = [];
-            const key = typeof activeKey === 'string' && activeKey.trim() ? activeKey.trim() : 'exam_index';
+            const key = typeof activeKey === 'string' && activeKey.trim() ? activeKey.trim() : null;
             try {
                 currentIndex = await this.fetchLibraryDataset(key);
             } catch (_) {
                 currentIndex = [];
             }
-            if (!Array.isArray(currentIndex) || currentIndex.length === 0) {
-                try {
-                    currentIndex = global.getExamIndexState ? global.getExamIndexState() : [];
-                } catch (_) {
-                    currentIndex = [];
-                }
-            }
-            if ((!Array.isArray(currentIndex) || currentIndex.length === 0) && key === 'exam_index') {
+            if ((!Array.isArray(currentIndex) || currentIndex.length === 0) && key === null) {
                 const reading = this.resolveDefaultTypeIndex('reading');
                 const listening = this.resolveDefaultTypeIndex('listening');
                 currentIndex = reading.concat(listening);
@@ -523,7 +570,7 @@
             return this.normalizeIndexForCustomConfig(next);
         }
 
-        async buildUniqueImportedConfigKey(prefix = 'exam_index') {
+        async buildUniqueImportedConfigKey(prefix = 'library_import') {
             let configs = [];
             try {
                 configs = await this.getLibraryConfigurations();
@@ -542,16 +589,8 @@
                 if (used.has(key)) {
                     continue;
                 }
-                try {
-                    const stored = global.storage && typeof global.storage.get === 'function'
-                        ? await global.storage.get(key)
-                        : null;
-                    if (!stored) {
-                        return key;
-                    }
-                } catch (_) {
-                    return key;
-                }
+                const stored = await global.AppData.library.getIndex(key);
+                if (!stored.length) return key;
             }
             return `${prefix}_${now}_${Math.random().toString(36).slice(2, 8)}`;
         }
@@ -622,7 +661,7 @@
                 try { global.assignExamSequenceNumbers(newIndex); } catch (_) { }
             }
 
-            const key = options.key || await this.buildUniqueImportedConfigKey('exam_index');
+            const key = options.key || await this.buildUniqueImportedConfigKey('library_import');
             const name = options.name || this.buildImportedConfigName(type, mode, options.label);
             const counts = countIndexTypes(newIndex);
             const sourceReport = options.discoveryResult && options.discoveryResult.report
@@ -636,22 +675,23 @@
                     mode,
                     accepted: additions.length,
                     rejected: sourceReport ? Number(sourceReport.rejected) || 0 : 0,
-                    createdFrom: activeKey || 'exam_index',
+                    createdFrom: activeKey || null,
                     label: options.label || '',
                     timestamp: Date.now()
                 }
             };
 
-            await global.storage.set(key, newIndex);
-            const pathFallback = await this.loadPathMapForConfiguration(activeKey || 'exam_index');
+            const pathFallback = await this.loadPathMapForConfiguration(activeKey);
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(newIndex, pathFallback || this.DEFAULT_PATH_MAP)
                 : (pathFallback || null);
-            await this.savePathMapForConfiguration(key, newIndex, {
-                overrideMap: pathMap,
-                setActive: options.activate !== false
+            await global.AppData.library.import({
+                id: key,
+                configuration: Object.assign({}, metadata, { id: key, key, name, examCount: newIndex.length, timestamp: Date.now() }),
+                index: newIndex,
+                operationId: options.operationId
             });
-            await this.saveLibraryConfiguration(name, key, newIndex.length, metadata);
+            if (options.activate !== false) this.setActivePathMap(pathMap);
 
             let applied = true;
             if (options.activate !== false) {
@@ -682,15 +722,13 @@
                 return false;
             }
 
+            await this.setActiveLibraryConfiguration(key);
             const currentPathMap = await this.loadPathMapForConfiguration(key);
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
                 : (currentPathMap || null);
             this.setActivePathMap(pathMap);
 
-            if (global.setExamIndexState) {
-                global.setExamIndexState(exams);
-            }
             refreshListeningAvailabilityUI(exams);
             if (typeof global.setBrowseFilterState === 'function') {
                 global.setBrowseFilterState('all', 'all');
@@ -699,24 +737,18 @@
                 global.setFilteredExamsState([]);
             }
 
-            try {
-                await this.setActiveLibraryConfiguration(key);
-            } catch (error) {
-                console.warn('[LibraryManager] 无法写入当前题库配置:', error);
-            }
-
             await this.updateLibraryConfigurationMetadata(key, exams.length);
             await this.savePathMapForConfiguration(key, exams, {
                 overrideMap: pathMap,
                 setActive: true
             });
 
-            try { global.updateSystemInfo && global.updateSystemInfo(); } catch (_) { }
-            try { global.updateOverview && global.updateOverview(); } catch (_) { }
-            try { global.loadExamList && global.loadExamList(); } catch (_) { }
+            try { global.updateSystemInfo && global.updateSystemInfo(exams); } catch (_) { }
+            try { global.updateOverview && global.updateOverview(exams); } catch (_) { }
+            try { global.loadExamList && global.loadExamList(exams); } catch (_) { }
 
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key } }));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
             }
@@ -742,10 +774,6 @@
             if (!configKey) {
                 return { deleted: false, reason: 'invalid-key' };
             }
-            if (configKey === 'exam_index') {
-                return { deleted: false, reason: 'default-config' };
-            }
-
             const activeKey = await this.getActiveLibraryConfigurationKey();
             if (activeKey === configKey) {
                 return { deleted: false, reason: 'active-config' };
@@ -788,12 +816,8 @@
                 return { deleted: false, reason: 'not-found' };
             }
 
-            if (!global.storage || typeof global.storage.remove !== 'function') {
-                return { deleted: false, reason: 'storage-remove-unavailable' };
-            }
-            await global.storage.remove(configKey);
+            await global.AppData.library.remove(configKey);
             await this.deletePathMapForConfiguration(configKey);
-            await global.storage.set('exam_index_configurations', nextConfigs);
 
             return {
                 deleted: true,
@@ -803,7 +827,8 @@
         }
 
         async loadLibrary(keyOrForceReload) {
-            if (keyOrForceReload === 'default' || keyOrForceReload === 'exam_index') {
+            if (keyOrForceReload === 'default' || keyOrForceReload === null) {
+                await this.setActiveLibraryConfiguration(null);
                 return this.loadActiveLibrary(true);
             }
             if (typeof keyOrForceReload === 'string' && keyOrForceReload) {
@@ -824,7 +849,7 @@
 
     async function switchLibraryConfig(key) {
         const manager = getInstance();
-        const nextKey = key || await manager.getActiveLibraryConfigurationKey() || 'exam_index';
+        const nextKey = typeof key === 'string' && key.trim() ? key.trim() : null;
         return manager.applyLibraryConfiguration(nextKey);
     }
 
@@ -832,10 +857,25 @@
         return getInstance().loadLibrary(keyOrForceReload);
     }
 
+    async function resolveActiveLibraryIndex() {
+        return getInstance().resolveActiveIndex();
+    }
+
+    async function resolveLibraryIndexForPracticeRecord(record) {
+        return getInstance().resolveIndexForRecord(record);
+    }
+
+    async function resolveExamForPracticeRecord(record) {
+        return getInstance().resolveExamForRecord(record);
+    }
+
     global.LibraryManager = {
         getInstance,
         switchLibraryConfig,
         loadLibrary,
+        resolveActiveIndex: resolveActiveLibraryIndex,
+        resolveIndexForRecord: resolveLibraryIndexForPracticeRecord,
+        resolveExamForRecord: resolveExamForPracticeRecord,
         get RAW_DEFAULT_PATH_MAP() {
             const manager = getInstance();
             return manager.RAW_DEFAULT_PATH_MAP;
@@ -874,4 +914,7 @@
     global.isBuiltInListeningLibraryAvailable = isBuiltInListeningLibraryAvailable;
     global.switchLibraryConfig = switchLibraryConfig;
     global.loadLibrary = loadLibrary;
+    global.resolveActiveLibraryIndex = resolveActiveLibraryIndex;
+    global.resolveLibraryIndexForPracticeRecord = resolveLibraryIndexForPracticeRecord;
+    global.resolveExamForPracticeRecord = resolveExamForPracticeRecord;
 })(typeof window !== 'undefined' ? window : globalThis);
