@@ -30,7 +30,7 @@ jobs:
         run: |
           npm ci --prefix developer
           python -m pip install --upgrade pip
-          python -m pip install playwright
+          python -m pip install playwright==1.56.0
           python -m playwright install --with-deps chromium
 
       - name: Check JS bundle drift
