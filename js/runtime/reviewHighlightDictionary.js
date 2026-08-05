@@ -5,12 +5,12 @@
     const BUBBLE_ID = 'review-highlight-dictionary-bubble';
     const INTERACTIVE_CLASS = 'review-dictionary-highlight';
     const VOCAB_MESSAGE_TYPE = 'VOCAB_HIGHLIGHT_SAVE';
-    const FALLBACK_STORAGE_KEY = 'exam_system_vocab_list_reading_highlights';
 
     let currentOptions = {};
     let activeHighlight = null;
     let activeLookup = null;
     let outsideHandlerAttached = false;
+    const pendingSaveRequests = new Map();
 
     function cleanText(value) {
         return String(value || '').replace(/\s+/g, ' ').trim();
@@ -445,48 +445,12 @@
         };
     }
 
-    function createStorageEnvelope(data) {
-        return JSON.stringify({
-            data,
-            timestamp: Date.now(),
-            version: '0.6.2-fix',
-            compressed: false
-        });
-    }
-
-    function readFallbackList() {
-        try {
-            const raw = global.localStorage && global.localStorage.getItem(FALLBACK_STORAGE_KEY);
-            if (!raw) {
-                return null;
-            }
-            const parsed = JSON.parse(raw);
-            const data = parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-                ? parsed.data
-                : parsed;
-            return data && typeof data === 'object' && Array.isArray(data.words) ? data : null;
-        } catch (_) {
-            return null;
-        }
-    }
-
-    function writeFallbackVocab(payload) {
-        if (!global.localStorage || !payload || !payload.word) {
-            return false;
-        }
+    async function writeAppDataVocab(payload) {
+        if (!payload || !payload.word || !global.AppData || !global.AppData.vocab) return false;
+        const key = String(payload.word).trim().toLowerCase();
         const now = new Date().toISOString();
-        const list = readFallbackList() || {
-            id: 'reading-highlights',
-            name: '阅读高亮生词',
-            icon: '📖',
-            source: 'reading-highlight',
-            words: [],
-            createdAt: now,
-            updatedAt: now
-        };
-        const key = payload.word.toLowerCase();
-        const existingIndex = list.words.findIndex((item) => String(item.word || '').trim().toLowerCase() === key);
-        const wordRecord = {
+        await global.AppData.ready;
+        await global.AppData.vocab.upsertCollectionWord('reading-highlights', {
             id: `reading-highlight-${key.replace(/[^a-z0-9]+/g, '-')}`,
             word: payload.word,
             meaning: payload.meaning || payload.definition || '待补充释义',
@@ -497,7 +461,6 @@
                 payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${payload.selectedText}` : '',
                 payload.sourceLabel ? `来源: ${payload.sourceLabel}` : ''
             ].filter(Boolean).join('；'),
-            timestamp: Date.now(),
             source: 'reading-highlight',
             easeFactor: null,
             interval: 1,
@@ -506,59 +469,74 @@
             correctCount: 0,
             lastReviewed: null,
             nextReview: null,
-            createdAt: existingIndex >= 0 ? (list.words[existingIndex].createdAt || now) : now,
             updatedAt: now
-        };
-        if (existingIndex >= 0) {
-            list.words.splice(existingIndex, 1, { ...list.words[existingIndex], ...wordRecord });
-        } else {
-            list.words.push(wordRecord);
-        }
-        list.updatedAt = now;
-        list.stats = {
-            totalWords: list.words.length,
-            masteredWords: list.words.filter((word) => (Number(word.correctCount) || 0) >= 4).length,
-            reviewingWords: list.words.filter((word) => word.lastReviewed && !word.nextReview).length
-        };
-        global.localStorage.setItem(FALLBACK_STORAGE_KEY, createStorageEnvelope(list));
+        });
         return true;
     }
 
-    function postVocabPayload(payload) {
-        if (currentOptions && typeof currentOptions.postMessage === 'function') {
-            currentOptions.postMessage(VOCAB_MESSAGE_TYPE, payload);
-            return true;
-        }
-        const candidates = [global.opener, global.parent];
-        for (let index = 0; index < candidates.length; index += 1) {
-            const target = candidates[index];
-            if (!target || target === global) {
-                continue;
+    function createRequestId() {
+        try {
+            if (global.crypto && typeof global.crypto.randomUUID === 'function') {
+                return `vocab-highlight-${global.crypto.randomUUID()}`;
             }
-            try {
-                target.postMessage({
-                    type: VOCAB_MESSAGE_TYPE,
-                    source: 'practice_page',
-                    data: payload
-                }, '*');
-                return true;
-            } catch (_) {
-                // try next target
-            }
+        } catch (_) {
+            // use timestamp fallback
         }
-        return false;
+        return `vocab-highlight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
 
-    function saveActiveLookup(button) {
+    function settleSaveRequest(requestId, succeeded) {
+        const id = String(requestId || '').trim();
+        const pending = pendingSaveRequests.get(id);
+        if (!id || !pending) return false;
+        pendingSaveRequests.delete(id);
+        clearTimeout(pending.timer);
+        pending.resolve(Boolean(succeeded));
+        return true;
+    }
+
+    function handleSaveOutcome(payload, succeeded) {
+        const requestId = payload && payload.requestId != null ? String(payload.requestId).trim() : '';
+        return settleSaveRequest(requestId, succeeded);
+    }
+
+    function postVocabPayload(payload) {
+        if (!currentOptions || typeof currentOptions.postMessage !== 'function') return null;
+        const requestId = createRequestId();
+        const requestPayload = { ...payload, requestId };
+        const outcome = new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                pendingSaveRequests.delete(requestId);
+                resolve(false);
+            }, 5000);
+            pendingSaveRequests.set(requestId, { resolve, timer });
+        });
+        let delivered = false;
+        try {
+            delivered = currentOptions.postMessage(VOCAB_MESSAGE_TYPE, requestPayload) !== false;
+        } catch (_) {
+            delivered = false;
+        }
+        if (!delivered) {
+            settleSaveRequest(requestId, false);
+            return null;
+        }
+        return outcome;
+    }
+
+    async function saveActiveLookup(button) {
         const payload = buildVocabPayload();
         if (!payload.word) {
             return;
         }
-        const posted = postVocabPayload(payload);
-        const fallbackSaved = writeFallbackVocab(payload);
+        const hostOutcome = postVocabPayload(payload);
+        let persisted = hostOutcome ? await hostOutcome : false;
+        if (!persisted) {
+            try { persisted = await writeAppDataVocab(payload); } catch (_) { persisted = false; }
+        }
         if (button instanceof HTMLButtonElement) {
-            button.textContent = posted || fallbackSaved ? '已加入' : '保存失败';
-            button.disabled = true;
+            button.textContent = persisted ? '已加入' : '保存失败';
+            button.disabled = persisted;
         }
     }
 
@@ -610,7 +588,7 @@
         attach,
         enhance,
         close: closeBubble,
-        storageKey: FALLBACK_STORAGE_KEY,
+        handleSaveOutcome,
         messageType: VOCAB_MESSAGE_TYPE
     };
 

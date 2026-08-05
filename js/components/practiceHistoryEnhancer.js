@@ -76,7 +76,7 @@ class PracticeHistoryEnhancer {
                 const hasStandardComponent = window.app?.components?.practiceHistory;
                 const hasBasicStructure = document.querySelector('.practice-history') || 
                                         document.querySelector('#practice-records') ||
-                                        window.PracticeRecordAPI;
+                                        window.AppData;
                 
                 if (hasStandardComponent || hasBasicStructure) {
                     clearInterval(checkInterval);
@@ -265,30 +265,11 @@ class PracticeHistoryEnhancer {
      */
     async exportAsJSON() {
         try {
-            let practiceRecords = [];
-            let practiceStats = {};
-
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                const records = await window.PracticeRecordAPI.list();
-                practiceRecords = Array.isArray(records) ? records : [];
-            }
-
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
-                practiceStats = await window.PracticeRecordAPI.readStats();
-            }
-            
-            if (practiceRecords.length === 0) {
+            const practiceRecords = await window.AppData.practice.list({ projection: 'light' });
+            if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
                 throw new Error('没有练习记录可导出');
             }
-            
-            const data = {
-                exportDate: new Date().toISOString(),
-                stats: practiceStats,
-                user_stats: practiceStats,
-                userStats: practiceStats,
-                records: practiceRecords,
-                practice_records: practiceRecords
-            };
+            const data = await window.AppData.backups.export({ domains: ['practice'] });
 
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -311,33 +292,16 @@ class PracticeHistoryEnhancer {
     }
 
     /**
-     * 从统一练习记录 API 获取练习记录，避免 legacy storage 影子键回灌
+     * 从统一练习记录 API 获取练习记录，避免 legacy storage 影子键回灌。
+     * 默认 medium 投影：详情答案层，不含 highlights/notes。
+     * 回顾模式请用 fetchRecordById(id, { projection: 'full' })。
      */
-    async fetchRecordById(recordId) {
+    async fetchRecordById(recordId, options = {}) {
         const toIdStr = (v) => v == null ? '' : String(v);
         const targetIdStr = toIdStr(recordId);
+        const projection = (options && options.projection) || 'detail';
 
-        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.getById === 'function') {
-            try {
-                const hit = await window.PracticeRecordAPI.getById(targetIdStr);
-                if (hit) return hit;
-            } catch (err) {
-                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecordAPI 获取记录失败:', err);
-            }
-        }
-
-        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-            try {
-                const records = await window.PracticeRecordAPI.list();
-                if (!Array.isArray(records)) return null;
-                const hit = records.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
-                if (hit) return hit;
-            } catch (err) {
-                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecordAPI 列表查找记录失败:', err);
-            }
-        }
-
-        return null;
+        return window.AppData.practice.get(targetIdStr, { projection });
     }
 
     /**

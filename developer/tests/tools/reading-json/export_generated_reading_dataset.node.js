@@ -21,11 +21,15 @@ function readText(filePath) {
 }
 
 function parseArgs(argv) {
-  const args = { examId: '', list: false };
+  const args = { examId: '', list: false, all: false };
   for (let i = 2; i < argv.length; i += 1) {
     const token = argv[i];
     if (token === '--list') {
       args.list = true;
+      continue;
+    }
+    if (token === '--all') {
+      args.all = true;
       continue;
     }
     if (token === '--exam-id') {
@@ -120,6 +124,23 @@ function pickManifestEntry(manifest, examId) {
   return null;
 }
 
+function buildPayload(dataset, entry, fallbackExamId = '') {
+  return {
+    examId: dataset.examId || entry.examId || fallbackExamId,
+    questionOrder: Array.isArray(dataset.questionOrder) ? dataset.questionOrder : [],
+    answerKey: dataset.answerKey && typeof dataset.answerKey === 'object' ? dataset.answerKey : {},
+    questionGroups: Array.isArray(dataset.questionGroups) ? dataset.questionGroups : [],
+    questionDisplayMap: dataset.questionDisplayMap && typeof dataset.questionDisplayMap === 'object'
+      ? dataset.questionDisplayMap
+      : {},
+    meta: dataset.meta && typeof dataset.meta === 'object' ? dataset.meta : {},
+    metaQuestionIntroHtml: dataset.meta && typeof dataset.meta.questionIntroHtml === 'string'
+      ? dataset.meta.questionIntroHtml
+      : '',
+    script: entry.script
+  };
+}
+
 function main() {
   if (!fs.existsSync(MANIFEST_PATH)) {
     fail('reading_manifest_not_found');
@@ -134,6 +155,17 @@ function main() {
     return;
   }
 
+  if (args.all) {
+    const entries = buildEntryList(manifest);
+    const datasets = Object.fromEntries(entries.map((entry) => {
+      const dataset = loadDataset(context, registry, entry);
+      const payload = buildPayload(dataset, entry, entry.examId);
+      return [payload.examId, payload];
+    }));
+    process.stdout.write(`${JSON.stringify({ entries, datasets })}\n`);
+    return;
+  }
+
   if (!args.examId) {
     fail('missing_required_arg:--exam-id');
   }
@@ -144,20 +176,7 @@ function main() {
   }
 
   const dataset = loadDataset(context, registry, entry);
-  const payload = {
-    examId: dataset.examId || entry.examId || args.examId,
-    questionOrder: Array.isArray(dataset.questionOrder) ? dataset.questionOrder : [],
-    answerKey: dataset.answerKey && typeof dataset.answerKey === 'object' ? dataset.answerKey : {},
-    questionGroups: Array.isArray(dataset.questionGroups) ? dataset.questionGroups : [],
-    questionDisplayMap: dataset.questionDisplayMap && typeof dataset.questionDisplayMap === 'object'
-      ? dataset.questionDisplayMap
-      : {},
-    meta: dataset.meta && typeof dataset.meta === 'object' ? dataset.meta : {},
-    metaQuestionIntroHtml: dataset.meta && typeof dataset.meta.questionIntroHtml === 'string'
-      ? dataset.meta.questionIntroHtml
-      : '',
-    script: entry.script
-  };
+  const payload = buildPayload(dataset, entry, args.examId);
 
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }

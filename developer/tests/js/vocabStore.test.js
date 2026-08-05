@@ -9,42 +9,100 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
-function createLocalStorage(seed = {}) {
-    const store = new Map(Object.entries(seed));
-    return {
-        getItem(key) {
-            return store.has(key) ? store.get(key) : null;
-        },
-        setItem(key, value) {
-            store.set(key, String(value));
-        },
-        removeItem(key) {
-            store.delete(key);
-        },
-        clear() {
-            store.clear();
-        }
-    };
+function clone(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
-function loadVocabStore({ embeddedWords, storageSeed }) {
+function createVocabFacade(seed = {}) {
+    const state = {
+        words: clone(seed.words || []),
+        collections: clone(seed.collections || {}),
+        config: { activeListId: 'default', ...(clone(seed.config) || {}) }
+    };
+    const vocab = {
+        async getConfig() {
+            return clone(state.config);
+        },
+        async listWords() {
+            return clone(state.words);
+        },
+        async listCollections() {
+            return clone(state.collections);
+        },
+        async replaceListWords({ listId = 'default', words = [] }) {
+            if (seed.failReplace) throw new Error('backend write failed');
+            if (listId === 'default') {
+                state.words = clone(words);
+            } else {
+                state.collections[listId] = {
+                    ...(state.collections[listId] || {}),
+                    id: listId,
+                    words: clone(words)
+                };
+            }
+            return { committed: true };
+        },
+        async mergeListWords({ listId = 'default', words = [] }) {
+            const target = listId === 'default'
+                ? state.words
+                : (state.collections[listId]?.words || []);
+            const merged = clone(target);
+            let addedCount = 0;
+            let updatedCount = 0;
+            for (const incoming of words) {
+                const identity = String(incoming.word || incoming.id || '').trim().toLowerCase();
+                const index = merged.findIndex((word) => String(word.word || word.id || '').trim().toLowerCase() === identity);
+                if (index >= 0) {
+                    merged[index] = { ...merged[index], ...clone(incoming) };
+                    updatedCount += 1;
+                } else {
+                    merged.push(clone(incoming));
+                    addedCount += 1;
+                }
+            }
+            await this.replaceListWords({ listId, words: merged });
+            return { committed: true, words: clone(merged), addedCount, updatedCount };
+        },
+        async patchConfig(patch = {}) {
+            state.config = { ...state.config, ...clone(patch) };
+            return { committed: true };
+        },
+        async activateList(listId) {
+            state.config = { ...state.config, activeListId: listId };
+            return { committed: true };
+        },
+        async patchWord({ listId = 'default', wordId, patch = {} }) {
+            const source = listId === 'default'
+                ? state.words
+                : (state.collections[listId]?.words || []);
+            const index = source.findIndex((word) => (word.id || word.word) === wordId);
+            if (index < 0) throw new Error(`Unknown word: ${wordId}`);
+            source[index] = { ...source[index], ...clone(patch) };
+            return { committed: true, word: clone(source[index]) };
+        }
+    };
+    return { state, vocab };
+}
+
+function loadVocabStore({ embeddedWords, dataSeed }) {
     const quietConsole = {
         log() {},
         warn() {},
         error() {},
         info() {}
     };
+    const { state: appDataState, vocab } = createVocabFacade(dataSeed);
     const windowStub = {
         console: quietConsole,
         __EMBEDDED_WORDLISTS__: {
             ielts_core: embeddedWords || []
         },
-        location: { protocol: 'file:' }
+        location: { protocol: 'file:' },
+        AppData: { ready: Promise.resolve(), vocab }
     };
     const sandbox = {
         window: windowStub,
         console: quietConsole,
-        localStorage: createLocalStorage(storageSeed),
         Date,
         Math,
         JSON,
@@ -52,7 +110,6 @@ function loadVocabStore({ embeddedWords, storageSeed }) {
         clearTimeout
     };
     sandbox.globalThis = sandbox.window;
-    sandbox.window.localStorage = sandbox.localStorage;
     sandbox.window.Date = Date;
     sandbox.window.Math = Math;
     sandbox.window.JSON = JSON;
@@ -62,6 +119,7 @@ function loadVocabStore({ embeddedWords, storageSeed }) {
     const context = vm.createContext(sandbox);
     const source = fs.readFileSync(path.join(repoRoot, 'js/core/vocabStore.js'), 'utf8');
     vm.runInContext(source, context, { filename: 'js/core/vocabStore.js' });
+    sandbox.window.VocabStore.__appDataState = appDataState;
     return sandbox.window.VocabStore;
 }
 
@@ -72,9 +130,11 @@ async function testSpellingErrorUsesEmbeddedLexiconMeaning() {
             meaning: 'n. 住宿',
             example: 'The hotel provides comfortable accommodation.'
         }],
-        storageSeed: {
-            vocab_list_p1_errors: JSON.stringify({
-                id: 'p1',
+        dataSeed: {
+            words: [{ id: 'default-seed', word: 'unrelated', meaning: 'seed' }],
+            collections: {
+                'spelling-errors-p1': {
+                id: 'spelling-errors-p1',
                 words: [{
                     word: 'accommodation',
                     userInput: 'accomodation',
@@ -84,7 +144,8 @@ async function testSpellingErrorUsesEmbeddedLexiconMeaning() {
                     errorCount: 2,
                     source: 'p1'
                 }]
-            })
+                }
+            }
         }
     });
 
@@ -102,9 +163,11 @@ async function testSpellingErrorUsesEmbeddedLexiconMeaning() {
 async function testSpellingErrorFallsBackWhenLexiconMissing() {
     const vocabStore = loadVocabStore({
         embeddedWords: [],
-        storageSeed: {
-            vocab_list_p4_errors: JSON.stringify({
-                id: 'p4',
+        dataSeed: {
+            words: [{ id: 'default-seed', word: 'unrelated', meaning: 'seed' }],
+            collections: {
+                'spelling-errors-p4': {
+                id: 'spelling-errors-p4',
                 words: [{
                     word: 'specialised',
                     userInput: 'specializedd',
@@ -114,7 +177,8 @@ async function testSpellingErrorFallsBackWhenLexiconMissing() {
                     errorCount: 1,
                     source: 'p4'
                 }]
-            })
+                }
+            }
         }
     });
 
@@ -130,8 +194,12 @@ async function testSpellingErrorFallsBackWhenLexiconMissing() {
 async function testSpellingErrorPreservesStoredMeaningAndMetadata() {
     const vocabStore = loadVocabStore({
         embeddedWords: [],
-        storageSeed: {
-            vocab_list_master_errors: JSON.stringify([{
+        dataSeed: {
+            words: [{ id: 'default-seed', word: 'unrelated', meaning: 'seed' }],
+            collections: {
+                'spelling-errors-master': {
+                id: 'spelling-errors-master',
+                words: [{
                 id: 'spelling-all-garden',
                 word: 'garden',
                 meaning: 'n. 花园；庭院',
@@ -145,7 +213,9 @@ async function testSpellingErrorPreservesStoredMeaningAndMetadata() {
                 acceptedAnswers: ['green garden', 'green gardens'],
                 canonicalAnswer: 'green garden',
                 reasonCode: 'edit'
-            }])
+                }]
+                }
+            }
         }
     });
 
@@ -168,8 +238,12 @@ async function testSpellingErrorPreservesStoredMeaningAndMetadata() {
 async function testSpellingErrorMetadataSurvivesStudyUpdates() {
     const vocabStore = loadVocabStore({
         embeddedWords: [],
-        storageSeed: {
-            vocab_list_master_errors: JSON.stringify([{
+        dataSeed: {
+            words: [{ id: 'default-seed', word: 'unrelated', meaning: 'seed' }],
+            collections: {
+                'spelling-errors-master': {
+                id: 'spelling-errors-master',
+                words: [{
                 id: 'spelling-all-garden',
                 word: 'garden',
                 meaning: 'n. 花园；庭院',
@@ -181,7 +255,9 @@ async function testSpellingErrorMetadataSurvivesStudyUpdates() {
                 source: 'p1',
                 acceptedAnswers: ['green garden'],
                 canonicalAnswer: 'green garden'
-            }])
+                }]
+                }
+            }
         }
     });
 
@@ -199,6 +275,22 @@ async function testSpellingErrorMetadataSurvivesStudyUpdates() {
     assert.strictEqual(updated.errorCount, 3, '背诵更新不应该洗掉错误次数');
     assert.deepStrictEqual(updated.acceptedAnswers, ['green garden']);
     assert.strictEqual(updated.canonicalAnswer, 'green garden');
+    assert.strictEqual(vocabStore.__appDataState.config.activeListId, 'spelling-errors-master');
+    assert.strictEqual(
+        vocabStore.__appDataState.collections['spelling-errors-master'].words[0].note,
+        'new memory note',
+        '学习更新必须通过 AppData.vocab.patchWord 提交'
+    );
+}
+
+async function testDefaultLexiconWriteFailureRejectsInitialization() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [{ word: 'alpha', meaning: 'A' }],
+        dataSeed: { failReplace: true }
+    });
+
+    await assert.rejects(vocabStore.init(), /backend write failed/);
+    assert.strictEqual(vocabStore.state.ready, false, '持久化失败时不得把词汇域标记为 ready');
 }
 
 async function main() {
@@ -212,6 +304,8 @@ async function main() {
         results.push({ name: '错词保留已补全释义和元数据', status: 'pass' });
         await testSpellingErrorMetadataSurvivesStudyUpdates();
         results.push({ name: '背诵更新保留错词业务元数据', status: 'pass' });
+        await testDefaultLexiconWriteFailureRejectsInitialization();
+        results.push({ name: '默认词库持久化失败会阻断 ready', status: 'pass' });
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

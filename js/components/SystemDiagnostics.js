@@ -122,8 +122,11 @@ class SystemDiagnostics {
     /**
      * 测试单个题目的通信功能
      */
-    async testExamCommunication(examId, timeout = 10000) {
-        const exam = window.examIndex?.find(e => e.id === examId);
+    async testExamCommunication(examId, timeout = 10000, examIndex = null) {
+        const index = Array.isArray(examIndex)
+            ? examIndex
+            : await window.resolveActiveLibraryIndex();
+        const exam = index.find(e => e.id === examId);
         if (!exam) {
             return {
                 examId,
@@ -176,7 +179,10 @@ class SystemDiagnostics {
                 }
             };
 
-            examWindow.postMessage(testMessage, '*');
+            examWindow.postMessage(
+                testMessage,
+                window.location.protocol === 'file:' ? '*' : window.location.origin
+            );
 
             // 等待响应
             const result = await new Promise((resolve) => {
@@ -234,14 +240,17 @@ class SystemDiagnostics {
     /**
      * 批量测试通信功能
      */
-    async testMultipleExams(examIds, concurrency = 3) {
+    async testMultipleExams(examIds, concurrency = 3, examIndex = null) {
         console.log(`[SystemDiagnostics] 开始批量测试 ${examIds.length} 个题目的通信功能`);
 
+        const index = Array.isArray(examIndex)
+            ? examIndex
+            : await window.resolveActiveLibraryIndex();
         const results = [];
         for (let i = 0; i < examIds.length; i += concurrency) {
             const batch = examIds.slice(i, i + concurrency);
             const batchResults = await Promise.all(
-                batch.map(examId => this.testExamCommunication(examId))
+                batch.map(examId => this.testExamCommunication(examId, 10000, index))
             );
             results.push(...batchResults);
         }
@@ -295,7 +304,7 @@ class SystemDiagnostics {
                     connection.window.postMessage({
                         type: 'HEARTBEAT',
                         timestamp: Date.now()
-                    }, '*');
+                    }, window.location.protocol === 'file:' ? '*' : window.location.origin);
                 }
             } catch (error) {
                 this.handleConnectionLost(examId, 'connection_error');
@@ -523,7 +532,7 @@ class SystemDiagnostics {
     async fullSystemDiagnostics() {
         console.log('[SystemDiagnostics] 开始完整系统诊断...');
 
-        const examIndex = window.examIndex || [];
+        const examIndex = await window.resolveActiveLibraryIndex();
         const diagnosticReport = {
             timestamp: Date.now(),
             indexValidation: null,
@@ -540,7 +549,7 @@ class SystemDiagnostics {
                 // 如果有失败的题目，进行通信测试
                 if (diagnosticReport.indexValidation.failedExams.length > 0) {
                     const failedExamIds = diagnosticReport.indexValidation.failedExams.map(exam => exam.id);
-                    diagnosticReport.communicationTest = await this.testMultipleExams(failedExamIds.slice(0, 5)); // 限制测试数量
+                    diagnosticReport.communicationTest = await this.testMultipleExams(failedExamIds.slice(0, 5), 3, examIndex); // 限制测试数量
                 }
             } catch (error) {
                 console.error('[SystemDiagnostics] 索引验证失败:', error);

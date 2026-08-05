@@ -1,0 +1,141 @@
+# Progress
+
+- 2026-07-28: Read `planning-with-files` instructions and ran session catch-up.
+- 2026-07-28: Captured baseline branch, HEAD, divergence, and preserved dirty-file list.
+- 2026-07-28: Initialized implementation plan and findings files.
+- 2026-07-28: Default-mode subagent dispatch also returned `unsupported call`; switched to parallel read-only shell probes.
+- 2026-07-28: Captured existing UI source diffs and selected restore/journal/broadcast implementation contracts.
+- 2026-07-28: Implemented DataKernel cross-realm commit broadcast, `CORRUPT_RECORD` isolation, restore journal reset, and restore commit notifications; syntax check passed.
+- 2026-07-28: Session catch-up found an additional unsynced `AppData` projection patch in the worktree; exact projection/import coverage still requires diff review and focused tests before phase 2 can be marked complete.
+- 2026-07-28: Attempted the mandated read-only subagent split; `spawn_agent` again returned `unsupported call`. Stopped repeating the unavailable call and switched to parallel shell probes.
+- 2026-07-28: First parallel shell probe aborted because this repository has no root `package.json`; adjusted discovery to locate manifests/build runners instead of assuming layout.
+- 2026-07-28: Reviewed the unsynced AppData diff: legacy nested annotations, score aliases/accuracy normalization, and sanitized suite light summaries are implemented in source; consumers/tests are not yet verified.
+- 2026-07-28: Completed focused restore/vocab review. Full mirror/three-layer invariant and public restore journal reset are still missing; vocab collection RMW paths remain bare CAS.
+- 2026-07-28: Implemented full-scope cleared envelopes, atomic three-layer import planning with recordId-set validation, restore journal reset wiring, and corrupt-summary skipping. Syntax passed; the old orphan-preserving test now fails at the intended new validation gate.
+- 2026-07-28: Added a single vocab mutation queue with bounded fresh-read CAS retries across config, collections, word merge/patch, and progress paths.
+- 2026-07-28: Replaced the orphan-preserving test with full-mirror, incomplete replace, recordId-set, nested v1, sanitized suite light, journal reset, concurrent vocab, BroadcastChannel, and corrupt-row isolation regressions. Focused AppData/DataKernel tests pass.
+- 2026-07-28: Completed the protocol source read. Main mixin ACK/origin infrastructure is reusable; fallback origin, duplicate recorder, Listening pending submission, and vocab request receipts remain to implement.
+- 2026-07-28: Implemented fallback opaque-origin normalization and required submission IDs; removed the duplicate mixin fallback recorder.
+- 2026-07-28: Listening now caches pre-INIT completion details, generates one submissionId, resends the same persisted request, and marks completed only on trusted ACK.
+- 2026-07-28: Reading highlight vocab now generates requestId, waits for trusted host ACK/FAILED, falls back to direct AppData commit, and never labels a bare postMessage as success.
+- 2026-07-28: Separated practice record/session business IDs from mutation operation IDs in PracticeRecorder, suite finalize, and host persistence; added per-call/new-op and internal-retry/same-op tests.
+- 2026-07-28: Resumed from persisted plan; subagent dispatch remained unavailable with `unsupported call`.
+- 2026-07-28: Diagnosed the suite reset regression as stale fixture accounting and reset the recorder-start probe before the reset request.
+- 2026-07-28: `suiteModeRegression.test.js` passes after isolating reset-time recorder synchronization in the fixture.
+- 2026-07-28: Located existing focused surfaces for the remaining gates: listening parser, unified reading protocol, external backup v2, Browse controller/preferences, and file/listening E2E runners.
+- 2026-07-28: Confirmed the Listening source state machine and identified the parser test file as an encoding/readability edge case requiring byte-level inspection before editing.
+- 2026-07-28: Confirmed the parser test is ordinary UTF-8; selected a separate VM-based Listening protocol regression using the bridge's existing public test hooks.
+- 2026-07-28: Designed the Listening protocol harness to assert file-origin wildcard sends, no pre-INIT completion emission, same-submission retry, forged ACK rejection, and trusted ACK finalization.
+- 2026-07-28: Added and passed `listeningRecordBridgeProtocol.test.js`; registered it in the static suite.
+- 2026-07-28: Selected a VM source-injection harness for vocab UI protocol coverage so production exports remain unchanged.
+- 2026-07-28: Added and passed `reviewHighlightDictionaryProtocol.test.js`; registered it in the static suite.
+- 2026-07-28: Began Browse consumer tracing; ruled out `browseController.js` as the completion-state owner.
+- 2026-07-28: Located both Browse completion scans and the existing read-status regression; selected a shared `suiteEntrySummaries`-first helper with `suiteEntries` fallback.
+- 2026-07-28: Implemented Browse `suiteEntrySummaries` consumption in both indexed and path/file fallback paths; `legacyViewReadStatus.test.js` passes.
+- 2026-07-28: Verified the DataKernel → AppData backups → ExternalBackupService remote-commit subscription chain.
+- 2026-07-28: Made the ExternalBackupService regression emit an explicit `remote:true` child-realm commit; the v2 backup suite passes.
+- 2026-07-28: Located the app fallback origin regression surface in `practiceRecordPersistence.test.js`.
+- 2026-07-28: Extended the fallback persistence regression to file:// REQUEST_INIT and ACK, asserting declared `null` and wildcard targetOrigin; the test passes.
+- 2026-07-28: Started a repository-wide PRACTICE_COMPLETE/ACK sender audit.
+- 2026-07-28: Sender audit found Practice Enhancer completion messages missing submissionId at the final send boundary.
+- 2026-07-28: Completed sender inventory: Unified Reading and Listening are correlated; generic enhancer, injected collector, two templates, and the inline E2E fixture need metadata enrichment.
+- 2026-07-28: Selected existing enhancer VM coverage and session-bound submission ID reset semantics for the generic/template fixes.
+- 2026-07-28: Added completion correlation to Practice Enhancer and the host-injected collector; enhancer syntax and its 6/6 VM regressions pass.
+- 2026-07-28: Added session-bound submission correlation and file-origin normalization to the shipped placeholder/base templates; placeholder replay test passes.
+- 2026-07-28: Confirmed the unified E2E runner excludes Listening and found UA-based test-environment activation still permits synthetic saves under Playwright.
+- 2026-07-28: Removed automation-UA test mode, added its explicit-opt-in regression, and passed syntax/unit checks.
+- 2026-07-28: Added Listening to the unified E2E list; reading file submit and Listening now use a normal Chrome UA and assert production test-env/recorder/receipt/synthetic invariants. Python syntax checks pass.
+- 2026-07-28: Added placeholder completion contract coverage; the replay/submit regression passes.
+- 2026-07-28: Rebuilt all generated bundles successfully. The builder reported only the repository's eight known non-blocking symbol collisions.
+- 2026-07-28: Focused data/kernel/backup, recorder/persistence/completion, Listening/vocab/environment, host/unified-reading, suite/enhancer/placeholder, and Browse/view test groups all pass.
+- 2026-07-28: Replaced `codex/audit-tmp-migration` with the verified seven-commit `codex/squash-preview` history and force-pushed with an explicit remote lease; preserved `codex/audit-tmp-migration-backup` at the original 34-commit tip.
+- 2026-07-28: Took over the new production reports: extracted packages sometimes show zero exams, optional Listening manifest is absent, and practice completion can fail v2 validation because `correctAnswers` reaches `canonicalizeRecord` as a negative/non-finite value.
+- 2026-07-28: Started the manifest/submission hotfix trace; no source edits made yet.
+- 2026-07-29: Three read-only traces confirmed the legacy IndexedDB row-envelope bug, the `exam_index` sentinel/active-library mismatch, the non-idempotent migration guard, and the overloaded `correctAnswers` completion contract.
+- 2026-07-29: Local PowerShell spawning began failing globally with Windows `CreateProcessAsUserW error 5`; switched to the exact force-pushed branch through the connected GitHub read API for source verification. No code was edited through GitHub.
+- 2026-07-29: Fixed legacy IDB `{key,value,timestamp}` unwrapping and added sessionStorage fallback with an explicit completeness signal.
+- 2026-07-29: Added versioned, retry-safe v1-to-v2 repair: default sentinel translation, deterministic custom-library remap, poisoned active-state repair, current-v2 precedence, per-layer practice merge, stable missing-ID generation, and a completion marker written only after full success.
+- 2026-07-29: Added completion-score normalization that preserves answer maps, selects the first valid non-negative scalar (including zero), derives totals from scoreInfo, and keeps canonical validation strict; applied the same rule to suite light summaries.
+- 2026-07-29: Changed empty/damaged active custom-library startup to reset active state and continue through the generated Reading manifest path; optional Listening absence remains non-blocking.
+- 2026-07-29: Added regressions in dataKernelV2, appDataV2, legacyMigrationBrickRegression, and libraryManagerImportConfig for the three production reports.
+- 2026-07-29: Two independent verification agents confirmed the intended static paths and identified/fixed retry/idempotency/catch-boundary issues. Node execution and bundle rebuild remain blocked by the global Windows process-launch error; no hotfix commit or push was made.
+- 2026-07-29: Inspected the supplied 4 KB backup completely and reproduced its semantics: checksum-valid full snapshot, zero practice rows, missing imported-index envelope, poisoned active ID, and three legacy row wrappers.
+- 2026-07-29: Compared six opensource export paths and confirmed the catastrophic file is a v2 migration/export regression, while also documenting old-version backup completeness gaps.
+- 2026-07-29: Confirmed current import accepts the poisoned file, replace clears all practice stores, and bad active state hides the manifest; started backup trust/import-safety implementation.
+- 2026-07-29: Implemented semantic v2 import canonicalization for exact legacy row wrappers, sparse-snapshot degradation, cross-domain wrapper isolation, and all-or-nothing custom-library bundle validation.
+- 2026-07-29: Removed the unsafe rule that interpreted missing full-snapshot envelopes as clears; new exports now produce a dense present/cleared catalog snapshot.
+- 2026-07-29: Added preview-bound destructive confirmation tokens and exact practice existing/incoming/final/removed counts; wired ordinary import, external restore, and E2E callers.
+- 2026-07-29: Added `poisonedV2Repair` startup recovery that runs independently of the old completion marker, retries legacy practice recovery, repairs safe document wrappers, and resets/reconstructs invalid active-library state.
+- 2026-07-29: Rebuilt all 14 generated bundles; `build-bundles.mjs --check` passes. Focused AppData/DataKernel/migration/library/external-backup/recorder suites pass.
+- 2026-07-29: file:// export/import Playwright flow passes end-to-end, including v1 merge and v2 destructive replace with confirmation token.
+- 2026-07-29: The exact user-supplied poisoned JSON passed a dedicated file:// browser safety run: merge preserved the seeded record/current library and replace reported `1 → 0` then rejected a tokenless commit.
+- 2026-07-29: Full JS sweep passed all data/import-related suites; the unrelated `unifiedReadingCoreRegression.test.js` async notification-order assertion remains reproducibly failing.
+- 2026-07-29: Started a raw-data-first migration-chain review at the user's request; no new fallback code will be added until the original persisted shapes and every lossy boundary are re-established.
+- 2026-07-29: Three independent read-only audits completed: historical writer shapes, byte-to-domain loss tracing, and current-patch minimality. They converged on one root cause and identified multiple over-broad recovery risks for main-agent line-level verification.
+- 2026-07-29: Main-agent source checks confirmed the canonical old IDB writer/reader pair, real unprefixed Web Storage variants, the absence of a production raw-IDB writer, and the new forceReload overwrite bug.
+- 2026-07-29: Removed the unevidenced raw-IDB fallback, added explicit unprefixed Web Storage keys, unified wrapper decoding, preserved post-migration overlay fields, and rejected non-object wrapper payloads.
+- 2026-07-29: Replaced global marker-triggered replay with fresh-or-poison detection, removed the independent poisoned-repair marker, prevented resurrection from healthy v2 + frozen v1, and simplified destructive authorization to `confirmDestructive`.
+- 2026-07-29: Added real writer-envelope coverage through the complete IndexedDB → AppData migration chain, plus regressions for no resurrection, partial library imports, and healthy custom-library force reload.
+- 2026-07-29: Limited poison-time library recovery to the exact wrapped legacy index IDs; a poisoned active pointer can consult its old ID only when v2 has no usable current index.
+- 2026-07-29: Verified the supplied poisoned backup in a real file:// browser: merge is degraded to partial and preserves a seeded record/current library; replace is destructive and rejects commit without `confirmDestructive:true`.
+- 2026-07-29: Rebuilt all 14 bundles and passed focused data/import/library tests plus the file:// export/import E2E. Full JS sweep passed 50/51; only the unchanged standalone Unified Reading notification-order assertion failed.
+- 2026-07-29: Completed final bundle drift and `git diff --check` verification. No hotfix commit or push was made.
+- 2026-07-29: User changed the migration priority: surviving v1 data must be reconciled automatically on every startup and must overwrite known-poisoned v2 values. Started a new persistent-reconciliation phase.
+- 2026-07-29: Three independent read-only audits located the exact marker/fresh/poison gates, proposed the persistent union precedence, and identified the existing no-resurrection tests that must be reversed.
+- 2026-07-29: Main-agent source review confirmed the existing three-layer practice helper can atomically replace partial records and the library checksum comparisons can provide repeated-startup idempotency.
+- 2026-07-29: Implemented the first persistent-reconciliation source pass: legacy reads are no longer gated by markers/healthy v2, libraries are unioned, missing documents are seeded, partial practice records are atomically repaired, and the stable marker is diagnostic only.
+- 2026-07-29: AppData syntax check passed; the old migration regression now fails only at its expected retired `poison-repair` mode assertion.
+- 2026-07-29: Reversed the obsolete no-resurrection tests and added a shared-backing reboot harness with mutation counters and entity revisions.
+- 2026-07-29: Persistent reconciliation regression passes, including marker bypass, v1/v2 union, poisoned wrapper precedence, active-library recovery, partial-record repair, and second-boot zero-write idempotency.
+- 2026-07-29: DataKernel, AppData, LibraryManager, and ExternalBackupService focused suites all pass after the reconciliation change.
+- 2026-07-29: Extended the real browser/IndexedDB migration test across three realms: marker bypass and newly added v1 data on boot two, followed by zero business revision/checksum churn on boot three. The test passes.
+- 2026-07-29: Added operation-ID based recovery for collapsed legacy array/object documents and covered a collapsed `vocab.words` envelope.
+- 2026-07-29: Added an explicit persistent-union regression: deleting a v1-backed practice record from v2 causes exactly one atomic restoration on the next startup.
+- 2026-07-29: Persistent-reconciliation implementation and regressions are complete; focused VM and real IndexedDB migration tests pass.
+- 2026-07-29: Rebuilt all 14 generated bundles after the persistent-reconciliation source change; only the eight known non-blocking symbol conflicts remain.
+- 2026-07-29: Focused DataKernel, persistent migration, AppData, LibraryManager, and ExternalBackupService suites all pass on the rebuilt source.
+- 2026-07-29: file:// export/import E2E passes after persistent reconciliation, including v1 merge, visible history, and confirmed v2 replace.
+- 2026-07-29: Full JS sweep passed 50/51. All migration/data/import/library tests pass; the same unchanged Unified Reading notification-order assertion remains the sole failure.
+- 2026-07-29: Extended persistent reconciliation from missing/poisoned documents to catalog-aware unions for all valid v1 `patch` and `merge-by-id` documents; focused migration, real IndexedDB, and AppData suites pass.
+- 2026-07-29: Rebuilt bundles again after the document-union extension. Final full JS sweep remains 50/51 with only the unchanged Unified Reading notification-order failure.
+- 2026-07-29: Final file:// export/import E2E passes on the persistent-union build.
+- 2026-07-29: Final bundle drift check confirms all 14 outputs are current; `git diff --check` passes. Persistent v1 reconciliation is complete and remains uncommitted/unpushed.
+- 2026-07-30: Started the review/v2-insights/endless-mode change, read the planning skill and supplied automated-review report, and recovered the prior persistent-reconciliation context.
+- 2026-07-30: Three read-only audits confirmed all six review regressions, the light-summary/detail mismatch behind empty wrong-answer classification, and the deterministic null-state crash that prevents endless mode startup.
+- 2026-07-30: Recorded the current five-phase implementation plan and retained all existing uncommitted migration/bundle work.
+- 2026-07-30: Read the project README and the exact catalog/summary/radar/import/endless/open-exam source regions that define the affected contracts.
+- 2026-07-30: Located focused regression surfaces for achievement projection, Browse hydration, import sequencing, and the static method contract.
+- 2026-07-30: Implemented the first source pass for all six review findings, lightweight question-type error projections, suite-aware filtering/radar input, and the unified endless-mode exam-open lifecycle.
+- 2026-07-30: All changed JavaScript and Python files pass syntax checks; `git diff --check` is clean apart from expected CRLF conversion warnings.
+- 2026-07-30: Added executable regressions for transient recovery non-resurrection, durable achievements, Browse hydration readiness, light/suite error-count insights, suite type filtering, and the first/next endless exam lifecycle.
+- 2026-07-30: AppData v2 (47 tests), persistent migration, Browse preferences (5/5), practice custom card (9/9), and Unified Reading/endless lifecycle focused suites all pass.
+- 2026-07-30: Corrected the remaining Browse first-render gap by awaiting preference hydration alongside the active exam-index load in `initializeBrowseView()`.
+- 2026-07-30: The first unified static-suite run exceeded the 120-second shell bound with no emitted failure; recorded the timeout and deferred the longer rerun until after the required final bundle rebuild.
+- 2026-07-30: Rebuilt all 14 bundles; bundle drift check and all focused tests pass on generated outputs.
+- 2026-07-30: The unified static suite exceeded a 300-second outer timeout; source inspection confirmed several intentional 240s/360s/480s child gates, so the final attempt will use an outer bound that covers the runner's own declared timeouts.
+- 2026-07-31: Full static report completed. All changed-feature gates pass; remaining failures are the pre-existing v2 legacy-key allowlist mismatch, noisy suite-test JSON parsing, four NB replay content cases, and the 480-second Reading quick audit timeout.
+- 2026-07-31: Added bounded `practice.listInsights({limit:10})` compatibility reads so historical summaries also feed the wrong-answer radar without scanning annotations or all details; focused AppData and light-render tests pass.
+- 2026-07-31: First suite E2E attempt stopped before the reviewed preference assertion because an overview re-render detached the button during an explicit scroll; replaced that redundant scroll with Playwright's locator auto-wait path.
+- 2026-07-31: Second suite E2E attempt reached preference setup and exposed one stale Playwright positional-argument call; converted it to the current keyword-only `arg=` API.
+- 2026-07-31: Third suite E2E attempt passed lazy loading and preference setup, then hit the existing first-passage readiness timeout caused by unavailable local exercise assets; stopped expanding that unrelated browser fixture path.
+- 2026-07-31: Final focused verification passes for suite preferences, DataKernel, AppData, external backups, light render contracts, migration, Browse preferences, practice insights, and executable endless lifecycle.
+- 2026-07-31: Final syntax checks, 14-bundle drift check, exam-app method contract, and `git diff --check` all pass. Current change is complete and remains uncommitted/unpushed.
+- 2026-07-31: Started a read-only residual-gate triage at the user's request; recovered the prior plan/worktree state and separated the four static failures plus suite E2E readiness into independent audits.
+- 2026-07-31: Completed three independent audits and main-agent line verification. Classified the v2 guard, suite JSON parser, and four NB replay failures as stale test infrastructure; classified Reading quick and suite placeholder propagation as unresolved end-to-end coverage blockers.
+- 2026-07-31: Confirmed the missing listening manifest is optional noise rather than the suite button root cause. No production or test implementation was changed during this diagnostic pass.
+- 2026-07-31: User authorized implementation. Recovered the persistent plan and dirty worktree, opened a five-phase residual-gate repair, and retained the rule that runtime message safety must not be weakened to satisfy stale fixtures.
+- 2026-07-31: Three clean-context read-only agents completed exact reconnaissance for gate/fixture, Reading, and suite repairs. Chosen design uses the real Reading host/ACK protocol, one-process dataset export, narrow suite flag propagation, and trusted NB messages.
+- 2026-07-31: Main-agent inspection verified the exact semantic allowlist markers and current NB/date-sensitive fixture code before editing.
+- 2026-07-31: Repaired the v2 semantic guard and suite last-line JSON collection. The guard now reports zero source/test/bundle/html errors and suiteModeRegression exits successfully.
+- 2026-07-31: Updated NB replay to use trusted INIT/token/source and clone-scoped selectors; all 4/4 generated-resource cases pass without weakening runtime security.
+- 2026-07-31: Replaced the fixed migration timestamp with fresh/stale relative rows; the persistent migration regression passes and explicitly validates 30-day TTL pruning.
+- 2026-07-31: Reading exporter now returns all 232 datasets from one Node/VM process; syntax/count validation passes.
+- 2026-07-31: Reading quick now exercises the real iframe INIT/SESSION_READY/PRACTICE_COMPLETE/ACK chain. Static coverage passed 232/232 and UI coverage passed 12/12 in 22.3 seconds instead of timing out at 480 seconds.
+- 2026-07-31: Added narrow `suite_test=1` propagation, URL encoding regression coverage, and immediate E2E blocked-state diagnostics; the source-level suite regression passes.
+- 2026-07-31: Rebuilt all 14 bundles; bundle drift check passes with the same eight known non-blocking symbol conflicts.
+- 2026-07-31: Suite E2E now launches the unlocked placeholder, completes P1, and switches to P2. It then times out after P2 submit while waiting for P3, exposing a deeper transition defect that was previously masked by the blocked placeholder.
+- 2026-07-31: Added suite sequence exam definitions to every subsequent `openExam()` call and bound placeholder simulation navigation to its current session ID; these preserve the locked sequence and provide the strict fallback routing proof.
+- 2026-07-31: Hardened suite E2E GPL overlay dismissal against asynchronous modal appearance after an initial app-ready check.
+- 2026-07-31: Stabilized suite placeholder URL fallbacks for both stationary and simulation flows; late INIT/REVIEW_CONTEXT messages no longer erase manual navigation or final-submit state.
+- 2026-07-31: Final suite E2E passes automatic three-passage aggregation plus stationary manual review/finalization (180.5s). Reading quick 232/232 + 12/12, NB 4/4, migration, suite-mode, and unified readonly-submit regressions also pass.
+- 2026-07-31: Full unified static suite passes after adding the missing `listInsights()` method to the practice-persistence test harness; all gates are green, with only documented optional/skipped checks and eight non-blocking historical bundle symbol warnings.

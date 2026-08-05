@@ -32,6 +32,7 @@ function createAppHarness(options = {}) {
     const savedCompletions = [];
     const statusCalls = [];
     const cleanupCalls = [];
+    const completionClaims = new Map();
     const examIndex = [{
         id: 'reading-p1',
         title: 'Passage 1',
@@ -41,17 +42,6 @@ function createAppHarness(options = {}) {
     }];
     let releaseSync = null;
 
-    const storage = {
-        async get(key, fallback = null) {
-            if (key === 'exam_index' || key === 'active_exam_index_key') {
-                return key === 'exam_index' ? examIndex : 'exam_index';
-            }
-            return fallback;
-        },
-        async set() {
-            return true;
-        }
-    };
     const quietConsole = {
         log() {},
         warn() {},
@@ -61,7 +51,6 @@ function createAppHarness(options = {}) {
     };
     const sandboxWindow = {
         console: quietConsole,
-        storage,
         location: { href: 'http://localhost/' },
         document: { addEventListener() {}, removeEventListener() {} },
         addEventListener() {},
@@ -76,22 +65,42 @@ function createAppHarness(options = {}) {
             }
             : async (syncOptions = {}) => {
                 syncCalls.push(syncOptions);
+                if (syncCalls.length > 1) {
+                    return true;
+                }
                 await new Promise((resolve) => {
                     releaseSync = resolve;
                 });
                 return true;
             },
-        PracticeRecordAPI: {
-            async saveCompletion(payload, context) {
+        resolveActiveLibraryIndex: async () => examIndex.map((entry) => ({ ...entry })),
+        AppData: {
+            ready: Promise.resolve(),
+            practice: {
+            async completeAttempt(command) {
                 if (options.saveRejects) {
                     throw new Error('save failed');
                 }
-                savedCompletions.push({ payload, context });
-                return {
+                if (completionClaims.has(command.operationId)) {
+                    return completionClaims.get(command.operationId);
+                }
+                const record = {
+                    ...command.record,
                     id: 'saved-1',
-                    examId: context.examId,
-                    sessionId: context.sessionId
+                    examId: command.record.examId,
+                    sessionId: command.record.sessionId
                 };
+                savedCompletions.push({ command: JSON.parse(JSON.stringify(command)), record });
+                const receipt = { committed: true, revision: 1, operationId: command.operationId || 'test-operation', record };
+                completionClaims.set(command.operationId, receipt);
+                return receipt;
+            },
+            async get(recordId) {
+                return savedCompletions.find((entry) => entry.record.id === recordId)?.record || null;
+            },
+            async list() {
+                return savedCompletions.map((entry) => ({ ...entry.record }));
+            }
             }
         },
         AchievementManager: {
@@ -104,7 +113,6 @@ function createAppHarness(options = {}) {
     const sandbox = {
         window: sandboxWindow,
         document: sandboxWindow.document,
-        storage,
         console: quietConsole,
         setTimeout,
         clearTimeout,
@@ -151,14 +159,16 @@ function createAppHarness(options = {}) {
 async function testCompletionWaitsForSyncAndDedupes() {
     const harness = createAppHarness();
     const completion = harness.app.handlePracticeComplete('reading-p1', {
+        sessionId: 'session-p1',
         scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
         duration: 120,
+        endTime: '2026-07-28T00:00:00.000Z',
         answers: { q1: 'A' }
     });
 
     await waitForCondition(
-        () => harness.savedCompletions.length === 1,
-        '第一次完成应保存一次'
+        () => harness.savedCompletions.length === 1 && harness.syncCalls.length === 1,
+        '第一次完成应保存并进入同步阶段'
     );
     assert.strictEqual(harness.savedCompletions.length, 1, '第一次完成应保存一次');
     assert.strictEqual(harness.statusCalls.length, 0, 'syncPracticeRecords 未完成前不应先标记完成');
@@ -173,7 +183,8 @@ async function testCompletionWaitsForSyncAndDedupes() {
     await harness.app.handlePracticeComplete('reading-p1', {
         sessionId: 'session-p1',
         scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
-        duration: 120
+        duration: 120,
+        endTime: '2026-07-28T00:00:00.000Z'
     });
     assert.strictEqual(harness.savedCompletions.length, 1, '相同 sessionId 的重复完成事件不应重复保存');
 }

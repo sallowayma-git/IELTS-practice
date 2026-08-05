@@ -50,17 +50,6 @@
         'WORKOUT_COMPLETE'
     ]);
 
-    const STORAGE_KEYS = Object.freeze({
-        practiceRecords: 'practice_records',
-        userStats: 'user_stats',
-        activeSessions: 'active_sessions',
-        tempPracticeRecords: 'temp_practice_records'
-    });
-    let internalRepositories = null;
-    // 由 data/index.js 在仓库注入时通过 __installInternalRepositories 第二参数传入，
-    // 使仓库未注入前的 fallback 路径也能拿到 storage internal token，避免被新保护层拒绝。
-    let internalStorageAccess = null;
-
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
     }
@@ -88,6 +77,47 @@
             clone[key] = clonePlainObject(value[key]);
         });
         return clone;
+    }
+
+    /**
+     * Resolve the complete reading-annotation snapshot from canonical and legacy
+     * locations. Explicit root values win so review edits can replace an older
+     * realData mirror; the returned object is deep-cloned and safe to persist.
+     */
+    function resolveAnnotationState(recordData = {}, fallbackSources = [], options = {}) {
+        const root = isPlainObject(recordData) ? recordData : {};
+        const rawData = isPlainObject(root.rawData) ? root.rawData : {};
+        const realData = isPlainObject(root.realData) ? root.realData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        const sources = [root, rawData, realData, rawRealData]
+            .concat(Array.isArray(fallbackSources) ? fallbackSources : [fallbackSources])
+            .filter((source) => isPlainObject(source));
+
+        const pickArray = (field) => {
+            const source = sources.find((candidate) => (
+                Array.isArray(candidate[field])
+                && (!options.preferNonEmptyArrays || candidate[field].length)
+            )) || sources.find((candidate) => Array.isArray(candidate[field]));
+            return source ? clonePlainObject(source[field]) : [];
+        };
+        const pickString = (field) => {
+            const source = sources.find((candidate) => typeof candidate[field] === 'string');
+            return source ? source[field] : '';
+        };
+        const scrollSource = sources.find((candidate) => (
+            candidate.scrollY !== undefined
+            && candidate.scrollY !== null
+            && Number.isFinite(Number(candidate.scrollY))
+        ));
+
+        return {
+            highlights: pickArray('highlights'),
+            markedQuestions: pickArray('markedQuestions'),
+            noteText: pickString('noteText'),
+            notes: pickArray('notes'),
+            noteOutlines: pickArray('noteOutlines'),
+            scrollY: scrollSource ? Number(scrollSource.scrollY) : 0
+        };
     }
 
     function ensureNumber(value, fallback = 0) {
@@ -672,12 +702,15 @@
             : Number(scoreInfo.percentage);
         scoreInfo.answerKeyComplete = hasCompleteCanonicalCorrectAnswers;
 
+        const annotations = resolveAnnotationState(entry);
+
         return {
             answers,
             correctAnswers: correctAnswerMap,
             correctAnswerMap,
             answerComparison,
-            scoreInfo
+            scoreInfo,
+            ...annotations
         };
     }
 
@@ -895,12 +928,13 @@
                 }
                 return map;
             }, {});
-            const highlights = Array.isArray(entry.highlights)
-                ? entry.highlights.slice()
-                : (Array.isArray(entry.rawData && entry.rawData.highlights) ? entry.rawData.highlights.slice() : []);
-            const scrollY = Number.isFinite(Number(entry.scrollY))
-                ? Number(entry.scrollY)
-                : (Number.isFinite(Number(entry.rawData && entry.rawData.scrollY)) ? Number(entry.rawData.scrollY) : 0);
+            // 旧/导入的套题条目可能只在 entry.metadata.markedQuestions 保留标记题，
+            // 与顶层 standardizeRecord（见下方 resolveAnnotationState(recordData, [recordData.metadata])）
+            // 保持一致，将 entry.metadata 作为兜底来源传入，避免根级 markedQuestions: [] 被回放
+            // 逻辑视作权威而丢弃已保存的标记题。
+            const metadata = entry.metadata ? Object.assign({}, entry.metadata) : {};
+            const annotations = resolveAnnotationState(entry, [entry.metadata], { preferNonEmptyArrays: true });
+            metadata.markedQuestions = clonePlainObject(annotations.markedQuestions);
             return {
                 examId: entry.examId || null,
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
@@ -910,9 +944,8 @@
                 answers: answerMap,
                 correctAnswerMap: entryCorrectMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
-                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
-                highlights,
-                scrollY,
+                metadata,
+                ...annotations,
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
             };
         }).filter(Boolean);
@@ -1076,6 +1109,8 @@
             ? clonePlainObject(comparisonSource)
             : null;
         const realDataCorrectAnswers = clonePlainObject(normalizedCorrectMap || {});
+        const annotations = resolveAnnotationState(recordData, [recordData.metadata]);
+        metadata.markedQuestions = clonePlainObject(annotations.markedQuestions);
         const generateRecordId = typeof options.generateRecordId === 'function'
             ? options.generateRecordId
             : defaultGenerateRecordId;
@@ -1104,13 +1139,13 @@
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
             suiteSessionId: recordData.suiteSessionId || (metadata && metadata.suiteSessionId) || null,
             suiteEntries: normalizedSuiteEntries,
+            ...annotations,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
                 })
                 : (detailSource ? { details: detailSource } : null),
-            realData: recordData.realData
-                ? Object.assign({}, recordData.realData, {
+            realData: Object.assign({}, recordData.realData || {}, {
                     answers: (recordData.realData && recordData.realData.answers) || answerMap,
                     correctAnswers: realDataCorrectAnswers,
                     correctAnswerMap: clonePlainObject(normalizedCorrectMap || {}),
@@ -1119,9 +1154,9 @@
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
-                })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                        : (normalizedComparison || null),
+                    ...clonePlainObject(annotations)
+                }),
             answerComparison: normalizedComparison,
             version: options.currentVersion || recordData.version || '0.6.2-fix',
             createdAt: firstDateCandidate(recordData.createdAt, recordData.startTime, recordData.start_time, recordDate) || now,
@@ -1336,26 +1371,7 @@
             || (examEntry && examEntry.title)
             || resolvedExamId
             || '未命名练习';
-        const resolvedHighlights = Array.isArray(rawPayload.highlights)
-            ? rawPayload.highlights.slice()
-            : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights)
-                ? rawPayload.realData.highlights.slice()
-                : (Array.isArray(sessionContext.highlights) ? sessionContext.highlights.slice() : []));
-        const resolvedMarkedQuestions = Array.isArray(rawPayload.markedQuestions)
-            ? rawPayload.markedQuestions.slice()
-            : (Array.isArray(rawPayload.realData && rawPayload.realData.markedQuestions)
-                ? rawPayload.realData.markedQuestions.slice()
-                : (Array.isArray(sessionContext.markedQuestions) ? sessionContext.markedQuestions.slice() : []));
-        const resolvedScrollY = Number.isFinite(Number(rawPayload.scrollY))
-            ? Number(rawPayload.scrollY)
-            : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY))
-                ? Number(rawPayload.realData.scrollY)
-                : (Number.isFinite(Number(sessionContext.scrollY)) ? Number(sessionContext.scrollY) : 0));
-        const resolvedNoteText = typeof rawPayload.noteText === 'string'
-            ? rawPayload.noteText
-            : (typeof rawPayload.realData?.noteText === 'string'
-                ? rawPayload.realData.noteText
-                : (typeof sessionContext.noteText === 'string' ? sessionContext.noteText : ''));
+        const annotations = resolveAnnotationState(rawPayload, [sessionContext]);
         const resolvedQuestionTypeMap = isPlainObject(rawPayload.questionTypeMap)
             ? clonePlainObject(rawPayload.questionTypeMap)
             : (isPlainObject(rawPayload.realData && rawPayload.realData.questionTypeMap)
@@ -1389,16 +1405,13 @@
                 examTitle: title,
                 category,
                 frequency,
-                markedQuestions: resolvedMarkedQuestions.slice()
+                markedQuestions: clonePlainObject(annotations.markedQuestions)
             }),
             frequency,
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
-            highlights: resolvedHighlights.slice(),
-            scrollY: resolvedScrollY,
-            markedQuestions: resolvedMarkedQuestions.slice(),
-            noteText: resolvedNoteText,
+            ...annotations,
             questionTypeMap: resolvedQuestionTypeMap,
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
@@ -1413,10 +1426,7 @@
                 correctAnswers: correctAnswerMap,
                 answerComparison,
                 correctAnswerMap,
-                highlights: resolvedHighlights.slice(),
-                scrollY: resolvedScrollY,
-                markedQuestions: resolvedMarkedQuestions.slice(),
-                noteText: resolvedNoteText,
+                ...clonePlainObject(annotations),
                 questionTypeMap: resolvedQuestionTypeMap,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
@@ -1432,367 +1442,6 @@
                 sessionId: rawPayload.sessionId || sessionContext.sessionId || null
             })
         }, options);
-    }
-
-    function getRepositories() {
-        return internalRepositories;
-    }
-
-    function getStorageManager(storageManager) {
-        return storageManager || global.persistentStore || global.storage || null;
-    }
-
-    function getStorageInternalOptions(storage) {
-        // 仓库注入后用 token 化选项，确保 fallback 读写能通过 storage 的 internal-only 保护。
-        if (internalStorageAccess && typeof internalStorageAccess.createInternalOptions === 'function') {
-            try {
-                return internalStorageAccess.createInternalOptions({});
-            } catch (_) {
-                // fallthrough 到旧行为
-            }
-        }
-        return { skipPracticeCoreRedirect: true };
-    }
-
-    function syncPracticeRecordState(records) {
-        const syncAppState = (nextRecords) => {
-            try {
-                if (global.app && global.app.state && global.app.state.practice) {
-                    global.app.state.practice.records = Array.isArray(nextRecords) ? nextRecords.slice() : [];
-                }
-            } catch (_) {}
-        };
-
-        if (typeof global.setPracticeRecordsState === 'function') {
-            try {
-                const finalRecords = global.setPracticeRecordsState(records);
-                syncAppState(finalRecords);
-                return;
-            } catch (error) {
-                console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
-            }
-        }
-        syncAppState(records);
-    }
-
-    async function readPracticeRecords(storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.practice && typeof repos.practice.list === 'function') {
-            return await repos.practice.list();
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.readPersistentValue === 'function') {
-            return await storage.readPersistentValue(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
-        }
-        if (storage && typeof storage.get === 'function') {
-            return await storage.get(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
-        }
-        return [];
-    }
-
-    /**
-     * 轻量投影：读取原始数组（clone:false 跳过 structuredClone），映射为精简 summary 对象。
-     * 排除 answers/answerDetails/correctAnswerMap/suiteEntries[]/realData/answerComparison 等重字段，
-     * 供练习历史列表、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用，
-     * 避免大数据量下反序列化+克隆全部记录导致的前端渲染卡顿和内存溢出。
-     */
-    function projectRecordSummary(record) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const scoreInfo = record.scoreInfo || {};
-        const metadata = record.metadata || {};
-        // 轻量 suiteEntries 投影：仅保留签名字段，不含 answers/correctAnswerMap/realData
-        const rawSuiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
-        const suiteEntries = rawSuiteEntries.map(function (entry) {
-            if (!entry || typeof entry !== 'object') { return null; }
-            const entryMeta = entry.metadata || {};
-            const entryScore = entry.scoreInfo || {};
-            return {
-                id: entry.id || '',
-                examId: entry.examId || entryMeta.examId || '',
-                title: entry.title || entryMeta.examTitle || '',
-                percentage: Number(entry.percentage != null ? entry.percentage : entryScore.percentage) || 0,
-                duration: Number(entry.duration != null ? entry.duration : (entry.rawData && entry.rawData.duration)) || 0
-            };
-        }).filter(Boolean);
-        return {
-            id: record.id || record.sessionId || '',
-            sessionId: record.sessionId || null,
-            examId: record.examId || metadata.examId || null,
-            title: record.title || metadata.examTitle || '',
-            type: record.type || metadata.type || 'reading',
-            practiceType: record.practiceType || metadata.practiceType || metadata.examType || null,
-            url: record.url || metadata.url || null,
-            startTime: record.startTime || null,
-            endTime: record.endTime || null,
-            date: record.date || null,
-            duration: Number(record.duration ?? scoreInfo.duration ?? scoreInfo.timeSpent) || 0,
-            percentage: Number(record.percentage ?? scoreInfo.percentage) || 0,
-            accuracy: Number(record.accuracy ?? scoreInfo.accuracy) || 0,
-            score: Number(record.score ?? scoreInfo.score) || 0,
-            totalQuestions: Number(record.totalQuestions ?? scoreInfo.total) || 0,
-            correctAnswers: Number(record.correctAnswers ?? scoreInfo.correct) || 0,
-            status: record.status || 'completed',
-            suiteMode: Boolean(record.suiteMode),
-            suiteEntryCount: rawSuiteEntries.length,
-            suiteEntries: suiteEntries,
-            suiteSessionId: record.suiteSessionId || (metadata.suiteSessionId) || null,
-            // questionTypePerformance 是小对象（每题型 {total,correct}），不是重字段，保留供 recalculateStats 使用
-            questionTypePerformance: record.questionTypePerformance || null,
-            // 轻量 scoreInfo 子集：供 accuracy/duration 等 fallback 读取
-            scoreInfo: {
-                accuracy: scoreInfo.accuracy != null ? scoreInfo.accuracy : null,
-                duration: scoreInfo.duration != null ? scoreInfo.duration : null,
-                timeSpent: scoreInfo.timeSpent != null ? scoreInfo.timeSpent : null,
-                percentage: scoreInfo.percentage != null ? scoreInfo.percentage : null,
-                score: scoreInfo.score != null ? scoreInfo.score : null,
-                total: scoreInfo.total != null ? scoreInfo.total : null,
-                correct: scoreInfo.correct != null ? scoreInfo.correct : null
-            },
-            metadata: {
-                category: metadata.category || record.category || null,
-                examTitle: metadata.examTitle || record.title || '',
-                frequency: metadata.frequency || record.frequency || 'unknown',
-                type: metadata.type || record.type || null,
-                examType: metadata.examType || null,
-                practiceType: metadata.practiceType || null,
-                examId: metadata.examId || null,
-                title: metadata.title || null,
-                url: metadata.url || null
-            },
-            updatedAt: record.updatedAt || null,
-            createdAt: record.createdAt || null
-        };
-    }
-
-    async function readPracticeRecordSummaries(storageManager) {
-        const repos = getRepositories();
-        let records;
-        if (repos && repos.practice && typeof repos.practice.read === 'function') {
-            // clone:false 跳过 structuredClone，在投影后原始重字段不会进入返回值
-            records = await repos.practice.read({ clone: false });
-        } else {
-            records = await readPracticeRecords(storageManager);
-        }
-        if (!Array.isArray(records)) {
-            return [];
-        }
-        return records
-            .map(projectRecordSummary)
-            .filter(Boolean);
-    }
-
-    /**
-     * 轻量计数：使用 repository.count()（clone:false + .length），不构造 summary 数组。
-     */
-    async function countPracticeRecords(storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.practice && typeof repos.practice.count === 'function') {
-            return await repos.practice.count();
-        }
-        const records = await readPracticeRecords(storageManager);
-        return Array.isArray(records) ? records.length : 0;
-    }
-
-    async function writePracticeRecords(records, storageManager) {
-        const finalRecords = Array.isArray(records) ? records : [];
-        const repos = getRepositories();
-        if (repos && repos.practice && typeof repos.practice.overwrite === 'function') {
-            await repos.practice.overwrite(finalRecords);
-            syncPracticeRecordState(finalRecords);
-            return true;
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.writePersistentValue === 'function') {
-            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords, getStorageInternalOptions(storage));
-            syncPracticeRecordState(finalRecords);
-            return result;
-        }
-        return false;
-    }
-
-    async function readMeta(key, defaultValue, storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.meta && typeof repos.meta.get === 'function') {
-            return await repos.meta.get(key, defaultValue);
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.readPersistentValue === 'function') {
-            return await storage.readPersistentValue(key, defaultValue, getStorageInternalOptions(storage));
-        }
-        if (storage && typeof storage.get === 'function') {
-            return await storage.get(key, defaultValue, getStorageInternalOptions(storage));
-        }
-        return defaultValue;
-    }
-
-    async function writeMeta(key, value, storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.meta && typeof repos.meta.set === 'function') {
-            await repos.meta.set(key, value);
-            return true;
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.writePersistentValue === 'function') {
-            return await storage.writePersistentValue(key, value, getStorageInternalOptions(storage));
-        }
-        return false;
-    }
-
-    async function removeMeta(key, storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.meta && typeof repos.meta.remove === 'function') {
-            await repos.meta.remove(key);
-            return true;
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.removePersistentValue === 'function') {
-            return await storage.removePersistentValue(key, getStorageInternalOptions(storage));
-        }
-        return false;
-    }
-
-    function extractSessionId(record) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const rawId = record.sessionId
-            || (record.realData && record.realData.sessionId)
-            || (record.metadata && record.metadata.sessionId)
-            || null;
-        if (!rawId) return null;
-        return String(rawId).trim() || null;
-    }
-
-    function dedupePracticeRecords(records) {
-        // 仅按 record.id 去重，不按 sessionId 全局去重。
-        // sessionId 在套题场景中是容器标识，不是 attempt 唯一键；
-        // 多条不同 id 的记录可能共享同一 sessionId（如同一套题的不同 passage），
-        // 按 sessionId 去重会永久丢弃合法记录。
-        const seenIds = new Set();
-        const deduped = [];
-
-        (Array.isArray(records) ? records : []).forEach((record) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            const recordId = record.id != null ? String(record.id) : null;
-
-            if (recordId && seenIds.has(recordId)) {
-                return;
-            }
-
-            if (recordId) seenIds.add(recordId);
-            deduped.push(record);
-        });
-
-        return deduped;
-    }
-
-    function getRecordTimestamp(record) {
-        if (!record || typeof record !== 'object') {
-            return 0;
-        }
-        const candidates = [
-            record.updatedAt,
-            record.createdAt,
-            record.endTime,
-            record.startTime,
-            record.date,
-            record.timestamp
-        ];
-        for (let index = 0; index < candidates.length; index += 1) {
-            const value = candidates[index];
-            if (!value) {
-                continue;
-            }
-            const time = new Date(value).getTime();
-            if (Number.isFinite(time)) {
-                return time;
-            }
-        }
-        return 0;
-    }
-
-    function handlesStorageKey(key) {
-        return key === STORAGE_KEYS.practiceRecords
-            || key === STORAGE_KEYS.userStats
-            || key === STORAGE_KEYS.activeSessions
-            || key === STORAGE_KEYS.tempPracticeRecords;
-    }
-
-    async function replacePracticeRecords(records, options = {}) {
-        const canonical = dedupePracticeRecords(
-            (Array.isArray(records) ? records : []).map((record) => standardizeRecord(record, options))
-        );
-        canonical.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-        if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && canonical.length > options.maxRecords) {
-            canonical.splice(options.maxRecords);
-        }
-        return await writePracticeRecords(canonical, options.storageManager);
-    }
-
-    async function savePracticeRecord(record, options = {}) {
-        const standardizedRecord = standardizeRecord(record, options);
-        let records = await readPracticeRecords(options.storageManager);
-        records = Array.isArray(records) ? records.slice() : [];
-
-        const existingIndex = records.findIndex((entry) => entry && String(entry.id) === String(standardizedRecord.id));
-        if (existingIndex >= 0) {
-            records[existingIndex] = standardizedRecord;
-        } else {
-            records.unshift(standardizedRecord);
-        }
-
-        // 仅当同一 sessionId 且同一 examId 时才移除旧记录（同一篇练习的重复提交覆盖）。
-        // 不同 examId 但共享 sessionId 的记录（如套题不同 passage）必须保留。
-        const standardizedSessionId = extractSessionId(standardizedRecord);
-        const standardizedExamId = standardizedRecord.examId || null;
-        if (standardizedSessionId) {
-            records = records.filter((entry, index) => {
-                if (index === 0) {
-                    return true;
-                }
-                const sessionId = extractSessionId(entry);
-                const examId = entry && entry.examId || null;
-                const sameSession = sessionId && sessionId === standardizedSessionId;
-                const sameExam = standardizedExamId && examId && examId === standardizedExamId;
-                return !(sameSession && sameExam && String(entry.id) !== String(standardizedRecord.id));
-            });
-        }
-
-        records = dedupePracticeRecords(records);
-        records.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-        if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && records.length > options.maxRecords) {
-            records.splice(options.maxRecords);
-        }
-        await writePracticeRecords(records, options.storageManager);
-        return standardizedRecord;
-    }
-
-    async function routeStorageSet(storageManager, key, value, options = {}) {
-        if (key === STORAGE_KEYS.practiceRecords) {
-            return await replacePracticeRecords(value, {
-                currentVersion: options.currentVersion || '0.6.2-fix',
-                maxRecords: options.maxRecords || 1000,
-                storageManager
-            });
-        }
-        if (key === STORAGE_KEYS.userStats || key === STORAGE_KEYS.activeSessions || key === STORAGE_KEYS.tempPracticeRecords) {
-            return await writeMeta(key, value, storageManager);
-        }
-        return null;
-    }
-
-    async function routeStorageRemove(storageManager, key) {
-        if (key === STORAGE_KEYS.practiceRecords) {
-            return await writePracticeRecords([], storageManager);
-        }
-        if (key === STORAGE_KEYS.userStats || key === STORAGE_KEYS.activeSessions || key === STORAGE_KEYS.tempPracticeRecords) {
-            return await removeMeta(key, storageManager);
-        }
-        return null;
     }
 
     const contracts = Object.freeze({
@@ -1823,6 +1472,7 @@
         buildMetadata,
         standardizeRecord,
         standardizeSuiteEntries,
+        resolveAnnotationState,
         clonePlainObject
     });
 
@@ -1839,71 +1489,12 @@
         fromCompletion
     });
 
-    const internalStore = Object.freeze({
-        STORAGE_KEYS,
-        handlesStorageKey,
-        listPracticeRecords: readPracticeRecords,
-        listPracticeRecordSummaries: readPracticeRecordSummaries,
-        countPracticeRecords,
-        replacePracticeRecords,
-        savePracticeRecord,
-        routeStorageSet,
-        routeStorageRemove,
-        readMeta,
-        writeMeta,
-        removeMeta,
-        syncPracticeRecordState
-    });
-
-    const publicStore = Object.freeze({
-        STORAGE_KEYS,
-        handlesStorageKey,
-        listPracticeRecords: readPracticeRecords,
-        listPracticeRecordSummaries: readPracticeRecordSummaries,
-        countPracticeRecords,
-        readMeta,
-        syncPracticeRecordState
-    });
-
-    const practiceCore = {
+    const practiceCore = Object.freeze({
         __stable: true,
         version: '0.6.2-fix',
         contracts,
         protocol,
-        ingestor,
-        store: publicStore
-    };
-    Object.defineProperty(practiceCore, '__installRecordAPI', {
-        value: function(install) {
-            if (typeof install !== 'function') {
-                throw new Error('PracticeCore.__installRecordAPI requires an installer function');
-            }
-            return install(internalStore);
-        },
-        enumerable: false,
-        configurable: true,
-        writable: false
-    });
-    Object.defineProperty(practiceCore, '__installInternalRepositories', {
-        value: function(repositories, installers) {
-            if (!repositories || typeof repositories !== 'object') {
-                throw new Error('PracticeCore.__installInternalRepositories requires repositories');
-            }
-            internalRepositories = repositories;
-            // 接收 storage internal token factory，供 fallback 路径使用。
-            if (installers && typeof installers.createInternalOptions === 'function') {
-                internalStorageAccess = { createInternalOptions: installers.createInternalOptions };
-            }
-            try {
-                delete practiceCore.__installInternalRepositories;
-            } catch (_) {
-                practiceCore.__installInternalRepositories = undefined;
-            }
-            return true;
-        },
-        enumerable: false,
-        configurable: true,
-        writable: false
+        ingestor
     });
     global.PracticeCore = practiceCore;
 })(typeof window !== 'undefined' ? window : globalThis);

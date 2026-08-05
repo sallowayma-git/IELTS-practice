@@ -165,7 +165,7 @@ assets/generated/listening-exams/listening-index.compat.js
 
 系统管理能力：
 
-- 清除缓存：清理部分运行缓存并刷新状态。
+- 清除全部本地数据：删除浏览器中的练习、题库、词汇、设置、应用内备份和本地文件夹绑定，刷新后回到首次启动并重新显示 GPL 协议；外部文件夹中的 JSON 备份不会删除。
 - 加载题库：导入阅读或听力题库目录。
 - 主题切换：切换当前界面的背景与视觉主题。
 - 题库配置切换：查看、切换或管理题库配置。
@@ -349,6 +349,7 @@ assets/generated/listening-exams/listening-index.compat.js
 
 ```bash
 python developer/tests/ci/run_static_suite.py
+python developer/tests/e2e/full_reset_flow.py
 python developer/tests/e2e/suite_practice_flow.py
 ```
 
@@ -534,4 +535,3 @@ ReadingPractice/
 代码许可证见 [LICENSE](LICENSE)。使用、修改和再分发代码时，应遵守许可证条款。
 
 题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有。本项目不授予这些内容的商业使用权或公开传播权。使用者应自行承担因复制、部署、传播或商业化使用相关内容产生的法律和平台风险。
-

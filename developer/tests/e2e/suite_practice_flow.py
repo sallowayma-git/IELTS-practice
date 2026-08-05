@@ -90,16 +90,15 @@ async def _ensure_app_ready(page: Page) -> None:
     log_step("页面加载完成，等待应用初始化...")
     
     try:
-        await page.wait_for_function(
-            "() => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function'",
-            timeout=60000,
-        )
+        await page.wait_for_function("() => !!window.AppData", timeout=60000)
+        await page.evaluate("async () => { await window.AppData.ready; }")
+        await page.wait_for_function("() => window.app?.isInitialized === true", timeout=60000)
         log_step("应用初始化完成", "SUCCESS")
     except PlaywrightTimeoutError:
         log_step("应用初始化超时", "ERROR")
         # 打印调试信息
         app_state = await page.evaluate(
-            "() => ({ hasApp: !!window.app, isInit: window.app?.isInitialized, hasStorage: !!window.storage })"
+            "() => ({ hasApp: !!window.app, isInit: window.app?.isInitialized, hasAppData: !!window.AppData })"
         )
         log_step(f"应用状态: {app_state}", "DEBUG")
         raise
@@ -111,7 +110,7 @@ async def _click_nav(page: Page, view: str) -> None:
     
     try:
         await _dismiss_overlays(page)
-        await page.locator(f"nav button[data-view='{view}']").click()
+        await page.locator(f"nav button[data-view='{view}']").evaluate("node => node.click()")
         await page.wait_for_selector(f"#{view}-view.active", timeout=15000)
         log_step(f"视图 {view} 已激活", "SUCCESS")
     except PlaywrightTimeoutError:
@@ -162,23 +161,13 @@ async def _preset_suite_preferences(
         auto_advance_after_submit = normalized_mode != "stationary"
     normalized_auto_advance = bool(auto_advance_after_submit)
     await page.evaluate(
-        """(payload) => {
-            try {
-                localStorage.setItem('suite_flow_mode', payload.mode);
-                localStorage.setItem('suite_frequency_scope', payload.scope);
-                localStorage.setItem('suite_auto_advance_after_submit', payload.autoAdvanceAfterSubmit ? 'true' : 'false');
-            } catch (_) {
-                // ignore storage failures
-            }
-            if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {
-                window.practiceConfig = {};
-            }
-            if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {
-                window.practiceConfig.suite = {};
-            }
-            window.practiceConfig.suite.flowMode = payload.mode;
-            window.practiceConfig.suite.frequencyScope = payload.scope;
-            window.practiceConfig.suite.autoAdvanceAfterSubmit = payload.autoAdvanceAfterSubmit;
+        """async (payload) => {
+            await window.SuitePreferenceUtils.ready();
+            window.SuitePreferenceUtils.persistSuitePreference({
+                flowMode: payload.mode,
+                frequencyScope: payload.scope,
+                autoAdvanceAfterSubmit: payload.autoAdvanceAfterSubmit
+            });
         }""",
         {
             "mode": normalized_mode,
@@ -186,46 +175,52 @@ async def _preset_suite_preferences(
             "autoAdvanceAfterSubmit": normalized_auto_advance,
         }
     )
+    await page.wait_for_function(
+        """async (expected) => {
+            const suite = await window.AppData.preferences.getSuite();
+            return suite?.flowMode === expected.mode
+                && suite?.frequencyScope === expected.scope
+                && suite?.autoAdvanceAfterSubmit === expected.autoAdvanceAfterSubmit;
+        }""",
+        arg={"mode": normalized_mode, "scope": normalized_scope, "autoAdvanceAfterSubmit": normalized_auto_advance},
+        timeout=10000,
+    )
 
 
 async def _dismiss_overlays(page: Page) -> None:
     """关闭可能阻塞交互的覆盖层"""
     log_step("检查并关闭覆盖层...")
 
-    try:
-        await page.evaluate(
-            """() => {
-                try {
-                    localStorage.setItem('hasSeenGplLicense', 'true');
-                } catch (_) {
-                    // ignore storage errors
-                }
-                if (typeof window.acceptGplLicense === 'function') {
-                    try { window.acceptGplLicense(); } catch (_) {}
-                }
-                const modal = document.getElementById('license-modal');
-                if (modal) {
-                    modal.classList.remove('show');
-                }
-            }"""
-        )
-    except Exception as e:
-        log_step(f"预清理 GPL 弹窗失败: {e}", "WARNING")
+    has_visible_overlay = await page.evaluate(
+        """() => {
+            const visible = (node) => !!node && getComputedStyle(node).display !== 'none'
+                && getComputedStyle(node).visibility !== 'hidden'
+                && node.getBoundingClientRect().width > 0
+                && node.getBoundingClientRect().height > 0;
+            return visible(document.getElementById('license-modal'))
+                || visible(document.getElementById('library-loader-overlay'))
+                || Array.from(document.querySelectorAll('.backup-modal-close')).some(visible);
+        }"""
+    )
+    if not has_visible_overlay:
+        return
 
     # 关闭 GPL 许可弹窗
-    license_modal = page.locator("#license-modal.show")
-    if await license_modal.count():
-        try:
-            acknowledge = license_modal.locator("button.lm-btn")
-            if await acknowledge.count():
-                await acknowledge.first.click()
-                await page.wait_for_function(
-                    "() => !document.getElementById('license-modal')?.classList.contains('show')",
-                    timeout=5000,
-                )
-                log_step("已关闭 GPL 许可弹窗", "SUCCESS")
-        except Exception as e:
-            log_step(f"关闭 GPL 许可弹窗失败: {e}", "WARNING")
+    license_modal = page.locator("#license-modal")
+    try:
+        await license_modal.wait_for(state="visible", timeout=1500)
+        acknowledge = license_modal.locator("button.lm-btn")
+        if await acknowledge.count():
+            await acknowledge.first.evaluate("node => node.click()")
+            await page.wait_for_function(
+                "() => !document.getElementById('license-modal')?.classList.contains('show')",
+                timeout=5000,
+            )
+            log_step("已关闭 GPL 许可弹窗", "SUCCESS")
+    except PlaywrightTimeoutError:
+        pass
+    except Exception as e:
+        log_step(f"关闭 GPL 许可弹窗失败: {e}", "WARNING")
 
     
     # 关闭题库加载器覆盖层
@@ -235,7 +230,7 @@ async def _dismiss_overlays(page: Page) -> None:
             await overlay.wait_for(state="visible", timeout=2000)
             close_btn = overlay.locator("[data-library-action='close']")
             if await close_btn.count():
-                await close_btn.first.click()
+                await close_btn.first.evaluate("node => node.click()")
                 await overlay.wait_for(state="detached", timeout=5000)
                 log_step("已关闭题库加载器覆盖层", "SUCCESS")
         except Exception as e:
@@ -243,7 +238,7 @@ async def _dismiss_overlays(page: Page) -> None:
 
     # 关闭备份模态框
     backup_modal = page.locator(".backup-modal-close")
-    if await backup_modal.count():
+    if await backup_modal.count() and await backup_modal.first.is_visible():
         try:
             await backup_modal.first.click()
             log_step("已关闭备份模态框", "SUCCESS")
@@ -307,18 +302,47 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
         log_step(f"当前题目 ID: {current_exam_id}", "DEBUG")
         log_step(f"提交前计时器: {timer_before_submit}s", "DEBUG")
         
-        await suite_page.click("#complete-exam-btn")
+        # Native DOM click avoids Playwright's actionability retry racing a same-URL
+        # history marker inserted by SuiteBackGuard between passages.
+        await suite_page.locator("#complete-exam-btn").evaluate("node => node.click()")
         log_step("已点击完成按钮")
         
-        await suite_page.wait_for_function(
-            "(initialId) => {\n"
-            "  const btn = document.getElementById('complete-exam-btn');\n"
-            "  const examId = document.body.dataset.examId || '';\n"
-            "  return !!(btn && btn.disabled) || examId !== String(initialId || '');\n"
-            "}",
-            arg=current_exam_id,
-            timeout=20000,
-        )
+        try:
+            await suite_page.wait_for_function(
+                "(initialId) => {\n"
+                "  const btn = document.getElementById('complete-exam-btn');\n"
+                "  const examId = document.body.dataset.examId || '';\n"
+                "  return !!(btn && btn.disabled) || examId !== String(initialId || '');\n"
+                "}",
+                arg=current_exam_id,
+                timeout=20000,
+            )
+        except PlaywrightTimeoutError:
+            try:
+                transition_state = await suite_page.evaluate(
+                    """async () => ({
+                        url: window.location.href,
+                        examId: document.body?.dataset?.examId || '',
+                        examState: document.body?.dataset?.examState || '',
+                        eventLog: document.getElementById('event-log')?.innerText || '',
+                        buttonDisabled: Boolean(document.getElementById('complete-exam-btn')?.disabled),
+                        openerSession: window.opener?.app?.currentSuiteSession
+                            ? {
+                                activeExamId: window.opener.app.currentSuiteSession.activeExamId || '',
+                                currentIndex: window.opener.app.currentSuiteSession.currentIndex,
+                                sequence: (window.opener.app.currentSuiteSession.sequence || []).map((item) => item?.examId || ''),
+                                handlerKeys: Array.from(window.opener.app.messageHandlers?.keys?.() || []),
+                                targetInActiveIndex: window.opener.resolveActiveLibraryIndex
+                                    ? (await window.opener.resolveActiveLibraryIndex()).some((item) => item?.id === window.opener.app.currentSuiteSession.sequence?.[2]?.examId)
+                                    : null
+                            }
+                            : null
+                    })"""
+                )
+                log_step(f"提交后切题诊断: {transition_state}", "ERROR")
+            except Exception as diagnostic_error:
+                log_step(f"提交后切题诊断失败: {diagnostic_error}", "WARNING")
+            raise
         
         if index + 1 < total_count:
             log_step(f"等待下一篇练习加载...")
@@ -339,6 +363,29 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                 if suite_page.is_closed():
                     log_step("套题页面在切换时关闭", "WARNING")
                     return False
+                try:
+                    transition_state = await suite_page.evaluate(
+                        """async () => ({
+                            url: window.location.href,
+                            examId: document.body?.dataset?.examId || '',
+                            examState: document.body?.dataset?.examState || '',
+                            buttonDisabled: Boolean(document.getElementById('complete-exam-btn')?.disabled),
+                            openerSession: window.opener?.app?.currentSuiteSession
+                                ? {
+                                    activeExamId: window.opener.app.currentSuiteSession.activeExamId || '',
+                                    currentIndex: window.opener.app.currentSuiteSession.currentIndex,
+                                    sequence: (window.opener.app.currentSuiteSession.sequence || []).map((item) => item?.examId || ''),
+                                    handlerKeys: Array.from(window.opener.app.messageHandlers?.keys?.() || []),
+                                    targetInActiveIndex: window.opener.resolveActiveLibraryIndex
+                                        ? (await window.opener.resolveActiveLibraryIndex()).some((item) => item?.id === window.opener.app.currentSuiteSession.sequence?.[2]?.examId)
+                                        : null
+                                }
+                                : null
+                        })"""
+                    )
+                    log_step(f"切题超时诊断: {transition_state}", "ERROR")
+                except Exception as diagnostic_error:
+                    log_step(f"切题超时诊断失败: {diagnostic_error}", "WARNING")
                 # 兼容提交后先进入回看页，再由 next 导航到下一篇
                 log_step("自动切换未发生，尝试通过回看导航 next 切题...", "WARNING")
                 nav_next_selector = await suite_page.evaluate(
@@ -424,11 +471,8 @@ async def _verify_popstate_back_guard(suite_page: Page) -> bool:
 async def _count_practice_records(page: Page) -> int:
     return await page.evaluate(
         "async () => {\n"
-        "  if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {\n"
-        "    const records = await window.PracticeRecordAPI.list();\n"
-        "    return Array.isArray(records) ? records.length : 0;\n"
-        "  }\n"
-        "  return document.querySelectorAll('#history-list .history-record-item').length;\n"
+        "  const records = await window.AppData.practice.list({ projection: 'light' });\n"
+        "  return records.length;\n"
         "}"
     )
 
@@ -464,11 +508,7 @@ async def _suite_record_stats(page: Page) -> Dict[str, int]:
         "      toFiniteNumber(record.timestamp)\n"
         "    );\n"
         "  };\n"
-        "  if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') {\n"
-        "    const fallbackCount = document.querySelectorAll('#history-list .history-record-item').length;\n"
-        "    return { count: Number(fallbackCount) || 0, latestTs: 0 };\n"
-        "  }\n"
-        "  const records = await window.PracticeRecordAPI.list();\n"
+        "  const records = await window.AppData.practice.list();\n"
         "  if (!Array.isArray(records)) {\n"
         "    return { count: 0, latestTs: 0 };\n"
         "  }\n"
@@ -556,8 +596,8 @@ def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
     page.on("console", _handler)
 
 
-async def run() -> None:
-    """运行套题练习流程测试"""
+async def run() -> bool:
+    """运行套题练习流程测试，返回是否通过"""
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     console_log: List[ConsoleEntry] = []
     start_time = datetime.now()
@@ -607,7 +647,7 @@ async def run() -> None:
             
             log_step("查找套题练习按钮...")
             start_button = page.locator("button[data-action='start-suite-mode']")
-            await start_button.scroll_into_view_if_needed()
+            await start_button.wait_for(state="visible", timeout=15000)
             log_step("套题练习按钮已就绪", "SUCCESS")
             await _preset_suite_preferences(
                 page,
@@ -622,6 +662,15 @@ async def run() -> None:
                 await _select_suite_flow_mode(page, "simulation")
             suite_page = await popup_wait.value
             _collect_console(suite_page, console_log)
+            await suite_page.wait_for_load_state("load")
+            placeholder_state = await suite_page.evaluate(
+                """() => ({
+                    suiteTest: new URLSearchParams(window.location.search).get('suite_test'),
+                    examState: document.body?.dataset?.examState || ''
+                })"""
+            )
+            if placeholder_state.get("suiteTest") != "1" or placeholder_state.get("examState") == "blocked":
+                raise AssertionError(f"suite placeholder test mode was not propagated: {placeholder_state}")
             log_step("套题练习窗口已打开", "SUCCESS")
 
             await page.wait_for_function(
@@ -666,29 +715,23 @@ async def run() -> None:
             
             log_step("等待练习记录加载...")
             await page.wait_for_function(
-                "() => {\n"
-                "  const appRecords = window.app && window.app.state && window.app.state.practice\n"
-                "    ? window.app.state.practice.records\n"
-                "    : null;\n"
-                "  if (Array.isArray(appRecords) && appRecords.length > 0) {\n"
-                "    return true;\n"
-                "  }\n"
-                "  if (typeof window.getPracticeRecordsState === 'function') {\n"
-                "    try {\n"
-                "      const records = window.getPracticeRecordsState();\n"
-                "      if (Array.isArray(records) && records.length > 0) {\n"
-                "        return true;\n"
-                "      }\n"
-                "    } catch (_) {}\n"
-                "  }\n"
-                "  return false;\n"
+                "async () => {\n"
+                "  const records = await window.AppData.practice.list({ projection: 'light' });\n"
+                "  return Array.isArray(records) && records.length > 0;\n"
                 "}",
                 timeout=30000,
             )
             log_step("练习记录已加载", "SUCCESS")
 
             await page.evaluate(
-                "if (typeof window.updatePracticeView === 'function') { window.updatePracticeView(); }"
+                """async () => {
+                    if (typeof window.updatePracticeView !== 'function') return;
+                    const records = await window.AppData.practice.list({ projection: 'light' });
+                    const examIndex = typeof window.resolveActiveLibraryIndex === 'function'
+                        ? await window.resolveActiveLibraryIndex()
+                        : [];
+                    window.updatePracticeView(records, examIndex);
+                }"""
             )
 
             await page.wait_for_timeout(500)
@@ -707,9 +750,7 @@ async def run() -> None:
                 raise AssertionError("Suite practice record not found in history list")
             suite_duration = await page.evaluate(
                 "async (id) => {\n"
-                "  if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') return -1;\n"
-                "  const records = await window.PracticeRecordAPI.list();\n"
-                "    const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;\n"
+                "    const target = await window.AppData.practice.get(id);\n"
                 "    const value = target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;\n"
                 "    return value;\n"
                 "}",
@@ -892,23 +933,10 @@ async def run() -> None:
             manual_suite_latest_ts_before = int(manual_suite_stats_before.get("latestTs") or 0)
             log_step("开始手动回看模式专项验证...")
             await _click_nav(page, "overview")
-            await start_button.scroll_into_view_if_needed()
-            await page.evaluate(
-                "() => {\n"
-                "  try {\n"
-                "    localStorage.setItem('suite_flow_mode', 'stationary');\n"
-                "    localStorage.setItem('suite_auto_advance_after_submit', 'false');\n"
-                "  } catch (_) {}\n"
-                "  if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {\n"
-                "    window.practiceConfig = {};\n"
-                "  }\n"
-                "  if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {\n"
-                "    window.practiceConfig.suite = {};\n"
-                "  }\n"
-                "  window.practiceConfig.suite.flowMode = 'stationary';\n"
-                "  window.practiceConfig.suite.autoAdvanceAfterSubmit = false;\n"
-                "}"
-            )
+            await _preset_suite_preferences(page, mode="stationary", auto_advance_after_submit=False)
+            # 偏好写入会触发 overview 重绘，定位器必须在重绘完成后重新获取。
+            start_button = page.locator("button[data-action='start-suite-mode']")
+            await start_button.wait_for(state="visible", timeout=15000)
             async with page.expect_popup(timeout=20000) as manual_popup_wait:
                 await start_button.click()
                 await _select_suite_flow_mode(page, "stationary")
@@ -916,7 +944,14 @@ async def run() -> None:
             _collect_console(manual_suite_page, console_log)
             await manual_suite_page.wait_for_load_state("load")
             await page.wait_for_function(
-                "() => !!(window.practiceConfig && window.practiceConfig.suite && window.practiceConfig.suite.autoAdvanceAfterSubmit === false)",
+                """async () => {
+                    const persisted = await window.AppData.preferences.getSuite();
+                    const runtime = await window.SuitePreferenceUtils.resolveSuitePreference();
+                    return persisted?.flowMode === 'stationary'
+                        && persisted?.autoAdvanceAfterSubmit === false
+                        && runtime?.flowMode === 'stationary'
+                        && runtime?.autoAdvanceAfterSubmit === false;
+                }""",
                 timeout=10000,
             )
             log_step("已切换到手动回看模式", "SUCCESS")
@@ -958,7 +993,15 @@ async def run() -> None:
                 raise AssertionError("manual mode P2 should be answering state, not settled review state")
             nav_on_p2_answering = await _review_nav_state(manual_suite_page)
             if not nav_on_p2_answering or nav_on_p2_answering.get("hidden"):
-                raise AssertionError("manual mode P2 answering should keep review nav visible")
+                nav_debug = await manual_suite_page.evaluate(
+                    "() => ({url: location.href, pageType: document.body?.dataset?.pageType || '', "
+                    "examId: document.body?.dataset?.examId || '', "
+                    "reviewNav: document.getElementById('review-nav-bar')?.outerHTML || "
+                    "document.getElementById('practice-review-nav')?.outerHTML || null, "
+                    "suiteAttrs: {suiteSessionId: document.body?.dataset?.suiteSessionId || '', "
+                    "reviewMode: document.body?.dataset?.reviewMode || ''}})"
+                )
+                raise AssertionError(f"manual mode P2 answering should keep review nav visible: {nav_debug}")
 
             await manual_suite_page.click("#complete-exam-btn")
             await manual_suite_page.wait_for_function(
@@ -1115,7 +1158,8 @@ async def run() -> None:
         else:
             log_step(f"❌ 测试失败 (耗时: {duration:.2f}秒)", "ERROR")
         log_step("=" * 80)
+    return test_passed
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    raise SystemExit(0 if asyncio.run(run()) else 1)

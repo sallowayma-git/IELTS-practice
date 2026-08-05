@@ -15,26 +15,11 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
-function createWebStorage() {
-    const map = new Map();
-    return {
-        getItem(key) {
-            return map.has(key) ? map.get(key) : null;
-        },
-        setItem(key, value) {
-            map.set(key, String(value));
-        },
-        removeItem(key) {
-            map.delete(key);
-        },
-        dump() {
-            return new Map(map);
-        }
-    };
-}
-
 function createHarness(options = {}) {
-    const { syncUiOnReplace = false, saveCompletionImpl = null, forceCompletionNotice = false } = options;
+    const {
+        saveCompletionImpl = null,
+        forceCompletionNotice = false
+    } = options;
     const practiceState = [
         {
             id: 'record-1',
@@ -51,11 +36,18 @@ function createHarness(options = {}) {
             duration: 90
         }
     ];
-    const uiState = practiceState.map((record) => ({ ...record }));
-    const localStorage = createWebStorage();
-    const sessionStorage = createWebStorage();
     const listeners = new Map();
     const savedSpellingErrors = [];
+    const renderedSnapshots = [];
+    const browseSnapshots = [];
+    const examIndex = [{
+        id: 'listening-p1-fallback',
+        title: 'Listening P1 Fallback',
+        category: 'P1',
+        path: 'assets/generated/listening-exams/listening-p1-fallback.html',
+        frequency: 'fallback',
+        type: 'listening'
+    }];
     const quietConsole = {
         log() {},
         warn() {},
@@ -64,33 +56,14 @@ function createHarness(options = {}) {
         debug() {}
     };
 
-    const storageStub = {
-        mode: 'indexeddb',
-        getKey(key) {
-            return `exam_system_${key}`;
-        },
-        async get() {
-            return practiceState.map((record) => ({ ...record }));
-        },
-        async set(key, value) {
-            if (key === 'practice_records') {
-                practiceState.splice(0, practiceState.length, ...(Array.isArray(value) ? value.map((record) => ({ ...record })) : []));
-            }
-            return true;
-        },
-        async writePersistentValue(key, value) {
-            return this.set(key, value);
-        }
-    };
-
     const messageLog = [];
-    let renderCount = 0;
+    const deleteCommands = [];
+    const deleteManyCommands = [];
+    const clearCommands = [];
+    const completionCommands = [];
 
     const sandbox = {
         console: quietConsole,
-        localStorage,
-        sessionStorage,
-        storage: storageStub,
         confirm: () => true,
         showMessage: (message, type) => {
             messageLog.push({ message, type });
@@ -105,35 +78,23 @@ function createHarness(options = {}) {
         processedSessions: {
             clear() {}
         },
-        getPracticeRecordsState() {
-            return uiState.map((record) => ({ ...record }));
-        },
-        setPracticeRecordsState(records) {
-            uiState.splice(0, uiState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-            return uiState.map((record) => ({ ...record }));
-        },
         getSelectedRecordsState() {
             return new Set();
         },
         clearSelectedRecordsState() {},
         setBulkDeleteModeState() {},
         refreshBulkDeleteButton() {},
-        refreshBrowseProgressFromRecords() {},
-        updatePracticeView() {},
+        refreshBrowseProgressFromRecords(records, index) {
+            browseSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
+        },
+        updatePracticeView(records, index) {
+            renderedSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
+        },
         normalizeRecordId(id) {
             return id == null ? '' : String(id);
         },
-        getExamIndexState() {
-            return [
-                {
-                    id: 'listening-p1-fallback',
-                    title: 'Listening P1 Fallback',
-                    category: 'P1',
-                    path: 'assets/generated/listening-exams/listening-p1-fallback.html',
-                    frequency: 'fallback',
-                    type: 'listening'
-                }
-            ];
+        async resolveActiveLibraryIndex() {
+            return structuredClone(examIndex);
         },
         document: {
             addEventListener() {},
@@ -149,9 +110,9 @@ function createHarness(options = {}) {
         },
         window: {
             console: quietConsole,
-            storage: storageStub,
-            location: {
-                origin: 'http://localhost'
+            location: options.location || {
+                origin: 'http://localhost',
+                protocol: 'http:'
             },
             addEventListener(type, handler) {
                 if (!listeners.has(type)) {
@@ -175,67 +136,97 @@ function createHarness(options = {}) {
                     return true;
                 }
             },
-            app: {
-                state: {
-                    practice: {
-                        records: uiState.map((record) => ({ ...record }))
-                    }
-                }
-            },
-            PracticeRecordAPI: {
-                async list() {
-                    return practiceState.map((record) => ({ ...record }));
-                },
-                async getById(recordId) {
-                    const targetId = recordId == null ? '' : String(recordId);
-                    return practiceState.find((record) => (
-                        String(record.id) === targetId || String(record.sessionId || '') === targetId
-                    )) || null;
-                },
-                async saveCompletion(realData = {}, context = {}, exam = {}) {
-                    if (typeof saveCompletionImpl === 'function') {
-                        return await saveCompletionImpl(realData, context, exam);
-                    }
-                    const record = {
-                        id: `record-${practiceState.length + 1}`,
-                        examId: context && context.examId ? context.examId : (exam.id || realData.examId || ''),
-                        sessionId: realData.sessionId || '',
-                        title: exam.title || realData.title || '',
-                        date: realData.endTime || '2026-03-09T12:00:00.000Z',
-                        percentage: Number(realData?.scoreInfo?.percentage) || 0,
-                        duration: Number(realData?.duration ?? realData?.scoreInfo?.duration) || 0
-                    };
-                    practiceState.unshift({ ...record });
-                    return { ...record };
-                },
-                async replace(records) {
-                    practiceState.splice(0, practiceState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-                    if (syncUiOnReplace) {
-                        uiState.splice(0, uiState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-                    }
-                    return practiceState.map((record) => ({ ...record }));
-                },
-                async deleteById(recordId) {
-                    const targetId = recordId == null ? '' : String(recordId);
-                    const next = [];
-                    let deleted = null;
-                    practiceState.forEach((record) => {
-                        if (!deleted && (String(record.id) === targetId || String(record.sessionId || '') === targetId)) {
-                            deleted = { ...record };
-                            return;
+            AppData: {
+                ready: Promise.resolve(),
+                practice: {
+                    async list() {
+                        return structuredClone(practiceState);
+                    },
+                    async listInsights() {
+                        return structuredClone(practiceState);
+                    },
+                    async get(recordId) {
+                        const target = String(recordId || '');
+                        const record = practiceState.find((item) => item && (
+                            String(item.id || '') === target || String(item.sessionId || '') === target
+                        ));
+                        return structuredClone(record || null);
+                    },
+                    async delete(command = {}) {
+                        deleteCommands.push(structuredClone(command));
+                        const index = practiceState.findIndex((record) => String(record.id) === String(command.recordId));
+                        if (index >= 0) practiceState.splice(index, 1);
+                        return {
+                            committed: true,
+                            revision: deleteCommands.length,
+                            operationId: command.operationId || `delete-${deleteCommands.length}`,
+                            derived: { status: 'ready', pending: [] },
+                            warnings: []
+                        };
+                    },
+                    async deleteMany(command = {}) {
+                        deleteManyCommands.push(structuredClone(command));
+                        const ids = new Set((command.recordIds || []).map(String));
+                        for (let index = practiceState.length - 1; index >= 0; index -= 1) {
+                            if (ids.has(String(practiceState[index].id))) practiceState.splice(index, 1);
                         }
-                        next.push(record);
-                    });
-                    await this.replace(next);
-                    return {
-                        deleted: Boolean(deleted),
-                        record: deleted,
-                        records: practiceState.map((record) => ({ ...record }))
-                    };
+                        return {
+                            committed: true,
+                            revision: deleteManyCommands.length,
+                            operationId: command.operationId || `delete-many-${deleteManyCommands.length}`,
+                            derived: { status: 'ready', pending: [] },
+                            warnings: []
+                        };
+                    },
+                    async clear(command = {}) {
+                        clearCommands.push(structuredClone(command));
+                        practiceState.splice(0, practiceState.length);
+                        return {
+                            committed: true,
+                            revision: clearCommands.length,
+                            operationId: command.operationId || `clear-${clearCommands.length}`,
+                            derived: { status: 'ready', pending: [] },
+                            warnings: []
+                        };
+                    },
+                    async completeAttempt(command = {}) {
+                        completionCommands.push(structuredClone(command));
+                        if (typeof saveCompletionImpl === 'function') {
+                            return await saveCompletionImpl(command);
+                        }
+                        const input = command.record && typeof command.record === 'object'
+                            ? structuredClone(command.record)
+                            : {};
+                        const record = {
+                            ...input,
+                            id: input.id || `record-${practiceState.length + 1}`,
+                            examId: input.examId || '',
+                            sessionId: input.sessionId || '',
+                            title: input.title || '',
+                            endTime: input.endTime || input.date || '2026-03-09T12:00:00.000Z',
+                            date: input.endTime || input.date || '2026-03-09T12:00:00.000Z'
+                        };
+                        practiceState.unshift(structuredClone(record));
+                        return {
+                            committed: true,
+                            revision: completionCommands.length,
+                            operationId: command.operationId || `completion-${completionCommands.length}`,
+                            derived: { status: 'ready', pending: [] },
+                            warnings: [],
+                            record: structuredClone(record)
+                        };
+                    }
                 },
-                async clear() {
-                    await this.replace([]);
-                    return true;
+                settings: {
+                    async reset() {
+                        return {
+                            committed: true,
+                            revision: 1,
+                            operationId: 'settings-reset',
+                            derived: { status: 'ready', pending: [] },
+                            warnings: []
+                        };
+                    }
                 }
             }
         }
@@ -243,37 +234,39 @@ function createHarness(options = {}) {
 
     sandbox.globalThis = sandbox.window;
     sandbox.fallbackExamSessions = new Map();
-    sandbox.window.localStorage = localStorage;
-    sandbox.window.sessionStorage = sessionStorage;
     sandbox.window.fallbackExamSessions = sandbox.fallbackExamSessions;
+    sandbox.window.resolveActiveLibraryIndex = sandbox.resolveActiveLibraryIndex;
 
     loadScript('js/main.js', vm.createContext(sandbox));
     if (forceCompletionNotice) {
         sandbox.shouldAnnounceCompletion = () => true;
     }
-    sandbox.updatePracticeView = function updatePracticeViewSpy() {
-        renderCount += 1;
+    sandbox.updatePracticeView = function updatePracticeViewSpy(records, index) {
+        renderedSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
+    };
+    sandbox.refreshBrowseProgressFromRecords = function refreshBrowseProgressFromRecordsSpy(records, index) {
+        browseSnapshots.push({ records: structuredClone(records), index: structuredClone(index) });
     };
     sandbox.window.updatePracticeView = sandbox.updatePracticeView;
+    sandbox.window.refreshBrowseProgressFromRecords = sandbox.refreshBrowseProgressFromRecords;
 
     return {
         sandbox,
         practiceState,
-        localStorage,
-        sessionStorage,
+        examIndex,
+        renderedSnapshots,
+        browseSnapshots,
+        deleteCommands,
+        deleteManyCommands,
+        clearCommands,
+        completionCommands,
         messageLog,
-        savedSpellingErrors,
-        getRenderCount() {
-            return renderCount;
-        }
+        savedSpellingErrors
     };
 }
 
-async function testDeleteRecordPersistsAndCleansLegacyKeys() {
+async function testDeleteRecordCommitsAndRefreshesCanonicalSnapshot() {
     const harness = createHarness();
-    harness.localStorage.setItem('practice_records', JSON.stringify([{ id: 'legacy-record' }]));
-    harness.localStorage.setItem('old_prefix_practice_records', JSON.stringify([{ id: 'legacy-old' }]));
-    harness.localStorage.setItem('exam_system_practice_records', 'stale-shadow');
 
     await harness.sandbox.deleteRecord('record-1');
 
@@ -282,51 +275,55 @@ async function testDeleteRecordPersistsAndCleansLegacyKeys() {
         ['record-2'],
         'deleteRecord 应删除 canonical store 中的目标记录'
     );
-    assert.strictEqual(
-        harness.localStorage.getItem('practice_records'),
-        null,
-        'deleteRecord 后应清理 legacy practice_records，避免删除记录被影子键回灌'
+    assert.deepStrictEqual(
+        harness.deleteCommands[0],
+        { recordId: 'record-1' },
+        'deleteRecord 应通过 AppData.practice.delete 提交目标 identity'
     );
     assert.deepStrictEqual(
-        harness.sandbox.window.app.state.practice.records.map((record) => record.id),
+        harness.renderedSnapshots.at(-1).records.map((record) => record.id),
         ['record-2'],
-        'deleteRecord 后应同步 app.state.practice.records，避免页面销毁时把旧记录写回去'
+        'deleteRecord 后应以 AppData 回读结果刷新练习视图'
     );
-    assert.strictEqual(harness.localStorage.getItem('old_prefix_practice_records'), null, 'deleteRecord 后应清理 old_prefix 影子键');
-    assert.strictEqual(harness.localStorage.getItem('exam_system_practice_records'), null, 'deleteRecord 后应清理 indexeddb shadow key');
+    assert.deepStrictEqual(
+        harness.browseSnapshots.at(-1).records.map((record) => record.id),
+        ['record-2'],
+        'deleteRecord 后应以同一 AppData 快照重建浏览完成索引'
+    );
+    assert.deepStrictEqual(harness.renderedSnapshots.at(-1).index, harness.examIndex, '练习视图应接收活动题库快照');
+    assert.deepStrictEqual(harness.browseSnapshots.at(-1).index, harness.examIndex, '浏览索引应接收同一活动题库快照');
 }
 
-async function testClearPracticeDataPersistsAndClearsLegacyKeys() {
+async function testClearPracticeDataCommitsAndRefreshesCanonicalSnapshot() {
     const harness = createHarness();
-    harness.localStorage.setItem('practice_records', JSON.stringify([{ id: 'legacy-record' }]));
-    harness.sessionStorage.setItem('practice_records', JSON.stringify([{ id: 'legacy-record' }]));
 
     await harness.sandbox.clearPracticeData();
 
     assert.strictEqual(harness.practiceState.length, 0, 'clearPracticeData 应清空 canonical store');
-    assert.strictEqual(harness.sandbox.window.app.state.practice.records.length, 0, 'clearPracticeData 后应同步清空 app.state.practice.records');
-    assert.strictEqual(harness.localStorage.getItem('practice_records'), null, 'clearPracticeData 后应删除 localStorage legacy 键');
-    assert.strictEqual(harness.sessionStorage.getItem('practice_records'), null, 'clearPracticeData 后应删除 sessionStorage legacy 键');
-}
-
-async function testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState() {
-    const harness = createHarness({ syncUiOnReplace: true });
-
-    await harness.sandbox.deleteRecord('record-1');
-
-    assert.ok(
-        harness.getRenderCount() > 0,
-        'deleteRecord 后即使全局状态已被 PracticeCore 提前同步，仍应强制刷新 UI，避免残留旧卡片'
-    );
+    assert.strictEqual(harness.clearCommands.length, 1, 'clearPracticeData 应通过 AppData.practice.clear 写入 tombstone');
+    assert.deepStrictEqual(harness.renderedSnapshots.at(-1).records, [], 'clearPracticeData 后练习视图应接收空快照');
+    assert.deepStrictEqual(harness.browseSnapshots.at(-1).records, [], 'clearPracticeData 后浏览完成索引应接收空快照');
 }
 
 async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
-    const harness = createHarness({ forceCompletionNotice: true });
-    const childWindow = { closed: false, postMessage() {} };
+    const harness = createHarness({
+        forceCompletionNotice: true,
+        location: { origin: 'file://', protocol: 'file:' }
+    });
+    const outcomes = [];
+    const targetOrigins = [];
+    const childWindow = {
+        closed: false,
+        postMessage(message, targetOrigin) {
+            outcomes.push(message);
+            targetOrigins.push(targetOrigin);
+        }
+    };
     harness.sandbox.window.fallbackExamSessions.set('parent-session-1', {
         examId: 'listening-p1-fallback',
         sessionId: 'parent-session-1',
         win: childWindow,
+        windowSessionToken: 'fallback-token-1',
         initPayload: {
             examId: 'listening-p1-fallback',
             sessionId: 'parent-session-1'
@@ -336,13 +333,33 @@ async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
 
     harness.sandbox.setupMessageListener();
     await harness.sandbox.window.__dispatchWindowEvent('message', {
-        origin: 'http://localhost',
+        origin: 'null',
+        source: childWindow,
+        data: {
+            type: 'REQUEST_INIT',
+            source: 'listening_record_bridge',
+            data: {
+                examId: 'listening-p1-fallback',
+                sessionId: 'child-temp-session'
+            }
+        }
+    });
+    const initMessage = outcomes.find((message) => message && message.type === 'INIT_SESSION');
+    assert(initMessage, 'file fallback REQUEST_INIT must receive INIT_SESSION');
+    assert.strictEqual(initMessage.data.parentOrigin, 'null', 'file fallback must declare opaque null origin');
+    assert(targetOrigins.every((origin) => origin === '*'), 'file fallback INIT must use wildcard targetOrigin');
+
+    await harness.sandbox.window.__dispatchWindowEvent('message', {
+        origin: 'null',
         source: childWindow,
         data: {
             type: 'PRACTICE_COMPLETE',
+            source: 'listening_record_bridge',
+            windowSessionToken: 'fallback-token-1',
             realData: {
                 examId: 'listening-unknown',
                 sessionId: 'child-temp-session',
+                submissionId: 'listening-submit-fallback-1',
                 type: 'listening',
                 practiceType: 'listening',
                 answers: { q1: 'acommodatio' },
@@ -380,6 +397,12 @@ async function testFallbackCompletionPersistsNormalizedSpellingErrors() {
     const savedRecord = harness.practiceState.find((record) => record && record.examId === 'listening-p1-fallback');
     assert(savedRecord, 'fallback PRACTICE_COMPLETE 应保存父页题源练习记录');
     assert.strictEqual(savedRecord.sessionId, 'parent-session-1', 'fallback 记录 sessionId 应归一到父页会话');
+    const acknowledgement = outcomes.find((message) => message && message.type === 'PRACTICE_SUBMIT_ACK');
+    assert(acknowledgement, 'fallback 持久化成功后必须回传 PRACTICE_SUBMIT_ACK');
+    assert.strictEqual(acknowledgement.data.submissionId, 'listening-submit-fallback-1');
+    assert.strictEqual(acknowledgement.data.sessionId, 'parent-session-1');
+    assert.strictEqual(acknowledgement.data.windowSessionToken, 'fallback-token-1');
+    assert(targetOrigins.every((origin) => origin === '*'), 'file fallback ACK must use wildcard targetOrigin');
 
     assert.strictEqual(harness.savedSpellingErrors.length, 1, 'fallback 应保存 bridge 带回的 spellingErrors');
     assert.deepStrictEqual(
@@ -435,13 +458,36 @@ async function testCanonicalCompletionSaveRejectsWhenPersistenceFails() {
     );
 }
 
+async function testSubmissionIdProducesStableCompletionOperationId() {
+    const harness = createHarness();
+    const payload = {
+        examId: 'listening-p1-fallback',
+        sessionId: 'session-stable-submit',
+        submissionId: 'submission-stable-submit',
+        type: 'listening',
+        scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+    };
+    await harness.sandbox.savePracticeCompletionRecord(payload.examId, payload);
+    await harness.sandbox.savePracticeCompletionRecord(payload.examId, payload);
+    assert.strictEqual(harness.completionCommands.length, 2);
+    assert.strictEqual(
+        harness.completionCommands[0].operationId,
+        'practice-complete:listening-p1-fallback:session-stable-submit:submission-stable-submit'
+    );
+    assert.strictEqual(
+        harness.completionCommands[1].operationId,
+        harness.completionCommands[0].operationId,
+        'retrying the same submission must reuse the canonical idempotency operationId'
+    );
+}
+
 async function main() {
     try {
-        await testDeleteRecordPersistsAndCleansLegacyKeys();
-        await testClearPracticeDataPersistsAndClearsLegacyKeys();
-        await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
+        await testDeleteRecordCommitsAndRefreshesCanonicalSnapshot();
+        await testClearPracticeDataCommitsAndRefreshesCanonicalSnapshot();
         await testFallbackCompletionPersistsNormalizedSpellingErrors();
         await testCanonicalCompletionSaveRejectsWhenPersistenceFails();
+        await testSubmissionIdProducesStableCompletionOperationId();
         console.log(JSON.stringify({
             status: 'pass',
             detail: 'practice record persistence and fallback completion regressions are covered'

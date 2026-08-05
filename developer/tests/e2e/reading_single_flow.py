@@ -94,32 +94,26 @@ async def _launch_chromium(p) -> Browser:
 
 async def _ensure_app_ready(page: Page) -> None:
     await page.wait_for_load_state("load")
-    await page.wait_for_function(
-        "() => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function'",
-        timeout=60000,
-    )
+    await page.wait_for_function("() => !!window.AppData", timeout=60000)
+    await page.evaluate("async () => { await window.AppData.ready; }")
+    await page.wait_for_function("() => window.app?.isInitialized === true", timeout=60000)
 
 
 async def _dismiss_overlays(page: Page) -> None:
-    try:
-        await page.evaluate(
-            """
-            () => {
-                try {
-                    localStorage.setItem('hasSeenGplLicense', 'true');
-                } catch (_) {}
-                if (typeof window.acceptGplLicense === 'function') {
-                    try { window.acceptGplLicense(); } catch (_) {}
-                }
-                const modal = document.getElementById('license-modal');
-                if (modal) {
-                    modal.classList.remove('show');
-                }
+    accepted = await page.evaluate(
+        """async () => {
+            if (!window.LicenseModal || typeof window.LicenseModal.accept !== 'function') {
+                throw new Error('LicenseModal.accept is unavailable');
             }
-            """
-        )
-    except Exception:
-        pass
+            return window.LicenseModal.accept();
+        }"""
+    )
+    if not accepted:
+        raise RuntimeError("GPL license consent was not committed")
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=5000,
+    )
 
     overlay = page.locator("#library-loader-overlay")
     if await overlay.count():
@@ -141,21 +135,13 @@ async def _click_nav(page: Page, view: str) -> None:
 async def _wait_exam_index_ready(page: Page) -> None:
     await page.wait_for_function(
         """
-        () => {
-            const candidates = [];
-            if (window.appStateService && typeof window.appStateService.getExamIndex === 'function') {
-                candidates.push(window.appStateService.getExamIndex());
+        async () => {
+            try {
+                const index = await window.resolveActiveLibraryIndex();
+                return Array.isArray(index) && index.length > 0;
+            } catch (_) {
+                return false;
             }
-            if (typeof window.getExamIndexState === 'function') {
-                candidates.push(window.getExamIndexState());
-            }
-            if (window.app && window.app.state && Array.isArray(window.app.state.examIndex)) {
-                candidates.push(window.app.state.examIndex);
-            }
-            if (Array.isArray(window.examIndex)) {
-                candidates.push(window.examIndex);
-            }
-            return candidates.some((item) => Array.isArray(item) && item.length > 0);
         }
         """,
         timeout=60000,
@@ -280,7 +266,16 @@ async def _open_manual_pdf_exam(page: Page, exam_id: str) -> tuple[str, bool]:
                 if (!window.app || typeof window.app.openExam !== 'function') {
                     throw new Error('openExam_missing');
                 }
-                await window.app.openExam(targetExamId, { target: 'tab' });
+                await window.app.openExam(targetExamId, {
+                    target: 'tab',
+                    examDefinition: {
+                        id: targetExamId,
+                        type: 'reading',
+                        title: 'Manual PDF regression fixture',
+                        hasHtml: false,
+                        pdfFilename: 'ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf'
+                    }
+                });
             }
             """,
             exam_id,
@@ -371,54 +366,31 @@ async def run() -> None:
                 await practice_page.close()
 
             await _click_nav(page, "practice")
-            await page.wait_for_function(
+            semantic_handle = await page.wait_for_function(
                 """
-                (targetExamId) => {
-                    const recordsFromState = window.app?.state?.practice?.records;
-                    if (Array.isArray(recordsFromState) && recordsFromState.some(r => String(r?.examId || '') === targetExamId)) {
-                        return true;
+                async (targetExamId) => {
+                    try {
+                        const records = await window.AppData.practice.list({ projection: 'light' });
+                        const matched = Array.isArray(records)
+                            ? records.filter(r => String(r?.examId || '') === targetExamId)
+                            : [];
+                        const record = matched.length ? matched[matched.length - 1] : null;
+                        return record ? {
+                            duration: Number(record.duration) || 0,
+                            startTimeMs: record.startTime ? new Date(record.startTime).getTime() : null,
+                            endTimeMs: record.endTime ? new Date(record.endTime).getTime() : null,
+                        } : null;
+                    } catch (_) {
+                        return null;
                     }
-                    if (typeof window.getPracticeRecordsState === 'function') {
-                        try {
-                            const records = window.getPracticeRecordsState();
-                            return Array.isArray(records) && records.some(r => String(r?.examId || '') === targetExamId);
-                        } catch (_) {
-                            return false;
-                        }
-                    }
-                    return false;
                 }
                 """,
                 arg=exam_id,
                 timeout=30000,
             )
+            semantic = await semantic_handle.json_value()
             log_step("练习记录已落地", "SUCCESS")
-            semantic = await page.evaluate(
-                """
-                ({ targetExamId, targetSessionId }) => {
-                    const records = window.getPracticeRecordsState?.()
-                        || window.app?.state?.practice?.records
-                        || [];
-                    const matched = Array.isArray(records)
-                        ? records
-                            .filter(r => String(r?.examId || '') === String(targetExamId))
-                            .filter(r => !targetSessionId || String(r?.sessionId || '') === String(targetSessionId))
-                        : [];
-                    const record = matched.length ? matched[matched.length - 1] : null;
-                    if (!record) {
-                        return { found: false };
-                    }
-                    return {
-                        found: true,
-                        duration: Number(record.duration) || 0,
-                        startTimeMs: record.startTime ? new Date(record.startTime).getTime() : null,
-                        endTimeMs: record.endTime ? new Date(record.endTime).getTime() : null,
-                    };
-                }
-                """,
-                {"targetExamId": exam_id, "targetSessionId": session_id},
-            )
-            if not semantic.get("found"):
+            if not semantic:
                 raise AssertionError("未找到目标练习记录用于时间语义断言")
             duration_sec = float(semantic.get("duration") or 0)
             end_time_ms = int(semantic.get("endTimeMs") or 0)

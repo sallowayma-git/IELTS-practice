@@ -769,17 +769,15 @@
                 ? meta.name.trim()
                 : (typeof meta.source === 'string' && meta.source.trim() ? meta.source.trim() : '');
             if (result.type === 'progress') {
-                await state.store.setWords(entries);
-                if (meta.config && typeof meta.config === 'object') {
-                    await state.store.setConfig(meta.config);
-                    const latestConfig = state.store.getConfig();
-                    const limit = Number(latestConfig?.reviewLimit);
-                    if (Number.isFinite(limit) && limit > 0) {
-                        state.session.batchSize = Math.max(1, Math.min(limit, DEFAULT_BATCH_SIZE));
-                    }
-                }
-                if (Array.isArray(meta.reviewQueue)) {
-                    await state.store.setReviewQueue(meta.reviewQueue);
+                await state.store.replaceProgress(
+                    entries,
+                    meta.config && typeof meta.config === 'object' ? meta.config : {},
+                    typeof meta.listId === 'string' ? meta.listId : null
+                );
+                const latestConfig = state.store.getConfig();
+                const limit = Number(latestConfig?.reviewLimit);
+                if (Number.isFinite(limit) && limit > 0) {
+                    state.session.batchSize = Math.max(1, Math.min(limit, DEFAULT_BATCH_SIZE));
                 }
                 resetSessionState();
                 prepareSessionQueue();
@@ -794,47 +792,13 @@
                 showFeedbackMessage(`${categoryLabel}${suffix}导入完成，已同步 ${entries.length} 条词汇`, 'success');
                 return;
             }
-            const existing = state.store.getWords();
-            const merged = existing.slice();
-            const indexByWord = new Map();
-            existing.forEach((word, index) => {
-                if (word && typeof word.word === 'string') {
-                    indexByWord.set(word.word.trim().toLowerCase(), index);
-                }
-            });
-            let updatedCount = 0;
-            let insertedCount = 0;
-            entries.forEach((entry) => {
-                const key = String(entry.word || '').trim().toLowerCase();
-                if (!key) {
-                    return;
-                }
-                if (indexByWord.has(key)) {
-                    const idx = indexByWord.get(key);
-                    const base = merged[idx];
-                    merged[idx] = {
-                        ...base,
-                        meaning: entry.meaning || base.meaning,
-                        example: entry.example || base.example,
-                        freq: typeof entry.freq === 'number' ? entry.freq : base.freq
-                    };
-                    updatedCount += 1;
-                    return;
-                }
-                merged.push({
-                    word: entry.word,
-                    meaning: entry.meaning,
-                    example: entry.example || '',
-                    freq: typeof entry.freq === 'number' ? entry.freq : undefined
-                });
-                indexByWord.set(key, merged.length - 1);
-                insertedCount += 1;
-            });
+            const mergeResult = await state.store.mergeWords(entries);
+            const insertedCount = Number(mergeResult && mergeResult.addedCount) || 0;
+            const updatedCount = Number(mergeResult && mergeResult.updatedCount) || 0;
             if (!insertedCount && !updatedCount) {
                 showFeedbackMessage('所有词条均已存在，无需更新', 'info');
                 return;
             }
-            await state.store.setWords(merged);
             const categoryLabel = meta.category === 'user' ? '自设词表' : '外部词表';
             const suffix = sourceLabel ? `「${sourceLabel}」` : '';
             showFeedbackMessage(`${categoryLabel}${suffix}导入完成：新增 ${insertedCount} 条，更新 ${updatedCount} 条`, 'success');
@@ -1531,7 +1495,7 @@
         state.session.activeQueue.push(clone);
     }
 
-    function rateAndContinue(quality) {
+    async function rateAndContinue(quality) {
         const session = state.session;
         const word = session.currentWord;
         if (!word || session.stage !== 'feedback') {
@@ -1542,9 +1506,17 @@
         if (session.lastAnswer && session.lastAnswer.quality !== quality) {
             const now = new Date();
             const patch = state.scheduler.scheduleAfterResult(word, quality, now);
-            state.store.updateWord(word.id, patch);
-            session.currentWord = { ...word, ...patch };
-            session.lastAnswer.quality = quality;
+            try {
+                const committedWord = await state.store.updateWord(word.id, patch);
+                if (!committedWord) {
+                    throw new Error('词汇记录不存在');
+                }
+                session.currentWord = committedWord;
+                session.lastAnswer.quality = quality;
+            } catch (error) {
+                showFeedbackMessage(`评分保存失败：${error.message || error}`, 'error');
+                return;
+            }
         }
         
         moveToNextWord();
@@ -1576,17 +1548,26 @@
         render();
     }
 
-    function saveCurrentNote() {
+    async function saveCurrentNote() {
         const word = state.session.currentWord;
         if (!word || !state.store || !state.elements.noteInput) {
             return;
         }
         const note = state.elements.noteInput.value.trim();
-        state.store.updateWord(word.id, { note });
-        state.session.currentWord = {
-            ...state.session.currentWord,
-            note
-        };
+        let committedWord;
+        try {
+            committedWord = await state.store.updateWord(word.id, { note });
+            if (!committedWord) {
+                throw new Error('词汇记录不存在');
+            }
+        } catch (error) {
+            if (state.elements.noteStatus) {
+                state.elements.noteStatus.textContent = '保存失败';
+            }
+            showFeedbackMessage(`笔记保存失败：${error.message || error}`, 'error');
+            return false;
+        }
+        state.session.currentWord = committedWord;
         if (state.elements.noteStatus) {
             state.elements.noteStatus.textContent = '已保存';
             setTimeout(() => {
@@ -1595,6 +1576,7 @@
                 }
             }, 1500);
         }
+        return true;
     }
 
     function startBatch(force) {

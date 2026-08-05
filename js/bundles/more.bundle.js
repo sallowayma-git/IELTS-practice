@@ -248,10 +248,12 @@
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
+                    listId: typeof payload.listId === 'string' && payload.listId.trim()
+                        ? payload.listId.trim()
+                        : undefined,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
                     config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
-                    reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
@@ -322,17 +324,17 @@
     }
 
     async function exportProgress() {
-        const store = window.VocabStore;
-        if (!store || typeof store.init !== 'function') {
-            throw new Error('VocabStore 未加载');
-        }
-        await store.init();
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
+        await window.AppData.ready;
+        const config = await window.AppData.vocab.getConfig();
+        const listId = config.activeListId || 'default';
+        const list = await window.AppData.vocab.readList(listId);
         const payload = {
             version: DEFAULT_EXPORT_VERSION,
             exportedAt: new Date().toISOString(),
-            config: store.getConfig(),
-            words: store.getWords(),
-            reviewQueue: store.getReviewQueue()
+            listId,
+            config,
+            words: Array.isArray(list) ? list : (list && Array.isArray(list.words) ? list.words : [])
         };
         return new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     }
@@ -723,51 +725,38 @@
             id: 'default',
             name: 'IELTS 核心词表',
             icon: '📚',
-            source: 'builtin',
-            storageKey: 'vocab_words'
+            source: 'builtin'
         },
         'spelling-errors-p1': {
             id: 'spelling-errors-p1',
             name: 'P1 拼写错误',
             icon: '📝',
-            source: 'p1',
-            storageKey: 'vocab_list_p1_errors'
+            source: 'p1'
         },
         'spelling-errors-p4': {
             id: 'spelling-errors-p4',
             name: 'P4 拼写错误',
             icon: '📝',
-            source: 'p4',
-            storageKey: 'vocab_list_p4_errors'
+            source: 'p4'
         },
         'spelling-errors-master': {
             id: 'spelling-errors-master',
             name: '综合错误词表',
             icon: '📚',
-            source: 'all',
-            storageKey: 'vocab_list_master_errors'
+            source: 'all'
         },
         'custom': {
             id: 'custom',
             name: '自定义词表',
             icon: '✏️',
-            source: 'user',
-            storageKey: 'vocab_list_custom'
+            source: 'user'
         },
         'reading-highlights': {
             id: 'reading-highlights',
             name: '阅读高亮生词',
             icon: '📖',
-            source: 'reading-highlight',
-            storageKey: 'vocab_list_reading_highlights'
+            source: 'reading-highlight'
         }
-    });
-
-    const STORAGE_KEYS = Object.freeze({
-        WORDS: 'vocab_words',
-        CONFIG: 'vocab_user_config',
-        REVIEW_QUEUE: 'vocab_review_queue',
-        ACTIVE_LIST: 'vocab_active_list_id'
     });
 
     const DEFAULT_CONFIG = Object.freeze({
@@ -778,28 +767,30 @@
         notify: true
     });
 
-    const DEFAULT_REVIEW_QUEUE = Object.freeze([]);
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
 
     const state = {
-        repositories: null,
-        metaRepo: null,
-        storageManager: null,
         words: [],
         wordIndex: new Map(),
         config: { ...DEFAULT_CONFIG },
-        reviewQueue: DEFAULT_REVIEW_QUEUE.slice(),
         ready: false,
         readyPromise: null,
         readyResolvers: [],
         loadingPromise: null,
-        registryUnsubscribe: null,
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
         listCache: new Map()
     };
+
+    function cloneValue(value) {
+        if (value === undefined) return undefined;
+        if (typeof structuredClone === 'function') {
+            try { return structuredClone(value); } catch (_) { /* fall through */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
 
     function emitReady(value) {
         if (state.ready) {
@@ -999,59 +990,30 @@
         });
     }
 
-    async function persist(key, value) {
-        try {
-            if (state.metaRepo && typeof state.metaRepo.set === 'function') {
-                await state.metaRepo.set(key, value, { clone: true });
-                return true;
-            }
-            if (state.storageManager && typeof state.storageManager.set === 'function') {
-                await state.storageManager.set(key, value);
-                return true;
-            }
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(key, JSON.stringify(value));
-                return true;
-            }
-        } catch (error) {
-            console.error('[VocabStore] persist error:', error);
-        }
-        return false;
+    async function requireVocabData() {
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab is unavailable');
+        await window.AppData.ready;
+        return window.AppData.vocab;
     }
 
-    async function read(key, defaultValue) {
-        if (state.metaRepo && typeof state.metaRepo.get === 'function') {
-            try {
-                const value = await state.metaRepo.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] metaRepo读取失败:', error);
-            }
-        }
-        if (state.storageManager && typeof state.storageManager.get === 'function') {
-            try {
-                const value = await state.storageManager.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] storageManager读取失败:', error);
-            }
-        }
-        if (typeof localStorage !== 'undefined') {
-            try {
-                const raw = localStorage.getItem(key);
-                if (!raw) {
-                    return defaultValue;
-                }
-                return JSON.parse(raw);
-            } catch (error) {
-                console.warn('[VocabStore] localStorage解析失败:', error);
-            }
-        }
-        return defaultValue;
+    async function readListData(listId) {
+        const vocab = await requireVocabData();
+        if (listId === DEFAULT_LIST_ID) return vocab.listWords();
+        const collections = await vocab.listCollections();
+        return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
+    }
+
+    async function saveListData(listId, value) {
+        const vocab = await requireVocabData();
+        const words = value && typeof value === 'object' && Array.isArray(value.words) ? value.words : value;
+        await vocab.replaceListWords({ listId, words: Array.isArray(words) ? words : [] });
+        return true;
+    }
+
+    async function saveConfigData(configPatch = state.config) {
+        const vocab = await requireVocabData();
+        await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
+        return true;
     }
 
     function mergeConfig(config) {
@@ -1069,15 +1031,6 @@
     function setWordsInternal(words) {
         state.words = words;
         rebuildIndex();
-    }
-
-    function getStorageKeyForListId(listId) {
-        const targetId = typeof listId === 'string' && VOCAB_LISTS[listId] ? listId : DEFAULT_LIST_ID;
-        return VOCAB_LISTS[targetId].storageKey;
-    }
-
-    function getActiveStorageKey() {
-        return getStorageKeyForListId(state.activeListId);
     }
 
     function isSpellingErrorList(listId) {
@@ -1193,29 +1146,26 @@
             return state.loadingPromise;
         }
         state.loadingPromise = (async () => {
-            const [storedConfig, storedQueue, storedActiveList] = await Promise.all([
-                read(STORAGE_KEYS.CONFIG, { ...DEFAULT_CONFIG }),
-                read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice()),
-                read(STORAGE_KEYS.ACTIVE_LIST, DEFAULT_LIST_ID)
-            ]);
+            const vocab = await requireVocabData();
+            const storedConfig = await vocab.getConfig();
+            const storedActiveList = storedConfig && storedConfig.activeListId;
 
             state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
                 ? storedActiveList
                 : DEFAULT_LIST_ID;
 
-            const activeStorageKey = getStorageKeyForListId(state.activeListId);
-            const storedWords = await read(activeStorageKey, []);
+            const storedWords = await readListData(state.activeListId);
             const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
-                state.lastLoadSource = state.metaRepo ? 'meta' : (state.storageManager ? 'storage' : 'localStorage');
+                state.lastLoadSource = 'appData-v2';
             }
 
             state.config = mergeConfig(storedConfig);
-            state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
+                throw error;
             })
             .finally(() => {
                 state.loadingPromise = null;
@@ -1225,8 +1175,7 @@
 
     async function ensureDefaultLexicon() {
         try {
-            const defaultStorageKey = getStorageKeyForListId(DEFAULT_LIST_ID);
-            const storedDefault = await read(defaultStorageKey, []);
+            const storedDefault = await readListData(DEFAULT_LIST_ID);
             const normalizedStored = normalizeStoredListWords(storedDefault, DEFAULT_LIST_ID);
             const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
             if (normalizedStored.length && !pollutedBySpellingList) {
@@ -1244,7 +1193,7 @@
                 console.warn('[VocabStore] 默认词库为空');
                 return [];
             }
-            await persist(defaultStorageKey, normalized);
+            await saveListData(DEFAULT_LIST_ID, normalized);
             if (state.activeListId === DEFAULT_LIST_ID) {
                 setWordsInternal(normalized);
                 state.lastLoadSource = 'default';
@@ -1266,8 +1215,8 @@
             });
             return normalized;
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
-            return [];
+            console.error('[VocabStore] 默认词库加载失败:', error);
+            throw error;
         }
     }
 
@@ -1277,87 +1226,39 @@
         emitReady(true);
     }
 
-    function connectToProviders() {
-        if (state.registryUnsubscribe || state.repositories || state.storageManager) {
-            return;
-        }
-        const registry = window.StorageProviderRegistry;
-        if (registry && typeof registry.onProvidersReady === 'function') {
-            state.registryUnsubscribe = registry.onProvidersReady((payload) => {
-                if (payload && payload.repositories) {
-                    attachRepositories(payload.repositories);
-                }
-                if (payload && payload.storageManager) {
-                    state.storageManager = payload.storageManager;
-                }
-            });
-            const current = typeof registry.getCurrentProviders === 'function' ? registry.getCurrentProviders() : null;
-            if (current) {
-                if (current.repositories) {
-                    attachRepositories(current.repositories);
-                }
-                if (current.storageManager) {
-                    state.storageManager = current.storageManager;
-                }
-            }
-            return;
-        }
-        if (window.dataRepositories) {
-            attachRepositories(window.dataRepositories);
-        }
-        if (window.storage) {
-            state.storageManager = window.storage;
-        }
-    }
-
-    async function attachRepositories(repositories) {
-        if (!repositories || state.repositories === repositories) {
-            return;
-        }
-        state.repositories = repositories;
-        state.metaRepo = repositories.meta || null;
-        await loadState();
-        if (!state.words.length) {
-            await ensureDefaultLexicon();
-        }
-        await persist(getActiveStorageKey(), state.words);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        emitReady(true);
-    }
-
     function getWords() {
-        return state.words.map((word) => ({ ...word }));
+        return cloneValue(state.words);
     }
 
-    async function setWords(words) {
+    async function mergeWords(words) {
         const normalized = Array.isArray(words)
             ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
-        setWordsInternal(normalized);
-        await persist(getActiveStorageKey(), normalized);
+        const vocab = await requireVocabData();
+        const receipt = await vocab.mergeListWords({ listId: state.activeListId, words: normalized });
+        const committedWords = Array.isArray(receipt.words) ? receipt.words : [];
+        setWordsInternal(committedWords.map((word) => normalizeWordRecord(word)).filter(Boolean));
         state.listCache.delete(state.activeListId);
-        return getWords();
+        return {
+            words: getWords(),
+            addedCount: Number(receipt.addedCount) || 0,
+            updatedCount: Number(receipt.updatedCount) || 0
+        };
     }
 
     async function updateWord(id, patch = {}) {
         if (!id || !state.wordIndex.has(id)) {
             return null;
         }
-        const original = state.wordIndex.get(id);
-        const updated = normalizeWordRecord({
-            ...original,
-            ...patch,
-            id,
-            updatedAt: getNow()
-        });
+        const vocab = await requireVocabData();
+        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch });
+        const updated = normalizeWordRecord(receipt.word);
         const index = state.words.findIndex((word) => word.id === id);
         if (index >= 0 && updated) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            await persist(getActiveStorageKey(), state.words);
             state.listCache.delete(state.activeListId);
-            return { ...updated };
+            return cloneValue(updated);
         }
         return null;
     }
@@ -1367,19 +1268,29 @@
     }
 
     async function setConfig(config) {
-        state.config = mergeConfig(config);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
+        const next = mergeConfig(config);
+        await saveConfigData(next);
+        state.config = next;
         return getConfig();
     }
 
-    function getReviewQueue() {
-        return state.reviewQueue.slice();
-    }
-
-    async function setReviewQueue(queue) {
-        state.reviewQueue = Array.isArray(queue) ? queue.map((id) => String(id)) : [];
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        return getReviewQueue();
+    async function replaceProgress(words, config = {}, listId = null) {
+        const normalized = Array.isArray(words)
+            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            : [];
+        const requestedListId = typeof listId === 'string' && listId.trim()
+            ? listId.trim()
+            : (typeof config.activeListId === 'string' && config.activeListId.trim()
+                ? config.activeListId.trim()
+                : state.activeListId);
+        const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
+        const vocab = await requireVocabData();
+        await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
+        state.config = nextConfig;
+        state.activeListId = requestedListId;
+        setWordsInternal(normalized);
+        state.listCache.delete(requestedListId);
+        return { words: getWords(), config: getConfig() };
     }
 
     function getDueWords(referenceTime = new Date()) {
@@ -1518,8 +1429,7 @@
         }
 
         try {
-            const storageKey = listConfig.storageKey;
-            let storedData = await read(storageKey, null);
+            let storedData = await readListData(listId);
             if (listId === DEFAULT_LIST_ID && (!storedData || (Array.isArray(storedData) && storedData.length === 0))) {
                 const ensured = await ensureDefaultLexicon();
                 storedData = ensured;
@@ -1554,7 +1464,7 @@
             return listData;
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', error);
-            return null;
+            throw error;
         }
     }
 
@@ -1579,25 +1489,11 @@
         }
 
         try {
-            // 保存当前词表到存储（如果有修改）
-            if (state.activeListId && state.words.length > 0) {
-                const currentConfig = VOCAB_LISTS[state.activeListId];
-                if (currentConfig) {
-                    await persist(currentConfig.storageKey, state.words);
-                }
-            }
-
-            // 切换到新词表
+            const vocab = await requireVocabData();
+            await vocab.activateList(listId);
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
             state.listCache.delete(listId);
-
-            // 保存激活的词表 ID
-            await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
-
-            // 清空复习队列（新词表需要重新生成队列）
-            state.reviewQueue = [];
-            await persist(STORAGE_KEYS.REVIEW_QUEUE, []);
 
             return true;
         } catch (error) {
@@ -1625,8 +1521,7 @@
 
         // 从存储读取
         try {
-            const listConfig = VOCAB_LISTS[listId];
-            const storedData = await read(listConfig.storageKey, null);
+            const storedData = await readListData(listId);
 
             // 检查是否为拼写错误词表格式
             if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
@@ -1638,7 +1533,7 @@
             return 0;
         } catch (error) {
             console.error('[VocabStore] getListWordCount 失败:', error);
-            return 0;
+            throw error;
         }
     }
 
@@ -1706,8 +1601,7 @@
         }
         await init();
         const listId = 'reading-highlights';
-        const listConfig = VOCAB_LISTS[listId];
-        const storedData = await read(listConfig.storageKey, []);
+        const storedData = await readListData(listId);
         const words = normalizeStoredListWords(storedData, listId);
         const key = normalized.word.toLowerCase();
         const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
@@ -1723,7 +1617,7 @@
         } else {
             words.push(normalized);
         }
-        await persist(listConfig.storageKey, words.filter(Boolean));
+        await saveListData(listId, words.filter(Boolean));
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
             setWordsInternal(words.filter(Boolean));
@@ -1733,7 +1627,6 @@
 
     async function init() {
         ensureReadyPromise();
-        connectToProviders();
         if (!state.ready) {
             await bootstrap();
         }
@@ -1743,12 +1636,11 @@
     const api = {
         init,
         getWords,
-        setWords,
+        mergeWords,
         updateWord,
         getConfig,
         setConfig,
-        getReviewQueue,
-        setReviewQueue,
+        replaceProgress,
         getDueWords,
         getNewWords,
         loadList,
@@ -3141,17 +3033,15 @@
                 ? meta.name.trim()
                 : (typeof meta.source === 'string' && meta.source.trim() ? meta.source.trim() : '');
             if (result.type === 'progress') {
-                await state.store.setWords(entries);
-                if (meta.config && typeof meta.config === 'object') {
-                    await state.store.setConfig(meta.config);
-                    const latestConfig = state.store.getConfig();
-                    const limit = Number(latestConfig?.reviewLimit);
-                    if (Number.isFinite(limit) && limit > 0) {
-                        state.session.batchSize = Math.max(1, Math.min(limit, DEFAULT_BATCH_SIZE));
-                    }
-                }
-                if (Array.isArray(meta.reviewQueue)) {
-                    await state.store.setReviewQueue(meta.reviewQueue);
+                await state.store.replaceProgress(
+                    entries,
+                    meta.config && typeof meta.config === 'object' ? meta.config : {},
+                    typeof meta.listId === 'string' ? meta.listId : null
+                );
+                const latestConfig = state.store.getConfig();
+                const limit = Number(latestConfig?.reviewLimit);
+                if (Number.isFinite(limit) && limit > 0) {
+                    state.session.batchSize = Math.max(1, Math.min(limit, DEFAULT_BATCH_SIZE));
                 }
                 resetSessionState();
                 prepareSessionQueue();
@@ -3166,47 +3056,13 @@
                 showFeedbackMessage(`${categoryLabel}${suffix}导入完成，已同步 ${entries.length} 条词汇`, 'success');
                 return;
             }
-            const existing = state.store.getWords();
-            const merged = existing.slice();
-            const indexByWord = new Map();
-            existing.forEach((word, index) => {
-                if (word && typeof word.word === 'string') {
-                    indexByWord.set(word.word.trim().toLowerCase(), index);
-                }
-            });
-            let updatedCount = 0;
-            let insertedCount = 0;
-            entries.forEach((entry) => {
-                const key = String(entry.word || '').trim().toLowerCase();
-                if (!key) {
-                    return;
-                }
-                if (indexByWord.has(key)) {
-                    const idx = indexByWord.get(key);
-                    const base = merged[idx];
-                    merged[idx] = {
-                        ...base,
-                        meaning: entry.meaning || base.meaning,
-                        example: entry.example || base.example,
-                        freq: typeof entry.freq === 'number' ? entry.freq : base.freq
-                    };
-                    updatedCount += 1;
-                    return;
-                }
-                merged.push({
-                    word: entry.word,
-                    meaning: entry.meaning,
-                    example: entry.example || '',
-                    freq: typeof entry.freq === 'number' ? entry.freq : undefined
-                });
-                indexByWord.set(key, merged.length - 1);
-                insertedCount += 1;
-            });
+            const mergeResult = await state.store.mergeWords(entries);
+            const insertedCount = Number(mergeResult && mergeResult.addedCount) || 0;
+            const updatedCount = Number(mergeResult && mergeResult.updatedCount) || 0;
             if (!insertedCount && !updatedCount) {
                 showFeedbackMessage('所有词条均已存在，无需更新', 'info');
                 return;
             }
-            await state.store.setWords(merged);
             const categoryLabel = meta.category === 'user' ? '自设词表' : '外部词表';
             const suffix = sourceLabel ? `「${sourceLabel}」` : '';
             showFeedbackMessage(`${categoryLabel}${suffix}导入完成：新增 ${insertedCount} 条，更新 ${updatedCount} 条`, 'success');
@@ -3903,7 +3759,7 @@
         state.session.activeQueue.push(clone);
     }
 
-    function rateAndContinue(quality) {
+    async function rateAndContinue(quality) {
         const session = state.session;
         const word = session.currentWord;
         if (!word || session.stage !== 'feedback') {
@@ -3914,9 +3770,17 @@
         if (session.lastAnswer && session.lastAnswer.quality !== quality) {
             const now = new Date();
             const patch = state.scheduler.scheduleAfterResult(word, quality, now);
-            state.store.updateWord(word.id, patch);
-            session.currentWord = { ...word, ...patch };
-            session.lastAnswer.quality = quality;
+            try {
+                const committedWord = await state.store.updateWord(word.id, patch);
+                if (!committedWord) {
+                    throw new Error('词汇记录不存在');
+                }
+                session.currentWord = committedWord;
+                session.lastAnswer.quality = quality;
+            } catch (error) {
+                showFeedbackMessage(`评分保存失败：${error.message || error}`, 'error');
+                return;
+            }
         }
 
         moveToNextWord();
@@ -3948,17 +3812,26 @@
         render();
     }
 
-    function saveCurrentNote() {
+    async function saveCurrentNote() {
         const word = state.session.currentWord;
         if (!word || !state.store || !state.elements.noteInput) {
             return;
         }
         const note = state.elements.noteInput.value.trim();
-        state.store.updateWord(word.id, { note });
-        state.session.currentWord = {
-            ...state.session.currentWord,
-            note
-        };
+        let committedWord;
+        try {
+            committedWord = await state.store.updateWord(word.id, { note });
+            if (!committedWord) {
+                throw new Error('词汇记录不存在');
+            }
+        } catch (error) {
+            if (state.elements.noteStatus) {
+                state.elements.noteStatus.textContent = '保存失败';
+            }
+            showFeedbackMessage(`笔记保存失败：${error.message || error}`, 'error');
+            return false;
+        }
+        state.session.currentWord = committedWord;
         if (state.elements.noteStatus) {
             state.elements.noteStatus.textContent = '已保存';
             setTimeout(() => {
@@ -3967,6 +3840,7 @@
                 }
             }, 1500);
         }
+        return true;
     }
 
     function startBatch(force) {
@@ -6011,33 +5885,99 @@
 (function (window) {
     'use strict';
 
+    /**
+     * Presentation catalog + notifier for achievements.
+     *
+     * Unlock rules and persistence belong entirely to the `achievements.progress`
+     * projector (js/data/v2/appData.js -> computeAchievementProgress). That projector
+     * is declared `derived` in the data catalog, is listed in `derivedPending` for every
+     * practice mutation, and records the historically accurate unlock timestamp for each
+     * achievement id.
+     *
+     * This class therefore owns only display metadata (title / description / icon / tier)
+     * and diffs successive projector reads so that newly unlocked achievements can be
+     * surfaced as notifications. It deliberately does NOT re-derive unlock conditions:
+     * a second rule engine here would drift from the projector (it previously did, which
+     * left every streak achievement permanently locked) and would stamp "unlocked now"
+     * instead of the real unlock time.
+     */
     class AchievementManager {
         constructor() {
-            this.storageKey = 'user_achievements';
             this.achievements = this._defineAchievements();
+            this.achievementIds = new Set(this.achievements.map((item) => item.id));
             this.listeners = [];
             this.initialized = false;
+            // Newest read — what the achievements modal renders.
             this.unlocked = {};
+            // Last read whose projector provenance was proven — what the unlock diff measures
+            // against. Deliberately separate from `unlocked`: see syncFromAppData.
+            this.baseline = {};
+            this.baselineFresh = false;
+            this._deliveryInitialized = false;
+            this._pendingDelivery = {};
+            this._initPromise = null;
+            this._syncTail = Promise.resolve();
         }
 
         /**
-         * Initialize the manager, loading state from storage
+         * Initialize the manager, loading persisted progress from storage.
+         *
+         * The first run seeds a durable delivery baseline so existing users are not greeted with
+         * every historical unlock. Later runs diff against that persisted acknowledgement instead
+         * of the first projector read, which lets a pending unlock survive a page restart.
          */
         async init() {
             if (this.initialized) return;
+            if (this._initPromise) return this._initPromise;
 
+            this._initPromise = this._enqueueSync(() => this._initialize()).finally(() => {
+                this._initPromise = null;
+            });
+            return this._initPromise;
+        }
+
+        async _initialize() {
             try {
-                this.unlocked = await this._loadUnlockedState();
+                let [state, delivery] = await Promise.all([
+                    this._loadUnlockedState(),
+                    this._loadDeliveryState()
+                ]);
+                state = await this._retryUntilFresh(state);
+                this.unlocked = state.unlocked;
+                if (delivery) {
+                    this.baseline = delivery.acknowledged;
+                    this.baselineFresh = true;
+                    this._deliveryInitialized = true;
+                } else {
+                    this.baseline = state.unlocked;
+                    this.baselineFresh = state.fresh;
+                    // A brand-new store has no projector provenance yet, but its empty snapshot is
+                    // still a safe delivery baseline: there is no historical unlock to suppress.
+                    if (state.fresh || Object.keys(state.unlocked).length === 0) {
+                        await this._persistDeliveryBaseline(state.unlocked);
+                        this._deliveryInitialized = true;
+                    }
+                }
                 console.log('[AchievementManager] Initialized. Unlocked:', Object.keys(this.unlocked).length);
                 this.initialized = true;
+
+                if (delivery) {
+                    await this._syncFromAppDataNow({ notify: true, initialState: state });
+                }
             } catch (e) {
                 console.error('[AchievementManager] Init failed', e);
                 this.unlocked = {};
+                this.baseline = {};
+                this.baselineFresh = false;
+                this._deliveryInitialized = false;
+                this.initialized = false;
+                throw e;
             }
         }
 
         /**
-         * Define the list of available achievements
+         * Display metadata for every achievement the projector can unlock.
+         * Ids must stay in sync with computeAchievementProgress in js/data/v2/appData.js.
          */
         _defineAchievements() {
             return [
@@ -6047,32 +5987,28 @@
                     title: '初出茅庐',
                     description: '累计完成 10 次练习',
                     icon: '🥉',
-                    tier: 1,
-                    condition: (stats) => stats.totalPracticed >= 10
+                    tier: 1
                 },
                 {
                     id: 'practice_silver',
                     title: '渐入佳境',
                     description: '累计完成 50 次练习',
                     icon: '🥈',
-                    tier: 2,
-                    condition: (stats) => stats.totalPracticed >= 50
+                    tier: 2
                 },
                 {
                     id: 'practice_gold',
                     title: '百炼成钢',
                     description: '累计完成 100 次练习',
                     icon: '🥇',
-                    tier: 3,
-                    condition: (stats) => stats.totalPracticed >= 100
+                    tier: 3
                 },
                 {
                     id: 'practice_platinum',
                     title: '千锤百炼',
                     description: '累计完成 200 次练习',
                     icon: '🏅',
-                    tier: 3,
-                    condition: (stats) => stats.totalPracticed >= 200
+                    tier: 3
                 },
 
                 // --- Streak Milestones ---
@@ -6081,32 +6017,28 @@
                     title: '持之以恒',
                     description: '连续学习 3 天',
                     icon: '🔥',
-                    tier: 1,
-                    condition: (stats) => stats.streakDays >= 3
+                    tier: 1
                 },
                 {
                     id: 'streak_silver',
                     title: '习惯养成',
                     description: '连续学习 7 天',
                     icon: '🔥',
-                    tier: 2,
-                    condition: (stats) => stats.streakDays >= 7
+                    tier: 2
                 },
                 {
                     id: 'streak_gold',
                     title: '意志如铁',
                     description: '连续学习 30 天',
                     icon: '🔥',
-                    tier: 3,
-                    condition: (stats) => stats.streakDays >= 30
+                    tier: 3
                 },
                 {
                     id: 'streak_platinum',
                     title: '长期主义',
                     description: '连续学习 60 天',
                     icon: '🗓️',
-                    tier: 3,
-                    condition: (stats) => stats.streakDays >= 60
+                    tier: 3
                 },
 
                 // --- Category Mastery: Listening ---
@@ -6115,32 +6047,28 @@
                     title: '开耳第一篇',
                     description: '完成 1 篇听力练习',
                     icon: '🎧',
-                    tier: 1,
-                    condition: (stats) => stats.listeningCount >= 1
+                    tier: 1
                 },
                 {
                     id: 'listening_bronze',
                     title: '顺风耳 (铜)',
                     description: '累计完成 10 篇听力练习',
                     icon: '👂',
-                    tier: 1,
-                    condition: (stats) => stats.listeningCount >= 10
+                    tier: 1
                 },
                 {
                     id: 'listening_silver',
                     title: '顺风耳 (银)',
                     description: '累计完成 50 篇听力练习',
                     icon: '👂',
-                    tier: 2,
-                    condition: (stats) => stats.listeningCount >= 50
+                    tier: 2
                 },
                 {
                     id: 'listening_gold',
                     title: '顺风耳 (金)',
                     description: '累计完成 100 篇听力练习',
                     icon: '👂',
-                    tier: 3,
-                    condition: (stats) => stats.listeningCount >= 100
+                    tier: 3
                 },
 
                 // --- Category Mastery: Reading ---
@@ -6149,32 +6077,28 @@
                     title: '开卷第一篇',
                     description: '完成 1 篇阅读练习',
                     icon: '📖',
-                    tier: 1,
-                    condition: (stats) => stats.readingCount >= 1
+                    tier: 1
                 },
                 {
                     id: 'reading_bronze',
                     title: '火眼金睛 (铜)',
                     description: '累计完成 10 篇阅读练习',
                     icon: '👁️',
-                    tier: 1,
-                    condition: (stats) => stats.readingCount >= 10
+                    tier: 1
                 },
                 {
                     id: 'reading_silver',
                     title: '火眼金睛 (银)',
                     description: '累计完成 50 篇阅读练习',
                     icon: '👁️',
-                    tier: 2,
-                    condition: (stats) => stats.readingCount >= 50
+                    tier: 2
                 },
                 {
                     id: 'reading_gold',
                     title: '火眼金睛 (金)',
                     description: '累计完成 100 篇阅读练习',
                     icon: '👁️',
-                    tier: 3,
-                    condition: (stats) => stats.readingCount >= 100
+                    tier: 3
                 },
 
                 // --- Balanced Practice ---
@@ -6183,16 +6107,14 @@
                     title: '双线推进',
                     description: '阅读与听力各完成 10 篇',
                     icon: '⚖️',
-                    tier: 2,
-                    condition: (stats) => stats.readingCount >= 10 && stats.listeningCount >= 10
+                    tier: 2
                 },
                 {
                     id: 'balanced_advanced',
                     title: '均衡进阶',
                     description: '阅读与听力各完成 30 篇',
                     icon: '🧭',
-                    tier: 3,
-                    condition: (stats) => stats.readingCount >= 30 && stats.listeningCount >= 30
+                    tier: 3
                 },
 
                 // --- Focus Time ---
@@ -6201,24 +6123,21 @@
                     title: '专注一小时',
                     description: '累计学习 60 分钟',
                     icon: '⏱️',
-                    tier: 1,
-                    condition: (stats) => stats.totalStudyMinutes >= 60
+                    tier: 1
                 },
                 {
                     id: 'time_focus_300',
                     title: '沉浸五小时',
                     description: '累计学习 300 分钟',
                     icon: '⏳',
-                    tier: 2,
-                    condition: (stats) => stats.totalStudyMinutes >= 300
+                    tier: 2
                 },
                 {
                     id: 'time_focus_1000',
                     title: '深度备考',
                     description: '累计学习 1000 分钟',
                     icon: '⌛',
-                    tier: 3,
-                    condition: (stats) => stats.totalStudyMinutes >= 1000
+                    tier: 3
                 },
 
                 // --- Accuracy Milestones ---
@@ -6227,48 +6146,42 @@
                     title: '稳中有进',
                     description: '10 次练习后平均正确率 70%+',
                     icon: '📈',
-                    tier: 2,
-                    condition: (stats) => stats.totalPracticed >= 10 && stats.averageAccuracy >= 0.7
+                    tier: 2
                 },
                 {
                     id: 'accuracy_elite',
                     title: '高分稳定',
                     description: '20 次练习后平均正确率 85%+',
                     icon: '💎',
-                    tier: 3,
-                    condition: (stats) => stats.totalPracticed >= 20 && stats.averageAccuracy >= 0.85
+                    tier: 3
                 },
                 {
                     id: 'perfect_three',
                     title: '三次满分',
                     description: '累计 3 次练习获得满分',
                     icon: '🎯',
-                    tier: 2,
-                    condition: (stats) => stats.perfectCount >= 3
+                    tier: 2
                 },
                 {
                     id: 'perfect_ten',
                     title: '十全十美',
                     description: '累计 10 次练习获得满分',
                     icon: '🏆',
-                    tier: 3,
-                    condition: (stats) => stats.perfectCount >= 10
+                    tier: 3
                 },
                 {
                     id: 'speed_three',
                     title: '快速稳定',
                     description: '3 次 5 分钟内完成高分练习',
                     icon: '⚡',
-                    tier: 2,
-                    condition: (stats) => stats.speedHighScoreCount >= 3
+                    tier: 2
                 },
                 {
                     id: 'speed_ten',
                     title: '闪电节奏',
                     description: '10 次 5 分钟内完成高分练习',
                     icon: '🌩️',
-                    tier: 3,
-                    condition: (stats) => stats.speedHighScoreCount >= 10
+                    tier: 3
                 },
 
                 // --- Special Achievements ---
@@ -6277,383 +6190,208 @@
                     title: '迈出第一步',
                     description: '完成第一次练习',
                     icon: '🌱',
-                    tier: 1,
-                    condition: (stats) => stats.totalPracticed >= 1
+                    tier: 1
                 },
                 {
                     id: 'accuracy_perfect',
                     title: '神射手',
                     description: '单次练习获得 100% 正确率',
                     icon: '🎯',
-                    tier: 3,
-                    condition: (stats) => stats.hasPerfectAccuracy
+                    tier: 3
                 },
                 {
                     id: 'speed_demon',
                     title: '唯快不破',
                     description: '5分钟内完成高分练习',
                     icon: '⚡',
-                    tier: 3,
-                    condition: (stats) => stats.hasSpeedDemon
+                    tier: 3
                 }
             ];
         }
 
         /**
-         * Load unlocked state from storage
+         * Read projector-owned unlock progress from storage.
+         *
+         * `AppData.achievements.getAll()` attaches a non-enumerable `fresh` flag: false means the
+         * projector was still pending and the payload is an inline recompute rather than the proven
+         * cache. That distinction is load-bearing for the unlock diff and delivery retry.
          */
         async _loadUnlockedState() {
-            if (window.storage) {
-                return await window.storage.get(this.storageKey, {});
+            const progress = await window.AppData.achievements.getAll();
+            return {
+                unlocked: this._normalizeProgress(progress),
+                fresh: !progress || progress.fresh !== false
+            };
+        }
+
+        async _loadDeliveryState() {
+            const settings = await window.AppData.settings.getAll();
+            const delivery = settings && settings.achievementDelivery;
+            if (!delivery || delivery.version !== 1 || !delivery.acknowledged
+                || typeof delivery.acknowledged !== 'object' || Array.isArray(delivery.acknowledged)) {
+                return null;
             }
-            const raw = localStorage.getItem(this.storageKey);
-            return raw ? JSON.parse(raw) : {};
+            return {
+                acknowledged: Object.fromEntries(Object.entries(delivery.acknowledged)
+                    .filter(([id]) => this.achievementIds.has(id))
+                    .map(([id, unlockedAt]) => [id, { unlockedAt: unlockedAt || null }]))
+            };
+        }
+
+        async _persistDeliveryBaseline(unlocked) {
+            if (!window.AppData.achievements
+                || typeof window.AppData.achievements.acknowledgeDelivery !== 'function') {
+                throw new Error('AppData.achievements.acknowledgeDelivery is required');
+            }
+            await window.AppData.achievements.acknowledgeDelivery(unlocked);
+        }
+
+        _unionBaseline(...sources) {
+            const merged = {};
+            sources.forEach((source) => {
+                Object.entries(source && typeof source === 'object' ? source : {}).forEach(([id, value]) => {
+                    if (!this.achievementIds.has(id)) return;
+                    const candidate = value && typeof value === 'object' ? value.unlockedAt : value;
+                    const candidateTime = typeof candidate === 'string' ? Date.parse(candidate) : NaN;
+                    const prior = merged[id] && merged[id].unlockedAt;
+                    const priorTime = typeof prior === 'string' ? Date.parse(prior) : NaN;
+                    if (!merged[id] || (Number.isFinite(candidateTime)
+                        && (!Number.isFinite(priorTime) || candidateTime < priorTime))) {
+                        merged[id] = { unlockedAt: Number.isFinite(candidateTime)
+                            ? new Date(candidateTime).toISOString()
+                            : null };
+                    }
+                });
+            });
+            return merged;
+        }
+
+        async _retryUntilFresh(initialState) {
+            let state = initialState;
+            if (state.fresh || !window.AppData.achievements
+                || typeof window.AppData.achievements.retryPending !== 'function') {
+                return state;
+            }
+            for (let attempt = 0; attempt < 3 && !state.fresh; attempt += 1) {
+                try {
+                    await window.AppData.achievements.retryPending();
+                    state = await this._loadUnlockedState();
+                } catch (err) {
+                    console.warn('[AchievementManager] Failed to retry pending achievement projection', err);
+                }
+                if (!state.fresh && attempt < 2) {
+                    await new Promise((resolve) => {
+                        const schedule = window.setTimeout || ((callback) => callback());
+                        schedule(resolve, 10 * (2 ** attempt));
+                    });
+                }
+            }
+            return state;
         }
 
         /**
-         * Save unlocked state to storage
+         * Reduce the projector payload to `{ [id]: { unlockedAt } }` for ids this
+         * catalog can render. Unknown ids (e.g. manual entries for retired achievements)
+         * are dropped because there is no card to show them on.
          */
-        async _saveUnlockedState() {
-            if (window.storage) {
-                await window.storage.set(this.storageKey, this.unlocked);
-                return;
-            }
-            localStorage.setItem(this.storageKey, JSON.stringify(this.unlocked));
-        }
-
-        _getDefaultUserStats() {
-            return {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                practiceDays: [],
-                lastPracticeDate: null,
-                achievements: []
-            };
-        }
-
-        _getPracticeRecorder() {
-            const app = window.app;
-            if (app && app.components && app.components.practiceRecorder) {
-                return app.components.practiceRecorder;
-            }
-            return null;
-        }
-
-        async _getUserStatsFromPracticeRecordAPI() {
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
-                return await window.PracticeRecordAPI.readStats();
-            }
-            const recorder = this._getPracticeRecorder();
-            if (recorder && typeof recorder.getUserStats === 'function') {
-                return await recorder.getUserStats();
-            }
-            return this._getDefaultUserStats();
-        }
-
-        /** @deprecated Use _getUserStatsFromPracticeRecordAPI */
-        async _getUserStatsFromScoreStorage() {
-            return this._getUserStatsFromPracticeRecordAPI();
-        }
-
-        async _getPracticeRecordsFromPracticeRecordAPI() {
-            // 使用轻量 listSummary：achievementManager 只需 type/accuracy/duration 等元数据，
-            // 不需要 answers/correctAnswerMap/suiteEntries 等重字段。listSummary 已从 scoreInfo 投影了
-            // accuracy/duration/score 等字段，无需依赖 realData.scoreInfo 后备路径。
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
-                return await window.PracticeRecordAPI.listSummary();
-            }
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                return await window.PracticeRecordAPI.list();
-            }
-            const recorder = this._getPracticeRecorder();
-            if (recorder && typeof recorder.getPracticeRecords === 'function') {
-                return await recorder.getPracticeRecords();
-            }
-            return [];
-        }
-
-        /** @deprecated Use _getPracticeRecordsFromPracticeRecordAPI */
-        async _getPracticeRecordsFromScoreStorage() {
-            return this._getPracticeRecordsFromPracticeRecordAPI();
-        }
-
-        _getCategoryPracticeCount(stats, targetKey) {
-            if (!stats || !stats.categoryStats || typeof stats.categoryStats !== 'object') {
-                return 0;
-            }
-
-            const normalizedTarget = String(targetKey || '').toLowerCase();
-            let count = 0;
-
-            Object.entries(stats.categoryStats).forEach(([key, value]) => {
-                const normalizedKey = String(key || '').toLowerCase();
-                if (normalizedKey !== normalizedTarget) {
-                    return;
-                }
-                const practices = value && Number(value.practices);
-                if (Number.isFinite(practices)) {
-                    count += practices;
-                }
-            });
-
-            return count;
-        }
-
-        _normalizePracticeType(rawType) {
-            if (!rawType) {
-                return null;
-            }
-
-            const normalized = String(rawType).toLowerCase();
-            if (normalized.includes('listen') || normalized.includes('audio') || normalized.includes('hearing')) {
-                return 'listening';
-            }
-            if (normalized.includes('read')) {
-                return 'reading';
-            }
-            return null;
-        }
-
-        _inferRecordPracticeType(record) {
-            if (!record || typeof record !== 'object') {
-                return null;
-            }
-
-            const metadata = record.metadata && typeof record.metadata === 'object'
-                ? record.metadata
+        _normalizeProgress(progress) {
+            const source = progress && typeof progress === 'object' && !Array.isArray(progress)
+                ? progress
                 : {};
-            const candidates = [
-                record.type,
-                record.practiceType,
-                metadata.type,
-                metadata.examType,
-                metadata.practiceType
-            ];
+            const normalized = {};
 
-            for (const candidate of candidates) {
-                const normalized = this._normalizePracticeType(candidate);
-                if (normalized) {
-                    return normalized;
-                }
-            }
-
-            const contextHints = [
-                record.examId,
-                record.url,
-                record.title,
-                metadata.url,
-                metadata.examId,
-                metadata.examTitle,
-                metadata.title
-            ]
-                .filter(Boolean)
-                .map((item) => String(item).toLowerCase())
-                .join(' ');
-
-            if (/listeningpractice|\/listening\/|listen|audio/.test(contextHints)) {
-                return 'listening';
-            }
-            if (/reading|睡着过项目组/.test(contextHints)) {
-                return 'reading';
-            }
-
-            return null;
-        }
-
-        _normalizeAccuracy(record) {
-            if (!record || typeof record !== 'object') {
-                return 0;
-            }
-
-            const scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
-                ? record.scoreInfo
-                : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo === 'object'
-                    ? record.realData.scoreInfo
-                    : {});
-
-            const candidates = [
-                record.accuracy,
-                scoreInfo.accuracy
-            ];
-
-            for (const candidate of candidates) {
-                const value = Number(candidate);
-                if (!Number.isFinite(value)) {
-                    continue;
-                }
-                if (value > 1 && value <= 100) {
-                    return value / 100;
-                }
-                return Math.max(0, Math.min(1, value));
-            }
-
-            return 0;
-        }
-
-        _getRecordDuration(record) {
-            if (!record || typeof record !== 'object') {
-                return 0;
-            }
-
-            const scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
-                ? record.scoreInfo
-                : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo === 'object'
-                    ? record.realData.scoreInfo
-                    : {});
-
-            const candidates = [
-                record.duration,
-                record.realData && record.realData.duration,
-                scoreInfo.duration,
-                scoreInfo.timeSpent
-            ];
-
-            for (const candidate of candidates) {
-                const value = Number(candidate);
-                if (Number.isFinite(value) && value >= 0) {
-                    return value;
-                }
-            }
-
-            return 0;
-        }
-
-        _applyRecordsToDerivedStats(derived, records) {
-            if (!derived || !Array.isArray(records) || records.length === 0) {
-                return;
-            }
-
-            let listeningFromRecords = 0;
-            let readingFromRecords = 0;
-            let totalFromRecords = 0;
-            let totalAccuracyFromRecords = 0;
-            let accuracyRecordCount = 0;
-            let totalDurationFromRecords = 0;
-
-            records.forEach((record) => {
-                if (!record || typeof record !== 'object') {
+            Object.entries(source).forEach(([id, value]) => {
+                if (!value || id === 'updatedAt' || !this.achievementIds.has(id)) {
                     return;
                 }
-
-                totalFromRecords += 1;
-
-                const practiceType = this._inferRecordPracticeType(record);
-                if (practiceType === 'listening') {
-                    listeningFromRecords += 1;
-                } else if (practiceType === 'reading') {
-                    readingFromRecords += 1;
-                }
-
-                const accuracy = this._normalizeAccuracy(record);
-                const duration = this._getRecordDuration(record);
-                totalAccuracyFromRecords += accuracy;
-                accuracyRecordCount += 1;
-                totalDurationFromRecords += duration;
-                this._applyRecordToDerivedStats(derived, { accuracy, duration });
+                const unlockedAt = value && typeof value === 'object' ? value.unlockedAt : null;
+                normalized[id] = { unlockedAt: unlockedAt || null };
             });
 
-            derived.totalPracticed = Math.max(Number(derived.totalPracticed) || 0, totalFromRecords);
-            derived.listeningCount = Math.max(Number(derived.listeningCount) || 0, listeningFromRecords);
-            derived.readingCount = Math.max(Number(derived.readingCount) || 0, readingFromRecords);
-            derived.totalStudyMinutes = Math.max(
-                Number(derived.totalStudyMinutes) || 0,
-                totalDurationFromRecords / 60
-            );
-            if (accuracyRecordCount > 0) {
-                derived.averageAccuracy = Math.max(
-                    Number(derived.averageAccuracy) || 0,
-                    totalAccuracyFromRecords / accuracyRecordCount
-                );
-            }
+            return normalized;
         }
 
-        _buildDerivedStats(rawStats) {
-            const stats = rawStats && typeof rawStats === 'object' ? rawStats : {};
-            const averageScore = Number(stats.averageScore) || 0;
-            return {
-                totalPracticed: Number(stats.totalPractices) || 0,
-                streakDays: Number(stats.streakDays) || 0,
-                totalStudyMinutes: (Number(stats.totalTimeSpent) || 0) / 60,
-                averageAccuracy: averageScore > 1 && averageScore <= 100 ? averageScore / 100 : averageScore,
-                listeningCount: this._getCategoryPracticeCount(stats, 'listening'),
-                readingCount: this._getCategoryPracticeCount(stats, 'reading'),
-                hasPerfectAccuracy: false,
-                hasSpeedDemon: false,
-                perfectCount: 0,
-                speedHighScoreCount: 0
-            };
+        /**
+         * Re-read projector progress and report achievements unlocked since the last proven read.
+         *
+         * Freshness gates the baseline, not the display. `this.unlocked` always tracks the newest
+         * read so the achievements modal never renders yesterday's state, while `this.baseline` —
+         * the set the unlock diff is measured against — only advances on a read whose provenance the
+         * projector proved. An unproven read that quietly became the baseline would make the next
+         * read see the unlock as "already known" and drop its notification for good, which is the
+         * one failure mode with no recovery path: there is no later event that re-raises it.
+         *
+         * Consequences of that split: an unproven read never notifies (announcing an unlock the
+         * proven projection has not confirmed risks a toast for something that never happened, e.g.
+         * a source snapshot read mid-import), and it never consumes one either — the very next
+         * proven read still sees the unlock as new and raises it exactly once.
+         *
+         * @param {Object} options
+         * @param {boolean} [options.notify] - surface a toast for each new unlock
+         */
+        syncFromAppData(options = {}) {
+            return this._enqueueSync(() => this._syncFromAppDataNow(options));
         }
 
-        _applyRecordToDerivedStats(derived, record) {
-            if (!derived || !record) {
-                return;
-            }
-
-            const accuracy = Number(record.accuracy) || 0;
-            const duration = Number(record.duration) || 0;
-
-            if (accuracy >= 1) {
-                derived.hasPerfectAccuracy = true;
-                derived.perfectCount = (Number(derived.perfectCount) || 0) + 1;
-            }
-            if (duration > 0 && duration <= 300 && accuracy > 0.8) {
-                derived.hasSpeedDemon = true;
-                derived.speedHighScoreCount = (Number(derived.speedHighScoreCount) || 0) + 1;
-            }
+        _enqueueSync(run) {
+            const result = this._syncTail.then(run, run);
+            this._syncTail = result.catch(() => {});
+            return result;
         }
 
-        async syncFromPracticeRecordAPI(options = {}) {
-            const {
-                includeRecords = false,
-                latestRecord = null,
-                notify = false
-            } = options;
-
-            const rawStats = await this._getUserStatsFromPracticeRecordAPI();
-            const derivedStats = this._buildDerivedStats(rawStats);
-
-            const records = await this._getPracticeRecordsFromPracticeRecordAPI();
-            this._applyRecordsToDerivedStats(derivedStats, records);
-
-            if (!includeRecords) {
-                this._applyRecordToDerivedStats(derivedStats, latestRecord);
-            }
-
-            return this._unlockByStats(derivedStats, { notify });
-        }
-
-        /** @deprecated Use syncFromPracticeRecordAPI */
-        async syncFromScoreStorage(options = {}) {
-            return this.syncFromPracticeRecordAPI(options);
-        }
-
-        async _unlockByStats(stats, options = {}) {
+        async _syncFromAppDataNow(options = {}) {
             const { notify = false } = options;
-            const newUnlocks = [];
+            const baseline = this.baseline && typeof this.baseline === 'object' ? this.baseline : {};
 
-            for (const achievement of this.achievements) {
-                if (this.unlocked[achievement.id]) continue;
-
-                try {
-                    if (achievement.condition(stats, null)) {
-                        this.unlocked[achievement.id] = {
-                            unlockedAt: new Date().toISOString()
-                        };
-                        newUnlocks.push(achievement);
-                    }
-                } catch (err) {
-                    console.error(`[AchievementManager] Error checking ${achievement.id}`, err);
-                }
+            let state = options.initialState || null;
+            try {
+                if (!state) state = await this._loadUnlockedState();
+            } catch (err) {
+                console.warn('[AchievementManager] Failed to read achievement progress', err);
+                return [];
             }
 
-            if (newUnlocks.length > 0) {
-                await this._saveUnlockedState();
-                if (notify) {
-                    this._notify(newUnlocks);
+            state = await this._retryUntilFresh(state);
+
+            const current = state.unlocked;
+            this.unlocked = current;
+            if (!state.fresh) {
+                // Derived cache was unproven (projector pending): display refreshed, baseline held.
+                this.baselineFresh = false;
+                return [];
+            }
+
+            if (!this._deliveryInitialized) {
+                await this._persistDeliveryBaseline(current);
+                this.baseline = this._unionBaseline(baseline, current);
+                this.baselineFresh = true;
+                this._deliveryInitialized = true;
+                return [];
+            }
+
+            const newUnlocks = this.achievements.filter((achievement) => (
+                current[achievement.id] && !baseline[achievement.id]
+            ));
+
+            this.baselineFresh = true;
+
+            if (newUnlocks.length > 0 && notify) {
+                this._notify(newUnlocks);
+                // Notification delivery is at-least-once across crashes. Within this session,
+                // advance first so a failed persistence retry cannot repeatedly toast the user.
+                this.baseline = this._unionBaseline(baseline, current);
+                this._pendingDelivery = this._unionBaseline(this._pendingDelivery, current);
+            } else if (newUnlocks.length === 0) {
+                this.baseline = this._unionBaseline(baseline, current);
+            }
+
+            if (Object.keys(this._pendingDelivery).length > 0) {
+                const pending = this._pendingDelivery;
+                try {
+                    await this._persistDeliveryBaseline(pending);
+                    this._pendingDelivery = {};
+                } catch (err) {
+                    console.warn('[AchievementManager] Failed to persist delivery acknowledgement', err);
                 }
             }
 
@@ -6661,12 +6399,12 @@
         }
 
         /**
-         * Check for new achievements based on latest activity
-         * @param {Object} latestRecord - The practice record just completed
+         * Check for newly unlocked achievements after a practice completes.
+         * The projector has already recomputed progress by this point; we only diff it.
          */
-        async check(latestRecord) {
+        async check() {
             if (!this.initialized) await this.init();
-            return this.syncFromPracticeRecordAPI({ includeRecords: true, latestRecord, notify: true });
+            return this.syncFromAppData({ notify: true });
         }
 
         /**
@@ -6723,7 +6461,7 @@
             }
         }
 
-        await window.AchievementManager.syncFromPracticeRecordAPI({ includeRecords: true, notify: false });
+        await window.AchievementManager.syncFromAppData({ notify: false });
         const all = window.AchievementManager.getAll();
         list.innerHTML = all.map(a => `
             <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''} ${a.tier ? 'tier-' + a.tier : ''}">

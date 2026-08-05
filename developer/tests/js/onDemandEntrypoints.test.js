@@ -37,6 +37,9 @@ function createDocumentStub(inputState, buttonState) {
             }
             return null;
         },
+        querySelectorAll() {
+            return [];
+        },
         getElementById(id) {
             if (id === 'exam-search-input') {
                 return inputState;
@@ -68,10 +71,17 @@ function createHarness() {
         showMessage(message, type) {
             messages.push({ message, type });
         },
-        getExamIndexState() {
+        async resolveActiveLibraryIndex() {
             return [
                 { id: 'reading-1', title: 'Ocean Passage', type: 'reading', hasHtml: true, path: 'Reading/set-1' }
             ];
+        },
+        AppData: {
+            ready: Promise.resolve(),
+            preferences: {
+                async getCandidateCode() { return null; },
+                async setCandidateCode(value) { return value; }
+            }
         },
         AppLazyLoader: {
             ensureGroup(name) {
@@ -118,9 +128,7 @@ async function testRandomPracticeEnsuresBrowseRuntime(harness) {
     loadScript('js/app/main-entry.js', harness.context);
     loadScript('js/presentation/app-actions.js', harness.context);
 
-    harness.windowStub.AppActions.startRandomPractice('all', 'reading');
-    await Promise.resolve();
-    await Promise.resolve();
+    await harness.windowStub.AppActions.startRandomPractice('all', 'reading');
 
     assert(harness.ensureCalls.includes('browse-runtime'), '随机练习应主动确保 browse-runtime 已加载');
     assert.strictEqual(harness.windowStub.__openedExamId, 'reading-1', '随机练习应在严格按需模式下仍能打开题目');

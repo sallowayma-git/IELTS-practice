@@ -43,10 +43,9 @@ def _summarize_results() -> None:
 
 async def _ensure_app_ready(page: Page) -> None:
     await page.wait_for_load_state("load")
-    await page.wait_for_function(
-        "() => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function'",
-        timeout=60000,
-    )
+    await page.wait_for_function("() => !!window.AppData", timeout=60000)
+    await page.evaluate("async () => { await window.AppData.ready; }")
+    await page.wait_for_function("() => window.app?.isInitialized === true", timeout=60000)
 
 
 async def _accept_dialog(dialog: Dialog) -> None:
@@ -75,9 +74,8 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
     global _AUTO_CLOSE_POPUPS
     before_records = await page.evaluate(
         "async () => {"
-        "  if (!window.PracticeRecordAPI?.list) return 0;"
-        "  const records = await window.PracticeRecordAPI.list();"
-        "  return Array.isArray(records) ? records.length : 0;"
+        "  const records = await window.AppData.practice.list({ projection: 'light' });"
+        "  return records.length;"
         "}"
     )
     popup = None
@@ -95,11 +93,10 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
             failure=f"未找到 data-exam-id, exam_id={exam_id}",
         )
 
-        records_after = await popup.evaluate(
+        records_after = await page.evaluate(
             "async () => {"
-            "  if (!window.PracticeRecordAPI?.list) return 0;"
-            "  const records = await window.PracticeRecordAPI.list();"
-            "  return Array.isArray(records) ? records.length : 0;"
+            "  const records = await window.AppData.practice.list({ projection: 'light' });"
+            "  return records.length;"
             "}"
         )
         _assert_and_record(
@@ -118,7 +115,16 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
 
 async def _get_backups(page: Page) -> list:
     backups = await page.evaluate(
-        "() => (window.storage?.get && window.storage.get('manual_backups')) || []"
+        """async () => {
+            const isolationId = window.__E2E_ISOLATION_BACKUP_ID || null;
+            const items = await window.AppData.backups.list();
+            return items
+                .filter((item) => item && item.id !== isolationId)
+                .map((item) => ({
+                    ...item,
+                    timestamp: Date.parse(item.createdAt || item.updatedAt || item.timestamp || 0) / 1000
+                }));
+        }"""
     )
     return backups if isinstance(backups, list) else []
 
@@ -441,15 +447,41 @@ async def exercise_index_interactions(page: Page) -> None:
     await page.goto(INDEX_PATH.resolve().as_uri())
     await _ensure_app_ready(page)
 
+    isolation = await page.evaluate(
+        """async () => {
+            const baselineIds = (await window.AppData.backups.list()).map((item) => item.id);
+            const backup = await window.AppData.backups.create({ type: 'e2e-isolation', label: 'index-clickthrough' });
+            window.__E2E_ISOLATION_BACKUP_ID = backup.id;
+            return { backupId: backup.id, baselineIds };
+        }"""
+    )
+
     page.on("dialog", lambda dialog: asyncio.ensure_future(_accept_dialog(dialog)))
     page.on("popup", lambda popup: asyncio.ensure_future(_close_popup_if_enabled(popup)))
 
-    await _exercise_developer_links(page)
-    await _exercise_overview(page)
-    await _exercise_browse(page)
-    await _exercise_practice(page)
-    await _exercise_settings(page)
-    await _exercise_developer_links(page)
+    try:
+        await _exercise_developer_links(page)
+        await _exercise_overview(page)
+        await _exercise_browse(page)
+        await _exercise_practice(page)
+        await _exercise_settings(page)
+        await _exercise_developer_links(page)
+    finally:
+        await _ensure_app_ready(page)
+        await page.evaluate(
+            """async ({ backupId, baselineIds }) => {
+                await window.AppData.backups.restore(backupId);
+                const baseline = new Set(baselineIds);
+                const current = await window.AppData.backups.list();
+                for (const backup of current) {
+                    if (backup && !baseline.has(backup.id)) {
+                        await window.AppData.backups.delete(backup.id);
+                    }
+                }
+                delete window.__E2E_ISOLATION_BACKUP_ID;
+            }""",
+            isolation,
+        )
 
 
 async def run_e2e_suite(page: Page) -> None:
@@ -480,10 +512,6 @@ async def main() -> None:
     async with async_playwright() as p:
         browser: Browser = await p.chromium.launch()
         context = await browser.new_context()
-        await context.add_init_script(
-            "(() => { try { localStorage.removeItem('preferred_theme_portal'); sessionStorage.removeItem('preferred_theme_skip_session'); } catch (_) {} })();"
-        )
-
         page = await context.new_page()
         await exercise_index_interactions(page)
 

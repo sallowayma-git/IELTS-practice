@@ -15,18 +15,20 @@ function loadScript(relativePath, context) {
     vm.runInContext(code, context, { filename: relativePath });
 }
 
-function createSessionStorageStub() {
+function createWindowSessionStub() {
     const store = new Map();
     return {
-        store,
-        getItem(key) {
-            return store.has(key) ? store.get(key) : null;
+        save(name, value) {
+            store.set(String(name), JSON.parse(JSON.stringify(value)));
+            return true;
         },
-        setItem(key, value) {
-            store.set(key, String(value));
+        get(name) {
+            const value = store.get(String(name));
+            return value == null ? null : JSON.parse(JSON.stringify(value));
         },
-        removeItem(key) {
-            store.delete(key);
+        discard(name) {
+            store.delete(String(name));
+            return true;
         }
     };
 }
@@ -64,17 +66,29 @@ function createDocumentStub() {
     };
 }
 
+function hostEvent(sourceWindow, type, data, overrides = {}) {
+    return {
+        source: overrides.source || sourceWindow,
+        origin: overrides.origin || 'http://localhost',
+        data: { type, source: overrides.envelopeSource || 'exam_host', data }
+    };
+}
+
 function createContext() {
-    const sessionStorage = createSessionStorageStub();
+    const windowSession = createWindowSessionStub();
     const document = createDocumentStub();
     const window = {
         location: {
             href: 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1',
-            search: '?examId=reading-p1'
+            search: '?examId=reading-p1',
+            protocol: 'http:'
         },
         history: { replaceState() {} },
         document,
-        sessionStorage,
+        AppData: {
+            ready: Promise.resolve(true),
+            recovery: { windowSession }
+        },
         opener: null,
         parent: null,
         addEventListener() {},
@@ -132,22 +146,21 @@ function createContext() {
         HTMLInputElement: window.HTMLInputElement,
         HTMLTextAreaElement: window.HTMLTextAreaElement,
         HTMLSelectElement: window.HTMLSelectElement,
-        sessionStorage,
         location: window.location
     };
     sandbox.globalThis = window;
-    return { context: vm.createContext(sandbox), window, document, sessionStorage };
+    return { context: vm.createContext(sandbox), window, document, windowSession };
 }
 
 function loadHooks() {
-    const { context, window, sessionStorage } = createContext();
+    const { context, window, windowSession } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, sessionStorage };
+    return { hooks, window, windowSession };
 }
 
 function plain(value) {
@@ -231,7 +244,7 @@ async function testInlineEnvelopeGuard() {
 }
 
 async function testInlineReinitSnapshot() {
-    const { hooks, sessionStorage, window } = loadHooks();
+    const { hooks, windowSession, window } = loadHooks();
 
     hooks.setTestState({
         examId: 'reading-p1',
@@ -284,9 +297,8 @@ async function testInlineReinitSnapshot() {
     assert.deepStrictEqual(plain(slotEntry[1].draft.answers), { q1: 'A' }, 'slot draft must be updated before reinit');
     assert.strictEqual(slotEntry[1].draft.noteText, 'fresh note', 'slot draft noteText must be updated before reinit');
 
-    const storageKey = 'ielts_sim_draft::suite-1::reading-p1';
-    assert(sessionStorage.store.has(storageKey), 'reinit snapshot must persist the local mirror');
-    const stored = JSON.parse(sessionStorage.store.get(storageKey));
+    const stored = windowSession.get('simulation-draft:suite-1:reading-p1');
+    assert(stored, 'reinit snapshot must persist the window-session draft');
     assert.deepStrictEqual(plain(stored.draft.answers), { q1: 'A' }, 'persisted mirror must use the captured draft');
 }
 
@@ -299,6 +311,9 @@ async function testWindowSessionMessageGuard() {
         sessionId: 'session-new',
         suiteSessionId: 'suite-new',
         parentWindow: sourceWindow,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
         windowSessionToken: 'token-new',
         windowSessionIssuedAtMs: 5000,
         lastInitSignature: '',
@@ -316,29 +331,20 @@ async function testWindowSessionMessageGuard() {
         }
     });
 
-    await hooks.handleIncoming({
-        source: sourceWindow,
-        data: {
-            type: 'INIT_SESSION',
-            data: {
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'INIT_SESSION', {
                 examId: 'reading-p2',
                 sessionId: 'session-new',
                 suiteSessionId: 'suite-new',
                 windowSessionToken: 'token-old',
-                messageIssuedAtMs: 4000
-            }
-        }
-    });
+                messageIssuedAtMs: 4000,
+                parentOrigin: 'http://localhost'
+    }));
 
     let state = hooks.getTestState();
     assert.strictEqual(state.lastInitSignature, '', 'stale INIT_SESSION must not overwrite current inline session');
     assert.strictEqual(state.windowSessionToken, 'token-new', 'stale INIT_SESSION must not replace window token');
 
-    await hooks.handleIncoming({
-        source: sourceWindow,
-        data: {
-            type: 'SIMULATION_CONTEXT',
-            data: {
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'SIMULATION_CONTEXT', {
                 examId: 'reading-p2',
                 sessionId: 'session-new',
                 suiteSessionId: 'suite-new',
@@ -352,30 +358,322 @@ async function testWindowSessionMessageGuard() {
                     { examId: 'reading-p2' },
                     { examId: 'reading-p3' }
                 ]
-            }
-        }
-    });
+    }));
 
     state = hooks.getTestState();
     assert.strictEqual(state.simulationCtx.currentIndex, 1, 'stale SIMULATION_CONTEXT must not replace active simulation context');
 
-    await hooks.handleIncoming({
-        source: sourceWindow,
-        data: {
-            type: 'INIT_SESSION',
-            data: {
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'INIT_SESSION', {
                 examId: 'reading-p2',
                 sessionId: 'session-newer',
                 suiteSessionId: 'suite-new',
                 windowSessionToken: 'token-newer',
-                messageIssuedAtMs: 6000
-            }
-        }
-    });
+                messageIssuedAtMs: 6000,
+                parentOrigin: 'http://localhost'
+    }));
 
     state = hooks.getTestState();
     assert.strictEqual(state.sessionId, 'session-newer', 'newer INIT_SESSION must still be accepted');
     assert.strictEqual(state.windowSessionToken, 'token-newer', 'newer INIT_SESSION must adopt the latest window token');
+    hooks.stopReadingDraftSync();
+    hooks.stopSimulationDraftSync();
+}
+
+async function testReferrerlessInitBindsOnlyTrustedHost() {
+    const { hooks } = loadHooks();
+    const parentWindow = { postMessage() {} };
+    hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: null,
+        suiteSessionId: null,
+        parentWindow,
+        expectedParentOrigin: '',
+        parentOrigin: '',
+        parentOriginIsOpaque: false,
+        windowSessionToken: '',
+        lastInitSignature: ''
+    });
+    const initData = {
+        examId: 'reading-p1',
+        sessionId: 'referrerless-session',
+        parentOrigin: 'https://host.example',
+        windowSessionToken: 'referrerless-token'
+    };
+    await hooks.handleIncoming(hostEvent({ postMessage() {} }, 'INIT_SESSION', initData, { origin: 'https://host.example' }));
+    assert.strictEqual(hooks.getTestState().parentOrigin, '', 'a forged source must not bind a referrerless child');
+    await hooks.handleIncoming(hostEvent(parentWindow, 'INIT_SESSION', initData, { origin: 'https://attacker.invalid' }));
+    assert.strictEqual(hooks.getTestState().parentOrigin, '', 'a mismatched origin must not bind a referrerless child');
+    await hooks.handleIncoming(hostEvent(parentWindow, 'INIT_SESSION', initData, { origin: 'https://host.example' }));
+    assert.strictEqual(hooks.getTestState().parentOrigin, 'https://host.example', 'trusted non-opaque INIT must bind the missing referrer origin');
+    assert.strictEqual(hooks.getTestState().windowSessionToken, 'referrerless-token');
+
+    const fileHarness = loadHooks();
+    const fileParent = { postMessage() {} };
+    fileHarness.window.location.protocol = 'file:';
+    fileHarness.hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: null,
+        suiteSessionId: null,
+        parentWindow: fileParent,
+        expectedParentOrigin: '',
+        parentOrigin: '',
+        parentOriginIsOpaque: false,
+        windowSessionToken: '',
+        lastInitSignature: ''
+    });
+    await fileHarness.hooks.handleIncoming(hostEvent(fileParent, 'INIT_SESSION', {
+        examId: 'reading-p1',
+        sessionId: 'file-session',
+        parentOrigin: 'file://',
+        windowSessionToken: 'file-token'
+    }, { origin: 'file://' }));
+    assert.strictEqual(fileHarness.hooks.getTestState().parentOrigin, 'null',
+        'file:// opener INIT must bind the opaque origin');
+    assert.strictEqual(fileHarness.hooks.getTestState().parentOriginIsOpaque, true);
+    assert.strictEqual(fileHarness.hooks.getTestState().windowSessionToken, 'file-token');
+}
+
+async function testSavedRecordAcknowledgementSessionGate() {
+    const { hooks } = loadHooks();
+    const sourceWindow = { name: 'saved-record-host' };
+    hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'session-current',
+        submittedRecordId: 'record-existing',
+        parentWindow: sourceWindow,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-current',
+        suite: {
+            inline: false,
+            slotsByExamId: new Map()
+        }
+    });
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_RECORD_SAVED', {
+                examId: 'reading-p1',
+                sessionId: 'session-stale',
+                recordId: 'record-stale',
+                windowSessionToken: 'token-current'
+    }));
+    assert.strictEqual(
+        hooks.getTestState().submittedRecordId,
+        'record-existing',
+        'a late acknowledgement from an older session must be ignored'
+    );
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_RECORD_SAVED', {
+                examId: 'reading-p1',
+                recordId: 'record-without-session',
+                windowSessionToken: 'token-current'
+    }));
+    assert.strictEqual(
+        hooks.getTestState().submittedRecordId,
+        'record-existing',
+        'an acknowledgement without a session binding must be ignored'
+    );
+
+    const validAcknowledgement = {
+        examId: 'reading-p1',
+        sessionId: 'session-current',
+        recordId: 'record-current',
+        windowSessionToken: 'token-current'
+    };
+    await hooks.handleIncoming(hostEvent(
+        sourceWindow,
+        'PRACTICE_RECORD_SAVED',
+        validAcknowledgement,
+        { origin: 'https://attacker.invalid' }
+    ));
+    await hooks.handleIncoming(hostEvent(
+        sourceWindow,
+        'PRACTICE_RECORD_SAVED',
+        validAcknowledgement,
+        { source: { name: sourceWindow.name } }
+    ));
+    await hooks.handleIncoming(hostEvent(
+        sourceWindow,
+        'PRACTICE_RECORD_SAVED',
+        validAcknowledgement,
+        { envelopeSource: 'practice_page' }
+    ));
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_RECORD_SAVED', {
+        ...validAcknowledgement,
+        windowSessionToken: 'token-forged'
+    }));
+    assert.strictEqual(
+        hooks.getTestState().submittedRecordId,
+        'record-existing',
+        'wrong origin/window/source/token must not overwrite the saved record binding'
+    );
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_RECORD_SAVED', {
+                ...validAcknowledgement
+    }));
+    assert.strictEqual(
+        hooks.getTestState().submittedRecordId,
+        'record-current',
+        'the current session acknowledgement should bind its saved record id'
+    );
+
+    hooks.setTestState({ sessionId: null });
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_RECORD_SAVED', {
+                examId: 'reading-p1',
+                sessionId: 'session-current',
+                recordId: 'record-during-restart',
+                windowSessionToken: 'token-current'
+    }));
+    assert.strictEqual(
+        hooks.getTestState().submittedRecordId,
+        'record-current',
+        'an acknowledgement received during session restart must be ignored'
+    );
+}
+
+async function testSubmitAcknowledgementStateMachine() {
+    const falseHarness = loadHooks();
+    falseHarness.hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'session-submit-false',
+        parentWindow: { postMessage() { return false; } },
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-submit-false',
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+    assert.strictEqual(falseHarness.hooks.beginSubmission('PRACTICE_COMPLETE', {}), false);
+    assert.strictEqual(falseHarness.hooks.getTestState().submissionStatus, 'draft');
+    assert.strictEqual(falseHarness.hooks.getTestState().readOnly, false);
+
+    const failedHarness = loadHooks();
+    const throwingParent = {
+        postMessage() {
+            throw new Error('delivery failed');
+        }
+    };
+    failedHarness.hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'session-submit-failed',
+        parentWindow: throwingParent,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-submit-failed',
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+    assert.strictEqual(
+        failedHarness.hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } }),
+        false,
+        'a synchronous postMessage failure must reject the submission attempt'
+    );
+    assert.strictEqual(failedHarness.hooks.getTestState().submissionStatus, 'draft');
+    assert.strictEqual(failedHarness.hooks.getTestState().readOnly, false);
+
+    const delivered = [];
+    const sourceWindow = {
+        postMessage(message) {
+            delivered.push(message);
+        }
+    };
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'session-submit-current',
+        suiteSessionId: null,
+        parentWindow: sourceWindow,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-submit-current',
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+
+    assert.strictEqual(hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } }), true);
+    let state = hooks.getTestState();
+    const submissionId = state.submissionId;
+    assert.strictEqual(state.submissionStatus, 'submitting');
+    assert.strictEqual(state.submitted, false, 'delivery alone must not mark the page submitted');
+    assert.strictEqual(state.readOnly, false, 'delivery alone must not lock the page');
+    assert.strictEqual(delivered.length, 1);
+    assert.strictEqual(delivered[0].data.submissionId, submissionId);
+    assert.strictEqual(
+        hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } }),
+        false,
+        'a duplicate click while submitting must be ignored'
+    );
+    assert.strictEqual(delivered.length, 1, 'duplicate clicks must not emit a second message');
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_SUBMIT_ACK', {
+        sessionId: 'session-submit-current',
+        submissionId,
+        windowSessionToken: 'token-submit-current'
+    }));
+    assert.strictEqual(hooks.getTestState().submissionStatus, 'submitting', 'ACK without examId must be ignored');
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_SUBMIT_FAILED', {
+        examId: 'reading-p1',
+        sessionId: 'session-submit-current',
+        submissionId,
+        windowSessionToken: 'token-submit-current'
+    }));
+    state = hooks.getTestState();
+    assert.strictEqual(state.submissionStatus, 'draft');
+    assert.strictEqual(state.readOnly, false);
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_SUBMIT_ACK', {
+        examId: 'reading-p1',
+        sessionId: 'session-submit-current',
+        submissionId,
+        windowSessionToken: 'token-submit-current'
+    }));
+    assert.strictEqual(hooks.getTestState().submissionStatus, 'draft', 'late ACK after NACK must not submit the page');
+    assert.strictEqual(hooks.getTestState().readOnly, false);
+
+    assert.strictEqual(hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'A' } }), true);
+    assert.strictEqual(delivered.length, 2);
+    assert.strictEqual(delivered[1].data.submissionId, submissionId, 'retry must reuse the idempotency key');
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_SUBMIT_ACK', {
+        examId: 'reading-p1',
+        sessionId: 'session-submit-current',
+        submissionId,
+        windowSessionToken: 'token-submit-current'
+    }));
+    state = hooks.getTestState();
+    assert.strictEqual(state.submissionStatus, 'submitted');
+    assert.strictEqual(state.submitted, true);
+    assert.strictEqual(state.readOnly, true, 'only a valid ACK may lock the page');
+
+    const timeoutHarness = loadHooks();
+    const timeoutParent = { postMessage() {} };
+    timeoutHarness.hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'session-submit-timeout',
+        parentWindow: timeoutParent,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-submit-timeout',
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+    assert.strictEqual(timeoutHarness.hooks.beginSubmission('PRACTICE_COMPLETE', {}), true);
+    const timeoutSubmissionId = timeoutHarness.hooks.getTestState().submissionId;
+    assert.strictEqual(timeoutHarness.hooks.expirePendingSubmission(timeoutSubmissionId), true);
+    assert.strictEqual(timeoutHarness.hooks.getTestState().submissionStatus, 'draft');
+    assert.strictEqual(timeoutHarness.hooks.getTestState().readOnly, false);
+    await timeoutHarness.hooks.handleIncoming(hostEvent(timeoutParent, 'PRACTICE_SUBMIT_ACK', {
+        examId: 'reading-p1',
+        sessionId: 'session-submit-timeout',
+        submissionId: timeoutSubmissionId,
+        windowSessionToken: 'token-submit-timeout'
+    }));
+    assert.strictEqual(timeoutHarness.hooks.getTestState().submissionStatus, 'draft', 'late ACK after timeout must be ignored');
+    assert.strictEqual(timeoutHarness.hooks.getTestState().readOnly, false);
 }
 
 async function main() {
@@ -383,10 +681,14 @@ async function main() {
     await testInlineEnvelopeGuard();
     await testInlineReinitSnapshot();
     await testWindowSessionMessageGuard();
+    await testReferrerlessInitBindsOnlyTrustedHost();
+    await testSavedRecordAcknowledgementSessionGate();
+    await testSubmitAcknowledgementStateMachine();
     process.stdout.write(JSON.stringify({
         status: 'pass',
         detail: 'unified reading inline suite regressions covered'
     }));
+    process.exit(0);
 }
 
 main().catch((error) => {

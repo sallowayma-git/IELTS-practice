@@ -4,8 +4,8 @@
     var BRIDGE_SCRIPT_URL = '/js/bundles/listening-record-bridge.bundle.js';
     var ADAPTER_STYLE_ID = 'listening-unified-wrapper-adapter-style';
     var TIMER_INTERVAL_MS = 1000;
-    var CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
     var CANDIDATE_CODE_PATTERN = /^\d{6}$/;
+    var candidateCodeCache = { mode: 'auto', customCode: '' };
     var state = {
         examId: '',
         sourceUrl: '',
@@ -19,7 +19,11 @@
         bridgeInjected: false,
         bridgeReady: false,
         pendingMessages: [],
-        parentWindow: null,
+        parentWindow: global.opener || (global.parent && global.parent !== global ? global.parent : null),
+        expectedParentOrigin: '',
+        parentOrigin: '',
+        parentOriginIsOpaque: false,
+        windowSessionToken: '',
         timerInterval: null,
         lastTimerText: ''
     };
@@ -27,8 +31,17 @@
     function sameOrigin() {
         return global.location && global.location.origin && global.location.origin !== 'null'
             ? global.location.origin
-            : '*';
+            : (global.location && global.location.protocol === 'file:' ? '*' : '');
     }
+
+    try {
+        if (global.document && global.document.referrer) {
+            var referrerUrl = new URL(global.document.referrer, global.location.href);
+            state.expectedParentOrigin = referrerUrl.origin && referrerUrl.origin !== 'null'
+                ? referrerUrl.origin
+                : '';
+        }
+    } catch (_) { }
 
     function normalizeSafeId(value, fallback) {
         var text = String(value || '').trim();
@@ -125,20 +138,15 @@
     }
 
     function readCandidateCodePreferences() {
-        try {
-            var raw = global.localStorage && global.localStorage.getItem(CANDIDATE_CODE_PREF_KEY);
-            var parsed = raw ? JSON.parse(raw) : null;
-            var mode = parsed && parsed.mode === 'custom' ? 'custom' : 'auto';
-            var customCode = parsed && typeof parsed.customCode === 'string'
-                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
-                : '';
-            return {
-                mode: mode,
-                customCode: CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
-            };
-        } catch (_) {
-            return { mode: 'auto', customCode: '' };
-        }
+        return Object.assign({}, candidateCodeCache);
+    }
+
+    async function loadCandidateCodePreferences() {
+        await global.AppData.ready;
+        var stored = await global.AppData.preferences.getCandidateCode();
+        var mode = stored && stored.mode === 'custom' ? 'custom' : 'auto';
+        var customCode = stored && typeof stored.customCode === 'string' ? stored.customCode.replace(/\D/g, '').slice(0, 6) : '';
+        candidateCodeCache = { mode: mode, customCode: CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : '' };
     }
 
     function resolveCandidateCode() {
@@ -830,7 +838,9 @@
             return;
         }
         try {
-            win.postMessage(message, sameOrigin());
+            var targetOrigin = sameOrigin();
+            if (!targetOrigin) throw new Error('iframe target origin unavailable');
+            win.postMessage(message, targetOrigin);
         } catch (_) {
             state.pendingMessages.push(message);
         }
@@ -869,35 +879,74 @@
             return;
         }
         try {
-            target.postMessage(message, sameOrigin());
+            var targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
+                ? state.parentOrigin
+                : (state.expectedParentOrigin || (global.location.protocol === 'file:' ? '*' : ''));
+            if (!targetOrigin) return;
+            target.postMessage(message, targetOrigin);
         } catch (_) { }
     }
 
-    function handleParentMessage(message, source) {
-        if (source && source !== global && typeof source.postMessage === 'function') {
-            state.parentWindow = source;
-        }
+    function handleParentMessage(event) {
+        var message = event && event.data;
+        var source = event && event.source;
         var type = message && message.type;
         if (type === 'INIT_SESSION' || type === 'init_exam_session') {
             var payload = message.data || message;
+            var incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+            var declaredOrigin = typeof payload.parentOrigin === 'string' ? payload.parentOrigin : '';
+            var incomingToken = typeof payload.windowSessionToken === 'string' ? payload.windowSessionToken.trim() : '';
+            if (!state.parentWindow || source !== state.parentWindow || message.source !== 'exam_host' || !incomingToken) return;
+            if (state.expectedParentOrigin) {
+                if (incomingOrigin !== state.expectedParentOrigin || declaredOrigin !== state.expectedParentOrigin) return;
+                state.parentOrigin = state.expectedParentOrigin;
+                state.parentOriginIsOpaque = false;
+            } else {
+                if (incomingOrigin !== 'null' || declaredOrigin !== 'null' || global.location.protocol !== 'file:') return;
+                state.parentOrigin = 'null';
+                state.parentOriginIsOpaque = true;
+            }
+            state.windowSessionToken = incomingToken;
             state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
             state.sessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
             state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
             state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
+        } else {
+            var messagePayload = message && message.data || {};
+            var messageOrigin = typeof event.origin === 'string' ? event.origin : '';
+            var messageToken = typeof messagePayload.windowSessionToken === 'string' ? messagePayload.windowSessionToken.trim() : '';
+            var originMatches = state.parentOriginIsOpaque
+                ? messageOrigin === 'null'
+                : Boolean(state.parentOrigin && messageOrigin === state.parentOrigin);
+            if (!state.parentWindow || source !== state.parentWindow || message.source !== 'exam_host'
+                || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) return;
         }
         forwardToIframe(message);
     }
 
     function handleMessage(event) {
-        if (!event || !event.data || (event.origin && event.origin !== global.location.origin)) {
+        if (!event || !event.data) {
             return;
         }
         var frameWindow = getFrameWindow();
         if (event.source && frameWindow && event.source === frameWindow) {
+            var frameOrigin = sameOrigin();
+            if (frameOrigin === '*') {
+                if (event.origin !== 'null') return;
+            } else if (!frameOrigin || event.origin !== frameOrigin) {
+                return;
+            }
+            var framePayload = event.data && event.data.data || {};
+            var permitsPreInit = event.data.type === 'REQUEST_INIT'
+                || (event.data.type === 'SESSION_READY' && framePayload.initialized !== true);
+            if (!permitsPreInit && (
+                !state.windowSessionToken
+                || framePayload.windowSessionToken !== state.windowSessionToken
+            )) return;
             forwardToParent(event.data);
             return;
         }
-        handleParentMessage(event.data, event.source);
+        handleParentMessage(event);
     }
 
     function exposeCompatibilityApi() {
@@ -937,7 +986,9 @@
         };
     }
 
-    function init() {
+    async function init() {
+        await loadCandidateCodePreferences();
+        if (global.PracticeTimerPreferences && global.PracticeTimerPreferences.ready) await global.PracticeTimerPreferences.ready;
         var root = getRoot();
         var frame = getFrame();
         if (!root || !frame) {

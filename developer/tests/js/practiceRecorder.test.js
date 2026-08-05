@@ -1,385 +1,145 @@
 #!/usr/bin/env node
+import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
-import assert from 'assert';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const repoRoot = path.resolve(__dirname, '../../..');
+
+function clone(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
 
 function loadScript(relativePath, context) {
-    const fullPath = path.join(repoRoot, relativePath);
-    const source = fs.readFileSync(fullPath, 'utf8');
-    vm.runInContext(source, context, { filename: relativePath });
+    vm.runInContext(fs.readFileSync(path.join(repoRoot, relativePath), 'utf8'), context, { filename: relativePath });
 }
 
-const results = [];
-
-function recordResult(name, detail) {
-    results.push({ name, detail, timestamp: new Date().toISOString() });
-}
-
-function createPrototypeRecorder(PracticeRecorder) {
-    const recorder = Object.create(PracticeRecorder.prototype);
-    recorder.scoreStorage = null;
-    recorder.practiceTypeCache = new Map();
-    recorder.lookupExamIndexEntry = () => null;
-    recorder.generateRecordId = () => 'record-generated';
-    return recorder;
-}
-
-async function testCanonicalCorrectAnswerMapWins(PracticeRecorder) {
-    const recorder = createPrototypeRecorder(PracticeRecorder);
-    const record = {
-        id: 'record-canonical-correct-map',
-        examId: 'reading-canonical',
-        sessionId: 'session-canonical',
-        title: 'Canonical correct map',
-        type: 'reading',
-        date: '2026-05-10T00:00:00.000Z',
-        startTime: '2026-05-10T00:00:00.000Z',
-        endTime: '2026-05-10T00:10:00.000Z',
-        duration: 600,
-        score: 2,
-        totalQuestions: 2,
-        correctAnswers: { q1: 'B', q2: 'C' },
-        correctAnswersCount: 2,
-        accuracy: 1,
-        answers: { q1: 'A', q2: 'D' },
-        correctAnswerMap: { q1: 'A', q2: 'D' },
-        realData: {
-            correctAnswerMap: { q2: 'D', q3: 'E' },
-            correctAnswers: { q1: 'B', q2: 'C', q3: 'F' },
-            answers: { q1: 'A', q2: 'D', q3: 'E' }
-        },
-        scoreInfo: {
-            correct: 2,
-            details: {
-                q1: { userAnswer: 'A', correctAnswer: 'B' },
-                q3: { userAnswer: 'E', correctAnswer: 'G' }
+function createHarness() {
+    const state = {
+        records: [],
+        drafts: [{
+            id: 'reading-draft:reading-p2',
+            kind: 'reading_draft',
+            examId: 'reading-p2',
+            sessionId: 'reading-session',
+            answers: { q1: 'A' },
+            updatedAt: '2026-07-26T00:00:00.000Z'
+        }],
+        commands: [],
+        backupCalls: [],
+        failCompleteAttempts: 0
+    };
+    const quietConsole = { log() {}, warn() {}, error() {}, info() {}, debug() {} };
+    const appData = {
+        ready: Promise.resolve(),
+        practice: {
+            async completeAttempt(command) {
+                state.commands.push(clone(command));
+                if (state.failCompleteAttempts > 0) {
+                    state.failCompleteAttempts -= 1;
+                    const error = new Error('transient write failure');
+                    error.code = 'IO';
+                    throw error;
+                }
+                const existing = state.records.find((record) => record.id === command.record.id);
+                if (existing) return { committed: true, operationId: command.operationId, revision: 1, record: clone(existing) };
+                const record = clone(command.record);
+                state.records.unshift(record);
+                return { committed: true, operationId: command.operationId, revision: 1, record: clone(record) };
+            },
+            async get(id) {
+                return clone(state.records.find((record) => record.id === id) || null);
+            },
+            async list() {
+                return clone(state.records);
+            },
+            async getStats() {
+                return { totalPractices: state.records.length, totalTimeSpent: 600, averageScore: 0.5 };
             }
         },
-        metadata: { examTitle: 'Canonical', category: 'P1', frequency: 'high', type: 'reading' }
-    };
-
-    const storageReady = recorder.prepareRecordForStorage(record);
-    assert.strictEqual(storageReady.correctAnswerMap.q1, 'A', 'canonical correctAnswerMap 应压过对象型 correctAnswers');
-    assert.strictEqual(storageReady.correctAnswerMap.q2, 'D', 'realData legacy 不应覆盖顶层 canonical');
-    assert.strictEqual(storageReady.correctAnswerMap.q3, 'E', 'realData.correctAnswerMap 应先于 legacy correctAnswers 补缺');
-    assert.strictEqual(storageReady.realData.correctAnswers.q1, 'A', 'realData.correctAnswers 应镜像 canonical map');
-    assert.strictEqual(storageReady.realData.correctAnswerMap.q3, 'E', 'realData.correctAnswerMap 应镜像 canonical map');
-
-    const standardized = recorder.normalizeRecordForPracticeRecordApi(record);
-    assert.strictEqual(standardized.correctAnswers, 2, '对象型 correctAnswers 不能污染数字答对数');
-    assert.strictEqual(standardized.correctAnswerMap.q1, 'A', '重试标准化也必须 canonical 优先');
-    assert.strictEqual(standardized.correctAnswerMap.q3, 'E', '重试标准化应保留 realData canonical 补缺');
-    assert.strictEqual(standardized.realData.correctAnswers.q1, 'A', '重试标准化 realData.correctAnswers 应镜像 canonical');
-    assert.strictEqual(standardized.realData.correctAnswerMap.q2, 'D', '重试标准化 realData.correctAnswerMap 应存在');
-    recordResult('PracticeRecorder 正确答案表 canonical 优先', { correctAnswerMap: standardized.correctAnswerMap });
-}
-
-async function testCompletionPayloadCanonicalCorrectAnswerMapWins(PracticeRecorder) {
-    const recorder = createPrototypeRecorder(PracticeRecorder);
-    const shaped = recorder.normalizePracticeCompletePayload({
-        examId: 'reading-completion-canonical',
-        sessionId: 'session-completion-canonical',
-        answers: { q1: 'A', q2: 'D' },
-        correctAnswerMap: { q1: 'A', q2: 'D' },
-        correctAnswers: { q1: 'B', q2: 'C' },
-        correctAnswersCount: 2,
-        scoreInfo: {
-            correct: 2,
-            total: 2,
-            details: {
-                q1: { userAnswer: 'A', correctAnswer: 'B' }
+        recovery: {
+            async listDrafts() {
+                return clone(state.drafts);
+            },
+            async saveDraft(value) {
+                const draft = { ...clone(value), updatedAt: '2026-07-26T01:00:00.000Z' };
+                const index = state.drafts.findIndex((entry) => entry.id === draft.id);
+                if (index >= 0) state.drafts[index] = draft;
+                else state.drafts.push(draft);
+                return { committed: true, item: clone(draft) };
+            },
+            async discardDraft(id) {
+                state.drafts = state.drafts.filter((entry) => entry.id !== id);
+                return { committed: true };
             }
         },
-        realData: {
-            correctAnswerMap: { q2: 'D' },
-            correctAnswers: { q1: 'B', q2: 'C' }
-        }
-    });
-
-    assert(shaped, 'completion payload 应能标准化');
-    assert.strictEqual(shaped.results.correctAnswers, 2, 'completion 数字 correctAnswers 应来自 count 字段');
-    assert.strictEqual(shaped.results.correctAnswerMap.q1, 'A', 'completion canonical map 应压过 legacy map');
-    assert.strictEqual(shaped.results.correctAnswerMap.q2, 'D', 'completion canonical map 应保留 q2');
-    assert.strictEqual(shaped.results.realData.correctAnswers.q1, 'A', 'completion realData.correctAnswers 应镜像 canonical');
-    assert.strictEqual(shaped.results.realData.correctAnswerMap.q2, 'D', 'completion realData.correctAnswerMap 应镜像 canonical');
-    recordResult('completion payload 正确答案表 canonical 优先', { correctAnswerMap: shaped.results.correctAnswerMap });
-}
-
-async function testRetrySaveUsesPracticeRecordApi(PracticeRecorder, windowStub) {
-    const savedRecords = [];
-    const tempRecords = [];
-    const saveOptions = [];
-    const recorder = Object.create(PracticeRecorder.prototype);
-
-    recorder.scoreStorage = null;
-    recorder.practiceTypeCache = new Map();
-    recorder.metaRepo = {
-        async get(key, fallback) {
-            if (key === 'temp_practice_records') {
-                return tempRecords.map((record) => JSON.parse(JSON.stringify(record)));
-            }
-            return fallback;
-        },
-        async set(key, value) {
-            if (key === 'temp_practice_records') {
-                tempRecords.splice(0, tempRecords.length, ...value.map((record) => JSON.parse(JSON.stringify(record))));
-            }
-            return true;
-        }
-    };
-    recorder.updateUserStats = async () => {
-        throw new Error('retrySaveWithStandardizedRecord should let PracticeRecordAPI own stats');
-    };
-    windowStub.PracticeRecordAPI = {
-        async saveRecord(record, options = {}) {
-            savedRecords.unshift(JSON.parse(JSON.stringify(record)));
-            saveOptions.push(JSON.parse(JSON.stringify(options)));
-            return record;
-        }
-    };
-
-    const saved = await recorder.retrySaveWithStandardizedRecord({
-        id: 'record-api-retry',
-        examId: 'reading-p1',
-        sessionId: 'session-api-retry',
-        title: 'Retry should use PracticeRecordAPI',
-        type: 'reading',
-        date: '2026-05-07T00:00:00.000Z',
-        startTime: '2026-05-07T00:00:00.000Z',
-        endTime: '2026-05-07T00:10:00.000Z',
-        duration: 600,
-        score: 1,
-        totalQuestions: 2,
-        correctAnswers: 1,
-        accuracy: 0.5,
-        answers: { q1: 'A', q2: 'B' },
-        correctAnswerMap: { q1: 'A', q2: 'C' },
-        metadata: { examTitle: 'Passage 1', category: 'P1', frequency: 'high', type: 'reading' }
-    });
-
-    assert.strictEqual(saved.id, 'record-api-retry', '标准化重试保存应返回已保存记录');
-    assert.strictEqual(savedRecords.length, 1, '主记录应通过 PracticeRecordAPI 落库');
-    assert.strictEqual(saveOptions[0].updateStats, true, '标准化重试保存应让统一 API 负责统计更新');
-    assert.strictEqual(tempRecords.length, 0, 'API 保存成功不应写入临时恢复队列');
-    assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecords[0], 'savedBy'), false, '标准化重试不应写入 fallback 标记');
-    assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecords[0], 'fallbackReason'), false, '标准化重试不应写入 fallback 原因');
-    recordResult('标准化重试保存走统一 PracticeRecordAPI', { savedRecordId: saved.id });
-}
-
-async function testPrimarySaveUsesPracticeRecordApi(PracticeRecorder, windowStub) {
-    const savedRecords = [];
-    const saveOptions = [];
-    const recorder = Object.create(PracticeRecorder.prototype);
-
-    recorder.scoreStorage = {};
-    Object.defineProperties(recorder.scoreStorage, {
-        currentVersion: {
-            get() {
-                throw new Error('savePracticeRecord must not read ScoreStorage.currentVersion');
-            }
-        },
-        maxRecords: {
-            get() {
-                throw new Error('savePracticeRecord must not read ScoreStorage.maxRecords');
-            }
-        },
-        savePracticeRecord: {
-            value: async () => {
-                throw new Error('savePracticeRecord must not call ScoreStorage directly');
+        backups: {
+            async export(options) {
+                state.backupCalls.push({ method: 'export', options: clone(options) });
+                return {
+                    format: 'ielts-atlas-data-v2',
+                    schemaVersion: 2,
+                    scope: 'partial',
+                    envelopes: {},
+                    entities: {
+                        practiceSummaries: state.records.map((record) => ({
+                            recordId: record.id,
+                            revision: 1,
+                            operationId: 'export',
+                            updatedAt: '2026-07-26T00:00:00.000Z',
+                            data: clone(record),
+                            checksum: `sum-${record.id}`
+                        })),
+                        practiceDetails: [],
+                        practiceAnnotations: []
+                    },
+                    checksum: 'snapshot-checksum'
+                };
+            },
+            async create(options) {
+                state.backupCalls.push({ method: 'create', options: clone(options) });
+                return { id: options.id || 'backup-before-import' };
+            },
+            async previewImport(payload, options) {
+                state.backupCalls.push({ method: 'previewImport', payload: clone(payload), options: clone(options) });
+                const format = payload && payload.format === 'ielts-atlas-data-v2' ? 'v2' : 'v1';
+                return {
+                    id: 'import-plan-1',
+                    format,
+                    keys: [],
+                    practice: { accepted: 1, importedCount: 1, skippedCount: 0 }
+                };
+            },
+            async commitImport(id, options) {
+                state.backupCalls.push({ method: 'commitImport', id, options: clone(options) });
+                return {
+                    committed: true,
+                    operationId: options.operationId || 'import-operation',
+                    revisions: { 'practiceSummaries/legacy-import': 1 },
+                    importedCount: 1,
+                    practice: { accepted: 1, importedCount: 1, skippedCount: 0 }
+                };
+            },
+            async recordImport(entry) {
+                state.backupCalls.push({ method: 'recordImport', entry: clone(entry) });
+                return { committed: true };
+            },
+            async restore(id) {
+                state.backupCalls.push({ method: 'restore', id });
+                return { committed: true, operationId: `restore:${id}` };
+            },
+            async list() {
+                return [{ id: 'backup-before-import' }];
             }
         }
-    });
-    recorder.practiceTypeCache = new Map();
-    recorder.wait = async () => {};
-    recorder.isCriticalError = PracticeRecorder.prototype.isCriticalError;
-    recorder.prepareRecordForStorage = PracticeRecorder.prototype.prepareRecordForStorage;
-    recorder.restoreRecordAnswerState = PracticeRecorder.prototype.restoreRecordAnswerState;
-    recorder.buildRecordLogSummary = PracticeRecorder.prototype.buildRecordLogSummary;
-    recorder.inferExamId = PracticeRecorder.prototype.inferExamId;
-    recorder.lookupExamIndexEntry = () => null;
-    recorder.normalizePracticeType = PracticeRecorder.prototype.normalizePracticeType;
-    recorder.normalizeAnswerMap = PracticeRecorder.prototype.normalizeAnswerMap;
-    recorder.normalizeAnswerComparison = PracticeRecorder.prototype.normalizeAnswerComparison;
-    recorder.convertAnswerArrayToMap = PracticeRecorder.prototype.convertAnswerArrayToMap;
-    recorder.extractCorrectAnswerMap = PracticeRecorder.prototype.extractCorrectAnswerMap;
-    recorder.buildAnswerDetails = PracticeRecorder.prototype.buildAnswerDetails;
-    recorder.saveToTemporaryStorage = async () => {
-        throw new Error('API primary save success should not write temp queue');
-    };
-
-    windowStub.PracticeRecordAPI = {
-        async saveRecord(record, options = {}) {
-            savedRecords.unshift(JSON.parse(JSON.stringify(record)));
-            saveOptions.push(JSON.parse(JSON.stringify(options)));
-            return Object.assign({}, record, { savedBy: 'api-primary' });
-        },
-        async getById(recordId) {
-            return savedRecords.find((record) => record.id === recordId || record.sessionId === recordId) || null;
-        }
-    };
-
-    const saved = await recorder.savePracticeRecord({
-        id: 'record-api-primary',
-        examId: 'reading-p2',
-        sessionId: 'session-api-primary',
-        title: 'Primary should use PracticeRecordAPI',
-        type: 'reading',
-        date: '2026-05-08T00:00:00.000Z',
-        startTime: '2026-05-08T00:00:00.000Z',
-        endTime: '2026-05-08T00:12:00.000Z',
-        duration: 720,
-        score: 2,
-        totalQuestions: 3,
-        correctAnswers: 2,
-        accuracy: 2 / 3,
-        answers: { q1: 'A', q2: 'B', q3: 'C' },
-        correctAnswerMap: { q1: 'A', q2: 'B', q3: 'D' },
-        metadata: { examTitle: 'Passage 2', category: 'P2', frequency: 'medium', type: 'reading' }
-    });
-
-    assert.strictEqual(saved.id, 'record-api-primary', '正常保存应返回 API 保存记录');
-    assert.strictEqual(saved.savedBy, 'api-primary', '正常保存应使用 PracticeRecordAPI 返回值');
-    assert.strictEqual(savedRecords.length, 1, '正常保存应通过 PracticeRecordAPI 落库');
-    assert.strictEqual(saveOptions[0].updateStats, true, '正常保存应让统一 API 负责统计更新');
-    assert.strictEqual(Object.prototype.hasOwnProperty.call(saveOptions[0], 'currentVersion'), false, '正常保存不应从 ScoreStorage 透传版本');
-    assert.strictEqual(Object.prototype.hasOwnProperty.call(saveOptions[0], 'maxRecords'), false, '正常保存不应从 ScoreStorage 透传容量');
-    recordResult('正常保存走统一 PracticeRecordAPI', { savedRecordId: saved.id });
-}
-
-async function testLegacyDataMethodsUseUnifiedAdapters(PracticeRecorder, windowStub) {
-    const recorder = Object.create(PracticeRecorder.prototype);
-    const calls = [];
-    const records = [
-        {
-            id: 'record-export-a',
-            examId: 'reading-export-a',
-            sessionId: 'session-export-a',
-            title: 'Export Passage',
-            type: 'reading',
-            date: '2026-05-09T00:00:00.000Z',
-            startTime: '2026-05-09T00:00:00.000Z',
-            endTime: '2026-05-09T00:05:00.000Z',
-            duration: 300,
-            score: 1,
-            totalQuestions: 2,
-            correctAnswers: 1,
-            accuracy: 0.5,
-            metadata: { category: 'P1', frequency: 'high', examTitle: 'Export Passage' }
-        }
-    ];
-    const stats = {
-        totalPractices: 1,
-        totalTimeSpent: 300,
-        averageScore: 0.5,
-        categoryStats: {},
-        questionTypeStats: {},
-        streakDays: 1,
-        practiceDays: ['2026-05-09'],
-        lastPracticeDate: '2026-05-09',
-        achievements: []
-    };
-
-    recorder.scoreStorage = {
-        async savePracticeRecord() {
-            throw new Error('legacy data methods must not save through ScoreStorage');
-        },
-        async getUserStats() {
-            throw new Error('getUserStats must use PracticeRecordAPI.readStats');
-        },
-        exportData() {
-            throw new Error('exportData must use PracticeRecordAPI');
-        },
-        importData() {
-            throw new Error('importData must use DataBackupManager');
-        },
-        createBackup() {
-            throw new Error('createBackup must use DataBackupManager');
-        },
-        restoreBackup() {
-            throw new Error('restoreBackup must use DataBackupManager');
-        }
-    };
-
-    windowStub.PracticeRecordAPI = {
-        async list() {
-            calls.push({ method: 'list' });
-            return JSON.parse(JSON.stringify(records));
-        },
-        async readStats(options = {}) {
-            calls.push({ method: 'readStats', fallback: options.fallback });
-            return JSON.parse(JSON.stringify(stats));
-        },
-        getDefaultStats() {
-            return {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                practiceDays: [],
-                lastPracticeDate: null,
-                achievements: []
-            };
-        }
-    };
-    windowStub.DataBackupManager = class FakeDataBackupManager {
-        importPracticeData(data, options = {}) {
-            calls.push({ method: 'importPracticeData', data, options });
-            return { imported: true, options };
-        }
-
-        createBackup(backupName, type) {
-            calls.push({ method: 'createBackup', backupName, type });
-            return 'backup-created';
-        }
-
-        restoreBackup(backupId) {
-            calls.push({ method: 'restoreBackup', backupId });
-            return { restored: backupId };
-        }
-    };
-
-    const loadedStats = await recorder.getUserStats();
-    assert.deepStrictEqual(loadedStats, stats, 'getUserStats 应通过 PracticeRecordAPI.readStats');
-
-    const exported = JSON.parse(await recorder.exportData('json'));
-    assert.strictEqual(exported.version, '0.6.2-fix', 'JSON 导出应使用稳定导出版本');
-    assert.deepStrictEqual(exported.practiceRecords, records, 'JSON 导出应通过 PracticeRecordAPI.list');
-    assert.deepStrictEqual(exported.userStats, stats, 'JSON 导出应通过 PracticeRecordAPI.readStats');
-
-    const csv = await recorder.exportData('csv');
-    assert(csv.includes('record-export-a'), 'CSV 导出应序列化 PracticeRecordAPI 记录');
-
-    const importResult = await recorder.importData({ practice_records: records }, { merge: false });
-    assert.strictEqual(importResult.imported, true, 'importData 应委托 DataBackupManager');
-    assert.strictEqual(importResult.options.mergeMode, 'replace', 'merge=false 应转换为 replace mergeMode');
-
-    const backupId = recorder.createBackup('legacy-backup');
-    assert.strictEqual(backupId, 'backup-created', 'createBackup 应委托 DataBackupManager');
-    const restored = recorder.restoreBackup('backup-created');
-    assert.deepStrictEqual(restored, { restored: 'backup-created' }, 'restoreBackup 应委托 DataBackupManager');
-    assert(calls.some((call) => call.method === 'createBackup' && call.type === 'practice_recorder'), 'createBackup 应标记 practice_recorder 来源');
-    recordResult('公开数据方法走统一适配器', { calls: calls.map((call) => call.method) });
-}
-
-async function main() {
-    const quietConsole = {
-        log() {},
-        warn() {},
-        error() {},
-        info() {},
-        debug() {}
     };
     const windowStub = {
         console: quietConsole,
-        dataRepositories: {}
+        AppData: appData,
+        resolveActiveLibraryIndex: async () => [{ id: 'reading-p1', title: 'Passage 1', type: 'reading', category: 'P1', frequency: 'high' }]
     };
     const sandbox = {
         window: windowStub,
@@ -390,34 +150,154 @@ async function main() {
         clearInterval,
         Date,
         Math,
-        JSON,
-        ScoreStorage: function ScoreStorage() {}
+        JSON
     };
-    sandbox.globalThis = sandbox.window;
-
+    sandbox.globalThis = windowStub;
     const context = vm.createContext(sandbox);
     loadScript('js/core/practiceCore.js', context);
     loadScript('js/core/practiceRecorder.js', context);
-    const PracticeRecorder = sandbox.window.PracticeRecorder;
+    const recorder = Object.create(windowStub.PracticeRecorder.prototype);
+    recorder.wait = async () => {};
+    return { recorder, state };
+}
+
+function makeRecord(id = 'record-v2') {
+    return {
+        id,
+        examId: 'reading-p1',
+        sessionId: `session-${id}`,
+        title: 'Passage 1',
+        type: 'reading',
+        date: '2026-07-26',
+        startTime: '2026-07-26T00:00:00.000Z',
+        endTime: '2026-07-26T00:10:00.000Z',
+        duration: 600,
+        score: 1,
+        totalQuestions: 2,
+        correctAnswers: 1,
+        accuracy: 0.5,
+        answers: { q1: 'A', q2: 'B' },
+        correctAnswerMap: { q1: 'A', q2: 'C' },
+        realData: {
+            questionTypeMap: { q1: 'true-false-not-given' },
+            interactions: [{ type: 'answer', questionId: 'q1' }]
+        },
+        metadata: { examId: 'reading-p1', examTitle: 'Passage 1', category: 'P1', frequency: 'high', type: 'reading' }
+    };
+}
+
+async function main() {
+    const results = [];
+    const record = async (name, test) => {
+        await test();
+        results.push({ name, status: 'pass' });
+    };
 
     try {
-        await testCanonicalCorrectAnswerMapWins(PracticeRecorder);
-        await testCompletionPayloadCanonicalCorrectAnswerMapWins(PracticeRecorder);
-        await testPrimarySaveUsesPracticeRecordApi(PracticeRecorder, windowStub);
-        await testRetrySaveUsesPracticeRecordApi(PracticeRecorder, windowStub);
-        await testLegacyDataMethodsUseUnifiedAdapters(PracticeRecorder, windowStub);
-        console.log(JSON.stringify({
-            status: 'pass',
-            detail: `${results.length}/${results.length} 测试通过`,
-            passed: results.length,
-            total: results.length
-        }, null, 2));
+        await record('save separates business id from per-call operation id', async () => {
+            const { recorder, state } = createHarness();
+            const saved = await recorder.savePracticeRecord(makeRecord());
+            assert.strictEqual(saved.id, 'record-v2');
+            assert.strictEqual(state.records.length, 1);
+            assert.strictEqual(state.commands.length, 1);
+            assert.notStrictEqual(state.commands[0].operationId, 'record-v2');
+            assert(String(state.commands[0].operationId).startsWith('practice-complete_'));
+            assert.deepStrictEqual(clone(state.commands[0].record.answers), { q1: 'A', q2: 'B' });
+            assert(Array.isArray(state.commands[0].record.answerList));
+            assert.deepStrictEqual(clone(state.commands[0].record.answerList.map((item) => item.questionId)), ['q1', 'q2']);
+            assert.deepStrictEqual(clone(state.commands[0].record.questionTypeMap), { q1: 'true-false-not-given' });
+            assert.deepStrictEqual(clone(state.commands[0].record.interactions), [{ type: 'answer', questionId: 'q1' }]);
+            assert.deepStrictEqual(clone(saved.correctAnswerMap), { q1: 'A', q2: 'C' });
+            await recorder.savePracticeRecord({ ...makeRecord(), title: 'Updated title' });
+            assert.notStrictEqual(
+                state.commands[1].operationId,
+                state.commands[0].operationId,
+                'a second logical save of the same record must receive a new operation id'
+            );
+        });
+
+        await record('internal retries reuse one operation id', async () => {
+            const { recorder, state } = createHarness();
+            state.failCompleteAttempts = 1;
+            const saved = await recorder.savePracticeRecord(makeRecord('record-retry'));
+            assert.strictEqual(saved.id, 'record-retry');
+            assert.strictEqual(state.commands.length, 2);
+            assert.strictEqual(state.commands[0].operationId, state.commands[1].operationId);
+        });
+
+        await record('global message listener never persists PRACTICE_COMPLETE alongside the host', async () => {
+            const { recorder } = createHarness();
+            let completionCalls = 0;
+            recorder.handleSessionCompleted = async () => { completionCalls += 1; };
+            recorder.handleExamMessage({
+                data: {
+                    type: 'PRACTICE_COMPLETE',
+                    data: { examId: 'reading-p1', results: { scoreInfo: { correct: 1, total: 1 } } }
+                }
+            });
+            assert.strictEqual(completionCalls, 0, 'host-owned completion must not be saved through the recorder global listener');
+        });
+
+        await record('temporary recovery draft does not overwrite reading drafts', async () => {
+            const { recorder, state } = createHarness();
+            await recorder.saveToTemporaryStorage(makeRecord('record-recovery'));
+            assert(state.drafts.some((draft) => draft.id === 'reading-draft:reading-p2'));
+            assert(state.drafts.some((draft) => draft.id === 'practice-record:record-recovery' && draft.kind === 'practice_record_recovery'));
+
+            const recovered = [];
+            recorder.savePracticeRecord = async (value) => {
+                recovered.push(clone(value));
+                return value;
+            };
+            await recorder.recoverTemporaryRecords();
+            assert.strictEqual(recovered.length, 1);
+            assert.strictEqual(recovered[0].id, 'record-recovery');
+            assert.deepStrictEqual(state.drafts.map((draft) => draft.id), ['reading-draft:reading-p2']);
+        });
+
+        await record('JSON export is a catalog-governed v2 practice snapshot', async () => {
+            const { recorder, state } = createHarness();
+            state.records.push(makeRecord('record-export'));
+            const exported = JSON.parse(await recorder.exportData('json'));
+            assert.strictEqual(exported.format, 'ielts-atlas-data-v2');
+            assert.strictEqual(exported.schemaVersion, 2);
+            assert(Array.isArray(exported.entities.practiceSummaries));
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(exported, 'practiceRecords'), false);
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(exported, 'userStats'), false);
+            assert.deepStrictEqual(state.backupCalls[0], { method: 'export', options: { domains: ['practice'] } });
+        });
+
+        await record('import preview and commit stay inside AppData.backups', async () => {
+            const { recorder, state } = createHarness();
+            const result = await recorder.importData({ practice_records: [makeRecord('legacy-import')] }, {
+                merge: false,
+                operationId: 'import-practice-v2'
+            });
+            assert.strictEqual(result.committed, true);
+            assert.strictEqual(result.backupId, 'backup-before-import');
+            const previewCall = state.backupCalls.find((call) => call.method === 'previewImport');
+            assert(previewCall);
+            assert.strictEqual(previewCall.options.practiceMode, 'replace');
+            assert.strictEqual(previewCall.payload.practice_records[0].id, 'legacy-import');
+            const commitCall = state.backupCalls.find((call) => call.method === 'commitImport' && call.id === 'import-plan-1');
+            assert(commitCall);
+            assert.strictEqual(commitCall.options.confirmDestructive, true);
+            assert(state.backupCalls.some((call) => call.method === 'recordImport'));
+        });
+
+        await record('backup create and restore delegate to the backups domain', async () => {
+            const { recorder, state } = createHarness();
+            const backup = await recorder.createBackup('practice-backup');
+            const restored = await recorder.restoreBackup(backup.id);
+            assert.strictEqual(restored.committed, true);
+            assert(state.backupCalls.some((call) => call.method === 'create' && call.options.type === 'practice-recorder'));
+            assert(state.backupCalls.some((call) => call.method === 'restore' && call.id === 'practice-backup'));
+        });
+
+        console.log(JSON.stringify({ status: 'pass', detail: `${results.length}/${results.length} tests passed`, results }, null, 2));
     } catch (error) {
-        console.log(JSON.stringify({
-            status: 'fail',
-            detail: error.message,
-            results
-        }, null, 2));
+        results.push({ name: 'test execution', status: 'fail', error: error.stack || error.message });
+        console.log(JSON.stringify({ status: 'fail', results }, null, 2));
         process.exit(1);
     }
 }

@@ -53,7 +53,7 @@ class ExamAutomationTest {
             const checks = [
                 { name: 'COMPLETE_EXAM_DATA', exists: typeof window.COMPLETE_EXAM_DATA !== 'undefined' },
                 { name: 'LISTENING_EXAM_DATA', exists: typeof window.LISTENING_EXAM_DATA !== 'undefined' },
-                { name: 'examIndex', exists: typeof window.examIndex !== 'undefined' },
+                { name: 'resolveActiveLibraryIndex', exists: typeof window.resolveActiveLibraryIndex === 'function' },
                 { name: 'currentCategory', exists: typeof window.currentCategory !== 'undefined' },
                 { name: 'currentExamType', exists: typeof window.currentExamType !== 'undefined' }
             ];
@@ -375,12 +375,13 @@ class ExamAutomationTest {
 
         try {
             const consistencyChecks = [];
+            const activeIndex = await window.resolveActiveLibraryIndex();
 
             // 检查考试索引一致性
-            if (window.examIndex && Array.isArray(window.examIndex)) {
-                const indexConsistent = window.examIndex.every(examId => {
-                    const existsInComplete = this.testData.completeExamData?.some(exam => exam.id === examId);
-                    const existsInListening = this.testData.listeningExamData?.some(exam => exam.id === examId);
+            if (Array.isArray(activeIndex)) {
+                const indexConsistent = activeIndex.every(entry => {
+                    const existsInComplete = this.testData.completeExamData?.some(exam => exam.id === entry.id);
+                    const existsInListening = this.testData.listeningExamData?.some(exam => exam.id === entry.id);
                     return existsInComplete || existsInListening;
                 });
 
@@ -388,7 +389,7 @@ class ExamAutomationTest {
                     name: 'examIndex一致性',
                     passed: indexConsistent,
                     details: {
-                        totalInIndex: window.examIndex.length,
+                        totalInIndex: activeIndex.length,
                         consistent: indexConsistent
                     }
                 });
@@ -398,11 +399,10 @@ class ExamAutomationTest {
             const categoriesFromData = this.testData.loadedCategories;
             const categoriesFromIndex = new Set();
 
-            if (window.examIndex && this.testData.completeExamData) {
-                window.examIndex.forEach(examId => {
-                    const exam = this.testData.completeExamData.find(e => e.id === examId);
-                    if (exam && exam.category) {
-                        categoriesFromIndex.add(exam.category);
+            if (Array.isArray(activeIndex) && this.testData.completeExamData) {
+                activeIndex.forEach(entry => {
+                    if (entry && entry.category) {
+                        categoriesFromIndex.add(entry.category);
                     }
                 });
             }

@@ -31,25 +31,20 @@ except ModuleNotFoundError:
 
 
 async def _dismiss_overlays(page) -> None:
-    try:
-        await page.evaluate(
-            """
-            () => {
-                try {
-                    localStorage.setItem('hasSeenGplLicense', 'true');
-                } catch (_) {}
-                if (typeof window.acceptGplLicense === 'function') {
-                    try { window.acceptGplLicense(); } catch (_) {}
-                }
-                const modal = document.getElementById('license-modal');
-                if (modal) {
-                    modal.classList.remove('show');
-                }
+    accepted = await page.evaluate(
+        """async () => {
+            if (!window.LicenseModal || typeof window.LicenseModal.accept !== 'function') {
+                throw new Error('LicenseModal.accept is unavailable');
             }
-            """
-        )
-    except Exception:
-        pass
+            return window.LicenseModal.accept();
+        }"""
+    )
+    if not accepted:
+        raise RuntimeError("GPL license consent was not committed")
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=5000,
+    )
 
     overlay = page.locator("#library-loader-overlay")
     if await overlay.count():
@@ -73,10 +68,9 @@ async def run() -> None:
             page = await browser.new_page()
             await page.goto(INDEX_URL)
             await page.wait_for_load_state("load")
-            await page.wait_for_function(
-                "() => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function'",
-                timeout=60000,
-            )
+            await page.wait_for_function("() => !!window.AppData", timeout=60000)
+            await page.evaluate("async () => { await window.AppData.ready; }")
+            await page.wait_for_function("() => window.app?.isInitialized === true", timeout=60000)
             await _dismiss_overlays(page)
 
             await page.locator("nav button[data-view='browse']").click()
@@ -98,22 +92,21 @@ async def run() -> None:
             async def read_state() -> dict:
                 return await page.evaluate(
                     """
-                    () => {
+                    async () => {
                         const trigger = document.getElementById('browse-title-trigger');
                         const dot = trigger ? trigger.querySelector('.browse-title-dot') : null;
                         const style = dot ? window.getComputedStyle(dot) : null;
-                        let pref = null;
-                        try {
-                            const raw = localStorage.getItem('browse_view_preferences_v2');
-                            pref = raw ? JSON.parse(raw).autoScrollEnabled : null;
-                        } catch (_) { pref = null; }
+                        if (typeof window.flushBrowsePreferenceWrites === 'function') {
+                            await window.flushBrowsePreferenceWrites();
+                        }
+                        const pref = await window.AppData.preferences.getBrowse();
                         return {
                             hasTrigger: !!trigger,
                             hasDot: !!dot,
                             activeClass: !!(trigger && trigger.classList.contains('active')),
                             ariaPressed: trigger ? trigger.getAttribute('aria-pressed') : null,
                             dotOpacity: style ? style.opacity : null,
-                            autoScrollEnabled: pref,
+                            autoScrollEnabled: pref?.autoScrollEnabled ?? null,
                         };
                     }
                     """
@@ -123,12 +116,28 @@ async def run() -> None:
             report["steps"].append({"name": "before", "state": before})
 
             await page.click("#browse-title-trigger")
-            await page.wait_for_timeout(120)
+            await page.wait_for_function(
+                """() => {
+                    const trigger = document.getElementById('browse-title-trigger');
+                    const dot = trigger?.querySelector('.browse-title-dot');
+                    return trigger?.getAttribute('aria-pressed') === 'false'
+                        && Number.parseFloat(getComputedStyle(dot).opacity || '1') < 0.2;
+                }""",
+                timeout=2000,
+            )
             after_first = await read_state()
             report["steps"].append({"name": "after_first_click", "state": after_first})
 
             await page.click("#browse-title-trigger")
-            await page.wait_for_timeout(120)
+            await page.wait_for_function(
+                """() => {
+                    const trigger = document.getElementById('browse-title-trigger');
+                    const dot = trigger?.querySelector('.browse-title-dot');
+                    return trigger?.getAttribute('aria-pressed') === 'true'
+                        && Number.parseFloat(getComputedStyle(dot).opacity || '0') > 0.8;
+                }""",
+                timeout=2000,
+            )
             after_second = await read_state()
             report["steps"].append({"name": "after_second_click", "state": after_second})
 

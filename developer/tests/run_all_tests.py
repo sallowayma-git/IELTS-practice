@@ -163,62 +163,72 @@ class TestRunner:
             return False
     
     def run_e2e_tests(self) -> bool:
-        """运行 E2E 测试"""
+        """运行统一 E2E 套件（file:// 兼容，含提交/结算与导出导入）"""
         self.log("=" * 80)
-        self.log("运行 E2E 套题练习流程测试")
+        self.log("运行统一 E2E 套件 (e2e_runner.py)")
         self.log("=" * 80)
-        
-        test_script = REPO_ROOT / "developer" / "tests" / "e2e" / "suite_practice_flow.py"
-        
+
+        test_script = REPO_ROOT / "developer" / "tests" / "e2e" / "e2e_runner.py"
+
         if not test_script.exists():
             self.log(f"E2E 测试脚本不存在: {test_script}", "ERROR")
             return False
-        
+
         try:
             result = subprocess.run(
                 [sys.executable, str(test_script)],
                 capture_output=True,
                 text=True,
-                timeout=180
+                timeout=900
             )
-            
+
             print(result.stdout)
             if result.stderr:
                 print(result.stderr)
-            
+
             passed = result.returncode == 0
-            
-            # 尝试解析 JSON 报告
-            report_path = REPO_ROOT / "developer" / "tests" / "e2e" / "reports" / "suite-practice-flow-report.json"
+
+            report_path = REPO_ROOT / "developer" / "tests" / "e2e" / "reports" / "e2e-unified-report.json"
             if report_path.exists():
                 try:
                     report = json.loads(report_path.read_text(encoding="utf-8"))
                     self.results.append({
-                        "name": "E2E 套题练习流程",
+                        "name": "E2E 统一套件",
                         "status": report.get("status", "unknown"),
-                        "duration": report.get("duration"),
-                        "consoleLogs": len(report.get("consoleLogs", []))
+                        "duration": report.get("durationSeconds"),
+                        "cases": [
+                            {
+                                "name": item.get("name"),
+                                "status": item.get("status"),
+                                "exitCode": item.get("exitCode"),
+                            }
+                            for item in report.get("cases", [])
+                        ],
                     })
                 except Exception:
-                    pass
+                    self.results.append({
+                        "name": "E2E 统一套件",
+                        "status": "pass" if passed else "fail",
+                        "returnCode": result.returncode
+                    })
             else:
                 self.results.append({
-                    "name": "E2E 套题练习流程",
+                    "name": "E2E 统一套件",
                     "status": "pass" if passed else "fail",
                     "returnCode": result.returncode
                 })
-            
+
             if passed:
                 self.log("E2E 测试通过", "SUCCESS")
             else:
                 self.log(f"E2E 测试失败 (返回码: {result.returncode})", "ERROR")
-            
+
             return passed
-            
+
         except subprocess.TimeoutExpired:
-            self.log("E2E 测试超时 (180秒)", "ERROR")
+            self.log("E2E 测试超时 (900秒)", "ERROR")
             self.results.append({
-                "name": "E2E 套题练习流程",
+                "name": "E2E 统一套件",
                 "status": "fail",
                 "error": "超时"
             })
@@ -226,7 +236,7 @@ class TestRunner:
         except Exception as e:
             self.log(f"运行 E2E 测试时出错: {e}", "ERROR")
             self.results.append({
-                "name": "E2E 套题练习流程",
+                "name": "E2E 统一套件",
                 "status": "fail",
                 "error": str(e)
             })

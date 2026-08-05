@@ -14,6 +14,20 @@
     }
 
     console.log('[PracticeEnhancer] 初始化增强器');
+    const HOST_MESSAGE_SOURCE = 'exam_host';
+
+    function deriveParentOriginFromReferrer() {
+        try {
+            if (!document.referrer) return '';
+            const parsed = new URL(document.referrer, window.location.href);
+            // Chromium: file URL.origin is "file://", postMessage event.origin is "null".
+            if (parsed.protocol === 'file:') return '';
+            if (!parsed.origin || parsed.origin === 'null' || parsed.origin === 'file://') return '';
+            return parsed.origin;
+        } catch (_) {
+            return '';
+        }
+    }
 
     const DEFAULT_ENHANCER_CONFIG = {
         autoInitialize: true,
@@ -766,6 +780,10 @@
         sessionId: null,
         examId: null, // 新增：存储唯一的examId
         parentWindow: null,
+        expectedParentOrigin: deriveParentOriginFromReferrer(),
+        parentOrigin: '',
+        parentOriginIsOpaque: false,
+        windowSessionToken: '',
         answers: {},
         correctAnswers: {},
         interactions: [],
@@ -882,9 +900,7 @@
                 }
 
                 this.enhancerBaseUrl = this.getEnhancerBaseUrl();
-                await this.ensureStorageAvailable();
                 await this.ensureSpellingErrorCollector();
-                await this.prepareStorageNamespace();
 
                 // 检测多套题结构
                 this.isMultiSuite = this.detectMultiSuiteStructure();
@@ -1081,95 +1097,6 @@
             }).filter(Boolean);
         },
 
-        ensureStorageAvailable: async function () {
-            try {
-                if (window.storage && typeof window.storage.setNamespace === 'function') {
-                    if (window.storage.ready && typeof window.storage.ready.then === 'function') {
-                        await window.storage.ready;
-                    }
-                    return true;
-                }
-
-                const tryLoad = async (urls) => {
-                    for (const url of urls) {
-                        if (!url) continue;
-                        try {
-                            console.log('[PracticeEnhancer] 尝试加载存储管理器:', url);
-                            await dependencyLoader.loadScript(url);
-                            if (window.storage && typeof window.storage.setNamespace === 'function') {
-                                if (window.storage.ready && typeof window.storage.ready.then === 'function') {
-                                    await window.storage.ready;
-                                }
-                                return true;
-                            }
-                        } catch (error) {
-                            console.warn('[PracticeEnhancer] 存储管理器加载失败:', error);
-                        }
-                    }
-                    return false;
-                };
-
-                const baseUrl = this.getEnhancerBaseUrl();
-                const baseCandidate = new URL('utils/storage.js', baseUrl).href;
-                const fallbackUrls = this.buildFallbackUrls([
-                    '../../../../js/utils/storage.js',
-                    '../../../js/utils/storage.js',
-                    '../../js/utils/storage.js',
-                    '../js/utils/storage.js',
-                    './js/utils/storage.js'
-                ]);
-
-                const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
-                if (loaded) return true;
-            } catch (error) {
-                console.warn('[PracticeEnhancer] 加载存储管理器失败:', error);
-            }
-
-            // 创建简易回退存储，确保流程不中断
-            console.warn('[PracticeEnhancer] 使用简易回退存储');
-            const fallbackPrefix = 'exam_system_';
-            const safeStore = (() => {
-                try {
-                    return window.localStorage;
-                } catch (_) {
-                    return null;
-                }
-            })();
-
-            const stubStorage = {
-                namespace: '',
-                ready: Promise.resolve(),
-                setNamespace(ns) { this.namespace = ns ? `${ns}_` : ''; },
-                async set(key, value) {
-                    if (!safeStore) return false;
-                    const k = fallbackPrefix + this.namespace + key;
-                    safeStore.setItem(k, JSON.stringify({ value }));
-                    return true;
-                },
-                async get(key) {
-                    if (!safeStore) return null;
-                    const k = fallbackPrefix + this.namespace + key;
-                    const raw = safeStore.getItem(k);
-                    if (!raw) return null;
-                    try {
-                        const parsed = JSON.parse(raw);
-                        return parsed && parsed.value !== undefined ? parsed.value : parsed;
-                    } catch (_) {
-                        return null;
-                    }
-                },
-                async remove(key) {
-                    if (!safeStore) return false;
-                    const k = fallbackPrefix + this.namespace + key;
-                    safeStore.removeItem(k);
-                    return true;
-                }
-            };
-
-            window.storage = stubStorage;
-            return true;
-        },
-
         ensureSpellingErrorCollector: async function () {
             if (window.spellingErrorCollector) {
                 return true;
@@ -1209,42 +1136,6 @@
 
             const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
             return loaded;
-        },
-
-        prepareStorageNamespace: async function () {
-            // 设置共享命名空间
-            try {
-                if (window.storage?.ready) {
-                    await window.storage.ready;
-                }
-
-                if (window.storage && typeof window.storage.setNamespace === 'function') {
-                    window.storage.setNamespace('exam_system');
-                    console.log('[PracticeEnhancer] 已设置共享命名空间: exam_system');
-
-                    // 验证命名空间设置是否生效
-                    setTimeout(async () => {
-                        const testKey = 'namespace_test_enhancer';
-                        const testValue = 'test_value_enhancer_' + Date.now();
-                        try {
-                            await window.storage.set(testKey, testValue);
-                            const retrievedValue = await window.storage.get(testKey);
-                            if (retrievedValue === testValue) {
-                                console.log('✅ 增强器命名空间设置验证成功: 存储和读取正常');
-                            } else {
-                                console.warn('❌ 增强器命名空间设置验证失败: 读取值不匹配');
-                            }
-                            await window.storage.remove(testKey);
-                        } catch (error) {
-                            console.error('❌ 增强器命名空间设置验证失败', error);
-                        }
-                    }, 1000);
-                } else {
-                    console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
-                }
-            } catch (error) {
-                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', error);
-            }
         },
 
         cleanup: function () {
@@ -1857,9 +1748,49 @@
                 }
                 const messageType = String(payload.type).toUpperCase();
                 const payloadData = payload.data || {};
+                if (!event || event.source !== this.parentWindow || payload.source !== HOST_MESSAGE_SOURCE) {
+                    return;
+                }
 
                 if (messageType === 'INIT_SESSION' || messageType === 'INIT_EXAM_SESSION') {
                     const initData = payloadData;
+                    const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+                    const declaredOrigin = typeof initData.parentOrigin === 'string' ? initData.parentOrigin : '';
+                    const incomingToken = typeof initData.windowSessionToken === 'string'
+                        ? initData.windowSessionToken.trim()
+                        : '';
+                    if (!incomingToken) return;
+                    const expectedParentOrigin = this.expectedParentOrigin
+                        && this.expectedParentOrigin !== 'file://'
+                        && !String(this.expectedParentOrigin).startsWith('file:')
+                        ? this.expectedParentOrigin
+                        : '';
+                    if (expectedParentOrigin) {
+                        if (incomingOrigin !== expectedParentOrigin || declaredOrigin !== expectedParentOrigin) {
+                            return;
+                        }
+                        this.parentOrigin = expectedParentOrigin;
+                        this.parentOriginIsOpaque = false;
+                    } else if (window.location.protocol === 'file:') {
+                        const trustedFileOrigin = incomingOrigin === 'null'
+                            && (declaredOrigin === 'null' || declaredOrigin === '' || declaredOrigin === 'file://');
+                        if (!trustedFileOrigin) {
+                            return;
+                        }
+                        this.parentOrigin = 'null';
+                        this.parentOriginIsOpaque = true;
+                    } else {
+                        const trustedWebOrigin = Boolean(incomingOrigin)
+                            && incomingOrigin !== 'null'
+                            && incomingOrigin !== 'file://'
+                            && declaredOrigin === incomingOrigin;
+                        if (!trustedWebOrigin) {
+                            return;
+                        }
+                        this.parentOrigin = incomingOrigin;
+                        this.parentOriginIsOpaque = false;
+                    }
+                    this.windowSessionToken = incomingToken;
                     this.sessionId = initData.sessionId;
                     this.examId = initData.examId; // 存储 examId
                     if (initData.reviewSessionId) {
@@ -1889,6 +1820,17 @@
                         reviewSessionId: this.reviewSessionId || null,
                         reviewEntryIndex: this.reviewEntryIndex
                     });
+                    return;
+                }
+
+                const incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+                const incomingToken = typeof payloadData.windowSessionToken === 'string'
+                    ? payloadData.windowSessionToken.trim()
+                    : '';
+                const originMatches = this.parentOriginIsOpaque
+                    ? incomingOrigin === 'null'
+                    : Boolean(this.parentOrigin && incomingOrigin === this.parentOrigin);
+                if (!originMatches || !this.windowSessionToken || incomingToken !== this.windowSessionToken) {
                     return;
                 }
 
@@ -3380,6 +3322,7 @@
                 // Requirement 9.1: 必须包含的基本字段
                 examId: `${this.examId}_${suiteId}`,  // Requirement 9.2: examId包含套题标识
                 sessionId: this.sessionId,
+                suiteSessionId: this.suiteSessionId || null,
                 answers: suiteAnswers,                 // Requirement 9.3: 答案键使用"套题ID::问题ID"格式
                 correctAnswers: suiteCorrectAnswers,
 
@@ -4530,29 +4473,57 @@
             return null;
         },
 
+        createSubmissionId: function () {
+            try {
+                if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                    return `practice-submit-${window.crypto.randomUUID()}`;
+                }
+            } catch (_) {
+                // Fall through to the session-bound fallback.
+            }
+            return `practice-submit-${this.sessionId || this.examId || 'session'}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        },
+
         sendMessage: function (type, data) {
             if (!this.parentWindow) {
                 console.warn('[PracticeEnhancer] 无父窗口，无法发送消息');
-                return;
+                return false;
             }
             if (this.readOnly && type === 'PRACTICE_COMPLETE') {
                 console.info('[PracticeEnhancer] 回顾模式阻止 PRACTICE_COMPLETE 上报');
-                return;
+                return false;
             }
 
-            this.runHooks('beforeSendMessage', type, data);
+            const payload = data && typeof data === 'object' ? data : {};
+            if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT') {
+                payload.sessionId = payload.sessionId || this.sessionId || null;
+                payload.submissionId = payload.submissionId || this.createSubmissionId();
+            }
+            this.runHooks('beforeSendMessage', type, payload);
+            const secureData = Object.assign({}, payload, {
+                windowSessionToken: this.windowSessionToken || null
+            });
             const message = {
                 type: type,
-                data: data,
+                data: secureData,
                 source: 'practice_page',
                 timestamp: Date.now()
             };
 
             try {
-                this.parentWindow.postMessage(message, '*');
+                const targetOrigin = this.parentOrigin && this.parentOrigin !== 'null'
+                    ? this.parentOrigin
+                    : (this.expectedParentOrigin || (window.location.protocol === 'file:' ? '*' : ''));
+                if (!targetOrigin) {
+                    console.warn('[PracticeEnhancer] 缺少可信父窗口 origin，消息未发送:', type);
+                    return false;
+                }
+                this.parentWindow.postMessage(message, targetOrigin);
                 console.log('[PracticeEnhancer] 消息已发送:', type);
+                return true;
             } catch (error) {
                 console.error('[PracticeEnhancer] 发送消息失败:', error);
+                return false;
             }
         },
 
