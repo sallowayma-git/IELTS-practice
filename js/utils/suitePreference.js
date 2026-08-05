@@ -1,10 +1,6 @@
 (function initSuitePreferenceUtils(global) {
     'use strict';
 
-    const FLOW_MODE_STORAGE_KEY = 'suite_flow_mode';
-    const FREQUENCY_SCOPE_STORAGE_KEY = 'suite_frequency_scope';
-    const AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit';
-
     const FLOW_MODES = ['classic', 'simulation', 'stationary'];
     const FREQUENCY_SCOPES = ['high', 'high_medium', 'all', 'custom'];
 
@@ -119,50 +115,54 @@
         return null;
     }
 
-    function readStorageValue(key) {
-        try {
-            if (global.localStorage && typeof global.localStorage.getItem === 'function') {
-                return global.localStorage.getItem(key);
-            }
-        } catch (_) {
-            // ignore read failures
+    let hydrationPromise = null;
+    function hydrateSuitePreference() {
+        if (hydrationPromise) return hydrationPromise;
+        // runtime-entry.bundle.js is intentionally loaded before the data
+        // foundation.  Do not memoize that early miss: a cached `false` would
+        // make every later resolver skip the persisted AppData preference.
+        if (!global.AppData || !global.AppData.preferences) {
+            return Promise.resolve(false);
         }
-        return null;
+        hydrationPromise = Promise.resolve().then(async () => {
+            await global.AppData.ready;
+            const stored = await global.AppData.preferences.getSuite();
+            if (stored && typeof stored === 'object') Object.assign(ensurePracticeConfig().suite, stored);
+            return true;
+        }).catch((error) => {
+            console.warn('[SuitePreference] 加载失败:', error);
+            return false;
+        });
+        // A transient AppData initialization failure should be retryable on the
+        // next read, just like the pre-foundation early miss above.
+        hydrationPromise = hydrationPromise.then((hydrated) => {
+            if (!hydrated) hydrationPromise = null;
+            return hydrated;
+        });
+        return hydrationPromise;
     }
 
-    function writeStorageValue(key, value) {
-        try {
-            if (global.localStorage && typeof global.localStorage.setItem === 'function') {
-                global.localStorage.setItem(key, String(value));
-            }
-        } catch (_) {
-            // ignore write failures
-        }
-    }
-
-    function resolveSuitePreference(overrides = {}) {
+    async function resolveSuitePreference(overrides = {}) {
+        await hydrateSuitePreference();
         const config = ensurePracticeConfig();
         const suiteConfig = config.suite || {};
 
         const flowMode = normalizeFlowMode(overrides.flowMode)
             || normalizeFlowMode(suiteConfig.flowMode)
-            || normalizeFlowMode(readStorageValue(FLOW_MODE_STORAGE_KEY))
             || 'classic';
 
         const frequencyScope = normalizeFrequencyScope(overrides.frequencyScope)
             || normalizeFrequencyScope(suiteConfig.frequencyScope)
-            || normalizeFrequencyScope(readStorageValue(FREQUENCY_SCOPE_STORAGE_KEY))
             || 'all';
 
         const overrideAutoAdvance = parseBoolean(overrides.autoAdvanceAfterSubmit);
         const configAutoAdvance = parseBoolean(suiteConfig.autoAdvanceAfterSubmit);
-        const storedAutoAdvance = parseBoolean(readStorageValue(AUTO_ADVANCE_STORAGE_KEY));
         const fallbackAutoAdvance = flowMode !== 'stationary';
         const autoAdvanceAfterSubmit = overrideAutoAdvance != null
             ? overrideAutoAdvance
             : (configAutoAdvance != null
                 ? configAutoAdvance
-                : (storedAutoAdvance != null ? storedAutoAdvance : fallbackAutoAdvance));
+                : fallbackAutoAdvance);
 
         config.suite.flowMode = flowMode;
         config.suite.frequencyScope = frequencyScope;
@@ -176,24 +176,34 @@
     }
 
     function persistSuitePreference(partial = {}) {
-        const current = resolveSuitePreference();
+        const config = ensurePracticeConfig();
+        const suiteConfig = config.suite || {};
+        const fallbackCurrent = {
+            flowMode: normalizeFlowMode(suiteConfig.flowMode) || 'classic',
+            frequencyScope: normalizeFrequencyScope(suiteConfig.frequencyScope) || 'all',
+            autoAdvanceAfterSubmit: parseBoolean(suiteConfig.autoAdvanceAfterSubmit)
+        };
 
-        const flowMode = normalizeFlowMode(partial.flowMode) || current.flowMode;
-        const frequencyScope = normalizeFrequencyScope(partial.frequencyScope) || current.frequencyScope;
+        const flowMode = normalizeFlowMode(partial.flowMode) || fallbackCurrent.flowMode;
+        const frequencyScope = normalizeFrequencyScope(partial.frequencyScope) || fallbackCurrent.frequencyScope;
 
         const partialAutoAdvance = parseBoolean(partial.autoAdvanceAfterSubmit);
         const autoAdvanceAfterSubmit = partialAutoAdvance != null
             ? partialAutoAdvance
             : (flowMode === 'stationary' ? false : true);
 
-        const config = ensurePracticeConfig();
         config.suite.flowMode = flowMode;
         config.suite.frequencyScope = frequencyScope;
         config.suite.autoAdvanceAfterSubmit = autoAdvanceAfterSubmit;
 
-        writeStorageValue(FLOW_MODE_STORAGE_KEY, flowMode);
-        writeStorageValue(FREQUENCY_SCOPE_STORAGE_KEY, frequencyScope);
-        writeStorageValue(AUTO_ADVANCE_STORAGE_KEY, autoAdvanceAfterSubmit ? 'true' : 'false');
+        hydrateSuitePreference().then((hydrated) => {
+            if (!hydrated || !global.AppData || !global.AppData.preferences) return;
+            return global.AppData.preferences.patchSuite({
+                flowMode,
+                frequencyScope,
+                autoAdvanceAfterSubmit
+            });
+        }).catch((error) => console.warn('[SuitePreference] 保存失败:', error));
 
         return {
             flowMode,
@@ -210,11 +220,18 @@
         normalizeFrequencyScope,
         normalizeFrequency,
         isFrequencyIncluded,
+        ready: hydrateSuitePreference,
         resolveSuitePreference,
         persistSuitePreference
     };
 
     global.SuitePreferenceUtils = api;
+
+    // Kick hydration off eagerly so any later resolver (including the
+    // synchronous readers inside suitePracticeMixin) does not race the very
+    // first AppData.preferences.getSuite() lookup.  If the data foundation is
+    // not installed yet, hydrateSuitePreference deliberately retries later.
+    hydrateSuitePreference();
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;

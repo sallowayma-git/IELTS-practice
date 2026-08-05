@@ -8,7 +8,7 @@
     function resolveSuitePreferenceForMixin(options = {}) {
         const suitePreferenceUtils = getSuitePreferenceUtils();
         if (suitePreferenceUtils && typeof suitePreferenceUtils.resolveSuitePreference === 'function') {
-            return suitePreferenceUtils.resolveSuitePreference(options);
+            return suitePreferenceUtils.ensurePracticeConfig().suite || {};
         }
         let flowMode = String(options && options.flowMode || '').trim().toLowerCase();
         if (!['classic', 'simulation', 'stationary'].includes(flowMode)) {
@@ -171,16 +171,26 @@
             }
         },
         async handleSuitePracticeComplete(examId, data, sourceWindow = null) {
+            const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => (
+                data && data.submissionId
+                    ? Object.assign({
+                        handled: Boolean(handled),
+                        committed: Boolean(committed),
+                        errorCode: errorCode || null
+                    }, extra || {})
+                    : Boolean(handled)
+            );
             // First check whether this is multi-suite mode (detected via suiteId).
             if (data && data.suiteId) {
-                return await this.handleMultiSuitePracticeComplete(examId, data);
+                const committed = await this.handleMultiSuitePracticeComplete(examId, data);
+                return withSubmitOutcome(true, committed, committed ? '' : 'suite_save_failed');
             }
             if (data && data.suiteSubmission === true && typeof this._handleInlineSimulationSuiteSubmit === 'function') {
                 return await this._handleInlineSimulationSuiteSubmit(examId, data, sourceWindow);
             }
 
             const session = this.currentSuiteSession;
-            if (!session || session.status !== 'active') {
+            if (!session) {
                 return false;
             }
 
@@ -188,6 +198,14 @@
                 ? data.suiteSessionId.trim()
                 : '';
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
+                return false;
+            }
+            if (session.status === 'completed') {
+                return withSubmitOutcome(true, true, '', data && data.submissionId ? {
+                    teardownSession: session
+                } : null);
+            }
+            if (session.status !== 'active') {
                 return false;
             }
 
@@ -219,7 +237,7 @@
                     submittedExamId: examId,
                     sessionId: session.id
                 });
-                return true;
+                return withSubmitOutcome(true, false, 'inactive_suite_exam');
             }
 
             const derivedDuration = this._deriveSuiteExamElapsedSeconds(session, examId, data && data.duration);
@@ -257,7 +275,7 @@
                 if (replayWindow) {
                     await this._sendSuiteReviewState(session, examId, replayWindow);
                 }
-                return true;
+                return withSubmitOutcome(true, true);
             }
 
             session.currentIndex = currentIndex + 1;
@@ -266,8 +284,11 @@
 
             // Last passage -> finalize the entire simulation
             if (session.currentIndex >= session.sequence.length) {
-                await this.finalizeSuiteRecord(session);
-                return true;
+                const deferTeardown = Boolean(data && data.submissionId && sourceWindow && !sourceWindow.closed);
+                const committed = await this.finalizeSuiteRecord(session, { deferTeardown });
+                return withSubmitOutcome(true, committed, committed ? '' : 'suite_save_failed', deferTeardown ? {
+                    teardownSession: session
+                } : null);
             }
 
             // Not last -> advance to next passage
@@ -279,7 +300,8 @@
                 }
             }
 
-            return this._advanceSuiteToNext(session, sequenceEntry.exam.title, examId);
+            const advanced = await this._advanceSuiteToNext(session, sequenceEntry.exam.title, examId);
+            return withSubmitOutcome(advanced, advanced, advanced ? '' : 'suite_advance_failed');
         },
 
         async continueSuitePractice() {
@@ -295,8 +317,17 @@
         },
 
         async _handleInlineSimulationSuiteSubmit(examId, data, sourceWindow = null) {
+            const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => (
+                data && data.submissionId
+                    ? Object.assign({
+                        handled: Boolean(handled),
+                        committed: Boolean(committed),
+                        errorCode: errorCode || null
+                    }, extra || {})
+                    : Boolean(handled)
+            );
             const session = this.currentSuiteSession;
-            if (!session || session.status !== 'active' || session.flowMode !== 'simulation') {
+            if (!session || session.flowMode !== 'simulation') {
                 return false;
             }
             const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
@@ -305,9 +336,17 @@
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
             }
+            if (session.status === 'completed') {
+                return withSubmitOutcome(true, true, '', data && data.submissionId ? {
+                    teardownSession: session
+                } : null);
+            }
+            if (session.status !== 'active') {
+                return false;
+            }
             const suiteEntries = Array.isArray(data && data.suiteEntries) ? data.suiteEntries : [];
             if (!suiteEntries.length) {
-                return false;
+                return withSubmitOutcome(true, false, 'suite_entries_missing');
             }
             const entriesByExam = new Map();
             suiteEntries.forEach((entry) => {
@@ -317,7 +356,7 @@
                 }
             });
             if (!entriesByExam.size) {
-                return false;
+                return withSubmitOutcome(true, false, 'suite_entries_missing');
             }
             const hasEverySequenceEntry = Array.isArray(session.sequence)
                 && session.sequence.length > 0
@@ -331,7 +370,7 @@
                     expected: session.sequence.map(item => item && item.examId).filter(Boolean),
                     received: Array.from(entriesByExam.keys())
                 });
-                return false;
+                return withSubmitOutcome(true, false, 'suite_entries_incomplete');
             }
 
             session.results = [];
@@ -355,6 +394,8 @@
                         answers: entryPayload.answers || {},
                         highlights: Array.isArray(entryPayload.highlights) ? entryPayload.highlights.slice() : [],
                         noteText: typeof entryPayload.noteText === 'string' ? entryPayload.noteText : '',
+                        notes: Array.isArray(entryPayload.notes) ? entryPayload.notes.slice() : [],
+                        noteOutlines: Array.isArray(entryPayload.noteOutlines) ? entryPayload.noteOutlines.slice() : [],
                         scrollY: Number.isFinite(Number(entryPayload.scrollY)) ? Number(entryPayload.scrollY) : 0,
                         markedQuestions: Array.isArray(entryPayload.markedQuestions) ? entryPayload.markedQuestions.slice() : []
                     },
@@ -378,8 +419,11 @@
                 session.windowRef = sourceWindow;
             }
             this._mirrorSessionToStorage(session);
-            await this.finalizeSuiteRecord(session);
-            return true;
+            const deferTeardown = Boolean(data && data.submissionId && sourceWindow && !sourceWindow.closed);
+            const committed = await this.finalizeSuiteRecord(session, { deferTeardown });
+            return withSubmitOutcome(true, committed, committed ? '' : 'suite_save_failed', deferTeardown ? {
+                teardownSession: session
+            } : null);
         },
 
         _resolveSuitePreference(options = {}) {
@@ -435,7 +479,7 @@
             if (data.draft && typeof data.draft === 'object' && !Array.isArray(data.draft)) {
                 return true;
             }
-            return ['answers', 'highlights', 'noteText', 'scrollY', 'markedQuestions', 'draftUpdatedAt'].some((key) => (
+            return ['answers', 'highlights', 'noteText', 'notes', 'noteOutlines', 'scrollY', 'markedQuestions', 'draftUpdatedAt'].some((key) => (
                 Object.prototype.hasOwnProperty.call(data, key)
             ));
         },
@@ -467,6 +511,12 @@
             const noteTextSource = typeof draftSource.noteText === 'string'
                 ? draftSource.noteText
                 : (data && typeof data.noteText === 'string' ? data.noteText : '');
+            const notesSource = Array.isArray(draftSource.notes)
+                ? draftSource.notes
+                : (Array.isArray(data && data.notes) ? data.notes : []);
+            const noteOutlinesSource = Array.isArray(draftSource.noteOutlines)
+                ? draftSource.noteOutlines
+                : (Array.isArray(data && data.noteOutlines) ? data.noteOutlines : []);
             const scrollSource = Number.isFinite(Number(draftSource.scrollY))
                 ? Number(draftSource.scrollY)
                 : (Number.isFinite(Number(data && data.scrollY)) ? Number(data.scrollY) : 0);
@@ -480,6 +530,8 @@
                 answers: this._cloneSuiteDraftPlainObject(answerSource),
                 highlights: highlightSource.slice(),
                 noteText: noteTextSource,
+                notes: this._cloneSuitePlainObject(notesSource),
+                noteOutlines: this._cloneSuitePlainObject(noteOutlinesSource),
                 scrollY: scrollSource,
                 markedQuestions: markedQuestionsSource.slice(),
                 updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now()
@@ -555,6 +607,8 @@
             delete cloned.highlights;
             delete cloned.scrollY;
             delete cloned.noteText;
+            delete cloned.notes;
+            delete cloned.noteOutlines;
             return cloned;
         },
 
@@ -573,6 +627,14 @@
             if (noteText) {
                 rawData.noteText = noteText;
             }
+            const notes = this._resolveSuiteEntryNotes(entry, draft);
+            if (notes.length > 0) {
+                rawData.notes = notes;
+            }
+            const noteOutlines = this._resolveSuiteEntryNoteOutlines(entry, draft);
+            if (noteOutlines.length > 0) {
+                rawData.noteOutlines = noteOutlines;
+            }
             return rawData;
         },
 
@@ -582,8 +644,11 @@
                 entry && entry.highlights,
                 entry && entry.rawData && entry.rawData.highlights
             ];
+            // 把“存在数组”视为权威来源（即使为空也可代表用户已清空高亮），
+            // 与 _buildSuiteDraftSnapshot 的写路径语义保持一致；避免显式 highlights: []
+            // 被跳过而回落到旧 entry.rawData.highlights，复活已删除的高亮。
             for (const source of sources) {
-                if (Array.isArray(source) && source.length > 0) {
+                if (source != null && Array.isArray(source)) {
                     return source.slice();
                 }
             }
@@ -629,6 +694,40 @@
                 }
             }
             return '';
+        },
+
+        _resolveSuiteEntryNotes(entry, draft = null) {
+            const sources = [
+                draft && draft.notes,
+                entry && entry.notes,
+                entry && entry.rawData && entry.rawData.notes
+            ];
+            // 把“存在数组”视为权威来源（即使为空也可代表用户已删除最后一条结构笔记），
+            // 与 _buildSuiteDraftSnapshot 的写路径语义保持一致；避免显式 notes: []
+            // 被跳过而回落到旧 entry.rawData.notes，复活已删除的笔记。
+            for (const source of sources) {
+                if (source != null && Array.isArray(source)) {
+                    return this._cloneSuitePlainObject(source);
+                }
+            }
+            return [];
+        },
+
+        _resolveSuiteEntryNoteOutlines(entry, draft = null) {
+            const sources = [
+                draft && draft.noteOutlines,
+                entry && entry.noteOutlines,
+                entry && entry.rawData && entry.rawData.noteOutlines
+            ];
+            // 把“存在数组”视为权威来源（即使为空也可代表用户已删除最后一条笔记大纲），
+            // 与 _buildSuiteDraftSnapshot 的写路径语义保持一致；避免显式 noteOutlines: []
+            // 被跳过而回落到旧 entry.rawData.noteOutlines，复活已删除的大纲。
+            for (const source of sources) {
+                if (source != null && Array.isArray(source)) {
+                    return this._cloneSuitePlainObject(source);
+                }
+            }
+            return [];
         },
 
         _buildSuiteReplayEntry(session, examId) {
@@ -695,6 +794,8 @@
 
             const highlights = this._resolveSuiteEntryHighlights(result, draft);
             const noteText = this._resolveSuiteEntryNoteText(result, draft);
+            const notes = this._resolveSuiteEntryNotes(result, draft);
+            const noteOutlines = this._resolveSuiteEntryNoteOutlines(result, draft);
             const scrollY = this._resolveSuiteEntryScrollY(result, draft);
             const markedQuestions = result && Array.isArray(result.markedQuestions)
                 ? result.markedQuestions.slice()
@@ -705,6 +806,8 @@
                 || markedQuestions.length
                 || highlights.length
                 || noteText
+                || notes.length
+                || noteOutlines.length
                 || (Number.isFinite(Number(scrollY)) && Number(scrollY) > 0)
             );
             if (!hasReplayData) {
@@ -719,6 +822,8 @@
                 markedQuestions,
                 highlights,
                 noteText,
+                notes,
+                noteOutlines,
                 scrollY
             };
         },
@@ -780,18 +885,15 @@
             }
             try {
                 if (replayEntry) {
-                    resolvedWindow.postMessage({
-                        type: 'REPLAY_PRACTICE_RECORD',
-                        data: {
-                            suiteSessionId: session.id,
-                            reviewEntryIndex: contextPayload.currentIndex,
-                            readOnly: contextPayload.readOnly !== false,
-                            markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
-                            entry: replayEntry
-                        }
-                    }, '*');
+                    this._postExamMessage(examId, resolvedWindow, 'REPLAY_PRACTICE_RECORD', {
+                        suiteSessionId: session.id,
+                        reviewEntryIndex: contextPayload.currentIndex,
+                        readOnly: contextPayload.readOnly !== false,
+                        markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
+                        entry: replayEntry
+                    });
                 }
-                resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                this._postExamMessage(examId, resolvedWindow, 'REVIEW_CONTEXT', contextPayload);
                 return true;
             } catch (error) {
                 console.warn('[SuitePractice] 发送套题回看上下文失败:', error);
@@ -826,7 +928,7 @@
                     && Number(windowInfo.lastMessageAt) >= startedAt
                     && (!windowInfo.suiteSessionId || windowInfo.suiteSessionId === session.id)
                     && (!windowInfo.windowSessionToken || !windowInfo.lastWindowSessionToken || windowInfo.windowSessionToken === windowInfo.lastWindowSessionToken)
-                    && (!windowInfo.pageType || /unified-reading|suite-placeholder/i.test(String(windowInfo.pageType)))
+                    && (!windowInfo.pageType || /unified-reading|suite-placeholder|^p[1-4]$|^practice$/i.test(String(windowInfo.pageType)))
                 );
                 if (readyMatches) {
                     return true;
@@ -870,7 +972,7 @@
             const pageType = windowInfo && typeof windowInfo.pageType === 'string'
                 ? windowInfo.pageType.toLowerCase()
                 : '';
-            if (pageType && !pageType.includes('unified-reading') && !pageType.includes('suite-placeholder')) {
+            if (pageType && !/unified-reading|suite-placeholder|^p[1-4]$|^practice$/i.test(pageType)) {
                 return false;
             }
             return true;
@@ -1006,6 +1108,7 @@
             }
             if (isCrossExamNavigation || !targetWindow) {
                 targetWindow = await this.openExam(targetEntry.examId, {
+                    examDefinition: targetEntry.exam,
                     target: 'tab',
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     suiteSessionId: session.id,
@@ -1083,7 +1186,10 @@
                 }
 
                 try {
-                    const opened = await this.openExam(nextEntry.examId, options);
+                    const opened = await this.openExam(nextEntry.examId, {
+                        ...options,
+                        examDefinition: nextEntry.exam
+                    });
                     if (opened && !opened.closed) {
                         return opened;
                     }
@@ -1169,18 +1275,13 @@
                     startTime: session.startTime,
                     activeExamId: session.activeExamId
                 };
-                if (global.sessionStorage) {
-                    global.sessionStorage.setItem('ielts_sim_session', JSON.stringify(snapshot));
-                }
+                global.AppData.recovery.windowSession.save('simulation', snapshot);
             } catch (_) { /* file:// may not support */ }
         },
 
         _restoreSessionFromStorage() {
             try {
-                if (!global.sessionStorage) return null;
-                const raw = global.sessionStorage.getItem('ielts_sim_session');
-                if (!raw) return null;
-                const snapshot = JSON.parse(raw);
+                const snapshot = global.AppData.recovery.windowSession.get('simulation');
                 if (!snapshot || !snapshot.id || !Array.isArray(snapshot.sequence)) return null;
                 return snapshot;
             } catch (_) { return null; }
@@ -1188,9 +1289,7 @@
 
         _clearSessionStorage() {
             try {
-                if (global.sessionStorage) {
-                    global.sessionStorage.removeItem('ielts_sim_session');
-                }
+                global.AppData.recovery.windowSession.discard('simulation');
             } catch (_) { /* ignore */ }
         },
 
@@ -1300,8 +1399,6 @@
             const pausedAtMs = Number.isFinite(Number(session.suiteTimerPausedAtMs)) ? Number(session.suiteTimerPausedAtMs) : null;
             const suiteTimerRunning = session.suiteTimerRunning !== false;
             const payload = {
-                type: 'SIMULATION_CONTEXT',
-                data: {
                     suiteSessionId: session.id,
                     flowMode: session.flowMode || 'simulation',
                     examId,
@@ -1330,10 +1427,9 @@
                         pausedAtMs,
                         running: suiteTimerRunning
                     }
-                }
             };
             try {
-                targetWindow.postMessage(payload, '*');
+                this._postExamMessage(examId, targetWindow, 'SIMULATION_CONTEXT', payload);
                 return true;
             } catch (e) {
                 console.warn('[SuitePractice] 发送模拟上下文失败:', e);
@@ -1345,7 +1441,16 @@
             const session = this.currentSuiteSession;
             if (!session || session.status !== 'active') return false;
             if (session.flowMode !== 'simulation') return false;
-            if (session.simulationNavigateLocked === true) return false;
+            if (session.simulationNavigateLocked === true) {
+                const inFlight = this._simulationNavigateInFlight;
+                if (!inFlight || typeof inFlight.then !== 'function') return false;
+                try {
+                    await inFlight;
+                } catch (_) {
+                    // The queued request still gets its own validation and error path.
+                }
+                return this._handleSimulationNavigate(examId, data, sourceWindow);
+            }
             const normalizedExamId = examId != null ? String(examId).trim() : '';
             const activeExamId = session.activeExamId != null ? String(session.activeExamId).trim() : '';
             if (!normalizedExamId) return false;
@@ -1359,6 +1464,11 @@
                 }
                 session.activeExamId = normalizedExamId;
             }
+            let releaseNavigation;
+            const navigationInFlight = new Promise((resolve) => {
+                releaseNavigation = resolve;
+            });
+            this._simulationNavigateInFlight = navigationInFlight;
             session.simulationNavigateLocked = true;
             try {
 
@@ -1402,6 +1512,7 @@
                 session.activeExamId = targetEntry.examId;
 
                 const targetWindow = await this.openExam(targetEntry.examId, {
+                    examDefinition: targetEntry.exam,
                     target: 'tab',
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     suiteSessionId: session.id,
@@ -1441,6 +1552,10 @@
                 return true;
             } finally {
                 session.simulationNavigateLocked = false;
+                if (this._simulationNavigateInFlight === navigationInFlight) {
+                    this._simulationNavigateInFlight = null;
+                }
+                releaseNavigation();
             }
         },
 
@@ -1461,7 +1576,7 @@
             if (!session || (session.status !== 'active' && session.status !== 'initializing') || !examId) {
                 return false;
             }
-            if (session.flowMode !== 'simulation') {
+            if (session.flowMode !== 'simulation' && session.flowMode !== 'stationary') {
                 return false;
             }
             if (!Array.isArray(session.sequence) || !session.sequence.length) {
@@ -1483,7 +1598,7 @@
             const pageType = windowInfo && typeof windowInfo.pageType === 'string'
                 ? windowInfo.pageType.toLowerCase()
                 : '';
-            if (pageType && !pageType.includes('unified-reading') && !pageType.includes('suite-placeholder')) {
+            if (pageType && !/unified-reading|suite-placeholder|^p[1-4]$|^practice$/i.test(pageType)) {
                 return false;
             }
             let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
@@ -1528,10 +1643,13 @@
             session.activeExamId = examId;
             session.windowRef = targetWindow;
             this._mirrorSessionToStorage(session);
-            if (session._contextSentExamId === examId
+            if (session.flowMode === 'simulation' && session._contextSentExamId === examId
                 && Number.isFinite(Number(session._contextSentAt))
                 && Date.now() - session._contextSentAt < 3000) {
                 return true;
+            }
+            if (session.flowMode === 'stationary') {
+                return this._sendSuiteReviewState(session, examId, targetWindow);
             }
             return this._sendSimulationContext(session, examId, targetWindow);
         },
@@ -1560,6 +1678,9 @@
 
             if (alreadyRecorded) {
                 console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
+                if (session.status !== 'completed' && this.isMultiSuiteComplete(session)) {
+                    return await this.finalizeMultiSuiteRecord(session);
+                }
                 return true;
             }
 
@@ -1602,8 +1723,7 @@
             // 检查是否所有套题都已完成
             if (this.isMultiSuiteComplete(session)) {
                 console.log('[MultiSuite] all suite entries completed, finalizing consolidated record.');
-                await this.finalizeMultiSuiteRecord(session);
-                return true;
+                return await this.finalizeMultiSuiteRecord(session);
             }
 
             // 还有套题未完成，保存当前进度
@@ -1650,12 +1770,13 @@
         async finalizeMultiSuiteRecord(session) {
             if (!session || !Array.isArray(session.suiteResults) || session.suiteResults.length === 0) {
                 console.warn('[MultiSuite] 无效的会话或无结果，跳过聚合');
-                return;
+                return false;
             }
 
             session.status = 'finalizing';
             console.log('[MultiSuite] 开始聚合多套题记录:', session.id);
 
+            let record = null;
             try {
                 const completionTime = Date.now();
                 const startTime = session.startTime || completionTime;
@@ -1685,7 +1806,7 @@
                 const displayTitle = dateLabel + ' ' + sourceLabel + ' multi-suite practice';
 
                 // 构建聚合记录
-                const record = {
+                record = {
                     id: session.id,
                     examId: session.baseExamId,
                     title: displayTitle,
@@ -1750,36 +1871,49 @@
 
                 // 保存聚合记录
                 await this._saveSuitePracticeRecord(record);
-
-                // 保存拼写错误到词表
-                if (aggregatedSpellingErrors.length > 0 && window.spellingErrorCollector) {
-                    try {
-                        await window.spellingErrorCollector.saveErrors(aggregatedSpellingErrors);
-                        console.log('[MultiSuite] 已保存拼写错误到词表:', aggregatedSpellingErrors.length);
-                    } catch (error) {
-                        console.warn('[MultiSuite] 保存拼写错误失败:', error);
-                    }
-                }
-
-                // 更新状态
-                await this._updatePracticeRecordsState();
-                this.refreshOverviewData && this.refreshOverviewData();
-
-                // 清理会话
-                this.multiSuiteSessionsMap.delete(session.baseExamId);
                 session.status = 'completed';
-
-                window.showMessage && window.showMessage('多套题练习已完成，已保存 ' + session.suiteResults.length + ' 条套题记录。', 'success');
-
-
-
-
-                console.log('[MultiSuite] consolidated record saved:', record.id);
-
             } catch (error) {
                 console.error('[MultiSuite] 聚合记录失败:', error);
                 session.status = 'error';
-                window.showMessage && window.showMessage('多套题记录保存失败，请稍后重试。', 'error');
+                try {
+                    window.showMessage && window.showMessage('多套题记录保存失败，请稍后重试。', 'error');
+                } catch (notificationError) {
+                    console.warn('[MultiSuite] 显示聚合保存失败通知时出错:', notificationError);
+                }
+                return false;
+            }
+
+            // From here on the aggregate record is authoritative. Every remaining action is best-effort
+            // and must not turn the committed submission into a NACK or another persistence attempt.
+            const aggregatedSpellingErrors = Array.isArray(record.spellingErrors) ? record.spellingErrors : [];
+            if (aggregatedSpellingErrors.length > 0 && window.spellingErrorCollector) {
+                await this._runSuitePostCommitStep('保存多套题拼写错误', async () => {
+                    await window.spellingErrorCollector.saveErrors(aggregatedSpellingErrors);
+                    console.log('[MultiSuite] 已保存拼写错误到词表:', aggregatedSpellingErrors.length);
+                });
+            }
+            await this._runSuitePostCommitStep('同步多套题练习记录', () => this._updatePracticeRecordsState());
+            await this._runSuitePostCommitStep('刷新多套题总览', () => {
+                this.refreshOverviewData && this.refreshOverviewData();
+            });
+            await this._runSuitePostCommitStep('清理多套题会话', () => {
+                this.multiSuiteSessionsMap.delete(session.baseExamId);
+            });
+            await this._runSuitePostCommitStep('显示多套题完成通知', () => {
+                window.showMessage && window.showMessage('多套题练习已完成，已保存 ' + session.suiteResults.length + ' 条套题记录。', 'success');
+            });
+
+            console.log('[MultiSuite] consolidated record saved:', record.id);
+            return true;
+        },
+
+        async _runSuitePostCommitStep(label, callback) {
+            try {
+                await callback();
+                return true;
+            } catch (error) {
+                console.warn(`[SuitePractice] ${label}失败（聚合记录已保存）:`, error);
+                return false;
             }
         },
 
@@ -1953,14 +2087,15 @@
             return aggregated;
         },
 
-        async finalizeSuiteRecord(session) {
+        async finalizeSuiteRecord(session, options = {}) {
             if (!session || !session.results || !session.results.length) {
                 await this._teardownSuiteSession(session);
-                return;
+                return false;
             }
 
             session.status = 'finalizing';
 
+            let committed = false;
             try {
                 const completionTime = Date.now();
                 const suiteEntries = session.results.map(entry => {
@@ -1976,6 +2111,8 @@
                         markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                         highlights: this._resolveSuiteEntryHighlights(entry, draft),
                         noteText: this._resolveSuiteEntryNoteText(entry, draft),
+                        notes: this._resolveSuiteEntryNotes(entry, draft),
+                        noteOutlines: this._resolveSuiteEntryNoteOutlines(entry, draft),
                         scrollY: this._resolveSuiteEntryScrollY(entry, draft),
                         rawData: this._sanitizeSuiteRawData(entry.rawData)
                     };
@@ -2074,55 +2211,55 @@
                 };
 
                 await this._saveSuitePracticeRecord(record);
-                await this._updatePracticeRecordsState();
-                this.refreshOverviewData && this.refreshOverviewData();
-                window.showMessage && window.showMessage('套题练习已完成，记录已保存。', 'success');
+                committed = true;
                 session.status = 'completed';
             } catch (error) {
                 console.error('[SuitePractice] 保存套题记录失败:', error);
-                window.showMessage && window.showMessage('套题记录保存失败，系统将尝试恢复到普通模式。', 'error');
-                await this._savePartialSuiteAsIndividual(session);
-                session.status = 'error';
-            } finally {
-                await this._teardownSuiteSession(session);
+                try {
+                    window.showMessage && window.showMessage('套题记录保存失败，系统将尝试恢复到普通模式。', 'error');
+                } catch (notificationError) {
+                    console.warn('[SuitePractice] 显示套题保存失败通知时出错:', notificationError);
+                }
+                try {
+                    await this._savePartialSuiteAsIndividual(session);
+                } catch (fallbackError) {
+                    console.warn('[SuitePractice] 聚合记录未保存，单篇恢复也失败:', fallbackError);
+                }
+                session.status = options.deferTeardown ? 'active' : 'error';
             }
+
+            if (committed) {
+                await this._runSuitePostCommitStep('同步套题练习记录', () => this._updatePracticeRecordsState());
+                await this._runSuitePostCommitStep('刷新套题总览', () => {
+                    this.refreshOverviewData && this.refreshOverviewData();
+                });
+                await this._runSuitePostCommitStep('显示套题完成通知', () => {
+                    window.showMessage && window.showMessage('套题练习已完成，记录已保存。', 'success');
+                });
+            }
+
+            if (!options.deferTeardown) {
+                await this._runSuitePostCommitStep('清理套题会话窗口', () => this._teardownSuiteSession(session));
+            }
+            return committed;
         },
 
         async _fetchSuiteExamIndex() {
-            let list = this.getState ? this.getState('exam.index') : null;
-            if (!Array.isArray(list) || !list.length) {
-                try {
-                    const activeKey = await storage.get('active_exam_index_key', 'exam_index');
-                    list = await storage.get(activeKey, []);
-                    if (!Array.isArray(list) || !list.length) {
-                        list = await storage.get('exam_index', []);
-                    }
-                } catch (error) {
-                    console.warn('[SuitePractice] Failed to load exam index, falling back to the default bank.', error);
-                    list = await storage.get('exam_index', []);
-                }
-            }
-
+            const list = await window.resolveActiveLibraryIndex();
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
         async _listPracticeRecordsViaAPI() {
             const normalizeList = (list) => (Array.isArray(list) ? list : []);
 
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                return normalizeList(await window.PracticeRecordAPI.list());
-            }
-
-            return [];
+            // Filtering needs suiteEntries and suite markers, but never highlights or notes.
+            // The detail projection contains those fields without loading the annotation layer.
+            return normalizeList(await window.AppData.practice.list({ projection: 'detail' }));
         },
 
         async _recalculatePracticeStatsFromRecords() {
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.recalculateStats === 'function') {
-                await window.PracticeRecordAPI.recalculateStats();
-                return true;
-            }
-            console.warn('[SuitePractice] 统一练习统计 API 未就绪');
-            return false;
+            await window.AppData.practice.getStats();
+            return true;
         },
 
         async _loadSuitePracticeRecordsForFiltering() {
@@ -2455,6 +2592,7 @@
                 let examWindow = null;
                 try {
                     examWindow = await this.openExam(firstEntry.examId, {
+                        examDefinition: firstEntry.exam,
                         target: 'tab',
                         windowName: suiteWindowName,
                         suiteSessionId,
@@ -2583,13 +2721,26 @@
         },
 
         async _saveSuitePracticeRecord(record) {
-            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.saveRecord !== 'function') {
-                throw new Error('统一练习记录存储未就绪');
-            }
-            await window.PracticeRecordAPI.saveRecord(record, { updateStats: true });
-            await this._cleanupSuiteEntryRecords(record).catch(error => {
-                console.warn('[SuitePractice] 清理套题子记录失败:', error);
+            const childSessionIds = [];
+            (Array.isArray(record && record.suiteEntries) ? record.suiteEntries : []).forEach((entry) => {
+                const raw = entry && entry.rawData || {};
+                const sessionId = raw.sessionId || (entry && (entry.sessionId || entry.suiteEntrySessionId));
+                if (sessionId && String(sessionId) !== String(record.sessionId || '')) childSessionIds.push(String(sessionId));
             });
+            const receipt = await window.AppData.practice.finalizeSuite({
+                record,
+                childSessionIds,
+                operationId: record.operationId
+                    || (record.submissionId
+                        ? `practice-suite:${String(record.sessionId || 'session')}:${String(record.submissionId)}`
+                        : undefined)
+            });
+            if (!receipt || receipt.committed !== true) {
+                const error = new Error('Suite aggregate commit was not confirmed');
+                error.code = 'SUITE_COMMIT_NOT_CONFIRMED';
+                throw error;
+            }
+            return receipt.record || record;
         },
 
         async _cleanupSuiteEntryRecords(record) {
@@ -2622,14 +2773,7 @@
                 return;
             }
 
-            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.deleteMany !== 'function') {
-                throw new Error('统一练习记录删除 API 未就绪');
-            }
-            const result = await window.PracticeRecordAPI.deleteMany(Array.from(entrySessionIds), { updateStats: true, matchBy: 'sessionId' });
-            const deletedCount = Number(result && result.deletedCount) || 0;
-            if (deletedCount > 0) {
-                console.log('[SuitePractice] cleared ' + deletedCount + ' suite child records');
-            }
+            // Child cleanup is committed atomically by practice.finalizeSuite.
         },
 
         async _updatePracticeRecordsState() {
@@ -2638,21 +2782,19 @@
                     await window.syncPracticeRecords({ forceRender: true });
                     return;
                 } else {
-                    const latest = await this._listPracticeRecordsViaAPI();
-                    if (this.setState) {
-                        this.setState('practice.records', Array.isArray(latest) ? latest : []);
+                    const [latest, index] = await Promise.all([
+                        window.AppData.practice.list({ projection: 'light' }),
+                        window.resolveActiveLibraryIndex()
+                    ]);
+                    if (typeof window.refreshBrowseProgressFromRecords === 'function') {
+                        window.refreshBrowseProgressFromRecords(latest, index);
+                    }
+                    if (typeof window.updatePracticeView === 'function') {
+                        window.updatePracticeView(latest, index);
                     }
                 }
             } catch (error) {
                 console.warn('[SuitePractice] 同步练习记录失败:', error);
-            }
-
-            try {
-                if (typeof window.updatePracticeView === 'function') {
-                    window.updatePracticeView();
-                }
-            } catch (error) {
-                console.warn('[SuitePractice] 刷新练习视图失败:', error);
             }
         },
 
@@ -2775,16 +2917,21 @@
                 return;
             }
 
+            if (session.submitReceiptTeardownTimer) {
+                clearTimeout(session.submitReceiptTeardownTimer);
+                session.submitReceiptTeardownTimer = null;
+            }
+
             this._clearSuiteHandshakes();
 
             if (session.windowRef && !session.windowRef.closed && typeof session.windowRef.postMessage === 'function') {
                 try {
-                    session.windowRef.postMessage({
-                        type: 'SUITE_FORCE_CLOSE',
-                        data: {
-                            suiteSessionId: session.id || null
-                        }
-                    }, '*');
+                    const activeExamId = session.activeExamId
+                        || (session.sequence && session.sequence[session.currentIndex || 0] && session.sequence[session.currentIndex || 0].examId)
+                        || '';
+                    this._postExamMessage(activeExamId, session.windowRef, 'SUITE_FORCE_CLOSE', {
+                        suiteSessionId: session.id || null
+                    });
                 } catch (forceCloseError) {
                     console.warn('[SuitePractice] 无法通知套题窗口关闭:', forceCloseError);
                 }
@@ -3175,9 +3322,3 @@
     global.ExamSystemAppMixins = global.ExamSystemAppMixins || {};
     global.ExamSystemAppMixins.suitePractice = mixin;
 })(typeof window !== 'undefined' ? window : globalThis);
-
-
-
-
-
-
