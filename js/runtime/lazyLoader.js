@@ -42,9 +42,7 @@
             'js/bundles/theme.bundle.js'
         ];
 
-        manifest['settings-tools'] = [
-            'js/bundles/settings.bundle.js'
-        ];
+        manifest['settings-tools'] = [];
 
         manifest['diagnostics-tools'] = [
             'js/bundles/diagnostics.bundle.js'
@@ -53,13 +51,16 @@
         dependencies['state-core'] = [];
         dependencies['exam-data'] = [];
         dependencies['practice-suite'] = ['state-core'];
-        dependencies['browse-runtime'] = ['state-core'];
-        dependencies['browse-view'] = ['state-core'];
+        // Browsing is also the entry point for starting a practice session.
+        // Keep the real recorder ready before a user can open an exam; the
+        // bootstrap fallback cannot own the full submit/persist round trip.
+        dependencies['browse-runtime'] = ['state-core', 'practice-suite'];
+        dependencies['browse-view'] = ['state-core', 'practice-suite'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
         dependencies['settings-tools'] = ['state-core'];
-        dependencies['more-tools'] = ['state-core', 'settings-tools'];
+        dependencies['more-tools'] = ['state-core'];
         dependencies['theme-tools'] = [];
-        dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];
+        dependencies['diagnostics-tools'] = ['state-core'];
     }
 
     function setBuiltInListeningAvailability(available, reason) {

@@ -175,6 +175,7 @@
                     scope,
                     text,
                     kind: resolveHighlightKind(node),
+                    noteId: node.dataset && node.dataset.noteId ? String(node.dataset.noteId) : '',
                     occurrence: seen,
                     start: startOffset,
                     end: endOffset,
@@ -248,6 +249,9 @@
                 if (offsetRange && !offsetRange.collapsed) {
                     const offsetSpan = document.createElement('span');
                     applyHighlightKind(offsetSpan, highlightKind);
+                    if (record.noteId) {
+                        offsetSpan.dataset.noteId = String(record.noteId);
+                    }
                     try {
                         offsetRange.surroundContents(offsetSpan);
                         return true;
@@ -296,6 +300,9 @@
         }
         const span = document.createElement('span');
         applyHighlightKind(span, highlightKind);
+        if (record.noteId) {
+            span.dataset.noteId = String(record.noteId);
+        }
         try {
             range.surroundContents(span);
             return true;

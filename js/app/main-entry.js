@@ -7,8 +7,9 @@
     var SESSION_GROUP = 'session-suite';
     var STATE_CORE_GROUP = 'state-core';
     var SETTINGS_GROUP = 'settings-tools';
-    var READING_CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
     var READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
+    var readingCandidateCodeCache = { mode: 'auto', customCode: '' };
+    var readingCandidateCodeReady = null;
 
     function ensureLazyGroup(name) {
         if (!name || !global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
@@ -46,34 +47,32 @@
     }
 
     function readReadingCandidateCodePreferences() {
-        try {
-            var raw = global.localStorage && global.localStorage.getItem(READING_CANDIDATE_CODE_PREF_KEY);
-            var parsed = raw ? JSON.parse(raw) : null;
-            var mode = parsed && parsed.mode === 'custom' ? 'custom' : 'auto';
-            var customCode = parsed && typeof parsed.customCode === 'string'
-                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
-                : '';
-            return {
-                mode: mode,
-                customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
-            };
-        } catch (_) {
-            return { mode: 'auto', customCode: '' };
-        }
+        return Object.assign({}, readingCandidateCodeCache);
     }
 
-    function saveReadingCandidateCodePreferences(preferences) {
+    function loadReadingCandidateCodePreferences() {
+        if (readingCandidateCodeReady) return readingCandidateCodeReady;
+        readingCandidateCodeReady = Promise.resolve().then(async function loadCandidateCode() {
+            await global.AppData.ready;
+            var stored = await global.AppData.preferences.getCandidateCode();
+            var mode = stored && stored.mode === 'custom' ? 'custom' : 'auto';
+            var customCode = stored && typeof stored.customCode === 'string' ? stored.customCode.replace(/\D/g, '').slice(0, 6) : '';
+            readingCandidateCodeCache = { mode: mode, customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : '' };
+            return readingCandidateCodeCache;
+        });
+        return readingCandidateCodeReady;
+    }
+
+    async function saveReadingCandidateCodePreferences(preferences) {
+        await loadReadingCandidateCodePreferences();
         var next = {
             mode: preferences && preferences.mode === 'custom' ? 'custom' : 'auto',
             customCode: preferences && typeof preferences.customCode === 'string'
                 ? preferences.customCode.replace(/\D/g, '').slice(0, 6)
                 : ''
         };
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(READING_CANDIDATE_CODE_PREF_KEY, JSON.stringify(next));
-            }
-        } catch (_) { }
+        await global.AppData.preferences.setCandidateCode(next);
+        readingCandidateCodeCache = next;
         return next;
     }
 
@@ -89,7 +88,8 @@
         }
     }
 
-    function setupReadingCandidateCodeSettings() {
+    async function setupReadingCandidateCodeSettings() {
+        await loadReadingCandidateCodePreferences();
         var input = document.getElementById('reading-candidate-code-input');
         var saveButton = document.getElementById('reading-candidate-code-save-btn');
         var randomButton = document.getElementById('reading-candidate-code-random-btn');
@@ -144,7 +144,7 @@
             setReadingCandidateCodeStatus(status, '', '');
         });
 
-        saveButton.addEventListener('click', function saveCandidateCodeSettings() {
+        saveButton.addEventListener('click', async function saveCandidateCodeSettings() {
             var mode = getSelectedMode();
             var code = input.value.replace(/\D/g, '').slice(0, 6);
             if (mode === 'custom' && !READING_CANDIDATE_CODE_PATTERN.test(code)) {
@@ -152,7 +152,7 @@
                 input.focus();
                 return;
             }
-            saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
+            await saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
             setReadingCandidateCodeStatus(
                 status,
                 mode === 'custom' ? '已保存自定义编码：' + code : '已保存：自动生成。',
@@ -160,11 +160,11 @@
             );
         });
 
-        randomButton.addEventListener('click', function generateCandidateCode() {
+        randomButton.addEventListener('click', async function generateCandidateCode() {
             var code = hashReadingCandidateCode(createReadingCandidateCodeSeed());
             setSelectedMode('custom');
             input.value = code;
-            saveReadingCandidateCodePreferences({ mode: 'custom', customCode: code });
+            await saveReadingCandidateCodePreferences({ mode: 'custom', customCode: code });
             setReadingCandidateCodeStatus(status, '已随机生成并保存：' + code, 'success');
         });
 
@@ -183,12 +183,13 @@
         }
     }
 
-    function setupPracticeTimerSettings() {
+    async function setupPracticeTimerSettings() {
         var manager = global.PracticeTimerPreferences;
         if (!manager || typeof manager.read !== 'function' || typeof manager.save !== 'function') {
             return;
         }
 
+        if (manager.ready) await manager.ready;
         Array.prototype.slice.call(document.querySelectorAll('.practice-timer-card[data-timer-scope]'))
             .forEach(function bindTimerCard(card) {
                 var scope = String(card.dataset.timerScope || '').toLowerCase() === 'listening'
@@ -244,10 +245,14 @@
                         setPracticeTimerStatus(status, '', '');
                     });
                 });
-                saveButton.addEventListener('click', function saveTimerPreferences() {
-                    var saved = manager.save(scope, collect());
-                    apply(saved);
-                    setPracticeTimerStatus(status, '已保存', 'success');
+                saveButton.addEventListener('click', async function saveTimerPreferences() {
+                    try {
+                        var saved = await manager.save(scope, collect());
+                        apply(saved);
+                        setPracticeTimerStatus(status, '已保存', 'success');
+                    } catch (error) {
+                        setPracticeTimerStatus(status, '保存失败', 'error');
+                    }
                 });
 
                 apply(manager.read(scope));
@@ -341,20 +346,6 @@
 
     function ensureSettingsToolsGroup() {
         return ensureLazyGroup(SETTINGS_GROUP);
-    }
-
-    function setStorageNamespace() {
-        if (!global.storage || !global.storage.ready || typeof global.storage.setNamespace !== 'function') {
-            return;
-        }
-        global.storage.ready.then(function applyNamespace() {
-            global.storage.setNamespace('exam_system');
-            try {
-                console.log('[MainEntry] 已设置存储命名空间: exam_system');
-            } catch (_) { }
-        }).catch(function handleNamespaceError(error) {
-            console.error('[MainEntry] 设置命名空间失败', error);
-        });
     }
 
     function initializeNavigationShell() {
@@ -594,35 +585,29 @@
         return active.id.replace(/-view$/, '');
     }
 
-    function syncOverviewAfterIndexLoad() {
-        if (!global.app || typeof global.app.setState !== 'function') {
-            return;
-        }
-        if (typeof global.getExamIndexState !== 'function') {
-            return;
-        }
-        var list = global.getExamIndexState();
+    function syncOverviewAfterIndexLoad(index) {
+        var list = Array.isArray(index) ? index : [];
         if (!Array.isArray(list)) {
             return;
         }
         try {
-            global.app.setState('exam.index', list.slice());
-            if (typeof global.app.refreshOverviewData === 'function') {
-                global.app.refreshOverviewData();
+            if (typeof global.updateOverview === 'function') {
+                global.updateOverview(list);
             }
         } catch (error) {
             console.warn('[MainEntry] 同步总览数据失败:', error);
         }
     }
 
-    function handleExamIndexLoaded() {
-        syncOverviewAfterIndexLoad();
+    function handleExamIndexLoaded(index) {
+        var snapshot = Array.isArray(index) ? index : [];
+        syncOverviewAfterIndexLoad(snapshot);
         var activeView = getActiveViewName();
 
         if (activeView === 'browse') {
             ensureBrowseGroup().then(function afterBrowseReady() {
                 if (typeof global.loadExamList === 'function') {
-                    try { global.loadExamList(); } catch (_) { }
+                    try { global.loadExamList(snapshot); } catch (_) { }
                 }
                 var loading = document.querySelector('#browse-view .loading');
                 if (loading) {
@@ -636,8 +621,8 @@
 
         if (activeView === 'practice') {
             Promise.all([ensureBrowseGroup(), ensurePracticeSuiteGroup()]).then(function onPracticeReady() {
-                if (typeof global.updatePracticeView === 'function') {
-                    try { global.updatePracticeView(); } catch (_) { }
+                if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                    global.startPracticeRecordsSyncInBackground('exam-index-loaded', { forceRender: true });
                 }
             }).catch(function handlePracticeLoadError(error) {
                 console.error('[MainEntry] practice 视图模块加载失败:', error);
@@ -645,8 +630,8 @@
         }
     }
 
-    global.addEventListener('examIndexLoaded', function onExamIndexLoaded() {
-        handleExamIndexLoaded();
+    global.addEventListener('examIndexLoaded', function onExamIndexLoaded(event) {
+        handleExamIndexLoaded(event && event.detail ? event.detail.index : []);
     });
 
     global.addEventListener('appCoreReady', function onAppCoreReady() {
@@ -677,7 +662,6 @@
     }
 
     function init() {
-        setStorageNamespace();
         initializeNavigationShell();
         setupReadingCandidateCodeSettings();
         setupPracticeTimerSettings();

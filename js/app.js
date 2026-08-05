@@ -13,17 +13,14 @@ class ExamSystemApp {
         this.state = {
             // 考试相关状态
             exam: {
-                index: [],
                 currentCategory: 'all',
                 currentExamType: 'all',
                 filteredExams: [],
-                configurations: {},
-                activeConfigKey: 'exam_index'
+                configurations: {}
             },
 
             // 练习相关状态
             practice: {
-                records: [],
                 selectedRecords: new Set(),
                 bulkDeleteMode: false,
                 dataCollector: null
@@ -42,7 +39,6 @@ class ExamSystemApp {
 
             // 组件实例
             components: {
-                dataIntegrityManager: null,
                 pdfHandler: null,
                 browseStateManager: null,
                 practiceListScroller: null
@@ -78,62 +74,6 @@ class ExamSystemApp {
         updateState(path, updates) {
             const current = this.getState(path);
             this.setState(path, { ...current, ...updates });
-        },
-        async persistState(path, storageKey = null) {
-            const value = this.getState(path);
-            const key = storageKey || path.replace('.', '_');
-            try {
-                const serializedValue = StateSerializer.serialize(value);
-                await storage.set(key, serializedValue);
-            } catch (error) {
-                console.error(`[App] 持久化状态失败 ${path}:`, error);
-            }
-        },
-        async persistMultipleState(mapping) {
-            const promises = Object.entries(mapping).map(([path, storageKey]) =>
-                this.persistState(path, storageKey)
-            );
-            try {
-                await Promise.all(promises);
-            } catch (error) {
-                console.error('[App] 批量持久化状态失败:', error);
-            }
-        },
-        async loadState(path, storageKey = null) {
-            const key = storageKey || path.replace('.', '_');
-            try {
-                const value = await storage.get(key, null);
-                if (value !== null) {
-                    const deserializedValue = StateSerializer.deserialize(value);
-                    this.setState(path, deserializedValue);
-                    return deserializedValue;
-                }
-            } catch (error) {
-                console.error(`[App] 加载状态失败 ${path}:`, error);
-            }
-            return null;
-        },
-        async loadPersistedState() {
-            const stateMappings = {
-                exam: 'app_exam_state',
-                practice: 'app_practice_state',
-                ui: 'app_ui_state',
-                system: 'app_system_state'
-            };
-            for (const [path, storageKey] of Object.entries(stateMappings)) {
-                await this.loadState(path, storageKey);
-            }
-            console.log('[App] 持久化状态加载完成');
-        },
-        async saveAllState() {
-            const stateMappings = {
-                exam: 'app_exam_state',
-                practice: 'app_practice_state',
-                ui: 'app_ui_state',
-                system: 'app_system_state'
-            };
-            await this.persistMultipleState(stateMappings);
-            console.log('[App] 所有状态已保存');
         },
         async checkComponents() {
             console.log('=== 组件加载检查 ===');
@@ -173,12 +113,9 @@ class ExamSystemApp {
                 console.log(`${name}: ${status}`);
             });
             console.log('\n=== 数据检查 ===');
-            const practiceRecordsCount = this.getState('practice.records')?.length || 0;
-            console.log(`practiceRecords: ${practiceRecordsCount} 条记录`);
             try {
-                const records = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                    ? await window.PracticeRecordAPI.list()
-                    : [];
+                // 只统计条数，light 投影即可，避免为诊断日志拉取全量答题详情。
+                const records = await window.AppData.practice.list({ projection: 'light' });
                 const count = Array.isArray(records) ? records.length : 0;
                 console.log(`canonical practice records: ${count} 条记录`);
             } catch (_) {
@@ -205,11 +142,6 @@ class ExamSystemApp {
                     console.warn('[App] AppStateService connect failed:', error);
                 }
             }
-            Object.defineProperty(window, 'dataIntegrityManager', {
-                get: () => this.state.components.dataIntegrityManager,
-                set: (value) => this.setState('components.dataIntegrityManager', value),
-                configurable: true
-            });
             Object.defineProperty(window, 'pdfHandler', {
                 get: () => this.state.components.pdfHandler,
                 set: (value) => this.setState('components.pdfHandler', value),
@@ -226,7 +158,7 @@ class ExamSystemApp {
 
     const integratedBootstrapMixin = {
         checkDependencies() {
-            const requiredGlobals = ['storage'];
+            const requiredGlobals = ['AppData'];
             const missing = requiredGlobals.filter((name) => !window[name]);
             if (missing.length > 0) {
                 throw new Error(`Missing required dependencies: ${missing.join(', ')}`);
@@ -253,6 +185,11 @@ class ExamSystemApp {
         },
         async initializeCoreComponents() {
             if (this.instantiatePracticeRecorder()) {
+                // PracticeRecorder restores durable sessions asynchronously.  The
+                // hot-upgrade rebind must run after that restore has completed;
+                // otherwise the recovery snapshot can overwrite the host session
+                // that we are about to seed.
+                await this._practiceRecorderRebindPromise;
                 return;
             }
             console.warn('[App] PracticeRecorder类不可用，使用降级记录器');
@@ -265,12 +202,117 @@ class ExamSystemApp {
                 return false;
             }
             try {
-                this.components.practiceRecorder = new PracticeRecorder();
+                const previous = this.components && this.components.practiceRecorder
+                    ? this.components.practiceRecorder
+                    : null;
+                if (previous && previous.constructor === window.PracticeRecorder && previous.isFallback !== true) {
+                    return true;
+                }
+                const recorder = new PracticeRecorder();
+                this.components.practiceRecorder = recorder;
                 this.ensurePracticeRecorderEvents();
+                // Hot-upgrade from the bootstrap fallback must re-seed live host sessions;
+                // otherwise PRACTICE_COMPLETE finds no activeSessions and production rejects
+                // synthetic saves, so the child never receives PRACTICE_SUBMIT_ACK / results.
+                const recorderReady = recorder.ready && typeof recorder.ready.then === 'function'
+                    ? recorder.ready
+                    : Promise.resolve();
+                this._practiceRecorderRebindPromise = Promise.resolve(recorderReady)
+                    .then(() => this._rebindPracticeRecorderSessions(recorder, previous))
+                    .catch((rebindError) => {
+                        console.warn('[App] PracticeRecorder ready 后重建活动会话失败:', rebindError);
+                    });
                 return true;
             } catch (error) {
                 console.error('[App] PracticeRecorder初始化失败:', error);
                 return false;
+            }
+        },
+        _rebindPracticeRecorderSessions(recorder, previousRecorder = null) {
+            if (!recorder || typeof recorder.startPracticeSession !== 'function') {
+                return;
+            }
+            const seeded = new Set();
+            try {
+                if (this.examWindows && typeof this.examWindows.forEach === 'function') {
+                    this.examWindows.forEach((info, examId) => {
+                        if (!info || !examId) {
+                            return;
+                        }
+                        if (info.reviewMode || String(info.practiceMode || '').toLowerCase() === 'memorize') {
+                            return;
+                        }
+                        if (info.status === 'completed' || info.status === 'closed') {
+                            return;
+                        }
+                        const sessionId = info.expectedSessionId || info.sessionId || null;
+                        if (!sessionId) {
+                            return;
+                        }
+                        try {
+                            recorder.startPracticeSession(examId, {
+                                sessionId: String(sessionId),
+                                title: info.title || info.examTitle || '',
+                                category: info.category || info.pageType || '',
+                                frequency: info.frequency || '',
+                                libraryConfigurationId: Object.prototype.hasOwnProperty.call(info, 'libraryConfigurationId')
+                                    ? info.libraryConfigurationId
+                                    : (typeof this._readLaunchLibraryConfigurationId === 'function'
+                                        ? this._readLaunchLibraryConfigurationId(examId, null, info)
+                                        : null)
+                            });
+                            if (typeof recorder.handleSessionStarted === 'function') {
+                                recorder.handleSessionStarted({
+                                    examId,
+                                    sessionId: String(sessionId),
+                                    metadata: {
+                                        pageType: info.pageType || null,
+                                        suiteSessionId: info.suiteSessionId || null,
+                                        source: 'recorder-hot-upgrade',
+                                        libraryConfigurationId: Object.prototype.hasOwnProperty.call(info, 'libraryConfigurationId')
+                                            ? info.libraryConfigurationId
+                                            : null
+                                    }
+                                });
+                            }
+                            seeded.add(String(examId));
+                        } catch (seedError) {
+                            console.warn('[App] 升级 PracticeRecorder 时重建活动会话失败:', examId, seedError);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('[App] 升级 PracticeRecorder 时扫描 examWindows 失败:', error);
+            }
+
+            // Carry over any sessions the fallback stub tracked in-memory before the class loaded.
+            try {
+                const priorSessions = previousRecorder && previousRecorder.activeSessions;
+                if (priorSessions && typeof priorSessions.forEach === 'function') {
+                    priorSessions.forEach((session, examId) => {
+                        if (!examId || seeded.has(String(examId)) || !session) {
+                            return;
+                        }
+                        const sessionId = session.sessionId || session.id || null;
+                        if (!sessionId) {
+                            return;
+                        }
+                        try {
+                            recorder.startPracticeSession(examId, Object.assign({}, session.metadata || {}, {
+                                sessionId: String(sessionId),
+                                title: session.metadata && (session.metadata.examTitle || session.metadata.title) || '',
+                                totalQuestions: session.progress && session.progress.totalQuestions || 0,
+                                libraryConfigurationId: session.metadata && session.metadata.libraryConfigurationId != null
+                                    ? session.metadata.libraryConfigurationId
+                                    : null
+                            }));
+                        } catch (seedError) {
+                            console.warn('[App] 升级 PracticeRecorder 时迁移降级会话失败:', examId, seedError);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('[App] 升级 PracticeRecorder 时读取降级会话失败:', error);
             }
         },
         ensurePracticeRecorderEvents() {
@@ -282,36 +324,62 @@ class ExamSystemApp {
             }
         },
         createFallbackRecorder() {
-            function normalizeRecords(records) {
-                return Array.isArray(records) ? records : [];
-            }
+            const activeSessions = new Map();
+            const start = (examId, examData = {}) => {
+                const sessionId = (examData && examData.sessionId)
+                    || `fallback_${examId || 'exam'}_${Date.now()}`;
+                const session = {
+                    examId: examId || '',
+                    startTime: new Date().toISOString(),
+                    sessionId,
+                    status: 'started',
+                    progress: {
+                        totalQuestions: examData && examData.totalQuestions || 0
+                    },
+                    metadata: {
+                        examTitle: examData && examData.title || '',
+                        category: examData && examData.category || '',
+                        frequency: examData && examData.frequency || '',
+                        libraryConfigurationId: examData && examData.libraryConfigurationId != null
+                            ? examData.libraryConfigurationId
+                            : null
+                    }
+                };
+                if (examId) {
+                    activeSessions.set(examId, session);
+                }
+                return session;
+            };
             return {
-                startPracticeSession: (examId) => ({ examId: examId || '', startTime: Date.now(), sessionId: `fallback_${Date.now()}`, status: 'started' }),
-                startSession: (examId) => ({ examId: examId || '', startTime: Date.now(), sessionId: `fallback_${Date.now()}`, status: 'started' }),
+                activeSessions,
+                isFallback: true,
+                startPracticeSession: start,
+                startSession: start,
+                handleSessionStarted: (data) => {
+                    if (!data || !data.examId || !data.sessionId) {
+                        return;
+                    }
+                    const existing = activeSessions.get(data.examId) || {
+                        examId: data.examId,
+                        startTime: new Date().toISOString(),
+                        status: 'started',
+                        metadata: {}
+                    };
+                    existing.sessionId = data.sessionId;
+                    existing.status = 'active';
+                    if (data.metadata) {
+                        existing.metadata = Object.assign({}, existing.metadata || {}, data.metadata);
+                    }
+                    activeSessions.set(data.examId, existing);
+                },
                 handleRealPracticeData: async () => null,
                 savePracticeRecord: async (record) => {
-                    try {
-                        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.saveRecord === 'function') {
-                            await window.PracticeRecordAPI.saveRecord(record);
-                        } else {
-                            throw new Error('统一练习记录存储未就绪');
-                        }
-                    } catch (error) {
-                        console.warn('[App] 降级记录器保存失败:', error);
-                    }
-                    return record || null;
+                    const receipt = await window.AppData.practice.completeAttempt({ record });
+                    return receipt && receipt.record ? receipt.record : null;
                 },
-                getPracticeRecords: async () => {
-                    try {
-                        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                            return normalizeRecords(await window.PracticeRecordAPI.list());
-                        }
-                        return [];
-                    } catch (error) {
-                        console.warn('[App] 降级记录器读取失败:', error);
-                        return [];
-                    }
-                }
+                // 兼容用的记录列表读取：调用方只做列表/统计展示，light 投影已覆盖，
+                // 不需要拉取答题详情、笔记与高亮等重负载字段。
+                getPracticeRecords: async () => window.AppData.practice.list({ projection: 'light' })
             };
         },
         schedulePracticeRecorderUpgrade(maxAttempts = 20, interval = 500) {
@@ -637,11 +705,17 @@ class ExamSystemApp {
                 case 'browse':
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
                         const { category, type, filterMode, path } = window.__pendingBrowseFilter;
-                        try {
-                            window.applyBrowseFilter(category, type, filterMode, path);
-                        } finally {
-                            delete window.__pendingBrowseFilter;
-                        }
+                        Promise.resolve(
+                            typeof window.initializeBrowseView === 'function'
+                                ? window.initializeBrowseView({ skipLoad: true })
+                                : null
+                        ).then(() => window.applyBrowseFilter(category, type, filterMode, path))
+                            .catch((error) => {
+                                console.warn('[App] 应用待处理题库筛选失败:', error);
+                            })
+                            .finally(() => {
+                                delete window.__pendingBrowseFilter;
+                            });
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();
                     }
@@ -652,6 +726,9 @@ class ExamSystemApp {
                         .then(() => (typeof window.ensureBrowseGroup === 'function' ? window.ensureBrowseGroup() : null))
                         .then(() => (typeof window.ensurePracticeSuiteReady === 'function' ? window.ensurePracticeSuiteReady() : null))
                         .then(() => {
+                            if (typeof window.ensurePracticeRecordsSync === 'function') {
+                                return window.ensurePracticeRecordsSync('practice-view');
+                            }
                             if (typeof window.syncPracticeRecords === 'function') {
                                 return window.syncPracticeRecords();
                             }
@@ -681,6 +758,7 @@ class ExamSystemApp {
             }
         },
         browseCategory(category, type = null, filterMode = null, path = null) {
+            const wasAlreadyInBrowse = this.currentView === 'browse';
             try {
                 window.__pendingBrowseFilter = { category, type, filterMode, path };
                 const descriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
@@ -695,14 +773,16 @@ class ExamSystemApp {
             } catch (_) {}
             this.navigateToView('browse');
             try {
-                if (typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
+                // 非 browse → browse 时，onViewActivated 已经消费 pending filter；
+                // 只有原本就在 browse 页时才需要补一次应用，避免双重加载。
+                if (wasAlreadyInBrowse && typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
                     window.applyBrowseFilter(category, type, filterMode, path);
                     delete window.__pendingBrowseFilter;
                 }
             } catch (_) {}
         },
         async startCategoryPractice(category) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await window.resolveActiveLibraryIndex();
             const categoryExams = examIndex.filter((exam) => exam.category === category);
             if (categoryExams.length === 0) {
                 window.showMessage(`${category} 分类暂无可用题目`, 'warning');
@@ -726,8 +806,6 @@ class ExamSystemApp {
                 this.checkDependencies();
                 this.updateLoadingMessage('正在初始化状态管理...');
                 this.initializeGlobalCompatibility();
-                this.updateLoadingMessage('正在加载持久化状态...');
-                await this.loadPersistedState();
                 this.updateLoadingMessage('正在初始化响应式功能...');
                 this.initializeResponsiveFeatures();
                 this.updateLoadingMessage('正在加载系统组件...');
@@ -928,20 +1006,13 @@ class ExamSystemApp {
         },
         async loadInitialData() {
             try {
-                const examIndex = await storage.get('exam_index', []);
-                if (Array.isArray(examIndex)) {
-                    this.setState('exam.index', examIndex);
-                }
-                const practiceRecords = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                    ? await window.PracticeRecordAPI.list()
-                    : [];
-                if (Array.isArray(practiceRecords)) {
-                    this.setState('practice.records', practiceRecords);
-                }
-                const browseFilter = await storage.get('browse_filter', { category: 'all', type: 'all' });
+                const browsePreference = await window.AppData.preferences.getBrowse();
+                const browseFilter = browsePreference && browsePreference.filter
+                    ? browsePreference.filter
+                    : { category: 'all', type: 'all' };
                 this.setState('ui.browseFilter', browseFilter);
                 await this.loadUserStats();
-                this.updateOverviewStats();
+                await this.updateOverviewStats();
             } catch (error) {
                 console.error('Failed to load initial data:', error);
             }
@@ -957,15 +1028,15 @@ class ExamSystemApp {
                 lastPracticeDate: null,
                 achievements: []
             };
-            const stats = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function'
-                ? await window.PracticeRecordAPI.readStats({ fallback })
-                : fallback;
+            const stats = Object.assign({}, fallback, await window.AppData.practice.getStats());
             this.userStats = stats;
             return stats;
         },
         async updateOverviewStats() {
-            const examIndex = this.getState('exam.index') || [];
-            const practiceRecords = this.getState('practice.records') || [];
+            const [examIndex, practiceRecords] = await Promise.all([
+                window.resolveActiveLibraryIndex(),
+                window.AppData.practice.list({ projection: 'light' })
+            ]);
             if (!Array.isArray(examIndex) || !Array.isArray(practiceRecords)) {
                 console.warn('[App] 状态管理中的数据格式异常');
                 return;
@@ -1003,7 +1074,7 @@ class ExamSystemApp {
         },
         updateCategoryStats(examIndex, practiceRecords) {
             const categories = ['P1', 'P2', 'P3'];
-            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const list = Array.isArray(examIndex) ? examIndex : [];
             categories.forEach((category) => {
                 const categoryExams = list.filter((exam) => exam.category === category);
                 const categoryRecords = practiceRecords.filter((record) => {
@@ -1091,7 +1162,12 @@ class ExamSystemApp {
                     },
                     onStartEndless() {
                         if (window.AppActions && typeof window.AppActions.startEndlessPractice === 'function') {
-                            window.AppActions.startEndlessPractice();
+                            Promise.resolve(window.AppActions.startEndlessPractice()).catch((error) => {
+                                console.error('[App] 无尽模式启动失败:', error);
+                                if (typeof window.showMessage === 'function') {
+                                    window.showMessage('无尽模式启动失败，请稍后重试', 'error');
+                                }
+                            });
                             return;
                         }
                         if (typeof window.showMessage === 'function') {
@@ -1127,12 +1203,6 @@ class ExamSystemApp {
             }
         },
         destroy() {
-            this.persistMultipleState({
-                'exam.index': 'exam_index',
-                'ui.browseFilter': 'browse_filter',
-                'exam.currentCategory': 'current_category',
-                'exam.currentExamType': 'current_exam_type'
-            });
             window.removeEventListener('resize', this.handleResize);
             if (this.sessionMonitorInterval) {
                 clearInterval(this.sessionMonitorInterval);
