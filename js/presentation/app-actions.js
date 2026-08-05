@@ -134,11 +134,11 @@
             if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all' && frequencyScope !== 'custom') {
                 frequencyScope = 'all';
             }
-            return {
+            return Promise.resolve({
                 flowMode: flowMode,
                 frequencyScope: frequencyScope,
                 autoAdvanceAfterSubmit: flowMode !== 'stationary'
-            };
+            });
         }
 
         function persistSuitePreference(partial) {
@@ -146,7 +146,22 @@
             if (suitePreferenceUtils && typeof suitePreferenceUtils.persistSuitePreference === 'function') {
                 return suitePreferenceUtils.persistSuitePreference(partial || {});
             }
-            return resolveSuitePreference(partial || {});
+            // Fallback persists locally; resolveSuitePreference() above is async,
+            // but persistSuitePreference itself must remain synchronous so callers
+            // can read .flowMode/.frequencyScope immediately. Compute inline.
+            var flowMode = String(partial && partial.flowMode || '').trim().toLowerCase();
+            if (flowMode !== 'classic' && flowMode !== 'simulation' && flowMode !== 'stationary') {
+                flowMode = 'classic';
+            }
+            var frequencyScope = String(partial && partial.frequencyScope || '').trim().toLowerCase();
+            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all' && frequencyScope !== 'custom') {
+                frequencyScope = 'all';
+            }
+            return {
+                flowMode: flowMode,
+                frequencyScope: frequencyScope,
+                autoAdvanceAfterSubmit: flowMode !== 'stationary'
+            };
         }
 
         function persistSuiteFlowMode(mode) {
@@ -161,9 +176,9 @@
 
         function promptSuiteModeSelection() {
             return new Promise(function resolveSelection(resolve) {
-                var preselectedPreference = resolveSuitePreference();
-                var preselected = preselectedPreference.flowMode || 'classic';
-                var preselectedScope = preselectedPreference.frequencyScope || 'all';
+                resolveSuitePreference().then(function applyPreselection(preselectedPreference) {
+                    var preselected = (preselectedPreference && preselectedPreference.flowMode) || 'classic';
+                    var preselectedScope = (preselectedPreference && preselectedPreference.frequencyScope) || 'all';
                 var search = '';
                 try {
                     search = String(global.location && global.location.search || '').toLowerCase();
@@ -274,6 +289,7 @@
                     }
                 });
                 global.document.body.appendChild(host);
+                });
             });
         }
 
@@ -377,34 +393,6 @@
         } else {
             launch();
         }
-    }
-
-    function getExamIndexSnapshot() {
-        if (typeof global.getExamIndexState === 'function') {
-            try {
-                var snapshot = global.getExamIndexState();
-                if (Array.isArray(snapshot) && snapshot.length) {
-                    return snapshot.slice();
-                }
-            } catch (_) { }
-        }
-        if (Array.isArray(global.examIndex) && global.examIndex.length) {
-            return global.examIndex.slice();
-        }
-        if (typeof global.getReadingExamIndex === 'function') {
-            var readingIndex = global.getReadingExamIndex();
-            if (Array.isArray(readingIndex) && readingIndex.length) {
-                return readingIndex.map(function (exam) {
-                    return Object.assign({}, exam, { type: exam.type || 'reading' });
-                });
-            }
-        }
-        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
-            return global.__READING_EXAM_INDEX__.map(function (exam) {
-                return Object.assign({}, exam, { type: exam.type || 'reading' });
-            });
-        }
-        return [];
     }
 
     function isReadingMemorizeCandidate(exam) {
@@ -596,12 +584,8 @@
         });
     }
 
-    function startRandomPractice(category, type, filterMode, path) {
-        var getExamIndexState = global.getExamIndexState || function () {
-            return Array.isArray(global.examIndex) ? global.examIndex : [];
-        };
-
-        var list = getExamIndexState();
+    async function startRandomPractice(category, type, filterMode, path) {
+        var list = await global.resolveActiveLibraryIndex();
         var normalizedType = (!type || type === 'all') ? null : type;
         var normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
 
@@ -702,11 +686,8 @@
         }, 1000);
     }
 
-    function pickRandomExam() {
-        var getExamIndexState = global.getExamIndexState || function () {
-            return Array.isArray(global.examIndex) ? global.examIndex : [];
-        };
-        var list = getExamIndexState().filter(function (e) {
+    function pickRandomExam(examIndex) {
+        var list = (Array.isArray(examIndex) ? examIndex : []).filter(function (e) {
             return e && e.hasHtml && e.type === 'reading';
         });
         if (!list.length) return null;
@@ -728,6 +709,9 @@
             }
             // resolve to absolute
             url = new URL(url, window.location.href).href;
+            var parsedUrl = new URL(url);
+            parsedUrl.searchParams.set('endless', '1');
+            url = parsedUrl.href;
         } catch (_) { }
         if (!url) return null;
 
@@ -752,14 +736,21 @@
         if (!endlessState || !endlessState.active) return;
 
         var countdown = ENDLESS_COUNTDOWN_SEC;
+        var postEndlessControl = function (type, data) {
+            if (!endlessState || !endlessState.currentExamId || !global.app
+                || typeof global.app._postExamMessage !== 'function') return false;
+            return global.app._postExamMessage(
+                endlessState.currentExamId,
+                sourceWindow,
+                type,
+                data || {}
+            );
+        };
 
         // 通知练习页开始倒计时
         try {
             if (sourceWindow && !sourceWindow.closed) {
-                sourceWindow.postMessage({
-                    type: 'ENDLESS_COUNTDOWN',
-                    data: { seconds: countdown }
-                }, '*');
+                postEndlessControl('ENDLESS_COUNTDOWN', { seconds: countdown });
             }
         } catch (_) { }
 
@@ -780,10 +771,7 @@
             // 持续更新倒计时
             try {
                 if (sourceWindow && !sourceWindow.closed) {
-                    sourceWindow.postMessage({
-                        type: 'ENDLESS_COUNTDOWN_TICK',
-                        data: { seconds: countdown }
-                    }, '*');
+                    postEndlessControl('ENDLESS_COUNTDOWN_TICK', { seconds: countdown });
                 }
             } catch (_) { }
 
@@ -793,16 +781,13 @@
 
                 try {
                     if (sourceWindow && !sourceWindow.closed) {
-                        sourceWindow.postMessage({
-                            type: 'ENDLESS_COUNTDOWN_END',
-                            data: {}
-                        }, '*');
+                        postEndlessControl('ENDLESS_COUNTDOWN_END', {});
                     }
                 } catch (_) { }
 
                 if (!endlessState || !endlessState.active) return;
 
-                var nextExam = pickRandomExam();
+                var nextExam = pickRandomExam(endlessState.examIndex);
                 if (!nextExam) {
                     if (typeof global.showMessage === 'function') {
                         global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u9898\u5e93\u4e3a\u7a7a', 'warning');
@@ -816,21 +801,32 @@
                 }
 
                 var reuseWin = (sourceWindow && !sourceWindow.closed) ? sourceWindow : null;
-                var newWin = openEndlessExam(nextExam, reuseWin);
-                if (newWin) {
+                var openNext = global.app && typeof global.app.openExam === 'function'
+                    ? global.app.openExam(nextExam.id, {
+                        target: 'tab',
+                        windowName: ENDLESS_WINDOW_NAME,
+                        reuseWindow: reuseWin,
+                        endlessMode: true
+                    })
+                    : openEndlessExam(nextExam, reuseWin);
+                Promise.resolve(openNext).then(function (newWin) {
+                    if (!newWin || !endlessState || !endlessState.active) {
+                        throw new Error('无法打开下一题');
+                    }
                     endlessState.currentWindow = newWin;
-                    if (global.app && typeof global.app.setupExamWindowManagement === 'function') {
-                        global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
+                    endlessState.currentExamId = nextExam.id;
+                }).catch(function (error) {
+                    if (global.console && console.error) console.error('[EndlessMode] 打开下一题失败:', error);
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u65e0\u6cd5\u6253\u5f00\u4e0b\u4e00\u9898', 'error');
                     }
-                    if (global.app && typeof global.app.startPracticeSession === 'function') {
-                        try { global.app.startPracticeSession(nextExam.id); } catch (_) { }
-                    }
-                }
+                    stopEndlessPractice({ silent: true });
+                });
             }
         }, 1000);
     }
 
-    function startEndlessPractice() {
+    async function startEndlessPractice() {
         // 如果已激活，不再走“父页按钮二次点击退出”的伪交互
         if (endlessState && endlessState.active) {
             if (typeof global.showMessage === 'function') {
@@ -839,7 +835,8 @@
             return;
         }
 
-        var firstExam = pickRandomExam();
+        var examIndex = await global.resolveActiveLibraryIndex();
+        var firstExam = pickRandomExam(examIndex);
         if (!firstExam) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u9898\u5e93\u4e3a\u7a7a\uff0c\u8bf7\u5148\u52a0\u8f7d\u9898\u5e93', 'error');
@@ -850,8 +847,10 @@
         // 标记状态
         endlessState = {
             active: true,
+            examIndex: examIndex,
             countdownTimer: null,
             currentWindow: null,
+            currentExamId: firstExam.id,
             messageHandler: null,
             windowMonitor: null
         };
@@ -861,6 +860,25 @@
             if (!endlessState || !endlessState.active) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;
+            var currentWindow = endlessState.currentWindow;
+            if (!currentWindow || event.source !== currentWindow) return;
+            var info = global.app && global.app.examWindows && endlessState.currentExamId
+                ? global.app.examWindows.get(endlessState.currentExamId)
+                : null;
+            if (info && info.expectedOrigin && info.expectedOrigin !== 'null') {
+                if (event.origin !== info.expectedOrigin) return;
+            } else if (info && info.allowOpaqueOrigin) {
+                if (event.origin !== 'null') return;
+            } else {
+                return;
+            }
+            var messageData = msg.data || {};
+            var permitsPreInit = msg.type === 'REQUEST_INIT';
+            if (!permitsPreInit && (
+                msg.source !== 'practice_page'
+                || !info.windowSessionToken
+                || messageData.windowSessionToken !== info.windowSessionToken
+            )) return;
             if (msg.type === 'ENDLESS_USER_EXIT') {
                 stopEndlessPractice();
                 return;
@@ -894,19 +912,27 @@
         // 优先用 app.openExam 保证注入
         if (global.app && typeof global.app.openExam === 'function') {
             try {
-                Promise.resolve(global.app.openExam(firstExam.id, {
+                win = await global.app.openExam(firstExam.id, {
                     target: 'tab',
-                    windowName: ENDLESS_WINDOW_NAME
-                })).then(function (w) {
-                    if (w && endlessState) endlessState.currentWindow = w;
-                    startEndlessWindowMonitor();
-                }).catch(function () { });
-            } catch (_) { }
+                    windowName: ENDLESS_WINDOW_NAME,
+                    endlessMode: true
+                });
+            } catch (error) {
+                if (global.console && console.error) console.error('[EndlessMode] 打开首题失败:', error);
+            }
         } else {
             win = openEndlessExam(firstExam, null);
-            if (win && endlessState) endlessState.currentWindow = win;
-            startEndlessWindowMonitor();
         }
+        if (!win || !endlessState) {
+            stopEndlessPractice({ silent: true });
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u65e0\u6cd5\u6253\u5f00\u7ec3\u4e60\u7a97\u53e3', 'error');
+            }
+            return;
+        }
+        endlessState.currentWindow = win;
+        endlessState.currentExamId = firstExam.id;
+        startEndlessWindowMonitor();
     }
 
     global.AppActions = Object.assign({}, global.AppActions, {

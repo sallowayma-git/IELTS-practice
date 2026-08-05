@@ -57,11 +57,16 @@ function createHarness() {
         matchMedia() {
             return { matches: false };
         },
-        localStorage: {
-            getItem() {
-                return 'true';
-            },
-            setItem() {}
+        AppData: {
+            ready: Promise.resolve(true),
+            preferences: {
+                async getConsent() {
+                    return { hasSeenGplLicense: true };
+                },
+                async setConsent() {
+                    return { committed: true };
+                }
+            }
         }
     };
     const sandbox = {

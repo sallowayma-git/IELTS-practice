@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified E2E runner: execute reading + suite flows in one entrypoint."""
+"""Unified E2E runner: reading / listening / suite / file:// submit / export-import flows."""
 
 from __future__ import annotations
 
@@ -12,6 +12,19 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 REPORT_PATH = REPORT_DIR / "e2e-unified-report.json"
+
+# Keep this list the single source of truth for "full e2e" in CI and local runs.
+# Prefer file://-capable scripts; do not require a temporary HTTP host.
+E2E_CASES = [
+    "browse_preference_toggle_flow.py",
+    "reading_single_flow.py",
+    "listening_practice_flow.py",
+    "suite_practice_flow.py",
+    "practice_submit_file_flow.py",
+    "file_init_referrer_trap.py",
+    "ui_export_import_click.py",
+    "unified_submit_readonly_regression.py",
+]
 
 
 def _run_case(script_name: str) -> dict:
@@ -34,8 +47,8 @@ def _run_case(script_name: str) -> dict:
         "name": script_name,
         "status": "pass" if completed.returncode == 0 else "fail",
         "exitCode": completed.returncode,
-        "stdout": (completed.stdout or "").strip(),
-        "stderr": (completed.stderr or "").strip(),
+        "stdout": (completed.stdout or "").strip()[-4000:],
+        "stderr": (completed.stderr or "").strip()[-2000:],
     }
 
 
@@ -43,11 +56,7 @@ def main() -> int:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     started_at = datetime.now(timezone.utc)
-    cases = [
-        _run_case("browse_preference_toggle_flow.py"),
-        _run_case("reading_single_flow.py"),
-        _run_case("suite_practice_flow.py"),
-    ]
+    cases = [_run_case(name) for name in E2E_CASES]
     all_passed = all(item["status"] == "pass" for item in cases)
 
     report = {

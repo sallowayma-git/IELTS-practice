@@ -37,7 +37,6 @@
     });
   }
 
-  var storage = window.storage;
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
@@ -98,7 +97,6 @@
       if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
         window.ensurePracticeRecordsSync('practice-view').catch(function () { });
       }
-      if (normalized === 'practice' && typeof window.updatePracticeView === 'function') window.updatePracticeView();
     };
   }
 
@@ -142,53 +140,24 @@
     return fn.name === 'lazyProxy' || src.indexOf('ensureLazyGroup') !== -1 || src.indexOf('AppLazyLoader') !== -1;
   };
 
-  function _ensureFallbackDataIntegrityManager() {
-    if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-      try {
-        window.dataIntegrityManager = new window.DataIntegrityManager();
-      } catch (error) {
-        console.warn('[Fallback] 初始化 DataIntegrityManager 失败:', error);
-      }
-    }
-    return window.dataIntegrityManager || null;
+  function _fallbackDownloadJson(data, filename) {
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json; charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   }
 
-  var _fallbackDataIntegrityLoadPromise = null;
-
-  function _ensureFallbackDataIntegrityManagerAsync() {
-    var manager = _ensureFallbackDataIntegrityManager();
-    if (manager) {
-      return Promise.resolve(manager);
-    }
-
-    if (!_fallbackDataIntegrityLoadPromise) {
-      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('settings-tools');
-      } else if (typeof document !== 'undefined' && !window.DataIntegrityManager) {
-        _fallbackDataIntegrityLoadPromise = new Promise(function (resolve, reject) {
-          var script = document.createElement('script');
-          script.src = 'js/components/DataIntegrityManager.js';
-          script.onload = resolve;
-          script.onerror = function (error) {
-            reject(error || new Error('failed to load DataIntegrityManager'));
-          };
-          document.head.appendChild(script);
-        });
-      } else {
-        _fallbackDataIntegrityLoadPromise = Promise.resolve();
-      }
-    }
-
-    return _fallbackDataIntegrityLoadPromise.then(function () {
-      var readyManager = _ensureFallbackDataIntegrityManager();
-      if (!readyManager) {
-        throw new Error('数据管理模块未初始化');
-      }
-      return readyManager;
-    }).catch(function (error) {
-      _fallbackDataIntegrityLoadPromise = null;
-      throw error;
-    });
+  async function _fallbackExportAllData() {
+    await window.AppData.ready;
+    var snapshot = await window.AppData.backups.export();
+    _fallbackDownloadJson(snapshot, 'ielts-atlas-backup-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json');
+    try { await window.AppData.backups.recordExport({ type: 'full-v2', checksum: snapshot.checksum }); } catch (error) { console.warn('[Fallback] 导出历史记录失败:', error); }
+    return snapshot;
   }
 
   function _fallbackCreateElement(tag, attributes, children) {
@@ -291,21 +260,13 @@
       return;
     }
 
-    var manager = null;
-    try {
-      manager = await _ensureFallbackDataIntegrityManagerAsync();
-    } catch (error) {
-      window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-      return;
-    }
-
     if (!confirm('确定要恢复备份 ' + backupId + ' 吗？当前数据将被覆盖。')) {
       return;
     }
 
     try {
       window.showMessage && window.showMessage('正在恢复备份...', 'info');
-      await manager.restoreBackup(backupId);
+      await window.AppData.backups.restore(backupId);
       window.showMessage && window.showMessage('备份恢复成功', 'success');
       setTimeout(function () {
         try {
@@ -384,30 +345,6 @@
     };
   }
 
-  var ensureDataBackupManager = (function () {
-    let loading = null;
-    return function ensureDataBackupManager() {
-      if (window.DataBackupManager) {
-        return Promise.resolve(new window.DataBackupManager());
-      }
-      if (loading) {
-        return loading.then(() => new window.DataBackupManager());
-      }
-      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        loading = window.AppLazyLoader.ensureGroup('settings-tools');
-        return loading.then(() => new window.DataBackupManager());
-      }
-      loading = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'js/utils/dataBackupManager.js';
-        script.onload = () => resolve();
-        script.onerror = (err) => reject(err || new Error('failed to load dataBackupManager'));
-        document.head.appendChild(script);
-      });
-      return loading.then(() => new window.DataBackupManager());
-    };
-  })();
-
   function showImportModeModal(onSelect) {
     const overlay = document.createElement('div');
     overlay.className = 'import-mode-overlay-lite';
@@ -431,7 +368,7 @@
 
     const defs = [
       { mode: 'merge', icon: '📥', title: '增量导入', text: '合并新数据，保留现有记录。适合日常更新。' },
-      { mode: 'replace', icon: '⚠️', title: '覆盖导入', text: '清空并替换所有记录。慎用，数据不可恢复。' }
+      { mode: 'replace', icon: '⚠️', title: '覆盖练习记录', text: '仅用文件中的练习记录替换现有记录；提交前会显示删除数量。' }
     ];
 
     defs.forEach((def) => {
@@ -594,12 +531,29 @@
         return;
       }
       try {
-        const manager = await ensureDataBackupManager();
-        const result = await manager.importPracticeData(data, {
-          mergeMode: mode === 'replace' ? 'replace' : 'merge',
-          createBackup: true,
-          validateData: true
+        const payload = Array.isArray(data) ? { records: data } : data;
+        const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mode === 'replace' ? 'replace' : 'merge' });
+        if (preview.destructive) {
+          const practice = preview.practice || {};
+          const summary = [
+            '这次导入会删除现有数据。',
+            `练习记录：现有 ${Number(practice.existingCount) || 0} 条 → 导入后 ${Number(practice.finalCount) || 0} 条`,
+            `将删除 ${Number(practice.removedCount) || 0} 条。`
+          ];
+          if (Array.isArray(preview.clearedKeys) && preview.clearedKeys.length) {
+            summary.push(`将清空数据域：${preview.clearedKeys.join('、')}`);
+          }
+          summary.push('', '是否确认继续？');
+          if (!window.confirm(summary.join('\n'))) {
+            window.showMessage && window.showMessage('已取消导入，现有数据未改变', 'info');
+            return;
+          }
+        }
+        const backup = await window.AppData.backups.create({ type: 'pre-import' });
+        const result = await window.AppData.backups.commitImport(preview.id, {
+          confirmDestructive: preview.destructive === true
         });
+        try { await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup.id, practice: preview.practice }); } catch (historyError) { console.warn('[Fallback] 导入历史记录失败:', historyError); }
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
         console.error('[importData] failed', error);
@@ -611,17 +565,8 @@
 
   if (typeof window.exportAllData !== 'function') {
     window.exportAllData = async function () {
-      var manager = null;
       try {
-        manager = await _ensureFallbackDataIntegrityManagerAsync();
-      } catch (error) {
-        console.error('[Fallback] 数据导出模块加载失败:', error);
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-        return;
-      }
-
-      try {
-        await manager.exportData();
+        await _fallbackExportAllData();
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
         console.error('[Fallback] 数据导出失败:', error);
@@ -656,25 +601,14 @@
   // Fallbacks for backup operations used by Settings
   if (typeof window.createManualBackup !== 'function') {
     window.createManualBackup = async function () {
-      var manager = null;
       try {
-        manager = await _ensureFallbackDataIntegrityManagerAsync();
-      } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-        return;
-      }
-      try {
-        var backup = await manager.createBackup(null, 'manual');
-        if (backup && backup.external) {
-          window.showMessage && window.showMessage('本地存储不足，已将备份下载为文件', 'warning');
-        } else {
-          window.showMessage && window.showMessage('备份创建成功: ' + (backup && backup.id ? backup.id : ''), 'success');
-        }
+        var backup = await window.AppData.backups.create({ type: 'manual' });
+        window.showMessage && window.showMessage('备份创建成功: ' + (backup && backup.id ? backup.id : ''), 'success');
         try { if (typeof window.showBackupList === 'function') { window.showBackupList(); } } catch (_) { }
       } catch (error) {
         if (_fallbackIsQuotaExceeded(error)) {
           try {
-            await manager.exportData();
+            await _fallbackExportAllData();
             window.showMessage && window.showMessage('存储不足：已将数据导出为文件', 'warning');
           } catch (exportErr) {
             window.showMessage && window.showMessage('备份失败且导出失败: ' + (exportErr && exportErr.message ? exportErr.message : exportErr), 'error');
@@ -688,18 +622,10 @@
 
   if (typeof window.showBackupList !== 'function') {
     window.showBackupList = async function () {
-      var manager = null;
-      try {
-        manager = await _ensureFallbackDataIntegrityManagerAsync();
-      } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-        return;
-      }
-
       _ensureFallbackBackupDelegates();
       var backups = [];
       try {
-        backups = await manager.getBackupList();
+        backups = await window.AppData.backups.list();
       } catch (error) {
         console.warn('[Fallback] 获取备份列表失败:', error);
         window.showMessage && window.showMessage('无法获取备份列表', 'error');
@@ -798,38 +724,11 @@
 
   async function ensureDefaultConfig() {
     try {
-      var configs = [];
-      if (window.storage && storage.get) {
-        var maybeConfigs = storage.get('exam_index_configurations', []);
-        configs = (maybeConfigs && typeof maybeConfigs.then === 'function') ? await maybeConfigs : maybeConfigs;
-      }
+      var configs = await window.AppData.library.listConfigurations();
       if (!Array.isArray(configs)) configs = [];
-      var hasDefault = configs.some(function (c) { return c && c.key === 'exam_index'; });
-      if (!hasDefault) {
-        var count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
-        configs.push({ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() });
-        if (window.storage && storage.set) {
-          try {
-            var maybeSetConfigs = storage.set('exam_index_configurations', configs);
-            if (maybeSetConfigs && typeof maybeSetConfigs.then === 'function') await maybeSetConfigs;
-          } catch (err) {
-            console.warn('[Fallback] 无法保存 exam_index_configurations:', err);
-          }
-        }
-        if (window.storage && storage.get) {
-          try {
-            var currentActive = storage.get('active_exam_index_key');
-            currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
-            if (!currentActive && window.storage && storage.set) {
-              var maybeSetActive = storage.set('active_exam_index_key', 'exam_index');
-              if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
-            }
-          } catch (activeErr) {
-            console.warn('[Fallback] 无法校正 active_exam_index_key:', activeErr);
-          }
-        }
-      }
-      return configs;
+      var activeIndex = await window.resolveActiveLibraryIndex();
+      var count = Array.isArray(activeIndex) ? activeIndex.length : 0;
+      return [{ name: '默认题库', key: '', id: null, builtIn: true, sourceType: 'built-in-manifest', examCount: count }].concat(configs);
     } catch (e) {
       console.warn('[Fallback] ensureDefaultConfig 失败:', e);
       return [];
@@ -856,23 +755,18 @@
     window.showLibraryConfigListV2 = async function (options) {
       var configs = [];
       try {
-        configs = (window.storage && storage.get) ? await storage.get('exam_index_configurations', []) : [];
+        configs = await ensureDefaultConfig();
       } catch (e) {
         configs = [];
-      }
-      if (!Array.isArray(configs) || configs.length === 0) {
-        configs = await ensureDefaultConfig();
       }
       if (!Array.isArray(configs) || configs.length === 0) {
         if (window.showMessage) showMessage('暂无题库配置记录', 'info');
         return;
       }
 
-      var activeKey = 'exam_index';
+      var activeKey = null;
       try {
-        if (window.storage && storage.get) {
-          activeKey = await storage.get('active_exam_index_key', 'exam_index');
-        }
+        activeKey = await window.AppData.library.getActive();
       } catch (e) { }
 
       var containerId = options && typeof options.containerId === 'string' ? options.containerId : null;
@@ -915,12 +809,14 @@
       configs.forEach(function (cfg) {
         if (!cfg) return;
         var item = document.createElement('div');
-        item.className = 'library-config-panel__item' + (cfg.key === activeKey ? ' library-config-panel__item--active' : '');
+        var isDefault = cfg.builtIn === true;
+        var isActive = isDefault ? activeKey == null : cfg.key === activeKey;
+        item.className = 'library-config-panel__item' + (isActive ? ' library-config-panel__item--active' : '');
 
         var info = document.createElement('div');
         info.className = 'library-config-panel__info';
         var titleLine = document.createElement('div');
-        titleLine.textContent = (cfg.key === 'exam_index' ? '默认题库' : (cfg.name || cfg.key));
+        titleLine.textContent = (isDefault ? '默认题库' : (cfg.name || cfg.key));
         info.appendChild(titleLine);
 
         var meta = document.createElement('div');
@@ -938,18 +834,18 @@
         switchBtn.className = 'btn btn-secondary';
         switchBtn.type = 'button';
         switchBtn.dataset.configAction = 'switch';
-        switchBtn.dataset.configKey = cfg.key;
-        if (cfg.key === activeKey) switchBtn.disabled = true;
+        switchBtn.dataset.configKey = cfg.key || '';
+        if (isActive) switchBtn.disabled = true;
         switchBtn.textContent = '切换';
         actions.appendChild(switchBtn);
 
-        if (cfg.key !== 'exam_index') {
+        if (!isDefault) {
           var deleteBtn = document.createElement('button');
           deleteBtn.className = 'btn btn-warning';
           deleteBtn.type = 'button';
           deleteBtn.dataset.configAction = 'delete';
-          deleteBtn.dataset.configKey = cfg.key;
-          if (cfg.key === activeKey) deleteBtn.disabled = true;
+          deleteBtn.dataset.configKey = cfg.key || '';
+          if (isActive) deleteBtn.disabled = true;
           deleteBtn.textContent = '删除';
           actions.appendChild(deleteBtn);
         }
@@ -1326,29 +1222,14 @@
       if (typeof window.getActiveLibraryConfigurationKey === 'function') {
         try { return await window.getActiveLibraryConfigurationKey(); } catch (_) { }
       }
-      if (storage && storage.get) {
-        try {
-          var maybeKey = storage.get('active_exam_index_key', 'exam_index');
-          var key = (maybeKey && typeof maybeKey.then === 'function') ? await maybeKey : maybeKey;
-          return key || 'exam_index';
-        } catch (_) { }
-      }
-      return 'exam_index';
+      return window.AppData.library.getActive();
     }
 
     async function _fallbackSetActiveLibraryKey(key) {
-      if (!key) return;
       if (typeof window.setActiveLibraryConfiguration === 'function') {
         try { await window.setActiveLibraryConfiguration(key); return; } catch (_) { }
       }
-      if (storage && storage.set) {
-        try {
-          var maybe = storage.set('active_exam_index_key', key);
-          if (maybe && typeof maybe.then === 'function') await maybe;
-        } catch (err) {
-          console.warn('[Fallback] 无法写入 active_exam_index_key:', err);
-        }
-      }
+      await window.AppData.library.activate(typeof key === 'string' && key.trim() ? key.trim() : null);
     }
 
     async function _fallbackSaveLibraryConfiguration(name, key, count) {
@@ -1356,51 +1237,28 @@
       if (typeof window.saveLibraryConfiguration === 'function') {
         try { await window.saveLibraryConfiguration(name, key, count); return; } catch (_) { }
       }
-      if (storage && storage.get && storage.set) {
-        try {
-          var existing = storage.get('exam_index_configurations', []);
-          existing = (existing && typeof existing.then === 'function') ? await existing : existing;
-          if (!Array.isArray(existing)) existing = [];
-          var idx = existing.findIndex(function (c) { return c && c.key === key; });
-          if (idx >= 0) { existing[idx] = entry; } else { existing.push(entry); }
-          var maybeSave = storage.set('exam_index_configurations', existing);
-          if (maybeSave && typeof maybeSave.then === 'function') await maybeSave;
-        } catch (err) {
-          console.warn('[Fallback] 保存题库配置失败:', err);
-        }
-      }
+      if (key) await window.AppData.library.updateConfiguration(entry);
     }
 
     async function _fallbackSaveIndexForKey(key, list) {
-      if (storage && storage.set) {
-        var maybe = storage.set(key, list);
-        if (maybe && typeof maybe.then === 'function') {
-          await maybe;
-        }
-      } else {
-        try { window[key] = list; } catch (_) { }
-      }
+      if (key) await window.AppData.library.import({ id: key, configuration: { id: key, key: key, name: key }, index: list });
     }
 
     async function _fallbackApplyLibraryConfig(key, dataset, options) {
       if (typeof window.applyLibraryConfiguration === 'function') {
         try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
       }
-      // fallback:直接刷新内存状态与UI
-      if (typeof window.setExamIndexState === 'function') {
-        try { window.setExamIndexState(dataset); } catch (_) { }
-      } else {
-        try { window.examIndex = Array.isArray(dataset) ? dataset.slice() : []; } catch (_) { }
-      }
+      var snapshot = Array.isArray(dataset) ? dataset.slice() : [];
       if (options && options.setActive) {
         await _fallbackSetActiveLibraryKey(key);
       }
-      try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
+      try { if (typeof window.updateOverview === 'function') window.updateOverview(snapshot); } catch (_) { }
       try {
         if (typeof window.loadExamList === 'function') {
-          window.loadExamList();
+          window.loadExamList(snapshot);
         }
       } catch (_) { }
+      try { window.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: key, index: snapshot } })); } catch (_) { }
       return true;
     }
 
@@ -1611,15 +1469,7 @@
       }
 
       var activeKey = await _fallbackGetActiveLibraryKey();
-      var currentIndex = (typeof window.getExamIndexState === 'function')
-        ? window.getExamIndexState()
-        : (Array.isArray(window.examIndex) ? window.examIndex : []);
-      if (storage && storage.get) {
-        try {
-          var maybeCurrent = storage.get(activeKey, currentIndex);
-          currentIndex = (maybeCurrent && typeof maybeCurrent.then === 'function') ? await maybeCurrent : maybeCurrent;
-        } catch (_) { }
-      }
+      var currentIndex = await window.resolveActiveLibraryIndex();
       if (!Array.isArray(currentIndex)) currentIndex = [];
       currentIndex = _fallbackNormalizeIndexForCustomConfig(currentIndex);
 
@@ -1662,7 +1512,7 @@
       };
 
       if (mode === 'full') {
-        var targetKey = 'exam_index_' + Date.now();
+        var targetKey = 'library_import_' + Date.now();
         var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
         try {
           await saveAndApply(targetKey, configName, true);
@@ -1690,7 +1540,7 @@
         }
       }
 
-      var targetKeyInc = 'exam_index_' + Date.now();
+      var targetKeyInc = 'library_import_' + Date.now();
       var configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
       await saveAndApply(targetKeyInc, configNameInc, false);
       await _fallbackApplyLibraryConfig(targetKeyInc, newIndex, { setActive: true, skipConfigRefresh: false });

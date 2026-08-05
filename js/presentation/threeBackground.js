@@ -533,11 +533,7 @@
 
     function start(themeName = null) {
         if (!themeName) {
-            try {
-                themeName = localStorage.getItem('three_bg_theme') || 'floral-bloom';
-            } catch(e) {
-                themeName = 'floral-bloom';
-            }
+            themeName = 'floral-bloom';
         }
         
         try {
@@ -580,14 +576,20 @@
     }
 
     global.switchBgTheme = function(themeName) {
-        try {
-            localStorage.setItem('three_bg_theme', themeName);
-        } catch(e){}
+        if (global.AppData && global.AppData.preferences) {
+            global.AppData.preferences.setThreeBackground(themeName).catch((error) => console.warn('[SHUI Three Background] preference save failed:', error));
+        }
         start(themeName);
     };
 
-    function init() {
-        start();
+    async function init() {
+        try {
+            await global.AppData.ready;
+            const saved = await global.AppData.preferences.getThreeBackground();
+            start(saved || 'floral-bloom');
+        } catch (_) {
+            start('floral-bloom');
+        }
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {

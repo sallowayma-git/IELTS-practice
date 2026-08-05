@@ -101,6 +101,7 @@ function createHarness() {
     const listeners = new Map();
     const documentStub = {
         body: new ElementStub('body'),
+        referrer: '',
         getElementById(id) {
             return ensureElement(id);
         },
@@ -119,7 +120,8 @@ function createHarness() {
     const windowStub = {
         location: {
             search: '?test_env=1&examId=reading-p1&title=Passage%201&category=P1&suiteSessionId=suite-1',
-            href: ''
+            href: 'https://child.example/templates/exam-placeholder.html',
+            protocol: 'https:'
         },
         opener: {
             postMessage(message) {
@@ -127,11 +129,6 @@ function createHarness() {
             }
         },
         parent: null,
-        localStorage: {
-            getItem() {
-                return null;
-            }
-        },
         EnvironmentDetector: {
             isInTestEnvironment() {
                 return true;
@@ -173,17 +170,36 @@ function createHarness() {
         filename: 'templates/exam-placeholder.html:inline'
     });
 
+    const dispatchHostMessage = (message) => {
+        const handler = listeners.get('message');
+        if (!handler) throw new Error('message handler was not registered');
+        const data = Object.assign({}, message.data || {}, {
+            windowSessionToken: 'placeholder-test-token'
+        });
+        handler({
+            data: Object.assign({}, message, { source: 'exam_host', data }),
+            source: windowStub.opener,
+            origin: 'https://host.example'
+        });
+    };
+    dispatchHostMessage({
+        type: 'INIT_SESSION',
+        data: {
+            examId: 'reading-p1',
+            sessionId: 'placeholder-session',
+            suiteSessionId: 'suite-1',
+            parentOrigin: 'https://host.example'
+        }
+    });
+    openerMessages.length = 0;
+
     return {
         document: documentStub,
         body: documentStub.body,
         elements,
         openerMessages,
         sendMessage(message) {
-            const handler = listeners.get('message');
-            if (!handler) {
-                throw new Error('message handler was not registered');
-            }
-            handler({ data: message });
+            dispatchHostMessage(message);
         }
     };
 }
@@ -303,11 +319,23 @@ function testNonLastSimulationSubmitNavigatesInsteadOfFinalSubmit() {
     assert.strictEqual(harness.body.dataset.examState, '已提交本篇，等待下一篇...', '非末篇提交后应等待父页切篇');
 }
 
+function testPracticeCompleteCarriesSubmissionContract() {
+    const harness = createHarness();
+    harness.elements.get('complete-exam-btn').click();
+
+    const message = harness.openerMessages.find((item) => item && item.type === 'PRACTICE_COMPLETE');
+    assert(message, '占位页普通提交必须发送 PRACTICE_COMPLETE');
+    assert.strictEqual(message.data.sessionId, 'placeholder-session');
+    assert.strictEqual(message.data.windowSessionToken, 'placeholder-test-token');
+    assert.match(message.data.submissionId, /^placeholder-submit-/);
+}
+
 function run() {
     testReplayUsesCanonicalCorrectAnswerMap();
     testReplayRefusesLegacyCorrectAnswerFallbacks();
     testReplayKeepsSuitePrefixedQuestionNumbers();
     testNonLastSimulationSubmitNavigatesInsteadOfFinalSubmit();
+    testPracticeCompleteCarriesSubmissionContract();
 
     process.stdout.write(JSON.stringify({
         status: 'pass',

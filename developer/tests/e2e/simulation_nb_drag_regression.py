@@ -4,7 +4,7 @@
 Covers:
 - NB clone drag question status should become answered right after drop.
 - Simulation draft replay should restore dragged answer and answered status.
-- Simulation draft mirror should exist in sessionStorage.
+- Simulation draft should be available through AppData recovery window-session state.
 - Highlight replay should restore at least one highlight when a record is available.
 """
 
@@ -39,6 +39,7 @@ SOURCE_SELECTOR = (
     ".pool-items .drag-item, #word-options .draggable-word, #word-options .drag-item, "
     ".draggable-word, .drag-item"
 )
+CLONE_GROUP_SELECTOR = '#question-groups .unified-group[data-allow-option-reuse="true"]'
 
 
 def collect_nb_exam_ids() -> List[str]:
@@ -66,9 +67,13 @@ async def run_case(page, exam_id: str, base_url: str) -> Dict[str, Any]:
     await page.goto(url, wait_until="load")
     await page.wait_for_selector("#question-groups .unified-group", timeout=30000)
 
-    target = page.locator(".match-dropzone[data-question]").first
-    target_count = await page.locator(".match-dropzone[data-question]").count()
-    source_count = await page.locator(SOURCE_SELECTOR).count()
+    clone_group = page.locator(CLONE_GROUP_SELECTOR).filter(
+        has=page.locator(".match-dropzone[data-question]")
+    ).first
+    target = clone_group.locator(".match-dropzone[data-question]").first
+    source = clone_group.locator(SOURCE_SELECTOR).first
+    target_count = await clone_group.locator(".match-dropzone[data-question]").count()
+    source_count = await clone_group.locator(SOURCE_SELECTOR).count()
 
     if target_count == 0 or source_count == 0:
         result["status"] = "fail"
@@ -76,7 +81,7 @@ async def run_case(page, exam_id: str, base_url: str) -> Dict[str, Any]:
         return result
 
     question_id = await target.get_attribute("data-question")
-    await page.locator(SOURCE_SELECTOR).first.drag_to(target)
+    await source.drag_to(target)
     await page.wait_for_timeout(250)
 
     after_drop = await page.evaluate(
@@ -156,10 +161,28 @@ async def run_case(page, exam_id: str, base_url: str) -> Dict[str, Any]:
         "scrollY": 0,
     }
 
+    session_token = f"nb-drag-regression::{exam_id}"
     await page.evaluate(
         """(payload) => {
             window.postMessage({
+                type: 'INIT_SESSION',
+                source: 'exam_host',
+                data: {
+                    examId: payload.examId,
+                    sessionId: 'nb-drag-regression',
+                    suiteSessionId: 'nb-drag-regression',
+                    practiceMode: 'suite',
+                    suiteFlowMode: 'simulation',
+                    suiteSequenceIndex: 0,
+                    suiteSequenceTotal: 3,
+                    parentOrigin: 'file://',
+                    windowSessionToken: payload.sessionToken,
+                    messageIssuedAtMs: Date.now()
+                }
+            }, '*');
+            window.postMessage({
                 type: 'SIMULATION_CONTEXT',
+                source: 'exam_host',
                 data: {
                     flowMode: 'simulation',
                     examId: payload.examId,
@@ -170,11 +193,13 @@ async def run_case(page, exam_id: str, base_url: str) -> Dict[str, Any]:
                     canPrev: false,
                     canNext: true,
                     elapsed: 0,
+                    windowSessionToken: payload.sessionToken,
+                    messageIssuedAtMs: Date.now(),
                     draft: payload.draft
                 }
             }, '*');
         }""",
-        {"examId": exam_id, "draft": draft},
+        {"examId": exam_id, "draft": draft, "sessionToken": session_token},
     )
     await page.wait_for_timeout(400)
 
@@ -223,11 +248,10 @@ async def run_case(page, exam_id: str, base_url: str) -> Dict[str, Any]:
     await page.wait_for_timeout(1300)
     mirror_ok = await page.evaluate(
         """(examId) => {
-            const key = 'ielts_sim_draft::nb-drag-regression::' + examId;
-            const raw = sessionStorage.getItem(key);
-            if (!raw) return false;
             try {
-                const parsed = JSON.parse(raw);
+                const parsed = window.AppData?.recovery?.windowSession?.get(
+                    'simulation-draft:nb-drag-regression:' + examId
+                );
                 return Boolean(parsed && parsed.draft && parsed.draft.answers);
             } catch (_) {
                 return false;

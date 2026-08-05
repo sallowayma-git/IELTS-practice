@@ -333,8 +333,8 @@ function createMockStore(words = [], config = {}) {
             ...word
         })),
         config: { ...baseConfig, ...config },
-        reviewQueue: [],
         setConfigCalls: 0,
+        replaceProgressCalls: [],
         init: async () => true,
         getWords() {
             return this.words;
@@ -346,12 +346,39 @@ function createMockStore(words = [], config = {}) {
             this.config = { ...this.config, ...next };
             this.setConfigCalls += 1;
         },
-        async setWords(next) {
+        async mergeWords(incoming) {
+            const indexByWord = new Map(this.words.map((word, index) => [String(word.word || '').trim().toLowerCase(), index]));
+            let addedCount = 0;
+            let updatedCount = 0;
+            for (const entry of incoming) {
+                const key = String(entry.word || '').trim().toLowerCase();
+                if (!key) continue;
+                if (indexByWord.has(key)) {
+                    const index = indexByWord.get(key);
+                    this.words[index] = { ...this.words[index], ...entry };
+                    updatedCount += 1;
+                } else {
+                    const word = { id: entry.id || `word-${this.words.length + 1}`, ...entry };
+                    indexByWord.set(key, this.words.length);
+                    this.words.push(word);
+                    addedCount += 1;
+                }
+            }
+            return { words: this.words, addedCount, updatedCount };
+        },
+        async replaceProgress(next, nextConfig = {}, listId = null) {
             this.words = next.map((word, index) => ({
                 id: word.id || `word-${index + 1}`,
                 ...word
             }));
-            return true;
+            const activeListId = listId || nextConfig.activeListId || this.config.activeListId || 'default';
+            this.config = { ...this.config, ...nextConfig, activeListId };
+            this.replaceProgressCalls.push({
+                listId: activeListId,
+                words: this.words.map((word) => ({ ...word })),
+                config: { ...this.config }
+            });
+            return { words: this.words, config: this.config };
         },
         async updateWord(id, patch) {
             const idx = this.words.findIndex((word) => word.id === id);
@@ -361,9 +388,6 @@ function createMockStore(words = [], config = {}) {
             const updated = { ...this.words[idx], ...patch };
             this.words[idx] = updated;
             return updated;
-        },
-        setReviewQueue(queue) {
-            this.reviewQueue = Array.isArray(queue) ? queue.slice() : [];
         },
         getDueWords(now) {
             const nowTime = now instanceof Date ? now.getTime() : Date.now();
@@ -380,7 +404,7 @@ function createMockStore(words = [], config = {}) {
             return items.slice(0, limit);
         },
         getActiveListId() {
-            return 'default';
+            return this.config.activeListId || 'default';
         },
         getAvailableLists() {
             return [];
@@ -901,7 +925,7 @@ async function run() {
         assert.strictEqual(elements.noteInput.value, 'Note text');
     });
 
-    await record('save note writes to store', () => {
+    await record('save note writes to store', async () => {
         const store = createMockStore([
             {
                 id: 'w-5',
@@ -915,7 +939,7 @@ async function run() {
         hooks.state.session.currentWord = store.words[0];
         elements.noteInput.value = 'remember this';
 
-        hooks.saveCurrentNote();
+        await hooks.saveCurrentNote();
         assert.strictEqual(store.words[0].note, 'remember this');
         assert.ok(elements.noteStatus.textContent.length > 0);
     });
@@ -1018,11 +1042,11 @@ async function run() {
         windowStub.VocabDataIO = {
             importWordList: async () => ({
                 type: 'progress',
-                entries: [{ word: 'theta', meaning: 'T' }],
+                entries: [{ word: 'theta', meaning: 'T', nextReview: '2026-07-25T00:00:00.000Z' }],
                 meta: {
                     category: 'user',
-                    config: { dailyNew: 5, reviewLimit: 10, masteryCount: 2, notify: false },
-                    reviewQueue: ['x']
+                    listId: 'spelling-errors-p1',
+                    config: { dailyNew: 5, reviewLimit: 10, masteryCount: 2, notify: false }
                 }
             })
         };
@@ -1030,7 +1054,9 @@ async function run() {
         await hooks.performImport({ name: 'progress.json' });
         assert.strictEqual(store.words.length, 1);
         assert.strictEqual(store.config.dailyNew, 5);
-        assert.strictEqual(store.reviewQueue.length, 1);
+        assert.strictEqual(store.config.activeListId, 'spelling-errors-p1');
+        assert.strictEqual(store.replaceProgressCalls[0].listId, 'spelling-errors-p1');
+        assert.strictEqual(store.replaceProgressCalls[0].words[0].nextReview, '2026-07-25T00:00:00.000Z');
     });
 
     await record('export progress triggers download', async () => {

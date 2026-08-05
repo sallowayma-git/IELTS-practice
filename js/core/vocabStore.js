@@ -5,51 +5,38 @@
             id: 'default',
             name: 'IELTS 核心词表',
             icon: '📚',
-            source: 'builtin',
-            storageKey: 'vocab_words'
+            source: 'builtin'
         },
         'spelling-errors-p1': {
             id: 'spelling-errors-p1',
             name: 'P1 拼写错误',
             icon: '📝',
-            source: 'p1',
-            storageKey: 'vocab_list_p1_errors'
+            source: 'p1'
         },
         'spelling-errors-p4': {
             id: 'spelling-errors-p4',
             name: 'P4 拼写错误',
             icon: '📝',
-            source: 'p4',
-            storageKey: 'vocab_list_p4_errors'
+            source: 'p4'
         },
         'spelling-errors-master': {
             id: 'spelling-errors-master',
             name: '综合错误词表',
             icon: '📚',
-            source: 'all',
-            storageKey: 'vocab_list_master_errors'
+            source: 'all'
         },
         'custom': {
             id: 'custom',
             name: '自定义词表',
             icon: '✏️',
-            source: 'user',
-            storageKey: 'vocab_list_custom'
+            source: 'user'
         },
         'reading-highlights': {
             id: 'reading-highlights',
             name: '阅读高亮生词',
             icon: '📖',
-            source: 'reading-highlight',
-            storageKey: 'vocab_list_reading_highlights'
+            source: 'reading-highlight'
         }
-    });
-
-    const STORAGE_KEYS = Object.freeze({
-        WORDS: 'vocab_words',
-        CONFIG: 'vocab_user_config',
-        REVIEW_QUEUE: 'vocab_review_queue',
-        ACTIVE_LIST: 'vocab_active_list_id'
     });
 
     const DEFAULT_CONFIG = Object.freeze({
@@ -60,28 +47,30 @@
         notify: true
     });
 
-    const DEFAULT_REVIEW_QUEUE = Object.freeze([]);
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
 
     const state = {
-        repositories: null,
-        metaRepo: null,
-        storageManager: null,
         words: [],
         wordIndex: new Map(),
         config: { ...DEFAULT_CONFIG },
-        reviewQueue: DEFAULT_REVIEW_QUEUE.slice(),
         ready: false,
         readyPromise: null,
         readyResolvers: [],
         loadingPromise: null,
-        registryUnsubscribe: null,
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
         listCache: new Map()
     };
+
+    function cloneValue(value) {
+        if (value === undefined) return undefined;
+        if (typeof structuredClone === 'function') {
+            try { return structuredClone(value); } catch (_) { /* fall through */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
 
     function emitReady(value) {
         if (state.ready) {
@@ -281,59 +270,30 @@
         });
     }
 
-    async function persist(key, value) {
-        try {
-            if (state.metaRepo && typeof state.metaRepo.set === 'function') {
-                await state.metaRepo.set(key, value, { clone: true });
-                return true;
-            }
-            if (state.storageManager && typeof state.storageManager.set === 'function') {
-                await state.storageManager.set(key, value);
-                return true;
-            }
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(key, JSON.stringify(value));
-                return true;
-            }
-        } catch (error) {
-            console.error('[VocabStore] persist error:', error);
-        }
-        return false;
+    async function requireVocabData() {
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab is unavailable');
+        await window.AppData.ready;
+        return window.AppData.vocab;
     }
 
-    async function read(key, defaultValue) {
-        if (state.metaRepo && typeof state.metaRepo.get === 'function') {
-            try {
-                const value = await state.metaRepo.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] metaRepo读取失败:', error);
-            }
-        }
-        if (state.storageManager && typeof state.storageManager.get === 'function') {
-            try {
-                const value = await state.storageManager.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] storageManager读取失败:', error);
-            }
-        }
-        if (typeof localStorage !== 'undefined') {
-            try {
-                const raw = localStorage.getItem(key);
-                if (!raw) {
-                    return defaultValue;
-                }
-                return JSON.parse(raw);
-            } catch (error) {
-                console.warn('[VocabStore] localStorage解析失败:', error);
-            }
-        }
-        return defaultValue;
+    async function readListData(listId) {
+        const vocab = await requireVocabData();
+        if (listId === DEFAULT_LIST_ID) return vocab.listWords();
+        const collections = await vocab.listCollections();
+        return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
+    }
+
+    async function saveListData(listId, value) {
+        const vocab = await requireVocabData();
+        const words = value && typeof value === 'object' && Array.isArray(value.words) ? value.words : value;
+        await vocab.replaceListWords({ listId, words: Array.isArray(words) ? words : [] });
+        return true;
+    }
+
+    async function saveConfigData(configPatch = state.config) {
+        const vocab = await requireVocabData();
+        await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
+        return true;
     }
 
     function mergeConfig(config) {
@@ -351,15 +311,6 @@
     function setWordsInternal(words) {
         state.words = words;
         rebuildIndex();
-    }
-
-    function getStorageKeyForListId(listId) {
-        const targetId = typeof listId === 'string' && VOCAB_LISTS[listId] ? listId : DEFAULT_LIST_ID;
-        return VOCAB_LISTS[targetId].storageKey;
-    }
-
-    function getActiveStorageKey() {
-        return getStorageKeyForListId(state.activeListId);
     }
 
     function isSpellingErrorList(listId) {
@@ -475,29 +426,26 @@
             return state.loadingPromise;
         }
         state.loadingPromise = (async () => {
-            const [storedConfig, storedQueue, storedActiveList] = await Promise.all([
-                read(STORAGE_KEYS.CONFIG, { ...DEFAULT_CONFIG }),
-                read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice()),
-                read(STORAGE_KEYS.ACTIVE_LIST, DEFAULT_LIST_ID)
-            ]);
+            const vocab = await requireVocabData();
+            const storedConfig = await vocab.getConfig();
+            const storedActiveList = storedConfig && storedConfig.activeListId;
 
             state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
                 ? storedActiveList
                 : DEFAULT_LIST_ID;
 
-            const activeStorageKey = getStorageKeyForListId(state.activeListId);
-            const storedWords = await read(activeStorageKey, []);
+            const storedWords = await readListData(state.activeListId);
             const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
-                state.lastLoadSource = state.metaRepo ? 'meta' : (state.storageManager ? 'storage' : 'localStorage');
+                state.lastLoadSource = 'appData-v2';
             }
 
             state.config = mergeConfig(storedConfig);
-            state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
+                throw error;
             })
             .finally(() => {
                 state.loadingPromise = null;
@@ -507,8 +455,7 @@
 
     async function ensureDefaultLexicon() {
         try {
-            const defaultStorageKey = getStorageKeyForListId(DEFAULT_LIST_ID);
-            const storedDefault = await read(defaultStorageKey, []);
+            const storedDefault = await readListData(DEFAULT_LIST_ID);
             const normalizedStored = normalizeStoredListWords(storedDefault, DEFAULT_LIST_ID);
             const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
             if (normalizedStored.length && !pollutedBySpellingList) {
@@ -526,7 +473,7 @@
                 console.warn('[VocabStore] 默认词库为空');
                 return [];
             }
-            await persist(defaultStorageKey, normalized);
+            await saveListData(DEFAULT_LIST_ID, normalized);
             if (state.activeListId === DEFAULT_LIST_ID) {
                 setWordsInternal(normalized);
                 state.lastLoadSource = 'default';
@@ -548,8 +495,8 @@
             });
             return normalized;
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
-            return [];
+            console.error('[VocabStore] 默认词库加载失败:', error);
+            throw error;
         }
     }
 
@@ -559,87 +506,39 @@
         emitReady(true);
     }
 
-    function connectToProviders() {
-        if (state.registryUnsubscribe || state.repositories || state.storageManager) {
-            return;
-        }
-        const registry = window.StorageProviderRegistry;
-        if (registry && typeof registry.onProvidersReady === 'function') {
-            state.registryUnsubscribe = registry.onProvidersReady((payload) => {
-                if (payload && payload.repositories) {
-                    attachRepositories(payload.repositories);
-                }
-                if (payload && payload.storageManager) {
-                    state.storageManager = payload.storageManager;
-                }
-            });
-            const current = typeof registry.getCurrentProviders === 'function' ? registry.getCurrentProviders() : null;
-            if (current) {
-                if (current.repositories) {
-                    attachRepositories(current.repositories);
-                }
-                if (current.storageManager) {
-                    state.storageManager = current.storageManager;
-                }
-            }
-            return;
-        }
-        if (window.dataRepositories) {
-            attachRepositories(window.dataRepositories);
-        }
-        if (window.storage) {
-            state.storageManager = window.storage;
-        }
-    }
-
-    async function attachRepositories(repositories) {
-        if (!repositories || state.repositories === repositories) {
-            return;
-        }
-        state.repositories = repositories;
-        state.metaRepo = repositories.meta || null;
-        await loadState();
-        if (!state.words.length) {
-            await ensureDefaultLexicon();
-        }
-        await persist(getActiveStorageKey(), state.words);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        emitReady(true);
-    }
-
     function getWords() {
-        return state.words.map((word) => ({ ...word }));
+        return cloneValue(state.words);
     }
 
-    async function setWords(words) {
+    async function mergeWords(words) {
         const normalized = Array.isArray(words)
             ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
-        setWordsInternal(normalized);
-        await persist(getActiveStorageKey(), normalized);
+        const vocab = await requireVocabData();
+        const receipt = await vocab.mergeListWords({ listId: state.activeListId, words: normalized });
+        const committedWords = Array.isArray(receipt.words) ? receipt.words : [];
+        setWordsInternal(committedWords.map((word) => normalizeWordRecord(word)).filter(Boolean));
         state.listCache.delete(state.activeListId);
-        return getWords();
+        return {
+            words: getWords(),
+            addedCount: Number(receipt.addedCount) || 0,
+            updatedCount: Number(receipt.updatedCount) || 0
+        };
     }
 
     async function updateWord(id, patch = {}) {
         if (!id || !state.wordIndex.has(id)) {
             return null;
         }
-        const original = state.wordIndex.get(id);
-        const updated = normalizeWordRecord({
-            ...original,
-            ...patch,
-            id,
-            updatedAt: getNow()
-        });
+        const vocab = await requireVocabData();
+        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch });
+        const updated = normalizeWordRecord(receipt.word);
         const index = state.words.findIndex((word) => word.id === id);
         if (index >= 0 && updated) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            await persist(getActiveStorageKey(), state.words);
             state.listCache.delete(state.activeListId);
-            return { ...updated };
+            return cloneValue(updated);
         }
         return null;
     }
@@ -649,19 +548,29 @@
     }
 
     async function setConfig(config) {
-        state.config = mergeConfig(config);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
+        const next = mergeConfig(config);
+        await saveConfigData(next);
+        state.config = next;
         return getConfig();
     }
 
-    function getReviewQueue() {
-        return state.reviewQueue.slice();
-    }
-
-    async function setReviewQueue(queue) {
-        state.reviewQueue = Array.isArray(queue) ? queue.map((id) => String(id)) : [];
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        return getReviewQueue();
+    async function replaceProgress(words, config = {}, listId = null) {
+        const normalized = Array.isArray(words)
+            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            : [];
+        const requestedListId = typeof listId === 'string' && listId.trim()
+            ? listId.trim()
+            : (typeof config.activeListId === 'string' && config.activeListId.trim()
+                ? config.activeListId.trim()
+                : state.activeListId);
+        const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
+        const vocab = await requireVocabData();
+        await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
+        state.config = nextConfig;
+        state.activeListId = requestedListId;
+        setWordsInternal(normalized);
+        state.listCache.delete(requestedListId);
+        return { words: getWords(), config: getConfig() };
     }
 
     function getDueWords(referenceTime = new Date()) {
@@ -800,8 +709,7 @@
         }
 
         try {
-            const storageKey = listConfig.storageKey;
-            let storedData = await read(storageKey, null);
+            let storedData = await readListData(listId);
             if (listId === DEFAULT_LIST_ID && (!storedData || (Array.isArray(storedData) && storedData.length === 0))) {
                 const ensured = await ensureDefaultLexicon();
                 storedData = ensured;
@@ -836,7 +744,7 @@
             return listData;
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', error);
-            return null;
+            throw error;
         }
     }
 
@@ -861,25 +769,11 @@
         }
 
         try {
-            // 保存当前词表到存储（如果有修改）
-            if (state.activeListId && state.words.length > 0) {
-                const currentConfig = VOCAB_LISTS[state.activeListId];
-                if (currentConfig) {
-                    await persist(currentConfig.storageKey, state.words);
-                }
-            }
-
-            // 切换到新词表
+            const vocab = await requireVocabData();
+            await vocab.activateList(listId);
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
             state.listCache.delete(listId);
-            
-            // 保存激活的词表 ID
-            await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
-
-            // 清空复习队列（新词表需要重新生成队列）
-            state.reviewQueue = [];
-            await persist(STORAGE_KEYS.REVIEW_QUEUE, []);
 
             return true;
         } catch (error) {
@@ -907,8 +801,7 @@
 
         // 从存储读取
         try {
-            const listConfig = VOCAB_LISTS[listId];
-            const storedData = await read(listConfig.storageKey, null);
+            const storedData = await readListData(listId);
             
             // 检查是否为拼写错误词表格式
             if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
@@ -920,7 +813,7 @@
             return 0;
         } catch (error) {
             console.error('[VocabStore] getListWordCount 失败:', error);
-            return 0;
+            throw error;
         }
     }
 
@@ -988,8 +881,7 @@
         }
         await init();
         const listId = 'reading-highlights';
-        const listConfig = VOCAB_LISTS[listId];
-        const storedData = await read(listConfig.storageKey, []);
+        const storedData = await readListData(listId);
         const words = normalizeStoredListWords(storedData, listId);
         const key = normalized.word.toLowerCase();
         const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
@@ -1005,7 +897,7 @@
         } else {
             words.push(normalized);
         }
-        await persist(listConfig.storageKey, words.filter(Boolean));
+        await saveListData(listId, words.filter(Boolean));
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
             setWordsInternal(words.filter(Boolean));
@@ -1015,7 +907,6 @@
 
     async function init() {
         ensureReadyPromise();
-        connectToProviders();
         if (!state.ready) {
             await bootstrap();
         }
@@ -1025,12 +916,11 @@
     const api = {
         init,
         getWords,
-        setWords,
+        mergeWords,
         updateWord,
         getConfig,
         setConfig,
-        getReviewQueue,
-        setReviewQueue,
+        replaceProgress,
         getDueWords,
         getNewWords,
         loadList,

@@ -5,32 +5,6 @@
         return Array.isArray(value) ? value.slice() : [];
     }
 
-    function cloneValue(value) {
-        if (value === null || value === undefined) {
-            return value;
-        }
-        if (typeof global.structuredClone === 'function') {
-            try {
-                return global.structuredClone(value);
-            } catch (_) { }
-        }
-        try {
-            return JSON.parse(JSON.stringify(value));
-        } catch (_) {
-            if (Array.isArray(value)) {
-                return value.map((item) => cloneValue(item));
-            }
-            if (value && typeof value === 'object') {
-                return Object.assign({}, value);
-            }
-            return value;
-        }
-    }
-
-    function clonePracticeRecords(records) {
-        return Array.isArray(records) ? records.map((record) => cloneValue(record)) : [];
-    }
-
     function cloneSet(value) {
         if (value instanceof Set) {
             return new Set(value);
@@ -171,8 +145,6 @@
             this.globalBindingsInstalled = false;
 
             this.state = {
-                examIndex: cloneArray(global.examIndex),
-                practiceRecords: [],
                 filteredExams: Array.isArray(global.filteredExams) ? global.filteredExams : [],
                 browseFilter: normalizeFilter(global.__browseFilter),
                 bulkDeleteMode: !!global.bulkDeleteMode,
@@ -183,8 +155,6 @@
             };
 
             this.listeners = {
-                examIndex: new Set(),
-                practiceRecords: new Set(),
                 filteredExams: new Set(),
                 browseFilter: new Set(),
                 bulkDeleteMode: new Set(),
@@ -240,13 +210,11 @@
 
             try {
                 if (app.state.exam) {
-                    app.state.exam.index = this.state.examIndex;
                     app.state.exam.currentCategory = this.state.browseFilter.category;
                     app.state.exam.currentExamType = this.state.browseFilter.type;
                     app.state.exam.filteredExams = this.state.filteredExams;
                 }
                 if (app.state.practice) {
-                    app.state.practice.records = clonePracticeRecords(this.state.practiceRecords);
                     app.state.practice.selectedRecords = this.state.selectedRecords;
                     app.state.practice.bulkDeleteMode = this.state.bulkDeleteMode;
                 }
@@ -266,12 +234,6 @@
 
         syncFromAppPath(path, value) {
             switch (path) {
-                case 'exam.index':
-                    this.setExamIndex(value, { syncApp: false });
-                    break;
-                case 'practice.records':
-                    this.setPracticeRecords(value, { syncApp: false });
-                    break;
                 case 'exam.filteredExams':
                     this.setFilteredExams(value, { syncApp: false });
                     break;
@@ -309,41 +271,6 @@
                 default:
                     break;
             }
-        }
-
-        getExamIndex() {
-            return this.state.examIndex;
-        }
-
-        setExamIndex(list, options = {}) {
-            const normalized = assignExamSequenceNumbers(cloneArray(list));
-            this.state.examIndex = normalized;
-            if (options.syncApp !== false) {
-                this.applyToApp();
-            }
-            emit(this.listeners, 'examIndex', this.state.examIndex);
-            return this.state.examIndex;
-        }
-
-        getPracticeRecords() {
-            return clonePracticeRecords(this.state.practiceRecords);
-        }
-
-        setPracticeRecords(records, options = {}) {
-            const normalized = clonePracticeRecords(records);
-            this.state.practiceRecords = normalized;
-            if (options.syncApp !== false) {
-                this.applyToApp();
-            }
-            emit(this.listeners, 'practiceRecords', clonePracticeRecords(this.state.practiceRecords));
-            if (typeof global.updateBrowseAnchorsFromRecords === 'function') {
-                try {
-                    global.updateBrowseAnchorsFromRecords(clonePracticeRecords(this.state.practiceRecords));
-                } catch (error) {
-                    console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', error);
-                }
-            }
-            return clonePracticeRecords(this.state.practiceRecords);
         }
 
         getFilteredExams() {
@@ -600,18 +527,6 @@
 
             const service = this;
 
-            globalRef.getExamIndexState = function getExamIndexState() {
-                return service.getExamIndex();
-            };
-            globalRef.setExamIndexState = function setExamIndexState(list) {
-                return service.setExamIndex(list);
-            };
-            globalRef.getPracticeRecordsState = function getPracticeRecordsState() {
-                return service.getPracticeRecords();
-            };
-            globalRef.setPracticeRecordsState = function setPracticeRecordsState(records) {
-                return service.setPracticeRecords(records);
-            };
             globalRef.getFilteredExamsState = function getFilteredExamsState() {
                 return service.getFilteredExams();
             };
@@ -671,14 +586,6 @@
             };
             globalRef.assignExamSequenceNumbers = assignExamSequenceNumbers;
 
-            defineGlobalProperty(globalRef, 'examIndex', {
-                get: () => service.getExamIndex(),
-                set: (value) => service.setExamIndex(value)
-            });
-            defineGlobalProperty(globalRef, 'practiceRecords', {
-                get: () => service.getPracticeRecords(),
-                set: (value) => service.setPracticeRecords(value)
-            });
             defineGlobalProperty(globalRef, 'filteredExams', {
                 get: () => service.getFilteredExams(),
                 set: (value) => service.setFilteredExams(value)

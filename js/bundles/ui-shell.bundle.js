@@ -1052,8 +1052,6 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 (function initPracticeTimerPreferences(global) {
     'use strict';
 
-    var READING_KEY = 'ielts_reading_timer_preferences_v2';
-    var LISTENING_KEY = 'ielts_listening_timer_preferences_v1';
     var VERSION = 1;
     var DEFAULTS = {
         version: VERSION,
@@ -1090,26 +1088,38 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         };
     }
 
-    function keyFor(scope) {
-        return String(scope || '').toLowerCase() === 'listening' ? LISTENING_KEY : READING_KEY;
+    var cache = Object.create(null);
+    var hydrationPromise = null;
+    function normalizeScope(scope) { return String(scope || '').toLowerCase() === 'listening' ? 'listening' : 'reading'; }
+    function hydrateTimerPreferences() {
+        if (cache.reading && cache.listening) return Promise.resolve(true);
+        if (hydrationPromise) return hydrationPromise;
+        if (!global.AppData || !global.AppData.preferences) return Promise.resolve(false);
+        hydrationPromise = Promise.resolve().then(async function loadTimerPreferences() {
+            await global.AppData.ready;
+            var stored = await global.AppData.preferences.getTimer();
+            cache.reading = normalize(stored && stored.reading);
+            cache.listening = normalize(stored && stored.listening);
+            return true;
+        }).catch(function onTimerPreferenceLoadError(error) {
+            hydrationPromise = null;
+            console.warn('[PracticeTimerPreferences] 加载失败:', error);
+            return false;
+        });
+        return hydrationPromise;
     }
 
     function read(scope) {
-        try {
-            var raw = global.localStorage && global.localStorage.getItem(keyFor(scope));
-            return normalize(raw ? JSON.parse(raw) : null);
-        } catch (_) {
-            return normalize(null);
-        }
+        return normalize(cache[normalizeScope(scope)]);
     }
 
-    function save(scope, preferences) {
+    async function save(scope, preferences) {
+        await hydrateTimerPreferences();
+        if (!global.AppData || !global.AppData.preferences) throw new Error('AppData.preferences is unavailable');
+        var normalizedScope = normalizeScope(scope);
         var next = normalize(preferences);
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(keyFor(scope), JSON.stringify(next));
-            }
-        } catch (_) { }
+        await global.AppData.preferences.setTimer(normalizedScope, next);
+        cache[normalizedScope] = next;
         return next;
     }
 
@@ -1117,17 +1127,16 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return clampMinutes(value, DEFAULTS.countdownMinutes) * 60;
     }
 
-    global.PracticeTimerPreferences = {
+    var api = {
         VERSION: VERSION,
-        READING_KEY: READING_KEY,
-        LISTENING_KEY: LISTENING_KEY,
         DEFAULTS: Object.freeze(Object.assign({}, DEFAULTS)),
         normalize: normalize,
         read: read,
         save: save,
-        keyFor: keyFor,
         minutesToSeconds: minutesToSeconds
     };
+    Object.defineProperty(api, 'ready', { enumerable: true, get: hydrateTimerPreferences });
+    global.PracticeTimerPreferences = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -1455,8 +1464,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var SESSION_GROUP = 'session-suite';
     var STATE_CORE_GROUP = 'state-core';
     var SETTINGS_GROUP = 'settings-tools';
-    var READING_CANDIDATE_CODE_PREF_KEY = 'ielts_reading_candidate_code_preferences_v1';
     var READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
+    var readingCandidateCodeCache = { mode: 'auto', customCode: '' };
+    var readingCandidateCodeReady = null;
 
     function ensureLazyGroup(name) {
         if (!name || !global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
@@ -1494,34 +1504,32 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function readReadingCandidateCodePreferences() {
-        try {
-            var raw = global.localStorage && global.localStorage.getItem(READING_CANDIDATE_CODE_PREF_KEY);
-            var parsed = raw ? JSON.parse(raw) : null;
-            var mode = parsed && parsed.mode === 'custom' ? 'custom' : 'auto';
-            var customCode = parsed && typeof parsed.customCode === 'string'
-                ? parsed.customCode.replace(/\D/g, '').slice(0, 6)
-                : '';
-            return {
-                mode: mode,
-                customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : ''
-            };
-        } catch (_) {
-            return { mode: 'auto', customCode: '' };
-        }
+        return Object.assign({}, readingCandidateCodeCache);
     }
 
-    function saveReadingCandidateCodePreferences(preferences) {
+    function loadReadingCandidateCodePreferences() {
+        if (readingCandidateCodeReady) return readingCandidateCodeReady;
+        readingCandidateCodeReady = Promise.resolve().then(async function loadCandidateCode() {
+            await global.AppData.ready;
+            var stored = await global.AppData.preferences.getCandidateCode();
+            var mode = stored && stored.mode === 'custom' ? 'custom' : 'auto';
+            var customCode = stored && typeof stored.customCode === 'string' ? stored.customCode.replace(/\D/g, '').slice(0, 6) : '';
+            readingCandidateCodeCache = { mode: mode, customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : '' };
+            return readingCandidateCodeCache;
+        });
+        return readingCandidateCodeReady;
+    }
+
+    async function saveReadingCandidateCodePreferences(preferences) {
+        await loadReadingCandidateCodePreferences();
         var next = {
             mode: preferences && preferences.mode === 'custom' ? 'custom' : 'auto',
             customCode: preferences && typeof preferences.customCode === 'string'
                 ? preferences.customCode.replace(/\D/g, '').slice(0, 6)
                 : ''
         };
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(READING_CANDIDATE_CODE_PREF_KEY, JSON.stringify(next));
-            }
-        } catch (_) { }
+        await global.AppData.preferences.setCandidateCode(next);
+        readingCandidateCodeCache = next;
         return next;
     }
 
@@ -1537,7 +1545,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    function setupReadingCandidateCodeSettings() {
+    async function setupReadingCandidateCodeSettings() {
+        await loadReadingCandidateCodePreferences();
         var input = document.getElementById('reading-candidate-code-input');
         var saveButton = document.getElementById('reading-candidate-code-save-btn');
         var randomButton = document.getElementById('reading-candidate-code-random-btn');
@@ -1592,7 +1601,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             setReadingCandidateCodeStatus(status, '', '');
         });
 
-        saveButton.addEventListener('click', function saveCandidateCodeSettings() {
+        saveButton.addEventListener('click', async function saveCandidateCodeSettings() {
             var mode = getSelectedMode();
             var code = input.value.replace(/\D/g, '').slice(0, 6);
             if (mode === 'custom' && !READING_CANDIDATE_CODE_PATTERN.test(code)) {
@@ -1600,7 +1609,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 input.focus();
                 return;
             }
-            saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
+            await saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
             setReadingCandidateCodeStatus(
                 status,
                 mode === 'custom' ? '已保存自定义编码：' + code : '已保存：自动生成。',
@@ -1608,11 +1617,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             );
         });
 
-        randomButton.addEventListener('click', function generateCandidateCode() {
+        randomButton.addEventListener('click', async function generateCandidateCode() {
             var code = hashReadingCandidateCode(createReadingCandidateCodeSeed());
             setSelectedMode('custom');
             input.value = code;
-            saveReadingCandidateCodePreferences({ mode: 'custom', customCode: code });
+            await saveReadingCandidateCodePreferences({ mode: 'custom', customCode: code });
             setReadingCandidateCodeStatus(status, '已随机生成并保存：' + code, 'success');
         });
 
@@ -1631,12 +1640,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    function setupPracticeTimerSettings() {
+    async function setupPracticeTimerSettings() {
         var manager = global.PracticeTimerPreferences;
         if (!manager || typeof manager.read !== 'function' || typeof manager.save !== 'function') {
             return;
         }
 
+        if (manager.ready) await manager.ready;
         Array.prototype.slice.call(document.querySelectorAll('.practice-timer-card[data-timer-scope]'))
             .forEach(function bindTimerCard(card) {
                 var scope = String(card.dataset.timerScope || '').toLowerCase() === 'listening'
@@ -1692,10 +1702,14 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                         setPracticeTimerStatus(status, '', '');
                     });
                 });
-                saveButton.addEventListener('click', function saveTimerPreferences() {
-                    var saved = manager.save(scope, collect());
-                    apply(saved);
-                    setPracticeTimerStatus(status, '已保存', 'success');
+                saveButton.addEventListener('click', async function saveTimerPreferences() {
+                    try {
+                        var saved = await manager.save(scope, collect());
+                        apply(saved);
+                        setPracticeTimerStatus(status, '已保存', 'success');
+                    } catch (error) {
+                        setPracticeTimerStatus(status, '保存失败', 'error');
+                    }
                 });
 
                 apply(manager.read(scope));
@@ -1789,20 +1803,6 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
     function ensureSettingsToolsGroup() {
         return ensureLazyGroup(SETTINGS_GROUP);
-    }
-
-    function setStorageNamespace() {
-        if (!global.storage || !global.storage.ready || typeof global.storage.setNamespace !== 'function') {
-            return;
-        }
-        global.storage.ready.then(function applyNamespace() {
-            global.storage.setNamespace('exam_system');
-            try {
-                console.log('[MainEntry] 已设置存储命名空间: exam_system');
-            } catch (_) { }
-        }).catch(function handleNamespaceError(error) {
-            console.error('[MainEntry] 设置命名空间失败', error);
-        });
     }
 
     function initializeNavigationShell() {
@@ -2042,35 +2042,29 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return active.id.replace(/-view$/, '');
     }
 
-    function syncOverviewAfterIndexLoad() {
-        if (!global.app || typeof global.app.setState !== 'function') {
-            return;
-        }
-        if (typeof global.getExamIndexState !== 'function') {
-            return;
-        }
-        var list = global.getExamIndexState();
+    function syncOverviewAfterIndexLoad(index) {
+        var list = Array.isArray(index) ? index : [];
         if (!Array.isArray(list)) {
             return;
         }
         try {
-            global.app.setState('exam.index', list.slice());
-            if (typeof global.app.refreshOverviewData === 'function') {
-                global.app.refreshOverviewData();
+            if (typeof global.updateOverview === 'function') {
+                global.updateOverview(list);
             }
         } catch (error) {
             console.warn('[MainEntry] 同步总览数据失败:', error);
         }
     }
 
-    function handleExamIndexLoaded() {
-        syncOverviewAfterIndexLoad();
+    function handleExamIndexLoaded(index) {
+        var snapshot = Array.isArray(index) ? index : [];
+        syncOverviewAfterIndexLoad(snapshot);
         var activeView = getActiveViewName();
 
         if (activeView === 'browse') {
             ensureBrowseGroup().then(function afterBrowseReady() {
                 if (typeof global.loadExamList === 'function') {
-                    try { global.loadExamList(); } catch (_) { }
+                    try { global.loadExamList(snapshot); } catch (_) { }
                 }
                 var loading = document.querySelector('#browse-view .loading');
                 if (loading) {
@@ -2084,8 +2078,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
         if (activeView === 'practice') {
             Promise.all([ensureBrowseGroup(), ensurePracticeSuiteGroup()]).then(function onPracticeReady() {
-                if (typeof global.updatePracticeView === 'function') {
-                    try { global.updatePracticeView(); } catch (_) { }
+                if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                    global.startPracticeRecordsSyncInBackground('exam-index-loaded', { forceRender: true });
                 }
             }).catch(function handlePracticeLoadError(error) {
                 console.error('[MainEntry] practice 视图模块加载失败:', error);
@@ -2093,8 +2087,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    global.addEventListener('examIndexLoaded', function onExamIndexLoaded() {
-        handleExamIndexLoaded();
+    global.addEventListener('examIndexLoaded', function onExamIndexLoaded(event) {
+        handleExamIndexLoaded(event && event.detail ? event.detail.index : []);
     });
 
     global.addEventListener('appCoreReady', function onAppCoreReady() {
@@ -2125,7 +2119,6 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function init() {
-        setStorageNamespace();
         initializeNavigationShell();
         setupReadingCandidateCodeSettings();
         setupPracticeTimerSettings();
@@ -2191,7 +2184,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var settingsPrefetchPromise = null;
     var indexInteractionsInitialized = false;
     var licenseModalInitialized = false;
-    var LICENSE_STORAGE_KEY = 'hasSeenGplLicense';
+    var licenseModalInitializationPromise = null;
+    var licenseModalRenderToken = 0;
 
     function ensureBrowse() {
         if (browsePrefetched) {
@@ -2226,22 +2220,14 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
 function ensureSettings() {
-        if (settingsPrefetched) {
-            return (settingsPrefetchPromise || Promise.resolve()).then(function () {
-                if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
-                    try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
-                }
-            });
+    if (settingsPrefetched) {
+        return settingsPrefetchPromise || Promise.resolve();
         }
         settingsPrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureSettingsToolsGroup === 'function'
             ? global.AppEntry.ensureSettingsToolsGroup
             : function fallback() { return Promise.resolve(); };
-        settingsPrefetchPromise = loader().then(function () {
-            if (global.ExternalBackupService && typeof global.ExternalBackupService.refreshPanel === 'function') {
-                try { global.ExternalBackupService.refreshPanel(); } catch (_) { /* ignore */ }
-            }
-        }).catch(function swallow(error) {
+        settingsPrefetchPromise = loader().catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
             console.warn('[IndexInteractions] 预加载 settings 失败:', error);
@@ -2249,8 +2235,8 @@ function ensureSettings() {
         return settingsPrefetchPromise;
     }
 
-    function startListeningSprint() {
-        var list = typeof global.getExamIndexState === 'function' ? global.getExamIndexState() : [];
+    async function startListeningSprint() {
+        var list = await global.resolveActiveLibraryIndex();
         var listeningExams = Array.isArray(list) ? list.filter(function (exam) { return exam && exam.type === 'listening'; }) : [];
         if (!listeningExams.length) {
             if (typeof global.showMessage === 'function') {
@@ -2269,8 +2255,8 @@ function ensureSettings() {
         }
     }
 
-    function startInstantLaunch() {
-        var list = typeof global.getExamIndexState === 'function' ? global.getExamIndexState() : [];
+    async function startInstantLaunch() {
+        var list = await global.resolveActiveLibraryIndex();
         if (!Array.isArray(list) || !list.length) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('题库尚未加载', 'error');
@@ -2434,6 +2420,13 @@ function ensureSettings() {
                 return global.OnboardingTour && typeof global.OnboardingTour.start === 'function'
                     ? global.OnboardingTour.start(true)
                     : undefined;
+            }],
+            ['external-backup-entry-btn', function () {
+                return ensureSettings().then(function () {
+                    return global.ExternalBackupService && typeof global.ExternalBackupService.openModal === 'function'
+                        ? global.ExternalBackupService.openModal()
+                        : undefined;
+                });
             }],
             ['create-backup-btn', function () {
                 return ensureSettings().then(function () {
@@ -2854,12 +2847,20 @@ function ensureSettings() {
         return global.document ? global.document.getElementById('license-modal') : null;
     }
 
-    function hasAcceptedLicense() {
-        try {
-            return global.localStorage && global.localStorage.getItem(LICENSE_STORAGE_KEY) === 'true';
-        } catch (_) {
-            return true;
+    function getConsentPreferences() {
+        var preferences = global.AppData && global.AppData.preferences;
+        if (!preferences || typeof preferences.getConsent !== 'function' || typeof preferences.setConsent !== 'function') {
+            throw new Error('AppData preferences consent API is unavailable');
         }
+        return preferences;
+    }
+
+    function hasAcceptedLicense() {
+        return Promise.resolve().then(function () {
+            return getConsentPreferences().getConsent();
+        }).then(function (consent) {
+            return !!(consent && consent.hasSeenGplLicense === true);
+        });
     }
 
     function showLicenseModal() {
@@ -2867,14 +2868,19 @@ function ensureSettings() {
         if (!modal) {
             return;
         }
+        var renderToken = ++licenseModalRenderToken;
         global.requestAnimationFrame(function () {
             global.requestAnimationFrame(function () {
+                if (renderToken !== licenseModalRenderToken) {
+                    return;
+                }
                 modal.classList.add('show');
             });
         });
     }
 
     function hideLicenseModal() {
+        licenseModalRenderToken += 1;
         var modal = getLicenseModal();
         if (modal) {
             modal.classList.remove('show');
@@ -2882,24 +2888,37 @@ function ensureSettings() {
     }
 
     function acceptGplLicense() {
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(LICENSE_STORAGE_KEY, 'true');
-            }
-        } catch (error) {
-            console.warn('LocalStorage error:', error);
-        }
-        hideLicenseModal();
+        var preferences;
+        return Promise.resolve().then(function () {
+            preferences = getConsentPreferences();
+            return preferences.getConsent();
+        }).then(function (consent) {
+            return preferences.setConsent(Object.assign({}, consent || {}, {
+                hasSeenGplLicense: true
+            }));
+        }).then(function () {
+            hideLicenseModal();
+            return true;
+        }).catch(function (error) {
+            console.error('[LicenseModal] Failed to save GPL license consent:', error);
+            return false;
+        });
     }
 
     function initLicenseModal() {
         if (licenseModalInitialized) {
-            return;
+            return licenseModalInitializationPromise || Promise.resolve();
         }
         licenseModalInitialized = true;
-        if (!hasAcceptedLicense()) {
+        licenseModalInitializationPromise = hasAcceptedLicense().then(function (accepted) {
+            if (!accepted) {
+                showLicenseModal();
+            }
+        }).catch(function (error) {
+            console.error('[LicenseModal] Failed to load GPL license consent:', error);
             showLicenseModal();
-        }
+        });
+        return licenseModalInitializationPromise;
     }
 
     global.LicenseModal = Object.assign({}, global.LicenseModal || {}, {

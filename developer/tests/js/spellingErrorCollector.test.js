@@ -22,7 +22,6 @@ const __dirname = path.dirname(__filename);
 // ============================================================================
 
 global.window = {
-    storage: null,
     spellingErrorCollector: null
 };
 
@@ -36,26 +35,32 @@ global.console = {
     info: () => {}
 };
 
-// 模拟存储系统
-class MockStorage {
-    constructor() {
-        this.data = new Map();
-        this.ready = Promise.resolve();
-    }
-
-    async get(key) {
-        return this.data.get(key) || null;
-    }
-
-    async set(key, value) {
-        this.data.set(key, value);
-        return true;
-    }
-
-    setNamespace() {}
+function clone(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
-global.window.storage = new MockStorage();
+const vocabCollections = {};
+function resetCollections() {
+    Object.keys(vocabCollections).forEach((id) => delete vocabCollections[id]);
+}
+global.window.AppData = {
+    ready: Promise.resolve(),
+    vocab: {
+        async listCollections() {
+            return clone(vocabCollections);
+        },
+        async saveCollection(id, value) {
+            vocabCollections[id] = clone(value);
+            return { committed: true };
+        },
+        async saveCollections(values) {
+            Object.entries(values).forEach(([id, value]) => {
+                vocabCollections[id] = clone(value);
+            });
+            return { committed: true };
+        }
+    }
+};
 
 // ============================================================================
 // 加载 SpellingErrorCollector
@@ -414,6 +419,7 @@ function testSpellingFalsePositiveFilters() {
  */
 async function testVocabListSaveAndLoad() {
     console.log('测试: 词表保存和加载');
+    resetCollections();
     
     const collector = new window.SpellingErrorCollector();
     await collector.ensureInitialized();
@@ -452,6 +458,7 @@ async function testVocabListSaveAndLoad() {
     assert.strictEqual(loadedList.id, 'p1', '词表ID应该正确');
     assert.strictEqual(loadedList.words.length, 1, '应该有1个单词');
     assert.strictEqual(loadedList.words[0].word, 'accommodation', '单词应该正确');
+    assert.ok(vocabCollections['spelling-errors-p1'], '必须写入 canonical collection');
     
     console.log('  ✓ 词表保存和加载正确');
 }
@@ -529,6 +536,7 @@ async function testMergeErrorsToList() {
  */
 async function testSaveErrors() {
     console.log('测试: 保存错误到词表');
+    resetCollections();
     
     const collector = new window.SpellingErrorCollector();
     await collector.ensureInitialized();
@@ -579,6 +587,7 @@ async function testSaveErrors() {
  */
 async function testRemoveWord() {
     console.log('测试: 移除单词');
+    resetCollections();
     
     const collector = new window.SpellingErrorCollector();
     await collector.ensureInitialized();
@@ -619,6 +628,7 @@ async function testRemoveWord() {
  */
 async function testClearList() {
     console.log('测试: 清空词表');
+    resetCollections();
     
     const collector = new window.SpellingErrorCollector();
     await collector.ensureInitialized();

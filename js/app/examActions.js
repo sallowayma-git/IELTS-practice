@@ -352,15 +352,9 @@
         return categories[Math.max(0, stageIndex)] || null;
     }
 
-    function findExamById(examId) {
-        const list = Array.isArray(global.examIndex)
-            ? global.examIndex
-            : (global.appStateService && typeof global.appStateService.getExamIndex === 'function'
-                ? global.appStateService.getExamIndex()
-                : []);
-        return Array.isArray(list)
-            ? list.find((item) => item && String(item.id) === String(examId))
-            : null;
+    function findExamById(examId, examIndex) {
+        const list = Array.isArray(examIndex) ? examIndex : [];
+        return list.find((item) => item && String(item.id) === String(examId)) || null;
     }
 
     function isReadingMemorizeBrowseMode() {
@@ -409,8 +403,11 @@
         return (Array.isArray(exams) ? exams : []).filter(isReadingMemorizeExam);
     }
 
-    function launchReadingMemorizeExam(examId) {
-        const exam = findExamById(examId);
+    async function launchReadingMemorizeExam(examId, examIndex = null) {
+        const list = Array.isArray(examIndex)
+            ? examIndex
+            : await global.resolveActiveLibraryIndex();
+        const exam = findExamById(examId, list);
         if (!isReadingMemorizeExam(exam)) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('该题目无法使用统一阅读页背题，请选择有 HTML 数据的阅读题。', 'warning');
@@ -701,13 +698,16 @@
         }
     }
 
-    function handleCustomSuiteSelect(examId) {
+    async function handleCustomSuiteSelect(examId, examIndex = null) {
         const draft = getCustomSuiteDraft();
         if (!draft || draft.status === 'ready') {
             return false;
         }
 
-        const exam = findExamById(examId);
+        const list = Array.isArray(examIndex)
+            ? examIndex
+            : await global.resolveActiveLibraryIndex();
+        const exam = findExamById(examId, list);
         if (!exam) {
             return false;
         }
@@ -808,7 +808,7 @@
     /**
      * 加载并渲染题库列表
      */
-    function loadExamList() {
+    function loadExamList(examIndex = []) {
         console.log('[ExamActions] loadExamList called');
 
         if (typeof global.setupBrowseControls === 'function') {
@@ -828,13 +828,13 @@
         if (!memorizeSelectionActive && global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
             try {
                 if (!global.browseController.buttonContainer) {
-                    global.browseController.initialize('type-filter-buttons');
+                    global.browseController.initialize('type-filter-buttons', examIndex);
                 }
                 if (global.browseController.currentMode !== global.__browseFilterMode) {
-                    global.browseController.setMode(global.__browseFilterMode);
+                    global.browseController.setMode(global.__browseFilterMode, examIndex);
                 } else {
                     const activeFilter = global.browseController.activeFilter || 'all';
-                    global.browseController.applyFilter(activeFilter);
+                    global.browseController.applyFilter(activeFilter, examIndex);
                 }
                 return;
             } catch (error) {
@@ -842,15 +842,8 @@
             }
         }
 
-        // 2. 获取题库快照
-        let examIndexSnapshot = [];
-        if (global.appStateService) {
-            examIndexSnapshot = global.appStateService.getExamIndex();
-        } else if (typeof global.getExamIndexState === 'function') {
-            examIndexSnapshot = global.getExamIndexState();
-        } else {
-            examIndexSnapshot = Array.isArray(global.examIndex) ? global.examIndex : [];
-        }
+        // 2. 使用控制器边界传入的本次题库快照。
+        const examIndexSnapshot = Array.isArray(examIndex) ? examIndex : [];
 
         // 3. 获取筛选条件
         let activeCategory = 'all';
@@ -1320,46 +1313,12 @@
         return Promise.resolve();
     }
 
-    function ensureSettingsToolsReady() {
-        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-            return global.AppLazyLoader.ensureGroup('settings-tools');
-        }
-        return ensureBrowseGroupReady();
-    }
-
-    async function ensureDataIntegrityManagerReady() {
-        try {
-            await ensureSettingsToolsReady();
-        } catch (error) {
-            console.warn('[ExamActions] 设置工具预加载失败，继续尝试导出:', error);
-        }
-
-        if (!global.dataIntegrityManager && global.DataIntegrityManager) {
-            try {
-                global.dataIntegrityManager = new global.DataIntegrityManager();
-            } catch (error) {
-                console.warn('[ExamActions] 初始化 DataIntegrityManager 失败:', error);
-            }
-        }
-
-        return global.dataIntegrityManager || null;
-    }
-
     async function exportPracticeData() {
         try {
-            if (global.dataIntegrityManager && typeof global.dataIntegrityManager.exportData === 'function') {
-                global.dataIntegrityManager.exportData();
-                try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
-                return;
-            }
-        } catch (_) { }
-        try {
-            var records = global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function'
-                ? await global.PracticeRecordAPI.list()
-                : (global.getPracticeRecordsState ? global.getPracticeRecordsState() : []);
-            var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
+            var snapshot = await global.AppData.backups.export({ domains: ['practice'] });
+            var blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json; charset=utf-8' });
             var url = URL.createObjectURL(blob);
-            var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
+            var a = document.createElement('a'); a.href = url; a.download = 'ielts-atlas-practice-v2.json';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
             try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
@@ -1370,14 +1329,17 @@
     }
 
     async function exportAllData() {
-        var manager = null;
         try {
-            manager = await ensureDataIntegrityManagerReady();
-            if (manager && typeof manager.exportData === 'function') {
-                await manager.exportData();
-                try { global.showMessage && global.showMessage('数据导出成功', 'success'); } catch (_) { }
-                return;
-            }
+            var snapshot = await global.AppData.backups.export();
+            var blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json; charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = 'ielts-atlas-backup-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+            document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor); URL.revokeObjectURL(url);
+            try { await global.AppData.backups.recordExport({ type: 'full-v2', checksum: snapshot.checksum }); } catch (historyError) { console.warn('[ExamActions] 导出历史记录失败:', historyError); }
+            try { global.showMessage && global.showMessage('数据导出成功', 'success'); } catch (_) { }
+            return snapshot;
         } catch (error) {
             console.error('[ExamActions] 数据导出失败:', error);
             if (typeof global.showMessage === 'function') {
@@ -1386,9 +1348,7 @@
             return;
         }
 
-        if (typeof global.exportPracticeData === 'function') {
-            return global.exportPracticeData();
-        }
+        return null;
         if (typeof global.showMessage === 'function') {
             global.showMessage('Data manager module is unavailable.', 'warning');
         }
@@ -1449,7 +1409,8 @@
         isReadingMemorizeExam
     };
 
-    global.loadExamList = loadExamList;
+    // 全局 loadExamList 由 main.js 的适配器持有（无参时自解析题库索引）；
+    // 此处仅通过 global.ExamActions.loadExamList 暴露，避免覆盖后无参调用拿到空数组。
     global.resetBrowseViewToAll = resetBrowseViewToAll;
     global.displayExams = displayExams;
     global.setupExamActionHandlers = setupExamActionHandlers;

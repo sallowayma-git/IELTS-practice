@@ -43,15 +43,9 @@ class BrowseStateManager {
      */
     initialize() {
         console.log('[BrowseStateManager] 初始化浏览状态管理器');
-        
-        // 恢复保存的状态
-        this.restorePersistentState();
-        
         // 设置事件监听器
         this.setupEventListeners();
-        
-        // 初始化完成后通知订阅者
-        this.notifySubscribers();
+        this.ready = this.restorePersistentState().finally(() => this.notifySubscribers());
     }
 
     /**
@@ -206,7 +200,7 @@ class BrowseStateManager {
     /**
      * 持久化状态
      */
-    persistState() {
+    async persistState() {
         try {
             const dataToSave = {
                 currentFilter: this.currentFilter,
@@ -216,7 +210,7 @@ class BrowseStateManager {
                 timestamp: Date.now()
             };
             
-            localStorage.setItem('browse_state', JSON.stringify(dataToSave));
+            await window.AppData.preferences.patchBrowse({ stateManager: dataToSave });
             console.log('[BrowseStateManager] 状态已持久化');
         } catch (error) {
             console.error('[BrowseStateManager] 持久化状态失败:', error);
@@ -226,11 +220,13 @@ class BrowseStateManager {
     /**
      * 恢复持久化的状态
      */
-    restorePersistentState() {
+    async restorePersistentState() {
         try {
-            const savedData = localStorage.getItem('browse_state');
+            await window.AppData.ready;
+            const browse = await window.AppData.preferences.getBrowse();
+            const savedData = browse && browse.stateManager;
             if (savedData) {
-                const data = JSON.parse(savedData);
+                const data = savedData;
                 
                 // 恢复基本状态
                 this.previousFilter = data.previousFilter || null;

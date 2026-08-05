@@ -200,10 +200,11 @@ def _check_index_css_convergence(index_path: Path) -> Tuple[bool, dict]:
     allowed = {
         "css/main.css",
         "css/heroui-bridge.css",
+        "css/theme-switcher-scroll.css",
         "css/onboarding.css",
     }
     unexpected = sorted([href for href in css_hrefs if href not in allowed])
-    missing_required = sorted([href for href in ("css/main.css",) if href not in css_hrefs])
+    missing_required = sorted([href for href in allowed if href not in css_hrefs])
 
     passed = not unexpected and not missing_required
     return passed, {
@@ -221,6 +222,18 @@ def _check_build_bundles_no_deleted_refs(build_script: Path) -> Tuple[bool, dict
         "js/features/overview/overview-runtime.js",
         "js/runtime/mainRuntime.js",
         "js/runtime/legacyPublicAPI.js",
+        "js/utils/storage.js",
+        "js/core/storageProviderRegistry.js",
+        "js/data/dataSources/storageDataSource.js",
+        "js/data/repositories/",
+        "js/data/index.js",
+        "js/core/practiceRecordAPI.js",
+        "js/core/backupAPI.js",
+        "js/core/practiceStore.js",
+        "js/utils/stateSerializer.js",
+        "js/utils/simpleStorageWrapper.js",
+        "js/core/scoreStorage.js",
+        "js/patches/runtime-fixes.js",
     ]
     try:
         source = build_script.read_text(encoding="utf-8")
@@ -231,6 +244,308 @@ def _check_build_bundles_no_deleted_refs(build_script: Path) -> Tuple[bool, dict
     return len(stale_refs) == 0, {
         "checkedRemovedScripts": removed_scripts,
         "staleRefs": stale_refs,
+    }
+
+
+def _check_bundle_outputs_current(build_script: Path) -> Tuple[bool, dict]:
+    try:
+        completed = subprocess.run(
+            ["node", str(build_script), "--check"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
+        )
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"bundle check 执行失败：{exc}"}
+    output = ((completed.stdout or "") + (completed.stderr or "")).strip()
+    return completed.returncode == 0, {
+        "exitCode": completed.returncode,
+        "output": output,
+    }
+
+
+def _check_v2_data_architecture() -> Tuple[bool, dict]:
+    v2_modules = (
+        "js/data/v2/dataCatalog.js",
+        "js/data/v2/dataKernel.js",
+        "js/data/v2/appData.js",
+    )
+    v2_bundle_names = {
+        "core-foundation.bundle.js",
+        "reading-page.bundle.js",
+        "practice-page-enhancer.bundle.js",
+        "listening-record-bridge.bundle.js",
+        "listening-wrapper.bundle.js",
+    }
+    removed_v1_markers = (
+        "js/utils/storage.js",
+        "js/core/storageProviderRegistry.js",
+        "js/data/dataSources/storageDataSource.js",
+        "js/data/repositories/",
+        "js/data/index.js",
+        "js/core/practiceRecordAPI.js",
+        "js/core/backupAPI.js",
+        "js/core/practiceStore.js",
+        "js/utils/stateSerializer.js",
+        "js/utils/simpleStorageWrapper.js",
+        "js/core/scoreStorage.js",
+        "js/patches/runtime-fixes.js",
+    )
+
+    bundle_errors: List[str] = []
+    for bundle_path in sorted((REPO_ROOT / "js" / "bundles").glob("*.bundle.js")):
+        source = bundle_path.read_text(encoding="utf-8")
+        expected = bundle_path.name in v2_bundle_names
+        for module in v2_modules:
+            count = source.count(f"/* ===== {module} ===== */")
+            if count != (1 if expected else 0):
+                bundle_errors.append(f"{bundle_path.name}:{module}:count={count}")
+        for marker in removed_v1_markers:
+            if marker in source:
+                bundle_errors.append(f"{bundle_path.name}:v1={marker}")
+
+    raw_storage_pattern = re.compile(
+        r"(?<![\w$])(?:(?:window|global|globalThis)\s*\.\s*)?"
+        r"(?:localStorage|sessionStorage|indexedDB)\s*(?:\.|\[|:|=|,)"
+    )
+    old_global_pattern = re.compile(
+        r"(?:(?:window|global|globalThis|this\.win)\.)"
+        r"(?:storage|persistentStore|preferenceStore|dataRepositories|PracticeRecordAPI|BackupAPI|ScoreStorage|ExternalBackupService|simpleStorageWrapper|dataIntegrityManager)\b"
+        r"|\b(?:StateSerializer|StorageFacade|StorageManager|SimpleStorageWrapper|DataIntegrityManager)\b"
+    )
+    legacy_state_pattern = re.compile(
+        r"\b(?:getExamIndexState|setExamIndexState|getPracticeRecordsState|setPracticeRecordsState)\b"
+        r"|(?:window|global|globalThis)\.(?:examIndex|practiceRecords)\b"
+        r"|(?:(?:window|this\.win)\.)?appStateService\.(?:get|set)(?:ExamIndex|PracticeRecords)\b"
+        r"|\bstateService\.(?:get|set)(?:ExamIndex|PracticeRecords)\b"
+        r"|(?:(?:window|this\.win)\.)?app\.state\.(?:examIndex|practiceRecords|exam\.index|practice\.records)\b"
+        r"|(?:getState|setState)\(\s*['\"](?:exam\.index|practice\.records)['\"]"
+    )
+    legacy_key_names = (
+        "practice_records", "practice_record_summaries", "user_stats", "active_sessions",
+        "temp_practice_records", "user_settings", "system_settings", "exam_index",
+        "user_achievements", "exam_index_configurations", "active_exam_index_key",
+        "exam_path_map", "library_path_map", "interrupted_records", "rejected_completion_payloads",
+        "ielts_sim_session", "manual_backups", "backup_settings", "export_history", "import_history",
+        "vocab_words", "vocab_user_config", "vocab_active_list_id", "vocab_lists",
+        "vocab_list_reading_highlights", "vocab_review_queue", "ui_preferences", "browse_sort_mode",
+        "browse_frequency_filter", "browse_view_preferences_v2", "learning_goals",
+        "achievement_manual_state", "practice_custom_widget", "ielts_reading_timer_preferences_v2",
+        "ielts_listening_timer_preferences_v1", "suite_auto_advance_after_submit", "__ielts_test_env__",
+        "namespace_test_practice",
+    )
+    legacy_key_alternatives = "|".join(re.escape(key) for key in legacy_key_names)
+    legacy_key_pattern = re.compile(
+        rf"(?P<quote>['\"`])(?:{legacy_key_alternatives}|"
+        r"(?:exam_system_)?(?:(?:exam_index_|exam_path_map__|ielts_sim_draft::|vocab_list_)[^'\"`]*|practice_record_(?!recovery['\"`])[^'\"`]*))"
+        r"(?P=quote)"
+    )
+    patterns = (
+        ("raw-storage", raw_storage_pattern),
+        ("old-global", old_global_pattern),
+        ("legacy-state", legacy_state_pattern),
+        ("legacy-key", legacy_key_pattern),
+    )
+
+    def in_region(source: str, offset: int, start_marker: str, end_marker: str) -> bool:
+        start = source.rfind(start_marker, 0, offset + 1)
+        if start < 0:
+            return False
+        end = source.find(end_marker, start + len(start_marker))
+        return end < 0 or offset < end
+
+    def is_allowed(relative: str, label: str, match: re.Match[str], line_text: str, source: str) -> bool:
+        token = match.group(0)
+        offset = match.start()
+        if relative == "js/data/v2/dataKernel.js":
+            if label == "raw-storage":
+                return True
+            if label == "legacy-key":
+                return in_region(
+                    source,
+                    offset,
+                    "const LEGACY_UNPREFIXED_WEB_KEYS",
+                    "function clone",
+                )
+        if relative == "js/core/externalBackupService.js" and label == "raw-storage":
+            return True
+        if relative == "js/core/externalBackupService.js" and label == "old-global" and "ExternalBackupService" in token:
+            return True
+        if relative == "js/core/siteDataReset.js" and label == "raw-storage":
+            return True
+        if relative == "js/core/siteDataReset.js" and label == "old-global" and "ExternalBackupService" in token:
+            return True
+        if relative == "js/presentation/indexInteractions.js" and label == "old-global" and "ExternalBackupService" in token:
+            return "openModal" in line_text
+        if relative == "js/data/v2/appData.js":
+            if label == "raw-storage" and "sessionStorage" in token:
+                return in_region(source, offset, "const windowSession", "async function readRecovery")
+            if label == "legacy-key":
+                return in_region(
+                    source,
+                    offset,
+                    "function extractLegacyPracticeRecords",
+                    "function entityRowFromLayer",
+                ) or in_region(
+                    source,
+                    offset,
+                    "const LEGACY_DOCUMENT_ALIASES",
+                    "const ready = kernel.initialize",
+                )
+
+        if relative == "developer/tests/js/dataKernelV2.test.js" and label == "raw-storage":
+            return True
+        if relative == "developer/tests/js/dataKernelV2.test.js" and label == "legacy-key":
+            return in_region(source, offset, "async function main()", "\nmain().catch")
+        if relative == "developer/tests/js/legacyMigrationBrickRegression.test.js":
+            if label == "raw-storage":
+                return in_region(source, offset, "function harness", "async function run")
+            if label == "legacy-key":
+                return in_region(source, offset, "function harness", "\nrun().catch")
+        if relative == "developer/tests/js/libraryManagerImportConfig.test.js" and label == "legacy-key":
+            return in_region(
+                source,
+                offset,
+                "async function testBrokenLegacyActiveLibraryFallsBackToReadingManifest",
+                "\nasync function test",
+            )
+        if relative == "developer/tests/js/appDataV2.test.js" and label == "raw-storage":
+            return True
+        if relative == "developer/tests/js/dataLossBaseline.test.js" and label == "raw-storage":
+            # This harness executes the real AppData/LegacyMigration boundary in a VM. Raw browser
+            # storage is test-fixture infrastructure here; production and ordinary business tests
+            # remain subject to the guard.
+            return True
+        if relative == "developer/tests/js/externalBackupServiceV2.test.js" and label == "raw-storage":
+            return True
+        if (
+            relative == "developer/tests/js/practiceLightProjectionRenderContract.test.js"
+            and label == "raw-storage"
+        ):
+            # This contract test boots the real dataCatalog/dataKernel/appData stack in a VM so the
+            # light projection runs as production code. The in-memory localStorage/sessionStorage
+            # stubs are the kernel's backing store fixture, not business access to raw storage.
+            return True
+        if relative == "developer/tests/js/siteDataReset.test.js" and label == "raw-storage":
+            return True
+        if relative == "developer/tests/e2e/full_reset_flow.py" and label == "raw-storage":
+            return True
+        if relative == "developer/tests/e2e/full_reset_flow.py" and label == "old-global" and "ExternalBackupService" in token:
+            return True
+        if relative == "developer/tests/js/appDataV2.test.js" and label == "legacy-key":
+            return in_region(
+                source,
+                offset,
+                "async function testLegacyImportAdapterNormalizesLibraryProvenance",
+                "\nasync function test",
+            ) or in_region(
+                source,
+                offset,
+                "async function testBackupBoundaryAndRestoreReplace",
+                "\nasync function test",
+            ) or "VALIDATION" in line_text or (
+                "add(" in line_text
+                and token.strip("'\"`") in {"practice_records", "system_settings"}
+            )
+        if relative == "developer/tests/js/practiceRecorder.test.js" and label == "legacy-key":
+            return "practice_records" in line_text
+        if relative == "developer/tests/e2e/fixtures/data-integrity-import-sample.json" and label == "legacy-key":
+            return token.strip("'\"`") in {"practice_records", "system_settings"}
+
+        if relative == "developer/tests/js/practiceCore.guard.test.js" and label in {"raw-storage", "old-global", "legacy-key"}:
+            return True
+        if relative == "developer/tests/js/unifiedReadingNotesMigration.test.js" and label == "raw-storage":
+            return "doesNotMatch" in line_text
+        if relative == "developer/tests/js/practiceCustomCard.test.js" and label == "legacy-key":
+            return "assertNotContains" in line_text
+        if relative == "developer/tests/e2e/suite_practice_flow.py" and label == "old-global":
+            return "console_errors" in line_text.lower() or "storagefacade" in line_text.lower()
+        return False
+
+    candidate_paths = set((REPO_ROOT / "js").rglob("*.js"))
+    tests_root = REPO_ROOT / "developer" / "tests"
+    candidate_paths.update(
+        path for path in tests_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".js", ".py", ".html", ".json"}
+        and "reports" not in path.relative_to(tests_root).parts
+    )
+    candidate_paths.add(REPO_ROOT / "index.html")
+    candidate_paths.update((REPO_ROOT / "templates").rglob("*.html"))
+    generated_root = REPO_ROOT / "assets" / "generated"
+    if generated_root.exists():
+        candidate_paths.update(generated_root.rglob("*.html"))
+    candidate_paths.discard(Path(__file__).resolve())
+
+    bundle_marker_pattern = re.compile(r"/\* ===== ([^=]+?) ===== \*/")
+    source_errors: List[str] = []
+    test_state_errors: List[str] = []
+    html_errors: List[str] = []
+    seen_errors = set()
+    ordered_candidates = sorted(
+        candidate_paths,
+        key=lambda path: ("bundles" in path.parts, path.as_posix()),
+    )
+    for source_path in ordered_candidates:
+        if not source_path.exists() or not source_path.is_file():
+            continue
+        relative_path = source_path.relative_to(REPO_ROOT)
+        relative = relative_path.as_posix()
+        source = source_path.read_text(encoding="utf-8", errors="replace")
+        bundle_markers = list(bundle_marker_pattern.finditer(source)) if "bundles" in relative_path.parts else []
+        for label, pattern in patterns:
+            for match in pattern.finditer(source):
+                effective_relative = relative
+                if bundle_markers:
+                    preceding = next((marker for marker in reversed(bundle_markers) if marker.start() <= match.start()), None)
+                    if preceding:
+                        effective_relative = preceding.group(1).strip()
+                line = source.count("\n", 0, match.start()) + 1
+                line_start = source.rfind("\n", 0, match.start()) + 1
+                line_end = source.find("\n", match.end())
+                if line_end < 0:
+                    line_end = len(source)
+                line_text = source[line_start:line_end]
+                if is_allowed(effective_relative, label, match, line_text, source):
+                    continue
+                error_key = (effective_relative, label, match.group(0), line_text.strip())
+                if error_key in seen_errors:
+                    continue
+                seen_errors.add(error_key)
+                mapped = f"=>{effective_relative}" if effective_relative != relative else ""
+                detail = f"{relative}:{line}{mapped}:{label}:{match.group(0)}"
+                if relative.startswith("developer/tests/"):
+                    test_state_errors.append(detail)
+                elif source_path.suffix.lower() == ".html":
+                    html_errors.append(detail)
+                else:
+                    source_errors.append(detail)
+
+    forbidden_html_scripts = v2_modules + removed_v1_markers
+    html_candidates = sorted(path for path in candidate_paths if path.suffix.lower() == ".html")
+    for html_path in html_candidates:
+        source = html_path.read_text(encoding="utf-8", errors="replace")
+        for marker in forbidden_html_scripts:
+            if marker in source:
+                html_errors.append(f"{html_path.relative_to(REPO_ROOT)}:{marker}")
+
+    injection_source = (REPO_ROOT / "js" / "app" / "examSessionMixin.js").read_text(encoding="utf-8")
+    listening_wrapper_guard = "doc.documentElement.dataset.listeningWrapper === 'true'" in injection_source
+    passed = not bundle_errors and not source_errors and not test_state_errors and not html_errors and listening_wrapper_guard
+    return passed, {
+        "bundleErrors": bundle_errors[:100],
+        "sourceErrors": source_errors[:100],
+        "testStateErrors": test_state_errors[:100],
+        "htmlErrors": html_errors[:100],
+        "errorCounts": {
+            "bundle": len(bundle_errors),
+            "source": len(source_errors),
+            "tests": len(test_state_errors),
+            "html": len(html_errors),
+        },
+        "listeningWrapperGuard": listening_wrapper_guard,
     }
 
 def _check_optional_listening_assets_not_bundled(build_script: Path, core_bundle: Path) -> Tuple[bool, dict]:
@@ -442,15 +757,16 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "js/bundles/browse.bundle.js",
         "js/bundles/practice.bundle.js",
         "js/bundles/session.bundle.js",
-        "js/bundles/settings.bundle.js",
         "js/bundles/diagnostics.bundle.js",
         "js/bundles/more.bundle.js",
         "js/bundles/theme.bundle.js",
         "js/bundles/reading-page.bundle.js",
         "js/bundles/practice-page-enhancer.bundle.js",
         "js/bundles/listening-record-bridge.bundle.js",
+        "js/bundles/listening-wrapper.bundle.js",
     ])
     missing_bundles = sorted(set(expected_bundles) - set(bundled_scripts))
+    unexpected_bundles = sorted(set(bundled_scripts) - set(expected_bundles))
 
     forbidden_templates = sorted([name for name in name_set if name == "templates" or name.startswith("templates/")])
     forbidden_listening = sorted([
@@ -510,6 +826,7 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
 
     passed = (
         not missing_bundles
+        and not unexpected_bundles
         and not forbidden_templates
         and not forbidden_listening
         and not unexpected_listening_roots
@@ -525,6 +842,7 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "zip": str(archive_path.relative_to(REPO_ROOT)).replace("\\", "/"),
         "bundleCount": len(bundled_scripts),
         "missingBundles": missing_bundles,
+        "unexpectedBundles": unexpected_bundles,
         "forbiddenTemplates": forbidden_templates,
         "forbiddenListeningPractice": forbidden_listening,
         "unexpectedListeningRoots": unexpected_listening_roots,
@@ -556,13 +874,17 @@ def _check_release_script_runtime_guards(release_script: Path) -> Tuple[bool, di
         'require_entry "js/bundles/browse.bundle.js"',
         'require_entry "js/bundles/practice.bundle.js"',
         'require_entry "js/bundles/session.bundle.js"',
-        'require_entry "js/bundles/settings.bundle.js"',
         'require_entry "js/bundles/diagnostics.bundle.js"',
         'require_entry "js/bundles/more.bundle.js"',
         'require_entry "js/bundles/theme.bundle.js"',
         'require_entry "js/bundles/reading-page.bundle.js"',
         'require_entry "js/bundles/practice-page-enhancer.bundle.js"',
         'require_entry "js/bundles/listening-record-bridge.bundle.js"',
+        'require_entry "js/bundles/listening-wrapper.bundle.js"',
+        'require_entry "css/main.css"',
+        'require_entry "css/heroui-bridge.css"',
+        'require_entry "css/theme-switcher-scroll.css"',
+        'require_entry "css/onboarding.css"',
         'LISTENING_EXCLUDE_PATTERNS=("assets/generated/listening-exams/" "assets/generated/listening-exams/*" "ListeningPractice/" "ListeningPractice/*")',
         'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ]; then',
         'INCLUDE_LOCAL_LISTENING=1 requires both assets/generated/listening-exams/manifest.js and listening-index.compat.js',
@@ -876,20 +1198,25 @@ def _check_settings_tools_split() -> Tuple[bool, dict]:
         return False, {"error": f"读取失败：{exc}"}
 
     required = {
-        "buildSettingsBundle": "'js/bundles/settings.bundle.js'" in build_source,
-        "settingsHasDataIntegrityManager": "'js/components/DataIntegrityManager.js'" in build_source,
-        "settingsHasDataBackupManager": "'js/utils/dataBackupManager.js'" in build_source,
-        "loaderManifest": "manifest['settings-tools']" in loader_source,
+        "loaderCompatibilityGroup": "manifest['settings-tools'] = [];" in loader_source,
         "loaderDependency": "dependencies['settings-tools'] = ['state-core'];" in loader_source,
-        "moreDependsOnSettings": "dependencies['more-tools'] = ['state-core', 'settings-tools'];" in loader_source,
-        "diagnosticsDependsOnSettings": "dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];" in loader_source,
-        "fallbackUsesSettingsTools": "ensureGroup('settings-tools')" in fallback_source,
-        "examActionsUsesSettingsTools": "ensureGroup('settings-tools')" in actions_source,
+        "moreUsesStateCore": "dependencies['more-tools'] = ['state-core'];" in loader_source,
+        "diagnosticsUsesStateCore": "dependencies['diagnostics-tools'] = ['state-core'];" in loader_source,
+        "fallbackUsesAppDataBackups": "AppData.backups" in fallback_source,
+        "fallbackImportBackupAfterPreview": (
+            fallback_source.find("const preview = await window.AppData.backups.previewImport")
+            < fallback_source.find("const backup = await window.AppData.backups.create({ type: 'pre-import' })")
+            < fallback_source.find("const result = await window.AppData.backups.commitImport")
+        ),
+        "examActionsUsesAppDataBackups": "AppData.backups" in actions_source,
     }
 
     forbidden = {
-        "fallbackLoadsBrowseForDataIntegrity": "ensureGroup('browse-runtime')" in fallback_source,
-        "examActionsLoadsDiagnosticsForDataIntegrity": "ensureGroup('diagnostics-tools')" in actions_source,
+        "buildSettingsBundle": "'js/bundles/settings.bundle.js'" in build_source,
+        "dataIntegrityManager": "DataIntegrityManager" in (build_source + fallback_source + actions_source),
+        "dataBackupManager": "DataBackupManager" in (build_source + fallback_source + actions_source),
+        "moreDependsOnSettings": "dependencies['more-tools'] = ['state-core', 'settings-tools'];" in loader_source,
+        "diagnosticsDependsOnSettings": "dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];" in loader_source,
     }
 
     passed = all(required.values()) and not any(forbidden.values())
@@ -916,12 +1243,13 @@ def _check_practice_recorder_synthetic_guard(recorder_path: Path) -> Tuple[bool,
     return True, "已检测到生产环境 synthetic 会话保护逻辑"
 
 
-def _collect_mixin_methods(app_dir: Path) -> List[str]:
+def _collect_exam_app_methods(app_dir: Path) -> List[str]:
     pattern = re.compile(r"^\s{8}(?:async\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
     reserved = {"if", "for", "while", "switch", "catch", "function", "return"}
     methods = set()
 
-    for mixin_path in sorted(app_dir.glob("*Mixin.js")):
+    source_paths = [app_dir.parent / "app.js", *sorted(app_dir.glob("*Mixin.js"))]
+    for mixin_path in source_paths:
         try:
             content = mixin_path.read_text(encoding="utf-8")
         except Exception:  # pragma: no cover - defensive guard
@@ -1443,6 +1771,12 @@ def run_checks() -> Tuple[List[dict], bool]:
     build_ref_passed, build_ref_detail = _check_build_bundles_no_deleted_refs(build_script)
     results.append(_format_result("build-bundles 删除脚本引用守卫", build_ref_passed, build_ref_detail))
     all_passed &= build_ref_passed
+    bundle_current_passed, bundle_current_detail = _check_bundle_outputs_current(build_script)
+    results.append(_format_result("bundle 产物原文同步守卫", bundle_current_passed, bundle_current_detail))
+    all_passed &= bundle_current_passed
+    v2_arch_passed, v2_arch_detail = _check_v2_data_architecture()
+    results.append(_format_result("v2 数据架构唯一入口守卫", v2_arch_passed, v2_arch_detail))
+    all_passed &= v2_arch_passed
     optional_listening_bundle_passed, optional_listening_bundle_detail = _check_optional_listening_assets_not_bundled(
         build_script,
         REPO_ROOT / "js" / "bundles" / "core-foundation.bundle.js",
@@ -1497,11 +1831,12 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("E2E 导入样例数据", fixture_passed, fixture_detail))
         all_passed &= fixture_passed
 
-        app_e2e_script = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "appE2ETest.js"
-        if app_e2e_script.exists():
-            snippet_passed, snippet_detail = _check_contains(app_e2e_script, "testDataIntegrityImportFlow")
-            results.append(_format_result("E2E 导入测试存在性", snippet_passed, snippet_detail))
-            all_passed &= snippet_passed
+        app_data_test = REPO_ROOT / "developer" / "tests" / "js" / "appDataV2.test.js"
+        if app_data_test.exists():
+            for api_name in ("previewImport", "commitImport", "restore"):
+                snippet_passed, snippet_detail = _check_contains(app_data_test, api_name)
+                results.append(_format_result(f"AppData v2 导入恢复契约: {api_name}", snippet_passed, snippet_detail))
+                all_passed &= snippet_passed
 
         interaction_path = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "interactionTargets.js"
         targets, detail = _load_interaction_targets(interaction_path)
@@ -1562,7 +1897,7 @@ def run_checks() -> Tuple[List[dict], bool]:
         browse_toggle_checks = {
             "校验触发按钮": "browse-title-trigger",
             "校验红点显隐": "browse-title-dot",
-            "校验偏好写回": "browse_view_preferences_v2",
+            "校验偏好写回": "AppData.preferences.getBrowse",
         }
         for label, snippet in browse_toggle_checks.items():
             check_passed, check_detail = _check_contains(browse_toggle_e2e, snippet)
@@ -1600,36 +1935,55 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result(f"Unified E2E Runner: {label}", check_passed, check_detail))
             all_passed &= check_passed
 
-    data_layer_files = [
-        REPO_ROOT / "js" / "data" / "dataSources" / "storageDataSource.js",
+    v2_data_layer_files = [
+        REPO_ROOT / "js" / "data" / "v2" / name
+        for name in ("dataCatalog.js", "dataKernel.js", "appData.js")
     ]
-    data_layer_files.extend(
-        REPO_ROOT / "js" / "data" / "repositories" / name
-        for name in (
-            "baseRepository.js",
-            "dataRepositoryRegistry.js",
-            "practiceRepository.js",
-            "settingsRepository.js",
-            "backupRepository.js",
-            "metaRepository.js",
-        )
-    )
-    data_layer_files.append(REPO_ROOT / "js" / "data" / "index.js")
-    for path in data_layer_files:
+    removed_migration = REPO_ROOT / "js" / "data" / "v2" / "legacyMigration.js"
+    if removed_migration.exists():
+        results.append(_format_result(
+            "v2 不得保留 legacyMigration.js",
+            False,
+            {"path": str(removed_migration.relative_to(REPO_ROOT))}
+        ))
+        all_passed = False
+    else:
+        results.append(_format_result("v2 不得保留 legacyMigration.js", True, {"absent": True}))
+    for path in v2_data_layer_files:
         file_passed, file_detail = _ensure_exists(path)
-        results.append(_format_result(f"数据层资产 {path.name}", file_passed, file_detail))
+        results.append(_format_result(f"v2 数据层资产 {path.name}", file_passed, file_detail))
         all_passed &= file_passed
 
-    registry_path = REPO_ROOT / "js" / "core" / "storageProviderRegistry.js"
-    registry_exists, registry_detail = _ensure_exists(registry_path)
-    results.append(_format_result("StorageProviderRegistry 存在性", registry_exists, registry_detail))
-    all_passed &= registry_exists
-
-    simple_wrapper = REPO_ROOT / "js" / "utils" / "simpleStorageWrapper.js"
-    wrapper_passed, wrapper_detail = _check_contains(simple_wrapper, "dataRepositories")
-    results.append(_format_result("simpleStorageWrapper 适配数据仓库", wrapper_passed, wrapper_detail))
-    all_passed &= wrapper_passed
-
+    removed_v1_data_files = [
+        REPO_ROOT / relative_path
+        for relative_path in (
+            "js/utils/storage.js",
+            "js/core/storageProviderRegistry.js",
+            "js/data/dataSources/storageDataSource.js",
+            "js/data/repositories/baseRepository.js",
+            "js/data/repositories/dataRepositoryRegistry.js",
+            "js/data/repositories/practiceRepository.js",
+            "js/data/repositories/settingsRepository.js",
+            "js/data/repositories/backupRepository.js",
+            "js/data/repositories/metaRepository.js",
+            "js/data/index.js",
+            "js/core/practiceRecordAPI.js",
+            "js/core/backupAPI.js",
+            "js/core/practiceStore.js",
+            "js/utils/stateSerializer.js",
+            "js/utils/simpleStorageWrapper.js",
+            "js/core/scoreStorage.js",
+            "js/patches/runtime-fixes.js",
+        )
+    ]
+    for path in removed_v1_data_files:
+        file_passed = not path.exists()
+        results.append(_format_result(
+            f"v1 数据层已清退 {path.name}",
+            file_passed,
+            "文件不存在" if file_passed else f"旧架构文件仍存在: {path}",
+        ))
+        all_passed &= file_passed
     on_demand_ok, on_demand_detail = _check_main_entry_on_demand(main_entry)
     results.append(_format_result("main-entry 严格按需启动策略", on_demand_ok, on_demand_detail))
     all_passed &= on_demand_ok
@@ -1783,7 +2137,7 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result("Mixin 方法契约覆盖", False, f"无法解析契约：{exc}"))
             all_passed = False
         else:
-            actual_methods = set(_collect_mixin_methods(REPO_ROOT / "js" / "app"))
+            actual_methods = set(_collect_exam_app_methods(REPO_ROOT / "js" / "app"))
             missing = sorted(expected_set - actual_methods)
             extras = sorted(actual_methods - expected_set)
             coverage_passed = len(missing) == 0
@@ -1850,28 +2204,17 @@ def run_checks() -> Tuple[List[dict], bool]:
 
     suite_regression_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeRegression.test.js"
     if suite_regression_test.exists():
-        try:
-            completed_suite_regression = subprocess.run(
-                ["node", str(suite_regression_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8"
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+        suite_regression_ok, suite_regression_payload = _run_json_subprocess(
+            ["node", str(suite_regression_test)],
+            timeout=60,
+            parse_mode="last-line",
+        )
+        if not suite_regression_ok:
             suite_regression_passed = False
-            suite_regression_detail = f"执行失败: {output_text.strip()}"
+            suite_regression_detail = suite_regression_payload
         else:
-            raw_suite_regression = (completed_suite_regression.stdout or "").strip() or (completed_suite_regression.stderr or "").strip()
-            try:
-                suite_regression_payload = json.loads(raw_suite_regression or "{}")
-            except json.JSONDecodeError as parse_error:
-                suite_regression_passed = False
-                suite_regression_detail = f"输出解析失败: {parse_error}"
-            else:
-                suite_regression_passed = suite_regression_payload.get("status") == "pass"
-                suite_regression_detail = suite_regression_payload.get("detail", suite_regression_payload)
+            suite_regression_passed = suite_regression_payload.get("status") == "pass"
+            suite_regression_detail = suite_regression_payload.get("detail", suite_regression_payload)
         results.append(_format_result("套题模式状态机回归测试", suite_regression_passed, suite_regression_detail))
         all_passed &= suite_regression_passed
     else:
@@ -2071,11 +2414,111 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("全量题库记录匹配测试", False, "测试脚本缺失"))
         all_passed = False
 
-    practice_core_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.test.js"
-    if practice_core_test.exists():
+    v2_data_tests = [
+        ("DataKernel v2 行为测试", REPO_ROOT / "developer" / "tests" / "js" / "dataKernelV2.test.js"),
+        ("AppData v2 领域测试", REPO_ROOT / "developer" / "tests" / "js" / "appDataV2.test.js"),
+        ("v2 本地磁盘备份测试", REPO_ROOT / "developer" / "tests" / "js" / "externalBackupServiceV2.test.js"),
+        ("站点全量重置测试", REPO_ROOT / "developer" / "tests" / "js" / "siteDataReset.test.js"),
+        ("v2 数据丢失底线测试", REPO_ROOT / "developer" / "tests" / "js" / "dataLossBaseline.test.js"),
+        (
+            "练习记录 light 投影与渲染过滤契约测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "practiceLightProjectionRenderContract.test.js",
+        ),
+    ]
+    for test_name, test_path in v2_data_tests:
+        if not test_path.exists():
+            results.append(_format_result(test_name, False, "测试脚本缺失"))
+            all_passed = False
+            continue
         try:
-            completed_practice_core = subprocess.run(
-                ["node", str(practice_core_test)],
+            completed_v2 = subprocess.run(
+                ["node", str(test_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=180,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            output_text = (getattr(exc, "stdout", "") or "") + (getattr(exc, "stderr", "") or "") + str(exc)
+            v2_passed = False
+            v2_detail = f"执行失败: {output_text.strip()}"
+        else:
+            v2_passed = True
+            output_text = (completed_v2.stdout or "").strip() or (completed_v2.stderr or "").strip()
+            v2_detail = output_text.splitlines()[-1] if output_text else "通过"
+        results.append(_format_result(test_name, v2_passed, v2_detail))
+        all_passed &= v2_passed
+
+    security_regression_tests = [
+        (
+            "听力 bridge 纯数据解析安全测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "listeningRecordBridgeParser.test.js",
+        ),
+        (
+            "听力 bridge INIT 前提交与 ACK 重试协议测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "listeningRecordBridgeProtocol.test.js",
+        ),
+        (
+            "阅读高亮生词 requestId ACK/FAILED 测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "reviewHighlightDictionaryProtocol.test.js",
+        ),
+        (
+            "自动化 UA 不得隐式开启 synthetic 测试环境",
+            REPO_ROOT / "developer" / "tests" / "js" / "environmentDetector.test.js",
+        ),
+        (
+            "宿主窗口消息 origin/source/token 负向测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "readingAnnotationHostProtocol.test.js",
+        ),
+        (
+            "统一阅读子窗控制消息负向测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "unifiedReadingPageInlineSuiteRegression.test.js",
+        ),
+    ]
+    for test_name, test_path in security_regression_tests:
+        if not test_path.exists():
+            results.append(_format_result(test_name, False, "测试脚本缺失"))
+            all_passed = False
+            continue
+        test_passed, test_detail = _run_json_subprocess(
+            ["node", str(test_path)],
+            timeout=30,
+            parse_mode="last-line",
+        )
+        results.append(_format_result(test_name, test_passed, test_detail))
+        all_passed &= test_passed
+
+    full_reset_browser_test = REPO_ROOT / "developer" / "tests" / "e2e" / "full_reset_flow.py"
+    if full_reset_browser_test.exists():
+        try:
+            completed_full_reset = subprocess.run(
+                [sys.executable, str(full_reset_browser_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            output_text = (getattr(exc, "stdout", "") or "") + (getattr(exc, "stderr", "") or "") + str(exc)
+            full_reset_passed = False
+            full_reset_detail = f"执行失败: {output_text.strip()}"
+        else:
+            full_reset_passed = True
+            output_text = (completed_full_reset.stdout or "").strip() or (completed_full_reset.stderr or "").strip()
+            full_reset_detail = output_text.splitlines()[-1] if output_text else "通过"
+        results.append(_format_result("浏览器全量重置与 GPL 回归测试", full_reset_passed, full_reset_detail))
+        all_passed &= full_reset_passed
+    else:
+        results.append(_format_result("浏览器全量重置与 GPL 回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_stress_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceRecordStress.test.js"
+    if practice_stress_test.exists():
+        try:
+            completed_practice_stress = subprocess.run(
+                ["node", str(practice_stress_test), "--ci"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -2083,22 +2526,22 @@ def run_checks() -> Tuple[List[dict], bool]:
             )
         except subprocess.CalledProcessError as exc:
             output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
-            practice_core_passed = False
-            practice_core_detail = f"执行失败: {output_text.strip()}"
+            practice_stress_passed = False
+            practice_stress_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_practice_core_output = (completed_practice_core.stdout or "").strip() or (completed_practice_core.stderr or "").strip()
+            raw_practice_stress_output = (completed_practice_stress.stdout or "").strip() or (completed_practice_stress.stderr or "").strip()
             try:
-                practice_core_payload = json.loads(raw_practice_core_output or "{}")
+                practice_stress_payload = json.loads(raw_practice_stress_output or "{}")
             except json.JSONDecodeError as parse_error:
-                practice_core_passed = False
-                practice_core_detail = f"输出解析失败: {parse_error}"
+                practice_stress_passed = False
+                practice_stress_detail = f"输出解析失败: {parse_error}"
             else:
-                practice_core_passed = practice_core_payload.get("status") == "pass"
-                practice_core_detail = practice_core_payload.get("detail", practice_core_payload)
-        results.append(_format_result("PracticeCore 单元测试", practice_core_passed, practice_core_detail))
-        all_passed &= practice_core_passed
+                practice_stress_passed = practice_stress_payload.get("status") == "pass"
+                practice_stress_detail = practice_stress_payload.get("detail", practice_stress_payload)
+        results.append(_format_result("练习记录与批注压力测试", practice_stress_passed, practice_stress_detail))
+        all_passed &= practice_stress_passed
     else:
-        results.append(_format_result("PracticeCore 单元测试", False, "测试脚本缺失"))
+        results.append(_format_result("练习记录与批注压力测试", False, "测试脚本缺失"))
         all_passed = False
 
     practice_recorder_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceRecorder.test.js"
@@ -2334,36 +2777,6 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("按需入口回归测试", False, "测试脚本缺失"))
         all_passed = False
 
-    service_facade_test = REPO_ROOT / "developer" / "tests" / "js" / "serviceFacade.test.js"
-    if service_facade_test.exists():
-        try:
-            completed_service_facade = subprocess.run(
-                ["node", str(service_facade_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8"
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
-            service_facade_passed = False
-            service_facade_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_service_facade_output = (completed_service_facade.stdout or "").strip() or (completed_service_facade.stderr or "").strip()
-            try:
-                service_facade_payload = json.loads(raw_service_facade_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                service_facade_passed = False
-                service_facade_detail = f"输出解析失败: {parse_error}"
-            else:
-                service_facade_passed = service_facade_payload.get("status") == "pass"
-                service_facade_detail = service_facade_payload.get("detail", service_facade_payload)
-        results.append(_format_result("服务门面回归测试", service_facade_passed, service_facade_detail))
-        all_passed &= service_facade_passed
-    else:
-        results.append(_format_result("服务门面回归测试", False, "测试脚本缺失"))
-        all_passed = False
-
     exam_filter_service_test = REPO_ROOT / "developer" / "tests" / "js" / "examFilterService.test.js"
     if exam_filter_service_test.exists():
         try:
@@ -2472,41 +2885,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("阅读高亮本地词典测试", False, "测试脚本缺失"))
         all_passed = False
 
-    practice_core_app_state_sync_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCoreAppStateSync.test.js"
-    if practice_core_app_state_sync_test.exists():
-        try:
-            completed_practice_core_app_state_sync = subprocess.run(
-                ["node", str(practice_core_app_state_sync_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8"
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
-            practice_core_app_state_sync_passed = False
-            practice_core_app_state_sync_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_app_state_output = (completed_practice_core_app_state_sync.stdout or "").strip() or (completed_practice_core_app_state_sync.stderr or "").strip()
-            try:
-                practice_core_app_state_sync_payload = json.loads(raw_app_state_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                practice_core_app_state_sync_passed = False
-                practice_core_app_state_sync_detail = f"输出解析失败: {parse_error}"
-            else:
-                practice_core_app_state_sync_passed = practice_core_app_state_sync_payload.get("status") == "pass"
-                practice_core_app_state_sync_detail = practice_core_app_state_sync_payload.get("detail", practice_core_app_state_sync_payload)
-        results.append(_format_result("PracticeCore app.state 同步测试", practice_core_app_state_sync_passed, practice_core_app_state_sync_detail))
-        all_passed &= practice_core_app_state_sync_passed
-    else:
-        results.append(_format_result("PracticeCore app.state 同步测试", False, "测试脚本缺失"))
-        all_passed = False
-
     # Integration tests
     deprecated_reading_source_dir = REPO_ROOT / "developer" / "reading-exams"
     integration_tests = [
         ("Reading migration snapshot integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "readingMigrationSnapshot.test.js"),
-        ("多套题提交流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "multiSuiteSubmission.test.js"),
         ("拼写错误收集流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "spellingErrorCollection.test.js"),
         ("词表切换流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "vocabListSwitching.test.js"),
         ("Vocab session view flow integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "vocabSessionView.test.js"),

@@ -2,6 +2,20 @@
   'use strict';
 
   var TAG = '[ListeningBridge]';
+  var HOST_MESSAGE_SOURCE = 'exam_host';
+
+  function deriveParentOriginFromReferrer() {
+    try {
+      if (!window.document || !window.document.referrer) return '';
+      var parsed = new URL(window.document.referrer, window.location.href);
+      // Chromium: file URL.origin is "file://", postMessage event.origin is "null".
+      if (parsed.protocol === 'file:') return '';
+      if (!parsed.origin || parsed.origin === 'null' || parsed.origin === 'file://') return '';
+      return parsed.origin;
+    } catch (e) {
+      return '';
+    }
+  }
 
   var state = {
     sessionId: null,
@@ -11,8 +25,13 @@
     initialized: false,
     completed: false,
     parentWindow: null,
+    expectedParentOrigin: deriveParentOriginFromReferrer(),
+    parentOrigin: '',
+    parentOriginIsOpaque: false,
+    windowSessionToken: '',
     initRequestTimer: null,
-    initRequestAttempts: 0
+    initRequestAttempts: 0,
+    pendingCompletion: null
   };
 
   function log() {
@@ -37,6 +56,22 @@
     return null;
   }
 
+  function createSubmissionId() {
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return 'listening-submit-' + window.crypto.randomUUID();
+      }
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        var bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        return 'listening-submit-' + Array.prototype.map.call(bytes, function (byte) {
+          return byte.toString(16).padStart(2, '0');
+        }).join('');
+      }
+    } catch (_) {}
+    return 'listening-submit-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+
   function sendMessage(type, data) {
     var pw = state.parentWindow || findParentWindow();
     if (!pw) {
@@ -44,7 +79,17 @@
       return false;
     }
     try {
-      pw.postMessage({ type: type, data: data || {}, source: 'listening_record_bridge', timestamp: Date.now() }, '*');
+      var targetOrigin = state.parentOrigin && state.parentOrigin !== 'null'
+        ? state.parentOrigin
+        : (state.expectedParentOrigin || (window.location.protocol === 'file:' ? '*' : ''));
+      if (!targetOrigin) {
+        warn('无法 send message — trusted parent origin is unavailable');
+        return false;
+      }
+      var secureData = Object.assign({}, data || {}, {
+        windowSessionToken: state.windowSessionToken || null
+      });
+      pw.postMessage({ type: type, data: secureData, source: 'listening_record_bridge', timestamp: Date.now() }, targetOrigin);
       return true;
     } catch (e) {
       warn('postMessage failed:', e);
@@ -327,30 +372,11 @@
   function parseObjectLiteral(text, startIndex, label) {
     label = label || 'inline';
     if (startIndex >= text.length) return null;
-    var depth = 0;
-    var i = startIndex;
-    var started = false;
-    var objectStart = -1;
-    for (; i < text.length; i++) {
-      var ch = text.charAt(i);
-      if (ch === '{') {
-        if (!started) objectStart = i;
-        depth++;
-        started = true;
-      }
-      else if (ch === '}') { depth--; if (started && depth === 0) break; }
-      else if (ch === '\'' || ch === '"') {
-        var quote = ch;
-        for (i++; i < text.length; i++) {
-          if (text.charAt(i) === '\\' && i + 1 < text.length) { i++; continue; }
-          if (text.charAt(i) === quote) break;
-        }
-      }
-    }
-    if (!started || depth !== 0) return null;
-    var snippet = text.substring(objectStart, i + 1);
     try {
-      return (new Function('return (' + snippet + ')'))();
+      if (!window.SafeObjectLiteralParser || typeof window.SafeObjectLiteralParser.parseAt !== 'function') {
+        throw new Error('SafeObjectLiteralParser is unavailable');
+      }
+      return window.SafeObjectLiteralParser.parseAt(text, startIndex).value;
     } catch (e) {
       warn('parseObjectLiteral failed for', label, e);
       return null;
@@ -753,13 +779,35 @@
     };
   }
 
+  function sendPendingCompletion(reason) {
+    var pending = state.pendingCompletion;
+    if (!pending || state.completed) return false;
+    if (!state.initialized || !state.windowSessionToken) {
+      sendInitRequest(reason || 'complete_before_init');
+      return false;
+    }
+    if (!pending.payload) {
+      pending.payload = buildBridgePayload(pending.details);
+      pending.payload.submissionId = pending.submissionId;
+    }
+    log(
+      'sending PRACTICE_COMPLETE, submissionId=' + pending.submissionId
+      + ' correct=' + pending.payload.scoreInfo.correct + '/' + pending.payload.scoreInfo.total
+    );
+    return sendMessage('PRACTICE_COMPLETE', pending.payload);
+  }
+
   function onComplete(options) {
     options = options || {};
     if (state.completed) {
       log('already completed, skipping');
       return true;
     }
-    state.completed = true;
+    if (state.pendingCompletion) {
+      sendPendingCompletion('completion_retry');
+      scheduleCompletionRetries(state.pendingCompletion.options || options);
+      return true;
+    }
 
     var allowGenerated = !!options.allowGenerated;
     var details = extractAttemptDetails(window, { allowGenerated: allowGenerated });
@@ -772,17 +820,17 @@
     }
     if (!details.length) {
       warn('no details extracted, cannot complete');
-      state.completed = false;
       return false;
     }
 
-    var payload = buildBridgePayload(details);
-    log('sending PRACTICE_COMPLETE, correct=' + payload.scoreInfo.correct + '/' + payload.scoreInfo.total);
-    if (!state.initialized) {
-      sendInitRequest('complete_before_init');
-    }
-    sendMessage('PRACTICE_COMPLETE', payload);
-    clearCompletionRetryTimers();
+    state.pendingCompletion = {
+      submissionId: createSubmissionId(),
+      details: details,
+      options: Object.assign({}, options),
+      payload: null
+    };
+    sendPendingCompletion(state.initialized ? 'completion_created' : 'complete_before_init');
+    scheduleCompletionRetries(options);
     return true;
   }
 
@@ -802,9 +850,9 @@
     for (var i = 0; i < retryDelays.length; i++) {
       (function (delay) {
         completionRetryTimers.push(setTimeout(function () {
-          if (!state.completed) {
-            onComplete(options || {});
-          }
+          if (state.completed) return;
+          if (state.pendingCompletion) sendPendingCompletion('completion_timeout');
+          else onComplete(options || {});
         }, delay));
       })(retryDelays[i]);
     }
@@ -1023,18 +1071,71 @@
 
       if (type === 'INIT_SESSION' || type === 'init_exam_session') {
         var payload = data.data || data;
-        if (event.source && event.source !== window && typeof event.source.postMessage === 'function') {
-          state.parentWindow = event.source;
+        if (!state.parentWindow || event.source !== state.parentWindow || data.source !== HOST_MESSAGE_SOURCE) return;
+        var incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+        var declaredOrigin = typeof payload.parentOrigin === 'string' ? payload.parentOrigin : '';
+        var incomingToken = typeof payload.windowSessionToken === 'string' ? payload.windowSessionToken.trim() : '';
+        if (!incomingToken) return;
+        var expectedParentOrigin = state.expectedParentOrigin
+          && state.expectedParentOrigin !== 'file://'
+          && String(state.expectedParentOrigin).indexOf('file:') !== 0
+          ? state.expectedParentOrigin
+          : '';
+        if (expectedParentOrigin) {
+          if (incomingOrigin !== expectedParentOrigin || declaredOrigin !== expectedParentOrigin) return;
+          state.parentOrigin = expectedParentOrigin;
+          state.parentOriginIsOpaque = false;
+        } else if (window.location.protocol === 'file:') {
+          var trustedFileOrigin = incomingOrigin === 'null'
+            && (declaredOrigin === 'null' || declaredOrigin === '' || declaredOrigin === 'file://');
+          if (!trustedFileOrigin) return;
+          state.parentOrigin = 'null';
+          state.parentOriginIsOpaque = true;
+        } else {
+          var trustedWebOrigin = !!incomingOrigin
+            && incomingOrigin !== 'null'
+            && incomingOrigin !== 'file://'
+            && declaredOrigin === incomingOrigin;
+          if (!trustedWebOrigin) return;
+          state.parentOrigin = incomingOrigin;
+          state.parentOriginIsOpaque = false;
         }
+        var previousSessionId = state.sessionId;
+        state.windowSessionToken = incomingToken;
         state.sessionId = payload.sessionId || state.sessionId || (state.examId + '_' + Date.now());
         state.examId = payload.examId || state.examId;
         state.suiteSessionId = payload.suiteSessionId || state.suiteSessionId || null;
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
         state.initialized = true;
         stopInitRequestLoop();
+        if (state.pendingCompletion && String(previousSessionId || '') !== String(state.sessionId || '')) {
+          state.pendingCompletion.payload = null;
+        }
 
         log('INIT_SESSION received — examId=' + state.examId + ' sessionId=' + state.sessionId);
         sendSessionReady('ready');
+        if (state.pendingCompletion) {
+          sendPendingCompletion('init_received');
+        }
+      } else if (type === 'PRACTICE_SUBMIT_ACK' || type === 'PRACTICE_SUBMIT_FAILED') {
+        var outcome = data.data || data;
+        if (!state.parentWindow || event.source !== state.parentWindow || data.source !== HOST_MESSAGE_SOURCE) return;
+        var outcomeOrigin = typeof event.origin === 'string' ? event.origin : '';
+        if (state.parentOriginIsOpaque ? outcomeOrigin !== 'null' : (!state.parentOrigin || outcomeOrigin !== state.parentOrigin)) return;
+        if (!outcome || String(outcome.windowSessionToken || '') !== String(state.windowSessionToken || '')) return;
+        var pending = state.pendingCompletion;
+        if (!pending
+          || String(outcome.submissionId || '') !== String(pending.submissionId || '')
+          || String(outcome.sessionId || '') !== String(state.sessionId || '')) return;
+        if (type === 'PRACTICE_SUBMIT_ACK') {
+          state.completed = true;
+          state.pendingCompletion = null;
+          clearCompletionRetryTimers();
+          log('PRACTICE_COMPLETE persisted, submissionId=' + outcome.submissionId);
+        } else {
+          warn('PRACTICE_COMPLETE persistence failed, retrying submissionId=' + outcome.submissionId);
+          scheduleCompletionRetries(pending.options || {});
+        }
       }
     });
   }

@@ -15,22 +15,6 @@ function loadScript(relativePath, context) {
     vm.runInContext(code, context, { filename: relativePath });
 }
 
-function createSessionStorageStub() {
-    const store = new Map();
-    return {
-        store,
-        getItem(key) {
-            return store.has(key) ? store.get(key) : null;
-        },
-        setItem(key, value) {
-            store.set(key, String(value));
-        },
-        removeItem(key) {
-            store.delete(key);
-        }
-    };
-}
-
 function createClassList() {
     return {
         add() {},
@@ -51,7 +35,6 @@ function createContext() {
     HTMLSelectElement.prototype = Object.create(HTMLElement.prototype);
     HTMLSelectElement.prototype.constructor = HTMLSelectElement;
 
-    const sessionStorage = createSessionStorageStub();
     const timer = {
         textContent: '',
         style: {},
@@ -125,7 +108,6 @@ function createContext() {
         },
         history: { replaceState() {} },
         document,
-        sessionStorage,
         opener: null,
         parent: null,
         addEventListener() {},
@@ -195,7 +177,6 @@ function createContext() {
         HTMLSelectElement,
         CustomEvent: window.CustomEvent,
         CSS: window.CSS,
-        sessionStorage,
         location: window.location
     };
     sandbox.globalThis = window;
@@ -254,17 +235,74 @@ async function testSubmitPostsBeforeExplanationRenderFinishes() {
         releaseExplanation = resolve;
     }));
 
-    const submitPromise = hooks.handleSubmit();
+    let submitError = null;
+    const submitPromise = hooks.handleSubmit().catch((error) => {
+        submitError = error;
+    });
     await Promise.resolve();
 
+    assert.ifError(submitError);
     assert.strictEqual(messages.length, 1, 'submit should notify host before explanation rendering completes');
     assert.strictEqual(messages[0].type, 'PRACTICE_COMPLETE', 'submit should post a practice completion message');
     assert.strictEqual(messages[0].data?.answers?.q1, 'A', 'posted submission should include the current answer');
 
     releaseExplanation();
     await submitPromise;
+    assert.ifError(submitError);
     hooks.setTestOverride('renderExplanations', null);
     assert.strictEqual(window.__UNIFIED_READING_SIMULATION_MODE__, false, 'submit regression harness should remain in non-simulation mode');
+}
+
+function testDraftBearingInitIsNotSuppressed() {
+    const { hooks } = loadHooks();
+    const baseData = {
+        examId: 'reading-p1',
+        sessionId: 'session-init',
+        windowSessionToken: 'token-init',
+        messageIssuedAtMs: 1000
+    };
+    const noDraftSignature = hooks.buildInitSignature(baseData);
+    const draftData = {
+        ...baseData,
+        draft: { answers: { q1: 'A' }, updatedAt: 2000 }
+    };
+    const draftSignature = hooks.buildInitSignature(draftData);
+    assert.notStrictEqual(
+        draftSignature,
+        noDraftSignature,
+        'a later draft-bearing INIT must not be suppressed by an earlier no-draft INIT'
+    );
+    assert.strictEqual(
+        hooks.buildInitSignature(draftData),
+        draftSignature,
+        'repeated INITs carrying the same draft should still be deduplicated'
+    );
+}
+
+function testSuiteReviewAnnotationsUseDraftChannel() {
+    const { hooks } = loadHooks();
+    const messages = [];
+    const hostWindow = {
+        postMessage(payload) {
+            messages.push(payload);
+        }
+    };
+    hooks.setTestState({
+        examId: 'reading-suite-review',
+        sessionId: 'session-suite-review',
+        suiteSessionId: 'suite-review',
+        simulationMode: true,
+        suiteReviewMode: true,
+        reviewMode: true,
+        readOnly: true,
+        parentWindow: hostWindow
+    });
+
+    hooks.syncReadingAnnotation('note-edit');
+
+    assert.strictEqual(messages.length, 1, 'suite review annotation should emit one persistence message');
+    assert.strictEqual(messages[0].type, 'SIMULATION_DRAFT_SYNC', 'suite review annotation must use the suite draft channel');
+    assert.strictEqual(messages[0].data?.examId, 'reading-suite-review', 'suite draft sync must retain the active exam id');
 }
 
 function testGroupedCheckboxSplitKeysScorePartially() {
@@ -358,6 +396,8 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 
 async function main() {
     await testSubmitPostsBeforeExplanationRenderFinishes();
+    testDraftBearingInitIsNotSuppressed();
+    testSuiteReviewAnnotationsUseDraftChannel();
     testGroupedCheckboxSplitKeysScorePartially();
     testGroupedCheckboxSingleKeyArrayScoresPartially();
     testAcceptedAnswerArraysStaySinglePoint();

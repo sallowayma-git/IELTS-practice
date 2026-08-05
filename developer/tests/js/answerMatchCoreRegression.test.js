@@ -22,6 +22,28 @@ function run() {
         'explicit option label with punctuation should still normalize to the letter'
     );
     assert.strictEqual(
+        core.normalizeToken('D effects'),
+        'D effects',
+        'unpunctuated labels should retain their text outside comparison context'
+    );
+    assert.strictEqual(
+        core.normalizeToken('A panoramic camera'),
+        'A panoramic camera',
+        'capitalized article phrases must not collapse to an option letter'
+    );
+    [
+        ['D effects', 'D'],
+        ['G feelings', 'G'],
+        ['A facial expressions', 'A'],
+        ['E word meanings', 'E']
+    ].forEach(([storedLabel, answerKey]) => {
+        assert.strictEqual(
+            core.compareAnswers(storedLabel, answerKey),
+            true,
+            `${storedLabel} should match its canonical option letter`
+        );
+    });
+    assert.strictEqual(
         core.compareAnswers('panoramic camera', ['a panoramic camera', 'panoramic camera']),
         true,
         'accepted-answer arrays should still accept textual alternates'
@@ -34,7 +56,7 @@ function run() {
 
     process.stdout.write(JSON.stringify({
         status: 'pass',
-        detail: 'answerMatchCore accepted-answer regression checks passed'
+        detail: 'answerMatchCore accepted-answer and drag-label regression checks passed'
     }));
 }
 

@@ -25,6 +25,62 @@ REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 SCREENSHOT_DIR = REPORT_DIR / "reading-question-audit-failures"
 NODE_EXPORTER = REPO_ROOT / "developer" / "tests" / "tools" / "reading-json" / "export_generated_reading_dataset.node.js"
 
+READING_AUDIT_HOST_HTML = """<!doctype html>
+<html>
+<body>
+  <iframe id="practice-frame" name="practice" style="width: 1200px; height: 900px;"></iframe>
+  <script>
+    (() => {
+      const frame = document.getElementById('practice-frame');
+      const clone = (value) => JSON.parse(JSON.stringify(value));
+      window.__readingAuditMessages = [];
+      window.__readingAuditConfig = null;
+      window.__readingAuditSend = (type, data) => {
+        const config = window.__readingAuditConfig;
+        frame.contentWindow.postMessage({
+          type,
+          source: 'exam_host',
+          data: Object.assign({}, data || {}, {
+            windowSessionToken: config.token,
+            messageIssuedAtMs: Date.now()
+          })
+        }, '*');
+      };
+      window.addEventListener('message', (event) => {
+        if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
+        const message = clone(event.data);
+        window.__readingAuditMessages.push(message);
+        const type = String(message.type || '').toUpperCase();
+        const config = window.__readingAuditConfig;
+        if (type === 'REQUEST_INIT') {
+          window.__readingAuditSend('INIT_SESSION', {
+            examId: config.examId,
+            sessionId: config.sessionId,
+            suiteSessionId: null,
+            practiceMode: 'single',
+            parentOrigin: 'null'
+          });
+          return;
+        }
+        if (type === 'PRACTICE_COMPLETE') {
+          const data = message.data || {};
+          window.__readingAuditSend('PRACTICE_SUBMIT_ACK', {
+            submissionId: data.submissionId,
+            sessionId: data.sessionId,
+            examId: data.examId,
+            suiteSessionId: data.suiteSessionId
+          });
+        }
+      });
+      window.__readingAuditConfigure = (config) => {
+        window.__readingAuditConfig = clone(config);
+        frame.src = config.url;
+      };
+    })();
+  </script>
+</body>
+</html>"""
+
 EXIT_OK = 0
 EXIT_FAIL = 1
 EXIT_ERROR = 2
@@ -153,19 +209,21 @@ def _parse_frequency(exam_id: str) -> str:
     return match.group(1) if match else ""
 
 
-def _collect_manifest_entries() -> List[Dict[str, Any]]:
-    payload = _run_cmd_json(["node", str(NODE_EXPORTER), "--list"])
+def _collect_export_bundle() -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    payload = _run_cmd_json(["node", str(NODE_EXPORTER), "--all"])
     entries = payload.get("entries")
     if not isinstance(entries, list):
         raise RuntimeError("manifest_entries_missing")
-    return [entry for entry in entries if isinstance(entry, dict) and entry.get("examId")]
-
-
-def _load_dataset(exam_id: str) -> Dict[str, Any]:
-    payload = _run_cmd_json(["node", str(NODE_EXPORTER), "--exam-id", exam_id])
-    if not isinstance(payload, dict) or not payload.get("examId"):
-        raise RuntimeError(f"dataset_invalid:{exam_id}")
-    return payload
+    datasets = payload.get("datasets")
+    if not isinstance(datasets, dict):
+        raise RuntimeError("manifest_datasets_missing")
+    normalized_entries = [entry for entry in entries if isinstance(entry, dict) and entry.get("examId")]
+    normalized_datasets = {
+        str(exam_id): dataset
+        for exam_id, dataset in datasets.items()
+        if isinstance(dataset, dict) and dataset.get("examId")
+    }
+    return normalized_entries, normalized_datasets
 
 
 def _extract_html_fragments(dataset: Dict[str, Any]) -> List[Tuple[str, str]]:
@@ -785,12 +843,31 @@ async def _audit_single_exam_ui(
         page.set_default_timeout(30000)
         _collect_console(page, console_entries)
 
-        exam_url = f"{UNIFIED_READING_PATH.as_uri()}?examId={exam_id}&test_env=1"
-        await page.goto(exam_url, wait_until="load")
-        await page.wait_for_selector("#question-groups", timeout=30000)
-        await page.wait_for_selector("#submit-btn", timeout=30000)
+        exam_url = f"{UNIFIED_READING_PATH.as_uri()}?examId={exam_id}&dataKey={exam_id}&test_env=1"
+        await page.goto(INDEX_URL, wait_until="load")
+        await page.set_content(READING_AUDIT_HOST_HTML, wait_until="load")
+        await page.evaluate(
+            "config => window.__readingAuditConfigure(config)",
+            {
+                "url": exam_url,
+                "examId": exam_id,
+                "sessionId": f"reading-audit::{exam_id}",
+                "token": f"reading-audit-token::{exam_id}",
+            },
+        )
+        await page.wait_for_selector("#practice-frame")
+        frame = page.frame(name="practice")
+        if frame is None:
+            raise RuntimeError("practice_frame_missing")
+        await frame.wait_for_selector("#question-groups .unified-group", timeout=30000)
+        await frame.wait_for_selector("#submit-btn", timeout=30000)
         await page.wait_for_function(
-            "() => document.querySelectorAll('#question-groups .unified-group').length > 0",
+            """(expectedExamId) => window.__readingAuditMessages.some((message) => {
+                if (!message || String(message.type || '').toUpperCase() !== 'SESSION_READY') return false;
+                const data = message.data || {};
+                return !data.examId || data.examId === expectedExamId;
+            })""",
+            arg=exam_id,
             timeout=30000,
         )
 
@@ -803,7 +880,7 @@ async def _audit_single_exam_ui(
             if not normalized_id:
                 continue
             answer = answer_key.get(normalized_id)
-            response = await page.evaluate(
+            response = await frame.evaluate(
                 JS_APPLY_ANSWER,
                 {
                     "questionId": normalized_id,
@@ -818,12 +895,12 @@ async def _audit_single_exam_ui(
                     "detail": response,
                 })
 
-        await page.click("#submit-btn")
-        await page.wait_for_function(
+        await frame.click("#submit-btn")
+        await frame.wait_for_function(
             "() => { const el = document.getElementById('results'); return !!(el && el.style.display !== 'none' && el.querySelectorAll('tbody tr').length > 0); }",
-            timeout=30000,
+            timeout=5000,
         )
-        ui_result = await page.evaluate(JS_READ_RESULTS)
+        ui_result = await frame.evaluate(JS_READ_RESULTS)
         if not isinstance(ui_result, dict):
             raise RuntimeError("ui_result_invalid")
 
@@ -957,22 +1034,22 @@ async def run_audit(mode: str) -> int:
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
     log_step("读取 manifest 并收集题目列表")
-    entries = _collect_manifest_entries()
+    entries, datasets = _collect_export_bundle()
     entries_by_exam: Dict[str, Dict[str, Any]] = {str(entry["examId"]): entry for entry in entries}
     all_exam_ids = sorted(entries_by_exam.keys(), key=lambda item: item)
     ui_exam_ids = _ui_exam_ids(entries, mode)
     log_step(f"manifest 题目数: {len(all_exam_ids)}")
     log_step(f"UI审计题目数({mode}): {len(ui_exam_ids)}")
 
-    datasets: Dict[str, Dict[str, Any]] = {}
     static_failures: List[Dict[str, Any]] = []
     static_results: List[Dict[str, Any]] = []
 
     log_step("阶段A: 静态结构审计开始")
     for index, exam_id in enumerate(all_exam_ids, start=1):
         try:
-            dataset = _load_dataset(exam_id)
-            datasets[exam_id] = dataset
+            dataset = datasets.get(exam_id)
+            if not isinstance(dataset, dict):
+                raise RuntimeError(f"dataset_invalid:{exam_id}")
             script_rel = str(dataset.get("script") or entries_by_exam[exam_id].get("script") or "")
             script_path = GENERATED_READING_DIR / script_rel.replace("./", "")
             if not script_path.exists():
@@ -1021,20 +1098,16 @@ async def run_audit(mode: str) -> int:
         for index, exam_id in enumerate(ui_exam_ids, start=1):
             dataset = datasets.get(exam_id)
             if not dataset:
-                try:
-                    dataset = _load_dataset(exam_id)
-                    datasets[exam_id] = dataset
-                except Exception as exc:
-                    fail_result = {
-                        "examId": exam_id,
-                        "status": "fail",
-                        "error": f"dataset_load_failed:{exc}",
-                        "failureType": "dataset_load_failed",
-                        "durationSec": 0.0,
-                    }
-                    ui_results.append(fail_result)
-                    ui_failures.append(fail_result)
-                    continue
+                fail_result = {
+                    "examId": exam_id,
+                    "status": "fail",
+                    "error": "dataset_load_failed:missing_from_batch_export",
+                    "failureType": "dataset_load_failed",
+                    "durationSec": 0.0,
+                }
+                ui_results.append(fail_result)
+                ui_failures.append(fail_result)
+                continue
 
             log_step(f"UI审计 {index}/{len(ui_exam_ids)}: {exam_id}")
             result = await _audit_single_exam_ui(context, exam_id, dataset, SCREENSHOT_DIR)

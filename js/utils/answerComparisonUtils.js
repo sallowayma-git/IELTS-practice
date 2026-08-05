@@ -572,156 +572,17 @@
         };
     }
 
-    function getAllExamIndexes(globalObj) {
-        let readingIndex = null;
-        if (globalObj && typeof globalObj.getReadingExamIndex === 'function') {
-            try {
-                readingIndex = globalObj.getReadingExamIndex();
-            } catch (_) {
-                readingIndex = null;
-            }
-        }
-        const sources = [
-            readingIndex,
-            globalObj.__READING_EXAM_INDEX__,
-            globalObj.examIndex,
-            globalObj.readingExamIndex,
-            globalObj.listeningExamIndex,
-            globalObj.fullExamIndex,
-            globalObj.practiceExamIndex
-        ];
-        return sources
-            .filter(Array.isArray)
-            .reduce((acc, list) => acc.concat(list), []);
-    }
-
-    function normalizeTitle(title) {
-        return toStringKey(title)
-            .toLowerCase()
-            .replace(/[\s\-_\u3000]+/g, '')
-            .replace(/[^\w\u4e00-\u9fa5]/g, '');
-    }
-
-    function findExamEntry(record, metadata, globalObj) {
-        const indexes = getAllExamIndexes(globalObj);
-        if (indexes.length === 0) {
-            return null;
-        }
-
-        const candidateIds = [
-            record && record.examId,
-            record && record.originalExamId,
-            record && record.derivedExamId,
-            record && record.realData && record.realData.examId,
-            metadata && metadata.examId,
-            metadata && metadata.id
-        ]
-            .map(toStringKey)
-            .filter(Boolean);
-
-        // 1. 精确 ID 匹配
-        if (candidateIds.length > 0) {
-            const idLookup = new Map();
-            indexes.forEach(item => {
-                if (!item || typeof item !== 'object') {
-                    return;
-                }
-                const itemId = toStringKey(item.id);
-                if (itemId) {
-                    idLookup.set(itemId.toLowerCase(), item);
-                }
-            });
-
-            for (const id of candidateIds) {
-                const normalizedId = id.toLowerCase();
-                if (idLookup.has(normalizedId)) {
-                    return idLookup.get(normalizedId);
-                }
-            }
-        }
-
-        // 2. 通过 URL 路径匹配（针对全量题库）
-        if (record && record.url) {
-            const urlPath = record.url.toLowerCase();
-            const match = indexes.find(item => {
-                if (!item || !item.path) return false;
-                const itemPath = item.path.toLowerCase();
-                // 提取 URL 中的文件夹名称
-                const urlParts = urlPath.split('/').filter(Boolean);
-                const pathParts = itemPath.split('/').filter(Boolean);
-
-                // 检查是否有共同的文件夹路径
-                for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
-                    if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
-                        return true;
-                    }
-                }
-                return false;
-            });
-            if (match) {
-                console.log('[AnswerComparisonUtils] 通过 URL 路径匹配到题目:', match.id, match.title);
-                return match;
-            }
-        }
-
-        // 3. 精确标题匹配
-        const candidateTitles = [
-            metadata && metadata.examTitle,
-            metadata && metadata.title,
-            record && record.title,
-            record && record.examTitle,
-            record && record.realData && record.realData.title
-        ]
-            .map(normalizeTitle)
-            .filter(Boolean);
-
-        if (candidateTitles.length > 0) {
-            const titleLookup = new Map();
-            indexes.forEach(item => {
-                if (!item || typeof item !== 'object') {
-                    return;
-                }
-                const itemTitle = normalizeTitle(item.title);
-                if (itemTitle) {
-                    titleLookup.set(itemTitle, item);
-                }
-            });
-
-            for (const title of candidateTitles) {
-                if (titleLookup.has(title)) {
-                    return titleLookup.get(title);
-                }
-            }
-
-            // 4. 模糊标题匹配（移除标签前缀后比较）
-            for (const candidateTitle of candidateTitles) {
-                const match = indexes.find(item => {
-                    if (!item || !item.title) return false;
-                    const itemTitle = normalizeTitle(item.title);
-                    // 移除标签前缀，如 "[听力全量-...] City Development" vs "City Development"
-                    const cleanCandidate = candidateTitle.replace(/^\[.*?\]\s*/, '');
-                    const cleanItem = itemTitle.replace(/^\[.*?\]\s*/, '');
-                    return cleanCandidate === cleanItem ||
-                           (cleanCandidate.length > 5 && cleanItem.includes(cleanCandidate)) ||
-                           (cleanItem.length > 5 && cleanCandidate.includes(cleanItem));
-                });
-                if (match) {
-                    console.log('[AnswerComparisonUtils] 通过模糊标题匹配到题目:', match.id, match.title);
-                    return match;
-                }
-            }
-        }
-
-        return null;
-    }
-
     function inferCategory(record, metadata, examEntry) {
-        if (examEntry && examEntry.category) {
-            return examEntry.category;
-        }
-
         if (metadata && metadata.category && metadata.category !== 'Unknown') {
             return metadata.category;
+        }
+
+        if (record && record.category && record.category !== 'Unknown') {
+            return record.category;
+        }
+
+        if (examEntry && examEntry.category) {
+            return examEntry.category;
         }
 
         const candidates = [
@@ -748,7 +609,7 @@
         return metadata && metadata.category ? metadata.category : 'Unknown';
     }
 
-    function enrichRecordMetadata(record) {
+    function enrichRecordMetadata(record, examEntry = null) {
         if (!record || typeof record !== 'object') {
             return {
                 category: 'Unknown',
@@ -764,25 +625,24 @@
             return metadata;
         }
 
-        const globalObj = global || {};
-        const examEntry = findExamEntry(record, metadata, globalObj);
+        const resolvedExam = examEntry && typeof examEntry === 'object' ? examEntry : null;
 
-        if (examEntry) {
-            if (examEntry.title && !metadata.examTitle) {
-                metadata.examTitle = examEntry.title;
+        if (resolvedExam) {
+            if (resolvedExam.title && !metadata.examTitle) {
+                metadata.examTitle = resolvedExam.title;
             }
-            if (examEntry.frequency && !metadata.frequency) {
-                metadata.frequency = examEntry.frequency;
+            if (resolvedExam.frequency && !metadata.frequency) {
+                metadata.frequency = resolvedExam.frequency;
             }
-            if (examEntry.type && !metadata.type) {
-                metadata.type = examEntry.type;
+            if (resolvedExam.type && !metadata.type) {
+                metadata.type = resolvedExam.type;
             }
         }
 
-        metadata.category = inferCategory(record, metadata, examEntry);
+        metadata.category = inferCategory(record, metadata, resolvedExam);
         if (!metadata.frequency) {
-            if (examEntry && examEntry.frequency) {
-                metadata.frequency = examEntry.frequency;
+            if (resolvedExam && resolvedExam.frequency) {
+                metadata.frequency = resolvedExam.frequency;
             } else if (metadata.frequency == null) {
                 metadata.frequency = 'unknown';
             }
@@ -811,13 +671,13 @@
         return metadata;
     }
 
-    function withEnrichedMetadata(record) {
+    function withEnrichedMetadata(record, examEntry = null) {
         if (!record || typeof record !== 'object') {
             return record;
         }
         const clone = Object.assign({}, record);
         clone.metadata = Object.assign({}, record.metadata || {});
-        enrichRecordMetadata(clone);
+        enrichRecordMetadata(clone, examEntry);
         return clone;
     }
 

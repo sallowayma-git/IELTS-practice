@@ -67,24 +67,28 @@ async def launch_browser(playwright) -> Browser:
 
 async def ensure_app_ready(page: Page) -> None:
     await page.wait_for_load_state("load")
+    await page.wait_for_function("() => !!window.AppData", timeout=60000)
+    await page.evaluate("async () => { await window.AppData.ready; }")
     await page.wait_for_function(
-        "() => window.app && window.app.isInitialized && window.storage && window.LibraryDiscovery && typeof window.handleLibraryUpload === 'function'",
+        "() => window.app?.isInitialized === true && window.LibraryDiscovery && typeof window.handleLibraryUpload === 'function'",
         timeout=60000,
     )
 
 
 async def dismiss_overlays(page: Page) -> None:
-    await page.evaluate(
-        """
-        () => {
-            try { localStorage.setItem('hasSeenGplLicense', 'true'); } catch (_) {}
-            if (typeof window.acceptGplLicense === 'function') {
-                try { window.acceptGplLicense(); } catch (_) {}
+    accepted = await page.evaluate(
+        """async () => {
+            if (!window.LicenseModal || typeof window.LicenseModal.accept !== 'function') {
+                throw new Error('LicenseModal.accept is unavailable');
             }
-            const modal = document.getElementById('license-modal');
-            if (modal) modal.classList.remove('show');
-        }
-        """
+            return window.LicenseModal.accept();
+        }"""
+    )
+    if not accepted:
+        raise RuntimeError("GPL license consent was not committed")
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=5000,
     )
 
 
@@ -120,11 +124,12 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
                 makeFile('Teacher Pack/loose/nested/readme.html', '<!doctype html><title>plain page</title>', 'text/html')
             ];
 
-            const beforeActive = await window.storage.get('active_exam_index_key', 'exam_index');
             const fullReport = await window.handleLibraryUpload({ type: 'listening', mode: 'full' }, files);
-            const activeKey = await window.storage.get('active_exam_index_key', '');
-            const configs = await window.storage.get('exam_index_configurations', []);
-            const dataset = await window.storage.get(activeKey, []);
+            const activeKey = await window.AppData.library.getActive();
+            const [configs, dataset] = await Promise.all([
+                window.AppData.library.listConfigurations(),
+                window.AppData.library.resolveIndex()
+            ]);
             const customRows = Array.isArray(dataset)
                 ? dataset.filter(row => row && row.type === 'listening' && row.sourceKind === 'file-picker')
                 : [];
@@ -141,10 +146,12 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
 
             window.prompt = () => 'optional-dup';
             const incrementalReport = await window.handleLibraryUpload({ type: 'listening', mode: 'incremental' }, files);
-            const incrementalActiveKey = await window.storage.get('active_exam_index_key', '');
-            const configsAfterIncremental = await window.storage.get('exam_index_configurations', []);
-            const afterDataset = await window.storage.get(incrementalActiveKey, []);
-            const fullDatasetAfterIncremental = await window.storage.get(activeKey, []);
+            const incrementalActiveKey = await window.AppData.library.getActive();
+            const [configsAfterIncremental, afterDataset, fullDatasetAfterIncremental] = await Promise.all([
+                window.AppData.library.listConfigurations(),
+                window.AppData.library.resolveIndex(),
+                window.AppData.library.getIndex(activeKey)
+            ]);
             const afterCustomRows = Array.isArray(afterDataset)
                 ? afterDataset.filter(row => row && row.type === 'listening' && row.sourceKind === 'file-picker')
                 : [];
@@ -155,9 +162,10 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
             window.renderLibraryUploadReport(fullReport, reportHost);
 
             return {
-                beforeActive,
                 activeKey,
                 incrementalActiveKey,
+                configIds: configs.map((item) => item && (item.id || item.key)).filter(Boolean),
+                configIdsAfterIncremental: configsAfterIncremental.map((item) => item && (item.id || item.key)).filter(Boolean),
                 configCount: Array.isArray(configs) ? configs.length : -1,
                 configCountAfterIncremental: Array.isArray(configsAfterIncremental) ? configsAfterIncremental.length : -1,
                 datasetCount: Array.isArray(dataset) ? dataset.length : -1,
@@ -191,24 +199,30 @@ async def delete_inactive_config_via_ui(page: Page, config_key: str) -> dict[str
             host.style.maxWidth = 'calc(100vw - 48px)';
             host.style.zIndex = '3500';
             document.body.appendChild(host);
-            const sentinelRecords = [{
+            const sentinelRecord = {
                 id: 'library-delete-sentinel',
                 examId: 'reading-a',
                 title: 'Sentinel Record',
                 metadata: { examType: 'reading', category: 'P1' }
-            }];
-            await window.storage.set('practice_records', sentinelRecords);
+            };
+            await window.AppData.practice.completeAttempt({
+                record: sentinelRecord,
+                operationId: 'e2e-library-delete-sentinel'
+            });
             await window.renderLibraryConfigList({
                 allowDelete: true,
                 containerId: 'dynamic-library-delete-test-host'
             });
-            const dataset = await window.storage.get(configKey, null);
-            const pathMap = await window.storage.get('exam_path_map__' + configKey, null);
+            const [configs, dataset, records] = await Promise.all([
+                window.AppData.library.listConfigurations(),
+                window.AppData.library.getIndex(configKey),
+                window.AppData.practice.list()
+            ]);
             return {
-                activeKey: await window.storage.get('active_exam_index_key', ''),
-                datasetExists: Array.isArray(dataset),
-                pathMapExists: !!pathMap,
-                records: await window.storage.get('practice_records', [])
+                activeKey: await window.AppData.library.getActive(),
+                configExists: configs.some(cfg => cfg && (cfg.id === configKey || cfg.key === configKey)),
+                indexCount: dataset.length,
+                records
             };
         }
         """,
@@ -224,7 +238,15 @@ async def delete_inactive_config_via_ui(page: Page, config_key: str) -> dict[str
     confirm_text = await confirm_overlay.inner_text()
     await page.locator('.library-config-confirm-overlay [data-confirm-action="confirm"]').click()
     await page.wait_for_function(
-        "configKey => window.storage.get(configKey, null).then(value => value === null)",
+        """async (configKey) => {
+            const [configs, index] = await Promise.all([
+                window.AppData.library.listConfigurations(),
+                window.AppData.library.getIndex(configKey)
+            ]);
+            return !configs.some(item => item && (item.id === configKey || item.key === configKey))
+                && Array.isArray(index)
+                && index.length === 0;
+        }""",
         arg=config_key,
         timeout=10000,
     )
@@ -233,18 +255,27 @@ async def delete_inactive_config_via_ui(page: Page, config_key: str) -> dict[str
     after = await page.evaluate(
         """
         async (configKey) => {
-            const configs = await window.storage.get('exam_index_configurations', []);
+            const [configs, dataset, records, activeKey] = await Promise.all([
+                window.AppData.library.listConfigurations(),
+                window.AppData.library.getIndex(configKey),
+                window.AppData.practice.list(),
+                window.AppData.library.getActive()
+            ]);
             return {
-                activeKey: await window.storage.get('active_exam_index_key', ''),
-                dataset: await window.storage.get(configKey, null),
-                pathMap: await window.storage.get('exam_path_map__' + configKey, null),
-                configStillListed: Array.isArray(configs) && configs.some(cfg => cfg && cfg.key === configKey),
-                records: await window.storage.get('practice_records', []),
-                panelText: (document.querySelector('#dynamic-library-delete-test-host .library-config-panel') || {}).textContent || ''
+                activeKey,
+                indexCount: dataset.length,
+                configStillListed: configs.some(cfg => cfg && (cfg.id === configKey || cfg.key === configKey)),
+                records
             };
         }
         """,
         config_key,
+    )
+    await page.evaluate(
+        """async () => window.AppData.practice.delete({
+            recordId: 'library-delete-sentinel',
+            operationId: 'e2e-library-delete-sentinel-cleanup'
+        })"""
     )
 
     return {
@@ -277,7 +308,7 @@ async def run() -> int:
             result = await run_dynamic_import(page)
             delete_result = await delete_inactive_config_via_ui(page, result.get("activeKey") or "")
             custom_rows = result.get("customRows") or []
-            assert result.get("activeKey") and result.get("activeKey") != "exam_index", "全量导入未创建新的自定义题库配置"
+            assert result.get("activeKey") and result.get("activeKey") in (result.get("configIds") or []), "全量导入未创建并激活新的自定义题库配置"
             assert len(custom_rows) == 1, f"应只识别一个有效听力 HTML，实际: {len(custom_rows)}"
             custom = custom_rows[0]
             assert custom.get("category") == "Custom", f"任意目录导入不应硬编码 P1-P4: {custom}"
@@ -301,11 +332,10 @@ async def run() -> int:
             rendered_text = result.get("renderedReportText") or ""
             assert "导入完成" in rendered_text and "缺少答案或评分链路" in rendered_text, f"导入报告 UI 未展示关键结果: {rendered_text}"
             assert "当前会话 Blob URL" in rendered_text, f"导入报告 UI 未展示 file:// 会话边界: {rendered_text}"
-            assert (delete_result.get("before") or {}).get("datasetExists") is True, f"删除前旧配置数据集不存在: {delete_result}"
-            assert (delete_result.get("before") or {}).get("pathMapExists") is True, f"删除前旧配置 path map 不存在: {delete_result}"
+            assert (delete_result.get("before") or {}).get("configExists") is True, f"删除前旧配置不存在: {delete_result}"
+            assert (delete_result.get("before") or {}).get("indexCount", 0) > 0, f"删除前旧配置数据集不存在: {delete_result}"
             assert "删除题库配置" in (delete_result.get("confirmText") or ""), f"删除配置未出现项目内确认层: {delete_result}"
-            assert (delete_result.get("after") or {}).get("dataset") is None, f"删除后配置数据集仍残留: {delete_result}"
-            assert (delete_result.get("after") or {}).get("pathMap") is None, f"删除后 path map 仍残留: {delete_result}"
+            assert (delete_result.get("after") or {}).get("indexCount") == 0, f"删除后配置数据集仍残留: {delete_result}"
             assert (delete_result.get("after") or {}).get("configStillListed") is False, f"删除后配置列表仍残留: {delete_result}"
             assert (delete_result.get("after") or {}).get("activeKey") == result.get("incrementalActiveKey"), f"删除非活动配置不应改变当前配置: {delete_result}"
             assert (delete_result.get("after") or {}).get("records") == (delete_result.get("before") or {}).get("records"), f"删除题库配置不应改写练习记录: {delete_result}"

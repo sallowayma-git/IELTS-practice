@@ -230,12 +230,11 @@
             if (!record) {
                 return false;
             }
-            var exam = index.find(function (item) {
-                return item && (item.id === record.examId || item.title === record.title);
-            });
-            var examType = exam ? normalizeTypeValue(exam.type) : '';
-            if (examType) {
-                return examType === targetType;
+            var suiteEntries = ensureArray(record.suiteEntrySummaries);
+            if (suiteEntries.length) {
+                return suiteEntries.some(function (entry) {
+                    return normalizeTypeValue(entry && entry.type) === targetType;
+                });
             }
             var recordType = normalizeTypeValue(
                 record.type ||
@@ -245,6 +244,13 @@
             );
             if (recordType) {
                 return recordType === targetType;
+            }
+            var exam = index.find(function (item) {
+                return item && (item.id === record.examId || item.title === record.title);
+            });
+            var examType = exam ? normalizeTypeValue(exam.type) : '';
+            if (examType) {
+                return examType === targetType;
             }
             // 无法确定类型时保持展示，避免题库切换导致历史记录被过滤掉
             return true;
@@ -296,7 +302,9 @@
         if (typeof value !== 'number' || isNaN(value)) {
             return '0.0%';
         }
-        return value.toFixed(1) + '%';
+        // Practice-record summary UI: keep a single decimal place so
+        // correct/total ratios do not dump long floating tails into the list.
+        return (Math.round(value * 10) / 10).toFixed(1) + '%';
     }
 
     function formatMinutes(minutes) {
@@ -878,6 +886,21 @@
         return used;
     }
 
+    function addProjectedErrorCounts(counts, projectedCounts) {
+        if (!projectedCounts || typeof projectedCounts !== 'object') {
+            return false;
+        }
+        var used = false;
+        Object.keys(projectedCounts).forEach(function addProjected(type) {
+            var value = Math.max(0, Number(projectedCounts[type]) || 0);
+            if (value > 0) {
+                addRadarCount(counts, type, value);
+                used = true;
+            }
+        });
+        return used;
+    }
+
     function addDetailCounts(counts, record) {
         var questionTypeMap = buildReadingQuestionTypeMap(record);
         var sources = getDetailSources(record);
@@ -904,7 +927,24 @@
 
     function calculateReadingRadarData(records) {
         var counts = {};
-        var recentReadingRecords = ensureArray(records)
+        var radarCandidates = [];
+        ensureArray(records).forEach(function expandSuiteRecord(record) {
+            var suiteEntries = ensureArray(record && record.suiteEntrySummaries);
+            if (suiteEntries.length) {
+                suiteEntries.forEach(function addSuiteEntry(entry) {
+                    if (!entry) {
+                        return;
+                    }
+                    radarCandidates.push(Object.assign({}, entry, {
+                        metadata: Object.assign({}, entry.metadata || {}, { type: entry.type }),
+                        date: entry.date || (record && record.date)
+                    }));
+                });
+                return;
+            }
+            radarCandidates.push(record);
+        });
+        var recentReadingRecords = radarCandidates
             .filter(function filterReading(record) {
                 var metadata = record && record.metadata ? record.metadata : {};
                 var realData = record && record.realData ? record.realData : {};
@@ -924,6 +964,9 @@
             .slice(0, 10);
 
         recentReadingRecords.forEach(function collectRecord(record) {
+            if (addProjectedErrorCounts(counts, record && record.questionTypeErrorCounts)) {
+                return;
+            }
             var performanceMap = record && (record.questionTypePerformance ||
                 (record.realData && record.realData.questionTypePerformance));
             if (addPerformanceCounts(counts, performanceMap)) {
@@ -1547,31 +1590,24 @@
 
     // 练习洞察卡片选中的组件（热力图 / 中高频余量 / 阅读雷达）持久化，
     // 刷新或重开页面后沿用用户上次的选中组件，而不是总回到默认的热力图。
-    var PRACTICE_WIDGET_PREFERENCE_KEY = 'practice_custom_widget';
     var SUPPORTED_PRACTICE_WIDGETS = ['heatmap', 'priority', 'radar'];
+    var persistedPracticeWidget = null;
+    if (window.AppData && window.AppData.preferences) {
+        window.AppData.ready.then(function () { return window.AppData.preferences.getPracticeWidget(); }).then(function (value) {
+            persistedPracticeWidget = SUPPORTED_PRACTICE_WIDGETS.indexOf(value) >= 0 ? value : null;
+        }).catch(function () {});
+    }
 
     function loadPersistedPracticeWidget() {
-        try {
-            if (typeof localStorage === 'undefined' || !localStorage) {
-                return null;
-            }
-            var value = localStorage.getItem(PRACTICE_WIDGET_PREFERENCE_KEY);
-            return SUPPORTED_PRACTICE_WIDGETS.indexOf(value) >= 0 ? value : null;
-        } catch (_) {
-            return null;
-        }
+        return persistedPracticeWidget;
     }
 
     function persistPracticeWidget(widget) {
-        try {
-            if (typeof localStorage === 'undefined' || !localStorage) {
-                return;
-            }
-            if (SUPPORTED_PRACTICE_WIDGETS.indexOf(widget) >= 0) {
-                localStorage.setItem(PRACTICE_WIDGET_PREFERENCE_KEY, widget);
-            }
-        } catch (_) {
-            /* 持久化失败不影响渲染 */
+        if (SUPPORTED_PRACTICE_WIDGETS.indexOf(widget) >= 0) {
+            persistedPracticeWidget = widget;
+            window.AppData.preferences.setPracticeWidget(widget).catch(function (error) {
+                console.warn('[PracticeWidget] 保存失败:', error);
+            });
         }
     }
 
@@ -2262,7 +2298,10 @@
         var durationInSeconds = Number(record && record.duration) || 0;
         var percentage = typeof record.percentage === 'number'
             ? record.percentage
-            : Math.round((record.accuracy || 0) * 100);
+            : ((Number(record.accuracy) || 0) * 100);
+        if (!Number.isFinite(percentage)) {
+            percentage = 0;
+        }
 
         var recordId = '';
         if (record && record.id != null) {
@@ -2334,7 +2373,7 @@
             createNode('div', {
                 className: 'record-percentage',
                 style: { color: helpers.getScoreColor(percentage) }
-            }, percentage + '%')
+            }, formatPercentage(percentage))
         ]);
 
         var actions = null;
@@ -3207,10 +3246,125 @@
         };
     }
 
+    var browseCompletionIndex = {
+        byExamId: new Map(),
+        byTitle: new Map(),
+        records: [],
+        ready: false
+    };
+
+    function rememberCompletionCandidate(map, key, candidate) {
+        if (!map || !key || !candidate) {
+            return;
+        }
+        var existing = map.get(key);
+        if (!existing || candidate.timestamp > existing.timestamp) {
+            map.set(key, candidate);
+        }
+    }
+
+    /**
+     * 在 setPracticeRecords 时重建一次正确率索引。
+     * 不使用 version 计数器；生命周期绑定“写状态那一次”。
+     */
+    function resolveRecordExamId(record) {
+        if (!record || typeof record !== 'object') {
+            return '';
+        }
+        var metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        var realData = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var rawData = record.rawData && typeof record.rawData === 'object' ? record.rawData : {};
+        return record.examId || metadata.examId || realData.examId || rawData.examId || '';
+    }
+
+    function getBrowseSuiteEntries(record) {
+        if (!record || typeof record !== 'object') {
+            return [];
+        }
+        var summaries = Array.isArray(record.suiteEntrySummaries) ? record.suiteEntrySummaries : [];
+        if (summaries.length) {
+            return summaries;
+        }
+        return Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+    }
+
+    function rebuildBrowseCompletionIndex(records) {
+        var byExamId = new Map();
+        var byTitle = new Map();
+        var recordSnapshot = ensureArray(records).slice();
+        recordSnapshot.forEach(function indexRecord(record) {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            var candidate = buildCompletionStatusCandidate(record);
+            var recordExamId = resolveRecordExamId(record);
+            if (recordExamId) {
+                rememberCompletionCandidate(byExamId, String(recordExamId), candidate);
+            }
+            var recordTitle = record.title || record.examTitle || (record.metadata && record.metadata.examTitle) || '';
+            if (recordTitle) {
+                rememberCompletionCandidate(byTitle, String(recordTitle), candidate);
+            }
+            var suiteEntries = getBrowseSuiteEntries(record);
+            suiteEntries.forEach(function indexSuiteEntry(entry) {
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                var comparableEntry = buildComparableSuiteEntryRecord(record, entry);
+                var entryCandidate = buildCompletionStatusCandidate(comparableEntry, record);
+                var entryExamId = resolveRecordExamId(comparableEntry);
+                if (entryExamId) {
+                    rememberCompletionCandidate(byExamId, String(entryExamId), entryCandidate);
+                }
+                var entryTitle = comparableEntry.title || comparableEntry.examTitle || '';
+                if (entryTitle) {
+                    rememberCompletionCandidate(byTitle, String(entryTitle), entryCandidate);
+                }
+            });
+        });
+        browseCompletionIndex = {
+            byExamId: byExamId,
+            byTitle: byTitle,
+            records: recordSnapshot,
+            ready: true
+        };
+        return browseCompletionIndex;
+    }
+
+    function ensureBrowseCompletionIndex() {
+        if (browseCompletionIndex.ready) {
+            return browseCompletionIndex;
+        }
+        return browseCompletionIndex;
+    }
+
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
-        var source = (typeof global.getPracticeRecordsState === 'function')
-            ? global.getPracticeRecordsState()
-            : global.practiceRecords;
+        var index = ensureBrowseCompletionIndex();
+        var byId = null;
+        var byTitle = null;
+        if (exam && exam.id && index.byExamId.has(String(exam.id))) {
+            byId = index.byExamId.get(String(exam.id));
+        }
+        if (exam && exam.title && index.byTitle.has(String(exam.title))) {
+            byTitle = index.byTitle.get(String(exam.title));
+        }
+        // 同时有 examId / title 命中时取较新时间戳，避免旧 examId 遮蔽更新 title 匹配。
+        var indexed = null;
+        if (byId && byTitle) {
+            indexed = (Number(byId.timestamp) || 0) >= (Number(byTitle.timestamp) || 0) ? byId : byTitle;
+        } else {
+            indexed = byId || byTitle;
+        }
+        if (indexed) {
+            return {
+                percentage: typeof indexed.percentage === 'number' ? indexed.percentage : 0,
+                date: indexed.date || null,
+                duration: typeof indexed.duration === 'number' ? indexed.duration : 0
+            };
+        }
+
+        // Path/file fallback scans the same authoritative snapshot used to build the index.
+        var source = index.records;
         var statuses = [];
         ensureArray(source).forEach(function collectStatus(record) {
             if (!record || typeof record !== 'object') {
@@ -3219,7 +3373,7 @@
             if (recordMatchesExam(exam, record)) {
                 statuses.push(buildCompletionStatusCandidate(record));
             }
-            var suiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+            var suiteEntries = getBrowseSuiteEntries(record);
             suiteEntries.forEach(function collectSuiteEntry(entry) {
                 if (!entry || typeof entry !== 'object') {
                     return;
@@ -3243,6 +3397,8 @@
             duration: typeof latest.duration === 'number' ? latest.duration : 0
         };
     };
+
+    global.rebuildBrowseCompletionIndex = rebuildBrowseCompletionIndex;
 
     // --- Legacy navigation controller ---
     function LegacyNavigationController(options) {
@@ -3522,8 +3678,8 @@
     };
 
     LibraryConfigView.prototype._renderItem = function _renderItem(config, activeKey, allowDelete) {
-        var isActive = activeKey === config.key;
-        var isDefault = config.key === 'exam_index';
+        var isDefault = config.builtIn === true;
+        var isActive = isDefault ? activeKey == null : activeKey === config.key;
         var className = this.classNames.item + (isActive ? ' ' + this.classNames.itemActive : '');
 
         var item = this._createElement('div', {
@@ -3551,7 +3707,7 @@
             type: 'button',
             dataset: {
                 configAction: 'switch',
-                configKey: config.key,
+                configKey: config.key || '',
                 configActive: isActive ? '1' : '0'
             }
         }, '切换');
@@ -3578,7 +3734,7 @@
                 type: 'button',
                 dataset: {
                     configAction: 'delete',
-                    configKey: config.key,
+                    configKey: config.key || '',
                     configActive: isActive ? '1' : '0'
                 }
             }, '删除');

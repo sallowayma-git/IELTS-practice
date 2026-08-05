@@ -6,33 +6,7 @@
         return;
     }
 
-    const FLAG_KEY = '__ielts_test_env__';
     const LOCATION_HINTS = ['test_env=1', 'suite_test=1', 'ci=1'];
-
-    const readStorageFlag = () => {
-        try {
-            if (global.localStorage) {
-                return global.localStorage.getItem(FLAG_KEY) === 'true';
-            }
-        } catch (error) {
-            console.warn('[EnvDetector] 无法读取测试标记:', error);
-        }
-        return false;
-    };
-
-    const persistFlag = (value) => {
-        try {
-            if (global.localStorage) {
-                if (value) {
-                    global.localStorage.setItem(FLAG_KEY, 'true');
-                } else {
-                    global.localStorage.removeItem(FLAG_KEY);
-                }
-            }
-        } catch (error) {
-            console.warn('[EnvDetector] 无法写入测试标记:', error);
-        }
-    };
 
     const shouldActivateFromLocation = () => {
         if (!global.location) {
@@ -50,33 +24,19 @@
             }
 
             if (shouldActivateFromLocation()) {
-                this.enableTestEnvironment({ persist: true });
-                return true;
-            }
-
-            if (readStorageFlag()) {
-                global.__IELTS_FORCE_TEST_ENV__ = true;
-                return true;
-            }
-
-            const userAgent = (global.navigator && global.navigator.userAgent) || '';
-            if (/\b(playwright|puppeteer|headlesschrome)\b/i.test(userAgent)) {
+                this.enableTestEnvironment();
                 return true;
             }
 
             return false;
         },
 
-        enableTestEnvironment(options = {}) {
+        enableTestEnvironment() {
             global.__IELTS_FORCE_TEST_ENV__ = true;
-            if (options.persist !== false) {
-                persistFlag(true);
-            }
         },
 
         disableTestEnvironment() {
             global.__IELTS_FORCE_TEST_ENV__ = false;
-            persistFlag(false);
         }
     };
 
@@ -95,8 +55,6 @@
         return;
     }
 
-    const STORAGE_KEY = 'exam_system_log_config_v2';
-
     // Default configuration
     const DEFAULT_CONFIG = {
         level: 'info',
@@ -106,7 +64,7 @@
             'PerformanceOptimizer': 'warn',
             'System': 'info',
             'PracticeRecorder': 'info',
-            'ScoreStorage': 'info'
+            'DataKernel': 'warn'
         }
     };
 
@@ -132,6 +90,7 @@
             this.debug = this.debug.bind(this);
 
             this.overrideConsole();
+            Promise.resolve().then(() => this.hydrateConfig());
 
             // Output initialization message
             this.internalLog('info', 'Logger initialized', {
@@ -141,41 +100,47 @@
         }
 
         /**
-         * Load configuration from localStorage or use defaults
+         * Build configuration from defaults and explicit bootstrap overrides.
          */
         loadConfig(externalConfig) {
-            let storedConfig = {};
-            try {
-                const stored = global.localStorage.getItem(STORAGE_KEY);
-                if (stored) {
-                    storedConfig = JSON.parse(stored);
-                }
-            } catch (e) {
-                // Ignore storage errors
-            }
-
             return {
-                level: externalConfig.level || storedConfig.level || DEFAULT_CONFIG.level,
+                level: externalConfig.level || DEFAULT_CONFIG.level,
                 categories: {
                     ...DEFAULT_CONFIG.categories,
-                    ...(storedConfig.categories || {}),
                     ...(externalConfig.categories || {})
                 }
             };
         }
 
+        async hydrateConfig() {
+            try {
+                if (!global.AppData) return;
+                await global.AppData.ready;
+                const storedConfig = await global.AppData.preferences.getLogConfig();
+                if (!storedConfig || typeof storedConfig !== 'object') return;
+                this.config = {
+                    level: storedConfig.level || this.config.level,
+                    categories: { ...this.config.categories, ...(storedConfig.categories || {}) }
+                };
+            } catch (error) {
+                this.nativeConsole.warn('[AppLogger] 无法读取日志配置:', error);
+            }
+        }
+
         /**
-         * Save current configuration to localStorage
+         * Save current configuration through the preferences domain.
          */
         saveConfig() {
-            try {
-                global.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            if (!global.AppData) return Promise.resolve(false);
+            return global.AppData.ready.then(() =>
+                global.AppData.preferences.setLogConfig({
                     level: this.config.level,
                     categories: this.config.categories
-                }));
-            } catch (e) {
-                // Ignore storage errors
-            }
+                })
+            ).then(() => true).catch((error) => {
+                this.nativeConsole.warn('[AppLogger] 无法保存日志配置:', error);
+                return false;
+            });
         }
 
         /**
@@ -366,4218 +331,4660 @@
 })(typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : this));
 
 
-/* ===== js/utils/storage.js ===== */
-(function initStorage(window) {
-'use strict';
-
+/* ===== js/data/practiceRecordSource.js ===== */
 /**
- * 本地存储工具类
- * 提供统一的数据存储和检索接口
+ * 练习记录来源判定 —— “什么算真实练习记录”的唯一权威定义。
+ *
+ * 背景（本文件存在的理由）：
+ * 这条规则历史上被复制成了两套互不相通的实现，语义还不一样：
+ *   - UI 侧 js/main.js `updatePracticeView` 只看顶层 `dataSource`；
+ *   - 投影器侧 js/data/v2/appData.js `computeStats` / `computeAchievementProgress`
+ *     只看 `metadata.source === 'onboarding-demo'`。
+ * 结果是 `demo` / `e2e-seed` 这类记录“在练习记录页看不见，却计入成绩统计和成就解锁”，
+ * 用户会看到自己没做过的题影响了正确率与成就。
+ *
+ * 因此判定必须只有一份实现，并被所有消费方共享。本文件同时被打进
+ * core-foundation / reading-page / practice-page-enhancer / listening-record-bridge /
+ * listening-wrapper（供 appData.js 的投影器使用）和 browse（供 js/main.js 的渲染过滤使用）
+ * 等 bundle；appData.js 在启动时硬性要求本模块存在，缺失即抛错，杜绝“再退回本地副本”。
+ *
+ * ---------------------------------------------------------------------------
+ * 语义（两个维度，任一命中即判为非真实）
+ *
+ * 1) dataSource（顶层，回退 metadata.dataSource）
+ *    - 缺失 / null / 空串  => **真实记录**
+ *    - 'real'              => 真实记录
+ *    - 其它任何显式值      => 非真实（演示 / 种子 / 占位）
+ *
+ *    “缺失即真实”是硬性约束，不得收窄：生产代码只在 practiceRecorder / examSessionMixin
+ *    三处写过该字段且都写 'real'，套题聚合、听力桥接、legacy 迁移记录从来不写。
+ *    曾经有一版把“没标注”当成“非真实”，直接导致练习记录页整页空白（线上 P0）。
+ *
+ * 2) metadata.source
+ *    只精确匹配已知的演示/种子标记，**绝不做包含匹配**。
+ *    这个字段是被复用的：套题记录会写 'listening' / 'reading'（内容类型标签，见
+ *    js/app/suitePracticeMixin.js），消息通道会写 'practice_page' / 'inline_collector'
+ *    / 'suite_placeholder' / 'listening_record_bridge' / 'data_collector'（采集方式标签）。
+ *    任何模糊匹配都可能把真实记录判成演示数据，属于同一类 P0。
+ *
+ * 注意：`record.source` 与 `realData.source` 是采集方式标签而非来源标注，故不参与判定。
  */
-const STORAGE_INTERNAL_ACCESS_TOKEN = Symbol('StorageManager.internalAccessToken');
+(function initPracticeRecordSource(global) {
+    'use strict';
 
-const createInternalAccessOptions = (options = {}) => {
-    return Object.assign({}, options, {
-        skipPracticeCoreRedirect: true,
-        internalAccessToken: STORAGE_INTERNAL_ACCESS_TOKEN
+    // 同一份源码会被多个 bundle 内联（浏览器里 core-foundation 与 browse 都会执行一次），
+    // 重复赋值本身无害，但仍按仓库惯例做幂等保护，避免任何形态的静默覆盖。
+    if (global.PracticeRecordSource && global.PracticeRecordSource.__stable === true) {
+        return;
+    }
+
+    /** 被认可为“真实用户练习”的显式 dataSource 取值。 */
+    const REAL_DATA_SOURCES = Object.freeze(['real']);
+
+    /**
+     * 被认定为“演示 / 种子 / 夹具数据”的 metadata.source 取值（精确匹配，大小写与首尾空白无关）。
+     * 目前生产代码只会写出 'onboarding-demo'（js/components/onboardingTour.js）；
+     * 其余是历史与测试夹具里出现过的等价写法，一并显式列出而不是靠模糊匹配推断。
+     */
+    const DEMO_SOURCE_MARKERS = Object.freeze([
+        'onboarding-demo',
+        'onboarding_demo',
+        'onboardingdemo',
+        'demo',
+        'e2e-seed',
+        'e2e_seed'
+    ]);
+
+    /** 只有新手引导自己的 marker 才有资格申请临时历史列表预览。 */
+    const ONBOARDING_PREVIEW_MARKERS = Object.freeze([
+        'onboarding-demo',
+        'onboarding_demo',
+        'onboardingdemo'
+    ]);
+
+    const realDataSourceSet = new Set(REAL_DATA_SOURCES);
+    const demoSourceSet = new Set(DEMO_SOURCE_MARKERS);
+    const onboardingPreviewMarkerSet = new Set(ONBOARDING_PREVIEW_MARKERS);
+
+    function normalize(value) {
+        if (value === undefined || value === null) return '';
+        return String(value).trim().toLowerCase();
+    }
+
+    function asObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
+    function hasOwn(object, field) {
+        return Object.prototype.hasOwnProperty.call(object, field);
+    }
+
+    /** 读取记录的来源标注：顶层优先，回退 metadata（light 投影同样走这条回退链）。 */
+    function readDataSource(record) {
+        if (hasOwn(record, 'dataSource')) return normalize(record.dataSource);
+        const metadata = asObject(record.metadata);
+        return hasOwn(metadata, 'dataSource') ? normalize(metadata.dataSource) : '';
+    }
+
+    function readMetadataSource(record) {
+        return normalize(asObject(record.metadata).source);
+    }
+
+    /**
+     * 唯一判定入口：该记录是否算作用户的真实练习。
+     * 练习记录列表渲染、practice.stats 投影、achievements.progress 投影三者必须都用它，
+     * 三处结论一致是本模块的核心契约。
+     */
+    function isRealPracticeRecord(record) {
+        if (!record || typeof record !== 'object') return false;
+
+        const dataSource = readDataSource(record);
+        // 缺失/空值一律按真实记录对待（见文件头“缺失即真实”）。
+        if (dataSource !== '' && !realDataSourceSet.has(dataSource)) return false;
+
+        if (demoSourceSet.has(readMetadataSource(record))) return false;
+
+        return true;
+    }
+
+    /** isRealPracticeRecord 的补集，仅对合法记录对象成立（非对象既不真也不演示）。 */
+    function isDemoPracticeRecord(record) {
+        if (!record || typeof record !== 'object') return false;
+        return !isRealPracticeRecord(record);
+    }
+
+    function filterRealPracticeRecords(records) {
+        return (Array.isArray(records) ? records : []).filter(isRealPracticeRecord);
+    }
+
+    // -----------------------------------------------------------------------
+    // 引导预览白名单（仅影响渲染，永不影响统计与成就）
+    //
+    // 新手引导的"回顾模式"步骤会先把一条演示记录写进权威 practice records，
+    // 再等待它在练习记录列表里出现（js/components/onboardingTour.js
+    // `_injectDemoRecord` -> `_waitForSelector`），演示完成后立即删除。
+    //
+    // 这条记录按上面的判定确实是演示数据（metadata.source = 'onboarding-demo'），
+    // 所以它必须继续被 practice.stats / achievements.progress 排除。但引导要教用户
+    // 认识这一行 UI，因此需要一个**显式、按 id 限定、临时**的渲染例外。
+    //
+    // 关键设计：例外只存在于视图层白名单，投影器根本读不到它——
+    // 于是"是否真实"仍然只有一份判定，不会退回"UI 与统计各写一套"的老 bug。
+    // 历史上引导记录之所以能显示，只是因为没人给它写 dataSource（巧合而非设计）。
+    // -----------------------------------------------------------------------
+    const previewRecordIds = new Set();
+
+    function normalizeId(value) {
+        if (value === undefined || value === null) return '';
+        return String(value).trim();
+    }
+
+    /** 登记一条允许在练习记录列表中预览的演示记录 id（引导步骤开始时调用）。 */
+    function allowPreviewRecordId(recordId) {
+        const id = normalizeId(recordId);
+        if (id) previewRecordIds.add(id);
+        return id !== '';
+    }
+
+    /** 撤销预览许可（引导结束/跳过/清理演示记录时调用）。 */
+    function clearPreviewRecordId(recordId) {
+        if (recordId === undefined) {
+            previewRecordIds.clear();
+            return true;
+        }
+        return previewRecordIds.delete(normalizeId(recordId));
+    }
+
+    function isPreviewRecord(record) {
+        if (!previewRecordIds.size || !record || typeof record !== 'object') return false;
+        if (!onboardingPreviewMarkerSet.has(readMetadataSource(record))) return false;
+        const id = normalizeId(record.id || record.recordId);
+        return Boolean(id && previewRecordIds.has(id));
+    }
+
+    /**
+     * 练习记录列表的渲染过滤：真实记录 + 已显式登记的引导预览记录。
+     * 统计/成就一律用 filterRealPracticeRecords，绝不用这个函数。
+     */
+    function filterRecordsForHistoryView(records) {
+        return (Array.isArray(records) ? records : [])
+            .filter((record) => isRealPracticeRecord(record) || isPreviewRecord(record));
+    }
+
+    const api = Object.freeze({
+        __stable: true,
+        REAL_DATA_SOURCES,
+        DEMO_SOURCE_MARKERS,
+        ONBOARDING_PREVIEW_MARKERS,
+        isRealPracticeRecord,
+        isDemoPracticeRecord,
+        filterRealPracticeRecords,
+        allowPreviewRecordId,
+        clearPreviewRecordId,
+        isPreviewRecord,
+        filterRecordsForHistoryView
     });
-};
 
-const hasInternalAccessOptions = (options = {}) => {
-    return Boolean(options && options.internalAccessToken === STORAGE_INTERNAL_ACCESS_TOKEN);
-};
+    global.PracticeRecordSource = api;
 
-class StorageManager {
-    constructor() {
-        this.prefix = 'exam_system_';
-        this.version = '0.6.2-fix';
-        this.localStorageAvailable = false;
-        this.sessionStorageAvailable = false;
-        this.backendPreferenceKey = this.prefix + 'storage_backend';
-        this.indexedDBBlocked = false;
-        this.volatileMode = false;
-        this.mode = 'indexeddb';
-        this.protectedDataKeys = new Set([
-            'practice_records',
-            'user_stats'
-        ]);
-        this.persistentKeys = new Set([
-            'practice_records',
-            'user_stats',
-            'manual_backups',
-            'backup_settings',
-            'export_history',
-            'import_history',
-            'exam_index',
-            'exam_index_configurations',
-            'active_exam_index_key',
-            'settings',
-            'learning_goals'
-        ]);
-        this.ready = this.initializeStorage().catch(error => {
-            console.error('[Storage] 初始化失败:', error);
-            throw error;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/data/v2/dataCatalog.js ===== */
+(function installDataCatalog(global) {
+    'use strict';
+
+    const V2_SCHEMA_VERSION = 2;
+
+    function clone(value) {
+        if (value === undefined) return undefined;
+        if (typeof structuredClone === 'function') {
+            try { return structuredClone(value); } catch (_) { /* fall through */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function objectDefault() { return {}; }
+    function arrayDefault() { return []; }
+    function nullableDefault() { return null; }
+    function normalizeArray(value) { return Array.isArray(value) ? clone(value) : []; }
+    function normalizeObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) ? clone(value) : {};
+    }
+    function normalizeNullableString(value) {
+        return value === null || value === undefined || value === '' ? null : String(value);
+    }
+    function isArray(value) { return Array.isArray(value); }
+    function isObject(value) { return Boolean(value && typeof value === 'object' && !Array.isArray(value)); }
+    function isNullableString(value) { return value === null || typeof value === 'string'; }
+
+    const CATALOG_OWNERS = new Set([
+        'settings', 'library', 'recovery', 'backups', 'vocab',
+        'preferences', 'goals', 'achievements', 'system', 'practice'
+    ]);
+    const CATALOG_CLASSIFICATIONS = new Set(['authoritative', 'preference', 'session', 'system']);
+    const IMPORT_POLICIES = new Set(['replace', 'patch', 'merge-by-id', 'ignore']);
+
+    function isNonEmptyString(value) {
+        return typeof value === 'string' && Boolean(value.trim());
+    }
+
+    function ownerFromKey(logicalKey) {
+        const dot = String(logicalKey || '').indexOf('.');
+        return dot > 0 ? logicalKey.slice(0, dot) : '';
+    }
+
+    function freezeEntry(entry) {
+        const logicalKey = String(entry.logicalKey || '');
+        const owner = ownerFromKey(logicalKey);
+        const next = Object.assign({}, entry, {
+            logicalKey,
+            owner,
+            schemaVersion: V2_SCHEMA_VERSION,
+            export: entry.export === true,
+            import: entry.import || 'ignore'
         });
+        return Object.freeze(next);
     }
 
-    async waitForInitialization(skipReady = false) {
-        if (!skipReady) {
-            await this.ready;
+    // Minimal document catalog. Practice lives in entity stores (summaries/details/annotations),
+    // not as document keys. import merge identity is resolved in AppData, not here.
+    const definitions = [
+        {
+            logicalKey: 'settings.values', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'library.configurations', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'library.importedIndexes', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'library.activeConfigurationId', classification: 'authoritative',
+            defaultValue: nullableDefault, normalize: normalizeNullableString, validate: isNullableString,
+            export: true, import: 'replace'
+        },
+        {
+            logicalKey: 'recovery.activeSessions', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'recovery.drafts', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'recovery.interrupted', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'recovery.rejectedCompletions', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'recovery.windowSession', classification: 'session',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
+            logicalKey: 'backups.entries', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: false, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'backups.settings', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'backups.exportHistory', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: false, import: 'ignore'
+        },
+        {
+            logicalKey: 'backups.importHistory', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: false, import: 'ignore'
+        },
+        {
+            logicalKey: 'vocab.words', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'vocab.userConfig', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'vocab.lists', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'preferences.values', classification: 'preference',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'goals.items', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
+            logicalKey: 'achievements.manual', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'achievements.progress', classification: 'authoritative',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: true, import: 'patch'
+        },
+        {
+            logicalKey: 'system.migrations', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
+            logicalKey: 'system.operationJournal', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
         }
-    }
+    ].map(freezeEntry);
 
-    isProtectedDataKey(key) {
-        return this.protectedDataKeys.has(String(key || ''));
-    }
-
-    isProtectedStorageKey(storageKey) {
-        const key = String(storageKey || '');
-        if (!key.startsWith(this.prefix)) {
-            return false;
+    function validateCatalog(entries) {
+        if (!Array.isArray(entries) || !entries.length) throw new Error('DataCatalog requires at least one entry');
+        const logicalKeys = new Set();
+        for (const entry of entries) {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                throw new Error('DataCatalog entry must be an object');
+            }
+            if (!isNonEmptyString(entry.logicalKey) || logicalKeys.has(entry.logicalKey)) {
+                throw new Error(`DataCatalog duplicate/invalid logical key: ${entry.logicalKey}`);
+            }
+            logicalKeys.add(entry.logicalKey);
         }
-        return this.isProtectedDataKey(key.slice(this.prefix.length));
-    }
-
-    async getPracticeRecordAPI(options = {}) {
-        const api = window.PracticeRecordAPI;
-        if (api) {
-            return api;
-        }
-        if (options.skipReady || !this.ready || this._resolvingPracticeRecordAPI) {
-            return null;
-        }
-        this._resolvingPracticeRecordAPI = true;
-        try {
-            await this.ready;
-            return window.PracticeRecordAPI || null;
-        } finally {
-            this._resolvingPracticeRecordAPI = false;
-        }
-    }
-
-    async readProtectedDataKey(key, defaultValue = null, options = {}) {
-        const api = await this.getPracticeRecordAPI(options);
-        if (key === 'practice_records') {
-            if (api && typeof api.list === 'function') {
-                return await api.list();
+        for (const entry of entries) {
+            if (!CATALOG_OWNERS.has(entry.owner) || !entry.logicalKey.startsWith(`${entry.owner}.`)) {
+                throw new Error(`DataCatalog owner conflict for ${entry.logicalKey}: ${entry.owner}`);
             }
-            throw new Error('Storage.get(practice_records): PracticeRecordAPI.list not ready');
-        }
-        if (key === 'user_stats') {
-            if (api && typeof api.readStats === 'function') {
-                return await api.readStats({ fallback: defaultValue });
+            if (!CATALOG_CLASSIFICATIONS.has(entry.classification)
+                || !Number.isInteger(entry.schemaVersion) || entry.schemaVersion !== V2_SCHEMA_VERSION
+                || typeof entry.defaultValue !== 'function'
+                || typeof entry.normalize !== 'function'
+                || typeof entry.validate !== 'function'
+                || typeof entry.export !== 'boolean'
+                || !IMPORT_POLICIES.has(entry.import)) {
+                throw new Error(`DataCatalog incomplete contract: ${entry.logicalKey}`);
             }
-            throw new Error('Storage.get(user_stats): PracticeRecordAPI.readStats not ready');
-        }
-        return defaultValue;
-    }
-
-    /**
-     * 初始化存储系统
-     */
-    checkStorageAvailability(getter) {
-        try {
-            const store = getter();
-            if (!store || typeof store.setItem !== 'function') {
-                return false;
-            }
-            const testKey = this.prefix + 'storage_test_' + Math.random().toString(36).slice(2);
-            store.setItem(testKey, '1');
-            store.removeItem(testKey);
-            return true;
-        } catch (_) {
-            return false;
-        }
-    }
-
-    getStoredBackendPreference() {
-        try {
-            if (this.sessionStorageAvailable && sessionStorage.getItem(this.backendPreferenceKey)) {
-                return sessionStorage.getItem(this.backendPreferenceKey);
-            }
-        } catch (_) { /* ignore */ }
-        try {
-            if (this.localStorageAvailable && localStorage.getItem(this.backendPreferenceKey)) {
-                return localStorage.getItem(this.backendPreferenceKey);
-            }
-        } catch (_) { /* ignore */ }
-        return null;
-    }
-
-    setBackendPreference(mode) {
-        try {
-            if (mode === 'session' && this.sessionStorageAvailable) {
-                sessionStorage.setItem(this.backendPreferenceKey, 'session');
-                return;
-            }
-            if (mode === 'local' && this.localStorageAvailable) {
-                localStorage.setItem(this.backendPreferenceKey, 'local');
-                return;
-            }
-        } catch (_) { /* ignore */ }
-    }
-
-    clearBackendPreference() {
-        try { if (this.sessionStorageAvailable) { sessionStorage.removeItem(this.backendPreferenceKey); } } catch (_) {}
-        try { if (this.localStorageAvailable) { localStorage.removeItem(this.backendPreferenceKey); } } catch (_) {}
-    }
-
-    async initializeStorage() {
-        console.log('[Storage] 开始初始化存储系统');
-        try {
-            this.localStorageAvailable = this.checkStorageAvailability(() => localStorage);
-            this.sessionStorageAvailable = this.checkStorageAvailability(() => sessionStorage);
-            if (this.localStorageAvailable) {
-                console.log('[Storage] localStorage 可用，将使用 localStorage 作为主要存储');
-                this.setBackendPreference('local');
-            } else {
-                console.warn('[Storage] localStorage 不可用');
-            }
-            if (this.sessionStorageAvailable) {
-                console.log('[Storage] sessionStorage 可用，可作为退路');
-            } else {
-                console.warn('[Storage] sessionStorage 不可用');
-            }
-
-            const storedPreference = this.getStoredBackendPreference();
-            if (storedPreference === 'session') {
-                this.useSessionStorageFallback = true;
-            }
-            if (!this.localStorageAvailable && this.sessionStorageAvailable) {
-                this.useSessionStorageFallback = true;
-            }
-
-            // 强制初始化 IndexedDB 以实现 Hybrid 模式，并在版本检查前确保 DB ready
-            console.log('[Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式');
-            await this.initializeIndexedDBStorage();
-
-            // 初始化版本信息
-            const currentVersion = await this.get('system_version', null, { skipReady: true });
-            console.log(`[Storage] 当前版本: ${currentVersion}, 目标版本: ${this.version}`);
-
-            if (!currentVersion) {
-                // 首次安装
-                console.log('[Storage] 首次安装，初始化默认数据');
-                await this.handleVersionUpgrade(null, { skipReady: true });
-            } else if (currentVersion !== this.version) {
-                // 版本升级
-                console.log('[Storage] 版本升级，迁移数据');
-                await this.handleVersionUpgrade(currentVersion, { skipReady: true });
-            } else {
-                console.log('[Storage] 版本匹配，跳过初始化');
-            }
-
-            // 添加恢复逻辑
-        } catch (error) {
-            console.warn('[Storage] 初始化基本存储能力失败，尝试继续:', error);
-            await this.initializeIndexedDBStorage();
-        }
-    }
-
-    /**
-     * 初始化IndexedDB存储
-     */
-    initializeIndexedDBStorage() {
-        console.log('[Storage] 开始初始化 IndexedDB');
-        if (this.indexedDBBlocked) {
-            return Promise.resolve();
-        }
-        return new Promise((resolve, reject) => {
             try {
-                // 检查IndexedDB支持
-                if (!window.indexedDB) {
-                    this.indexedDBBlocked = true;
-                    this.indexedDB = null;
-                    if (this.localStorageAvailable || this.sessionStorageAvailable) {
-                        this.volatileMode = false;
-                        this.mode = this.localStorageAvailable ? 'localStorage' : 'sessionStorage';
-                        console.warn('[Storage] IndexedDB 不支持，将使用现有本地/会话存储');
-                        resolve();
-                        return;
-                    }
-                    this.volatileMode = true;
-                    this.mode = 'volatile';
-                    console.warn('[Storage] IndexedDB 不支持且无本地存储，fallback 到内存存储');
-                    this.fallbackStorage = new Map();
-                    resolve();
-                    return;
+                const defaultValue = entry.defaultValue();
+                if (!entry.validate(defaultValue) || !entry.validate(entry.normalize(defaultValue))) {
+                    throw new Error('invalid default');
                 }
-
-                this.dbName = 'ExamSystemDB';
-                this.dbVersion = 1;
-
-                console.log(`[Storage] 打开 IndexedDB 数据库: ${this.dbName}, 版本: ${this.dbVersion}`);
-                const request = indexedDB.open(this.dbName, this.dbVersion);
-                request.addEventListener('error', () => {
-                    this.indexedDB = null;
-                    if (this.localStorageAvailable || this.sessionStorageAvailable) {
-                        this.volatileMode = false;
-                        this.mode = this.localStorageAvailable ? 'localStorage' : 'sessionStorage';
-                        return;
-                    }
-                    this.volatileMode = true;
-                    this.mode = 'volatile';
-                    this.fallbackStorage = this.fallbackStorage || new Map();
-                });
-                request.addEventListener('success', () => {
-                    this.volatileMode = false;
-                    this.mode = 'indexeddb';
-                });
-
-                request.onerror = (event) => {
-                    console.error('[Storage] IndexedDB 打开失败:', event.target.error);
-                    this.indexedDBBlocked = true;
-                    if (this.localStorageAvailable || this.sessionStorageAvailable) {
-                        console.warn('[Storage] 使用 local/sessionStorage 作为回退存储');
-                        this.indexedDB = null;
-                        resolve();
-                        return;
-                    }
-                    this.fallbackStorage = new Map();
-                    resolve();
-                };
-
-                request.onupgradeneeded = (event) => {
-                    console.log('[Storage] IndexedDB 升级事件触发，旧版本:', event.oldVersion, '新版本:', event.newVersion);
-                    const db = event.target.result;
-
-                    // 创建存储对象
-                    if (!db.objectStoreNames.contains('keyValueStore')) {
-                        console.log('[Storage] 创建 objectStore: keyValueStore');
-                        const store = db.createObjectStore('keyValueStore', { keyPath: 'key' });
-                        store.createIndex('timestamp', 'timestamp', { unique: false });
-                        console.log('[Storage] objectStore 创建成功');
-                    } else {
-                        console.log('[Storage] objectStore 已存在，跳过创建');
-                    }
-                };
-
-                request.onsuccess = (event) => {
-                    this.indexedDB = event.target.result;
-                    this.indexedDBBlocked = false;
-                    console.log('[Storage] IndexedDB 初始化成功，数据库:', this.indexedDB.name, '版本:', this.indexedDB.version);
-
-                    // 迁移localStorage数据到IndexedDB
-                    console.log('[Storage] 开始从 localStorage 迁移数据');
-                    Promise.resolve()
-                        .then(() => this.migrateFromLocalStorage())
-                        .then(() => resolve())
-                        .catch((migrationError) => {
-                            console.warn('[Storage] 迁移过程中出现问题，但继续初始化:', migrationError);
-                            resolve();
-                        });
-                };
-
-            } catch (error) {
-                console.error('[Storage] IndexedDB 初始化失败:', error);
-                this.indexedDBBlocked = true;
-                if (this.localStorageAvailable || this.sessionStorageAvailable) {
-                    console.warn('[Storage] IndexedDB 初始化失败，将使用 local/sessionStorage');
-                    this.indexedDB = null;
-                    resolve();
-                    return;
-                }
-                this.fallbackStorage = new Map();
-                resolve();
-            }
-        });
-    }
-
-    /**
-     * 确保 IndexedDB 已 ready
-     */
-    async ensureIndexedDBReady() {
-        if (this.indexedDBBlocked) {
-            return;
-        }
-        if (!this.indexedDB) {
-            try {
-                await this.initializeIndexedDBStorage();
-            } catch (err) {
-                this.indexedDBBlocked = true;
-            }
-        }
-    }
-
-    async tryPromoteToIndexedDB(serializedValue, key) {
-        try {
-            if (!this.indexedDB) {
-                await this.initializeIndexedDBStorage();
-            }
-            if (this.indexedDB) {
-                await this.setToIndexedDB(this.getKey(key), serializedValue);
-                this.useSessionStorageFallback = false;
-                this.setBackendPreference('local');
-                this.dispatchStorageSync(key);
-                return true;
-            }
-        } catch (e) {
-            console.warn('[Storage] 提升到 IndexedDB 失败，继续使用退路:', e);
-        }
-        return false;
-    }
-
-    /**
-     * 从localStorage迁移数据到IndexedDB
-     */
-    async migrateFromLocalStorage() {
-        console.log('[Storage] 开始数据迁移');
-        try {
-            if (!this.indexedDB) {
-                console.warn('[Storage] IndexedDB 不可用，跳过迁移');
-                return;
-            }
-
-            const keys = Object.keys(localStorage);
-            const migrationKeys = keys.filter(key => key.startsWith(this.prefix));
-            console.log(`[Storage] 发现 ${migrationKeys.length} 条需要迁移的键`);
-
-            if (migrationKeys.length === 0) {
-                console.log('[Storage] 无数据需要迁移');
-                return;
-            }
-
-            let migratedCount = 0;
-            let failedCount = 0;
-
-            for (const key of migrationKeys) {
-                try {
-                    const value = localStorage.getItem(key);
-                    if (value) {
-                        await this.setToIndexedDB(key, value);
-                        localStorage.removeItem(key);
-                        migratedCount++;
-                        console.log(`[Storage] 成功迁移键: ${key}`);
-                    }
-                } catch (error) {
-                    console.warn(`[Storage] 迁移数据失败: ${key}`, error);
-                    failedCount++;
-                }
-            }
-
-            console.log(`[Storage] 数据迁移完成: ${migratedCount} 成功, ${failedCount} 失败`);
-        } catch (error) {
-            console.error('[Storage] 数据迁移失败:', error);
-        }
-    }
-
-    /**
-     * 存储到IndexedDB
-     */
-    setToIndexedDB(key, value) {
-        return new Promise((resolve, reject) => {
-            if (!this.indexedDB) {
-                reject(new Error('IndexedDB not available'));
-                return;
-            }
-
-            const transaction = this.indexedDB.transaction(['keyValueStore'], 'readwrite');
-            const store = transaction.objectStore('keyValueStore');
-
-            const data = {
-                key: key,
-                value: value,
-                timestamp: Date.now()
-            };
-
-            const request = store.put(data);
-
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
-     * 从IndexedDB获取数据
-     */
-    getFromIndexedDB(key) {
-        return new Promise((resolve, reject) => {
-            if (!this.indexedDB) {
-                reject(new Error('IndexedDB not available'));
-                return;
-            }
-
-            const transaction = this.indexedDB.transaction(['keyValueStore'], 'readonly');
-            const store = transaction.objectStore('keyValueStore');
-            const request = store.get(key);
-
-            request.onsuccess = () => {
-                if (request.result) {
-                    resolve(request.result.value);
-                } else {
-                    resolve(null);
-                }
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
-     * 从IndexedDB删除数据
-     */
-    removeFromIndexedDB(key) {
-        return new Promise((resolve, reject) => {
-            if (!this.indexedDB) {
-                reject(new Error('IndexedDB not available'));
-                return;
-            }
-
-            const transaction = this.indexedDB.transaction(['keyValueStore'], 'readwrite');
-            const store = transaction.objectStore('keyValueStore');
-            const request = store.delete(key);
-
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
-     * 处理版本升级
-     */
-    async handleVersionUpgrade(oldVersion, options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        console.log(`Upgrading storage from ${oldVersion || 'unknown'} to ${this.version}`);
-
-        // 在这里处理数据迁移逻辑
-        if (!oldVersion) {
-            // 首次安装，初始化默认数据
-            await this.initializeDefaultData({ skipReady });
-        }
-
-        await this.set('system_version', this.version, { skipReady });
-
-        // 执行遗留数据迁移（只运行一次）
-        if (!await this.get('migration_completed', null, { skipReady })) {
-            console.log('[Storage] 检测到未完成迁移，开始执行...');
-            await this.migrateLegacyData({ skipReady });
-        } else {
-            console.log('[Storage] 迁移已完成，跳过');
-        }
-    }
-
-    /**
-     * 初始化默认数据
-     */
-    async initializeDefaultData(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        const defaultData = {
-            settings: {
-                theme: 'light',
-                notifications: true,
-                autoSave: true,
-                reminderTime: '19:00'
-            },
-            exam_index: null,
-            learning_goals: []
-        };
-
-        for (const [key, value] of Object.entries(defaultData)) {
-            const existingValue = await this.get(key, null, { skipReady });
-            if (existingValue === null || existingValue === undefined) {
-                console.log(`[Storage] 初始化默认数据: ${key}`);
-                await this.set(key, value, { skipReady });
-            } else {
-                console.log(`[Storage] 保留现有数据: ${key} (${Array.isArray(existingValue) ? existingValue.length + ' 项' : typeof existingValue})`);
-            }
-        }
-    }
-
-    /**
-     * 设置存储命名空间
-     */
-    setNamespace(namespace) {
-        if (typeof namespace === 'string' && namespace.trim()) {
-            this.prefix = namespace.trim() + '_';
-            console.log('[Storage] 命名空间已设置为:', this.prefix);
-        } else {
-            console.warn('[Storage] 无效的命名空间:', namespace);
-        }
-    }
-
-    /**
-     * 生成完整的存储键名
-     */
-    getKey(key) {
-        return this.prefix + key;
-    }
-
-    createStoredEnvelope(value) {
-        const compressedValue = this.compressData(value);
-        return JSON.stringify({
-            data: compressedValue,
-            timestamp: Date.now(),
-            version: this.version,
-            compressed: compressedValue !== value
-        });
-    }
-
-    parseStoredEnvelope(serializedValue, defaultValue = undefined) {
-        if (serializedValue === undefined || serializedValue === null) {
-            return defaultValue;
-        }
-        const parsed = JSON.parse(serializedValue);
-        return parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-            ? parsed.data
-            : defaultValue;
-    }
-
-    readWebStorageValue(storage, storageKey) {
-        if (!storage || typeof storage.getItem !== 'function') {
-            return null;
-        }
-        try {
-            return storage.getItem(storageKey);
-        } catch (_) {
-            return null;
-        }
-    }
-
-    writeWebStorageValue(storage, storageKey, serializedValue) {
-        if (!storage || typeof storage.setItem !== 'function') {
-            return false;
-        }
-        try {
-            storage.setItem(storageKey, serializedValue);
-            return true;
-        } catch (_) {
-            return false;
-        }
-    }
-
-    async writePersistentValue(key, value, options = {}) {
-        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
-            throw new Error(`Storage.writePersistentValue(${key}) is internal-only`);
-        }
-        const serializedValue = this.createStoredEnvelope(value);
-        const storageKey = this.getKey(key);
-
-        if (this.indexedDB && !this.indexedDBBlocked) {
-            await this.setToIndexedDB(storageKey, serializedValue);
-            this.dispatchStorageSync(key);
-            return true;
-        }
-
-        if (this.localStorageAvailable && this.writeWebStorageValue(localStorage, storageKey, serializedValue)) {
-            this.mode = 'localStorage';
-            this.volatileMode = false;
-            this.dispatchStorageSync(key);
-            return true;
-        }
-
-        if (this.sessionStorageAvailable && this.writeWebStorageValue(sessionStorage, storageKey, serializedValue)) {
-            this.mode = 'sessionStorage';
-            this.volatileMode = false;
-            this.dispatchStorageSync(key);
-            return true;
-        }
-
-        if (this.fallbackStorage) {
-            this.fallbackStorage.set(storageKey, serializedValue);
-            this.dispatchStorageSync(key);
-            return true;
-        }
-
-        this.volatileMode = true;
-        this.mode = 'volatile';
-        this.fallbackStorage = this.fallbackStorage || new Map();
-        this.fallbackStorage.set(storageKey, serializedValue);
-        this.dispatchStorageSync(key);
-        return true;
-    }
-
-    async readPersistentValue(key, defaultValue = undefined, options = {}) {
-        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
-            throw new Error(`Storage.readPersistentValue(${key}) is internal-only`);
-        }
-        const storageKey = this.getKey(key);
-
-        if (this.fallbackStorage && this.fallbackStorage.has(storageKey)) {
-            return this.parseStoredEnvelope(this.fallbackStorage.get(storageKey), defaultValue);
-        }
-
-        if (this.indexedDB && !this.indexedDBBlocked) {
-            const serializedValue = await this.getFromIndexedDB(storageKey);
-            return this.parseStoredEnvelope(serializedValue, defaultValue);
-        }
-
-        if (this.localStorageAvailable) {
-            return this.parseStoredEnvelope(this.readWebStorageValue(localStorage, storageKey), defaultValue);
-        }
-
-        if (this.sessionStorageAvailable) {
-            return this.parseStoredEnvelope(this.readWebStorageValue(sessionStorage, storageKey), defaultValue);
-        }
-
-        return defaultValue;
-    }
-
-    async removePersistentValue(key, options = {}) {
-        if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
-            throw new Error(`Storage.removePersistentValue(${key}) is internal-only`);
-        }
-        const storageKey = this.getKey(key);
-
-        if (this.fallbackStorage) {
-            this.fallbackStorage.delete(storageKey);
-        }
-
-        if (this.indexedDB && !this.indexedDBBlocked) {
-            await this.removeFromIndexedDB(storageKey);
-        }
-
-        try { localStorage.removeItem(storageKey); } catch (_) { }
-        try { sessionStorage.removeItem(storageKey); } catch (_) { }
-        this.dispatchStorageSync(key);
-        return true;
-    }
-
-    async clearPersistentStorage(options = {}) {
-        if (!hasInternalAccessOptions(options)) {
-            throw new Error('Storage.clearPersistentStorage is internal-only');
-        }
-        if (this.fallbackStorage) {
-            this.fallbackStorage.clear();
-        }
-
-        if (this.indexedDB && !this.indexedDBBlocked) {
-            const transaction = this.indexedDB.transaction(['keyValueStore'], 'readwrite');
-            const store = transaction.objectStore('keyValueStore');
-            const request = store.clear();
-            await new Promise((resolve, reject) => {
-                request.onsuccess = () => resolve();
-                request.onerror = () => reject(request.error);
-            });
-        }
-
-        try {
-            Object.keys(localStorage)
-                .filter((key) => key.startsWith(this.prefix))
-                .forEach((key) => localStorage.removeItem(key));
-        } catch (_) { }
-        try {
-            Object.keys(sessionStorage)
-                .filter((key) => key.startsWith(this.prefix))
-                .forEach((key) => sessionStorage.removeItem(key));
-        } catch (_) { }
-
-        this.clearBackendPreference();
-        window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key: '*' } }));
-        return true;
-    }
-
-    /**
-     * 压缩数据
-     */
-    compressData(data) {
-        try {
-            // 切记：不要压缩数组，避免把列表写坏
-            if (Array.isArray(data)) {
-                return data;
-            }
-            // 仅对体积较大的“对象记录”压缩
-            if (data && typeof data === 'object') {
-                const len = JSON.stringify(data).length;
-                if (len > 1000) {
-                    return this.compressObject(data);
-                }
-            }
-            return data;
-        } catch (error) {
-            console.warn('[Storage] 数据压缩失败，使用原始数据:', error);
-            return data;
-        }
-    }
-
-    /**
-     * 压缩对象数据
-     */
-    compressObject(obj) {
-        // 只保留核心字段：用户答案、canonical 正确答案表、正误、得分、正确率、答题时长、答题时间
-        const coreFields = [
-            'id', 'examId', 'title', 'category', 'frequency',
-            'score', 'totalQuestions', 'correctAnswers', 'correctAnswerMap', 'accuracy', 'percentage', 'duration',
-            'startTime', 'endTime', 'date', 'sessionId', 'timestamp',
-            'dataSource', 'realData'
-        ];
-
-        const compressed = {};
-
-        // 只保留核心字段
-        coreFields.forEach(field => {
-            if (obj.hasOwnProperty(field)) {
-                compressed[field] = obj[field];
-            }
-        });
-
-        // 压缩realData，只保留核心内容
-        if (obj.realData) {
-            compressed.realData = this.compressRealData(obj.realData);
-        }
-
-        return compressed;
-    }
-
-    /**
-     * 合并记录数组，避免重复
-     * 基于 id 去重，保留最新的记录（按 updatedAt/createdAt/endTime/startTime 多字段回退）
-     */
-    mergeRecords(current, legacy) {
-        if (!Array.isArray(current)) current = [];
-        if (!Array.isArray(legacy)) return current;
-
-        // canonical 记录的主要时间字段是 updatedAt/createdAt/endTime/startTime，
-        // 不保证有顶层 timestamp。用多字段回退取最大时间戳，避免保留旧副本丢新副本。
-        const resolveTimestamp = (record) => {
-            if (!record || typeof record !== 'object') return 0;
-            const candidates = [
-                record.updatedAt,
-                record.createdAt,
-                record.endTime,
-                record.startTime,
-                record.date,
-                record.timestamp
-            ];
-            for (let i = 0; i < candidates.length; i += 1) {
-                const value = candidates[i];
-                if (!value) continue;
-                const time = new Date(value).getTime();
-                if (Number.isFinite(time)) return time;
-            }
-            return 0;
-        };
-
-        const mergedMap = new Map();
-        [...current, ...legacy].forEach(record => {
-            if (record && record.id) {
-                const existing = mergedMap.get(record.id);
-                if (!existing || (resolveTimestamp(record) > resolveTimestamp(existing))) {
-                    mergedMap.set(record.id, record);
-                }
-            } else if (record && record.timestamp) {
-                // 如果无 id，使用 timestamp 过滤
-                mergedMap.set(record.timestamp, record);
-            }
-        });
-
-        return Array.from(mergedMap.values()).sort((a, b) => resolveTimestamp(b) - resolveTimestamp(a));
-    }
-
-    async listPracticeRecordsCanonical(options = {}) {
-        const { skipReady = false } = options;
-
-        const api = await this.getPracticeRecordAPI({ skipReady });
-        if (api && typeof api.list === 'function') {
-            const records = await api.list();
-            return Array.isArray(records) ? records : [];
-        }
-
-        throw new Error('Storage.listPracticeRecordsCanonical: unified store not ready');
-    }
-
-    async replacePracticeRecordsCanonical(records, options = {}) {
-        const { skipReady = false, updateStats } = options;
-        if (!Array.isArray(records)) {
-            throw new Error('Storage.replacePracticeRecordsCanonical requires an array of records');
-        }
-
-        const api = await this.getPracticeRecordAPI({ skipReady });
-        if (api && typeof api.replace === 'function') {
-            // 透传 updateStats 选项：导入/回滚场景同时写入 user_stats，
-            // 若此处 recalculateStats 会和并发 writeUserStatsCanonical 竞争，谁后写谁生效。
-            // 默认 undefined 让 api.replace 自行决定（保存路径会重算），导入路径传 false 跳过。
-            await api.replace(records, { maxRecords: 1000, updateStats });
-            return true;
-        }
-
-        throw new Error('Storage.replacePracticeRecordsCanonical: unified store not ready');
-    }
-
-    async writeUserStatsCanonical(stats, options = {}) {
-        const { skipReady = false } = options;
-        const api = await this.getPracticeRecordAPI({ skipReady });
-        if (api && typeof api.writeStats === 'function') {
-            return await api.writeStats(stats);
-        }
-        throw new Error('Storage.writeUserStatsCanonical: unified stats store not ready');
-    }
-
-    async mergePracticeRecordsCanonical(records, options = {}) {
-        if (!Array.isArray(records)) {
-            throw new Error('Storage.mergePracticeRecordsCanonical requires an array of records');
-        }
-        const current = await this.listPracticeRecordsCanonical(options);
-        const merged = this.mergeRecords(current, records);
-        await this.replacePracticeRecordsCanonical(merged, options);
-        return merged;
-    }
-
-    /**
-     * 压缩realData数据
-     */
-    compressRealData(realData) {
-        const compressed = {
-            score: realData.score,
-            totalQuestions: realData.totalQuestions,
-            accuracy: realData.accuracy,
-            percentage: realData.percentage,
-            duration: realData.duration,
-            answers: realData.answers || {},
-            correctAnswerMap: realData.correctAnswerMap || {},
-            isRealData: realData.isRealData,
-            source: realData.source
-        };
-
-        // 压缩答案历史，只保留每个题目的最后一次答案
-        if (realData.answerHistory) {
-            const latestAnswers = {};
-            Object.entries(realData.answerHistory).forEach(([questionId, history]) => {
-                if (Array.isArray(history) && history.length > 0) {
-                    latestAnswers[questionId] = history[history.length - 1];
-                }
-            });
-            compressed.answerHistory = latestAnswers;
-        }
-
-        // 压缩交互记录，只保留最近50次
-        if (realData.interactions && Array.isArray(realData.interactions)) {
-            compressed.interactions = realData.interactions.slice(-50);
-        }
-
-        // 压缩详细的题目比较信息
-        if (realData.answerComparison) {
-            const simplifiedComparison = {};
-            Object.entries(realData.answerComparison).forEach(([questionId, comparison]) => {
-                simplifiedComparison[questionId] = {
-                    userAnswer: comparison.userAnswer || '',
-                    isCorrect: typeof comparison.isCorrect === 'boolean' ? comparison.isCorrect : null
-                };
-            });
-            compressed.answerComparison = simplifiedComparison;
-        }
-
-        return compressed;
-    }
-
-    /**
-     * 存储数据
-     */
-    async set(key, value, options = {}) {
-        const { skipReady = false } = options;
-        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
-        await this.waitForInitialization(skipReady);
-        try {
-            await this.ensureIndexedDBReady();
-            if (protectedPublicAccess) {
-                throw new Error(`Storage.set(${key}) is disabled; use PracticeRecordAPI`);
-            }
-            return await this.writePersistentValue(key, value, options);
-        } catch (error) {
-            console.error('[Storage] set 操作错误:', error);
-            this.handleStorageError(key, value, error, options);
-            if (protectedPublicAccess) {
-                throw error;
-            }
-            return false;
-        }
-    }
-
-    /**
-     * 向数组追加新项
-     * @param {string} key - 存储键名
-     * @param {*} value - 要追加的项
-     * @returns {Promise<boolean>} 成功返回 true，失败返回 false
-     */
-    async append(key, value, options = {}) {
-        const { skipReady = false } = options;
-        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
-        await this.waitForInitialization(skipReady);
-        try {
-            await this.ensureIndexedDBReady();
-            if (protectedPublicAccess) {
-                throw new Error(`Storage.append(${key}) is disabled; use PracticeRecordAPI`);
-            }
-            let currentList = await this.readPersistentValue(key, [], options);
-            if (!Array.isArray(currentList)) {
-                currentList = [];
-            }
-            currentList.push(value);
-            return await this.writePersistentValue(key, currentList, options);
-        } catch (error) {
-            console.error('[Storage] Append error:', error);
-            this.handleStorageError(key, value, error, options);
-            if (protectedPublicAccess) {
-                throw error;
-            }
-            return false;
-        }
-    }
-
-    async get(key, defaultValue = null, options = {}) {
-        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
-        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
-        await this.waitForInitialization(skipReady);
-        try {
-            await this.ensureIndexedDBReady();
-            if (protectedPublicAccess) {
-                return await this.readProtectedDataKey(key, defaultValue, options);
-            }
-            return await this.readPersistentValue(key, defaultValue, options);
-        } catch (error) {
-            console.error('Storage get error:', error);
-            if (protectedPublicAccess) {
-                throw error;
-            }
-            return defaultValue;
-        }
-    }
-
-    /**
-     * 删除数据
-     */
-    async remove(key, options = {}) {
-        const { skipReady = false } = options;
-        const protectedPublicAccess = this.isProtectedDataKey(key) && !hasInternalAccessOptions(options);
-        await this.waitForInitialization(skipReady);
-        try {
-            await this.ensureIndexedDBReady();
-            if (protectedPublicAccess) {
-                throw new Error(`Storage.remove(${key}) is disabled; use PracticeRecordAPI`);
-            }
-            return await this.removePersistentValue(key, options);
-        } catch (error) {
-            console.error('Storage remove error:', error);
-            if (protectedPublicAccess) {
-                throw error;
-            }
-            return false;
-        }
-    }
-
-    /**
-     * 清空所有数据
-     */
-    async clear(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        try {
-            await this.ensureIndexedDBReady();
-            if (!hasInternalAccessOptions(options)) {
-                const api = await this.getPracticeRecordAPI(options);
-                if (!api || typeof api.clear !== 'function' || typeof api.resetStats !== 'function') {
-                    throw new Error('Storage.clear: PracticeRecordAPI clear/resetStats not ready');
-                }
-                await api.clear({ updateStats: false });
-                await api.resetStats();
-            }
-            return await this.clearPersistentStorage(createInternalAccessOptions(options));
-        } catch (error) {
-            console.error('Storage clear error:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 检查存储配额是否充足
-     */
-    async checkStorageQuota(dataSize, options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        try {
-            console.log(`[Storage] 检查存储配额，需要空间: ${dataSize} 字节`);
-            if (this.fallbackStorage) {
-                console.log('[Storage] 内存存储，无配额限制');
-                return true; // 内存存储没有配额限制
-            }
-
-            const storageInfo = await this.getStorageInfo({ skipReady });
-            if (!storageInfo) {
-                console.warn('[Storage] 无法获取存储信息，拒绝操作');
-                return false;
-            }
-
-            console.log(`[Storage] 当前存储类型: ${storageInfo.type}, 已用: ${storageInfo.used} 字节`);
-
-            if (storageInfo.type === 'Hybrid' || storageInfo.type === 'IndexedDB') {
-                // 混合存储或IndexedDB没有固定配额限制，但我们仍然检查数据大小
-                const maxSize = 105 * 1024 * 1024; // 105MB限制 (localStorage 5MB + IndexedDB 100MB)
-                const hasSpace = storageInfo.used + dataSize <= maxSize;
-                console.log(`[Storage] Hybrid/IndexedDB 检查: 已用 ${storageInfo.used}, 需要 ${dataSize}, 最大 ${maxSize}, 结果: ${hasSpace}`);
-                return hasSpace;
-            }
-
-            const currentUsage = storageInfo.used;
-            const quota = 5 * 1024 * 1024; // 5MB
-            const availableSpace = quota - currentUsage;
-
-            // 预留20%的缓冲空间
-            const bufferSpace = quota * 0.2;
-            const safeAvailableSpace = availableSpace - bufferSpace;
-
-            console.log(`[Storage] localStorage 检查: 当前使用 ${(currentUsage / 1024).toFixed(2)}KB, 总配额 ${quota / 1024}KB, 可用 ${(availableSpace / 1024).toFixed(2)}KB, 安全可用 ${(safeAvailableSpace / 1024).toFixed(2)}KB, 需要 ${(dataSize / 1024).toFixed(2)}KB`);
-
-            const hasSpace = safeAvailableSpace >= dataSize;
-            if (!hasSpace) {
-                console.warn('[Storage] localStorage 空间不足');
-            }
-            return hasSpace;
-        } catch (error) {
-            console.error('[Storage] 配额检查错误:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 获取存储使用情况
-     */
-    async getStorageInfo(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        try {
-            if (this.fallbackStorage) {
-                return {
-                    type: 'volatile',
-                    mode: this.mode,
-                    volatile: true,
-                    used: this.fallbackStorage.size,
-                    available: Infinity
-                };
-            }
-
-            if (this.indexedDB && !this.indexedDBBlocked) {
-                const indexedDBUsed = await this.getIndexedDBUsage();
-                return {
-                    type: 'indexedDB',
-                    mode: this.mode,
-                    volatile: false,
-                    used: indexedDBUsed,
-                    available: Infinity,
-                    breakdown: {
-                        indexedDB: indexedDBUsed
-                    }
-                };
-            }
-
-            if (this.fallbackStorage) {
-                return {
-                    type: 'memory',
-                    used: this.fallbackStorage.size,
-                    available: Infinity
-                };
-            }
-
-            if (this.indexedDB) {
-                try {
-                    // 获取所有存储的使用情况
-                    const localStorageUsed = this.getLocalStorageUsage();
-                    const indexedDBUsed = await this.getIndexedDBUsage();
-                    const totalUsed = localStorageUsed + indexedDBUsed;
-
-                    return {
-                        type: 'Hybrid',
-                        used: totalUsed,
-                        available: Infinity, // 混合存储没有固定配额
-                        breakdown: {
-                            localStorage: localStorageUsed,
-                            indexedDB: indexedDBUsed
-                        }
-                    };
-                } catch (error) {
-                    console.warn('[Storage] 获取混合存储使用情况失败:', error);
-                    // 降级到localStorage
-                }
-            }
-
-            let used = 0;
-            const keys = Object.keys(localStorage);
-            keys.forEach(key => {
-                if (key.startsWith(this.prefix)) {
-                    used += localStorage.getItem(key).length;
-                }
-            });
-
-            return {
-                type: 'localStorage',
-                used: used,
-                available: 5 * 1024 * 1024 - used // 假设5MB限制
-            };
-        } catch (error) {
-            console.error('Storage info error:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 获取localStorage使用情况
-     */
-    getLocalStorageUsage() {
-        try {
-            let used = 0;
-            const keys = Object.keys(localStorage);
-            keys.forEach(key => {
-                if (key.startsWith(this.prefix)) {
-                    used += localStorage.getItem(key).length;
-                }
-            });
-            return used;
-        } catch (error) {
-            console.error('Get localStorage usage error:', error);
-            return 0;
-        }
-    }
-
-    /**
-     * 获取IndexedDB使用情况
-     */
-    getIndexedDBUsage() {
-        return new Promise((resolve, reject) => {
-            if (!this.indexedDB) {
-                reject(new Error('IndexedDB not available'));
-                return;
-            }
-
-            const transaction = this.indexedDB.transaction(['keyValueStore'], 'readonly');
-            const store = transaction.objectStore('keyValueStore');
-            const request = store.getAll();
-
-            request.onsuccess = () => {
-                const items = request.result;
-                let totalSize = 0;
-
-                items.forEach(item => {
-                    if (item.key.startsWith(this.prefix) && item.value) {
-                        totalSize += item.value.length;
-                    }
-                });
-
-                resolve(totalSize);
-            };
-
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
-     * 清理旧数据
-     */
-    async cleanupOldData(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        try {
-            console.log('[Storage] 开始清理旧数据...');
-
-            const practiceRecords = await this.listPracticeRecordsCanonical({ skipReady });
-            if (practiceRecords.length > 0) {
-                console.log(`[Storage] 练习记录数据保留${practiceRecords.length}条记录，跳过压缩以保护答案数据完整性`);
-            }
-
-            // 清理错误日志
-            const errorLogs = await this.get('injection_errors', [], { skipReady });
-            if (errorLogs.length > 20) {
-                const logsToKeep = errorLogs.slice(-20); // 保留最近20条
-                await this.set('injection_errors', logsToKeep, { skipReady });
-                console.log(`[Storage] 已清理错误日志，从${errorLogs.length}条减少到${logsToKeep.length}条`);
-            }
-
-            const collectionErrors = await this.get('collection_errors', [], { skipReady });
-            if (collectionErrors.length > 20) {
-                const logsToKeep = collectionErrors.slice(-20);
-                await this.set('collection_errors', logsToKeep, { skipReady });
-                console.log(`[Storage] 已清理数据收集错误日志，从${collectionErrors.length}条减少到${logsToKeep.length}条`);
-            }
-
-            // 清理活动会话（保留最近的）
-            const activeSessions = await this.get('active_sessions', [], { skipReady });
-            const now = Date.now();
-            const recentSessions = activeSessions.filter(session => {
-                const sessionTime = new Date(session.startTime).getTime();
-                const hoursDiff = (now - sessionTime) / (1000 * 60 * 60);
-                return hoursDiff < 1; // 只保留1小时内的会话
-            });
-
-            if (recentSessions.length !== activeSessions.length) {
-                await this.set('active_sessions', recentSessions, { skipReady });
-                console.log(`[Storage] 已清理过期会话，从${activeSessions.length}个减少到${recentSessions.length}个`);
-            }
-
-        } catch (error) {
-            console.error('[Storage] 清理旧数据失败:', error);
-        }
-    }
-
-    /**
-     * 迁移遗留数据到新命名空间
-     * 只运行一次
-     */
-    async migrateLegacyData(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        console.log('[Storage] 开始迁移遗留数据');
-        try {
-            const legacyKeys = Object.keys(localStorage).filter(k =>
-                k === 'practice_records' ||
-                k === 'user_progress' ||
-                k === 'scores' ||
-                k.startsWith('old_prefix_')
-            );
-
-            if (legacyKeys.length === 0) {
-                console.log('[Storage] 无遗留数据需要迁移');
-                await this.set('migration_completed', true, { skipReady });
-            } else {
-                let migratedCount = 0;
-                let deferredPracticeMigration = false;
-                for (const oldKey of legacyKeys) {
-                    try {
-                        const legacyDataStr = localStorage.getItem(oldKey);
-                        if (!legacyDataStr) continue;
-
-                        let legacyData;
-                        try {
-                            legacyData = JSON.parse(legacyDataStr);
-                        } catch (parseError) {
-                            console.warn(`[Storage] 解析遗留数据失败: ${oldKey}`, parseError);
-                            continue;
-                        }
-
-                        if (!Array.isArray(legacyData)) {
-                            console.warn(`[Storage] 遗留数据非数组，跳过: ${oldKey}`);
-                            continue;
-                        }
-
-                        if (legacyData.length === 0) {
-                            console.log('[Storage] 旧数据为空，跳过迁移');
-                            continue;
-                        }
-
-                        // 对应新键（去除 old_prefix_ 如果存在）
-                        let newKey = oldKey.replace(/^old_prefix_/, '');
-                        const isPracticeRecordsKey = newKey === 'practice_records';
-                        if (isPracticeRecordsKey) {
-                            await this.mergePracticeRecordsCanonical(legacyData, { skipReady });
-                        } else {
-                            const current = await this.get(newKey, [], { skipReady });
-                            const merged = this.mergeRecords(current, legacyData);
-                            await this.set(newKey, merged, { skipReady });
-                        }
-
-                        // 删除旧键
-                        localStorage.removeItem(oldKey);
-                        migratedCount++;
-                        console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
-                    } catch (migrateError) {
-                        const newKey = oldKey.replace(/^old_prefix_/, '');
-                        if (newKey === 'practice_records') {
-                            deferredPracticeMigration = true;
-                        }
-                        console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
-                    }
-                }
-
-                console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
-                if (deferredPracticeMigration) {
-                    console.warn('[Storage] 练习记录迁移已延后，等待 PracticeRecordAPI 就绪后重试');
-                } else {
-                    await this.set('migration_completed', true, { skipReady });
-                }
-            }
-
-            if (!await this.get('my_melody_migration_completed', null, { skipReady })) {
-                console.log('[Storage] 检查 MyMelody 遗留键迁移...');
-                const canonicalPracticeKey = this.getKey('practice_records');
-                console.warn('[Storage] 跳过 MyMelody 遗留键迁移：旧键与 canonical practice_records 键相同，继续迁移会误删当前记录', canonicalPracticeKey);
-                await this.set('my_melody_migration_completed', true, { skipReady });
-            }
-
-        } catch (error) {
-            console.error('[Storage] 迁移遗留数据失败:', error);
-            // 即使失败也设置标志，避免无限重试
-            await this.set('migration_completed', true, { skipReady });
-        }
-    }
-
-    /**
-     * 从备份文件恢复数据
-     */
-    async restoreFromBackup(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        console.log('[Storage] 开始从备份恢复数据');
-
-        const backupPath = 'assets/data/backup-practice-records.json';
-        const isFileProtocol = typeof window !== 'undefined'
-            && window.location
-            && window.location.protocol === 'file:';
-
-        // Chromium 下 fetch(file://...) 会直接抛错；备份属于可选项，跳过即可。
-        if (isFileProtocol) {
-            console.info('[Storage] file:// 环境跳过内置备份恢复');
-            return false;
-        }
-
-        try {
-            const response = await fetch(backupPath);
-            if (!response.ok) {
-                return false;
-            }
-            const backupData = await response.json();
-            if (!backupData || !Array.isArray(backupData.practice_records)) {
-                console.warn('[Storage] 备份数据格式无效');
-                return false;
-            }
-            // 运行期恢复必须走统一记录 API；raw practice_records 只允许启动迁移兼容使用。
-            await this.replacePracticeRecordsCanonical(backupData.practice_records, { skipReady });
-            console.log('[Storage] 从备份恢复 practice_records 成功');
-            return true;
-        } catch (error) {
-            console.warn('[Storage] 备份恢复失败，已跳过:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 处理存储错误
-     */
-    handleStorageError(key, value, error, options = {}) {
-        console.error('[Storage] 存储错误:', error);
-
-        // 如果是配额错误，尝试切换到备用存储
-        if (error.name === 'QuotaExceededError') {
-            this.handleStorageQuotaExceeded(key, value, options);
-        } else {
-            // 其他错误
-            if (window.showMessage) {
-                window.showMessage('数据保存失败，请检查浏览器设置', 'error');
-            }
-
-            // 触发存储错误事件
-            document.dispatchEvent(new CustomEvent('storageError', {
-                detail: { key, value, error }
-            }));
-        }
-    }
-
-    /**
-     * 导出数据
-     */
-    async exportData(options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        try {
-            const data = {};
-
-            // 1. 导出内存存储数据
-            if (this.fallbackStorage) {
-                this.fallbackStorage.forEach((value, key) => {
-                    if (key.startsWith(this.prefix)) {
-                        if (this.isProtectedStorageKey(key)) {
-                            return;
-                        }
-                        const cleanKey = key.replace(this.prefix, '');
-                        data[cleanKey] = JSON.parse(value);
-                    }
-                });
-                console.log(`[Storage] 已导出内存存储数据 ${this.fallbackStorage.size} 条`);
-            }
-
-            // 2. 导出IndexedDB数据
-            if (this.indexedDB) {
-                try {
-                    const items = await this.getAllFromIndexedDB();
-                    const indexedDBData = {};
-                    items.forEach(item => {
-                        if (item.key.startsWith(this.prefix) && !this.isProtectedStorageKey(item.key)) {
-                            const cleanKey = item.key.replace(this.prefix, '');
-                            indexedDBData[cleanKey] = JSON.parse(item.value);
-                        }
-                    });
-                    // 合并IndexedDB数据
-                    Object.assign(data, indexedDBData);
-                    console.log(`[Storage] 已导出IndexedDB数据 ${Object.keys(indexedDBData).length} 条`);
-                } catch (error) {
-                    console.warn('[Storage] IndexedDB导出失败:', error);
-                }
-            }
-
-            // 3. 导出localStorage数据
-            const localStorageKeys = Object.keys(localStorage);
-            const appKeys = localStorageKeys.filter(key => key.startsWith(this.prefix));
-            appKeys.forEach(key => {
-                const cleanKey = key.replace(this.prefix, '');
-                if (this.isProtectedDataKey(cleanKey)) {
-                    return;
-                }
-                try {
-                    const value = localStorage.getItem(key);
-                    if (value) {
-                        data[cleanKey] = JSON.parse(value);
-                    }
-                } catch (error) {
-                    console.warn(`[Storage] 解析localStorage数据失败: ${cleanKey}`, error);
-                }
-            });
-            console.log(`[Storage] 已导出localStorage数据 ${appKeys.length} 条`);
-
-            data.practice_records = await this.readProtectedDataKey('practice_records', [], { skipReady });
-            data.user_stats = await this.readProtectedDataKey('user_stats', null, { skipReady });
-
-            console.log(`[Storage] 数据导出完成，总计 ${Object.keys(data).length} 条记录`);
-
-            return {
-                version: this.version,
-                exportDate: new Date().toISOString(),
-                data: data,
-                storageInfo: {
-                    totalRecords: Object.keys(data).length,
-                    sources: {
-                        memory: this.fallbackStorage ? this.fallbackStorage.size : 0,
-                        indexedDB: this.indexedDB ? Object.keys(data).length - (this.fallbackStorage ? this.fallbackStorage.size : 0) - appKeys.length : 0,
-                        localStorage: appKeys.length
-                    }
-                }
-            };
-        } catch (error) {
-            console.error('Export data error:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 从IndexedDB获取所有数据
-     */
-    getAllFromIndexedDB() {
-        return new Promise((resolve, reject) => {
-            if (!this.indexedDB) {
-                reject(new Error('IndexedDB not available'));
-                return;
-            }
-
-            const transaction = this.indexedDB.transaction(['keyValueStore'], 'readonly');
-            const store = transaction.objectStore('keyValueStore');
-            const request = store.getAll();
-
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    /**
-     * 导入数据
-     */
-    async importData(importedData, options = {}) {
-        const { skipReady = false } = options;
-        await this.waitForInitialization(skipReady);
-        try {
-            if (!importedData || !importedData.data) {
-                throw new Error('Invalid import data format');
-            }
-
-            const importEntries = Object.entries(importedData.data);
-            const api = await this.getPracticeRecordAPI({ skipReady });
-            const hasPracticeRecords = importEntries.some(([key]) => key === 'practice_records');
-            const hasUserStats = importEntries.some(([key]) => key === 'user_stats');
-            if (hasPracticeRecords && (!api || typeof api.replace !== 'function')) {
-                throw new Error('Storage.importData: unified practice record store not ready');
-            }
-            if (hasUserStats && (!api || typeof api.writeStats !== 'function')) {
-                throw new Error('Storage.importData: unified user stats store not ready');
-            }
-
-            // 备份当前数据
-            const backup = await this.exportData({ skipReady });
-            const importEntry = ([key, value]) => {
-                const nextValue = value && Object.prototype.hasOwnProperty.call(value, 'data')
-                    ? value.data
-                    : value;
-                if (key === 'practice_records') {
-                    // updateStats: false — 导入时 user_stats 会通过 writeUserStatsCanonical 独立写入，
-                    // 若此处 recalculateStats 会和并发写入竞争，导致备份中的统计值被覆盖。
-                    return this.replacePracticeRecordsCanonical(nextValue, { skipReady, updateStats: false });
-                }
-                if (key === 'user_stats') {
-                    return this.writeUserStatsCanonical(nextValue, { skipReady });
-                }
-                return this.set(key, nextValue, { skipReady });
-            };
-
-            try {
-                // 清空现有数据
-                await this.clear({ skipReady });
-
-                // 导入新数据
-                const importPromises = importEntries.map(importEntry);
-
-                await Promise.all(importPromises);
-
-                return { success: true, message: 'Data imported successfully' };
-            } catch (importError) {
-                // 恢复备份
-                console.error('Import failed, restoring backup:', importError);
-                await this.clear({ skipReady });
-
-                if (backup && backup.data) {
-                    const restorePromises = Object.entries(backup.data).map(importEntry);
-                    await Promise.all(restorePromises);
-                }
-
-                throw importError;
-            }
-        } catch (error) {
-            console.error('Import data error:', error);
-            return { success: false, message: error.message };
-        }
-    }
-
-    /**
-     * 数据验证
-     */
-    validateData(key, data) {
-        const validators = {
-            practice_records: (records) => {
-                return Array.isArray(records) && records.every(record =>
-                    record.id && record.examId && record.startTime && record.endTime
-                );
-            },
-            user_stats: (stats) => {
-                return stats && typeof stats.totalPractices === 'number';
-            },
-            exam_index: (index) => {
-                return !index || (Array.isArray(index) && index.every(exam =>
-                    exam.id && exam.title && exam.category
-                ));
-            }
-        };
-
-        const validator = validators[key];
-        return validator ? validator(data) : true;
-    }
-
-    /**
-     * 启动存储监控
-     */
-    async startStorageMonitoring() {
-        await this.waitForInitialization();
-        console.log('[Storage] 启动存储监控...');
-
-        // 定期检查存储使用情况
-        this.monitoringInterval = setInterval(async () => {
-            try {
-                const storageInfo = await this.getStorageInfo();
-                if (storageInfo) {
-                    const usagePercent = storageInfo.type === 'localStorage'
-                        ? (storageInfo.used / (5 * 1024 * 1024)) * 100
-                        : (storageInfo.used / (105 * 1024 * 1024)) * 100;
-
-                    const maxSize = storageInfo.type === 'localStorage' ? '5MB' :
-                                   storageInfo.type === 'Hybrid' ? '105MB' : '100MB';
-                    console.log(`[Storage] 使用率: ${usagePercent.toFixed(2)}% (${(storageInfo.used / 1024).toFixed(2)}KB / ${maxSize})`);
-
-                    // 显示详细的存储分布
-                    if (storageInfo.breakdown) {
-                        console.log(`[Storage] 存储分布: localStorage ${(storageInfo.breakdown.localStorage / 1024).toFixed(2)}KB, IndexedDB ${(storageInfo.breakdown.indexedDB / 1024).toFixed(2)}KB`);
-                    }
-
-                    // 当使用率超过80%时，自动清理
-                    if (usagePercent > 80) {
-                        console.warn('[Storage] 存储使用率过高，自动清理旧数据');
-                        await this.cleanupOldData();
-
-                        // 清理后再次检查
-                        const newStorageInfo = await this.getStorageInfo();
-                        if (newStorageInfo) {
-                            const newUsagePercent = newStorageInfo.type === 'localStorage'
-                                ? (newStorageInfo.used / (5 * 1024 * 1024)) * 100
-                                : (newStorageInfo.used / (105 * 1024 * 1024)) * 100;
-
-                            console.log(`[Storage] 清理后使用率: ${newUsagePercent.toFixed(2)}%`);
-
-                            // 如果仍然超过90%，显示警告
-                            if (newUsagePercent > 90) {
-                                if (window.showMessage) {
-                                    window.showMessage('存储空间即将不足，建议导出数据备份', 'warning');
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('[Storage] 存储监控错误:', error);
-            }
-        }, 300000); // 每5分钟检查一次
-
-        // 页面卸载时清理监控 - 全局事件必须使用原生 addEventListener
-        window.addEventListener('beforeunload', () => {
-            if (this.monitoringInterval) {
-                clearInterval(this.monitoringInterval);
-            }
-        });
-    }
-
-    // ==================== 词表存储专用方法 ====================
-
-    /**
-     * 词表存储键常量
-     */
-    getVocabStorageKeys() {
-        return {
-            P1_ERRORS: 'vocab_list_p1_errors',
-            P4_ERRORS: 'vocab_list_p4_errors',
-            MASTER_ERRORS: 'vocab_list_master_errors',
-            CUSTOM: 'vocab_list_custom',
-            READING_HIGHLIGHTS: 'vocab_list_reading_highlights',
-            ACTIVE_LIST: 'vocab_active_list'
-        };
-    }
-
-    /**
-     * 验证词表数据结构
-     */
-    validateVocabList(vocabList) {
-        if (!vocabList || typeof vocabList !== 'object') {
-            return { valid: false, error: '词表数据无效' };
-        }
-
-        const requiredFields = ['id', 'name', 'source', 'words', 'createdAt', 'updatedAt'];
-        for (const field of requiredFields) {
-            if (!(field in vocabList)) {
-                return { valid: false, error: `缺少必需字段: ${field}` };
-            }
-        }
-
-        if (!Array.isArray(vocabList.words)) {
-            return { valid: false, error: 'words 字段必须是数组' };
-        }
-
-        // 验证每个单词条目
-        for (const word of vocabList.words) {
-            if (!word.word || typeof word.word !== 'string') {
-                return { valid: false, error: '单词条目缺少有效的 word 字段' };
-            }
-            if (!word.timestamp || typeof word.timestamp !== 'number') {
-                return { valid: false, error: '单词条目缺少有效的 timestamp 字段' };
-            }
-        }
-
-        return { valid: true };
-    }
-
-    /**
-     * 清理词表数据
-     * 移除重复单词，保留最新的记录
-     */
-    cleanVocabList(vocabList) {
-        if (!vocabList || !Array.isArray(vocabList.words)) {
-            return vocabList;
-        }
-
-        const wordMap = new Map();
-
-        // 按时间戳排序，保留最新的
-        vocabList.words.forEach(word => {
-            const key = word.word.toLowerCase().trim();
-            const existing = wordMap.get(key);
-
-            if (!existing || word.timestamp > existing.timestamp) {
-                wordMap.set(key, word);
-            }
-        });
-
-        vocabList.words = Array.from(wordMap.values());
-        vocabList.updatedAt = Date.now();
-
-        return vocabList;
-    }
-
-    /**
-     * 保存词表数据
-     */
-    async saveVocabList(vocabList, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            // 验证数据
-            const validation = this.validateVocabList(vocabList);
-            if (!validation.valid) {
-                console.error('[Storage] 词表数据验证失败:', validation.error);
-                return false;
-            }
-
-            // 清理数据
-            const cleanedList = this.cleanVocabList(vocabList);
-
-            // 确定存储键
-            const keys = this.getVocabStorageKeys();
-            let storageKey;
-
-            switch (cleanedList.source) {
-                case 'p1':
-                    storageKey = keys.P1_ERRORS;
-                    break;
-                case 'p4':
-                    storageKey = keys.P4_ERRORS;
-                    break;
-                case 'all':
-                    storageKey = keys.MASTER_ERRORS;
-                    break;
-                case 'user':
-                    storageKey = keys.CUSTOM;
-                    break;
-                case 'reading-highlight':
-                    storageKey = keys.READING_HIGHLIGHTS;
-                    break;
-                default:
-                    storageKey = cleanedList.id;
-            }
-
-            console.log(`[Storage] 保存词表: ${storageKey}, 单词数: ${cleanedList.words.length}`);
-
-            // 保存到存储
-            const success = await this.set(storageKey, cleanedList, { skipReady });
-
-            if (success) {
-                console.log(`[Storage] 词表保存成功: ${storageKey}`);
-            }
-
-            return success;
-        } catch (error) {
-            console.error('[Storage] 保存词表失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 加载词表数据
-     */
-    async loadVocabList(listId, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            const keys = this.getVocabStorageKeys();
-            let storageKey;
-
-            // 根据 listId 确定存储键
-            if (listId === 'spelling-errors-p1') {
-                storageKey = keys.P1_ERRORS;
-            } else if (listId === 'spelling-errors-p4') {
-                storageKey = keys.P4_ERRORS;
-            } else if (listId === 'spelling-errors-master') {
-                storageKey = keys.MASTER_ERRORS;
-            } else if (listId === 'custom') {
-                storageKey = keys.CUSTOM;
-            } else if (listId === 'reading-highlights') {
-                storageKey = keys.READING_HIGHLIGHTS;
-            } else {
-                storageKey = listId;
-            }
-
-            console.log(`[Storage] 加载词表: ${storageKey}`);
-
-            const vocabList = await this.get(storageKey, null, { skipReady });
-
-            if (!vocabList) {
-                console.log(`[Storage] 词表不存在: ${storageKey}`);
-                return null;
-            }
-
-            if (Array.isArray(vocabList)) {
-                const now = new Date().toISOString();
-                const sourceMap = {
-                    'spelling-errors-p1': 'p1',
-                    'spelling-errors-p4': 'p4',
-                    'spelling-errors-master': 'all',
-                    'custom': 'user',
-                    'reading-highlights': 'reading-highlight'
-                };
-                const nameMap = {
-                    'spelling-errors-p1': 'P1 拼写错误',
-                    'spelling-errors-p4': 'P4 拼写错误',
-                    'spelling-errors-master': '综合错误词表',
-                    'custom': '自定义词表',
-                    'reading-highlights': '阅读高亮生词'
-                };
-                return {
-                    id: listId,
-                    name: nameMap[listId] || listId,
-                    source: sourceMap[listId] || listId,
-                    words: vocabList,
-                    createdAt: now,
-                    updatedAt: now
-                };
-            }
-
-            // 验证加载的数据
-            const validation = this.validateVocabList(vocabList);
-            if (!validation.valid) {
-                console.error('[Storage] 加载的词表数据无效:', validation.error);
-                return null;
-            }
-
-            console.log(`[Storage] 词表加载成功: ${storageKey}, 单词数: ${vocabList.words.length}`);
-            return vocabList;
-        } catch (error) {
-            console.error('[Storage] 加载词表失败:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 获取词表单词数量
-     */
-    async getVocabListWordCount(listId, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            const vocabList = await this.loadVocabList(listId, { skipReady });
-            return vocabList ? vocabList.words.length : 0;
-        } catch (error) {
-            console.error('[Storage] 获取词表单词数量失败:', error);
-            return 0;
-        }
-    }
-
-    /**
-     * 添加单词到词表
-     */
-    async addWordToVocabList(listId, word, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            let vocabList = await this.loadVocabList(listId, { skipReady });
-
-            if (!vocabList) {
-                // 创建新词表
-                vocabList = {
-                    id: listId,
-                    name: this.getVocabListName(listId),
-                    source: this.getVocabListSource(listId),
-                    words: [],
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                };
-            }
-
-            // 检查单词是否已存在
-            const existingIndex = vocabList.words.findIndex(w =>
-                w.word.toLowerCase() === word.word.toLowerCase()
-            );
-
-            if (existingIndex >= 0) {
-                // 更新现有单词
-                vocabList.words[existingIndex] = {
-                    ...vocabList.words[existingIndex],
-                    ...word,
-                    errorCount: (vocabList.words[existingIndex].errorCount || 0) + 1,
-                    timestamp: Date.now()
-                };
-            } else {
-                // 添加新单词
-                vocabList.words.push({
-                    ...word,
-                    errorCount: word.errorCount || 1,
-                    timestamp: word.timestamp || Date.now()
-                });
-            }
-
-            vocabList.updatedAt = Date.now();
-
-            return await this.saveVocabList(vocabList, { skipReady });
-        } catch (error) {
-            console.error('[Storage] 添加单词到词表失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 从词表中移除单词
-     */
-    async removeWordFromVocabList(listId, word, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            const vocabList = await this.loadVocabList(listId, { skipReady });
-
-            if (!vocabList) {
-                return false;
-            }
-
-            const normalizedWord = word.toLowerCase().trim();
-            vocabList.words = vocabList.words.filter(w =>
-                w.word.toLowerCase().trim() !== normalizedWord
-            );
-
-            vocabList.updatedAt = Date.now();
-
-            return await this.saveVocabList(vocabList, { skipReady });
-        } catch (error) {
-            console.error('[Storage] 从词表移除单词失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 获取词表名称
-     */
-    getVocabListName(listId) {
-        const names = {
-            'spelling-errors-p1': 'P1 拼写错误',
-            'spelling-errors-p4': 'P4 拼写错误',
-            'spelling-errors-master': '综合错误词表',
-            'custom': '自定义词表'
-        };
-        return names[listId] || listId;
-    }
-
-    /**
-     * 获取词表来源
-     */
-    getVocabListSource(listId) {
-        if (listId.includes('p1')) return 'p1';
-        if (listId.includes('p4')) return 'p4';
-        if (listId.includes('master')) return 'all';
-        return 'user';
-    }
-
-    /**
-     * 获取所有词表的元数据
-     */
-    async getAllVocabListsMetadata(options = {}) {
-        const { skipReady = false } = options;
-
-        const keys = this.getVocabStorageKeys();
-        const listIds = [
-            'spelling-errors-p1',
-            'spelling-errors-p4',
-            'spelling-errors-master',
-            'custom'
-        ];
-
-        const metadata = [];
-
-        for (const listId of listIds) {
-            const count = await this.getVocabListWordCount(listId, { skipReady });
-            metadata.push({
-                id: listId,
-                name: this.getVocabListName(listId),
-                source: this.getVocabListSource(listId),
-                wordCount: count
-            });
-        }
-
-        return metadata;
-    }
-
-    // ==================== 数据同步逻辑 ====================
-
-    /**
-     * 同步词表数据（跨会话）
-     * 处理数据冲突，使用最新时间戳
-     */
-    async syncVocabList(listId, newData, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            console.log(`[Storage] 开始同步词表: ${listId}`);
-
-            // 加载现有数据
-            const existingList = await this.loadVocabList(listId, { skipReady });
-
-            if (!existingList) {
-                // 没有现有数据，直接保存新数据
-                console.log(`[Storage] 无现有数据，直接保存新词表`);
-                return await this.saveVocabList(newData, { skipReady });
-            }
-
-            // 合并数据，解决冲突
-            const mergedList = this.mergeVocabLists(existingList, newData);
-
-            console.log(`[Storage] 词表合并完成，单词数: ${mergedList.words.length}`);
-
-            // 保存合并后的数据
-            return await this.saveVocabList(mergedList, { skipReady });
-        } catch (error) {
-            console.error('[Storage] 同步词表失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 合并两个词表，解决冲突
-     * 使用最新时间戳的数据
-     */
-    mergeVocabLists(existing, incoming) {
-        // 使用最新的元数据
-        const merged = {
-            id: existing.id,
-            name: existing.name,
-            source: existing.source,
-            words: [],
-            createdAt: existing.createdAt,
-            updatedAt: Math.max(existing.updatedAt, incoming.updatedAt)
-        };
-
-        // 创建单词映射
-        const wordMap = new Map();
-
-        // 先添加现有单词
-        existing.words.forEach(word => {
-            const key = word.word.toLowerCase().trim();
-            wordMap.set(key, word);
-        });
-
-        // 合并新单词，使用最新时间戳
-        incoming.words.forEach(word => {
-            const key = word.word.toLowerCase().trim();
-            const existingWord = wordMap.get(key);
-
-            if (!existingWord || word.timestamp > existingWord.timestamp) {
-                // 新单词或更新的单词
-                wordMap.set(key, {
-                    ...existingWord,
-                    ...word,
-                    errorCount: (existingWord?.errorCount || 0) + (word.errorCount || 1)
-                });
-            }
-        });
-
-        merged.words = Array.from(wordMap.values());
-
-        return merged;
-    }
-
-    /**
-     * 批量同步所有词表
-     */
-    async syncAllVocabLists(options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            console.log('[Storage] 开始批量同步所有词表');
-
-            const listIds = [
-                'spelling-errors-p1',
-                'spelling-errors-p4',
-                'spelling-errors-master',
-                'custom'
-            ];
-
-            const results = [];
-
-            for (const listId of listIds) {
-                const list = await this.loadVocabList(listId, { skipReady });
-                if (list) {
-                    const success = await this.syncVocabList(listId, list, { skipReady });
-                    results.push({ listId, success });
-                }
-            }
-
-            console.log('[Storage] 批量同步完成:', results);
-            return results;
-        } catch (error) {
-            console.error('[Storage] 批量同步失败:', error);
-            return [];
-        }
-    }
-
-    /**
-     * 确保数据持久化（页面关闭前）
-     */
-    async ensureDataPersisted(options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            console.log('[Storage] 确保数据持久化');
-
-            // 强制刷新所有待写入的数据
-            if (this.indexedDB) {
-                // IndexedDB 事务会自动提交，无需额外操作
-                console.log('[Storage] IndexedDB 数据已自动持久化');
-            }
-
-            // 同步所有词表
-            await this.syncAllVocabLists({ skipReady });
-
-            console.log('[Storage] 数据持久化完成');
-            return true;
-        } catch (error) {
-            console.error('[Storage] 数据持久化失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 监听页面卸载事件，确保数据持久化
-     */
-    setupBeforeUnloadHandler() {
-        // 使用 beforeunload 事件确保数据保存
-        window.addEventListener('beforeunload', async (event) => {
-            try {
-                console.log('[Storage] 页面即将关闭，确保数据持久化');
-
-                // 同步保存所有待写入的数据
-                await this.ensureDataPersisted({ skipReady: true });
-
-                console.log('[Storage] 数据持久化完成');
-            } catch (error) {
-                console.error('[Storage] beforeunload 数据持久化失败:', error);
-            }
-        });
-
-        console.log('[Storage] beforeunload 处理器已设置');
-    }
-
-    /**
-     * 检测数据冲突
-     */
-    detectVocabListConflict(list1, list2) {
-        if (!list1 || !list2) return false;
-
-        // 检查是否有相同单词但不同内容
-        const conflicts = [];
-
-        const map1 = new Map(list1.words.map(w => [w.word.toLowerCase(), w]));
-        const map2 = new Map(list2.words.map(w => [w.word.toLowerCase(), w]));
-
-        for (const [word, data1] of map1) {
-            const data2 = map2.get(word);
-            if (data2 && data1.timestamp !== data2.timestamp) {
-                conflicts.push({
-                    word,
-                    data1,
-                    data2,
-                    resolution: data1.timestamp > data2.timestamp ? 'use_list1' : 'use_list2'
-                });
-            }
-        }
-
-        return conflicts.length > 0 ? conflicts : false;
-    }
-
-    /**
-     * 解决词表冲突
-     */
-    resolveVocabListConflict(list1, list2, strategy = 'latest') {
-        if (strategy === 'latest') {
-            return this.mergeVocabLists(list1, list2);
-        } else if (strategy === 'keep_list1') {
-            return list1;
-        } else if (strategy === 'keep_list2') {
-            return list2;
-        }
-
-        return this.mergeVocabLists(list1, list2);
-    }
-
-    // ==================== 降级存储方案 ====================
-
-    /**
-     * 检测 IndexedDB 可用性
-     */
-    isIndexedDBAvailable() {
-        try {
-            // 检查浏览器是否支持 IndexedDB
-            if (!window.indexedDB) {
-                console.log('[Storage] IndexedDB 不支持');
-                return false;
-            }
-
-            // 检查是否已成功初始化
-            if (this.indexedDB) {
-                console.log('[Storage] IndexedDB 可用');
-                return true;
-            }
-
-            console.log('[Storage] IndexedDB 未初始化');
-            return false;
-        } catch (error) {
-            console.error('[Storage] IndexedDB 可用性检测失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 检测 localStorage 可用性
-     */
-    isLocalStorageAvailable() {
-        try {
-            const testKey = '__storage_test__';
-            localStorage.setItem(testKey, 'test');
-            localStorage.removeItem(testKey);
-            console.log('[Storage] localStorage 可用');
-            return true;
-        } catch (error) {
-            console.error('[Storage] localStorage 不可用:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 获取当前存储类型
-     */
-    getCurrentStorageType() {
-        if (this.fallbackStorage) {
-            return 'memory';
-        } else if (this.indexedDB) {
-            return 'indexedDB';
-        } else if (this.isLocalStorageAvailable()) {
-            return 'localStorage';
-        }
-        return 'none';
-    }
-
-    /**
-     * 处理存储空间不足
-     */
-    async handleStorageQuotaExceeded(key, value, options = {}) {
-        console.warn('[Storage] 存储空间不足，尝试清理');
-
-        try {
-            if (this.isProtectedDataKey(key) && !hasInternalAccessOptions(options)) {
-                console.error(`[Storage] ${key} 空间不足时禁止 raw fallback`);
-                if (window.showMessage) {
-                    window.showMessage('练习数据保存空间不足，请先导出备份并清理空间', 'error');
-                }
-                return false;
-            }
-
-            // 1. 清理旧数据
-            await this.cleanupOldData({ skipReady: true });
-
-            // 2. 再次尝试保存
-            const retrySuccess = await this.set(key, value, { skipReady: true });
-            if (retrySuccess) {
-                console.log('[Storage] 清理后保存成功');
-                return true;
-            }
-
-            // 3. 如果仍然失败，尝试降级存储
-            console.warn('[Storage] 清理后仍然失败，尝试降级存储');
-
-            const storageType = this.getCurrentStorageType();
-
-            if (storageType === 'indexedDB') {
-                // 降级到 localStorage
-                console.log('[Storage] 从 IndexedDB 降级到 localStorage');
-                try {
-                    const serializedValue = JSON.stringify({
-                        data: value,
-                        timestamp: Date.now(),
-                        version: this.version
-                    });
-                    localStorage.setItem(this.getKey(key), serializedValue);
-                    console.log('[Storage] localStorage 保存成功');
-                    return true;
-                } catch (localStorageError) {
-                    console.error('[Storage] localStorage 保存失败:', localStorageError);
-                }
-            }
-
-            // 4. 最后降级到内存存储
-            console.warn('[Storage] 降级到内存存储');
-            if (!this.fallbackStorage) {
-                this.fallbackStorage = new Map();
-            }
-            const serializedValue = JSON.stringify({
-                data: value,
-                timestamp: Date.now(),
-                version: this.version
-            });
-            this.fallbackStorage.set(this.getKey(key), serializedValue);
-
-            // 提示用户
-            if (window.showMessage) {
-                window.showMessage('存储空间不足，数据已保存到临时存储，请导出备份', 'warning');
-            }
-
-            return true;
-        } catch (error) {
-            console.error('[Storage] 处理存储空间不足失败:', error);
-
-            // 最终失败，提示用户
-            if (window.showMessage) {
-                window.showMessage('存储空间严重不足，无法保存数据，请清理旧数据', 'error');
-            }
-
-            return false;
-        }
-    }
-
-    /**
-     * 词表专用降级保存
-     */
-    async saveVocabListWithFallback(vocabList, options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            // 首先尝试正常保存
-            const success = await this.saveVocabList(vocabList, { skipReady });
-
-            if (success) {
-                return true;
-            }
-
-            // 如果失败，尝试降级保存
-            console.warn('[Storage] 词表保存失败，尝试降级保存');
-
-            // 压缩词表数据
-            const compressedList = this.compressVocabList(vocabList);
-
-            // 再次尝试保存压缩后的数据
-            const compressedSuccess = await this.saveVocabList(compressedList, { skipReady });
-
-            if (compressedSuccess) {
-                console.log('[Storage] 压缩后保存成功');
-                return true;
-            }
-
-            // 如果仍然失败，使用降级存储
-            return await this.handleStorageQuotaExceeded(
-                this.getVocabStorageKey(vocabList.id),
-                compressedList
-            );
-        } catch (error) {
-            console.error('[Storage] 词表降级保存失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 压缩词表数据
-     */
-    compressVocabList(vocabList) {
-        return {
-            id: vocabList.id,
-            name: vocabList.name,
-            source: vocabList.source,
-            words: vocabList.words.map(word => ({
-                word: word.word,
-                userInput: word.userInput,
-                timestamp: word.timestamp,
-                errorCount: word.errorCount
-                // 移除其他非必要字段
-            })),
-            createdAt: vocabList.createdAt,
-            updatedAt: vocabList.updatedAt
-        };
-    }
-
-    /**
-     * 获取词表存储键
-     */
-    getVocabStorageKey(listId) {
-        const keys = this.getVocabStorageKeys();
-
-        if (listId === 'spelling-errors-p1') return keys.P1_ERRORS;
-        if (listId === 'spelling-errors-p4') return keys.P4_ERRORS;
-        if (listId === 'spelling-errors-master') return keys.MASTER_ERRORS;
-        if (listId === 'custom') return keys.CUSTOM;
-
-        return listId;
-    }
-
-    /**
-     * 检查存储健康状态
-     */
-    async checkStorageHealth(options = {}) {
-        const { skipReady = false } = options;
-
-        try {
-            const health = {
-                indexedDB: this.isIndexedDBAvailable(),
-                localStorage: this.isLocalStorageAvailable(),
-                currentType: this.getCurrentStorageType(),
-                quotaStatus: 'unknown'
-            };
-
-            // 检查配额状态
-            const storageInfo = await this.getStorageInfo({ skipReady });
-            if (storageInfo) {
-                const usagePercent = storageInfo.type === 'localStorage'
-                    ? (storageInfo.used / (5 * 1024 * 1024)) * 100
-                    : (storageInfo.used / (105 * 1024 * 1024)) * 100;
-
-                if (usagePercent < 70) {
-                    health.quotaStatus = 'healthy';
-                } else if (usagePercent < 90) {
-                    health.quotaStatus = 'warning';
-                } else {
-                    health.quotaStatus = 'critical';
-                }
-
-                health.usagePercent = usagePercent;
-                health.used = storageInfo.used;
-            }
-
-            console.log('[Storage] 存储健康状态:', health);
-            return health;
-        } catch (error) {
-            console.error('[Storage] 检查存储健康状态失败:', error);
-            return {
-                indexedDB: false,
-                localStorage: false,
-                currentType: 'none',
-                quotaStatus: 'error'
-            };
-        }
-    }
-
-    // ==================== 数据导出功能 ====================
-
-    /**
-     * 导出练习记录
-     */
-    async exportPracticeRecords(options = {}) {
-        const { skipReady = false, format = 'json' } = options;
-
-        try {
-            console.log('[Storage] 开始导出练习记录');
-
-            const records = await this.listPracticeRecordsCanonical({ skipReady });
-
-            const exportData = {
-                type: 'practice_records',
-                version: this.version,
-                exportDate: new Date().toISOString(),
-                recordCount: records.length,
-                records: records
-            };
-
-            console.log(`[Storage] 练习记录导出完成，共 ${records.length} 条`);
-
-            if (format === 'json') {
-                return JSON.stringify(exportData, null, 2);
-            }
-
-            return exportData;
-        } catch (error) {
-            console.error('[Storage] 导出练习记录失败:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 导出词表数据
-     */
-    async exportVocabLists(options = {}) {
-        const { skipReady = false, format = 'json', listIds = null } = options;
-
-        try {
-            console.log('[Storage] 开始导出词表数据');
-
-            const vocabLists = [];
-            const targetListIds = listIds || [
-                'spelling-errors-p1',
-                'spelling-errors-p4',
-                'spelling-errors-master',
-                'custom'
-            ];
-
-            for (const listId of targetListIds) {
-                const list = await this.loadVocabList(listId, { skipReady });
-                if (list && list.words.length > 0) {
-                    vocabLists.push(list);
-                }
-            }
-
-            const exportData = {
-                type: 'vocabulary_lists',
-                version: this.version,
-                exportDate: new Date().toISOString(),
-                listCount: vocabLists.length,
-                totalWords: vocabLists.reduce((sum, list) => sum + list.words.length, 0),
-                lists: vocabLists
-            };
-
-            console.log(`[Storage] 词表导出完成，共 ${vocabLists.length} 个词表，${exportData.totalWords} 个单词`);
-
-            if (format === 'json') {
-                return JSON.stringify(exportData, null, 2);
-            }
-
-            return exportData;
-        } catch (error) {
-            console.error('[Storage] 导出词表数据失败:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 导出单个词表
-     */
-    async exportSingleVocabList(listId, options = {}) {
-        const { skipReady = false, format = 'json' } = options;
-
-        try {
-            console.log(`[Storage] 开始导出词表: ${listId}`);
-
-            const list = await this.loadVocabList(listId, { skipReady });
-
-            if (!list) {
-                console.warn(`[Storage] 词表不存在: ${listId}`);
-                return null;
-            }
-
-            const exportData = {
-                type: 'vocabulary_list',
-                version: this.version,
-                exportDate: new Date().toISOString(),
-                list: list
-            };
-
-            console.log(`[Storage] 词表导出完成: ${listId}, ${list.words.length} 个单词`);
-
-            if (format === 'json') {
-                return JSON.stringify(exportData, null, 2);
-            }
-
-            return exportData;
-        } catch (error) {
-            console.error('[Storage] 导出词表失败:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 导出完整数据（包括练习记录和词表）
-     */
-    async exportCompleteData(options = {}) {
-        const { skipReady = false, format = 'json' } = options;
-
-        try {
-            console.log('[Storage] 开始导出完整数据');
-
-            // 导出所有数据
-            const allData = await this.exportData({ skipReady });
-
-            // 导出练习记录
-            const practiceRecords = await this.exportPracticeRecords({
-                skipReady,
-                format: 'object'
-            });
-
-            // 导出词表
-            const vocabLists = await this.exportVocabLists({
-                skipReady,
-                format: 'object'
-            });
-
-            const exportData = {
-                type: 'complete_export',
-                version: this.version,
-                exportDate: new Date().toISOString(),
-                summary: {
-                    totalRecords: allData?.storageInfo?.totalRecords || 0,
-                    practiceRecords: practiceRecords?.recordCount || 0,
-                    vocabLists: vocabLists?.listCount || 0,
-                    totalWords: vocabLists?.totalWords || 0
-                },
-                data: {
-                    all: allData,
-                    practiceRecords: practiceRecords,
-                    vocabLists: vocabLists
-                }
-            };
-
-            console.log('[Storage] 完整数据导出完成');
-
-            if (format === 'json') {
-                return JSON.stringify(exportData, null, 2);
-            }
-
-            return exportData;
-        } catch (error) {
-            console.error('[Storage] 导出完整数据失败:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 下载导出数据为文件
-     */
-    downloadExportData(data, filename = null) {
-        try {
-            if (!data) {
-                console.error('[Storage] 无数据可导出');
-                return false;
-            }
-
-            // 确保数据是字符串格式
-            const jsonString = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-
-            // 创建 Blob
-            const blob = new Blob([jsonString], { type: 'application/json' });
-
-            // 生成文件名
-            const defaultFilename = `ielts-practice-export-${new Date().toISOString().split('T')[0]}.json`;
-            const finalFilename = filename || defaultFilename;
-
-            // 创建下载链接
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = finalFilename;
-
-            // 触发下载
-            document.body.appendChild(link);
-            link.click();
-
-            // 清理
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            console.log(`[Storage] 数据已下载: ${finalFilename}`);
-            return true;
-        } catch (error) {
-            console.error('[Storage] 下载导出数据失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 导出并下载练习记录
-     */
-    async exportAndDownloadPracticeRecords(filename = null) {
-        try {
-            const data = await this.exportPracticeRecords({ format: 'json' });
-            if (data) {
-                const defaultFilename = `practice-records-${new Date().toISOString().split('T')[0]}.json`;
-                return this.downloadExportData(data, filename || defaultFilename);
-            }
-            return false;
-        } catch (error) {
-            console.error('[Storage] 导出并下载练习记录失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 导出并下载词表数据
-     */
-    async exportAndDownloadVocabLists(filename = null) {
-        try {
-            const data = await this.exportVocabLists({ format: 'json' });
-            if (data) {
-                const defaultFilename = `vocab-lists-${new Date().toISOString().split('T')[0]}.json`;
-                return this.downloadExportData(data, filename || defaultFilename);
-            }
-            return false;
-        } catch (error) {
-            console.error('[Storage] 导出并下载词表数据失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 导出并下载完整数据
-     */
-    async exportAndDownloadCompleteData(filename = null) {
-        try {
-            const data = await this.exportCompleteData({ format: 'json' });
-            if (data) {
-                const defaultFilename = `complete-data-${new Date().toISOString().split('T')[0]}.json`;
-                return this.downloadExportData(data, filename || defaultFilename);
-            }
-            return false;
-        } catch (error) {
-            console.error('[Storage] 导出并下载完整数据失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 导入词表数据
-     */
-    async importVocabLists(importData, options = {}) {
-        const { skipReady = false, merge = true } = options;
-
-        try {
-            console.log('[Storage] 开始导入词表数据');
-
-            if (!importData || !importData.lists) {
-                console.error('[Storage] 导入数据格式无效');
-                return false;
-            }
-
-            let successCount = 0;
-            let failCount = 0;
-
-            for (const list of importData.lists) {
-                try {
-                    if (merge) {
-                        // 合并模式：与现有数据合并
-                        const success = await this.syncVocabList(list.id, list, { skipReady });
-                        if (success) {
-                            successCount++;
-                        } else {
-                            failCount++;
-                        }
-                    } else {
-                        // 覆盖模式：直接保存
-                        const success = await this.saveVocabList(list, { skipReady });
-                        if (success) {
-                            successCount++;
-                        } else {
-                            failCount++;
-                        }
-                    }
-                } catch (error) {
-                    console.error(`[Storage] 导入词表失败: ${list.id}`, error);
-                    failCount++;
-                }
-            }
-
-            console.log(`[Storage] 词表导入完成: ${successCount} 成功, ${failCount} 失败`);
-            return { successCount, failCount };
-        } catch (error) {
-            console.error('[Storage] 导入词表数据失败:', error);
-            return false;
-        }
-    }
-}
-
-const STORAGE_SYNC_IGNORED_KEYS = new Set([
-    'namespace_test',
-    'namespace_test_practice',
-    'namespace_test_enhancer'
-]);
-
-StorageManager.prototype.dispatchStorageSync = function(key) {
-    try {
-        const normalizedKey = typeof key === 'string' ? key.replace(this.prefix, '') : key;
-        if (normalizedKey && STORAGE_SYNC_IGNORED_KEYS.has(normalizedKey)) {
-            return;
-        }
-    } catch (_) {
-        // ignore errors resolving key
-    }
-    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
-};
-
-// 创建全局存储实例
-class PreferenceStore {
-    constructor(prefix = 'exam_system_') {
-        this.prefix = prefix;
-        this.ready = Promise.resolve();
-    }
-
-    setNamespace(namespace) {
-        if (typeof namespace === 'string' && namespace.trim()) {
-            this.prefix = namespace.trim() + '_';
-        }
-    }
-
-    getScopedKey(key) {
-        return key.startsWith(this.prefix) ? key : this.prefix + key;
-    }
-
-    getStorageArea(session = false) {
-        return session ? window.sessionStorage : window.localStorage;
-    }
-
-    serialize(value) {
-        return JSON.stringify({ data: value, timestamp: Date.now() });
-    }
-
-    deserialize(rawValue, defaultValue = null) {
-        if (!rawValue) {
-            return defaultValue;
-        }
-        try {
-            const parsed = JSON.parse(rawValue);
-            return parsed && Object.prototype.hasOwnProperty.call(parsed, 'data')
-                ? parsed.data
-                : defaultValue;
-        } catch (_) {
-            return defaultValue;
-        }
-    }
-
-    async get(key, defaultValue = null, options = {}) {
-        const storage = this.getStorageArea(options.session === true);
-        return this.deserialize(storage.getItem(this.getScopedKey(key)), defaultValue);
-    }
-
-    async set(key, value, options = {}) {
-        const storage = this.getStorageArea(options.session === true);
-        storage.setItem(this.getScopedKey(key), this.serialize(value));
-        window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
-        return true;
-    }
-
-    async remove(key, options = {}) {
-        const storage = this.getStorageArea(options.session === true);
-        storage.removeItem(this.getScopedKey(key));
-        window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
-        return true;
-    }
-
-    async clear(options = {}) {
-        const storage = this.getStorageArea(options.session === true);
-        Object.keys(storage)
-            .filter((key) => key.startsWith(this.prefix))
-            .forEach((key) => storage.removeItem(key));
-        return true;
-    }
-}
-
-class StorageKeyRegistry {
-    constructor() {
-        this.preferenceKeys = new Set([
-            'theme_settings',
-            'current_theme',
-            'keyboard_shortcuts_enabled',
-            'sound_effects_enabled',
-            'auto_save_enabled',
-            'notifications_enabled',
-            'theme',
-            'bloom-theme-mode',
-            'blue-theme-mode',
-            'browse_state',
-            'hasSeenGplLicense',
-            'preferred_theme_portal'
-        ]);
-        this.sessionKeys = new Set([
-            'preferred_theme_skip_session'
-        ]);
-    }
-
-    resolve(key) {
-        if (this.sessionKeys.has(key)) {
-            return { key, storageClass: 'session' };
-        }
-        if (this.preferenceKeys.has(key)) {
-            return { key, storageClass: 'preference' };
-        }
-        return { key, storageClass: 'persistent' };
-    }
-}
-
-class StorageFacade {
-    constructor(options = {}) {
-        this.persistentStore = options.persistentStore;
-        this.preferenceStore = options.preferenceStore;
-        this.keyRegistry = options.keyRegistry;
-        this.ready = this.persistentStore ? this.persistentStore.ready : Promise.resolve();
-    }
-
-    setNamespace(namespace) {
-        if (this.persistentStore && typeof this.persistentStore.setNamespace === 'function') {
-            this.persistentStore.setNamespace(namespace);
-        }
-        if (this.preferenceStore && typeof this.preferenceStore.setNamespace === 'function') {
-            this.preferenceStore.setNamespace(namespace);
-        }
-    }
-
-    resolveStore(key) {
-        const entry = this.keyRegistry.resolve(key);
-        if (entry.storageClass === 'preference') {
-            return { entry, store: this.preferenceStore, options: { session: false } };
-        }
-        if (entry.storageClass === 'session') {
-            return { entry, store: this.preferenceStore, options: { session: true } };
-        }
-        return { entry, store: this.persistentStore, options: {} };
-    }
-
-    async get(key, defaultValue = null, options = {}) {
-        const target = this.resolveStore(key);
-        return await target.store.get(key, defaultValue, Object.assign({}, target.options, options));
-    }
-
-    async set(key, value, options = {}) {
-        const target = this.resolveStore(key);
-        return await target.store.set(key, value, Object.assign({}, target.options, options));
-    }
-
-    async remove(key, options = {}) {
-        const target = this.resolveStore(key);
-        return await target.store.remove(key, Object.assign({}, target.options, options));
-    }
-
-    async clear(options = {}) {
-        if (this.persistentStore && typeof this.persistentStore.clear === 'function') {
-            await this.persistentStore.clear(options);
-        }
-        if (this.preferenceStore && typeof this.preferenceStore.clear === 'function') {
-            await this.preferenceStore.clear({ session: false });
-            await this.preferenceStore.clear({ session: true });
-        }
-        return true;
-    }
-
-    async getStorageInfo(options = {}) {
-        const persistentInfo = this.persistentStore && typeof this.persistentStore.getStorageInfo === 'function'
-            ? await this.persistentStore.getStorageInfo(options)
-            : null;
-        return Object.assign({}, persistentInfo || {}, {
-            facade: 'storage-facade',
-            volatile: Boolean(this.persistentStore && this.persistentStore.volatileMode)
-        });
-    }
-}
-
-const storageManager = new StorageManager();
-const preferenceStore = new PreferenceStore(storageManager.prefix);
-const storageKeyRegistry = new StorageKeyRegistry();
-const storageFacade = new StorageFacade({
-    persistentStore: storageManager,
-    preferenceStore,
-    keyRegistry: storageKeyRegistry
-});
-
-window.persistentStore = storageManager;
-window.preferenceStore = preferenceStore;
-window.storageKeyRegistry = storageKeyRegistry;
-window.storage = storageFacade;
-Object.defineProperty(window, '__installStorageInternalAccess', {
-    value(install) {
-        if (typeof install !== 'function') {
-            throw new Error('__installStorageInternalAccess requires an installer function');
-        }
-        const result = install(createInternalAccessOptions, hasInternalAccessOptions);
-        if (result !== false) {
-            try {
-                delete window.__installStorageInternalAccess;
             } catch (_) {
-                window.__installStorageInternalAccess = undefined;
+                throw new Error(`DataCatalog invalid default contract: ${entry.logicalKey}`);
             }
         }
-        return result;
-    },
-    enumerable: false,
-    configurable: true,
-    writable: false
-});
+        return true;
+    }
 
-// 启动存储监控和数据同步
-storageManager.ready
-    .then(() => {
-        storageManager.startStorageMonitoring();
-        storageManager.setupBeforeUnloadHandler();
-    })
-    .catch(error => {
-        console.error('[Storage] 存储初始化失败，监控未启动:', error);
+    validateCatalog(definitions);
+    const byKey = new Map(definitions.map((entry) => [entry.logicalKey, entry]));
+    const DataCatalog = Object.freeze({
+        version: V2_SCHEMA_VERSION,
+        list() { return definitions.slice(); },
+        get(logicalKey) {
+            const entry = byKey.get(String(logicalKey || ''));
+            if (!entry) throw new Error(`DataCatalog unknown logical key: ${logicalKey}`);
+            return entry;
+        },
+        has(logicalKey) { return byKey.has(String(logicalKey || '')); },
+        validate: validateCatalog,
+        clone
+    });
+
+    Object.defineProperty(global, '__AppDataV2Catalog', {
+        value: DataCatalog,
+        enumerable: false,
+        configurable: true,
+        writable: false
     });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
-/* ===== js/core/storageProviderRegistry.js ===== */
-(function(window) {
-    const listeners = new Set();
-    let providers = null;
+/* ===== js/data/v2/dataKernel.js ===== */
+(function installDataKernel(global) {
+    'use strict';
 
-    function normalizeProviders(input) {
-        if (!input || typeof input !== 'object') {
-            return null;
-        }
-        const normalized = {
-            storageManager: input.storageManager || window.storage || null,
-            persistentStore: input.persistentStore || window.persistentStore || null,
-            preferenceStore: input.preferenceStore || window.preferenceStore || null,
-            repositories: input.repositories || null,
-            simpleStorageWrapper: input.simpleStorageWrapper || null
-        };
-        if (!normalized.repositories) {
-            return null;
-        }
-        return normalized;
+    if (global.AppData) return;
+
+    const catalog = global.__AppDataV2Catalog;
+    if (!catalog) throw new Error('AppData v2 requires DataCatalog before DataKernel');
+
+    const DATABASE_NAME = 'IELTSAtlasDataV2';
+    // Version 2 uses a new schema, but initialization must still import the durable
+    // ExamSystemDB data owned by releases which predate AppData v2.
+    const DATABASE_VERSION = 2;
+    const DOCUMENT_STORE = 'documents';
+    const SYSTEM_STORE = 'system';
+    const ENTITY_STORES = Object.freeze(['practiceSummaries', 'practiceDetails', 'practiceAnnotations']);
+    const STORE_NAMES = Object.freeze([DOCUMENT_STORE, SYSTEM_STORE].concat(ENTITY_STORES));
+    const OPERATION_JOURNAL_WINDOW = 500;
+    const COMMIT_CHANNEL_NAME = `${DATABASE_NAME}:committed`;
+    const DEFAULT_IDB_MUTATION_TIMEOUT_MS = 30000;
+    const DEFAULT_IDB_REQUEST_TIMEOUT_MS = 30000;
+    const MAX_TIMER_DELAY_MS = 2147483647;
+    const LEGACY_DATABASE_NAME = 'ExamSystemDB';
+    const LEGACY_STORE_NAME = 'keyValueStore';
+    const LEGACY_EXTERNAL_DATABASE_NAME = 'ExamSystemExternalBackup';
+    const LEGACY_EXTERNAL_STORE_NAME = 'handles';
+    const LEGACY_EXTERNAL_HANDLE_KEY = 'backup_directory';
+    const LEGACY_EXTERNAL_FILENAME = 'practice-backup-latest.json';
+    const LEGACY_UNPREFIXED_WEB_KEYS = Object.freeze([
+        'practice_records',
+        'vocab_user_config',
+        'user_achievements'
+    ]);
+
+    function clone(value) { return catalog.clone(value); }
+    function nowIso() { return new Date().toISOString(); }
+    function randomId(prefix) {
+        const random = global.crypto && typeof global.crypto.randomUUID === 'function'
+            ? global.crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        return `${prefix || 'op'}_${random}`;
     }
 
-    function notifyListeners(payload) {
-        listeners.forEach((listener) => {
+    class AppDataError extends Error {
+        constructor(code, message, details = {}) {
+            super(message);
+            this.name = 'AppDataError';
+            this.code = code;
+            this.committed = false;
+            this.details = details;
+        }
+    }
+    function validation(message, details) { return new AppDataError('VALIDATION', message, details || {}); }
+    function corruption(message, details) { return new AppDataError('CORRUPT_RECORD', message, details || {}); }
+
+    function normalizeTimeoutMs(value, fallback) {
+        if (value === undefined || value === null || value === '') return fallback;
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && numeric > 0 ? Math.min(numeric, MAX_TIMER_DELAY_MS) : fallback;
+    }
+    function scheduleTimeout(handler, delayMs) {
+        if (typeof global.setTimeout !== 'function') throw new Error('setTimeout unavailable');
+        const handle = global.setTimeout.call(global, handler, delayMs);
+        if (handle === null || handle === undefined) throw new Error('setTimeout did not return a handle');
+        return handle;
+    }
+    function cancelTimeout(handle) {
+        if (handle !== null && handle !== undefined && typeof global.clearTimeout === 'function') {
+            try { global.clearTimeout.call(global, handle); } catch (_) { /* already gone */ }
+        }
+    }
+    function withDeadline(handle, timeoutMs, description, resolve, reject) {
+        let settled = false;
+        let timer = null;
+        const settle = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            cancelTimeout(timer);
+            callback(value);
+        };
+        const expire = (error) => {
+            if (settled) return;
+            settled = true;
+            try { if (handle && typeof handle.abort === 'function') handle.abort(); } catch (_) { /* best effort */ }
+            reject(error);
+        };
+        try {
+            timer = scheduleTimeout(() => expire(new AppDataError('BACKEND_UNAVAILABLE', `IndexedDB ${description} timed out after ${timeoutMs}ms`, {
+                operation: description, timeoutMs, reason: 'timeout'
+            })), timeoutMs);
+        } catch (error) {
+            expire(new AppDataError('BACKEND_UNAVAILABLE', `IndexedDB ${description} watchdog unavailable`, {
+                operation: description, reason: 'watchdog-unavailable', cause: error && error.message
+            }));
+        }
+        return { resolve(value) { settle(resolve, value); }, reject(error) { settle(reject, error); } };
+    }
+
+    function canonicalizeJson(value, path = '$', ancestors = new Set()) {
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) throw validation(`Non-finite number at ${path}`, { path });
+            return Object.is(value, -0) ? 0 : value;
+        }
+        if (typeof value !== 'object' || value === undefined || typeof value === 'bigint' || typeof value === 'function' || typeof value === 'symbol') {
+            throw validation(`Non-JSON value at ${path}`, { path, type: typeof value });
+        }
+        if (ancestors.has(value)) throw validation(`Cyclic data at ${path}`, { path });
+        const prototype = Object.getPrototypeOf(value);
+        if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) throw validation(`Non-plain object at ${path}`, { path });
+        if (typeof Reflect === 'object' && typeof Reflect.ownKeys === 'function'
+            && Reflect.ownKeys(value).some((key) => typeof key === 'symbol')) {
+            throw validation(`Symbol-keyed property at ${path}`, { path });
+        }
+        ancestors.add(value);
+        try {
+            if (Array.isArray(value)) {
+                return value.map((item, index) => {
+                    if (!Object.prototype.hasOwnProperty.call(value, index)) throw validation(`Sparse array entry at ${path}[${index}]`, { path });
+                    return canonicalizeJson(item, `${path}[${index}]`, ancestors);
+                });
+            }
+            const result = {};
+            for (const key of Object.keys(value).sort()) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (!descriptor || descriptor.get || descriptor.set) throw validation(`Accessor property at ${path}.${key}`, { path });
+                result[key] = canonicalizeJson(descriptor.value, `${path}.${key}`, ancestors);
+            }
+            return result;
+        } finally { ancestors.delete(value); }
+    }
+    function stableStringifyCanonical(value) {
+        if (value === null || typeof value !== 'object') return JSON.stringify(value);
+        if (Array.isArray(value)) return `[${value.map(stableStringifyCanonical).join(',')}]`;
+        return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringifyCanonical(value[key])}`).join(',')}}`;
+    }
+    function stableStringify(value) { return stableStringifyCanonical(canonicalizeJson(value)); }
+    function checksum(value) {
+        const input = stableStringify(value);
+        let hash = 2166136261;
+        for (let index = 0; index < input.length; index += 1) { hash ^= input.charCodeAt(index); hash = Math.imul(hash, 16777619); }
+        return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+    }
+    function legacyTimestamp(value) {
+        if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return -Infinity;
+        if (Number.isFinite(Number(value))) return Number(value);
+        const parsed = Date.parse(value == null ? '' : String(value));
+        return Number.isFinite(parsed) ? parsed : -Infinity;
+    }
+    function parseLegacyCandidate(value, outerTimestamp) {
+        let parsed = value;
+        let timestamp = legacyTimestamp(outerTimestamp);
+        const hasOuterTimestamp = timestamp !== -Infinity;
+        for (let depth = 0; depth < 3; depth += 1) {
+            if (typeof parsed === 'string') {
+                try { parsed = JSON.parse(parsed); } catch (_) { if (depth === 0) return null; break; }
+            } else if (parsed && typeof parsed === 'object' && Object.prototype.hasOwnProperty.call(parsed, 'data')
+                && (Object.prototype.hasOwnProperty.call(parsed, 'version') || Object.prototype.hasOwnProperty.call(parsed, 'compressed'))) {
+                const innerTimestamp = legacyTimestamp(parsed.timestamp);
+                if (!hasOuterTimestamp && innerTimestamp > timestamp) timestamp = innerTimestamp;
+                parsed = parsed.data;
+            } else break;
+        }
+        return { value: clone(parsed), timestamp };
+    }
+    function parseLegacyValue(value) {
+        const candidate = parseLegacyCandidate(value);
+        return candidate ? candidate.value : clone(value);
+    }
+    async function readLegacyValues(indexedDBApi = global.indexedDB, storage = global.localStorage, sessionStorageApi = global.sessionStorage) {
+        const values = {};
+        const candidates = {};
+        let readComplete = true;
+        const consider = (alias, rawValue, timestamp, sourceRank) => {
+            const candidate = parseLegacyCandidate(rawValue, timestamp);
+            if (!candidate) return;
+            const previous = candidates[alias];
+            if (!previous || candidate.timestamp > previous.timestamp
+                || (candidate.timestamp === previous.timestamp && sourceRank < previous.sourceRank)) {
+                candidates[alias] = Object.assign(candidate, { sourceRank });
+            }
+        };
+        if (indexedDBApi && typeof indexedDBApi.open === 'function') {
+            await new Promise((resolve) => {
+                let request;
+                let createdEmptyDatabase = false;
+                try { request = indexedDBApi.open(LEGACY_DATABASE_NAME); } catch (_) { readComplete = false; resolve(); return; }
+                request.onerror = () => { if (!createdEmptyDatabase) readComplete = false; resolve(); };
+                request.onupgradeneeded = () => {
+                    createdEmptyDatabase = true;
+                    try { request.transaction.abort(); } catch (_) {}
+                };
+                request.onsuccess = () => {
+                    const db = request.result;
+                    if (!db.objectStoreNames.contains(LEGACY_STORE_NAME)) { db.close(); resolve(); return; }
+                    const tx = db.transaction(LEGACY_STORE_NAME, 'readonly');
+                    const keys = tx.objectStore(LEGACY_STORE_NAME).getAllKeys();
+                    const rows = tx.objectStore(LEGACY_STORE_NAME).getAll();
+                    tx.oncomplete = () => {
+                        (keys.result || []).forEach((key, index) => {
+                            const row = (rows.result || [])[index];
+                            // v1's keyValueStore persisted { key, value, timestamp } rows.
+                            const validRow = row && typeof row === 'object'
+                                && Object.prototype.hasOwnProperty.call(row, 'key')
+                                && String(row.key) === String(key)
+                                && Object.prototype.hasOwnProperty.call(row, 'value');
+                            if (!validRow) {
+                                readComplete = false;
+                                return;
+                            }
+                            consider(String(key).replace(/^exam_system_/, ''), row.value, row.timestamp, 0);
+                        });
+                        db.close(); resolve();
+                    };
+                    tx.onerror = tx.onabort = () => { readComplete = false; db.close(); resolve(); };
+                };
+            });
+        }
+        for (const [sourceRank, fallbackStorage] of [storage, sessionStorageApi].entries()) {
+            if (!fallbackStorage || typeof fallbackStorage.key !== 'function') continue;
+            for (let index = 0; index < Number(fallbackStorage.length || 0); index += 1) {
+                const key = fallbackStorage.key(index);
+                if (!key) continue;
+                const alias = key.startsWith('exam_system_')
+                    ? key.slice('exam_system_'.length)
+                    : (LEGACY_UNPREFIXED_WEB_KEYS.includes(key) ? key : null);
+                if (!alias) continue;
+                try { consider(alias, fallbackStorage.getItem(key), null, sourceRank + 1); } catch (_) { /* inaccessible fallback */ }
+            }
+        }
+        for (const [alias, candidate] of Object.entries(candidates)) values[alias] = candidate.value;
+        Object.defineProperty(values, '__legacyReadComplete', {
+            value: readComplete,
+            enumerable: false,
+            configurable: false,
+            writable: false
+        });
+        return values;
+    }
+    async function readLegacyExternalBackup(indexedDBApi = global.indexedDB) {
+        if (!indexedDBApi || typeof indexedDBApi.open !== 'function') return null;
+        const directoryHandle = await new Promise((resolve) => {
+            let request;
+            let settled = false;
+            const finish = (value) => {
+                if (settled) return;
+                settled = true;
+                resolve(value || null);
+            };
+            try { request = indexedDBApi.open(LEGACY_EXTERNAL_DATABASE_NAME); } catch (_) { finish(null); return; }
+            request.onerror = () => finish(null);
+            request.onupgradeneeded = () => {
+                try { request.transaction.abort(); } catch (_) {}
+                finish(null);
+            };
+            request.onsuccess = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(LEGACY_EXTERNAL_STORE_NAME)) {
+                    db.close(); finish(null); return;
+                }
+                const get = db.transaction(LEGACY_EXTERNAL_STORE_NAME, 'readonly')
+                    .objectStore(LEGACY_EXTERNAL_STORE_NAME).get(LEGACY_EXTERNAL_HANDLE_KEY);
+                get.onerror = () => { db.close(); finish(null); };
+                get.onsuccess = () => { db.close(); finish(get.result); };
+            };
+        });
+        if (!directoryHandle || typeof directoryHandle.queryPermission !== 'function') return null;
+        if (await directoryHandle.queryPermission({ mode: 'read' }) !== 'granted') return null;
+        const fileHandle = await directoryHandle.getFileHandle(LEGACY_EXTERNAL_FILENAME, { create: false });
+        const parsed = JSON.parse(await (await fileHandle.getFile()).text());
+        const payload = parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.data !== undefined
+            ? parsed.data : parsed;
+        return payload && typeof payload === 'object' && !Array.isArray(payload) ? clone(payload) : null;
+    }
+    function lookupEntry(logicalKey) {
+        if (!catalog.has(logicalKey)) throw validation(`Unknown AppData logical key: ${logicalKey}`, { logicalKey });
+        return catalog.get(logicalKey);
+    }
+    function storeFor(logicalKey) {
+        const entry = lookupEntry(logicalKey);
+        if (entry.classification === 'session') throw validation(`${logicalKey} is not durable kernel data`, { logicalKey });
+        return entry.classification === 'system' ? SYSTEM_STORE : DOCUMENT_STORE;
+    }
+    function makeEnvelope(entry, data, options = {}) {
+        const state = options.state === 'cleared' ? 'cleared' : 'present';
+        if (options.state !== undefined && state !== options.state) throw validation(`Invalid envelope state for ${entry.logicalKey}`);
+        let normalized = null;
+        if (state === 'present') {
+            try { normalized = options.normalized ? data : entry.normalize(canonicalizeJson(data, `$.${entry.logicalKey}`)); } catch (error) {
+                throw validation(`Unable to normalize ${entry.logicalKey}`, { cause: error && error.message });
+            }
+            normalized = canonicalizeJson(normalized, `$.${entry.logicalKey}`);
+            if (!entry.validate(normalized)) throw validation(`Invalid data for ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        const revision = options.revision === undefined ? 1 : Number(options.revision);
+        if (!Number.isInteger(revision) || revision < 1) throw validation(`Invalid revision for ${entry.logicalKey}`);
+        const payload = { schemaVersion: entry.schemaVersion, revision, operationId: String(options.operationId || randomId('op')),
+            updatedAt: options.updatedAt || nowIso(), state, data: normalized };
+        payload.checksum = checksum(payload.data);
+        return Object.freeze(payload);
+    }
+    function validateEnvelope(entry, envelope) {
+        try {
+            if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
+                || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
+                || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+                || typeof envelope.operationId !== 'string' || !envelope.operationId
+                || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt
+                || (envelope.state !== 'present' && envelope.state !== 'cleared')) return false;
+            const data = canonicalizeJson(envelope.data, `$.${entry.logicalKey}`);
+            return (envelope.state !== 'cleared' || data === null)
+                && (envelope.state !== 'present' || entry.validate(data)) && envelope.checksum === checksum(data);
+        } catch (_) { return false; }
+    }
+    function operationId(value) {
+        if (value === undefined || value === null || value === '') return randomId('mutation');
+        if (typeof value !== 'string' || !value.trim()) throw validation('operationId must be a non-empty string');
+        return value;
+    }
+    function expectedRevision(value, label) {
+        if (value === undefined || value === null) return null;
+        const revision = Number(value);
+        if (!Number.isInteger(revision) || revision < 0) throw validation(`Invalid expectedRevision for ${label}`);
+        return revision;
+    }
+    function compactJournal(journal) {
+        const ranked = Object.entries(journal).sort((left, right) => Number(right[1].sequence) - Number(left[1].sequence));
+        for (let index = OPERATION_JOURNAL_WINDOW; index < ranked.length; index += 1) delete journal[ranked[index][0]];
+    }
+    function readJournal(row) {
+        const envelope = row && row.envelope;
+        return envelope && envelope.state === 'present' && envelope.data && typeof envelope.data === 'object' && !Array.isArray(envelope.data)
+            ? clone(envelope.data) : {};
+    }
+    function journalResult(journal, spec) {
+        const existing = journal[spec.operationId];
+        if (!existing) return null;
+        if (existing.fingerprint !== spec.fingerprint || !existing.receipt) {
+            throw new AppDataError('CONFLICT', `operationId is already bound to another request: ${spec.operationId}`, { operationId: spec.operationId });
+        }
+        return clone(existing.receipt);
+    }
+    function writeJournal(journal, spec, receipt) {
+        const sequence = Object.values(journal).reduce((maximum, item) => Math.max(maximum, Number(item.sequence) || 0), 0) + 1;
+        journal[spec.operationId] = { fingerprint: spec.fingerprint, receipt: clone(receipt), sequence, committedAt: nowIso() };
+        compactJournal(journal);
+        return journal;
+    }
+    function putJournal(tx, currentRow, journal, spec, receipt) {
+        const current = currentRow && currentRow.envelope;
+        const envelope = makeEnvelope(lookupEntry('system.operationJournal'), writeJournal(journal, spec, receipt), {
+            revision: current ? Number(current.revision) + 1 : 1,
+            operationId: spec.operationId,
+            normalized: true
+        });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: 'system.operationJournal', envelope: canonicalizeJson(envelope) });
+    }
+
+    class IndexedDBDriver {
+        constructor(indexedDBApi, options) {
+            this.indexedDB = indexedDBApi;
+            this.db = null;
+            this.mutationTimeoutMs = options.mutationTimeoutMs;
+            this.requestTimeoutMs = options.requestTimeoutMs;
+        }
+        async initialize() {
+            if (!this.indexedDB || typeof this.indexedDB.open !== 'function') throw new Error('IndexedDB unavailable');
+            this.db = await new Promise((resolve, reject) => {
+                const request = this.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+                let abandoned = false;
+                let settle;
+                request.onsuccess = () => { if (abandoned || !settle) { try { request.result.close(); } catch (_) {} } else settle.resolve(request.result); };
+                request.onupgradeneeded = (event) => {
+                    const db = request.result;
+                    if (event.oldVersion < 2) {
+                        for (const name of ['authoritative', 'derived']) {
+                            if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
+                        }
+                    }
+                    for (const name of STORE_NAMES) {
+                        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: name === DOCUMENT_STORE || name === SYSTEM_STORE ? 'logicalKey' : 'recordId' });
+                    }
+                };
+                settle = withDeadline({ abort() { abandoned = true; } }, this.requestTimeoutMs, 'open', resolve, reject);
+                request.onerror = () => settle.reject(request.error || new Error('Unable to open IndexedDB'));
+                request.onblocked = () => {
+                    abandoned = true;
+                    settle.reject(new Error('IndexedDB upgrade blocked'));
+                };
+            });
+            this.db.onversionchange = () => this.close();
+            return this;
+        }
+        close() { const db = this.db; this.db = null; try { if (db) db.close(); } catch (_) {} }
+        _open() { if (!this.db) throw new Error('IndexedDB connection closed'); }
+        _transaction(stores, mode, description, work, mutation = false) {
+            this._open();
+            return new Promise((resolve, reject) => {
+                let failure = null;
+                let value;
+                let tx;
+                try { tx = this.db.transaction(stores, mode); } catch (error) { reject(error); return; }
+                const settle = withDeadline(tx, mutation ? this.mutationTimeoutMs : this.requestTimeoutMs, description, resolve, reject);
+                tx.oncomplete = () => settle.resolve(clone(value));
+                tx.onerror = () => { failure = failure || tx.error || new Error(`IndexedDB ${description} failed`); };
+                tx.onabort = () => settle.reject(failure || tx.error || new Error(`IndexedDB ${description} aborted`));
+                const fail = (error) => { failure = failure || error; try { tx.abort(); } catch (_) {} };
+                try { work(tx, (result) => { value = result; }, fail); } catch (error) { fail(error); }
+            });
+        }
+        readEnvelope(logicalKey) {
+            const store = storeFor(logicalKey);
+            return this._transaction([store], 'readonly', `read ${logicalKey}`, (tx, done, fail) => {
+                const request = tx.objectStore(store).get(logicalKey);
+                request.onsuccess = () => done(request.result ? request.result.envelope : null);
+                request.onerror = () => fail(request.error || new Error(`Read failed: ${logicalKey}`));
+            });
+        }
+        readEntity(store, recordId) {
+            return this._transaction([store], 'readonly', `read ${store}/${recordId}`, (tx, done, fail) => {
+                const request = tx.objectStore(store).get(recordId);
+                request.onsuccess = () => done(request.result || null);
+                request.onerror = () => fail(request.error || new Error('Entity read failed'));
+            });
+        }
+        readPracticeSnapshot(recordIds = null, options = {}) {
+            const stores = Array.isArray(options.stores) && options.stores.length
+                ? Array.from(new Set(options.stores.map((store) => entityStore(store))))
+                : ENTITY_STORES.slice();
+            const requested = recordIds === null || recordIds === undefined
+                ? null
+                : new Set((Array.isArray(recordIds) ? recordIds : [recordIds])
+                    .map((value) => String(value || ''))
+                    .filter(Boolean));
+            return this._transaction(stores, 'readonly', 'read practice snapshot', (tx, done, fail) => {
+                const result = Object.fromEntries(stores.map((store) => [store, []]));
+                let remaining = stores.length;
+                const finishStore = (store, rows) => {
+                    result[store] = (rows || []).filter((row) => !requested || requested.has(String(row && row.recordId || '')));
+                    remaining -= 1;
+                    if (!remaining) done(result);
+                };
+                for (const store of stores) {
+                    const objectStore = tx.objectStore(store);
+                    const request = requested && requested.size === 1
+                        ? objectStore.get(Array.from(requested)[0])
+                        : objectStore.getAll();
+                    request.onsuccess = () => {
+                        const rows = requested && requested.size === 1
+                            ? (request.result ? [request.result] : [])
+                            : request.result;
+                        finishStore(store, rows);
+                    };
+                    request.onerror = () => fail(request.error || new Error(`Practice snapshot read failed: ${store}`));
+                }
+            });
+        }
+        listEntities(store) {
+            return this._transaction([store], 'readonly', `list ${store}`, (tx, done, fail) => {
+                const request = tx.objectStore(store).getAll();
+                request.onsuccess = () => done(request.result || []);
+                request.onerror = () => fail(request.error || new Error('Entity list failed'));
+            });
+        }
+        atomic(spec) {
+            return this._transaction(spec.stores, 'readwrite', `mutation ${spec.operationId}`, (tx, done, fail) => {
+                const journalRequest = tx.objectStore(SYSTEM_STORE).get('system.operationJournal');
+                journalRequest.onerror = () => fail(journalRequest.error || new Error('Journal read failed'));
+                journalRequest.onsuccess = () => {
+                    try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                };
+            }, true);
+        }
+        exportSnapshot(envelopeKeys) {
+            return this._transaction(STORE_NAMES, 'readonly', 'snapshot export', (tx, done, fail) => {
+                const result = { envelopes: {}, entities: {} };
+                let remaining = STORE_NAMES.length;
+                for (const store of STORE_NAMES) {
+                    const request = tx.objectStore(store).getAll();
+                    request.onerror = () => fail(request.error || new Error(`Snapshot read failed: ${store}`));
+                    request.onsuccess = () => {
+                        if (store === DOCUMENT_STORE || store === SYSTEM_STORE) {
+                            for (const row of request.result || []) if (envelopeKeys(row.logicalKey)) result.envelopes[row.logicalKey] = row.envelope;
+                        } else result.entities[store] = request.result || [];
+                        remaining -= 1;
+                        if (!remaining) done(result);
+                    };
+                }
+            });
+        }
+    }
+
+    function entityStore(store) {
+        const value = String(store || '');
+        if (!ENTITY_STORES.includes(value)) throw validation(`Unknown entity store: ${value}`, { store: value });
+        return value;
+    }
+    function validateEntityRow(store, row) {
+        if (!row || typeof row !== 'object' || Array.isArray(row)
+            || typeof row.recordId !== 'string' || !row.recordId
+            || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
+            || typeof row.operationId !== 'string' || !row.operationId
+            || typeof row.updatedAt !== 'string' || !row.updatedAt) {
+            throw corruption(`Invalid entity row: ${store}`, { store, recordId: row && row.recordId || null });
+        }
+        const data = canonicalizeJson(row.data, `$.${store}.${row.recordId}`);
+        if (row.checksum !== checksum(data)) {
+            throw corruption(`Entity checksum mismatch: ${store}/${row.recordId}`, { store, recordId: row.recordId });
+        }
+        return row;
+    }
+    function normalizeEntityOperation(operation, index) {
+        if (!operation || typeof operation !== 'object' || Array.isArray(operation)) throw validation(`Invalid entity operation at index ${index}`);
+        const type = String(operation.type || '');
+        const store = entityStore(operation.store);
+        if (!['upsert', 'delete', 'clear'].includes(type)) throw validation(`Invalid entity operation type: ${type}`);
+        const recordId = type === 'clear' ? null : String(operation.recordId || '');
+        if (type !== 'clear' && !recordId.trim()) throw validation(`Entity operation ${type} requires recordId`);
+        const data = type === 'upsert' ? canonicalizeJson(operation.data, `$.operations[${index}].data`) : null;
+        return { type, store, recordId, data, expectedRevision: expectedRevision(operation.expectedRevision, `${store}/${recordId || '*'}`) };
+    }
+    function receiptFor(operationIdValue, revisions, warnings, pending) {
+        const receipt = { committed: true, revisions, operationId: operationIdValue,
+            derived: { status: pending.length ? 'pending' : 'ready', pending: pending.slice() }, warnings: warnings.slice() };
+        const keys = Object.keys(revisions); if (keys.length === 1) receipt.revision = revisions[keys[0]];
+        return receipt;
+    }
+
+    class DataKernel {
+        constructor(options = {}) {
+            this.driver = null;
+            this.backend = null;
+            this.state = 'created';
+            this.failure = null;
+            this.indexedDB = Object.prototype.hasOwnProperty.call(options, 'indexedDB') ? options.indexedDB : global.indexedDB;
+            this.indexedDBMutationTimeoutMs = normalizeTimeoutMs(options.indexedDBMutationTimeoutMs, DEFAULT_IDB_MUTATION_TIMEOUT_MS);
+            this.indexedDBRequestTimeoutMs = normalizeTimeoutMs(options.indexedDBRequestTimeoutMs, DEFAULT_IDB_REQUEST_TIMEOUT_MS);
+            this.committedListeners = new Set();
+            this.commitChannel = null;
+            this.instanceId = randomId('kernel');
+            this.ready = null;
+        }
+        _initializeCommitChannel() {
+            if (this.commitChannel || typeof global.BroadcastChannel !== 'function') return;
             try {
-                listener(payload);
+                const channel = new global.BroadcastChannel(COMMIT_CHANNEL_NAME);
+                channel.onmessage = (message) => {
+                    const data = message && message.data;
+                    if (!data || data.sourceInstanceId === this.instanceId
+                        || typeof data.operationId !== 'string' || !Array.isArray(data.targets)) return;
+                    this._dispatchCommitted({
+                        operationId: data.operationId,
+                        targets: clone(data.targets),
+                        receipt: data.receipt ? clone(data.receipt) : null,
+                        remote: true
+                    });
+                };
+                this.commitChannel = channel;
+            } catch (_) {
+                this.commitChannel = null;
+            }
+        }
+        _closeCommitChannel() {
+            const channel = this.commitChannel;
+            this.commitChannel = null;
+            try { if (channel) channel.close(); } catch (_) {}
+        }
+        initialize() {
+            if (this.ready) return this.ready;
+            this.state = 'initializing';
+            this.ready = new IndexedDBDriver(this.indexedDB, {
+                mutationTimeoutMs: this.indexedDBMutationTimeoutMs, requestTimeoutMs: this.indexedDBRequestTimeoutMs
+            }).initialize().then((driver) => {
+                this.driver = driver; this.backend = 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
+            }).catch((error) => { this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
+                throw error instanceof AppDataError ? error : new AppDataError('BACKEND_UNAVAILABLE', 'IndexedDB is required for AppData v2', { cause: error && error.message }); });
+            return this.ready;
+        }
+        close() {
+            if (this.driver) this.driver.close();
+            this.driver = null; this.backend = null;
+            this._closeCommitChannel();
+            if (this.state !== 'failed') this.state = 'closed';
+        }
+        _assertReady() {
+            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', { cause: this.failure && this.failure.message });
+            if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
+        }
+        _latch(error) {
+            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
+            return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
+        }
+        onCommitted(listener) {
+            if (typeof listener !== 'function') throw validation('Committed listener must be a function');
+            this.committedListeners.add(listener); return () => this.committedListeners.delete(listener);
+        }
+        _dispatchCommitted(event) {
+            if (!event || !this.committedListeners.size) return;
+            const schedule = typeof global.queueMicrotask === 'function' ? global.queueMicrotask.bind(global) : (callback) => Promise.resolve().then(callback);
+            schedule(() => Array.from(this.committedListeners).forEach((listener) => { try { Promise.resolve(listener(clone(event))).catch(() => {}); } catch (_) {} }));
+        }
+        _notifyCommitted(targets, receipt) {
+            if (!targets.length) return;
+            const event = { operationId: receipt.operationId, targets: clone(targets), receipt: clone(receipt), remote: false };
+            this._dispatchCommitted(event);
+            if (this.commitChannel) {
+                try {
+                    this.commitChannel.postMessage({
+                        sourceInstanceId: this.instanceId,
+                        operationId: event.operationId,
+                        targets: event.targets,
+                        receipt: event.receipt
+                    });
+                } catch (_) { /* cross-realm notification is best effort */ }
+            }
+        }
+        async getEnvelope(logicalKey) {
+            this._assertReady(); const entry = lookupEntry(logicalKey);
+            try { const envelope = await this.driver.readEnvelope(logicalKey); if (envelope && !validateEnvelope(entry, envelope)) throw corruption(`Invalid envelope: ${logicalKey}`, { logicalKey }); return envelope; }
+            catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
+        }
+        async read(logicalKey, options = {}) {
+            const entry = lookupEntry(logicalKey); const envelope = await this.getEnvelope(logicalKey);
+            const data = !envelope || envelope.state === 'cleared' ? entry.defaultValue() : envelope.data;
+            return options.withMeta ? { data: clone(data), envelope: envelope ? clone(envelope) : null } : clone(data);
+        }
+        _documentSpec(changes, options) {
+            if (!Array.isArray(changes) || (!changes.length && !options.allowNoop && !options.noop)) throw validation('DataKernel.mutate requires changes');
+            const opId = operationId(options.operationId); const seen = new Set();
+            const prepared = changes.map((change, index) => {
+                if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
+                const logicalKey = String(change.logicalKey || ''); const entry = lookupEntry(logicalKey);
+                if (logicalKey === 'system.operationJournal') throw validation('system.operationJournal is managed by DataKernel');
+                if (seen.has(logicalKey)) throw validation(`Duplicate mutation key: ${logicalKey}`); seen.add(logicalKey);
+                const state = change.state === 'cleared' ? 'cleared' : 'present';
+                if (change.state !== undefined && state !== change.state) throw validation(`Invalid mutation state for ${logicalKey}`);
+                if (state === 'cleared' && entry.classification === 'system') throw validation(`${logicalKey} cannot be cleared`);
+                let data = null;
+                if (state === 'present') { try { data = canonicalizeJson(entry.normalize(canonicalizeJson(change.data)), '$.data'); } catch (error) { throw validation(`Unable to normalize ${logicalKey}`, { cause: error && error.message }); } if (!entry.validate(data)) throw validation(`Invalid data for ${logicalKey}`); }
+                return { logicalKey, entry, state, data, expectedRevision: expectedRevision(change.expectedRevision, logicalKey) };
+            });
+            const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
+            if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
+            const fingerprint = checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings });
+            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
+        }
+        async mutate(changes, options = {}) {
+            this._assertReady(); const spec = this._documentSpec(changes, options);
+            try {
+                const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
+                    const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
+                    const reads = spec.changes.map((change) => ({ change, request: tx.objectStore(storeFor(change.logicalKey)).get(change.logicalKey) }));
+                    let remaining = reads.length;
+                    const finish = () => {
+                        const revisions = {};
+                        for (const item of reads) {
+                            const current = item.request.result ? item.request.result.envelope : null;
+                            if (current && !validateEnvelope(item.change.entry, current)) throw corruption(`Invalid stored envelope: ${item.change.logicalKey}`, { logicalKey: item.change.logicalKey });
+                            const revision = current ? Number(current.revision) : 0;
+                            if (item.change.expectedRevision !== null && item.change.expectedRevision !== revision) throw new AppDataError('CONFLICT', `Revision conflict for ${item.change.logicalKey}`, { logicalKey: item.change.logicalKey, expectedRevision: item.change.expectedRevision, actualRevision: revision });
+                            const envelope = makeEnvelope(item.change.entry, item.change.data, { state: item.change.state, revision: revision + 1, operationId: spec.operationId, normalized: true });
+                            tx.objectStore(storeFor(item.change.logicalKey)).put({ logicalKey: item.change.logicalKey, envelope: canonicalizeJson(envelope) }); revisions[item.change.logicalKey] = envelope.revision;
+                        }
+                        const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
+                        putJournal(tx, journalRow, journal, spec, receipt);
+                        done(receipt);
+                    };
+                    if (!remaining) { finish(); return; }
+                    for (const item of reads) { item.request.onerror = () => fail(item.request.error || new Error('Mutation read failed')); item.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
+                } }));
+                const targets = spec.changes.filter((change) => change.entry.owner !== 'backups' && (change.entry.classification === 'authoritative' || change.entry.classification === 'preference')).map((change) => ({ logicalKey: change.logicalKey, state: change.state, owner: change.entry.owner, classification: change.entry.classification }));
+                this._notifyCommitted(targets, receipt); return receipt;
+            } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
+        }
+        async journalNoop(options = {}) { return this.mutate([], Object.assign({}, options, { allowNoop: true })); }
+        async readEntity(store, recordId, options = {}) {
+            this._assertReady(); store = entityStore(store); const id = String(recordId || ''); if (!id) throw validation('readEntity requires recordId');
+            try {
+                const row = await this.driver.readEntity(store, id);
+                if (!row) return null;
+                validateEntityRow(store, row);
+                return options.withMeta ? clone(row) : clone(row.data);
+            }
+            catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
+        }
+        async readPracticeSnapshot(recordIds = null, options = {}) {
+            this._assertReady();
+            const ids = recordIds === null || recordIds === undefined
+                ? null
+                : (Array.isArray(recordIds) ? recordIds : [recordIds])
+                    .map((value) => String(value || ''))
+                    .filter(Boolean);
+            try {
+                const snapshot = await this.driver.readPracticeSnapshot(ids, options);
+                const result = {};
+                const stores = Array.isArray(options.stores) && options.stores.length
+                    ? Array.from(new Set(options.stores.map((store) => entityStore(store))))
+                    : ENTITY_STORES;
+                for (const store of stores) {
+                    const validRows = (snapshot && Array.isArray(snapshot[store]) ? snapshot[store] : [])
+                        .filter((row) => {
+                            try { validateEntityRow(store, row); return true; }
+                            catch (error) {
+                                if (error instanceof AppDataError && error.code === 'CORRUPT_RECORD') return false;
+                                throw error;
+                            }
+                        });
+                    result[store] = options.withMeta
+                        ? clone(validRows)
+                        : validRows.map((row) => clone(row.data));
+                }
+                return result;
+            }
+            catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
+        }
+        async listEntities(store, options = {}) {
+            this._assertReady(); store = entityStore(store);
+            if (store !== 'practiceSummaries') throw validation('Only practiceSummaries supports listEntities; load details and annotations by recordId');
+            try {
+                const rows = await this.driver.listEntities(store);
+                const validRows = rows.filter((row) => {
+                    try { validateEntityRow(store, row); return true; }
+                    catch (error) {
+                        if (error instanceof AppDataError && error.code === 'CORRUPT_RECORD') return false;
+                        throw error;
+                    }
+                });
+                return options.withMeta ? clone(validRows) : validRows.map((row) => clone(row.data));
+            }
+            catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
+        }
+        async mutateEntities(operations, options = {}) {
+            this._assertReady(); if (!Array.isArray(operations) || !operations.length) throw validation('mutateEntities requires operations');
+            const opId = operationId(options.operationId); const items = operations.map(normalizeEntityOperation); const seen = new Set();
+            for (const item of items) { const key = `${item.store}/${item.recordId || '*'}`; if (seen.has(key)) throw validation(`Duplicate entity operation: ${key}`); seen.add(key); }
+            for (const store of ENTITY_STORES) {
+                const scoped = items.filter((item) => item.store === store);
+                if (scoped.some((item) => item.type === 'clear') && scoped.length > 1) {
+                    throw validation(`Entity clear cannot be combined with other operations for ${store}`);
+                }
+            }
+            const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
+            if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
+            const spec = { operationId: opId, warnings, pending: [], fingerprint: checksum({ operations: items, warnings }), stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))) };
+            try {
+                const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
+                    const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
+                    const reads = items.filter((item) => item.type !== 'clear').map((item) => ({ item, request: tx.objectStore(item.store).get(item.recordId) })); let remaining = reads.length;
+                    const finish = () => { const revisions = {};
+                        for (const read of reads) { const current = read.request.result || null; const revision = current ? Number(current.revision) : 0;
+                            if (read.item.expectedRevision !== null && read.item.expectedRevision !== revision) throw new AppDataError('CONFLICT', `Revision conflict for ${read.item.store}/${read.item.recordId}`);
+                            const key = `${read.item.store}/${read.item.recordId}`; if (read.item.type === 'delete') { tx.objectStore(read.item.store).delete(read.item.recordId); revisions[key] = revision + 1; } else { const next = { recordId: read.item.recordId, revision: revision + 1, operationId: spec.operationId, updatedAt: nowIso(), data: read.item.data }; next.checksum = checksum(next.data); tx.objectStore(read.item.store).put(next); revisions[key] = next.revision; }
+                        }
+                        for (const item of items.filter((item) => item.type === 'clear')) { tx.objectStore(item.store).clear(); revisions[`${item.store}/*`] = 0; }
+                        const receipt = receiptFor(spec.operationId, revisions, warnings, []); putJournal(tx, journalRow, journal, spec, receipt); done(receipt); };
+                    if (!remaining) { try { finish(); } catch (error) { fail(error); } return; }
+                    for (const read of reads) { read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed')); read.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
+                } }));
+                this._notifyCommitted(items.map((item) => ({ store: item.store, recordId: item.recordId, type: item.type })), receipt); return receipt;
+            } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
+        }
+        async exportSnapshot(options = {}) {
+            this._assertReady();
+            try {
+                const selected = Array.isArray(options.logicalKeys) ? new Set(options.logicalKeys.map((key) => String(key))) : null;
+                const shouldExport = (logicalKey) => {
+                    if (!catalog.has(logicalKey)) return false;
+                    const entry = lookupEntry(logicalKey);
+                    if (selected && !selected.has(logicalKey)) return false;
+                    if (entry.export === true) return true;
+                    return options.includeSystem === true && entry.classification === 'system';
+                };
+                const data = await this.driver.exportSnapshot(shouldExport);
+                // Full/partial snapshots must be dense for their declared catalog
+                // range. An absent physical row means the catalog default, not an
+                // instruction that future importers should guess about.
+                for (const entry of catalog.list()) {
+                    if (!shouldExport(entry.logicalKey)
+                        || Object.prototype.hasOwnProperty.call(data.envelopes, entry.logicalKey)) continue;
+                    data.envelopes[entry.logicalKey] = makeEnvelope(entry, null, {
+                        state: 'cleared',
+                        operationId: 'snapshot-default'
+                    });
+                }
+                if (Array.isArray(options.entityStores)) {
+                    const selectedStores = new Set(options.entityStores.map(entityStore));
+                    for (const store of ENTITY_STORES) if (!selectedStores.has(store)) delete data.entities[store];
+                }
+                const payload = { envelopes: data.envelopes, entities: data.entities };
+                return { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: selected ? 'partial' : 'full', createdAt: nowIso(), backend: this.backend, envelopes: data.envelopes, entities: data.entities, checksum: checksum(payload) };
+            } catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
+        }
+        async installSnapshot(snapshot, options = {}) {
+            this._assertReady(); const source = snapshot && snapshot.envelopes ? snapshot : { envelopes: snapshot, entities: {} };
+            const envelopes = canonicalizeJson(source.envelopes, '$.envelopes'); const entities = canonicalizeJson(source.entities || {}, '$.entities');
+            if (!envelopes || typeof envelopes !== 'object' || Array.isArray(envelopes) || !entities || typeof entities !== 'object' || Array.isArray(entities)) throw validation('Snapshot is invalid');
+            if (source.checksum && source.checksum !== checksum({ envelopes, entities })) throw validation('Snapshot checksum mismatch');
+            const changes = [];
+            for (const [logicalKey, envelope] of Object.entries(envelopes)) {
+                const entry = lookupEntry(logicalKey);
+                if (entry.classification === 'system' || entry.classification === 'session' || entry.import === 'ignore') continue;
+                if (!validateEnvelope(entry, envelope)) throw validation(`Invalid snapshot envelope: ${logicalKey}`);
+                changes.push({ logicalKey, entry, envelope });
+            }
+            const entityRows = {};
+            for (const store of ENTITY_STORES) {
+                if (!Object.prototype.hasOwnProperty.call(entities, store)) continue;
+                const rows = entities[store];
+                if (!Array.isArray(rows)) throw validation(`Invalid snapshot entities: ${store}`);
+                const ids = new Set();
+                entityRows[store] = rows.map((row) => {
+                    if (!row || typeof row !== 'object' || !String(row.recordId || '')) throw validation(`Invalid snapshot entity: ${store}`);
+                    const recordId = String(row.recordId);
+                    if (ids.has(recordId)) throw validation(`Duplicate snapshot entity: ${store}/${recordId}`);
+                    ids.add(recordId);
+                    const data = canonicalizeJson(row.data);
+                    if (!row.checksum || row.checksum !== checksum(data)) throw validation(`Invalid snapshot entity checksum: ${store}/${recordId}`);
+                    const revision = row.revision === undefined ? 1 : Number(row.revision);
+                    if (!Number.isInteger(revision) || revision < 1) throw validation(`Invalid snapshot entity revision: ${store}/${recordId}`);
+                    return { recordId, revision, operationId: String(row.operationId || options.operationId || 'snapshot'), updatedAt: String(row.updatedAt || nowIso()), data, checksum: checksum(data) };
+                });
+            }
+            if (!changes.length && !Object.keys(entityRows).length) throw validation('Snapshot contains no importable data');
+            const resetJournal = options.resetJournal === true;
+            const expectedRevisionToken = options.expectedRevisionToken && typeof options.expectedRevisionToken === 'object'
+                ? canonicalizeJson(options.expectedRevisionToken, '$.expectedRevisionToken')
+                : null;
+            const opId = operationId(options.operationId || randomId('restore')); const spec = { operationId: opId, warnings: [], pending: [], fingerprint: checksum({ envelopes: changes.map((item) => [item.logicalKey, item.envelope]), entities: entityRows, resetJournal, expectedRevisionToken }), stores: STORE_NAMES.slice() };
+            try {
+                const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
+                    const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
+                    const documentChecks = expectedRevisionToken && expectedRevisionToken.documents || {};
+                    const entityChecks = expectedRevisionToken && expectedRevisionToken.entities || {};
+                    const reads = Object.entries(documentChecks).map(([logicalKey, expected]) => ({
+                        kind: 'document', logicalKey, expected, request: tx.objectStore(DOCUMENT_STORE).get(logicalKey)
+                    })).concat(Object.entries(entityChecks).map(([store, expected]) => ({
+                        kind: 'entities', store, expected, request: tx.objectStore(store).getAll()
+                    })));
+                    const finish = () => {
+                        for (const read of reads) {
+                            if (read.kind === 'document') {
+                                const current = read.request.result ? read.request.result.envelope : null;
+                                const actualRevision = current ? Number(current.revision) : 0;
+                                const expectedRevision = Number(read.expected) || 0;
+                                if (actualRevision !== expectedRevision) {
+                                    throw new AppDataError('CONFLICT', `Snapshot revision conflict for ${read.logicalKey}`, { logicalKey: read.logicalKey, expectedRevision, actualRevision });
+                                }
+                            } else {
+                                const actual = Object.fromEntries((read.request.result || []).map((row) => [String(row.recordId), Number(row.revision) || 0]));
+                                const expected = read.expected && typeof read.expected === 'object' ? read.expected : {};
+                                const ids = new Set(Object.keys(actual).concat(Object.keys(expected)));
+                                for (const recordId of ids) {
+                                    const current = actual[recordId] || 0;
+                                    const wanted = Number(expected[recordId]) || 0;
+                                    if (current !== wanted) {
+                                        throw new AppDataError('CONFLICT', `Snapshot revision conflict for ${read.store}/${recordId}`, { store: read.store, recordId });
+                                    }
+                                }
+                            }
+                        }
+                        const revisions = {};
+                        for (const item of changes) { tx.objectStore(DOCUMENT_STORE).put({ logicalKey: item.logicalKey, envelope: makeEnvelope(item.entry, item.envelope.data, { state: item.envelope.state, revision: item.envelope.revision, operationId: spec.operationId, normalized: true }) }); revisions[item.logicalKey] = Number(item.envelope.revision); }
+                        for (const [store, rows] of Object.entries(entityRows)) {
+                            tx.objectStore(store).clear();
+                            for (const row of rows) tx.objectStore(store).put(row);
+                        }
+                        const receipt = receiptFor(spec.operationId, revisions, [], []); putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt); done(receipt);
+                    };
+                    if (!reads.length) { try { finish(); } catch (error) { fail(error); } return; }
+                    let remaining = reads.length;
+                    for (const read of reads) {
+                        read.request.onerror = () => fail(read.request.error || new Error('Snapshot revalidation read failed'));
+                        read.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } };
+                    }
+                } }));
+                const targets = changes
+                    .filter((item) => item.entry.owner !== 'backups')
+                    .map((item) => ({ logicalKey: item.logicalKey, state: item.envelope.state, owner: item.entry.owner, classification: item.entry.classification }))
+                    .concat(Object.keys(entityRows).map((store) => ({ store, recordId: null, type: 'replace' })));
+                this._notifyCommitted(targets, receipt);
+                return receipt;
+            }
+            catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
+        }
+        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
+    }
+
+    Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/data/v2/appData.js ===== */
+(function installAppData(global) {
+    'use strict';
+
+    const internals = global.__AppDataV2Internals;
+    if (!internals || typeof internals.DataKernel !== 'function') {
+        throw new Error('AppData v2 requires DataKernel');
+    }
+    const {
+        DataKernel,
+        AppDataError,
+        catalog,
+        clone,
+        randomId,
+        nowIso,
+        checksum
+    } = internals;
+    const kernel = new DataKernel();
+    const importPlans = new Map();
+    const RECOVERY_KEYS = Object.freeze({
+        activeSession: 'recovery.activeSessions',
+        draft: 'recovery.drafts',
+        interrupted: 'recovery.interrupted',
+        rejectedCompletion: 'recovery.rejectedCompletions'
+    });
+    const PREFERENCE_FIELDS = Object.freeze({
+        theme: 'theme', browse: 'browse', timer: 'timer', suite: 'suite', candidateCode: 'candidateCode',
+        resourceBasePrefix: 'resourceBasePrefix', onboarding: 'onboarding', readingDisplay: 'readingDisplay',
+        threeBackground: 'threeBackground', themePortal: 'themePortal', practiceWidget: 'practiceWidget',
+        consent: 'consent', logConfig: 'logConfig'
+    });
+    const PRACTICE_ENTITY_STORES = Object.freeze(['practiceSummaries', 'practiceDetails', 'practiceAnnotations']);
+
+    function asObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
+    function asArray(value) { return Array.isArray(value) ? value : []; }
+    function idOf(value, fields) {
+        for (const field of fields) {
+            if (value && value[field] !== undefined && value[field] !== null && value[field] !== '') return String(value[field]);
+        }
+        return '';
+    }
+
+    function importedLibraryId(value, options = {}) {
+        const id = value === null || value === undefined ? '' : String(value).trim();
+        if (!id && options.nullable) return null;
+        if (!id) throw new AppDataError('VALIDATION', 'Imported library configuration id is required');
+        if (/^exam_index(?:_|$)/.test(id)) {
+            throw new AppDataError('VALIDATION', 'Unsupported library configuration id');
+        }
+        return id;
+    }
+    function assertObject(value, message) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AppDataError('VALIDATION', message);
+    }
+    function assertArray(value, message) {
+        if (!Array.isArray(value)) throw new AppDataError('VALIDATION', message);
+    }
+    function jsonValue(value, label = 'value') {
+        try {
+            const serialized = JSON.stringify(value, (_key, current) => {
+                if (typeof current === 'bigint') return String(current);
+                if (typeof current === 'number' && !Number.isFinite(current)) return null;
+                return current;
+            });
+            if (serialized === undefined) return null;
+            return JSON.parse(serialized);
+        } catch (error) {
+            throw new AppDataError('VALIDATION', `${label} must be JSON-serializable`, { cause: error && error.message });
+        }
+    }
+    function operationId(command, prefix, semanticPayload = command) {
+        const id = command && command.operationId ? String(command.operationId) : randomId(prefix);
+        jsonValue(semanticPayload, `${prefix} payload`);
+        return id;
+    }
+    function mutationOptions(command, prefix, semanticPayload, extra = {}) {
+        const source = asObject(command);
+        const payload = jsonValue(semanticPayload, `${prefix} payload`);
+        const intent = { command: prefix, payload };
+        if (Object.prototype.hasOwnProperty.call(source, 'expectedRevision')) {
+            intent.expectedRevision = source.expectedRevision;
+        }
+        return Object.assign({}, extra, {
+            operationId: operationId(source, prefix, payload),
+            intent
+        });
+    }
+    function optionsMutationOptions(options, prefix, semanticPayload, extra = {}) {
+        return mutationOptions(asObject(options), prefix, semanticPayload, extra);
+    }
+    function deterministicEntityId(prefix, operation) {
+        return `${prefix}_${checksum({ operationId: String(operation) }).replace(/[^a-z0-9]+/gi, '')}`;
+    }
+    function normalizeAccuracyRatio(value, label = 'accuracy') {
+        if (value === undefined || value === null || value === '') return null;
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) {
+            throw new AppDataError('VALIDATION', `${label} must be between 0 and 100`);
+        }
+        return numeric > 1 ? numeric / 100 : numeric;
+    }
+    function defaultStats() {
+        return {
+            totalPractices: 0, totalQuestions: 0, correctAnswers: 0, averageAccuracy: 0,
+            reading: { practices: 0, questions: 0, correct: 0, accuracy: 0 },
+            listening: { practices: 0, questions: 0, correct: 0, accuracy: 0 },
+            lastUpdated: nowIso()
+        };
+    }
+
+    function firstNonNegative(...values) {
+        for (const value of values) {
+            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 0) return numeric;
+        }
+        return null;
+    }
+
+    function normalizePracticeScore(record) {
+        const scoreInfo = asObject(record.scoreInfo);
+        const legacyScoreInfo = asObject(asObject(record.realData).scoreInfo);
+        const overloadedAnswers = record.correctAnswers;
+        if (overloadedAnswers && typeof overloadedAnswers === 'object') {
+            record.correctAnswerMap = Object.assign(
+                {},
+                clone(asObject(overloadedAnswers)),
+                clone(asObject(record.correctAnswerMap))
+            );
+        }
+        const correct = firstNonNegative(
+            overloadedAnswers,
+            record.correctAnswersCount,
+            scoreInfo.correctAnswers,
+            scoreInfo.correct,
+            legacyScoreInfo.correctAnswers,
+            legacyScoreInfo.correct
+        );
+        if (correct !== null) record.correctAnswers = correct;
+        else if (overloadedAnswers && typeof overloadedAnswers === 'object') record.correctAnswers = 0;
+        const total = firstNonNegative(
+            record.totalQuestions,
+            record.questionCount,
+            scoreInfo.totalQuestions,
+            scoreInfo.total,
+            legacyScoreInfo.totalQuestions,
+            legacyScoreInfo.total
+        );
+        if (total !== null) record.totalQuestions = total;
+    }
+
+    function mergeAnswers(target, source) {
+        if (Array.isArray(source)) {
+            source.forEach((item, index) => {
+                if (!item || typeof item !== 'object') return;
+                const questionId = idOf(item, ['questionId', 'questionNumber', 'id', 'number']) || String(index + 1);
+                const answer = item.answer ?? item.value ?? item.userAnswer ?? item.selectedAnswer;
+                if (answer !== undefined) target[questionId] = clone(answer);
+            });
+            return;
+        }
+        for (const [questionId, answer] of Object.entries(asObject(source))) {
+            target[String(questionId)] = clone(answer);
+        }
+    }
+
+    function normalizePracticeAnswers(record) {
+        const answers = {};
+        const raw = asObject(record.rawData);
+        const rawReal = asObject(raw.realData);
+        const real = asObject(record.realData);
+        for (const source of [
+            rawReal.answerMap, rawReal.answerList, rawReal.answers,
+            raw.answerMap, raw.answerList, raw.answers,
+            real.answerMap, real.answerList, real.answers,
+            record.answerMap, record.answerList, record.answers
+        ]) mergeAnswers(answers, source);
+        if (Object.keys(answers).length) record.answers = answers;
+    }
+
+    function questionTypeErrorCounts(source) {
+        const counts = {};
+        const add = (type, count = 1) => {
+            const key = String(type || '').trim();
+            if (key && count > 0) counts[key] = (counts[key] || 0) + count;
+        };
+        for (const [type, value] of Object.entries(asObject(source && source.questionTypePerformance))) {
+            const metrics = asObject(value);
+            const total = firstNonNegative(metrics.totalQuestions, metrics.total);
+            const correct = firstNonNegative(metrics.correctAnswers, metrics.correct);
+            if (total !== null && correct !== null) add(type, Math.max(0, total - correct));
+        }
+        for (const detail of Object.values(asObject(asObject(source && source.scoreInfo).details))) {
+            if (detail && detail.isCorrect === false) add(detail.questionType || detail.type);
+        }
+        return counts;
+    }
+
+    function canonicalizeRecord(input) {
+        assertObject(input, 'practice record must be an object');
+        const record = jsonValue(input, 'practice record');
+        record.id = idOf(record, ['id', 'recordId', 'sessionId']) || randomId('record');
+        record.sessionId = idOf(record, ['sessionId']) || record.id;
+        record.timestamp = record.timestamp || record.completedAt || record.date || nowIso();
+        record.completedAt = record.completedAt || record.timestamp;
+        record.type = record.type || record.examType || (record.metadata && record.metadata.type) || 'practice';
+        record.metadata = asObject(record.metadata);
+        if (!record.metadata.examId && record.examId) record.metadata.examId = record.examId;
+        if (!record.examId && record.metadata.examId) record.examId = record.metadata.examId;
+        normalizePracticeAnswers(record);
+        normalizePracticeScore(record);
+        for (const field of ['duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'totalScore']) {
+            if (record[field] === undefined || record[field] === null || record[field] === '') continue;
+            const numeric = Number(record[field]);
+            if (!Number.isFinite(numeric) || numeric < 0) throw new AppDataError('VALIDATION', `practice record ${field} must be a non-negative number`);
+            record[field] = numeric;
+        }
+        if (record.accuracy !== undefined) record.accuracy = normalizeAccuracyRatio(record.accuracy, 'practice record accuracy');
+        return jsonValue(record, 'canonical practice record');
+    }
+
+    function lightSuiteEntry(source, fallbackType = null) {
+        const entry = asObject(source);
+        const scoreInfo = asObject(entry.scoreInfo);
+        const realScoreInfo = asObject(asObject(entry.realData).scoreInfo);
+        const metadata = asObject(entry.metadata);
+        const totalQuestions = firstNonNegative(entry.totalQuestions, scoreInfo.totalQuestions, scoreInfo.total, realScoreInfo.totalQuestions, realScoreInfo.total) ?? 0;
+        const correctAnswers = firstNonNegative(entry.correctAnswers, scoreInfo.correctAnswers, scoreInfo.correct, realScoreInfo.correctAnswers, realScoreInfo.correct) ?? 0;
+        const explicitAccuracy = entry.accuracy ?? scoreInfo.accuracy ?? realScoreInfo.accuracy;
+        const accuracy = normalizeAccuracyRatio(
+            explicitAccuracy === undefined && totalQuestions > 0 ? correctAnswers / totalQuestions : (explicitAccuracy ?? 0),
+            'suite entry accuracy'
+        ) || 0;
+        const percentage = Number(entry.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0;
+        return jsonValue({
+            id: entry.id || null,
+            sessionId: entry.sessionId || null,
+            examId: entry.examId || metadata.examId || null,
+            title: entry.title || entry.examTitle || metadata.examTitle || metadata.title || '',
+            type: entry.type || metadata.type || fallbackType,
+            date: entry.date || entry.completedAt || entry.timestamp || null,
+            duration: Number(entry.duration ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            percentage,
+            questionTypeErrorCounts: questionTypeErrorCounts(entry)
+        }, 'suite entry light projection');
+    }
+
+    function lightFromCanonical(source) {
+        const scoreInfo = asObject(source.scoreInfo);
+        const realScoreInfo = asObject(asObject(source.realData).scoreInfo);
+        const metadata = asObject(source.metadata);
+        const hasOwn = (object, field) => Object.prototype.hasOwnProperty.call(object, field);
+        const dataSource = hasOwn(source, 'dataSource')
+            ? source.dataSource
+            : (hasOwn(metadata, 'dataSource') ? metadata.dataSource : undefined);
+        const totalQuestions = Number(source.totalQuestions ?? scoreInfo.totalQuestions ?? scoreInfo.total ?? realScoreInfo.totalQuestions ?? realScoreInfo.total ?? 0) || 0;
+        const correctAnswers = Number(source.correctAnswers ?? scoreInfo.correctAnswers ?? scoreInfo.correct ?? realScoreInfo.correctAnswers ?? realScoreInfo.correct ?? 0) || 0;
+        const explicitAccuracy = source.accuracy ?? scoreInfo.accuracy ?? realScoreInfo.accuracy;
+        const accuracy = normalizeAccuracyRatio(
+            explicitAccuracy === undefined && totalQuestions > 0 ? correctAnswers / totalQuestions : (explicitAccuracy ?? 0),
+            'practice light accuracy'
+        ) || 0;
+        return jsonValue({
+            id: source.id,
+            sessionId: source.sessionId,
+            examId: source.examId || source.metadata.examId || null,
+            title: source.title || source.examTitle || (source.metadata && source.metadata.examTitle) || source.metadata.title || '',
+            type: source.type,
+            mode: source.mode || source.practiceMode || null,
+            timestamp: source.timestamp,
+            completedAt: source.completedAt,
+            date: source.date || source.completedAt || source.timestamp || null,
+            startTime: source.startTime || null,
+            endTime: source.endTime || null,
+            duration: Number(source.duration ?? source.durationSeconds ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            percentage: Number(source.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0,
+            score: source.score ?? scoreInfo.score ?? realScoreInfo.score ?? null,
+            questionTypeErrorCounts: questionTypeErrorCounts(source),
+            // 缺失时必须留空而不是写 null：消费方按 `dataSource === 'real' || === undefined`
+            // 过滤记录（js/main.js updatePracticeView），null 两者都不匹配会让记录整条消失。
+            // jsonValue 走 JSON.stringify，undefined 字段会被丢弃，读取时即为 undefined。
+            dataSource,
+            // Summaries are list indexes.  Keep only the metadata needed to filter, show a
+            // source label, or locate the originating library; details stay in their entity.
+            metadata: Object.fromEntries([
+                // `source` must stay: PracticeRecordSource uses metadata.source demo markers
+                // (e.g. onboarding-demo) so light/stats/achievements stay consistent with full.
+                'examId', 'examTitle', 'title', 'type', 'category', 'frequency',
+                'dataSource', 'source', 'libraryConfigurationId'
+            ].filter((field) => hasOwn(metadata, field)).map((field) => [field, clone(metadata[field])])),
+            suite: source.suite == null ? null : clone(asObject(source.suite)),
+            suiteEntrySummaries: asArray(source.suiteEntries).map((entry) => lightSuiteEntry(
+                entry,
+                String(source.type || '').replace(/-suite$/, '') || null
+            ))
+        }, 'practice light projection');
+    }
+
+    function projectLight(record) {
+        if (!record) return null;
+        return lightFromCanonical(canonicalizeRecord(record));
+    }
+
+    function firstNonEmpty(...values) {
+        let first;
+        for (const value of values) {
+            if (value === undefined || value === null) continue;
+            if (first === undefined) first = value;
+            if (Array.isArray(value) && value.length) return clone(value);
+            if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length) return clone(value);
+            if (typeof value !== 'object') return clone(value);
+        }
+        return first === undefined ? {} : clone(first);
+    }
+
+    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
+    const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
+
+    function withoutRawData(value) {
+        if (Array.isArray(value)) return value.map(withoutRawData);
+        if (!value || typeof value !== 'object') return clone(value);
+        const clean = {};
+        for (const [key, item] of Object.entries(value)) {
+            if (key !== 'realData' && key !== 'rawData') clean[key] = withoutRawData(item);
+        }
+        return clean;
+    }
+
+    function splitPracticeRecord(input) {
+        const source = canonicalizeRecord(input);
+        const summary = lightFromCanonical(source);
+        const detail = { recordId: source.id };
+        const annotations = { recordId: source.id };
+        for (const [key, value] of Object.entries(source)) {
+            if (key === 'realData' || key === 'rawData' || key === 'answerMap' || key === 'answerList' || SUMMARY_FIELDS.has(key)) continue;
+            if (ANNOTATION_FIELDS.has(key)) annotations[key] = withoutRawData(value);
+            else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
+                const next = Object.assign({}, asObject(entry));
+                const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
+                for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+                    if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
+                }
+                const annotation = {};
+                for (const annotationKey of ANNOTATION_FIELDS) {
+                    if (hasOwn(next, annotationKey)) { annotation[annotationKey] = next[annotationKey]; delete next[annotationKey]; }
+                    if (next.realData && hasOwn(next.realData, annotationKey)) delete next.realData[annotationKey];
+                    if (next.rawData && hasOwn(next.rawData, annotationKey)) delete next.rawData[annotationKey];
+                }
+                delete next.realData; delete next.rawData;
+                if (Object.keys(annotation).length) {
+                    if (!annotations.suiteEntries) annotations.suiteEntries = {};
+                    annotations.suiteEntries[String(next.examId || asObject(next.metadata).examId || next.id || Object.keys(annotations.suiteEntries).length)] = annotation;
+                }
+                return withoutRawData(next);
+            });
+            else detail[key] = withoutRawData(value);
+        }
+        // Accept the old mirror only as an input normalization boundary; it is never persisted.
+        const realData = asObject(source.realData); const rawData = asObject(source.rawData);
+        for (const key of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+            if (!hasOwn(detail, key)) detail[key] = firstNonEmpty(source[key], realData[key], rawData[key]);
+        }
+        for (const key of ANNOTATION_FIELDS) {
+            if (hasOwn(annotations, key)) continue;
+            if (hasOwn(realData, key)) annotations[key] = withoutRawData(realData[key]);
+            else if (hasOwn(rawData, key)) annotations[key] = withoutRawData(rawData[key]);
+        }
+        return { summary: jsonValue(summary, 'practice summary'), detail: jsonValue(detail, 'practice detail'), annotations: jsonValue(annotations, 'practice annotations') };
+    }
+
+    function joinPracticeRecord(summary, detail, annotations, projection = 'full') {
+        if (!summary) return null;
+        const mode = String(projection || 'full').toLowerCase();
+        const light = clone(summary);
+        if (mode === 'light' || mode === 'summary') return light;
+        const joined = Object.assign({}, light, clone(asObject(detail)));
+        delete joined.recordId;
+        if (mode === 'detail' || mode === 'medium') return jsonValue(joined, 'practice detail projection');
+        const annotationData = asObject(annotations);
+        for (const [key, value] of Object.entries(annotationData)) if (key !== 'recordId' && key !== 'suiteEntries') joined[key] = clone(value);
+        if (Array.isArray(joined.suiteEntries)) {
+            const suiteAnnotations = asObject(annotationData.suiteEntries);
+            joined.suiteEntries = joined.suiteEntries.map((entry) => Object.assign({}, entry, clone(suiteAnnotations[String(entry.examId || asObject(entry.metadata).examId || entry.id)] || {})));
+        }
+        return jsonValue(joined, 'practice full projection');
+    }
+
+    function projectDetail(record) { return joinPracticeRecord(splitPracticeRecord(record).summary, splitPracticeRecord(record).detail, null, 'detail'); }
+
+    // “什么算真实练习记录”只有一份定义（js/data/practiceRecordSource.js）。
+    // 这里必须硬性依赖而不是本地兜底：曾经投影器与 js/main.js 各写一套判定，
+    // 导致演示/种子记录在列表里看不见却计入统计与成就。缺失即启动失败，
+    // 让漏配 bundle 在开发期就暴露，而不是运行时静默退回旧语义。
+    const practiceRecordSource = global.PracticeRecordSource;
+    if (!practiceRecordSource || typeof practiceRecordSource.isRealPracticeRecord !== 'function') {
+        throw new Error('AppData v2 requires PracticeRecordSource (js/data/practiceRecordSource.js)');
+    }
+    const isRealPracticeRecord = practiceRecordSource.isRealPracticeRecord;
+
+    function computeStats(records) {
+        const stats = defaultStats();
+        for (const record of asArray(records).filter(isRealPracticeRecord)) {
+            const summary = projectLight(record);
+            const type = String(summary.type || '').toLowerCase();
+            const target = type.includes('listen') ? stats.listening : stats.reading;
+            stats.totalPractices += 1;
+            stats.totalQuestions += summary.totalQuestions;
+            stats.correctAnswers += summary.correctAnswers;
+            target.practices += 1;
+            target.questions += summary.totalQuestions;
+            target.correct += summary.correctAnswers;
+        }
+        stats.averageAccuracy = stats.totalQuestions ? (stats.correctAnswers / stats.totalQuestions) * 100 : 0;
+        for (const target of [stats.reading, stats.listening]) target.accuracy = target.questions ? (target.correct / target.questions) * 100 : 0;
+        stats.lastUpdated = nowIso();
+        return stats;
+    }
+
+    function validIso(value) {
+        if (value === null || value === undefined || value === '') return null;
+        const time = new Date(value).getTime();
+        return Number.isFinite(time) ? new Date(time).toISOString() : null;
+    }
+
+    function practiceType(record) {
+        const metadata = asObject(record.metadata);
+        const hints = [record.type, record.practiceType, metadata.type, metadata.examType, metadata.practiceType,
+            record.examId, record.title, metadata.examId, metadata.title].filter(Boolean).join(' ').toLowerCase();
+        if (hints.includes('listen') || hints.includes('audio') || hints.includes('hearing')) return 'listening';
+        if (hints.includes('read')) return 'reading';
+        return null;
+    }
+
+    function accuracyRatio(record) {
+        const summary = lightFromCanonical(record);
+        const value = Number(summary.accuracy);
+        if (!Number.isFinite(value)) return 0;
+        return Math.max(0, Math.min(1, value > 1 ? value / 100 : value));
+    }
+
+    function durationSeconds(record) {
+        const scoreInfo = asObject(record.scoreInfo);
+        const realData = asObject(record.realData);
+        const realScoreInfo = asObject(realData.scoreInfo);
+        for (const value of [record.duration, realData.duration, scoreInfo.duration, scoreInfo.timeSpent, realScoreInfo.duration, realScoreInfo.timeSpent]) {
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 0) return numeric;
+        }
+        return 0;
+    }
+
+    function earlierUnlock(left, right) {
+        const leftIso = validIso(left);
+        const rightIso = validIso(right);
+        if (!leftIso) return rightIso;
+        if (!rightIso) return leftIso;
+        return new Date(leftIso).getTime() <= new Date(rightIso).getTime() ? leftIso : rightIso;
+    }
+
+    function laterUnlock(left, right) {
+        const leftIso = validIso(left);
+        const rightIso = validIso(right);
+        if (!leftIso) return rightIso;
+        if (!rightIso) return leftIso;
+        return new Date(leftIso).getTime() >= new Date(rightIso).getTime() ? leftIso : rightIso;
+    }
+
+    function computeAchievementProgress(records, manual, existing) {
+        const items = asArray(records).filter(isRealPracticeRecord).map(canonicalizeRecord)
+            .map((record, index) => ({
+                record,
+                index,
+                unlockedAt: validIso(record.completedAt || record.timestamp),
+                time: new Date(record.completedAt || record.timestamp).getTime()
+            }))
+            .sort((left, right) => {
+                const leftTime = Number.isFinite(left.time) ? left.time : Number.MAX_SAFE_INTEGER;
+                const rightTime = Number.isFinite(right.time) ? right.time : Number.MAX_SAFE_INTEGER;
+                return leftTime - rightTime || left.index - right.index;
+            });
+        const candidates = {};
+        const setThreshold = (id, list, count) => {
+            if (list.length >= count) candidates[id] = list[count - 1].unlockedAt;
+        };
+        setThreshold('first_step', items, 1);
+        setThreshold('practice_bronze', items, 10);
+        setThreshold('practice_silver', items, 50);
+        setThreshold('practice_gold', items, 100);
+        setThreshold('practice_platinum', items, 200);
+
+        const reading = items.filter((item) => practiceType(item.record) === 'reading');
+        const listening = items.filter((item) => practiceType(item.record) === 'listening');
+        setThreshold('reading_first', reading, 1);
+        setThreshold('reading_bronze', reading, 10);
+        setThreshold('reading_silver', reading, 50);
+        setThreshold('reading_gold', reading, 100);
+        setThreshold('listening_first', listening, 1);
+        setThreshold('listening_bronze', listening, 10);
+        setThreshold('listening_silver', listening, 50);
+        setThreshold('listening_gold', listening, 100);
+        if (reading.length >= 10 && listening.length >= 10) candidates.balanced_foundation = laterUnlock(reading[9].unlockedAt, listening[9].unlockedAt);
+        if (reading.length >= 30 && listening.length >= 30) candidates.balanced_advanced = laterUnlock(reading[29].unlockedAt, listening[29].unlockedAt);
+
+        let cumulativeDuration = 0;
+        let cumulativeAccuracy = 0;
+        let perfectCount = 0;
+        let speedCount = 0;
+        for (let index = 0; index < items.length; index += 1) {
+            const item = items[index];
+            const accuracy = accuracyRatio(item.record);
+            const duration = durationSeconds(item.record);
+            cumulativeDuration += duration;
+            cumulativeAccuracy += accuracy;
+            if (!Object.prototype.hasOwnProperty.call(candidates, 'time_focus_60') && cumulativeDuration >= 3600) candidates.time_focus_60 = item.unlockedAt;
+            if (!Object.prototype.hasOwnProperty.call(candidates, 'time_focus_300') && cumulativeDuration >= 18000) candidates.time_focus_300 = item.unlockedAt;
+            if (!Object.prototype.hasOwnProperty.call(candidates, 'time_focus_1000') && cumulativeDuration >= 60000) candidates.time_focus_1000 = item.unlockedAt;
+            if (!Object.prototype.hasOwnProperty.call(candidates, 'accuracy_stable') && index + 1 >= 10 && cumulativeAccuracy / (index + 1) >= 0.7) candidates.accuracy_stable = item.unlockedAt;
+            if (!Object.prototype.hasOwnProperty.call(candidates, 'accuracy_elite') && index + 1 >= 20 && cumulativeAccuracy / (index + 1) >= 0.85) candidates.accuracy_elite = item.unlockedAt;
+            if (accuracy >= 1) {
+                perfectCount += 1;
+                if (!Object.prototype.hasOwnProperty.call(candidates, 'accuracy_perfect')) candidates.accuracy_perfect = item.unlockedAt;
+                if (perfectCount === 3) candidates.perfect_three = item.unlockedAt;
+                if (perfectCount === 10) candidates.perfect_ten = item.unlockedAt;
+            }
+            if (duration > 0 && duration <= 300 && accuracy > 0.8) {
+                speedCount += 1;
+                if (!Object.prototype.hasOwnProperty.call(candidates, 'speed_demon')) candidates.speed_demon = item.unlockedAt;
+                if (speedCount === 3) candidates.speed_three = item.unlockedAt;
+                if (speedCount === 10) candidates.speed_ten = item.unlockedAt;
+            }
+        }
+
+        const dayItems = new Map();
+        for (const item of items) {
+            if (!item.unlockedAt) continue;
+            const day = item.unlockedAt.slice(0, 10);
+            if (!dayItems.has(day)) dayItems.set(day, item.unlockedAt);
+        }
+        const days = Array.from(dayItems.keys()).sort();
+        let streak = 0;
+        let previousDay = null;
+        for (const day of days) {
+            const currentDay = new Date(`${day}T00:00:00.000Z`).getTime();
+            streak = previousDay !== null && currentDay - previousDay === 86400000 ? streak + 1 : 1;
+            previousDay = currentDay;
+            if (streak === 3 && !Object.prototype.hasOwnProperty.call(candidates, 'streak_bronze')) candidates.streak_bronze = dayItems.get(day);
+            if (streak === 7 && !Object.prototype.hasOwnProperty.call(candidates, 'streak_silver')) candidates.streak_silver = dayItems.get(day);
+            if (streak === 30 && !Object.prototype.hasOwnProperty.call(candidates, 'streak_gold')) candidates.streak_gold = dayItems.get(day);
+            if (streak === 60 && !Object.prototype.hasOwnProperty.call(candidates, 'streak_platinum')) candidates.streak_platinum = dayItems.get(day);
+        }
+
+        const progress = {};
+        const mergeUnlocked = (source) => {
+            for (const [rawId, value] of Object.entries(asObject(source))) {
+                if (!value || rawId === 'updatedAt') continue;
+                const id = rawId;
+                const unlockedAt = value && typeof value === 'object' ? validIso(value.unlockedAt) : null;
+                if (!progress[id]) progress[id] = { unlockedAt };
+                else progress[id].unlockedAt = earlierUnlock(progress[id].unlockedAt, unlockedAt);
+            }
+        };
+        mergeUnlocked(existing);
+        mergeUnlocked(manual);
+        for (const [id, unlockedAt] of Object.entries(candidates)) {
+            if (!progress[id]) progress[id] = { unlockedAt: validIso(unlockedAt) };
+            else progress[id].unlockedAt = earlierUnlock(progress[id].unlockedAt, unlockedAt);
+        }
+        return jsonValue(progress, 'achievement progress');
+    }
+
+    // Entity records are authoritative. Projections are assembled on reads, never cached or
+    // scheduled as follow-up work; this keeps a successful write immediately observable.
+    async function retryMergeConflict(options, task, maxAttempts = 3) {
+        const explicitRevision = hasOwn(options, 'expectedRevision');
+        let lastError;
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            try {
+                return await task();
             } catch (error) {
-                console.error('[StorageProviderRegistry] listener failed:', error);
+                lastError = error;
+                if (explicitRevision || !error || error.code !== 'CONFLICT' || attempt + 1 >= maxAttempts) {
+                    throw error;
+                }
+            }
+        }
+        throw lastError;
+    }
+
+    async function readCollectionMeta(logicalKey) {
+        const meta = await kernel.read(logicalKey, { withMeta: true });
+        return { items: asArray(meta.data), revision: meta.envelope ? Number(meta.envelope.revision) : 0 };
+    }
+
+    function retainBackupEntries(items, limit = 20, preserveIds = []) {
+        const cap = Math.max(1, Number(limit) || 20);
+        const newestFirst = (left, right) => String(right.timestamp || '').localeCompare(String(left.timestamp || ''));
+        const entries = asArray(items).filter(Boolean).sort(newestFirst);
+        const retained = [];
+        const retainedIds = new Set();
+        const requestedIds = new Set(asArray(preserveIds).map(String).filter(Boolean));
+        for (const item of entries) {
+            const id = String(item.id);
+            if (retained.length >= cap || retainedIds.has(id) || !requestedIds.has(id)) continue;
+            retained.push(item);
+            retainedIds.add(id);
+        }
+        for (const item of entries) {
+            const id = String(item.id);
+            if (retained.length >= cap) break;
+            if (retainedIds.has(id)) continue;
+            retained.push(item);
+            retainedIds.add(id);
+        }
+        return retained;
+    }
+
+    function hasOwn(value, key) {
+        return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
+    }
+
+    function normalizeLibraryConfigurationId(value) {
+        return importedLibraryId(value, { nullable: true });
+    }
+
+    async function practiceRecordWithLibraryProvenance(source, command, options = {}) {
+        assertObject(source, 'practice record must be an object');
+        const record = jsonValue(source, 'practice record');
+        const metadata = asObject(record.metadata);
+        let configurationId;
+
+        if (hasOwn(command, 'libraryConfigurationId')) {
+            configurationId = command.libraryConfigurationId;
+        } else if (hasOwn(metadata, 'libraryConfigurationId')) {
+            configurationId = metadata.libraryConfigurationId;
+        } else if (hasOwn(record, 'libraryConfigurationId')) {
+            configurationId = record.libraryConfigurationId;
+        } else {
+            configurationId = await kernel.read('library.activeConfigurationId');
+        }
+
+        const normalizedId = normalizeLibraryConfigurationId(configurationId);
+        record.metadata = Object.assign({}, metadata, { libraryConfigurationId: normalizedId });
+
+        if (options.includeSuiteEntries && Array.isArray(record.suiteEntries)) {
+            record.suiteEntries = record.suiteEntries.map((entry) => {
+                if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+                const next = jsonValue(entry, 'practice suite entry');
+                const entryMetadata = asObject(next.metadata);
+                const entryId = hasOwn(entryMetadata, 'libraryConfigurationId')
+                    ? normalizeLibraryConfigurationId(entryMetadata.libraryConfigurationId)
+                    : normalizedId;
+                next.metadata = Object.assign({}, entryMetadata, { libraryConfigurationId: entryId });
+                return next;
+            });
+        }
+
+        return record;
+    }
+
+    function practiceRecordMatches(record, identities) {
+        const expected = new Set(asArray(identities).map((value) => String(value || '')).filter(Boolean));
+        if (!expected.size || !record || typeof record !== 'object') return false;
+        return ['id', 'recordId', 'sessionId'].some((field) => {
+            const value = record[field];
+            return value !== undefined && value !== null && expected.has(String(value));
+        });
+    }
+
+    function practiceLayerId(row) {
+        return String(row && (row.recordId || row.id || row.sessionId) || '');
+    }
+    async function practiceLayers(recordId, withMeta = false) {
+        const snapshot = await kernel.readPracticeSnapshot([recordId], { withMeta });
+        const find = (store) => asArray(snapshot[store]).find((row) => practiceLayerId(row) === String(recordId)) || null;
+        return { summary: find('practiceSummaries'), detail: find('practiceDetails'), annotations: find('practiceAnnotations') };
+    }
+    function entityRevision(row) { return row ? Number(row.revision) : 0; }
+    function practiceUpserts(recordId, layers, existing = {}) {
+        return [
+            { type: 'upsert', store: 'practiceSummaries', recordId, data: layers.summary, expectedRevision: entityRevision(existing.summary) },
+            { type: 'upsert', store: 'practiceDetails', recordId, data: layers.detail, expectedRevision: entityRevision(existing.detail) },
+            { type: 'upsert', store: 'practiceAnnotations', recordId, data: layers.annotations, expectedRevision: entityRevision(existing.annotations) }
+        ];
+    }
+    async function joinedPractice(recordId, projection, snapshot = null) {
+        const mode = String(projection || 'full').toLowerCase();
+        const stores = mode === 'light' || mode === 'summary'
+            ? ['practiceSummaries']
+            : (mode === 'detail' || mode === 'medium' ? ['practiceSummaries', 'practiceDetails'] : undefined);
+        const layers = snapshot || await kernel.readPracticeSnapshot([recordId], { stores });
+        const find = (store) => asArray(layers[store]).find((row) => practiceLayerId(row) === String(recordId)) || null;
+        const summary = find('practiceSummaries');
+        if (!summary) return null;
+        if (mode === 'light' || mode === 'summary') return clone(summary);
+        const detail = find('practiceDetails');
+        if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(summary, detail, null, mode);
+        return joinPracticeRecord(summary, detail, find('practiceAnnotations'), mode);
+    }
+    const practice = Object.freeze({
+        async list(options = {}) {
+            await ready;
+            const projection = String(options.projection || 'full').toLowerCase();
+            const summaries = await kernel.listEntities('practiceSummaries');
+            if (projection === 'light' || projection === 'summary') return summaries;
+            const stores = projection === 'detail' || projection === 'medium'
+                ? ['practiceSummaries', 'practiceDetails']
+                : undefined;
+            const snapshot = await kernel.readPracticeSnapshot(null, { stores });
+            return (await Promise.all(asArray(snapshot.practiceSummaries)
+                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean);
+        },
+        async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
+        async completeAttempt(command) {
+            await ready;
+            const source = command && (command.record || command.attempt) ? (command.record || command.attempt) : command;
+            const mutation = mutationOptions(command, 'practice-complete', source);
+            const recordInput = await practiceRecordWithLibraryProvenance(source, command);
+            if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
+            const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
+            const receipt = await retryMergeConflict(command || {}, async () => kernel.mutateEntities(
+                practiceUpserts(recordId, layers, await practiceLayers(recordId, true)), mutation));
+            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+        },
+        async finalizeSuite(command) {
+            await ready; assertObject(command, 'finalizeSuite command is required');
+            const mutation = mutationOptions(command, 'practice-suite', command);
+            const input = await practiceRecordWithLibraryProvenance(command.record || command.aggregate || command, command, { includeSuiteEntries: true });
+            if (!idOf(input, ['id', 'recordId', 'sessionId'])) input.id = deterministicEntityId('suite', mutation.operationId);
+            const layers = splitPracticeRecord(input); const recordId = layers.summary.id;
+            const childIdentities = asArray(command.childRecordIds || command.childSessionIds).map(String);
+            const children = new Set((await kernel.listEntities('practiceSummaries'))
+                .filter((summary) => practiceRecordMatches(summary, childIdentities))
+                .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
+            children.delete(recordId);
+            const receipt = await retryMergeConflict(command, async () => {
+                const existing = await practiceLayers(recordId, true);
+                const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
+                return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)), mutation);
+            });
+            return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
+        },
+        async updateAnnotations(command) {
+            await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
+            return retryMergeConflict(command, async () => {
+                const current = await practiceLayers(recordId, true); if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
+                if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
+                const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
+                const detail = clone(asObject(current.detail && current.detail.data)); const examId = String(command.examId || current.summary.data.examId || 'default');
+                if (Array.isArray(detail.suiteEntries) && detail.suiteEntries.length) {
+                    if (!detail.suiteEntries.some((entry) => String(entry.examId || asObject(entry.metadata).examId || '') === examId)) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
+                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(asObject(command.patch))) });
+                } else {
+                    if (current.summary.data.examId && String(current.summary.data.examId) !== examId) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
+                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(asObject(command.patch))) });
+                    Object.assign(annotations, clone(asObject(command.patch)));
+                }
+                return kernel.mutateEntities([{
+                    type: 'upsert',
+                    store: 'practiceAnnotations',
+                    recordId,
+                    data: annotations,
+                    expectedRevision: entityRevision(current.annotations)
+                }], mutationOptions(command, 'practice-annotations', command));
+            });
+        },
+        async delete(command) {
+            await ready; const recordId = String(command && (command.recordId || command.id) || command || ''); if (!recordId) throw new AppDataError('VALIDATION', 'practice record id is required');
+            const found = await kernel.readEntity('practiceSummaries', recordId); if (!found) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete', { recordId })), { deletedCount: 0, noop: true });
+            const receipt = await kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId })), mutationOptions(command, 'practice-delete', { recordId }));
+            return Object.assign({}, receipt, { deletedCount: 1 });
+        },
+        async deleteMany(command) {
+            await ready; assertObject(command, 'practice.deleteMany command is required'); const recordIds = Array.from(new Set(asArray(command.recordIds).map(String).filter(Boolean)));
+            if (!recordIds.length) throw new AppDataError('VALIDATION', 'practice.deleteMany requires recordIds'); const summaries = await kernel.listEntities('practiceSummaries'); const ids = recordIds.filter((id) => summaries.some((item) => practiceRecordMatches(item, [id])));
+            if (!ids.length) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete-many', { recordIds })), { deletedCount: 0, noop: true });
+            const receipt = await kernel.mutateEntities(ids.flatMap((recordId) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId }))), mutationOptions(command, 'practice-delete-many', { recordIds })); return Object.assign({}, receipt, { deletedCount: ids.length });
+        },
+        async clear(command = {}) { await ready; return kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'clear', store })), mutationOptions(command, 'practice-clear', { all: true })); },
+        async listInsights(options = {}) {
+            await ready;
+            const limit = Math.max(1, Math.min(50, Number(options.limit) || 10));
+            const summaries = (await kernel.listEntities('practiceSummaries'))
+                .slice()
+                .sort((left, right) => String(right.date || right.completedAt || right.timestamp || '')
+                    .localeCompare(String(left.date || left.completedAt || left.timestamp || '')))
+                .slice(0, limit);
+            return Promise.all(summaries.map(async (summary) => {
+                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return clone(summary);
+                const detail = await kernel.readEntity('practiceDetails', summary.id);
+                return jsonValue(Object.assign({}, clone(summary), {
+                    questionTypeErrorCounts: questionTypeErrorCounts(detail)
+                }), 'practice insight');
+            }));
+        },
+        async getStats() { await ready; return computeStats(await kernel.listEntities('practiceSummaries')); },
+        projectLight,
+        projectDetail
+    });
+
+    const settings = Object.freeze({
+        async getAll() { await ready; return kernel.read('settings.values'); },
+        async patch(values, options = {}) {
+            await ready; assertObject(values, 'settings.patch requires an object');
+            const mutation = optionsMutationOptions(options, 'settings-patch', values);
+            return retryMergeConflict(options, async () => {
+                const current = await kernel.read('settings.values', { withMeta: true });
+                return kernel.mutate([{ logicalKey: 'settings.values', data: Object.assign({}, asObject(current.data), clone(values)), expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0) }], mutation);
+            });
+        },
+        async reset(options = {}) { await ready; const current = await kernel.read('settings.values', { withMeta: true }); return kernel.mutate([{ logicalKey: 'settings.values', state: 'cleared', expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0) }], optionsMutationOptions(options, 'settings-reset', { reset: true })); }
+    });
+
+    const library = Object.freeze({
+        async listConfigurations() { await ready; return kernel.read('library.configurations'); },
+        async getActive() { await ready; return kernel.read('library.activeConfigurationId'); },
+        async getIndex(configurationId) {
+            await ready;
+            const id = importedLibraryId(configurationId, { nullable: true });
+            if (id === null) return [];
+            const indexes = await kernel.read('library.importedIndexes');
+            return asArray(indexes[id]);
+        },
+        async updateConfiguration(configuration, options = {}) {
+            await ready; assertObject(configuration, 'library.updateConfiguration requires an object');
+            const id = importedLibraryId(idOf(configuration, ['id', 'key', 'configId']));
+            const current = await kernel.read('library.configurations', { withMeta: true });
+            const configs = asArray(current.data);
+            const index = configs.findIndex((item) => idOf(item, ['id', 'key', 'configId']) === id);
+            const next = Object.assign({}, index >= 0 ? configs[index] : {}, clone(configuration), { id, key: id });
+            if (index >= 0) configs[index] = next; else configs.push(next);
+            return kernel.mutate([{ logicalKey: 'library.configurations', data: configs, expectedRevision: current.envelope ? current.envelope.revision : 0 }], optionsMutationOptions(options, 'library-config', configuration));
+        },
+        async activate(configurationId, options = {}) {
+            await ready;
+            const id = importedLibraryId(configurationId, { nullable: true });
+            const current = await kernel.read('library.activeConfigurationId', { withMeta: true });
+            return kernel.mutate([{ logicalKey: 'library.activeConfigurationId', data: id, expectedRevision: current.envelope ? current.envelope.revision : 0 }], optionsMutationOptions(options, 'library-activate', { configurationId: id }));
+        },
+        async import(command) {
+            await ready; assertObject(command, 'library.import requires a command');
+            const id = importedLibraryId(command.id || command.configurationId || randomId('library'));
+            const configsMeta = await kernel.read('library.configurations', { withMeta: true });
+            const indexesMeta = await kernel.read('library.importedIndexes', { withMeta: true });
+            const configs = asArray(configsMeta.data).filter((item) => idOf(item, ['id', 'key', 'configId']) !== id);
+            configs.push(Object.assign({}, asObject(command.configuration), { id, key: id }));
+            const indexes = Object.assign({}, asObject(indexesMeta.data), { [id]: asArray(command.index) });
+            return kernel.mutate([
+                { logicalKey: 'library.configurations', data: configs, expectedRevision: configsMeta.envelope ? configsMeta.envelope.revision : 0 },
+                { logicalKey: 'library.importedIndexes', data: indexes, expectedRevision: indexesMeta.envelope ? indexesMeta.envelope.revision : 0 }
+            ], mutationOptions(command, 'library-import', command));
+        },
+        async remove(configurationId, options = {}) {
+            await ready; const id = importedLibraryId(configurationId);
+            const configsMeta = await kernel.read('library.configurations', { withMeta: true });
+            const indexesMeta = await kernel.read('library.importedIndexes', { withMeta: true });
+            const activeMeta = await kernel.read('library.activeConfigurationId', { withMeta: true });
+            const indexes = Object.assign({}, asObject(indexesMeta.data)); delete indexes[id];
+            const changes = [
+                { logicalKey: 'library.configurations', data: asArray(configsMeta.data).filter((item) => idOf(item, ['id', 'key', 'configId']) !== id), expectedRevision: configsMeta.envelope ? configsMeta.envelope.revision : 0 },
+                { logicalKey: 'library.importedIndexes', data: indexes, expectedRevision: indexesMeta.envelope ? indexesMeta.envelope.revision : 0 }
+            ];
+            if (String(activeMeta.data || '') === id) {
+                changes.push({ logicalKey: 'library.activeConfigurationId', data: null, expectedRevision: activeMeta.envelope ? activeMeta.envelope.revision : 0 });
+            }
+            return kernel.mutate(changes, optionsMutationOptions(options, 'library-remove', { configurationId: id }));
+        },
+        async resolveIndex() {
+            await ready;
+            const [activeId, indexes] = await Promise.all([kernel.read('library.activeConfigurationId'), kernel.read('library.importedIndexes')]);
+            return activeId && Array.isArray(asObject(indexes)[activeId]) ? clone(indexes[activeId]) : clone([]);
+        }
+    });
+
+    function recoveryKey(kind) {
+        const key = RECOVERY_KEYS[String(kind || '')];
+        if (!key) throw new AppDataError('VALIDATION', `Unknown recovery kind: ${kind}`);
+        return key;
+    }
+    // Recovery document TTL is an AppData domain rule, not a catalog policy field.
+    const RECOVERY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+    function recoveryTimestamp(item) {
+        for (const field of ['updatedAt', 'lastActivity', 'tempSavedAt', 'timestamp', 'createdAt']) {
+            const parsed = Date.parse(item && item[field]);
+            if (Number.isFinite(parsed)) return parsed;
+        }
+        return null;
+    }
+    async function pruneRecoveryKey(logicalKey) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            const current = await kernel.read(logicalKey, { withMeta: true });
+            const items = asArray(current.data);
+            const cutoff = Date.now() - RECOVERY_TTL_MS;
+            const retained = items.filter((item) => {
+                const timestamp = recoveryTimestamp(item);
+                return timestamp === null || timestamp > cutoff;
+            });
+            if (retained.length === items.length) return items;
+            try {
+                await kernel.mutate([{ logicalKey, data: retained, expectedRevision: current.envelope ? current.envelope.revision : 0 }], {
+                    operationId: randomId('recovery-ttl')
+                });
+                return retained;
+            } catch (error) {
+                if (!(error instanceof AppDataError) || error.code !== 'CONFLICT' || attempt === 2) throw error;
+            }
+        }
+        return kernel.read(logicalKey);
+    }
+    async function cleanupExpiredRecovery() {
+        for (const logicalKey of Object.values(RECOVERY_KEYS)) await pruneRecoveryKey(logicalKey);
+    }
+    const windowSession = Object.freeze({
+        save(name, value) {
+            if (!global.sessionStorage) throw new AppDataError('BACKEND_UNAVAILABLE', 'sessionStorage unavailable');
+            const logicalName = String(name || 'default');
+            const payload = { schemaVersion: catalog.version, updatedAt: nowIso(), data: clone(value) };
+            global.sessionStorage.setItem(`ielts_atlas:v2:session:${logicalName}`, JSON.stringify(payload));
+            return true;
+        },
+        get(name) {
+            if (!global.sessionStorage) return null;
+            const raw = global.sessionStorage.getItem(`ielts_atlas:v2:session:${String(name || 'default')}`);
+            if (!raw) return null;
+            const payload = JSON.parse(raw);
+            return payload && payload.schemaVersion === catalog.version ? clone(payload.data) : null;
+        },
+        discard(name) {
+            if (global.sessionStorage) global.sessionStorage.removeItem(`ielts_atlas:v2:session:${String(name || 'default')}`);
+            return true;
+        }
+    });
+
+    const recoveryMutationTails = new Map();
+    function enqueueRecoveryMutation(logicalKey, task) {
+        const previous = recoveryMutationTails.get(logicalKey) || Promise.resolve();
+        const result = previous.then(task, task);
+        recoveryMutationTails.set(logicalKey, result.catch(() => undefined));
+        return result;
+    }
+
+    async function readRecovery(kind, id) {
+        await ready;
+        const items = await pruneRecoveryKey(recoveryKey(kind));
+        return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
+    }
+    async function saveRecovery(kind, value, options = {}) {
+        await ready; assertObject(value, `recovery ${kind} value must be an object`);
+        const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
+        const key = recoveryKey(kind);
+        const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
+        const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
+        const receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+            const current = await readCollectionMeta(key);
+            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+            if (index >= 0) current.items[index] = item; else current.items.push(item);
+            return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+        }));
+        const committedItem = (await kernel.read(key))
+            .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+        return Object.assign({}, receipt, { item: clone(committedItem || item) });
+    }
+    async function discardRecovery(kind, id, options = {}) {
+        await ready;
+        const key = recoveryKey(kind);
+        const mutation = optionsMutationOptions(options, `recovery-${kind}-discard`, { id: String(id) });
+        return enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+            const current = await readCollectionMeta(key);
+            const next = current.items.filter((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) !== String(id));
+            return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], mutation);
+        }));
+    }
+    async function clearRecovery(kind, options = {}) {
+        await ready;
+        const key = recoveryKey(kind);
+        const mutation = optionsMutationOptions(options, `recovery-${kind}-clear`, { kind });
+        return enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+            const current = await readCollectionMeta(key);
+            if (options.expectedRevision !== undefined && Number(options.expectedRevision) !== current.revision) {
+                throw new AppDataError('CONFLICT', `Revision conflict while clearing recovery ${kind}`, { expectedRevision: options.expectedRevision, actualRevision: current.revision });
+            }
+            return kernel.mutate([{ logicalKey: key, state: 'cleared', expectedRevision: current.revision }], mutation);
+        }));
+    }
+    async function clearAllRecovery(options = {}) {
+        const results = {};
+        for (const kind of Object.keys(RECOVERY_KEYS)) {
+            results[kind] = await clearRecovery(kind, options);
+        }
+        return results;
+    }
+    const recovery = Object.freeze({
+        windowSession,
+        async clear(options = {}) { return clearAllRecovery(options); },
+        async listActiveSessions() { return readRecovery('activeSession'); },
+        async getActiveSession(id) { return readRecovery('activeSession', id); },
+        async saveActiveSession(value, options) { return saveRecovery('activeSession', value, options); },
+        async completeActiveSession(id, options) { return discardRecovery('activeSession', id, options); },
+        async discardActiveSession(id, options) { return discardRecovery('activeSession', id, options); },
+        async listDrafts() { return readRecovery('draft'); },
+        async getDraft(id) { return readRecovery('draft', id); },
+        async saveDraft(value, options) { return saveRecovery('draft', value, options); },
+        async discardDraft(id, options) { return discardRecovery('draft', id, options); },
+        async listInterrupted() { return readRecovery('interrupted'); },
+        async getInterrupted(id) { return readRecovery('interrupted', id); },
+        async saveInterrupted(value, options) { return saveRecovery('interrupted', value, options); },
+        async discardInterrupted(id, options) { return discardRecovery('interrupted', id, options); },
+        async listRejectedCompletions() { return readRecovery('rejectedCompletion'); },
+        async getRejectedCompletion(id) { return readRecovery('rejectedCompletion', id); },
+        async saveRejectedCompletion(value, options) { return saveRecovery('rejectedCompletion', value, options); },
+        async discardRejectedCompletion(id, options) { return discardRecovery('rejectedCompletion', id, options); }
+    });
+
+    function isImportableEntry(entry) {
+        return entry
+            && entry.classification !== 'system'
+            && entry.classification !== 'session'
+            && entry.import !== 'ignore';
+    }
+
+    function isPlainImportObject(value) {
+        return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+    }
+
+    function isV2SnapshotShape(parsed) {
+        return isPlainImportObject(parsed)
+            && parsed.format === 'ielts-atlas-data-v2'
+            && isPlainImportObject(parsed.envelopes)
+            && isPlainImportObject(parsed.entities);
+    }
+
+    const POISONED_V2_WRAPPER_ALIASES = Object.freeze({
+        'settings.values': Object.freeze(['exam_system_settings', 'exam_system_user_settings', 'exam_system_system_settings']),
+        'vocab.userConfig': Object.freeze(['exam_system_vocab_user_config']),
+        'achievements.manual': Object.freeze(['exam_system_user_achievements', 'exam_system_achievement_manual_state'])
+    });
+    const LIBRARY_IMPORT_KEYS = Object.freeze([
+        'library.configurations',
+        'library.importedIndexes',
+        'library.activeConfigurationId'
+    ]);
+
+    function canonicalizeV2Import(parsed) {
+        const warnings = [];
+        const repairedKeys = [];
+        const ignoredKeys = [];
+        const envelopes = {};
+        for (const [logicalKey, rawEnvelope] of Object.entries(parsed.envelopes)) {
+            if (!catalog.has(logicalKey)) throw new AppDataError('VALIDATION', `Unknown import key: ${logicalKey}`);
+            const envelope = clone(rawEnvelope);
+            const data = envelope && envelope.state === 'present' ? envelope.data : null;
+            if (logicalKey === 'library.activeConfigurationId' && String(data) === '[object Object]') {
+                ignoredKeys.push(logicalKey);
+                warnings.push('Skipped poisoned active library id');
+                continue;
+            }
+            if (isPlainImportObject(data)
+                && Object.prototype.hasOwnProperty.call(data, 'key')
+                && Object.prototype.hasOwnProperty.call(data, 'value')
+                && String(data.key || '').startsWith('exam_system_')) {
+                const aliases = POISONED_V2_WRAPPER_ALIASES[logicalKey] || [];
+                const decoded = aliases.includes(String(data.key)) ? internals.parseLegacyValue(data.value) : null;
+                if (!isPlainImportObject(decoded)) {
+                    ignoredKeys.push(logicalKey);
+                    warnings.push(`Skipped mismatched legacy storage wrapper: ${logicalKey}`);
+                    continue;
+                }
+                const overlay = Object.fromEntries(Object.entries(data)
+                    .filter(([key]) => key !== 'key' && key !== 'value' && key !== 'timestamp'));
+                envelope.data = Object.assign({}, decoded, overlay);
+                envelope.checksum = checksum(envelope.data);
+                repairedKeys.push(logicalKey);
+                warnings.push(`Repaired legacy storage wrapper: ${logicalKey}`);
+            }
+            envelopes[logicalKey] = envelope;
+        }
+
+        if (parsed.scope === 'full') {
+            const presentLibraryKeys = LIBRARY_IMPORT_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(envelopes, key));
+            if (presentLibraryKeys.length && presentLibraryKeys.length !== LIBRARY_IMPORT_KEYS.length) {
+                for (const key of presentLibraryKeys) {
+                    delete envelopes[key];
+                    ignoredKeys.push(key);
+                }
+                warnings.push('Skipped incomplete library data');
+            }
+        }
+        const exportableKeys = catalog.list()
+            .filter((entry) => entry.export === true && isImportableEntry(entry))
+            .map((entry) => entry.logicalKey);
+        const missingKeys = parsed.scope === 'full'
+            ? exportableKeys.filter((key) => !Object.prototype.hasOwnProperty.call(envelopes, key))
+            : [];
+        const degraded = parsed.scope === 'full' && (missingKeys.length || ignoredKeys.length);
+        return {
+            envelopes,
+            warnings,
+            repairedKeys,
+            ignoredKeys,
+            missingKeys,
+            declaredScope: parsed.scope,
+            effectiveScope: degraded ? 'partial' : parsed.scope,
+            trust: degraded ? 'degraded-partial' : (parsed.scope === 'full' ? 'trusted-full' : 'partial')
+        };
+    }
+
+    function resolveImportReplaceFlags(options = {}) {
+        const source = asObject(options);
+        const practiceMode = String(source.practiceMode || source.mergeMode || '').toLowerCase();
+        const replaceAll = source.replace === true;
+        return {
+            replaceDocuments: replaceAll,
+            // Call sites (practiceRecorder / boot-fallbacks) pass practiceMode replace|merge.
+            replacePractice: replaceAll || practiceMode === 'replace'
+        };
+    }
+
+    function pickFirstRecordArray(candidates) {
+        for (const candidate of asArray(candidates)) {
+            if (Array.isArray(candidate.records) && candidate.records.some(isPlainImportObject)) {
+                return { source: candidate.source, records: candidate.records };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Historical v1 export shapes (opensource / pre-AppData-v2):
+     *   - practiceRecorder.exportData: { exportDate, version, practiceRecords, userStats }
+     *   - DataBackupManager: { exportInfo, practiceRecords, userStats?, backups? }
+     *   - BackupAPI dual schema: practice_records / practiceRecords (+ nested data.*)
+     *   - bare array of records, or { records: [...] }
+     * Recognition only — no dual backend and no local store migration.
+     */
+    function extractLegacyPracticeRecords(payload) {
+        const sources = [];
+        const add = (source, records) => {
+            if (Array.isArray(records) && records.some(isPlainImportObject)) {
+                sources.push({ source, records });
+            }
+        };
+
+        if (Array.isArray(payload)) {
+            add('(root array)', payload);
+        } else if (isPlainImportObject(payload)) {
+            const preferred = pickFirstRecordArray([
+                { source: 'practice_records', records: payload.practice_records },
+                { source: 'practiceRecords', records: payload.practiceRecords },
+                { source: 'records', records: payload.records }
+            ]);
+            if (preferred) add(preferred.source, preferred.records);
+
+            const data = isPlainImportObject(payload.data) ? payload.data : null;
+            if (data) {
+                const nested = pickFirstRecordArray([
+                    { source: 'data.practice_records', records: data.practice_records },
+                    { source: 'data.practiceRecords', records: data.practiceRecords }
+                ]);
+                if (nested) add(nested.source, nested.records);
+                else if (isPlainImportObject(data.practice_records)) add('data.practice_records.data', data.practice_records.data);
+                else if (isPlainImportObject(data.practiceRecords)) add('data.practiceRecords.data', data.practiceRecords.data);
+                if (isPlainImportObject(data.exam_system_practice_records)) {
+                    add('data.exam_system_practice_records.data', data.exam_system_practice_records.data);
+                }
+            }
+            if (isPlainImportObject(payload.exam_system_practice_records)) {
+                add('exam_system_practice_records.data', payload.exam_system_practice_records.data);
+            }
+        }
+
+        const seen = new Set();
+        const records = [];
+        for (const entry of sources) {
+            for (const item of asArray(entry.records)) {
+                if (!isPlainImportObject(item)) continue;
+                const identity = idOf(item, ['id', 'recordId', 'sessionId']);
+                if (identity) {
+                    if (seen.has(identity)) continue;
+                    seen.add(identity);
+                }
+                records.push(item);
+            }
+        }
+        return {
+            records,
+            sources: sources.map((entry) => entry.source)
+        };
+    }
+
+    function entityRowFromLayer(recordId, data, operationId) {
+        const payload = jsonValue(data, 'import practice entity');
+        return {
+            recordId: String(recordId),
+            revision: 1,
+            operationId: String(operationId || `import-${recordId}`),
+            updatedAt: nowIso(),
+            data: payload,
+            checksum: checksum(payload)
+        };
+    }
+
+    function convertLegacyPracticeImport(payload) {
+        const extracted = extractLegacyPracticeRecords(payload);
+        if (!extracted.records.length) {
+            throw new AppDataError(
+                'VALIDATION',
+                'Import file is neither a v2 snapshot nor a recognizable v1 practice export'
+            );
+        }
+
+        const entities = {
+            practiceSummaries: [],
+            practiceDetails: [],
+            practiceAnnotations: []
+        };
+        const warnings = [];
+        let skipped = 0;
+
+        for (const raw of extracted.records) {
+            try {
+                const layers = splitPracticeRecord(raw);
+                const recordId = layers.summary.id;
+                const operationId = `import-v1-${recordId}`;
+                entities.practiceSummaries.push(entityRowFromLayer(recordId, layers.summary, operationId));
+                entities.practiceDetails.push(entityRowFromLayer(recordId, layers.detail, operationId));
+                entities.practiceAnnotations.push(entityRowFromLayer(recordId, layers.annotations, operationId));
+            } catch (error) {
+                skipped += 1;
+                warnings.push(`Skipped invalid practice record: ${error && error.message ? error.message : error}`);
+            }
+        }
+
+        if (!entities.practiceSummaries.length) {
+            throw new AppDataError('VALIDATION', 'Import file practice records could not be normalized');
+        }
+
+        const accepted = entities.practiceSummaries.length;
+        return {
+            format: 'v1',
+            scope: 'partial',
+            envelopes: {},
+            entities,
+            checksum: null,
+            warnings,
+            practiceSummary: {
+                accepted,
+                importedCount: accepted,
+                skippedCount: skipped,
+                sources: extracted.sources.slice()
+            }
+        };
+    }
+
+    function parseImportPayload(payload) {
+        let parsed;
+        try { parsed = typeof payload === 'string' ? JSON.parse(payload) : jsonValue(payload, 'import payload'); }
+        catch (error) {
+            if (error instanceof AppDataError) throw error;
+            throw new AppDataError('VALIDATION', 'Import payload is not valid JSON', { cause: error && error.message });
+        }
+
+        // Bare record arrays are a historical import convenience (UI file pickers).
+        if (Array.isArray(parsed)) return convertLegacyPracticeImport(parsed);
+        if (!parsed || typeof parsed !== 'object') throw new AppDataError('VALIDATION', 'Import payload must be an object');
+
+        if (isV2SnapshotShape(parsed)) {
+            if (Number(parsed.schemaVersion) !== Number(catalog.version)) {
+                throw new AppDataError('VALIDATION', 'Import schema version mismatch');
+            }
+            if (!parsed.checksum || parsed.checksum !== checksum({ envelopes: parsed.envelopes, entities: parsed.entities })) {
+                throw new AppDataError('VALIDATION', 'Import checksum mismatch');
+            }
+            if (parsed.scope !== 'full' && parsed.scope !== 'partial') {
+                throw new AppDataError('VALIDATION', 'Import scope must be full or partial');
+            }
+            const scope = parsed.scope;
+            for (const [store, rows] of Object.entries(parsed.entities)) {
+                if (!PRACTICE_ENTITY_STORES.includes(store) || !Array.isArray(rows)) {
+                    throw new AppDataError('VALIDATION', `Invalid import entity store: ${store}`);
+                }
+                for (const row of rows) {
+                    if (!row || typeof row !== 'object' || Array.isArray(row) || !String(row.recordId || '')) {
+                        throw new AppDataError('VALIDATION', `Invalid import entity: ${store}`);
+                    }
+                }
+            }
+            if (scope === 'full' && PRACTICE_ENTITY_STORES.some((store) => !Object.prototype.hasOwnProperty.call(parsed.entities, store))) {
+                throw new AppDataError('VALIDATION', 'Full import is missing a practice entity layer');
+            }
+            const canonical = canonicalizeV2Import(parsed);
+            return {
+                format: 'v2',
+                scope: canonical.effectiveScope,
+                declaredScope: canonical.declaredScope,
+                envelopes: canonical.envelopes,
+                entities: parsed.entities,
+                checksum: parsed.checksum,
+                warnings: canonical.warnings,
+                practiceSummary: null,
+                repairedKeys: canonical.repairedKeys,
+                ignoredKeys: canonical.ignoredKeys,
+                missingKeys: canonical.missingKeys,
+                trust: canonical.trust
+            };
+        }
+
+        // Explicit but malformed v2 claims must not fall through to legacy parsers.
+        if (parsed.format === 'ielts-atlas-data-v2') {
+            throw new AppDataError('VALIDATION', 'Only valid v2 snapshots can be imported');
+        }
+
+        return convertLegacyPracticeImport(parsed);
+    }
+
+    function collectionIdentityFields(logicalKey) {
+        if (logicalKey === 'library.configurations') return ['id', 'key', 'configId'];
+        if (logicalKey.startsWith('recovery.')) return ['id', 'sessionId', 'recordId'];
+        if (logicalKey === 'backups.entries') return ['id'];
+        if (logicalKey === 'vocab.words') return ['id', 'word', 'key'];
+        if (logicalKey === 'goals.items') return ['id', 'goalId'];
+        return ['id', 'sessionId', 'recordId'];
+    }
+
+    function collectionIdentity(logicalKey, value) {
+        const identity = idOf(value, collectionIdentityFields(logicalKey));
+        return logicalKey === 'vocab.words' ? identity.trim().toLowerCase() : identity;
+    }
+
+    function mergeCollection(existing, incoming, logicalKey) {
+        const result = asArray(existing).map((item) => clone(item));
+        const positions = new Map();
+        result.forEach((item, index) => {
+            const identity = collectionIdentity(logicalKey, item);
+            if (identity) positions.set(identity, index);
+        });
+        for (const rawItem of asArray(incoming)) {
+            const item = jsonValue(rawItem, `${logicalKey} item`);
+            const identity = collectionIdentity(logicalKey, item);
+            if (!identity) throw new AppDataError('VALIDATION', `${logicalKey} import item has no stable identity`);
+            if (positions.has(identity)) result[positions.get(identity)] = item;
+            else {
+                positions.set(identity, result.length);
+                result.push(item);
+            }
+        }
+        return result;
+    }
+
+    function mergeImportValue(entry, existing, incoming) {
+        const policy = entry.import;
+        if (policy === 'merge-by-id') return mergeCollection(existing, incoming, entry.logicalKey);
+        if (policy === 'patch') {
+            if (Array.isArray(existing) || Array.isArray(incoming)) {
+                // Array-shaped keys should use merge-by-id; treat accidental patch as replace.
+                return clone(incoming);
+            }
+            return Object.assign({}, asObject(existing), asObject(incoming));
+        }
+        if (policy === 'replace') return clone(incoming);
+        throw new AppDataError('VALIDATION', `Unsupported import policy for ${entry.logicalKey}: ${policy}`);
+    }
+
+    async function currentEntitySnapshot() {
+        const summaries = await kernel.listEntities('practiceSummaries', { withMeta: true });
+        const result = {};
+        for (const store of PRACTICE_ENTITY_STORES) {
+            if (store === 'practiceSummaries') result[store] = summaries;
+            else result[store] = (await Promise.all(summaries.map((summary) => kernel.readEntity(store, summary.recordId, { withMeta: true })))).filter(Boolean);
+        }
+        return result;
+    }
+    function practiceEntityIds(rows) {
+        return new Set(asArray(rows).map((row) => String(row && row.recordId || '')).filter(Boolean));
+    }
+    function assertPracticeEntitySetsMatch(entities, message) {
+        const expected = practiceEntityIds(entities.practiceSummaries);
+        for (const store of PRACTICE_ENTITY_STORES.slice(1)) {
+            const actual = practiceEntityIds(entities[store]);
+            if (actual.size !== expected.size || Array.from(expected).some((recordId) => !actual.has(recordId))) {
+                throw new AppDataError('VALIDATION', message || 'Practice import entity layers must contain the same recordIds', {
+                    counts: Object.fromEntries(PRACTICE_ENTITY_STORES.map((name) => [name, practiceEntityIds(entities[name]).size]))
+                });
+            }
+        }
+    }
+    async function createImportPlan(parsed, options = {}) {
+        const { replaceDocuments, replacePractice } = resolveImportReplaceFlags(options);
+        const snapshot = { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: parsed.scope, envelopes: {}, entities: {} };
+        const revisionToken = { documents: {}, entities: {} };
+        const keys = []; const clearedKeys = [];
+        const warnings = asArray(parsed.warnings).map(String);
+        for (const [logicalKey, envelope] of Object.entries(asObject(parsed.envelopes))) {
+            if (!catalog.has(logicalKey)) throw new AppDataError('VALIDATION', `Unknown import key: ${logicalKey}`);
+            const entry = catalog.get(logicalKey); if (!isImportableEntry(entry)) continue;
+            if (!internals.validateEnvelope(entry, envelope)) throw new AppDataError('VALIDATION', `Invalid import envelope: ${logicalKey}`);
+            if (envelope.state === 'cleared' && !replaceDocuments && options.applyClears !== true) {
+                warnings.push(`Skipped cleared import key in merge mode: ${logicalKey}`);
+                continue;
+            }
+            const current = await kernel.read(logicalKey, { withMeta: true });
+            revisionToken.documents[logicalKey] = current.envelope ? Number(current.envelope.revision) || 0 : 0;
+            let next = envelope;
+            if (!replaceDocuments && envelope.state === 'present') {
+                next = internals.makeEnvelope(entry, mergeImportValue(entry, current.data, envelope.data), { operationId: randomId('import-merge') });
+            }
+            snapshot.envelopes[logicalKey] = next;
+            keys.push(logicalKey);
+            if (next.state === 'cleared') clearedKeys.push(logicalKey);
+        }
+
+        // A full replace mirrors all exportable user data. Missing physical
+        // envelopes mean catalog defaults, represented here as explicit clears.
+        if (replaceDocuments && parsed.scope === 'full') {
+            for (const entry of catalog.list().filter((candidate) => candidate.export === true && isImportableEntry(candidate))) {
+                if (Object.prototype.hasOwnProperty.call(snapshot.envelopes, entry.logicalKey)) continue;
+                snapshot.envelopes[entry.logicalKey] = internals.makeEnvelope(entry, null, {
+                    state: 'cleared',
+                    operationId: randomId('import-clear')
+                });
+                keys.push(entry.logicalKey);
+                clearedKeys.push(entry.logicalKey);
+            }
+        }
+
+        // Any successful practice import installs all three stores together. Merge
+        // may update a subset only when the final recordId sets remain identical.
+        const sourceStores = Object.keys(asObject(parsed.entities));
+        let practiceExistingCount = null;
+        let practiceIncomingCount = null;
+        if (sourceStores.length) {
+            if (replacePractice && PRACTICE_ENTITY_STORES.some((store) => !sourceStores.includes(store))) {
+                throw new AppDataError('VALIDATION', 'Practice replace requires summaries, details, and annotations');
+            }
+            const current = await currentEntitySnapshot();
+            revisionToken.entities = Object.fromEntries(PRACTICE_ENTITY_STORES.map((store) => [store, Object.fromEntries(
+                asArray(current[store]).map((row) => [String(row.recordId), Number(row.revision) || 0])
+            )]));
+            practiceExistingCount = asArray(current.practiceSummaries).length;
+            practiceIncomingCount = asArray(parsed.entities.practiceSummaries).length;
+            const existing = replacePractice
+                ? Object.fromEntries(PRACTICE_ENTITY_STORES.map((store) => [store, []]))
+                : current;
+            for (const store of PRACTICE_ENTITY_STORES) {
+                const rows = asArray(existing[store]).map(clone);
+                const positions = new Map(rows.map((row, index) => [String(row.recordId), index]));
+                for (const row of asArray(parsed.entities[store])) {
+                    if (!row || !String(row.recordId || '')) throw new AppDataError('VALIDATION', `Invalid import entity: ${store}`);
+                    const index = positions.get(String(row.recordId));
+                    if (index === undefined) {
+                        positions.set(String(row.recordId), rows.length);
+                        rows.push(clone(row));
+                    } else rows[index] = clone(row);
+                }
+                snapshot.entities[store] = rows;
+            }
+            assertPracticeEntitySetsMatch(snapshot.entities);
+        }
+
+        snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
+        const practiceSummary = parsed.practiceSummary
+            ? clone(parsed.practiceSummary)
+            : (Object.prototype.hasOwnProperty.call(snapshot.entities, 'practiceSummaries')
+                ? {
+                    accepted: Number(practiceIncomingCount) || 0,
+                    importedCount: Number(practiceIncomingCount) || 0,
+                    skippedCount: 0,
+                    existingCount: Number(practiceExistingCount) || 0,
+                    incomingCount: Number(practiceIncomingCount) || 0,
+                    finalCount: asArray(snapshot.entities.practiceSummaries).length,
+                    removedCount: Math.max(0, (Number(practiceExistingCount) || 0)
+                        - asArray(snapshot.entities.practiceSummaries).length)
+                }
+                : null);
+        if (practiceSummary && practiceSummary.existingCount === undefined) {
+            practiceSummary.existingCount = Number(practiceExistingCount) || 0;
+            practiceSummary.incomingCount = Number(practiceIncomingCount) || Number(practiceSummary.importedCount) || 0;
+            practiceSummary.finalCount = asArray(snapshot.entities.practiceSummaries).length;
+            practiceSummary.removedCount = Math.max(0, practiceSummary.existingCount - practiceSummary.finalCount);
+        }
+        const destructive = clearedKeys.length > 0
+            || Boolean(practiceSummary && Number(practiceSummary.removedCount) > 0);
+        return {
+            snapshot,
+            keys,
+            clearedKeys,
+            warnings,
+            practiceSummary,
+            destructive,
+            resetJournal: replaceDocuments && replacePractice,
+            revisionToken,
+            diagnostics: {
+                format: parsed.format,
+                replaceDocuments,
+                replacePractice,
+                declaredScope: parsed.declaredScope || parsed.scope,
+                effectiveScope: parsed.scope,
+                trust: parsed.trust || (parsed.format === 'v2' ? 'trusted-full' : 'degraded-partial'),
+                missingKeys: clone(parsed.missingKeys || []),
+                repairedKeys: clone(parsed.repairedKeys || []),
+                ignoredKeys: clone(parsed.ignoredKeys || [])
+            }
+        };
+    }
+    async function createRestoreSnapshot(backup) {
+        const parsed = parseImportPayload(asObject(backup && backup.data));
+        if (parsed.format !== 'v2') throw new AppDataError('VALIDATION', 'Only v2 snapshots can be restored from local backups');
+        if (backup.checksum && backup.checksum !== parsed.checksum) throw new AppDataError('VALIDATION', 'Backup checksum mismatch');
+        return (await createImportPlan(parsed, { replace: true })).snapshot;
+    }
+
+    const backups = Object.freeze({
+        onDataCommitted(listener) { return kernel.onCommitted(listener); },
+        async getSettings() { await ready; return kernel.read('backups.settings'); },
+        async setSettings(values, options = {}) { await ready; const current = await kernel.read('backups.settings', { withMeta: true }); return kernel.mutate([{ logicalKey: 'backups.settings', data: asObject(values), expectedRevision: current.envelope ? current.envelope.revision : 0 }], optionsMutationOptions(options, 'backup-settings', values)); },
+        async getExportHistory() { await ready; return kernel.read('backups.exportHistory'); },
+        async getImportHistory() { await ready; return kernel.read('backups.importHistory'); },
+        async recordExport(entry, options = {}) { await ready; const current = await readCollectionMeta('backups.exportHistory'); current.items.unshift(Object.assign({ timestamp: nowIso() }, jsonValue(entry, 'backup export history entry'))); return kernel.mutate([{ logicalKey: 'backups.exportHistory', data: current.items.slice(0, 100), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-export-history', entry)); },
+        async recordImport(entry, options = {}) { await ready; const current = await readCollectionMeta('backups.importHistory'); current.items.unshift(Object.assign({ timestamp: nowIso() }, jsonValue(entry, 'backup import history entry'))); return kernel.mutate([{ logicalKey: 'backups.importHistory', data: current.items.slice(0, 100), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-import-history', entry)); },
+        async create(options = {}) {
+            await ready; const current = await readCollectionMeta('backups.entries');
+            const mutation = optionsMutationOptions(options, 'backup-create', { id: options.id || null, type: options.type || 'manual' });
+            const backupId = options.id || (options.operationId ? `backup_${checksum({ operationId: String(options.operationId) }).replace(/[^a-z0-9]/gi, '')}` : randomId('backup'));
+            const existing = current.items.find((item) => String(item.id) === String(backupId));
+            if (existing) {
+                if (String(existing.operationId || '') === String(mutation.operationId)
+                    && String(existing.type || 'manual') === String(options.type || 'manual')) {
+                    return clone(existing);
+                }
+                throw new AppDataError('CONFLICT', `Backup id already exists: ${backupId}`, {
+                    backupId: String(backupId)
+                });
+            }
+            const snapshot = await kernel.exportSnapshot();
+            const backup = { id: backupId, operationId: mutation.operationId, timestamp: nowIso(), type: options.type || 'manual', version: 2, data: snapshot, size: JSON.stringify(snapshot).length, checksum: snapshot.checksum };
+            current.items.unshift(backup);
+            current.items = retainBackupEntries(current.items, 20, options.preserveIds);
+            await kernel.mutate([{ logicalKey: 'backups.entries', data: current.items, expectedRevision: current.revision }], mutation);
+            const committed = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(backupId));
+            return clone(committed || backup);
+        },
+        async list() { await ready; return kernel.read('backups.entries'); },
+        async delete(id, options = {}) { await ready; const current = await readCollectionMeta('backups.entries'); return kernel.mutate([{ logicalKey: 'backups.entries', data: current.items.filter((item) => String(item.id) !== String(id)), expectedRevision: current.revision }], optionsMutationOptions(options, 'backup-delete', { id: String(id) })); },
+        async export(options = {}) {
+            await ready;
+            if (options.backupId !== undefined && options.backupId !== null) {
+                const backupId = String(options.backupId);
+                const stored = asArray(await kernel.read('backups.entries'))
+                    .find((item) => String(item && item.id) === backupId);
+                if (!stored) throw new AppDataError('VALIDATION', `Unknown backup: ${backupId}`);
+                const portable = jsonValue(stored, 'stored backup export');
+                if (!portable.data || !portable.checksum || portable.checksum !== portable.data.checksum) {
+                    throw new AppDataError('VALIDATION', `Backup checksum mismatch: ${backupId}`);
+                }
+                return portable;
+            }
+            const domains = Array.isArray(options.domains) ? new Set(options.domains.map(String)) : null;
+            const logicalKeys = domains
+                ? catalog.list()
+                    .filter((entry) => domains.has(entry.owner) && entry.export === true)
+                    .map((entry) => entry.logicalKey)
+                : null;
+            const entityStores = !domains || domains.has('practice')
+                ? undefined
+                : [];
+            return kernel.exportSnapshot(Object.assign(
+                logicalKeys ? { logicalKeys } : {},
+                entityStores ? { entityStores } : {}
+            ));
+        },
+        async previewImport(payload, options = {}) {
+            await ready; const parsed = parseImportPayload(payload); const prepared = await createImportPlan(parsed, options); const planId = randomId('import-plan');
+            const cutoff = Date.now() - (30 * 60 * 1000);
+            for (const [id, existing] of importPlans) {
+                if (Date.parse(existing.createdAt) < cutoff || importPlans.size >= 20) importPlans.delete(id);
+            }
+            const plan = { id: planId, format: parsed.format, scope: parsed.scope, keys: prepared.keys, clearedKeys: prepared.clearedKeys, warnings: prepared.warnings, createdAt: nowIso(), snapshot: prepared.snapshot, practiceSummary: prepared.practiceSummary, diagnostics: prepared.diagnostics, destructive: prepared.destructive, resetJournal: prepared.resetJournal, revisionToken: prepared.revisionToken, signature: checksum(prepared.snapshot) };
+            importPlans.set(planId, plan); return { id: planId, format: plan.format, scope: plan.scope, keys: plan.keys, clearedKeys: clone(plan.clearedKeys), warnings: clone(plan.warnings), createdAt: plan.createdAt, practice: clone(plan.practiceSummary), diagnostics: clone(plan.diagnostics), destructive: plan.destructive };
+        },
+        async commitImport(planId, options = {}) {
+            await ready; const plan = importPlans.get(String(planId)); if (!plan) throw new AppDataError('VALIDATION', `Unknown import plan: ${planId}`);
+            if (plan.destructive && options.confirmDestructive !== true) {
+                throw new AppDataError('VALIDATION', 'Destructive import requires explicit confirmation');
+            }
+            const mutation = optionsMutationOptions(options, 'import-commit', {
+                planId: plan.id,
+                signature: plan.signature
+            }, { warnings: plan.warnings });
+            const receipt = await kernel.installSnapshot(plan.snapshot, Object.assign({}, mutation, {
+                resetJournal: plan.resetJournal === true,
+                expectedRevisionToken: plan.revisionToken
+            }));
+            importPlans.delete(String(planId));
+            return Object.assign({}, receipt, plan.practiceSummary || {}, { practice: clone(plan.practiceSummary) });
+        },
+        async restore(id, options = {}) {
+            await ready; const backup = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(id));
+            if (!backup) throw new AppDataError('VALIDATION', `Unknown backup: ${id}`);
+            const snapshot = await createRestoreSnapshot(backup);
+            const restoreMutation = optionsMutationOptions(options, 'backup-restore', {
+                backupId: String(id),
+                checksum: backup.checksum || checksum(backup.data)
+            }, { resetJournal: true });
+            const preRestoreOperationId = `${restoreMutation.operationId}:pre-restore`;
+            const preRestoreBackupId = `pre_restore_${checksum({
+                operationId: restoreMutation.operationId,
+                backupId: String(id),
+                checksum: backup.checksum || checksum(backup.data)
+            }).replace(/[^a-z0-9]/gi, '')}`;
+            const preRestoreBackup = await backups.create({
+                id: preRestoreBackupId,
+                operationId: preRestoreOperationId,
+                type: 'pre-restore',
+                preserveIds: [String(id)]
+            });
+            const receipt = await kernel.installSnapshot(snapshot, restoreMutation);
+            return Object.assign({}, receipt, { preRestoreBackupId: preRestoreBackup.id });
+        }
+    });
+
+    let vocabMutationTail = Promise.resolve();
+    function enqueueVocabMutation(task) {
+        const result = vocabMutationTail.then(task, task);
+        vocabMutationTail = result.catch(() => undefined);
+        return result;
+    }
+    function retryVocabMutation(options, task) {
+        return enqueueVocabMutation(() => retryMergeConflict(options, task));
+    }
+
+    const vocab = Object.freeze({
+        async listWords() { await ready; return kernel.read('vocab.words'); },
+        async saveWords(words, options = {}) {
+            await ready; assertArray(words, 'vocab.saveWords requires an array');
+            const mutation = optionsMutationOptions(options, 'vocab-words', words);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.words', { withMeta: true });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.words',
+                    data: words,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async getConfig() { await ready; return kernel.read('vocab.userConfig'); },
+        async setConfig(config, options = {}) {
+            await ready;
+            const mutation = optionsMutationOptions(options, 'vocab-config', config);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.userConfig', { withMeta: true });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.userConfig',
+                    data: asObject(config),
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async patchConfig(patch, options = {}) {
+            await ready; assertObject(patch, 'vocab.patchConfig requires an object');
+            const mutation = optionsMutationOptions(options, 'vocab-config-patch', patch);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.userConfig', { withMeta: true });
+                const next = Object.assign({}, asObject(current.data), clone(patch));
+                return kernel.mutate([{
+                    logicalKey: 'vocab.userConfig',
+                    data: next,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async activateList(listId, options = {}) { return this.patchConfig({ activeListId: String(listId || 'default') }, options); },
+        async listCollections() { await ready; return kernel.read('vocab.lists'); },
+        async saveCollection(id, value, options = {}) {
+            await ready;
+            const collectionId = String(id);
+            const mutation = optionsMutationOptions(options, 'vocab-list', { id: collectionId, value });
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.lists', { withMeta: true });
+                const next = Object.assign({}, asObject(current.data), { [collectionId]: clone(value) });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.lists',
+                    data: next,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async saveCollections(values, options = {}) {
+            await ready;
+            assertObject(values, 'vocab.saveCollections requires an object');
+            const upserts = Object.fromEntries(Object.entries(values).map(([id, value]) => [String(id), clone(value)]));
+            const mutation = optionsMutationOptions(options, 'vocab-lists-batch', upserts);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.lists', { withMeta: true });
+                const next = Object.assign({}, asObject(current.data), upserts);
+                return kernel.mutate([{
+                    logicalKey: 'vocab.lists',
+                    data: next,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async upsertCollectionWord(collectionId, word, options = {}) {
+            await ready; assertObject(word, 'vocab.upsertCollectionWord requires a word');
+            const id = String(collectionId || '');
+            if (!id) throw new AppDataError('VALIDATION', 'vocab collection id is required');
+            const identity = String(word.word || word.id || '').trim().toLowerCase();
+            if (!identity) throw new AppDataError('VALIDATION', 'vocab word identity is required');
+            const mutation = optionsMutationOptions(options, 'vocab-word', { collectionId: id, word });
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.lists', { withMeta: true });
+                const collections = Object.assign({}, asObject(current.data));
+                const existing = collections[id];
+                const list = existing && typeof existing === 'object' && !Array.isArray(existing)
+                    ? Object.assign({}, clone(existing), { words: asArray(existing.words) })
+                    : { id, words: asArray(existing) };
+                const index = list.words.findIndex((item) => String(item && (item.word || item.id) || '').trim().toLowerCase() === identity);
+                const nextWord = Object.assign({}, index >= 0 ? list.words[index] : {}, clone(word), { updatedAt: word.updatedAt || nowIso() });
+                if (!nextWord.createdAt) nextWord.createdAt = nextWord.updatedAt;
+                if (index >= 0) list.words[index] = nextWord; else list.words.push(nextWord);
+                list.updatedAt = nowIso();
+                collections[id] = list;
+                const receipt = await kernel.mutate([{
+                    logicalKey: 'vocab.lists',
+                    data: collections,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+                return Object.assign({}, receipt, { word: clone(nextWord) });
+            });
+        },
+        async readList(listId) { await ready; const id = String(listId || 'default'); if (id === 'default') return kernel.read('vocab.words'); const collections = await kernel.read('vocab.lists'); return Object.prototype.hasOwnProperty.call(collections, id) ? clone(collections[id]) : null; },
+        async replaceListWords(command, options = {}) {
+            await ready; assertObject(command, 'vocab.replaceListWords requires a command');
+            const id = String(command.listId || 'default'); const words = asArray(command.words);
+            if (id === 'default') return this.saveWords(words, options);
+            const mutation = optionsMutationOptions(options, 'vocab-list-words-replace', command);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read('vocab.lists', { withMeta: true });
+                const collections = Object.assign({}, asObject(current.data));
+                collections[id] = Object.assign({}, asObject(collections[id]), { id, words, updatedAt: nowIso() });
+                return kernel.mutate([{
+                    logicalKey: 'vocab.lists',
+                    data: collections,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+            });
+        },
+        async mergeListWords(command, options = {}) {
+            await ready;
+            assertObject(command, 'vocab.mergeListWords requires a command');
+            const listId = String(command.listId || 'default');
+            const incoming = asArray(command.words);
+            const logicalKey = listId === 'default' ? 'vocab.words' : 'vocab.lists';
+            const mutation = optionsMutationOptions(options, 'vocab-words-merge', command);
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read(logicalKey, { withMeta: true });
+                const collections = listId === 'default' ? null : Object.assign({}, asObject(current.data));
+                const storedList = listId === 'default'
+                    ? asArray(current.data)
+                    : (function readStoredCollection() {
+                        const collection = collections[listId];
+                        return collection && typeof collection === 'object' && !Array.isArray(collection)
+                            ? asArray(collection.words)
+                            : asArray(collection);
+                    }());
+                const merged = storedList.map((word) => clone(word));
+                const positions = new Map();
+                merged.forEach((word, index) => {
+                    const identity = String(word && (word.word || word.id) || '').trim().toLowerCase();
+                    if (identity) positions.set(identity, index);
+                });
+                let addedCount = 0;
+                let updatedCount = 0;
+                for (const rawWord of incoming) {
+                    assertObject(rawWord, 'vocab.mergeListWords entries must be objects');
+                    const identity = String(rawWord.word || rawWord.id || '').trim().toLowerCase();
+                    if (!identity) throw new AppDataError('VALIDATION', 'vocab word identity is required');
+                    if (!positions.has(identity)) {
+                        positions.set(identity, merged.length);
+                        merged.push(clone(rawWord));
+                        addedCount += 1;
+                        continue;
+                    }
+                    const index = positions.get(identity);
+                    const existing = asObject(merged[index]);
+                    const patch = {};
+                    if (typeof rawWord.meaning === 'string' && rawWord.meaning.trim()) patch.meaning = rawWord.meaning.trim();
+                    if (typeof rawWord.example === 'string' && rawWord.example.trim()) patch.example = rawWord.example.trim();
+                    if (typeof rawWord.freq === 'number' && Number.isFinite(rawWord.freq)) patch.freq = rawWord.freq;
+                    merged[index] = Object.assign({}, existing, patch, { updatedAt: nowIso() });
+                    updatedCount += 1;
+                }
+                const data = listId === 'default'
+                    ? merged
+                    : Object.assign({}, collections, {
+                        [listId]: Object.assign(
+                            {},
+                            (function collectionBaseForWrite() {
+                                const collection = collections[listId];
+                                return collection && typeof collection === 'object' && !Array.isArray(collection)
+                                    ? clone(collection)
+                                    : {};
+                            }()),
+                            { id: listId, words: merged, updatedAt: nowIso() }
+                        )
+                    });
+                const receipt = await kernel.mutate([{
+                    logicalKey,
+                    data,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+                return Object.assign({}, receipt, { listId, words: clone(merged), addedCount, updatedCount });
+            });
+        },
+        async patchWord(command, options = {}) {
+            await ready; assertObject(command, 'vocab.patchWord requires a command');
+            const listId = String(command.listId || 'default'); const wordId = String(command.wordId || command.id || '');
+            if (!wordId) throw new AppDataError('VALIDATION', 'vocab word id is required');
+            const logicalKey = listId === 'default' ? 'vocab.words' : 'vocab.lists';
+            const mutation = optionsMutationOptions(
+                Object.assign({}, options, { operationId: command.operationId || options.operationId }),
+                'vocab-word-patch',
+                command
+            );
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read(logicalKey, { withMeta: true });
+                const collections = listId === 'default' ? null : asObject(current.data);
+                const list = listId === 'default'
+                    ? asArray(current.data)
+                    : asArray(asObject(collections[listId]).words);
+                const index = list.findIndex((word) => idOf(word, ['id', 'word', 'key']) === wordId);
+                if (index < 0) throw new AppDataError('VALIDATION', `Unknown vocab word: ${wordId}`);
+                const updated = Object.assign({}, list[index], clone(asObject(command.patch)), { id: list[index].id || wordId, updatedAt: nowIso() });
+                const next = list.slice(); next[index] = updated;
+                const data = listId === 'default'
+                    ? next
+                    : Object.assign({}, collections, {
+                        [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words: next, updatedAt: nowIso() })
+                    });
+                const receipt = await kernel.mutate([{
+                    logicalKey,
+                    data,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? Number(current.envelope.revision) : 0)
+                }], mutation);
+                return Object.assign({}, receipt, { word: clone(updated) });
+            });
+        },
+        async replaceProgress(command, options = {}) {
+            await ready; assertObject(command, 'vocab.replaceProgress requires a command');
+            const listId = String(command.listId || 'default'); const words = asArray(command.words);
+            const mutation = optionsMutationOptions(options, 'vocab-progress', command);
+            return retryVocabMutation(options, async () => {
+                const configMeta = await kernel.read('vocab.userConfig', { withMeta: true });
+                const changes = [{
+                    logicalKey: 'vocab.userConfig',
+                    data: Object.assign({}, asObject(configMeta.data), asObject(command.config), { activeListId: listId }),
+                    expectedRevision: configMeta.envelope ? configMeta.envelope.revision : 0
+                }];
+                if (listId === 'default') {
+                    const wordsMeta = await kernel.read('vocab.words', { withMeta: true });
+                    changes.push({ logicalKey: 'vocab.words', data: words, expectedRevision: wordsMeta.envelope ? wordsMeta.envelope.revision : 0 });
+                } else {
+                    const listsMeta = await kernel.read('vocab.lists', { withMeta: true }); const lists = Object.assign({}, asObject(listsMeta.data));
+                    lists[listId] = Object.assign({}, asObject(lists[listId]), { id: listId, words });
+                    changes.push({ logicalKey: 'vocab.lists', data: lists, expectedRevision: listsMeta.envelope ? listsMeta.envelope.revision : 0 });
+                }
+                return kernel.mutate(changes, mutation);
+            });
+        }
+    });
+
+    async function readPreferences() { await ready; return kernel.read('preferences.values'); }
+    let preferenceMutationTail = Promise.resolve();
+    function enqueuePreferenceMutation(task) {
+        const result = preferenceMutationTail.then(task, task);
+        preferenceMutationTail = result.catch(() => undefined);
+        return result;
+    }
+    async function writePreference(field, value, options = {}) {
+        const mutation = optionsMutationOptions(options, 'preference-set', { field, value });
+        return enqueuePreferenceMutation(() => retryMergeConflict(options, async () => {
+            const current = await kernel.read('preferences.values', { withMeta: true });
+            const next = Object.assign({}, asObject(current.data), { [field]: clone(value) });
+            return kernel.mutate([{ logicalKey: 'preferences.values', data: next, expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0) }], mutation);
+        }));
+    }
+    async function patchPreference(field, patch, options = {}) {
+        await ready;
+        const mutation = optionsMutationOptions(options, 'preference-patch', { field, patch });
+        return enqueuePreferenceMutation(() => retryMergeConflict(options, async () => {
+            const current = await kernel.read('preferences.values', { withMeta: true });
+            const values = asObject(current.data);
+            const next = Object.assign({}, values, { [field]: Object.assign({}, asObject(values[field]), asObject(patch)) });
+            return kernel.mutate([{ logicalKey: 'preferences.values', data: next, expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0) }], mutation);
+        }));
+    }
+    const preferences = Object.freeze({
+        async getAll() { return readPreferences(); },
+        async getTheme() { return (await readPreferences())[PREFERENCE_FIELDS.theme] ?? null; }, async setTheme(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.theme, value, options); },
+        async getBrowse() { return clone((await readPreferences())[PREFERENCE_FIELDS.browse] ?? null); }, async setBrowse(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.browse, value, options); }, async patchBrowse(value, options) { return patchPreference(PREFERENCE_FIELDS.browse, value, options); },
+        async getTimer(scope) { const timer = clone((await readPreferences())[PREFERENCE_FIELDS.timer] ?? {}); return scope ? clone(timer[String(scope)] ?? null) : timer; }, async setTimer(scope, value, options) { return patchPreference(PREFERENCE_FIELDS.timer, { [String(scope)]: clone(value) }, options); },
+        async getSuite() { return clone((await readPreferences())[PREFERENCE_FIELDS.suite] ?? null); }, async setSuite(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.suite, value, options); }, async patchSuite(value, options) { return patchPreference(PREFERENCE_FIELDS.suite, value, options); },
+        async getCandidateCode() { return (await readPreferences())[PREFERENCE_FIELDS.candidateCode] ?? null; }, async setCandidateCode(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.candidateCode, value, options); }
+        ,async getResourceBasePrefix() { return (await readPreferences())[PREFERENCE_FIELDS.resourceBasePrefix] ?? null; }, async setResourceBasePrefix(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.resourceBasePrefix, value, options); },
+        async getOnboarding() { return clone((await readPreferences())[PREFERENCE_FIELDS.onboarding] ?? {}); }, async setOnboarding(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.onboarding, asObject(value), options); },
+        async getReadingDisplay() { return clone((await readPreferences())[PREFERENCE_FIELDS.readingDisplay] ?? null); }, async setReadingDisplay(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.readingDisplay, value, options); },
+        async getThreeBackground() { return (await readPreferences())[PREFERENCE_FIELDS.threeBackground] ?? null; }, async setThreeBackground(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.threeBackground, value, options); },
+        async getThemePortal() { return clone((await readPreferences())[PREFERENCE_FIELDS.themePortal] ?? null); }, async setThemePortal(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.themePortal, value, options); },
+        async getPracticeWidget() { return (await readPreferences())[PREFERENCE_FIELDS.practiceWidget] ?? null; }, async setPracticeWidget(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.practiceWidget, value, options); },
+        async getConsent() { return clone((await readPreferences())[PREFERENCE_FIELDS.consent] ?? {}); }, async setConsent(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.consent, asObject(value), options); },
+        async getLogConfig() { return clone((await readPreferences())[PREFERENCE_FIELDS.logConfig] ?? null); }, async setLogConfig(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.logConfig, asObject(value), options); }
+    });
+
+    const goals = Object.freeze({
+        async list() { await ready; return kernel.read('goals.items'); },
+        async save(goal, options = {}) { await ready; assertObject(goal, 'goals.save requires an object'); const mutation = optionsMutationOptions(options, 'goal-save', goal); const current = await readCollectionMeta('goals.items'); const id = idOf(goal, ['id', 'goalId']) || deterministicEntityId('goal', mutation.operationId); const item = Object.assign({}, clone(goal), { id }); const index = current.items.findIndex((entry) => idOf(entry, ['id', 'goalId']) === id); if (index >= 0) current.items[index] = item; else current.items.push(item); return kernel.mutate([{ logicalKey: 'goals.items', data: current.items, expectedRevision: current.revision }], mutation); },
+        async delete(id, options = {}) { await ready; const current = await readCollectionMeta('goals.items'); return kernel.mutate([{ logicalKey: 'goals.items', data: current.items.filter((item) => idOf(item, ['id', 'goalId']) !== String(id)), expectedRevision: current.revision }], optionsMutationOptions(options, 'goal-delete', { id: String(id) })); }
+    });
+
+    function deliveryTimestamp(value) {
+        const candidate = value && typeof value === 'object' ? value.unlockedAt : value;
+        const time = typeof candidate === 'string' && candidate.trim() ? Date.parse(candidate) : NaN;
+        return Number.isFinite(time) ? new Date(time).toISOString() : null;
+    }
+
+    function mergeDeliveryAcknowledgements(current, incoming) {
+        const merged = Object.assign({}, asObject(current));
+        for (const [id, value] of Object.entries(asObject(incoming))) {
+            const key = String(id).trim();
+            if (!key) continue;
+            const previous = deliveryTimestamp(merged[key]);
+            const next = deliveryTimestamp(value);
+            if (!hasOwn(merged, key) || (next && (!previous || next < previous))) {
+                merged[key] = next;
+            } else if (previous) {
+                merged[key] = previous;
+            } else {
+                merged[key] = null;
+            }
+        }
+        return merged;
+    }
+
+    const achievements = Object.freeze({
+        async getAll() {
+            await ready;
+            const progress = await retryMergeConflict({}, async () => {
+                const [summaries, manual, current] = await Promise.all([
+                    kernel.listEntities('practiceSummaries'),
+                    kernel.read('achievements.manual'),
+                    kernel.read('achievements.progress', { withMeta: true })
+                ]);
+                const projected = asObject(computeAchievementProgress(summaries, manual, current.data));
+                if (checksum(projected) !== checksum(asObject(current.data))) {
+                    await kernel.mutate([{
+                        logicalKey: 'achievements.progress',
+                        data: projected,
+                        expectedRevision: current.envelope ? Number(current.envelope.revision) : 0
+                    }], {
+                        operationId: `achievement-progress-${current.envelope ? Number(current.envelope.revision) : 0}-${checksum(projected)}`
+                    });
+                }
+                return projected;
+            }, 5);
+            if (Object.prototype.hasOwnProperty.call(progress, 'fresh')) delete progress.fresh;
+            Object.defineProperty(progress, 'fresh', { value: true, enumerable: false });
+            return progress;
+        },
+        async retryPending() { return achievements.getAll(); },
+        async acknowledgeDelivery(unlocked, options = {}) {
+            await ready;
+            assertObject(unlocked, 'achievements.acknowledgeDelivery requires an object');
+            const requested = clone(unlocked);
+            const mutation = optionsMutationOptions(options, 'achievement-delivery-acknowledge', requested);
+            return retryMergeConflict({}, async () => {
+                const current = await kernel.read('settings.values', { withMeta: true });
+                const settingsValue = asObject(current.data);
+                const delivery = asObject(settingsValue.achievementDelivery);
+                const acknowledged = mergeDeliveryAcknowledgements(delivery.acknowledged, requested);
+                return kernel.mutate([{
+                    logicalKey: 'settings.values',
+                    data: Object.assign({}, settingsValue, {
+                        achievementDelivery: { version: 1, acknowledged }
+                    }),
+                    expectedRevision: current.envelope ? Number(current.envelope.revision) : 0
+                }], mutation);
+            }, 5);
+        },
+        async getManualState() { await ready; return kernel.read('achievements.manual'); }
+    });
+
+    const LEGACY_DOCUMENT_ALIASES = Object.freeze({
+        'settings.values': ['user_settings', 'settings', 'system_settings'],
+        'recovery.activeSessions': ['active_sessions'], 'recovery.drafts': ['temp_practice_records'],
+        'recovery.interrupted': ['interrupted_records'], 'recovery.rejectedCompletions': ['rejected_completion_payloads'],
+        'backups.entries': ['manual_backups'], 'backups.settings': ['backup_settings'],
+        'backups.exportHistory': ['export_history'], 'backups.importHistory': ['import_history'],
+        'vocab.words': ['vocab_words'], 'vocab.userConfig': ['vocab_user_config'], 'vocab.lists': ['vocab_lists'],
+        'preferences.values': ['ui_preferences'], 'goals.items': ['learning_goals'],
+        'achievements.manual': ['achievement_manual_state', 'user_achievements']
+    });
+    const LEGACY_PREFERENCE_ALIASES = Object.freeze({
+        theme: 'theme', preferred_theme: 'theme', browse_state: 'browse', browse_preferences: 'browse',
+        practice_timer_preferences: 'timer', suite_preference: 'suite', candidate_code: 'candidateCode',
+        ielts_reading_display_preferences_v1: 'readingDisplay', onboarding_completed: 'onboarding.completed'
+    });
+
+    function mergeLegacySources(indexedDbValue, externalValue) {
+        const indexedDb = asObject(indexedDbValue);
+        const external = asObject(externalValue);
+        const merged = Object.assign({}, external, indexedDb);
+        const records = new Map();
+        const addRecords = (value) => {
+            const list = Array.isArray(value) ? value : asArray(asObject(value).data);
+            list.forEach((record) => {
+                const id = idOf(record, ['id', 'recordId', 'sessionId']);
+                records.set(id ? `id:${id}` : `content:${checksum(record)}`, clone(record));
+            });
+        };
+        addRecords(external.practice_records || external.practiceRecords);
+        addRecords(indexedDb.practice_records);
+        if (records.size) merged.practice_records = Array.from(records.values());
+        return merged;
+    }
+
+    function legacyLibraryBundle(legacy) {
+        const idMap = new Map();
+        const indexes = {};
+        for (const [oldId, value] of Object.entries(asObject(legacy))) {
+            if (!/^exam_index_/.test(oldId) || oldId === 'exam_index_configurations' || !asArray(value).length) continue;
+            const id = `legacy-library-${checksum(oldId).replace(/^fnv1a-/, '')}`;
+            idMap.set(oldId, id);
+            indexes[id] = clone(value);
+        }
+        if (!idMap.size) return null;
+        const configurations = new Map();
+        asArray(legacy.exam_index_configurations).forEach((configuration) => {
+            const oldId = idOf(configuration, ['id', 'key', 'configId']);
+            const id = idMap.get(oldId);
+            if (id) configurations.set(id, Object.assign({}, clone(configuration), { id, key: id, examCount: indexes[id].length }));
+        });
+        for (const [oldId, id] of idMap) {
+            if (!configurations.has(id)) configurations.set(id, {
+                id,
+                key: id,
+                name: `迁移的自定义题库 (${oldId})`,
+                examCount: indexes[id].length,
+                sourceType: 'legacy-import'
+            });
+        }
+        return {
+            configurations: Array.from(configurations.values()),
+            indexes,
+            activeId: idMap.get(String(legacy.active_exam_index_key || '')) || null
+        };
+    }
+
+    async function migrateLegacyData() {
+        // Unit embedders may provide a deliberately minimal kernel bootstrap.
+        if (typeof internals.readLegacyValues !== 'function') return;
+        const migrationMeta = await kernel.read('system.migrations', { withMeta: true });
+        const migrationState = asObject(migrationMeta.data);
+        const v1Complete = asObject(migrationState.v1ToV2).status === 'complete';
+        const externalConsumed = asObject(migrationState.externalBackupV1).status === 'consumed';
+        let externalBackup = null;
+        if (!externalConsumed && typeof internals.readLegacyExternalBackup === 'function') {
+            try { externalBackup = await internals.readLegacyExternalBackup(); }
+            catch (error) {
+                if (global.console && console.warn) console.warn('[AppData v2] legacy external backup skipped:', error && error.message);
+            }
+        }
+        if (v1Complete && !externalBackup) return;
+
+        const indexedDb = await internals.readLegacyValues();
+        if (indexedDb && indexedDb.__legacyReadComplete === false) {
+            throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy IndexedDB could not be read completely; migration will retry on next startup');
+        }
+        const legacy = mergeLegacySources(indexedDb, externalBackup);
+        const changes = [];
+        for (const [logicalKey, aliases] of Object.entries(LEGACY_DOCUMENT_ALIASES)) {
+            const current = await kernel.getEnvelope(logicalKey);
+            if (current) continue;
+            const alias = aliases.find((key) => Object.prototype.hasOwnProperty.call(legacy, key));
+            if (alias) changes.push({ logicalKey, data: legacy[alias], expectedRevision: 0 });
+        }
+        const libraryBundle = legacyLibraryBundle(legacy);
+        if (libraryBundle) {
+            if (!(await kernel.getEnvelope('library.configurations'))) changes.push({ logicalKey: 'library.configurations', data: libraryBundle.configurations, expectedRevision: 0 });
+            if (!(await kernel.getEnvelope('library.importedIndexes'))) changes.push({ logicalKey: 'library.importedIndexes', data: libraryBundle.indexes, expectedRevision: 0 });
+            if (!(await kernel.getEnvelope('library.activeConfigurationId'))) changes.push({ logicalKey: 'library.activeConfigurationId', data: libraryBundle.activeId, expectedRevision: 0 });
+        }
+        if (!(await kernel.getEnvelope('preferences.values')) && !changes.some((change) => change.logicalKey === 'preferences.values')) {
+            const preferences = {};
+            for (const [alias, target] of Object.entries(LEGACY_PREFERENCE_ALIASES)) {
+                if (!Object.prototype.hasOwnProperty.call(legacy, alias)) continue;
+                const path = target.split('.'); let cursor = preferences;
+                path.slice(0, -1).forEach((part) => { cursor[part] = asObject(cursor[part]); cursor = cursor[part]; });
+                cursor[path[path.length - 1]] = clone(legacy[alias]);
+            }
+            if (Object.keys(preferences).length) changes.push({ logicalKey: 'preferences.values', data: preferences, expectedRevision: 0 });
+        }
+        if (!(await kernel.getEnvelope('vocab.userConfig')) && !changes.some((change) => change.logicalKey === 'vocab.userConfig') && Object.prototype.hasOwnProperty.call(legacy, 'vocab_active_list_id')) {
+            changes.push({ logicalKey: 'vocab.userConfig', data: { activeListId: legacy.vocab_active_list_id }, expectedRevision: 0 });
+        }
+        if (changes.length) await kernel.mutate(changes, { operationId: `legacy-documents-${internals.checksum(changes)}` });
+        const recordsValue = legacy.practice_records;
+        const records = Array.isArray(recordsValue) ? recordsValue : asArray(asObject(recordsValue).data);
+        const operations = [];
+        for (const [index, record] of records.entries()) {
+            try {
+                const candidate = clone(record);
+                if (!idOf(candidate, ['id', 'recordId', 'sessionId'])) candidate.id = `legacy_${index}_${internals.checksum(record)}`;
+                const canonical = canonicalizeRecord(candidate);
+                const parts = splitPracticeRecord(canonical);
+                for (const [store, data] of [
+                    ['practiceSummaries', parts.summary],
+                    ['practiceDetails', parts.detail],
+                    ['practiceAnnotations', parts.annotations]
+                ]) {
+                    if (!await kernel.readEntity(store, canonical.id)) {
+                        operations.push({ type: 'upsert', store, recordId: canonical.id, data, expectedRevision: 0 });
+                    }
+                }
+            } catch (error) {
+                if (global.console && console.warn) console.warn(`[AppData v2] skipping malformed legacy practice record #${index}:`, error && error.message);
+            }
+        }
+        if (operations.length) {
+            await kernel.mutateEntities(operations, { operationId: `legacy-practice-${internals.checksum(records)}` });
+        }
+
+        const nextMigrationState = Object.assign({}, migrationState);
+        if (!v1Complete) nextMigrationState.v1ToV2 = {
+            version: 1,
+            status: 'complete',
+            completedAt: nowIso(),
+            sourceChecksum: checksum(indexedDb),
+            sourceRecordCount: asArray(indexedDb.practice_records).length
+        };
+        if (externalBackup) nextMigrationState.externalBackupV1 = {
+            version: 1,
+            status: 'consumed',
+            completedAt: nowIso(),
+            sourceChecksum: checksum(externalBackup)
+        };
+        await kernel.mutate([{
+            logicalKey: 'system.migrations',
+            data: nextMigrationState,
+            expectedRevision: migrationMeta.envelope ? Number(migrationMeta.envelope.revision) : 0
+        }], { operationId: `legacy-migration-${checksum(nextMigrationState)}` });
+    }
+
+    const ready = kernel.initialize()
+        .then(async () => {
+            // Legacy migration and recovery cleanup are best-effort: a failure here
+            // (e.g. one malformed v1 record) must not brick the data layer for every
+            // read that awaits `ready`. Only a genuine backend init failure below is fatal.
+            try {
+                await migrateLegacyData();
+            } catch (error) {
+                if (global.console && console.error) console.error('[AppData v2] legacy migration skipped:', error);
+            }
+            try {
+                await cleanupExpiredRecovery();
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[AppData v2] recovery cleanup skipped:', error);
+            }
+            return true;
+        })
+        .catch((error) => {
+            if (global.console && console.error) console.error('[AppData v2] initialization blocked:', error);
+            throw error instanceof AppDataError ? error : new AppDataError('INITIALIZATION_BLOCKED', error && error.message || 'AppData v2 initialization failed');
+        });
+
+    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
+    Object.defineProperties(AppData, {
+        ready: { value: ready, enumerable: false },
+        status: { value: () => kernel.status(), enumerable: false }
+    });
+    Object.freeze(AppData);
+    Object.defineProperty(global, 'AppData', { value: AppData, enumerable: true, configurable: false, writable: false });
+    if (!Reflect.deleteProperty(global, '__AppDataV2Internals')) {
+        throw new Error('AppData v2 failed to close its internal bootstrap channel');
+    }
+    if (!Reflect.deleteProperty(global, '__AppDataV2Catalog')) {
+        throw new Error('AppData v2 failed to close its catalog bootstrap channel');
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/externalBackupService.js ===== */
+/**
+ * V2 external disk backup adapter.
+ *
+ * The selected directory is not a DataKernel backend. Durable application
+ * commits stay authoritative in AppData; this adapter writes portable v2
+ * snapshots after the commit and isolates every filesystem failure.
+ */
+(function initExternalBackupService(global) {
+    'use strict';
+
+    if (global.ExternalBackupService && global.ExternalBackupService.__v2 === true) return;
+
+    var DB_NAME = 'IELTSAtlasExternalBackupV2';
+    var DB_VERSION = 1;
+    var STORE_NAME = 'binding';
+    var HANDLE_KEY = 'directory-handle';
+    var META_KEY = 'metadata';
+    var LATEST_FILENAME = 'ielts-atlas-backup-latest.json';
+    var WRITE_DELAY_MS = 8000;
+    var ENTRY_ID = 'external-backup-entry-btn';
+    var MODAL_ID = 'external-backup-modal';
+
+    var state = {
+        ready: false,
+        readyPromise: null,
+        initialized: false,
+        suspended: false,
+        directoryHandle: null,
+        permission: 'prompt',
+        dirty: false,
+        dirtyGeneration: 0,
+        writing: false,
+        writeQueue: Promise.resolve(),
+        silentFlushTimer: null,
+        unsubscribeCommitted: null,
+        visibilityHandler: null,
+        meta: {
+            directoryName: null,
+            lastWriteAt: null,
+            lastChecksum: null,
+            lastWriteError: null,
+            awaitingRestore: false
+        }
+    };
+
+    function nowIso() {
+        return new Date().toISOString();
+    }
+
+    function dayKey(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+
+    function cloneMeta(value) {
+        var source = value && typeof value === 'object' ? value : {};
+        return {
+            directoryName: source.directoryName ? String(source.directoryName) : null,
+            lastWriteAt: source.lastWriteAt ? String(source.lastWriteAt) : null,
+            lastChecksum: source.lastChecksum ? String(source.lastChecksum) : null,
+            lastWriteError: source.lastWriteError ? String(source.lastWriteError) : null,
+            awaitingRestore: source.awaitingRestore === true
+        };
+    }
+
+    function getIndexedDB() {
+        try {
+            return global.indexedDB || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function supportsFileSystemAccess() {
+        return typeof global.showDirectoryPicker === 'function'
+            && global.isSecureContext !== false;
+    }
+
+    function openBindingDb() {
+        return new Promise(function (resolve, reject) {
+            var indexedDb = getIndexedDB();
+            if (!indexedDb) {
+                reject(new Error('IndexedDB unavailable for directory binding'));
+                return;
+            }
+            var request;
+            try {
+                request = indexedDb.open(DB_NAME, DB_VERSION);
+            } catch (error) {
+                reject(error);
+                return;
+            }
+            request.onerror = function () {
+                reject(request.error || new Error('Failed to open external backup binding database'));
+            };
+            request.onupgradeneeded = function (event) {
+                var db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+            };
+            request.onsuccess = function () {
+                resolve(request.result);
+            };
+        });
+    }
+
+    async function readStoredValue(key) {
+        var db = await openBindingDb();
+        try {
+            return await new Promise(function (resolve, reject) {
+                var tx = db.transaction(STORE_NAME, 'readonly');
+                var request = tx.objectStore(STORE_NAME).get(key);
+                request.onsuccess = function () { resolve(request.result); };
+                request.onerror = function () { reject(request.error || tx.error); };
+                tx.onabort = function () { reject(tx.error || new Error('Binding read transaction aborted')); };
+            });
+        } finally {
+            try { db.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    async function writeStoredValues(values) {
+        var db = await openBindingDb();
+        try {
+            await new Promise(function (resolve, reject) {
+                var tx = db.transaction(STORE_NAME, 'readwrite');
+                var store = tx.objectStore(STORE_NAME);
+                Object.keys(values).forEach(function (key) {
+                    store.put(values[key], key);
+                });
+                tx.oncomplete = function () { resolve(); };
+                tx.onerror = function () { reject(tx.error || new Error('Binding write transaction failed')); };
+                tx.onabort = function () { reject(tx.error || new Error('Binding write transaction aborted')); };
+            });
+        } finally {
+            try { db.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    async function clearStoredBinding() {
+        var db = await openBindingDb();
+        try {
+            await new Promise(function (resolve, reject) {
+                var tx = db.transaction(STORE_NAME, 'readwrite');
+                var store = tx.objectStore(STORE_NAME);
+                store.delete(HANDLE_KEY);
+                store.delete(META_KEY);
+                tx.oncomplete = function () { resolve(); };
+                tx.onerror = function () { reject(tx.error || new Error('Binding clear transaction failed')); };
+                tx.onabort = function () { reject(tx.error || new Error('Binding clear transaction aborted')); };
+            });
+        } finally {
+            try { db.close(); } catch (_) { /* ignore */ }
+        }
+    }
+
+    async function persistMeta(patch) {
+        if (state.suspended) return false;
+        state.meta = Object.assign({}, state.meta, cloneMeta(Object.assign({}, state.meta, patch || {})));
+        try {
+            await writeStoredValues((function () {
+                var values = {};
+                values[META_KEY] = state.meta;
+                return values;
+            })());
+        } catch (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] metadata persistence failed:', error);
+        }
+        return true;
+    }
+
+    async function queryPermission(handle, mode) {
+        if (!handle) return 'denied';
+        try {
+            if (typeof handle.queryPermission === 'function') {
+                return await handle.queryPermission({ mode: mode || 'readwrite' });
+            }
+        } catch (_) { /* ignore */ }
+        return 'prompt';
+    }
+
+    async function ensurePermission(handle, interactive) {
+        var permission = await queryPermission(handle, 'readwrite');
+        if (permission === 'granted') {
+            state.permission = permission;
+            return true;
+        }
+        if (!interactive) {
+            state.permission = permission;
+            return false;
+        }
+        try {
+            if (typeof handle.requestPermission === 'function') {
+                permission = await handle.requestPermission({ mode: 'readwrite' });
+            }
+        } catch (_) {
+            permission = 'denied';
+        }
+        state.permission = permission;
+        return permission === 'granted';
+    }
+
+    async function requestPersistentStorage() {
+        try {
+            var storage = global.navigator && global.navigator.storage;
+            if (!storage || typeof storage.persist !== 'function') return false;
+            if (typeof storage.persisted === 'function' && await storage.persisted()) return true;
+            return await storage.persist();
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async function writeAndVerify(directoryHandle, filename, text, snapshot) {
+        var fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+        var writable = await fileHandle.createWritable();
+        try {
+            await writable.write(text);
+            await writable.close();
+        } catch (error) {
+            try { await writable.abort(); } catch (_) { /* ignore */ }
+            throw error;
+        }
+
+        var file = await fileHandle.getFile();
+        var storedText = await file.text();
+        var stored;
+        try {
+            stored = JSON.parse(storedText);
+        } catch (error) {
+            throw new Error('Backup verification failed: written file is not valid JSON');
+        }
+        if (!stored || stored.format !== 'ielts-atlas-data-v2'
+            || stored.schemaVersion !== snapshot.schemaVersion
+            || stored.checksum !== snapshot.checksum) {
+            throw new Error('Backup verification failed: snapshot metadata mismatch');
+        }
+        return storedText.length;
+    }
+
+    async function fileExists(directoryHandle, filename) {
+        try {
+            await directoryHandle.getFileHandle(filename, { create: false });
+            return true;
+        } catch (error) {
+            if (error && error.name === 'NotFoundError') return false;
+            throw error;
+        }
+    }
+
+    function uniqueGenerationFilename(date) {
+        var time = [
+            String(date.getHours()).padStart(2, '0'),
+            String(date.getMinutes()).padStart(2, '0'),
+            String(date.getSeconds()).padStart(2, '0'),
+            String(date.getMilliseconds()).padStart(3, '0')
+        ].join('');
+        return 'ielts-atlas-backup-' + dayKey(date) + '-' + time + '.json';
+    }
+
+    function requireBackupApi() {
+        var backups = global.AppData && global.AppData.backups;
+        if (!backups || typeof backups.export !== 'function'
+            || typeof backups.previewImport !== 'function'
+            || typeof backups.commitImport !== 'function') {
+            throw new Error('AppData v2 backup API is unavailable');
+        }
+        return backups;
+    }
+
+    async function withDiskWriteLock(callback) {
+        var previous = state.writeQueue.catch(function () {});
+        var releaseCurrent;
+        state.writeQueue = new Promise(function (resolve) {
+            releaseCurrent = resolve;
+        });
+        await previous;
+        try {
+            var locks = global.navigator && global.navigator.locks;
+            if (locks && typeof locks.request === 'function') {
+                return await locks.request('ielts-atlas-external-backup-write', { mode: 'exclusive' }, callback);
+            }
+            return await callback();
+        } finally {
+            releaseCurrent();
+        }
+    }
+
+    async function refreshStoredBindingForWrite() {
+        if (state.suspended) return;
+        var stored = await Promise.all([
+            readStoredValue(HANDLE_KEY),
+            readStoredValue(META_KEY)
+        ]);
+        state.directoryHandle = stored[0] || null;
+        if (stored[1]) state.meta = cloneMeta(stored[1]);
+        if (state.directoryHandle && !state.meta.directoryName) {
+            state.meta.directoryName = state.directoryHandle.name || 'backup';
+        }
+    }
+
+    async function writeToBoundDirectory(options) {
+        var opts = options || {};
+        await ensureReady();
+        if (state.suspended) return { success: false, reason: 'suspended' };
+        return withDiskWriteLock(async function () {
+            if (state.suspended) return { success: false, reason: 'suspended' };
+            if (state.writing) return { success: false, reason: 'busy' };
+            try {
+                await refreshStoredBindingForWrite();
+            } catch (error) {
+                return { success: false, reason: 'binding_unavailable', error: error };
+            }
+            if (!state.directoryHandle) return { success: false, reason: 'unbound' };
+            if (state.meta.awaitingRestore && opts.allowOverwriteExisting !== true) {
+                return { success: false, reason: 'restore_required' };
+            }
+
+            var startedGeneration = state.dirtyGeneration;
+            var followupNeeded = false;
+            state.writing = true;
+            refreshPanel();
+            try {
+                if (!await ensurePermission(state.directoryHandle, opts.interactive === true)) {
+                    await persistMeta({ lastWriteError: 'permission_denied' });
+                    return { success: false, reason: 'permission_denied' };
+                }
+
+                var backups = requireBackupApi();
+                var snapshot = await backups.export();
+                if (!snapshot || snapshot.format !== 'ielts-atlas-data-v2' || !snapshot.checksum) {
+                    throw new Error('AppData returned an invalid v2 backup snapshot');
+                }
+                if (!opts.force && snapshot.checksum === state.meta.lastChecksum) {
+                    state.dirty = state.dirtyGeneration !== startedGeneration;
+                    followupNeeded = state.dirty;
+                    return { success: true, reason: 'unchanged', skipped: true, checksum: snapshot.checksum };
+                }
+
+                var text = JSON.stringify(snapshot, null, 2);
+                var writeDate = new Date();
+                var datedFilename = 'ielts-atlas-backup-' + dayKey(writeDate) + '.json';
+                if (await fileExists(state.directoryHandle, datedFilename)) {
+                    datedFilename = uniqueGenerationFilename(writeDate);
+                }
+                await writeAndVerify(state.directoryHandle, datedFilename, text, snapshot);
+                var bytes = await writeAndVerify(state.directoryHandle, LATEST_FILENAME, text, snapshot);
+
+                var latestSnapshot = await backups.export();
+                var changedDuringWrite = state.dirtyGeneration !== startedGeneration
+                    || !latestSnapshot || latestSnapshot.checksum !== snapshot.checksum;
+                if (changedDuringWrite && state.dirtyGeneration === startedGeneration) {
+                    state.dirtyGeneration += 1;
+                }
+                state.dirty = changedDuringWrite;
+                followupNeeded = changedDuringWrite;
+                await persistMeta({
+                    directoryName: state.directoryHandle.name || state.meta.directoryName || 'backup',
+                    lastWriteAt: nowIso(),
+                    lastChecksum: snapshot.checksum,
+                    lastWriteError: null
+                });
+                return {
+                    success: true,
+                    reason: 'written',
+                    filename: LATEST_FILENAME,
+                    generationFilename: datedFilename,
+                    checksum: snapshot.checksum,
+                    bytes: bytes,
+                    followupPending: followupNeeded
+                };
+            } catch (error) {
+                followupNeeded = state.dirtyGeneration !== startedGeneration;
+                await persistMeta({ lastWriteError: error && error.message ? error.message : String(error) });
+                if (global.console && console.error) console.error('[ExternalBackup v2] write failed:', error);
+                return { success: false, reason: 'write_error', error: error };
+            } finally {
+                state.writing = false;
+                if (followupNeeded && state.directoryHandle) scheduleSilentFlush();
+                refreshPanel();
             }
         });
     }
 
-    function registerStorageProviders(input) {
-        const normalized = normalizeProviders(input);
-        if (!normalized) {
-            throw new Error('registerStorageProviders requires repositories');
+    async function bindDirectory(options) {
+        if (state.suspended) throw new Error('本地备份服务正在重置');
+        if (!supportsFileSystemAccess()) {
+            throw new Error('当前浏览器不支持绑定本地文件夹（请使用 Chrome/Edge 并通过 http(s) 或 localhost 打开）');
         }
-        providers = normalized;
+        var handle = await global.showDirectoryPicker({
+            id: 'ielts-atlas-external-backup',
+            mode: 'readwrite',
+            startIn: 'documents'
+        });
+        if (!handle) throw new Error('未选择文件夹');
+        if (!await ensurePermission(handle, true)) throw new Error('未获得文件夹读写权限');
 
-        if (!window.dataRepositories) {
-            window.dataRepositories = normalized.repositories;
-        }
-        if (!window.storage && normalized.storageManager) {
-            window.storage = normalized.storageManager;
-        }
-        if (!window.persistentStore && normalized.persistentStore) {
-            window.persistentStore = normalized.persistentStore;
-        }
-        if (!window.preferenceStore && normalized.preferenceStore) {
-            window.preferenceStore = normalized.preferenceStore;
-        }
-        if (normalized.simpleStorageWrapper && !window.simpleStorageWrapper) {
-            window.simpleStorageWrapper = normalized.simpleStorageWrapper;
-        }
+        var existingBackupFound = await fileExists(handle, LATEST_FILENAME);
+        var meta = cloneMeta({
+            directoryName: handle.name || 'backup',
+            lastWriteAt: null,
+            lastChecksum: null,
+            lastWriteError: null,
+            awaitingRestore: existingBackupFound
+        });
+        var values = {};
+        values[HANDLE_KEY] = handle;
+        values[META_KEY] = meta;
+        await writeStoredValues(values);
+        state.directoryHandle = handle;
+        state.meta = meta;
+        state.dirty = !existingBackupFound;
+        state.dirtyGeneration += 1;
+        await requestPersistentStorage();
 
-        notifyListeners(Object.assign({}, providers));
-        return providers;
+        var writeResult = null;
+        if (!existingBackupFound && (!options || options.writeNow !== false)) {
+            writeResult = await writeToBoundDirectory({ interactive: true, force: true });
+        }
+        refreshPanel();
+        return {
+            directoryName: meta.directoryName,
+            existingBackupFound: existingBackupFound,
+            writeResult: writeResult
+        };
     }
 
-    function onProvidersReady(callback) {
-        if (typeof callback !== 'function') {
-            return () => {};
-        }
-        listeners.add(callback);
-        if (providers) {
-            try {
-                callback(Object.assign({}, providers));
-            } catch (error) {
-                console.error('[StorageProviderRegistry] immediate callback failed:', error);
-            }
-        }
-        return () => listeners.delete(callback);
-    }
-
-    function getCurrentProviders() {
-        return providers ? Object.assign({}, providers) : null;
-    }
-
-    window.StorageProviderRegistry = {
-        registerStorageProviders,
-        onProvidersReady,
-        getCurrentProviders
-    };
-})(window);
-
-
-/* ===== js/data/dataSources/storageDataSource.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-
-    function isProtectedPracticeDataKey(key) {
-        return key === 'practice_records' || key === 'user_stats';
-    }
-
-    class StorageTransactionContext {
-        constructor(storageManager, options = {}) {
-            this.storage = storageManager;
-            this.createInternalOptions = typeof options.createInternalOptions === 'function'
-                ? options.createInternalOptions
-                : null;
-            this.operations = [];
-            this.cache = new Map();
-        }
-
-        _internalOptions(key) {
-            if (this.createInternalOptions) {
-                return this.createInternalOptions();
-            }
-            if (isProtectedPracticeDataKey(key)) {
-                throw new Error(`StorageTransactionContext cannot access protected key ${key} without internal storage access`);
-            }
-            return { skipPracticeCoreRedirect: true };
-        }
-
-        async get(key, defaultValue) {
-            if (this.cache.has(key)) {
-                return this.cache.get(key);
-            }
-            const resolvedDefault = typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-            const value = await this.storage.get(key, resolvedDefault, this._internalOptions(key));
-            const finalValue = value === undefined ? resolvedDefault : value;
-            this.cache.set(key, finalValue);
-            return finalValue;
-        }
-
-        set(key, value) {
-            this.cache.set(key, value);
-            this.operations.push({ type: 'set', key, value });
-        }
-
-        remove(key) {
-            this.cache.delete(key);
-            this.operations.push({ type: 'remove', key });
-        }
-
-        async commit() {
-            for (const op of this.operations) {
-                if (op.type === 'set') {
-                    await this.storage.set(op.key, op.value, this._internalOptions(op.key));
-                } else if (op.type === 'remove') {
-                    await this.storage.remove(op.key, this._internalOptions(op.key));
-                }
-            }
-            this.operations = [];
-        }
-
-        async rollback() {
-            this.operations = [];
+    function cancelSilentFlush() {
+        if (state.silentFlushTimer) {
+            global.clearTimeout(state.silentFlushTimer);
+            state.silentFlushTimer = null;
         }
     }
 
-    class StorageDataSource {
-        constructor(storageManager, options = {}) {
-            if (!storageManager) {
-                throw new Error('StorageDataSource requires a StorageManager instance');
-            }
-            this.storage = storageManager;
-            this.createInternalOptions = typeof options.createInternalOptions === 'function'
-                ? options.createInternalOptions
-                : null;
-            this._queue = Promise.resolve();
-        }
-
-        _internalOptions(key) {
-            if (this.createInternalOptions) {
-                return this.createInternalOptions();
-            }
-            if (isProtectedPracticeDataKey(key)) {
-                throw new Error(`StorageDataSource cannot access protected key ${key} without internal storage access`);
-            }
-            return { skipPracticeCoreRedirect: true };
-        }
-
-        async read(key, defaultValue) {
-            const resolvedDefault = typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-            const value = await this.storage.get(key, resolvedDefault, this._internalOptions(key));
-            return value === undefined ? resolvedDefault : value;
-        }
-
-        async write(key, value) {
-            return this._enqueue(async () => {
-                await this.storage.set(key, value, this._internalOptions(key));
-                return true;
-            });
-        }
-
-        async remove(key) {
-            return this._enqueue(async () => {
-                await this.storage.remove(key, this._internalOptions(key));
-                return true;
-            });
-        }
-
-        async runTransaction(handler, options = {}) {
-            if (typeof handler !== 'function') {
-                throw new Error('StorageDataSource.runTransaction requires a handler function');
-            }
-            const label = options.label || 'storage-transaction';
-            return this._enqueue(async () => {
-                const context = new StorageTransactionContext(this.storage, {
-                    createInternalOptions: this.createInternalOptions
-                });
-                try {
-                    const result = await handler(context);
-                    await context.commit();
-                    return result;
-                } catch (error) {
-                    await context.rollback();
-                    console.error(`[StorageDataSource] Transaction failed (${label}):`, error);
-                    throw error;
-                }
-            });
-        }
-
-        _enqueue(task) {
-            const next = this._queue.then(task);
-            this._queue = next.catch(() => {});
-            return next;
-        }
+    function clearBindingState() {
+        state.directoryHandle = null;
+        state.permission = 'prompt';
+        state.dirty = false;
+        state.dirtyGeneration += 1;
+        state.meta = cloneMeta({});
+        refreshPanel();
     }
 
-    ExamData.StorageTransactionContext = StorageTransactionContext;
-    ExamData.StorageDataSource = StorageDataSource;
-})(window);
+    async function unbindDirectory() {
+        cancelSilentFlush();
+        await withDiskWriteLock(async function () {
+            await clearStoredBinding();
+            clearBindingState();
+        });
+        return true;
+    }
 
-
-/* ===== js/data/repositories/baseRepository.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-
-    function cloneValue(value) {
-        if (value === null || value === undefined) {
-            return value;
+    async function prepareForFullReset() {
+        state.suspended = true;
+        cancelSilentFlush();
+        if (typeof state.unsubscribeCommitted === 'function') {
+            try { state.unsubscribeCommitted(); } catch (_) { /* ignore */ }
         }
-        if (typeof structuredClone === 'function') {
-            try {
-                return structuredClone(value);
-            } catch (_) {
-                // Fallback to JSON serialization below
-            }
+        state.unsubscribeCommitted = null;
+        if (global.document && state.visibilityHandler) {
+            try { global.document.removeEventListener('visibilitychange', state.visibilityHandler); } catch (_) { /* ignore */ }
         }
+        state.visibilityHandler = null;
+        state.initialized = false;
+
+        await withDiskWriteLock(async function () {
+            await clearStoredBinding();
+            clearBindingState();
+        });
+        return {
+            success: true,
+            diskFilesPreserved: true,
+            bindingCleared: true
+        };
+    }
+
+    async function readLatestPayload(interactive) {
+        await ensureReady();
+        if (!state.directoryHandle) throw new Error('请先绑定备份文件夹');
+        if (!await ensurePermission(state.directoryHandle, interactive === true)) {
+            throw new Error('需要允许文件夹访问权限');
+        }
+        var fileHandle;
         try {
-            return JSON.parse(JSON.stringify(value));
+            fileHandle = await state.directoryHandle.getFileHandle(LATEST_FILENAME, { create: false });
+        } catch (error) {
+            throw new Error('未找到 ' + LATEST_FILENAME);
+        }
+        var file = await fileHandle.getFile();
+        var text = await file.text();
+        try {
+            return JSON.parse(text);
         } catch (_) {
-            return value;
+            throw new Error('本地备份文件不是有效的 JSON');
         }
     }
 
-    class BaseRepository {
-        constructor(options) {
-            const {
-                dataSource,
-                key,
-                name,
-                defaultValue = null,
-                migrations = [],
-                validators = [],
-                cloneOnRead = true
-            } = options || {};
-
-            if (!dataSource) {
-                throw new Error('BaseRepository requires a dataSource instance');
-            }
-            if (!key) {
-                throw new Error('BaseRepository requires a storage key');
-            }
-
-            this.dataSource = dataSource;
-            this.key = key;
-            this.name = name || key;
-            this.defaultValue = defaultValue;
-            this.migrations = Array.isArray(migrations) ? migrations.slice() : [migrations];
-            this.validators = Array.isArray(validators) ? validators.slice() : [validators];
-            this.cloneOnRead = cloneOnRead;
+    function summarizePreview(preview) {
+        var keys = Array.isArray(preview.keys) ? preview.keys : [];
+        var cleared = Array.isArray(preview.clearedKeys) ? preview.clearedKeys : [];
+        var practice = preview.practice || {};
+        var lines = [
+            '将从本地磁盘备份覆盖恢复当前数据。',
+            '格式：' + (preview.format || 'unknown') + (preview.scope ? ' / ' + preview.scope : ''),
+            '数据域：' + (keys.length ? keys.join('、') : '无')
+        ];
+        if (cleared.length) lines.push('将清空：' + cleared.join('、'));
+        if (practice && Number.isFinite(Number(practice.finalCount))) {
+            lines.push('练习记录：现有 ' + (Number(practice.existingCount) || 0)
+                + ' 条 → 恢复后 ' + Number(practice.finalCount) + ' 条'
+                + '（删除 ' + (Number(practice.removedCount) || 0) + ' 条）');
         }
-
-        _resolveDefaultValue(override) {
-            const candidate = override !== undefined ? override : this.defaultValue;
-            return typeof candidate === 'function' ? candidate() : candidate;
+        var diagnostics = preview.diagnostics || {};
+        if (Array.isArray(diagnostics.missingKeys) && diagnostics.missingKeys.length) {
+            lines.push('备份缺失且将保留现状：' + diagnostics.missingKeys.join('、'));
         }
-
-        async read(options = {}) {
-            const { transaction, defaultValue, skipValidation = false, clone = undefined } = options;
-            const resolvedDefault = this._resolveDefaultValue(defaultValue);
-            const sourceValue = transaction
-                ? await transaction.get(this.key, resolvedDefault)
-                : await this.dataSource.read(this.key, resolvedDefault);
-
-            let value = sourceValue === undefined ? resolvedDefault : sourceValue;
-            value = await this.applyMigrations(value, { transaction });
-
-            if (!skipValidation) {
-                this.validate(value);
-            }
-
-            if (clone === false || (!this.cloneOnRead && clone === undefined)) {
-                return value;
-            }
-            return cloneValue(value);
+        if (Array.isArray(diagnostics.repairedKeys) && diagnostics.repairedKeys.length) {
+            lines.push('已修复旧格式数据：' + diagnostics.repairedKeys.join('、'));
         }
-
-        async write(value, options = {}) {
-            const { transaction, skipValidation = false, clone = true } = options;
-            if (!skipValidation) {
-                this.validate(value);
-            }
-            const dataToPersist = clone ? cloneValue(value) : value;
-            if (transaction) {
-                transaction.set(this.key, dataToPersist);
-                return true;
-            }
-            await this.dataSource.write(this.key, dataToPersist);
-            return true;
+        if (Array.isArray(diagnostics.ignoredKeys) && diagnostics.ignoredKeys.length) {
+            lines.push('已隔离不安全数据：' + diagnostics.ignoredKeys.join('、'));
         }
-
-        async remove(options = {}) {
-            const { transaction } = options;
-            if (transaction) {
-                transaction.remove(this.key);
-                return true;
-            }
-            await this.dataSource.remove(this.key);
-            return true;
+        if (Array.isArray(preview.warnings) && preview.warnings.length) {
+            lines.push('警告：' + preview.warnings.join('；'));
         }
+        lines.push('', '恢复前会创建一个应用内安全快照。是否继续？');
+        return lines.join('\n');
+    }
 
-        async applyMigrations(value, context = {}) {
-            let current = value;
-            for (const migration of this.migrations) {
-                if (typeof migration === 'function') {
-                    current = await migration(current, { key: this.key, name: this.name, ...context });
+    function createOperationId(prefix) {
+        try {
+            if (global.crypto && typeof global.crypto.randomUUID === 'function') {
+                return prefix + '-' + global.crypto.randomUUID();
+            }
+        } catch (_) { /* ignore */ }
+        return prefix + '-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    }
+
+    async function restorePayload(payload, options) {
+        var opts = options || {};
+        var backups = requireBackupApi();
+        var preview = await backups.previewImport(payload, {
+            replace: true,
+            practiceMode: 'replace',
+            applyClears: true,
+            fullRestore: true
+        });
+        var confirmed = opts.confirmed === true;
+        if (!confirmed) {
+            try {
+                confirmed = global.confirm(summarizePreview(preview));
+            } catch (_) {
+                confirmed = false;
+            }
+        }
+        if (!confirmed) return { success: false, reason: 'cancelled', preview: preview };
+
+        await backups.create({
+            type: 'pre-external-restore',
+            operationId: createOperationId('pre-external-restore')
+        });
+        var result = await backups.commitImport(preview.id, {
+            operationId: opts.operationId || createOperationId('external-restore'),
+            confirmDestructive: preview.destructive === true
+        });
+        try {
+            if (typeof backups.recordImport === 'function') {
+                await backups.recordImport({
+                    source: 'external-backup',
+                    format: preview.format,
+                    keys: preview.keys,
+                    clearedKeys: preview.clearedKeys,
+                    practice: preview.practice || null
+                });
+            }
+        } catch (historyError) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] import history failed:', historyError);
+        }
+        return { success: true, preview: preview, result: result };
+    }
+
+    async function restoreFromLatest(options) {
+        var payload = await readLatestPayload(true);
+        var result = await restorePayload(payload, options);
+        if (result && result.success) {
+            state.dirty = false;
+            await persistMeta({
+                lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
+                lastWriteError: null,
+                awaitingRestore: false
+            });
+        }
+        return result;
+    }
+
+    function scheduleSilentFlush() {
+        if (state.suspended || state.meta.awaitingRestore) return;
+        if (state.silentFlushTimer) global.clearTimeout(state.silentFlushTimer);
+        state.silentFlushTimer = global.setTimeout(function () {
+            state.silentFlushTimer = null;
+            return flushSilentlyIfPermitted().catch(function (error) {
+                if (global.console && console.warn) console.warn('[ExternalBackup v2] silent flush failed:', error);
+            });
+        }, WRITE_DELAY_MS);
+    }
+
+    function markDirty() {
+        if (state.suspended) return;
+        state.dirty = true;
+        state.dirtyGeneration += 1;
+        refreshPanel();
+        scheduleSilentFlush();
+    }
+
+    async function flushSilentlyIfPermitted() {
+        await ensureReady();
+        if (state.suspended) return { success: false, reason: 'suspended' };
+        if (state.meta.awaitingRestore) return { success: false, reason: 'restore_required' };
+        if (!state.directoryHandle || !state.dirty) {
+            return { success: false, reason: 'skip' };
+        }
+        if (state.writing) {
+            scheduleSilentFlush();
+            return { success: false, reason: 'busy' };
+        }
+        if (!await ensurePermission(state.directoryHandle, false)) {
+            refreshPanel();
+            return { success: false, reason: 'permission_denied' };
+        }
+        return writeToBoundDirectory({ interactive: false, force: false });
+    }
+
+    function getStatus() {
+        return {
+            supported: supportsFileSystemAccess(),
+            bound: !!state.directoryHandle,
+            directoryName: state.meta.directoryName,
+            permission: state.permission,
+            permissionGranted: state.permission === 'granted',
+            dirty: state.dirty,
+            writing: state.writing,
+            suspended: state.suspended,
+            lastWriteAt: state.meta.lastWriteAt,
+            lastChecksum: state.meta.lastChecksum,
+            lastWriteError: state.meta.lastWriteError,
+            awaitingRestore: state.meta.awaitingRestore
+        };
+    }
+
+    function formatTime(value) {
+        if (!value) return '';
+        var parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+    }
+
+    function formatStatusText(status) {
+        if (!status.supported) return '当前环境不支持文件夹绑定，请使用「导出到下载」和「导入数据」。';
+        if (!status.bound) return '未绑定本地备份文件夹。';
+        var parts = ['已绑定：' + (status.directoryName || '文件夹')];
+        if (status.awaitingRestore) parts.push('检测到已有备份，请先恢复');
+        if (!status.permissionGranted) parts.push('需要重新授权');
+        if (status.writing) parts.push('正在写入');
+        else if (status.lastWriteAt) parts.push('上次写入 ' + formatTime(status.lastWriteAt));
+        else parts.push('尚未写入');
+        if (status.dirty) parts.push('有未备份的新数据');
+        if (status.lastWriteError) parts.push('最近错误：' + status.lastWriteError);
+        return parts.join(' · ');
+    }
+
+    function notify(message, type) {
+        if (typeof global.showMessage === 'function') {
+            global.showMessage(message, type || 'info');
+        } else if (global.console && console.log) {
+            console.log('[ExternalBackup v2] ' + message);
+        }
+    }
+
+    function makeButton(id, label) {
+        var button = global.document.createElement('button');
+        button.type = 'button';
+        button.id = id;
+        button.className = 'btn data-mgmt-btn';
+        button.textContent = label;
+        return button;
+    }
+
+    function getModal() {
+        return global.document ? global.document.getElementById(MODAL_ID) : null;
+    }
+
+    function ensureModalDom() {
+        if (!global.document || !global.document.body) return null;
+        var existing = getModal();
+        if (existing) return existing;
+
+        var modal = global.document.createElement('div');
+        modal.id = MODAL_ID;
+        modal.className = 'theme-modal external-backup-modal shui-secondary-modal shui-secondary-modal--sm';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'external-backup-title');
+
+        var content = global.document.createElement('div');
+        content.className = 'theme-modal-content external-backup-modal__content shui-secondary-modal__content';
+        var header = global.document.createElement('div');
+        header.className = 'theme-modal-header external-backup-modal__header shui-secondary-modal__header';
+        var title = global.document.createElement('h3');
+        title.id = 'external-backup-title';
+        title.textContent = '本地磁盘备份';
+        var closeButton = global.document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'theme-modal-close';
+        closeButton.setAttribute('aria-label', '关闭');
+        closeButton.innerHTML = '&times;';
+        header.appendChild(title);
+        header.appendChild(closeButton);
+
+        var body = global.document.createElement('div');
+        body.className = 'theme-modal-body external-backup-modal__body shui-secondary-modal__body';
+        var panel = global.document.createElement('div');
+        panel.id = 'external-backup-panel';
+        panel.className = 'external-backup-panel external-backup-panel--modal';
+        var description = global.document.createElement('p');
+        description.className = 'external-backup-panel__desc';
+        description.textContent = '绑定本地文件夹后，IELTS Atlas 会写入完整的 v2 数据快照。磁盘文件不会因清理浏览器站点数据而删除；后台写入不会主动请求权限。';
+        var statusCard = global.document.createElement('div');
+        statusCard.className = 'external-backup-status-card';
+        var statusLabel = global.document.createElement('div');
+        statusLabel.className = 'external-backup-status-card__label';
+        statusLabel.textContent = '当前状态';
+        var statusText = global.document.createElement('div');
+        statusText.id = 'external-backup-status';
+        statusText.className = 'external-backup-panel__status';
+        statusText.textContent = '状态加载中…';
+        statusCard.appendChild(statusLabel);
+        statusCard.appendChild(statusText);
+
+        var tips = global.document.createElement('ul');
+        tips.className = 'external-backup-panel__tips';
+        [
+            '支持 Chrome / Edge 的安全上下文；其他环境继续使用手动导出',
+            '备份文件包含练习、设置、词汇、题库配置等可迁移数据',
+            '磁盘 JSON 为明文文件，请妥善保管'
+        ].forEach(function (text) {
+            var item = global.document.createElement('li');
+            item.textContent = text;
+            tips.appendChild(item);
+        });
+
+        var actions = global.document.createElement('div');
+        actions.className = 'external-backup-panel__actions';
+        var bindButton = makeButton('external-backup-bind-btn', '📁 绑定备份文件夹');
+        var writeButton = makeButton('external-backup-write-btn', '💾 立即写入备份');
+        var restoreButton = makeButton('external-backup-restore-btn', '♻️ 从文件夹恢复');
+        var unbindButton = makeButton('external-backup-unbind-btn', '🔓 解除绑定');
+        unbindButton.classList.add('external-backup-btn--ghost');
+        actions.appendChild(bindButton);
+        actions.appendChild(writeButton);
+        actions.appendChild(restoreButton);
+        actions.appendChild(unbindButton);
+
+        panel.appendChild(description);
+        panel.appendChild(statusCard);
+        panel.appendChild(tips);
+        panel.appendChild(actions);
+        body.appendChild(panel);
+        content.appendChild(header);
+        content.appendChild(body);
+        modal.appendChild(content);
+        global.document.body.appendChild(modal);
+
+        closeButton.addEventListener('click', closeModal);
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) closeModal();
+        });
+        bindButton.addEventListener('click', async function () {
+            try {
+                var bound = await bindDirectory({ writeNow: true });
+                if (bound.existingBackupFound) {
+                    notify('已绑定并检测到现有备份；为防止覆盖，请先从文件夹恢复', 'warning');
+                } else if (bound.writeResult && !bound.writeResult.success) {
+                    notify('文件夹已绑定，但首次写入失败', 'warning');
+                } else {
+                    notify('已绑定并写入：' + bound.directoryName, 'success');
                 }
+            } catch (error) {
+                notify(error && error.name === 'AbortError' ? '已取消选择文件夹' : (error.message || '绑定失败'), error && error.name === 'AbortError' ? 'info' : 'error');
             }
-            return current;
-        }
-
-        validate(value) {
-            const errors = [];
-            for (const validator of this.validators) {
-                if (typeof validator !== 'function') {
-                    continue;
+            refreshPanel();
+        });
+        writeButton.addEventListener('click', async function () {
+            var result = await writeToBoundDirectory({ interactive: true, force: true });
+            if (result.success) notify(result.skipped ? '备份内容无变化' : '已写入 ' + result.filename, 'success');
+            else if (result.reason === 'unbound') notify('请先绑定备份文件夹', 'warning');
+            else if (result.reason === 'restore_required') notify('检测到现有备份，请先从文件夹恢复，避免覆盖', 'warning');
+            else if (result.reason === 'permission_denied') notify('需要允许文件夹访问权限', 'warning');
+            else notify('写入失败：' + (result.error && result.error.message || result.reason), 'error');
+        });
+        restoreButton.addEventListener('click', async function () {
+            try {
+                var restored = await restoreFromLatest();
+                if (restored.success) {
+                    notify('已从本地磁盘备份恢复', 'success');
+                    if (typeof global.syncPracticeRecords === 'function') {
+                        Promise.resolve(global.syncPracticeRecords({ forceRender: true })).catch(function () {});
+                    }
+                } else if (restored.reason === 'cancelled') {
+                    notify('已取消恢复', 'info');
                 }
+            } catch (error) {
+                notify(error && error.message ? error.message : '恢复失败', 'error');
+            }
+        });
+        unbindButton.addEventListener('click', async function () {
+            var confirmed = true;
+            try {
+                confirmed = global.confirm('解除绑定后将停止自动写入；磁盘上的 JSON 文件不会删除。确定？');
+            } catch (_) { /* ignore */ }
+            if (!confirmed) return;
+            try {
+                await unbindDirectory();
+                notify('已解除本地备份文件夹绑定', 'info');
+            } catch (error) {
+                notify(error && error.message ? error.message : '解除绑定失败', 'error');
+            }
+        });
+        return modal;
+    }
+
+    function refreshPanel() {
+        if (!global.document) return;
+        var status = getStatus();
+        var statusElement = global.document.getElementById('external-backup-status');
+        if (statusElement) {
+            statusElement.textContent = formatStatusText(status);
+            statusElement.dataset.state = !status.supported ? 'unsupported'
+                : !status.bound ? 'unbound'
+                    : !status.permissionGranted ? 'need-auth'
+                        : status.dirty ? 'stale' : 'ok';
+        }
+        var entry = global.document.getElementById(ENTRY_ID);
+        if (entry) {
+            entry.textContent = !status.bound ? '📁 本地磁盘备份'
+                : !status.permissionGranted ? '📁 本地备份 · 需授权'
+                    : status.dirty ? '📁 本地备份 · 待更新' : '📁 本地备份 · 已就绪';
+            entry.dataset.state = statusElement && statusElement.dataset.state || 'unbound';
+        }
+        var bindButton = global.document.getElementById('external-backup-bind-btn');
+        var writeButton = global.document.getElementById('external-backup-write-btn');
+        var restoreButton = global.document.getElementById('external-backup-restore-btn');
+        var unbindButton = global.document.getElementById('external-backup-unbind-btn');
+        if (bindButton) bindButton.disabled = !status.supported || status.writing;
+        if (writeButton) writeButton.disabled = !status.bound || status.writing;
+        if (restoreButton) restoreButton.disabled = !status.bound || status.writing;
+        if (unbindButton) unbindButton.disabled = !status.bound || status.writing;
+    }
+
+    function openModal() {
+        var modal = ensureModalDom();
+        if (modal) modal.classList.add('show');
+        ensureReady().then(async function () {
+            if (state.directoryHandle) state.permission = await queryPermission(state.directoryHandle, 'readwrite');
+            refreshPanel();
+        }).catch(function (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] initialization failed:', error);
+            refreshPanel();
+        });
+    }
+
+    function closeModal() {
+        var modal = getModal();
+        if (modal) modal.classList.remove('show');
+    }
+
+    async function ensureReady() {
+        if (state.ready) return true;
+        if (state.readyPromise) return state.readyPromise;
+        state.readyPromise = (async function () {
+            if (global.AppData && global.AppData.ready) await global.AppData.ready;
+            if (state.suspended) {
+                state.ready = true;
+                return false;
+            }
+            if (supportsFileSystemAccess()) {
                 try {
-                    const result = validator(value);
-                    if (result === false) {
-                        errors.push(`${this.name} 数据验证失败`);
-                    } else if (typeof result === 'string') {
-                        errors.push(result);
-                    } else if (result && typeof result === 'object') {
-                        if (result.valid === false || result.isValid === false) {
-                            errors.push(result.message || result.error || `${this.name} 数据验证失败`);
+                    var stored = await Promise.all([
+                        readStoredValue(HANDLE_KEY),
+                        readStoredValue(META_KEY)
+                    ]);
+                    state.directoryHandle = stored[0] || null;
+                    state.meta = cloneMeta(stored[1]);
+                    if (state.directoryHandle) {
+                        state.permission = await queryPermission(state.directoryHandle, 'readwrite');
+                        if (!state.meta.directoryName) {
+                            state.meta.directoryName = state.directoryHandle.name || 'backup';
                         }
                     }
                 } catch (error) {
-                    errors.push(error.message || String(error));
+                    if (global.console && console.warn) console.warn('[ExternalBackup v2] binding load failed:', error);
                 }
             }
-            if (errors.length > 0) {
-                const err = new Error(`[${this.name}] 数据验证失败: ${errors.join('; ')}`);
-                err.validationErrors = errors;
-                throw err;
+            var backups = global.AppData && global.AppData.backups;
+            if (backups && typeof backups.onDataCommitted === 'function' && !state.unsubscribeCommitted) {
+                state.unsubscribeCommitted = backups.onDataCommitted(markDirty);
             }
+            if (state.directoryHandle && backups && typeof backups.export === 'function') {
+                try {
+                    var currentSnapshot = await backups.export();
+                    if (!currentSnapshot || currentSnapshot.checksum !== state.meta.lastChecksum) {
+                        state.dirty = true;
+                        state.dirtyGeneration += 1;
+                    }
+                } catch (error) {
+                    if (global.console && console.warn) console.warn('[ExternalBackup v2] freshness check failed:', error);
+                }
+            }
+            state.ready = true;
+            if (state.dirty && state.permission === 'granted') scheduleSilentFlush();
+            refreshPanel();
             return true;
-        }
+        })();
+        return state.readyPromise;
+    }
 
-        async runConsistencyCheck(options = {}) {
+    async function init() {
+        await ensureReady();
+        if (state.suspended) return false;
+        ensureModalDom();
+        refreshPanel();
+        if (global.document && !state.initialized) {
+            state.visibilityHandler = function () {
+                if (state.suspended) return;
+                if (global.document.visibilityState === 'hidden') {
+                    flushSilentlyIfPermitted().catch(function () {});
+                } else if (state.directoryHandle) {
+                    queryPermission(state.directoryHandle, 'readwrite').then(function (permission) {
+                        state.permission = permission;
+                        if (permission === 'granted' && state.dirty) scheduleSilentFlush();
+                        refreshPanel();
+                    });
+                }
+            };
+            global.document.addEventListener('visibilitychange', state.visibilityHandler);
+        }
+        state.initialized = true;
+        return true;
+    }
+
+    global.ExternalBackupService = Object.freeze({
+        __v2: true,
+        LATEST_FILENAME: LATEST_FILENAME,
+        supportsFileSystemAccess: supportsFileSystemAccess,
+        ensureReady: ensureReady,
+        init: init,
+        openModal: openModal,
+        closeModal: closeModal,
+        bindDirectory: bindDirectory,
+        unbindDirectory: unbindDirectory,
+        prepareForFullReset: prepareForFullReset,
+        writeNow: function (options) {
+            return writeToBoundDirectory(Object.assign({ interactive: true, force: true }, options || {}));
+        },
+        restoreFromLatest: restoreFromLatest,
+        restorePayload: restorePayload,
+        getStatus: getStatus,
+        markDirty: markDirty,
+        flushSilentlyIfPermitted: flushSilentlyIfPermitted,
+        refreshPanel: refreshPanel,
+        requestPersistentStorage: requestPersistentStorage
+    });
+
+    function boot() {
+        init().catch(function (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] boot failed:', error);
+        });
+    }
+
+    if (global.document && global.document.readyState === 'loading') {
+        global.document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/core/siteDataReset.js ===== */
+/** Clear all browser-local IELTS Atlas data while preserving external JSON files. */
+(function initSiteDataReset(global) {
+    'use strict';
+
+    if (global.SiteDataReset && global.SiteDataReset.__v2 === true) {
+        global.clearCache = global.SiteDataReset.request;
+        return;
+    }
+
+    const DATABASE_NAMES = Object.freeze([
+        'IELTSAtlasDataV2',
+        'ExamSystemDB',
+        'IELTSAtlasExternalBackupV2'
+    ]);
+    let resetPromise = null;
+
+    function notify(message, type = 'info') {
+        if (typeof global.showMessage === 'function') global.showMessage(message, type);
+        else if (global.console && typeof global.console.log === 'function') {
+            global.console.log(`[SiteDataReset] ${message}`);
+        }
+    }
+
+    function deleteDatabase(name) {
+        return new Promise((resolve, reject) => {
+            const indexedDB = global.indexedDB;
+            if (!indexedDB || typeof indexedDB.deleteDatabase !== 'function') {
+                resolve({ name, skipped: true });
+                return;
+            }
+
+            let request;
+            try { request = indexedDB.deleteDatabase(name); }
+            catch (error) { reject(error); return; }
+
+            request.onsuccess = () => resolve({ name, deleted: true });
+            request.onerror = () => reject(request.error || new Error(`删除数据库失败：${name}`));
+            request.onblocked = () => notify(
+                `数据库 ${name} 正被其他 IELTS Atlas 标签页占用。请关闭其他标签页，清理会自动继续。`,
+                'warning'
+            );
+        });
+    }
+
+    async function stopExternalBackup() {
+        const service = global.ExternalBackupService;
+        if (!service) return;
+        if (typeof service.prepareForFullReset === 'function') {
+            await service.prepareForFullReset();
+        } else if (typeof service.unbindDirectory === 'function') {
+            await service.unbindDirectory();
+        }
+    }
+
+    function clearWebStorage() {
+        const errors = [];
+        for (const name of ['localStorage', 'sessionStorage']) {
             try {
-                const data = await this.read({ ...options, skipValidation: false });
-                return { valid: true, data, errors: [] };
+                const storage = global[name];
+                if (storage && typeof storage.clear === 'function') storage.clear();
             } catch (error) {
-                const errors = error.validationErrors || [error.message || String(error)];
-                return { valid: false, errors };
+                errors.push({ stage: 'clear-web-storage', storage: name, error });
             }
         }
-
-        registerMigration(fn) {
-            if (typeof fn === 'function') {
-                this.migrations.push(fn);
-            }
-        }
-
-        registerValidator(fn) {
-            if (typeof fn === 'function') {
-                this.validators.push(fn);
-            }
-        }
+        return errors;
     }
 
-    ExamData.cloneValue = cloneValue;
-    ExamData.BaseRepository = BaseRepository;
-})(window);
-
-
-/* ===== js/data/repositories/dataRepositoryRegistry.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-
-    class DataRepositoryRegistry {
-        constructor(dataSource) {
-            if (!dataSource) {
-                throw new Error('DataRepositoryRegistry requires a dataSource instance');
-            }
-            this.dataSource = dataSource;
-            this._repositories = new Map();
-        }
-
-        register(name, repository) {
-            if (!name) {
-                throw new Error('Repository name is required');
-            }
-            if (!repository) {
-                throw new Error(`Repository instance missing for ${name}`);
-            }
-            this._repositories.set(name, repository);
-        }
-
-        get(name) {
-            return this._repositories.get(name);
-        }
-
-        listNames() {
-            return Array.from(this._repositories.keys());
-        }
-
-        async transaction(names, handler) {
-            if (typeof handler !== 'function') {
-                throw new Error('transaction handler must be a function');
-            }
-            const targetNames = Array.isArray(names) && names.length > 0 ? names : this.listNames();
-            return this.dataSource.runTransaction(async (tx) => {
-                const scope = {};
-                for (const name of targetNames) {
-                    if (this._repositories.has(name)) {
-                        scope[name] = this._repositories.get(name);
-                    }
-                }
-                return handler(scope, tx);
-            }, { label: `registry:${targetNames.join(',')}` });
-        }
-
-        async runConsistencyChecks(names) {
-            const targetNames = Array.isArray(names) && names.length > 0 ? names : this.listNames();
-            const report = {};
-            for (const name of targetNames) {
-                const repo = this._repositories.get(name);
-                if (repo && typeof repo.runConsistencyCheck === 'function') {
-                    try {
-                        report[name] = await repo.runConsistencyCheck();
-                    } catch (error) {
-                        report[name] = {
-                            valid: false,
-                            errors: [error.message || String(error)]
-                        };
-                    }
-                }
-            }
-            return report;
-        }
+    function reload(options) {
+        if (options.reload === false) return false;
+        if (!global.location || typeof global.location.reload !== 'function') return false;
+        global.location.reload();
+        return true;
     }
 
-    ExamData.DataRepositoryRegistry = DataRepositoryRegistry;
-})(window);
-
-
-/* ===== js/data/repositories/practiceRepository.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-    const BaseRepository = ExamData.BaseRepository;
-
-    function ensureArray(value) {
-        return Array.isArray(value) ? value : [];
-    }
-
-    class PracticeRepository extends BaseRepository {
-        constructor(dataSource, options = {}) {
-            super({
-                dataSource,
-                key: options.key || 'practice_records',
-                name: options.name || 'practice_records',
-                defaultValue: () => [],
-                migrations: [
-                    (value) => ensureArray(value),
-                    ...(options.migrations || [])
-                ],
-                validators: [
-                    (value) => Array.isArray(value) || 'practice_records 必须为数组',
-                    ...(options.validators || [])
-                ],
-                cloneOnRead: options.cloneOnRead !== false
-            });
-            this.maxRecords = options.maxRecords || 1000;
-        }
-
-        normalizeRecord(record) {
-            if (!record || typeof record !== 'object') {
-                throw new Error('practice record 必须是对象');
-            }
-            const normalized = { ...record };
-            if (!normalized.id) {
-                normalized.id = `record_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            } else {
-                normalized.id = String(normalized.id);
-            }
-            return normalized;
-        }
-
-        validatePracticeRecord(record) {
-            const errors = [];
-            if (!record || typeof record !== 'object') {
-                errors.push('记录必须是对象');
-            } else {
-                if (!record.id || typeof record.id !== 'string') {
-                    errors.push('记录缺少有效的 id');
-                }
-                if (!record.type || typeof record.type !== 'string') {
-                    errors.push('记录缺少有效的 type');
-                }
-                if (record.score === undefined || record.score === null || typeof record.score !== 'number') {
-                    errors.push('记录缺少有效的 score');
-                }
-                if (record.score !== undefined && typeof record.score !== 'number') {
-                    errors.push('score 必须是数字');
-                }
-                if (record.totalQuestions !== undefined && typeof record.totalQuestions !== 'number') {
-                    errors.push('totalQuestions 必须是数字');
-                }
-                if (record.correctAnswers !== undefined && typeof record.correctAnswers !== 'number') {
-                    errors.push('correctAnswers 必须是数字');
-                }
-                if (record.duration !== undefined && typeof record.duration !== 'number') {
-                    errors.push('duration 必须是数字');
-                }
-                if (!record.date) {
-                    errors.push('记录缺少有效的 date');
-                } else if (Number.isNaN(new Date(record.date).getTime())) {
-                    errors.push('date 格式无效');
-                }
-            }
-            return {
-                isValid: errors.length === 0,
-                errors
-            };
-        }
-
-        _assertRecord(record) {
-            const validation = this.validatePracticeRecord(record);
-            if (!validation.isValid) {
-                const error = new Error(`[practice_records] 记录无效: ${validation.errors.join(', ')}`);
-                error.validationErrors = validation.errors;
-                throw error;
-            }
-            return true;
-        }
-
-        async list(options = {}) {
-            return await this.read({ ...options, clone: options.clone !== false });
-        }
-
-        async getById(id, options = {}) {
-            const records = await this.read({ ...options, clone: true });
-            return records.find(r => r.id === id) || null;
-        }
-
-        async overwrite(records, options = {}) {
-            const list = ensureArray(records).map((record) => {
-                const normalized = this.normalizeRecord(record);
-                this._assertRecord(normalized);
-                return normalized;
-            });
-            await this.write(list, { ...options, skipValidation: true });
-            return true;
-        }
-
-        async upsert(record, options = {}) {
-            const normalized = this.normalizeRecord(record);
-            this._assertRecord(normalized);
-            const merge = options.merge === true;
-            return this.dataSource.runTransaction(async (tx) => {
-                let records = await this.read({ transaction: tx, skipValidation: true, clone: true });
-                records = ensureArray(records);
-                const index = records.findIndex(r => r.id === normalized.id);
-                if (index >= 0) {
-                    records[index] = merge ? { ...records[index], ...normalized } : normalized;
-                } else {
-                    records.unshift(normalized);
-                }
-                if (this.maxRecords && records.length > this.maxRecords) {
-                    records = records.slice(0, this.maxRecords);
-                }
-                await this.write(records, { transaction: tx, skipValidation: true, clone: false });
-                return normalized;
-            }, { label: 'practice-upsert' });
-        }
-
-        async removeById(id, options = {}) {
-            if (!id) return 0;
-            const removed = await this.removeByIds([id], options);
-            return removed;
-        }
-
-        async removeByIds(ids, options = {}) {
-            const idSet = new Set((ids || []).filter(Boolean).map(String));
-            if (idSet.size === 0) {
-                return 0;
-            }
-            return this.dataSource.runTransaction(async (tx) => {
-                let records = await this.read({ transaction: tx, skipValidation: true, clone: true });
-                records = ensureArray(records);
-                const next = records.filter(record => !idSet.has(record.id));
-                const removed = records.length - next.length;
-                if (removed > 0) {
-                    await this.write(next, { transaction: tx, skipValidation: true, clone: false });
-                }
-                return removed;
-            }, { label: 'practice-remove' });
-        }
-
-        async update(id, updates = {}, options = {}) {
-            if (!id) {
-                throw new Error('update 需要记录 id');
-            }
-            if (!updates || typeof updates !== 'object') {
-                throw new Error('updates 必须是对象');
-            }
-            return this.dataSource.runTransaction(async (tx) => {
-                let records = await this.read({ transaction: tx, skipValidation: true, clone: true });
-                records = ensureArray(records);
-                const index = records.findIndex(record => record.id === String(id));
-                if (index === -1) {
-                    return null;
-                }
-                const updated = { ...records[index], ...updates };
-                this._assertRecord(updated);
-                records[index] = updated;
-                await this.write(records, { transaction: tx, skipValidation: true, clone: false });
-                return updated;
-            }, { label: 'practice-update' });
-        }
-
-        async count(options = {}) {
-            const records = await this.read({ ...options, clone: false, skipValidation: false });
-            return Array.isArray(records) ? records.length : 0;
-        }
-
-        async clear(options = {}) {
-            await this.write([], { ...options, skipValidation: true });
-            return true;
-        }
-
-        async runConsistencyCheck(options = {}) {
-            const report = await super.runConsistencyCheck(options);
-            if (!report.valid) {
-                return report;
-            }
-            const errors = [];
-            const records = ensureArray(report.data);
-            for (const record of records) {
-                const validation = this.validatePracticeRecord(record);
-                if (!validation.isValid) {
-                    errors.push(`记录 ${record && record.id ? record.id : 'unknown'}: ${validation.errors.join(', ')}`);
-                }
-            }
-            if (errors.length > 0) {
-                return { valid: false, errors };
-            }
-            return { valid: true, data: records, errors: [] };
-        }
-    }
-
-    ExamData.PracticeRepository = PracticeRepository;
-})(window);
-
-
-/* ===== js/data/repositories/settingsRepository.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-    const BaseRepository = ExamData.BaseRepository;
-
-    function ensureObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-    }
-
-    class SettingsRepository extends BaseRepository {
-        constructor(dataSource, options = {}) {
-            super({
-                dataSource,
-                key: options.key || 'user_settings',
-                name: options.name || 'user_settings',
-                defaultValue: () => ({}),
-                migrations: [
-                    (value) => ensureObject(value),
-                    ...(options.migrations || [])
-                ],
-                validators: [
-                    (value) => (value && typeof value === 'object' && !Array.isArray(value)) || 'user_settings 必须是对象',
-                    ...(options.validators || [])
-                ],
-                cloneOnRead: options.cloneOnRead !== false
-            });
-        }
-
-        async getAll(options = {}) {
-            return await this.read({ ...options, clone: options.clone !== false });
-        }
-
-        async saveAll(settings, options = {}) {
-            const prepared = ensureObject(settings);
-            await this.write(prepared, { ...options, skipValidation: false });
-            return true;
-        }
-
-        async get(key, defaultValue = null, options = {}) {
-            const settings = await this.read({ ...options, clone: true });
-            if (Object.prototype.hasOwnProperty.call(settings, key)) {
-                return settings[key];
-            }
-            return typeof defaultValue === 'function' ? defaultValue() : defaultValue;
-        }
-
-        async set(key, value, options = {}) {
-            return this.merge({ [key]: value }, options);
-        }
-
-        async merge(patch, options = {}) {
-            if (!patch || typeof patch !== 'object') {
-                throw new Error('merge 需要对象参数');
-            }
-            return this.dataSource.runTransaction(async (tx) => {
-                const current = ensureObject(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                const next = { ...current, ...patch };
-                await this.write(next, { transaction: tx, skipValidation: false, clone: false });
-                return next;
-            }, { label: 'settings-merge' });
-        }
-
-        async removeKey(key, options = {}) {
-            return this.dataSource.runTransaction(async (tx) => {
-                const current = ensureObject(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                if (!Object.prototype.hasOwnProperty.call(current, key)) {
-                    return current;
-                }
-                delete current[key];
-                await this.write(current, { transaction: tx, skipValidation: false, clone: false });
-                return current;
-            }, { label: 'settings-remove-key' });
-        }
-
-        async clear(options = {}) {
-            await this.write({}, { ...options, skipValidation: true });
-            return true;
-        }
-    }
-
-    ExamData.SettingsRepository = SettingsRepository;
-})(window);
-
-
-/* ===== js/data/repositories/backupRepository.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-    const BaseRepository = ExamData.BaseRepository;
-
-    function ensureArray(value) {
-        return Array.isArray(value) ? value : [];
-    }
-
-    class BackupRepository extends BaseRepository {
-        constructor(dataSource, options = {}) {
-            super({
-                dataSource,
-                key: options.key || 'manual_backups',
-                name: options.name || 'manual_backups',
-                defaultValue: () => [],
-                migrations: [
-                    (value) => ensureArray(value),
-                    ...(options.migrations || [])
-                ],
-                validators: [
-                    (value) => Array.isArray(value) || 'manual_backups 必须是数组',
-                    ...(options.validators || [])
-                ],
-                cloneOnRead: options.cloneOnRead !== false
-            });
-            this.maxBackups = options.maxBackups || 20;
-        }
-
-        normalizeBackup(backup) {
-            if (!backup || typeof backup !== 'object') {
-                throw new Error('备份数据必须是对象');
-            }
-            const normalized = { ...backup };
-            normalized.id = normalized.id ? String(normalized.id) : `backup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            normalized.timestamp = normalized.timestamp || new Date().toISOString();
-            normalized.type = normalized.type || 'manual';
-            normalized.version = normalized.version || '0.6.2-fix';
-            normalized.data = normalized.data || {};
-            normalized.size = normalized.size || JSON.stringify(normalized.data).length;
-            return normalized;
-        }
-
-        validateBackup(backup) {
-            const errors = [];
-            if (!backup || typeof backup !== 'object') {
-                errors.push('备份必须是对象');
-            } else {
-                if (!backup.id) {
-                    errors.push('备份缺少 id');
-                }
-                if (!backup.timestamp) {
-                    errors.push('备份缺少 timestamp');
-                }
-                if (!backup.data || typeof backup.data !== 'object') {
-                    errors.push('备份缺少 data 对象');
-                }
-            }
-            return {
-                isValid: errors.length === 0,
-                errors
-            };
-        }
-
-        _assertBackup(backup) {
-            const validation = this.validateBackup(backup);
-            if (!validation.isValid) {
-                const error = new Error(`[manual_backups] 备份无效: ${validation.errors.join(', ')}`);
-                error.validationErrors = validation.errors;
-                throw error;
-            }
-            return true;
-        }
-
-        async list(options = {}) {
-            return await this.read({ ...options, clone: options.clone !== false });
-        }
-
-        async add(backup, options = {}) {
-            const normalized = this.normalizeBackup(backup);
-            this._assertBackup(normalized);
-            return this.dataSource.runTransaction(async (tx) => {
-                let backups = ensureArray(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                backups.unshift(normalized);
-                if (this.maxBackups && backups.length > this.maxBackups) {
-                    backups = backups.slice(0, this.maxBackups);
-                }
-                await this.write(backups, { transaction: tx, skipValidation: true, clone: false });
-                return normalized;
-            }, { label: 'backup-add' });
-        }
-
-        async saveAll(backups, options = {}) {
-            const prepared = ensureArray(backups).map((item) => {
-                const normalized = this.normalizeBackup(item);
-                this._assertBackup(normalized);
-                return normalized;
-            });
-            await this.write(prepared, { ...options, skipValidation: true });
-            return true;
-        }
-
-        async delete(id, options = {}) {
-            if (!id) return false;
-            const targetId = String(id);
-            return this.dataSource.runTransaction(async (tx) => {
-                let backups = ensureArray(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                const next = backups.filter(backup => backup.id !== targetId);
-                const deleted = next.length !== backups.length;
-                if (deleted) {
-                    await this.write(next, { transaction: tx, skipValidation: true, clone: false });
-                }
-                return deleted;
-            }, { label: 'backup-delete' });
-        }
-
-        async getById(id, options = {}) {
-            if (!id) return null;
-            const backups = await this.read({ ...options, clone: true });
-            return backups.find(backup => backup.id === String(id)) || null;
-        }
-
-        async clear(options = {}) {
-            await this.write([], { ...options, skipValidation: true });
-            return true;
-        }
-
-        async prune(limit, options = {}) {
-            const max = typeof limit === 'number' && limit > 0 ? limit : this.maxBackups;
-            return this.dataSource.runTransaction(async (tx) => {
-                let backups = ensureArray(await this.read({ transaction: tx, skipValidation: true, clone: true }));
-                if (backups.length <= max) {
-                    return backups.length;
-                }
-                const next = backups.slice(0, max);
-                await this.write(next, { transaction: tx, skipValidation: true, clone: false });
-                return next.length;
-            }, { label: 'backup-prune' });
-        }
-    }
-
-    ExamData.BackupRepository = BackupRepository;
-})(window);
-
-
-/* ===== js/data/repositories/metaRepository.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-    const BaseRepository = ExamData.BaseRepository;
-
-    class MetaRepository {
-        constructor(dataSource, definitions = {}) {
-            if (!dataSource) {
-                throw new Error('MetaRepository requires a dataSource instance');
-            }
-            this.dataSource = dataSource;
-            this.repositories = new Map();
-            Object.entries(definitions).forEach(([key, config]) => {
-                this.registerKey(key, config);
-            });
-        }
-
-        registerKey(key, config = {}) {
-            const repository = new BaseRepository({
-                dataSource: this.dataSource,
-                key,
-                name: config.name || `meta:${key}`,
-                defaultValue: config.defaultValue !== undefined ? config.defaultValue : null,
-                migrations: config.migrations || [],
-                validators: config.validators || [],
-                cloneOnRead: config.cloneOnRead !== false
-            });
-            this.repositories.set(key, repository);
-            return repository;
-        }
-
-        _getRepo(key) {
-            const repo = this.repositories.get(key);
-            if (!repo) {
-                throw new Error(`MetaRepository 未注册键: ${key}`);
-            }
-            return repo;
-        }
-
-        async get(key, defaultValue, options = {}) {
-            const repo = this._getRepo(key);
-            const resolvedDefault = defaultValue !== undefined ? defaultValue : undefined;
-            return repo.read({ ...options, defaultValue: resolvedDefault, clone: options.clone !== false });
-        }
-
-        async set(key, value, options = {}) {
-            const repo = this._getRepo(key);
-            await repo.write(value, { ...options, skipValidation: false, clone: options.clone !== false });
-            return true;
-        }
-
-        async remove(key, options = {}) {
-            const repo = this._getRepo(key);
-            await repo.remove(options);
-            return true;
-        }
-
-        async runConsistencyCheck(keys) {
-            const targetKeys = Array.isArray(keys) && keys.length ? keys : Array.from(this.repositories.keys());
-            const report = {};
-            for (const key of targetKeys) {
-                const repo = this.repositories.get(key);
-                if (!repo) continue;
-                report[key] = await repo.runConsistencyCheck();
-            }
-            return report;
-        }
-    }
-
-    ExamData.MetaRepository = MetaRepository;
-})(window);
-
-
-/* ===== js/data/index.js ===== */
-(function(window) {
-    const ExamData = window.ExamData = window.ExamData || {};
-
-    function createDefaultUserStats() {
-        const now = new Date().toISOString();
-        return {
-            totalPractices: 0,
-            totalTimeSpent: 0,
-            averageScore: 0,
-            categoryStats: {},
-            questionTypeStats: {},
-            streakDays: 0,
-            lastPracticeDate: null,
-            achievements: [],
-            createdAt: now,
-            updatedAt: now
-        };
-    }
-
-    function createDefaultVocabConfig() {
-        return {
-            dailyNew: 20,
-            reviewLimit: 100,
-            masteryCount: 4,
-            theme: 'auto',
-            notify: true
-        };
-    }
-
-    function createMetaFacade(metaRepo) {
-        function assertAllowedKey(key) {
-            if (key === 'user_stats') {
-                throw new Error('user_stats must go through PracticeRecordAPI');
-            }
-        }
-
-        return Object.freeze({
-            async get(key, defaultValue, options = {}) {
-                assertAllowedKey(key);
-                return await metaRepo.get(key, defaultValue, options);
-            },
-            async set(key, value, options = {}) {
-                assertAllowedKey(key);
-                return await metaRepo.set(key, value, options);
-            },
-            async remove(key, options = {}) {
-                assertAllowedKey(key);
-                return await metaRepo.remove(key, options);
-            },
-            async runConsistencyCheck(keys) {
-                const targetKeys = Array.isArray(keys)
-                    ? keys.filter((key) => key !== 'user_stats')
-                    : undefined;
-                return await metaRepo.runConsistencyCheck(targetKeys);
-            }
-        });
-    }
-
-    function bootstrap() {
-        if (!window.persistentStore) {
-            console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
-            setTimeout(bootstrap, 100);
-            return;
-        }
-
-        if (window.dataRepositories) {
-            return;
-        }
-
-        if (!window.PracticeCore || typeof window.PracticeCore.__installInternalRepositories !== 'function') {
-            console.warn('[data/index] PracticeCore internal installer 未就绪，延迟初始化数据仓库');
-            setTimeout(bootstrap, 100);
-            return;
-        }
-
-        let createInternalOptions = null;
-        if (typeof window.__installStorageInternalAccess === 'function') {
-            window.__installStorageInternalAccess((factory) => {
-                createInternalOptions = typeof factory === 'function' ? factory : null;
-                return Boolean(createInternalOptions);
-            });
-        }
-        if (!createInternalOptions) {
-            console.warn('[data/index] Storage internal access 未就绪，延迟初始化数据仓库');
-            setTimeout(bootstrap, 100);
-            return;
-        }
-
-        const dataSource = new ExamData.StorageDataSource(window.persistentStore, {
-            createInternalOptions
-        });
-        const registry = new ExamData.DataRepositoryRegistry(dataSource);
-
-        const practiceRepo = new ExamData.PracticeRepository(dataSource, { maxRecords: 1000 });
-        const settingsRepo = new ExamData.SettingsRepository(dataSource);
-        const backupRepo = new ExamData.BackupRepository(dataSource, { maxBackups: 20 });
-        const metaRepo = new ExamData.MetaRepository(dataSource, {
-            user_stats: {
-                defaultValue: createDefaultUserStats,
-                validators: [
-                    (value) => (value && typeof value === 'object' && !Array.isArray(value)) || 'user_stats 必须为对象'
-                ]
-            },
-            storage_version: {
-                defaultValue: () => null,
-                validators: [
-                    (value) => value === null || typeof value === 'string' || 'storage_version 必须是字符串或 null'
-                ],
-                cloneOnRead: false
-            },
-            data_restored: {
-                defaultValue: () => false,
-                validators: [
-                    (value) => typeof value === 'boolean' || 'data_restored 必须是布尔值'
-                ],
-                cloneOnRead: false
-            },
-            active_sessions: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => Array.isArray(value) || 'active_sessions 必须为数组'
-                ]
-            },
-            temp_practice_records: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => Array.isArray(value) || 'temp_practice_records 必须为数组'
-                ]
-            },
-            interrupted_records: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => Array.isArray(value) || 'interrupted_records 必须为数组'
-                ]
-            },
-            exam_index: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => Array.isArray(value) || 'exam_index 必须为数组'
-                ]
-            },
-            vocab_words: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => Array.isArray(value) || 'vocab_words 必须为数组'
-                ]
-            },
-            vocab_user_config: {
-                defaultValue: createDefaultVocabConfig,
-                validators: [
-                    (value) => (value && typeof value === 'object' && !Array.isArray(value)) || 'vocab_user_config 必须为对象'
-                ]
-            },
-            vocab_review_queue: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => Array.isArray(value) || 'vocab_review_queue 必须为数组'
-                ]
-            },
-            vocab_list_reading_highlights: {
-                defaultValue: () => [],
-                validators: [
-                    (value) => (
-                        Array.isArray(value)
-                        || (value && typeof value === 'object' && Array.isArray(value.words))
-                    ) || 'vocab_list_reading_highlights 必须为数组或词表对象'
-                ]
-            },
-            legacy_practice_records_migrated: {
-                defaultValue: () => false,
-                validators: [
-                    (value) => typeof value === 'boolean' || 'legacy_practice_records_migrated 必须为布尔值'
-                ],
-                cloneOnRead: false
-            }
-        });
-
-        registry.register('practice', practiceRepo);
-        registry.register('settings', settingsRepo);
-        registry.register('backups', backupRepo);
-        registry.register('meta', metaRepo);
-
-        const internalApi = {
-            get practice() { return practiceRepo; },
-            get settings() { return settingsRepo; },
-            get backups() { return backupRepo; },
-            get meta() { return metaRepo; },
-            transaction(names, handler) {
-                return registry.transaction(names, handler);
-            },
-            runConsistencyChecks(names) {
-                return registry.runConsistencyChecks(names);
-            }
-        };
-        window.PracticeCore.__installInternalRepositories(internalApi, { createInternalOptions });
-        if (window.__installStorageInternalAccess) {
+    async function perform(options = {}) {
+        if (resetPromise) return resetPromise;
+        resetPromise = (async () => {
             try {
-                delete window.__installStorageInternalAccess;
-            } catch (_) {
-                window.__installStorageInternalAccess = undefined;
+                await stopExternalBackup();
+            } catch (error) {
+                notify('外部备份仍在写入，本次清理已取消。', 'error');
+                return {
+                    success: false,
+                    reason: 'external_backup_busy',
+                    terminal: false,
+                    error,
+                    databases: DATABASE_NAMES.slice(),
+                    externalBackupFilesPreserved: true
+                };
             }
-        }
-        const metaFacade = createMetaFacade(metaRepo);
-        const api = {
-            get settings() { return settingsRepo; },
-            get backups() { return backupRepo; },
-            get meta() { return metaFacade; },
-            transaction(names, handler) {
-                const targetNames = Array.isArray(names) ? names : [];
-                if (targetNames.includes('practice')) {
-                    throw new Error('practice_records transactions must go through PracticeRecordAPI');
-                }
-                return registry.transaction(names, handler);
-            },
-            runConsistencyChecks(names) {
-                const targetNames = Array.isArray(names)
-                    ? names.filter((name) => name !== 'practice')
-                    : undefined;
-                return registry.runConsistencyChecks(targetNames);
-            }
-        };
-        const registryApi = window.StorageProviderRegistry;
-        if (registryApi && typeof registryApi.registerStorageProviders === 'function') {
-            registryApi.registerStorageProviders({
-                repositories: api,
-                storageManager: window.storage || null,
-                persistentStore: window.persistentStore || null,
-                preferenceStore: window.preferenceStore || null
-            });
-        } else {
-            window.dataRepositories = api;
-        }
 
-        ExamData.registry = registry;
-        ExamData.createDefaultUserStats = createDefaultUserStats;
-        ExamData.createDefaultVocabConfig = createDefaultVocabConfig;
-        console.log('[data/index] 数据仓库初始化完成');
+            const results = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));
+            const errors = results.flatMap((result, index) => result.status === 'rejected'
+                ? [{ stage: 'delete-database', database: DATABASE_NAMES[index], error: result.reason }]
+                : []);
+            errors.push(...clearWebStorage());
+            if (errors.length) {
+                notify('本地数据仅部分清除，请关闭其他标签页后重试。', 'error');
+                return {
+                    success: false,
+                    reason: 'partial_reset',
+                    terminal: false,
+                    errors,
+                    databases: DATABASE_NAMES.slice(),
+                    externalBackupFilesPreserved: true
+                };
+            }
+
+            return {
+                success: true,
+                terminal: reload(options),
+                databases: DATABASE_NAMES.slice(),
+                externalBackupFilesPreserved: true
+            };
+        })();
+
+        try { return await resetPromise; }
+        finally { resetPromise = null; }
     }
 
-    bootstrap();
-})(window);
+    async function request(options = {}) {
+        let confirmed = options.confirmed === true;
+        if (!confirmed) {
+            try {
+                confirmed = global.confirm(
+                    '确定要清除全部浏览器本地数据并返回首次启动状态吗？\n\n'
+                    + '练习记录、题库、词汇、设置、应用内备份和本地文件夹绑定都会清除；'
+                    + '外部文件夹中的 JSON 备份不会删除。'
+                );
+            } catch (_) { confirmed = false; }
+        }
+        if (!confirmed) return { success: false, reason: 'cancelled', terminal: false };
+
+        notify('正在清除全部本地数据...', 'info');
+        try { return await perform(options); }
+        catch (error) {
+            if (global.console && typeof global.console.error === 'function') {
+                global.console.error('[SiteDataReset] full reset failed:', error);
+            }
+            notify(`清除失败：${error && error.message ? error.message : '浏览器存储不可用'}`, 'error');
+            return { success: false, reason: 'reset_failed', terminal: false, error };
+        }
+    }
+
+    global.SiteDataReset = Object.freeze({ __v2: true, DATABASE_NAMES, perform, request });
+    global.clearCache = request;
+})(typeof window !== 'undefined' ? window : globalThis);
 
 
 /* ===== js/core/practiceCore.js ===== */
@@ -4633,17 +5040,6 @@ storageManager.ready
         'WORKOUT_COMPLETE'
     ]);
 
-    const STORAGE_KEYS = Object.freeze({
-        practiceRecords: 'practice_records',
-        userStats: 'user_stats',
-        activeSessions: 'active_sessions',
-        tempPracticeRecords: 'temp_practice_records'
-    });
-    let internalRepositories = null;
-    // 由 data/index.js 在仓库注入时通过 __installInternalRepositories 第二参数传入，
-    // 使仓库未注入前的 fallback 路径也能拿到 storage internal token，避免被新保护层拒绝。
-    let internalStorageAccess = null;
-
     function isPlainObject(value) {
         return value && typeof value === 'object' && !Array.isArray(value);
     }
@@ -4671,6 +5067,47 @@ storageManager.ready
             clone[key] = clonePlainObject(value[key]);
         });
         return clone;
+    }
+
+    /**
+     * Resolve the complete reading-annotation snapshot from canonical and legacy
+     * locations. Explicit root values win so review edits can replace an older
+     * realData mirror; the returned object is deep-cloned and safe to persist.
+     */
+    function resolveAnnotationState(recordData = {}, fallbackSources = [], options = {}) {
+        const root = isPlainObject(recordData) ? recordData : {};
+        const rawData = isPlainObject(root.rawData) ? root.rawData : {};
+        const realData = isPlainObject(root.realData) ? root.realData : {};
+        const rawRealData = isPlainObject(rawData.realData) ? rawData.realData : {};
+        const sources = [root, rawData, realData, rawRealData]
+            .concat(Array.isArray(fallbackSources) ? fallbackSources : [fallbackSources])
+            .filter((source) => isPlainObject(source));
+
+        const pickArray = (field) => {
+            const source = sources.find((candidate) => (
+                Array.isArray(candidate[field])
+                && (!options.preferNonEmptyArrays || candidate[field].length)
+            )) || sources.find((candidate) => Array.isArray(candidate[field]));
+            return source ? clonePlainObject(source[field]) : [];
+        };
+        const pickString = (field) => {
+            const source = sources.find((candidate) => typeof candidate[field] === 'string');
+            return source ? source[field] : '';
+        };
+        const scrollSource = sources.find((candidate) => (
+            candidate.scrollY !== undefined
+            && candidate.scrollY !== null
+            && Number.isFinite(Number(candidate.scrollY))
+        ));
+
+        return {
+            highlights: pickArray('highlights'),
+            markedQuestions: pickArray('markedQuestions'),
+            noteText: pickString('noteText'),
+            notes: pickArray('notes'),
+            noteOutlines: pickArray('noteOutlines'),
+            scrollY: scrollSource ? Number(scrollSource.scrollY) : 0
+        };
     }
 
     function ensureNumber(value, fallback = 0) {
@@ -5255,12 +5692,15 @@ storageManager.ready
             : Number(scoreInfo.percentage);
         scoreInfo.answerKeyComplete = hasCompleteCanonicalCorrectAnswers;
 
+        const annotations = resolveAnnotationState(entry);
+
         return {
             answers,
             correctAnswers: correctAnswerMap,
             correctAnswerMap,
             answerComparison,
-            scoreInfo
+            scoreInfo,
+            ...annotations
         };
     }
 
@@ -5478,12 +5918,13 @@ storageManager.ready
                 }
                 return map;
             }, {});
-            const highlights = Array.isArray(entry.highlights)
-                ? entry.highlights.slice()
-                : (Array.isArray(entry.rawData && entry.rawData.highlights) ? entry.rawData.highlights.slice() : []);
-            const scrollY = Number.isFinite(Number(entry.scrollY))
-                ? Number(entry.scrollY)
-                : (Number.isFinite(Number(entry.rawData && entry.rawData.scrollY)) ? Number(entry.rawData.scrollY) : 0);
+            // 旧/导入的套题条目可能只在 entry.metadata.markedQuestions 保留标记题，
+            // 与顶层 standardizeRecord（见下方 resolveAnnotationState(recordData, [recordData.metadata])）
+            // 保持一致，将 entry.metadata 作为兜底来源传入，避免根级 markedQuestions: [] 被回放
+            // 逻辑视作权威而丢弃已保存的标记题。
+            const metadata = entry.metadata ? Object.assign({}, entry.metadata) : {};
+            const annotations = resolveAnnotationState(entry, [entry.metadata], { preferNonEmptyArrays: true });
+            metadata.markedQuestions = clonePlainObject(annotations.markedQuestions);
             return {
                 examId: entry.examId || null,
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
@@ -5493,9 +5934,8 @@ storageManager.ready
                 answers: answerMap,
                 correctAnswerMap: entryCorrectMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
-                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
-                highlights,
-                scrollY,
+                metadata,
+                ...annotations,
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
             };
         }).filter(Boolean);
@@ -5659,6 +6099,8 @@ storageManager.ready
             ? clonePlainObject(comparisonSource)
             : null;
         const realDataCorrectAnswers = clonePlainObject(normalizedCorrectMap || {});
+        const annotations = resolveAnnotationState(recordData, [recordData.metadata]);
+        metadata.markedQuestions = clonePlainObject(annotations.markedQuestions);
         const generateRecordId = typeof options.generateRecordId === 'function'
             ? options.generateRecordId
             : defaultGenerateRecordId;
@@ -5687,13 +6129,13 @@ storageManager.ready
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
             suiteSessionId: recordData.suiteSessionId || (metadata && metadata.suiteSessionId) || null,
             suiteEntries: normalizedSuiteEntries,
+            ...annotations,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
                 })
                 : (detailSource ? { details: detailSource } : null),
-            realData: recordData.realData
-                ? Object.assign({}, recordData.realData, {
+            realData: Object.assign({}, recordData.realData || {}, {
                     answers: (recordData.realData && recordData.realData.answers) || answerMap,
                     correctAnswers: realDataCorrectAnswers,
                     correctAnswerMap: clonePlainObject(normalizedCorrectMap || {}),
@@ -5702,9 +6144,9 @@ storageManager.ready
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
-                })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                        : (normalizedComparison || null),
+                    ...clonePlainObject(annotations)
+                }),
             answerComparison: normalizedComparison,
             version: options.currentVersion || recordData.version || '0.6.2-fix',
             createdAt: firstDateCandidate(recordData.createdAt, recordData.startTime, recordData.start_time, recordDate) || now,
@@ -5919,26 +6361,7 @@ storageManager.ready
             || (examEntry && examEntry.title)
             || resolvedExamId
             || '未命名练习';
-        const resolvedHighlights = Array.isArray(rawPayload.highlights)
-            ? rawPayload.highlights.slice()
-            : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights)
-                ? rawPayload.realData.highlights.slice()
-                : (Array.isArray(sessionContext.highlights) ? sessionContext.highlights.slice() : []));
-        const resolvedMarkedQuestions = Array.isArray(rawPayload.markedQuestions)
-            ? rawPayload.markedQuestions.slice()
-            : (Array.isArray(rawPayload.realData && rawPayload.realData.markedQuestions)
-                ? rawPayload.realData.markedQuestions.slice()
-                : (Array.isArray(sessionContext.markedQuestions) ? sessionContext.markedQuestions.slice() : []));
-        const resolvedScrollY = Number.isFinite(Number(rawPayload.scrollY))
-            ? Number(rawPayload.scrollY)
-            : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY))
-                ? Number(rawPayload.realData.scrollY)
-                : (Number.isFinite(Number(sessionContext.scrollY)) ? Number(sessionContext.scrollY) : 0));
-        const resolvedNoteText = typeof rawPayload.noteText === 'string'
-            ? rawPayload.noteText
-            : (typeof rawPayload.realData?.noteText === 'string'
-                ? rawPayload.realData.noteText
-                : (typeof sessionContext.noteText === 'string' ? sessionContext.noteText : ''));
+        const annotations = resolveAnnotationState(rawPayload, [sessionContext]);
         const resolvedQuestionTypeMap = isPlainObject(rawPayload.questionTypeMap)
             ? clonePlainObject(rawPayload.questionTypeMap)
             : (isPlainObject(rawPayload.realData && rawPayload.realData.questionTypeMap)
@@ -5972,16 +6395,13 @@ storageManager.ready
                 examTitle: title,
                 category,
                 frequency,
-                markedQuestions: resolvedMarkedQuestions.slice()
+                markedQuestions: clonePlainObject(annotations.markedQuestions)
             }),
             frequency,
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
-            highlights: resolvedHighlights.slice(),
-            scrollY: resolvedScrollY,
-            markedQuestions: resolvedMarkedQuestions.slice(),
-            noteText: resolvedNoteText,
+            ...annotations,
             questionTypeMap: resolvedQuestionTypeMap,
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
@@ -5996,10 +6416,7 @@ storageManager.ready
                 correctAnswers: correctAnswerMap,
                 answerComparison,
                 correctAnswerMap,
-                highlights: resolvedHighlights.slice(),
-                scrollY: resolvedScrollY,
-                markedQuestions: resolvedMarkedQuestions.slice(),
-                noteText: resolvedNoteText,
+                ...clonePlainObject(annotations),
                 questionTypeMap: resolvedQuestionTypeMap,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
@@ -6015,367 +6432,6 @@ storageManager.ready
                 sessionId: rawPayload.sessionId || sessionContext.sessionId || null
             })
         }, options);
-    }
-
-    function getRepositories() {
-        return internalRepositories;
-    }
-
-    function getStorageManager(storageManager) {
-        return storageManager || global.persistentStore || global.storage || null;
-    }
-
-    function getStorageInternalOptions(storage) {
-        // 仓库注入后用 token 化选项，确保 fallback 读写能通过 storage 的 internal-only 保护。
-        if (internalStorageAccess && typeof internalStorageAccess.createInternalOptions === 'function') {
-            try {
-                return internalStorageAccess.createInternalOptions({});
-            } catch (_) {
-                // fallthrough 到旧行为
-            }
-        }
-        return { skipPracticeCoreRedirect: true };
-    }
-
-    function syncPracticeRecordState(records) {
-        const syncAppState = (nextRecords) => {
-            try {
-                if (global.app && global.app.state && global.app.state.practice) {
-                    global.app.state.practice.records = Array.isArray(nextRecords) ? nextRecords.slice() : [];
-                }
-            } catch (_) {}
-        };
-
-        if (typeof global.setPracticeRecordsState === 'function') {
-            try {
-                const finalRecords = global.setPracticeRecordsState(records);
-                syncAppState(finalRecords);
-                return;
-            } catch (error) {
-                console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
-            }
-        }
-        syncAppState(records);
-    }
-
-    async function readPracticeRecords(storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.practice && typeof repos.practice.list === 'function') {
-            return await repos.practice.list();
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.readPersistentValue === 'function') {
-            return await storage.readPersistentValue(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
-        }
-        if (storage && typeof storage.get === 'function') {
-            return await storage.get(STORAGE_KEYS.practiceRecords, [], getStorageInternalOptions(storage));
-        }
-        return [];
-    }
-
-    /**
-     * 轻量投影：读取原始数组（clone:false 跳过 structuredClone），映射为精简 summary 对象。
-     * 排除 answers/answerDetails/correctAnswerMap/suiteEntries[]/realData/answerComparison 等重字段，
-     * 供练习历史列表、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用，
-     * 避免大数据量下反序列化+克隆全部记录导致的前端渲染卡顿和内存溢出。
-     */
-    function projectRecordSummary(record) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const scoreInfo = record.scoreInfo || {};
-        const metadata = record.metadata || {};
-        // 轻量 suiteEntries 投影：仅保留签名字段，不含 answers/correctAnswerMap/realData
-        const rawSuiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
-        const suiteEntries = rawSuiteEntries.map(function (entry) {
-            if (!entry || typeof entry !== 'object') { return null; }
-            const entryMeta = entry.metadata || {};
-            const entryScore = entry.scoreInfo || {};
-            return {
-                id: entry.id || '',
-                examId: entry.examId || entryMeta.examId || '',
-                title: entry.title || entryMeta.examTitle || '',
-                percentage: Number(entry.percentage != null ? entry.percentage : entryScore.percentage) || 0,
-                duration: Number(entry.duration != null ? entry.duration : (entry.rawData && entry.rawData.duration)) || 0
-            };
-        }).filter(Boolean);
-        return {
-            id: record.id || record.sessionId || '',
-            sessionId: record.sessionId || null,
-            examId: record.examId || metadata.examId || null,
-            title: record.title || metadata.examTitle || '',
-            type: record.type || metadata.type || 'reading',
-            practiceType: record.practiceType || metadata.practiceType || metadata.examType || null,
-            url: record.url || metadata.url || null,
-            startTime: record.startTime || null,
-            endTime: record.endTime || null,
-            date: record.date || null,
-            duration: Number(record.duration ?? scoreInfo.duration ?? scoreInfo.timeSpent) || 0,
-            percentage: Number(record.percentage ?? scoreInfo.percentage) || 0,
-            accuracy: Number(record.accuracy ?? scoreInfo.accuracy) || 0,
-            score: Number(record.score ?? scoreInfo.score) || 0,
-            totalQuestions: Number(record.totalQuestions ?? scoreInfo.total) || 0,
-            correctAnswers: Number(record.correctAnswers ?? scoreInfo.correct) || 0,
-            status: record.status || 'completed',
-            suiteMode: Boolean(record.suiteMode),
-            suiteEntryCount: rawSuiteEntries.length,
-            suiteEntries: suiteEntries,
-            suiteSessionId: record.suiteSessionId || (metadata.suiteSessionId) || null,
-            // questionTypePerformance 是小对象（每题型 {total,correct}），不是重字段，保留供 recalculateStats 使用
-            questionTypePerformance: record.questionTypePerformance || null,
-            // 轻量 scoreInfo 子集：供 accuracy/duration 等 fallback 读取
-            scoreInfo: {
-                accuracy: scoreInfo.accuracy != null ? scoreInfo.accuracy : null,
-                duration: scoreInfo.duration != null ? scoreInfo.duration : null,
-                timeSpent: scoreInfo.timeSpent != null ? scoreInfo.timeSpent : null,
-                percentage: scoreInfo.percentage != null ? scoreInfo.percentage : null,
-                score: scoreInfo.score != null ? scoreInfo.score : null,
-                total: scoreInfo.total != null ? scoreInfo.total : null,
-                correct: scoreInfo.correct != null ? scoreInfo.correct : null
-            },
-            metadata: {
-                category: metadata.category || record.category || null,
-                examTitle: metadata.examTitle || record.title || '',
-                frequency: metadata.frequency || record.frequency || 'unknown',
-                type: metadata.type || record.type || null,
-                examType: metadata.examType || null,
-                practiceType: metadata.practiceType || null,
-                examId: metadata.examId || null,
-                title: metadata.title || null,
-                url: metadata.url || null
-            },
-            updatedAt: record.updatedAt || null,
-            createdAt: record.createdAt || null
-        };
-    }
-
-    async function readPracticeRecordSummaries(storageManager) {
-        const repos = getRepositories();
-        let records;
-        if (repos && repos.practice && typeof repos.practice.read === 'function') {
-            // clone:false 跳过 structuredClone，在投影后原始重字段不会进入返回值
-            records = await repos.practice.read({ clone: false });
-        } else {
-            records = await readPracticeRecords(storageManager);
-        }
-        if (!Array.isArray(records)) {
-            return [];
-        }
-        return records
-            .map(projectRecordSummary)
-            .filter(Boolean);
-    }
-
-    /**
-     * 轻量计数：使用 repository.count()（clone:false + .length），不构造 summary 数组。
-     */
-    async function countPracticeRecords(storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.practice && typeof repos.practice.count === 'function') {
-            return await repos.practice.count();
-        }
-        const records = await readPracticeRecords(storageManager);
-        return Array.isArray(records) ? records.length : 0;
-    }
-
-    async function writePracticeRecords(records, storageManager) {
-        const finalRecords = Array.isArray(records) ? records : [];
-        const repos = getRepositories();
-        if (repos && repos.practice && typeof repos.practice.overwrite === 'function') {
-            await repos.practice.overwrite(finalRecords);
-            syncPracticeRecordState(finalRecords);
-            return true;
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.writePersistentValue === 'function') {
-            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords, getStorageInternalOptions(storage));
-            syncPracticeRecordState(finalRecords);
-            return result;
-        }
-        return false;
-    }
-
-    async function readMeta(key, defaultValue, storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.meta && typeof repos.meta.get === 'function') {
-            return await repos.meta.get(key, defaultValue);
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.readPersistentValue === 'function') {
-            return await storage.readPersistentValue(key, defaultValue, getStorageInternalOptions(storage));
-        }
-        if (storage && typeof storage.get === 'function') {
-            return await storage.get(key, defaultValue, getStorageInternalOptions(storage));
-        }
-        return defaultValue;
-    }
-
-    async function writeMeta(key, value, storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.meta && typeof repos.meta.set === 'function') {
-            await repos.meta.set(key, value);
-            return true;
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.writePersistentValue === 'function') {
-            return await storage.writePersistentValue(key, value, getStorageInternalOptions(storage));
-        }
-        return false;
-    }
-
-    async function removeMeta(key, storageManager) {
-        const repos = getRepositories();
-        if (repos && repos.meta && typeof repos.meta.remove === 'function') {
-            await repos.meta.remove(key);
-            return true;
-        }
-        const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.removePersistentValue === 'function') {
-            return await storage.removePersistentValue(key, getStorageInternalOptions(storage));
-        }
-        return false;
-    }
-
-    function extractSessionId(record) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const rawId = record.sessionId
-            || (record.realData && record.realData.sessionId)
-            || (record.metadata && record.metadata.sessionId)
-            || null;
-        if (!rawId) return null;
-        return String(rawId).trim() || null;
-    }
-
-    function dedupePracticeRecords(records) {
-        // 仅按 record.id 去重，不按 sessionId 全局去重。
-        // sessionId 在套题场景中是容器标识，不是 attempt 唯一键；
-        // 多条不同 id 的记录可能共享同一 sessionId（如同一套题的不同 passage），
-        // 按 sessionId 去重会永久丢弃合法记录。
-        const seenIds = new Set();
-        const deduped = [];
-
-        (Array.isArray(records) ? records : []).forEach((record) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            const recordId = record.id != null ? String(record.id) : null;
-
-            if (recordId && seenIds.has(recordId)) {
-                return;
-            }
-
-            if (recordId) seenIds.add(recordId);
-            deduped.push(record);
-        });
-
-        return deduped;
-    }
-
-    function getRecordTimestamp(record) {
-        if (!record || typeof record !== 'object') {
-            return 0;
-        }
-        const candidates = [
-            record.updatedAt,
-            record.createdAt,
-            record.endTime,
-            record.startTime,
-            record.date,
-            record.timestamp
-        ];
-        for (let index = 0; index < candidates.length; index += 1) {
-            const value = candidates[index];
-            if (!value) {
-                continue;
-            }
-            const time = new Date(value).getTime();
-            if (Number.isFinite(time)) {
-                return time;
-            }
-        }
-        return 0;
-    }
-
-    function handlesStorageKey(key) {
-        return key === STORAGE_KEYS.practiceRecords
-            || key === STORAGE_KEYS.userStats
-            || key === STORAGE_KEYS.activeSessions
-            || key === STORAGE_KEYS.tempPracticeRecords;
-    }
-
-    async function replacePracticeRecords(records, options = {}) {
-        const canonical = dedupePracticeRecords(
-            (Array.isArray(records) ? records : []).map((record) => standardizeRecord(record, options))
-        );
-        canonical.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-        if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && canonical.length > options.maxRecords) {
-            canonical.splice(options.maxRecords);
-        }
-        return await writePracticeRecords(canonical, options.storageManager);
-    }
-
-    async function savePracticeRecord(record, options = {}) {
-        const standardizedRecord = standardizeRecord(record, options);
-        let records = await readPracticeRecords(options.storageManager);
-        records = Array.isArray(records) ? records.slice() : [];
-
-        const existingIndex = records.findIndex((entry) => entry && String(entry.id) === String(standardizedRecord.id));
-        if (existingIndex >= 0) {
-            records[existingIndex] = standardizedRecord;
-        } else {
-            records.unshift(standardizedRecord);
-        }
-
-        // 仅当同一 sessionId 且同一 examId 时才移除旧记录（同一篇练习的重复提交覆盖）。
-        // 不同 examId 但共享 sessionId 的记录（如套题不同 passage）必须保留。
-        const standardizedSessionId = extractSessionId(standardizedRecord);
-        const standardizedExamId = standardizedRecord.examId || null;
-        if (standardizedSessionId) {
-            records = records.filter((entry, index) => {
-                if (index === 0) {
-                    return true;
-                }
-                const sessionId = extractSessionId(entry);
-                const examId = entry && entry.examId || null;
-                const sameSession = sessionId && sessionId === standardizedSessionId;
-                const sameExam = standardizedExamId && examId && examId === standardizedExamId;
-                return !(sameSession && sameExam && String(entry.id) !== String(standardizedRecord.id));
-            });
-        }
-
-        records = dedupePracticeRecords(records);
-        records.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-        if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && records.length > options.maxRecords) {
-            records.splice(options.maxRecords);
-        }
-        await writePracticeRecords(records, options.storageManager);
-        return standardizedRecord;
-    }
-
-    async function routeStorageSet(storageManager, key, value, options = {}) {
-        if (key === STORAGE_KEYS.practiceRecords) {
-            return await replacePracticeRecords(value, {
-                currentVersion: options.currentVersion || '0.6.2-fix',
-                maxRecords: options.maxRecords || 1000,
-                storageManager
-            });
-        }
-        if (key === STORAGE_KEYS.userStats || key === STORAGE_KEYS.activeSessions || key === STORAGE_KEYS.tempPracticeRecords) {
-            return await writeMeta(key, value, storageManager);
-        }
-        return null;
-    }
-
-    async function routeStorageRemove(storageManager, key) {
-        if (key === STORAGE_KEYS.practiceRecords) {
-            return await writePracticeRecords([], storageManager);
-        }
-        if (key === STORAGE_KEYS.userStats || key === STORAGE_KEYS.activeSessions || key === STORAGE_KEYS.tempPracticeRecords) {
-            return await removeMeta(key, storageManager);
-        }
-        return null;
     }
 
     const contracts = Object.freeze({
@@ -6406,6 +6462,7 @@ storageManager.ready
         buildMetadata,
         standardizeRecord,
         standardizeSuiteEntries,
+        resolveAnnotationState,
         clonePlainObject
     });
 
@@ -6422,2820 +6479,14 @@ storageManager.ready
         fromCompletion
     });
 
-    const internalStore = Object.freeze({
-        STORAGE_KEYS,
-        handlesStorageKey,
-        listPracticeRecords: readPracticeRecords,
-        listPracticeRecordSummaries: readPracticeRecordSummaries,
-        countPracticeRecords,
-        replacePracticeRecords,
-        savePracticeRecord,
-        routeStorageSet,
-        routeStorageRemove,
-        readMeta,
-        writeMeta,
-        removeMeta,
-        syncPracticeRecordState
-    });
-
-    const publicStore = Object.freeze({
-        STORAGE_KEYS,
-        handlesStorageKey,
-        listPracticeRecords: readPracticeRecords,
-        listPracticeRecordSummaries: readPracticeRecordSummaries,
-        countPracticeRecords,
-        readMeta,
-        syncPracticeRecordState
-    });
-
-    const practiceCore = {
+    const practiceCore = Object.freeze({
         __stable: true,
         version: '0.6.2-fix',
         contracts,
         protocol,
-        ingestor,
-        store: publicStore
-    };
-    Object.defineProperty(practiceCore, '__installRecordAPI', {
-        value: function(install) {
-            if (typeof install !== 'function') {
-                throw new Error('PracticeCore.__installRecordAPI requires an installer function');
-            }
-            return install(internalStore);
-        },
-        enumerable: false,
-        configurable: true,
-        writable: false
-    });
-    Object.defineProperty(practiceCore, '__installInternalRepositories', {
-        value: function(repositories, installers) {
-            if (!repositories || typeof repositories !== 'object') {
-                throw new Error('PracticeCore.__installInternalRepositories requires repositories');
-            }
-            internalRepositories = repositories;
-            // 接收 storage internal token factory，供 fallback 路径使用。
-            if (installers && typeof installers.createInternalOptions === 'function') {
-                internalStorageAccess = { createInternalOptions: installers.createInternalOptions };
-            }
-            try {
-                delete practiceCore.__installInternalRepositories;
-            } catch (_) {
-                practiceCore.__installInternalRepositories = undefined;
-            }
-            return true;
-        },
-        enumerable: false,
-        configurable: true,
-        writable: false
+        ingestor
     });
     global.PracticeCore = practiceCore;
-})(typeof window !== 'undefined' ? window : globalThis);
-
-
-/* ===== js/core/practiceRecordAPI.js ===== */
-(function initPracticeRecordAPI(global) {
-    'use strict';
-
-    const DEFAULT_VERSION = '0.6.2-fix';
-    const DEFAULT_MAX_RECORDS = 1000;
-
-    if (global.PracticeRecordAPI && global.PracticeRecordAPI.__stable === true) {
-        return;
-    }
-
-    let recordStore = null;
-
-    function getPracticeCore() {
-        return global.PracticeCore || null;
-    }
-
-    function installRecordStore() {
-        if (recordStore) {
-            return recordStore;
-        }
-        const core = getPracticeCore();
-        if (!core || typeof core.__installRecordAPI !== 'function') {
-            return null;
-        }
-        recordStore = core.__installRecordAPI((store) => store || null);
-        try {
-            delete core.__installRecordAPI;
-        } catch (_) {
-            core.__installRecordAPI = undefined;
-        }
-        return recordStore;
-    }
-
-    function getRecordStore() {
-        return recordStore || installRecordStore();
-    }
-
-    installRecordStore();
-
-    function getDefaultSaveOptions(options = {}) {
-        const source = options && typeof options === 'object' ? options : {};
-        const normalized = {
-            currentVersion: source.currentVersion || DEFAULT_VERSION,
-            maxRecords: DEFAULT_MAX_RECORDS
-        };
-        const maxRecords = Number(source.maxRecords);
-        if (Number.isFinite(maxRecords) && maxRecords > 0) {
-            normalized.maxRecords = maxRecords;
-        }
-        Object.keys(source).forEach((key) => {
-            if (source[key] !== undefined) {
-                normalized[key] = source[key];
-            }
-        });
-        normalized.currentVersion = normalized.currentVersion || DEFAULT_VERSION;
-        normalized.maxRecords = Number.isFinite(Number(normalized.maxRecords)) && Number(normalized.maxRecords) > 0
-            ? Number(normalized.maxRecords)
-            : DEFAULT_MAX_RECORDS;
-        return normalized;
-    }
-
-    function toIdString(value) {
-        return value == null ? '' : String(value);
-    }
-
-    function isPlainObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value);
-    }
-
-    function clonePlainObject(value) {
-        if (value == null || typeof value !== 'object') {
-            return value ?? null;
-        }
-        if (Array.isArray(value)) {
-            return value.map((item) => clonePlainObject(item));
-        }
-        const clone = {};
-        Object.keys(value).forEach((key) => {
-            clone[key] = clonePlainObject(value[key]);
-        });
-        return clone;
-    }
-
-    function getDefaultStats() {
-        if (global.ExamData && typeof global.ExamData.createDefaultUserStats === 'function') {
-            return clonePlainObject(global.ExamData.createDefaultUserStats());
-        }
-        const now = new Date().toISOString();
-        return {
-            totalPractices: 0,
-            totalTimeSpent: 0,
-            averageScore: 0,
-            categoryStats: {},
-            questionTypeStats: {},
-            streakDays: 0,
-            practiceDays: [],
-            lastPracticeDate: null,
-            achievements: [],
-            createdAt: now,
-            updatedAt: now
-        };
-    }
-
-    function toCamelCaseKey(key) {
-        return String(key)
-            .replace(/[-_\s]+([a-zA-Z0-9])/g, (_, group) => group.toUpperCase())
-            .replace(/^[A-Z]/, match => match.toLowerCase());
-    }
-
-    function normalizeStatsAliases(stats) {
-        if (!isPlainObject(stats)) {
-            return {};
-        }
-        const normalized = {};
-        Object.entries(stats).forEach(([key, value]) => {
-            normalized[toCamelCaseKey(key)] = value;
-        });
-        return normalized;
-    }
-
-    function prepareStats(stats) {
-        const source = normalizeStatsAliases(stats);
-        const prepared = Object.assign({}, getDefaultStats(), clonePlainObject(source));
-        prepared.categoryStats = isPlainObject(source.categoryStats) ? clonePlainObject(source.categoryStats) : {};
-        prepared.questionTypeStats = isPlainObject(source.questionTypeStats) ? clonePlainObject(source.questionTypeStats) : {};
-        prepared.practiceDays = Array.isArray(source.practiceDays) ? source.practiceDays.slice() : [];
-        prepared.achievements = Array.isArray(source.achievements) ? source.achievements.slice() : [];
-        prepared.updatedAt = source.updatedAt || new Date().toISOString();
-        return prepared;
-    }
-
-    function getCoreContracts() {
-        const core = getPracticeCore();
-        return core && core.contracts ? core.contracts : null;
-    }
-
-    function normalizeRecord(record, options = {}) {
-        if (!isPlainObject(record)) {
-            return null;
-        }
-
-        const contracts = getCoreContracts();
-        if (!contracts || typeof contracts.standardizeRecord !== 'function') {
-            throw new Error('PracticeRecordAPI.normalizeRecord: PracticeCore.contracts.standardizeRecord not ready');
-        }
-
-        const preserveIds = options.preserveIds !== false;
-        const safePrefix = options.fallbackIdPrefix || 'record';
-        const sourceId = record.id
-            ?? record.recordId
-            ?? record.record_id
-            ?? record.practiceId
-            ?? record.practice_id
-            ?? record.sessionId
-            ?? record.sessionID
-            ?? record.timestamp
-            ?? record.uuid;
-        const candidate = clonePlainObject(record) || {};
-
-        let id = preserveIds && sourceId ? String(sourceId).trim() : '';
-        if (!id) {
-            const index = Number.isFinite(Number(options.index)) ? Number(options.index) : 0;
-            id = `${safePrefix}_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
-        }
-        candidate.id = id;
-
-        if (record.recordStatus !== undefined && candidate.status === undefined) {
-            candidate.status = record.recordStatus;
-        }
-
-        const generateRecordId = typeof options.generateRecordId === 'function'
-            ? options.generateRecordId
-            : () => id;
-        const standardized = contracts.standardizeRecord(candidate, Object.assign({}, options, {
-            currentVersion: options.currentVersion || DEFAULT_VERSION,
-            generateRecordId
-        }));
-        return standardized && standardized.examId ? standardized : null;
-    }
-
-    function normalizeDateValue(value) {
-        if (!value) {
-            return null;
-        }
-        if (value instanceof Date && !Number.isNaN(value.getTime())) {
-            return value.toISOString();
-        }
-        if (typeof value === 'number' && Number.isFinite(value)) {
-            return new Date(value).toISOString();
-        }
-        if (typeof value === 'string') {
-            const trimmed = value.trim();
-            if (!trimmed) {
-                return null;
-            }
-            if (/^\d+$/.test(trimmed)) {
-                const numeric = Number(trimmed);
-                if (Number.isFinite(numeric)) {
-                    const milliseconds = trimmed.length > 10 ? numeric : numeric * 1000;
-                    return new Date(milliseconds).toISOString();
-                }
-            }
-            const parsed = new Date(trimmed);
-            if (!Number.isNaN(parsed.getTime())) {
-                return parsed.toISOString();
-            }
-        }
-        return null;
-    }
-
-    function getRecordTimestamp(record) {
-        if (!record || typeof record !== 'object') {
-            return 0;
-        }
-        const candidates = [
-            record.updatedAt,
-            record.createdAt,
-            record.endTime,
-            record.startTime,
-            record.timestamp,
-            record.date
-        ];
-        for (let index = 0; index < candidates.length; index += 1) {
-            const iso = normalizeDateValue(candidates[index]);
-            if (iso) {
-                const time = new Date(iso).getTime();
-                if (Number.isFinite(time)) {
-                    return time;
-                }
-            }
-        }
-        return 0;
-    }
-
-    function mergeRecordDetails(existing, incoming, options = {}) {
-        const merged = Object.assign({}, existing || {}, incoming || {});
-        if (isPlainObject(existing && existing.metadata) || isPlainObject(incoming && incoming.metadata)) {
-            merged.metadata = Object.assign(
-                {},
-                isPlainObject(existing && existing.metadata) ? existing.metadata : {},
-                isPlainObject(incoming && incoming.metadata) ? incoming.metadata : {}
-            );
-        }
-        if (isPlainObject(existing && existing.realData) || isPlainObject(incoming && incoming.realData)) {
-            merged.realData = Object.assign(
-                {},
-                isPlainObject(existing && existing.realData) ? existing.realData : {},
-                isPlainObject(incoming && incoming.realData) ? incoming.realData : {}
-            );
-        }
-        return normalizeRecord(merged, Object.assign({}, options, {
-            generateRecordId: () => String(merged.id || (incoming && incoming.id) || (existing && existing.id) || `record_${Date.now()}`)
-        }));
-    }
-
-    async function readStats(options = {}) {
-        const fallback = Object.prototype.hasOwnProperty.call(options, 'fallback')
-            ? options.fallback
-            : getDefaultStats();
-
-        const store = getRecordStore();
-        if (!store || typeof store.readMeta !== 'function') {
-            throw new Error('PracticeRecordAPI.readStats: unified meta store not ready');
-        }
-
-        return prepareStats(await store.readMeta('user_stats', fallback));
-    }
-
-    async function writeStats(stats) {
-        const finalStats = prepareStats(stats);
-        const store = getRecordStore();
-
-        if (store && typeof store.writeMeta === 'function') {
-            await store.writeMeta('user_stats', finalStats);
-            return finalStats;
-        }
-
-        throw new Error('PracticeRecordAPI.writeStats: unified meta store not ready');
-    }
-
-    function normalizeDay(value) {
-        if (!value) return null;
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return null;
-        return date.toISOString().slice(0, 10);
-    }
-
-    function calculateStreakDays(days) {
-        const sorted = Array.isArray(days) ? days.slice().sort() : [];
-        if (sorted.length === 0) return 0;
-        let streak = 1;
-        for (let index = sorted.length - 1; index > 0; index -= 1) {
-            const current = new Date(sorted[index]);
-            const previous = new Date(sorted[index - 1]);
-            const diffDays = Math.round((current - previous) / 86400000);
-            if (diffDays === 1) {
-                streak += 1;
-                continue;
-            }
-            if (diffDays > 1) break;
-        }
-        return streak;
-    }
-
-    function normalizeAccuracyForStats(record) {
-        const values = [
-            record && record.accuracy,
-            record && record.scoreInfo && record.scoreInfo.accuracy,
-            record && record.realData && record.realData.scoreInfo && record.realData.scoreInfo.accuracy
-        ];
-        for (let index = 0; index < values.length; index += 1) {
-            const numeric = Number(values[index]);
-            if (Number.isFinite(numeric)) {
-                if (numeric > 1 && numeric <= 100) {
-                    return numeric / 100;
-                }
-                return Math.max(0, Math.min(1, numeric));
-            }
-        }
-        const correct = Number(record && (record.correctAnswers ?? record.scoreInfo?.correct ?? record.score));
-        const total = Number(record && (record.totalQuestions ?? record.scoreInfo?.total));
-        return Number.isFinite(correct) && Number.isFinite(total) && total > 0
-            ? Math.max(0, Math.min(1, correct / total))
-            : 0;
-    }
-
-    function applyRecordToStats(stats, record) {
-        if (!stats || !record || typeof record !== 'object') {
-            return;
-        }
-
-        const duration = Math.max(0, Number(record.duration) || 0);
-        const accuracy = normalizeAccuracyForStats(record);
-        const category = String((record.metadata && record.metadata.category) || record.category || record.type || '').trim();
-        const day = normalizeDay(record.date || record.endTime || record.startTime || record.createdAt);
-
-        stats.totalPractices += 1;
-        stats.totalTimeSpent += duration;
-        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
-        stats.averageScore = stats.totalPractices > 0 ? totalScore / stats.totalPractices : 0;
-
-        stats.categoryStats = isPlainObject(stats.categoryStats) ? stats.categoryStats : {};
-        if (category) {
-            if (!stats.categoryStats[category]) {
-                stats.categoryStats[category] = {
-                    practices: 0,
-                    avgScore: 0,
-                    timeSpent: 0,
-                    bestScore: 0,
-                    totalQuestions: 0,
-                    correctAnswers: 0
-                };
-            }
-            const categoryStats = stats.categoryStats[category];
-            categoryStats.practices += 1;
-            categoryStats.timeSpent += duration;
-            categoryStats.bestScore = Math.max(categoryStats.bestScore || 0, accuracy);
-            categoryStats.totalQuestions += Number(record.totalQuestions) || 0;
-            categoryStats.correctAnswers += Number(record.correctAnswers) || 0;
-            categoryStats.avgScore = ((categoryStats.avgScore || 0) * (categoryStats.practices - 1) + accuracy) / categoryStats.practices;
-        }
-
-        stats.questionTypeStats = isPlainObject(stats.questionTypeStats) ? stats.questionTypeStats : {};
-        if (isPlainObject(record.questionTypePerformance)) {
-            Object.entries(record.questionTypePerformance).forEach(([type, performance]) => {
-                if (!stats.questionTypeStats[type]) {
-                    stats.questionTypeStats[type] = {
-                        practices: 0,
-                        accuracy: 0,
-                        totalQuestions: 0,
-                        correctAnswers: 0
-                    };
-                }
-                const typeStats = stats.questionTypeStats[type];
-                typeStats.practices += 1;
-                typeStats.totalQuestions += Number(performance && performance.total) || 0;
-                typeStats.correctAnswers += Number(performance && performance.correct) || 0;
-                typeStats.accuracy = typeStats.totalQuestions > 0
-                    ? typeStats.correctAnswers / typeStats.totalQuestions
-                    : 0;
-            });
-        }
-
-        if (day) {
-            const days = new Set(Array.isArray(stats.practiceDays) ? stats.practiceDays : []);
-            days.add(day);
-            stats.practiceDays = Array.from(days).sort();
-            stats.lastPracticeDate = stats.practiceDays[stats.practiceDays.length - 1] || null;
-            stats.streakDays = calculateStreakDays(stats.practiceDays);
-        }
-        stats.updatedAt = new Date().toISOString();
-    }
-
-    async function recalculateStats() {
-        // 使用轻量 listSummary 避免反序列化+克隆完整记录（answers/suiteEntries/realData 等重字段）。
-        // summary 已包含 applyRecordToStats 所需的全部字段：duration, accuracy, metadata.category,
-        // date/endTime/startTime/createdAt, totalQuestions, correctAnswers, questionTypePerformance。
-        const records = await listSummary();
-        const stats = getDefaultStats();
-        (Array.isArray(records) ? records : []).forEach((record) => applyRecordToStats(stats, record));
-        return await writeStats(stats);
-    }
-
-    async function resetStats(stats = null) {
-        return await writeStats(isPlainObject(stats) ? stats : getDefaultStats());
-    }
-
-    async function mergeStats(stats, options = {}) {
-        if (!isPlainObject(stats)) {
-            return await readStats();
-        }
-
-        const mergeMode = options.mergeMode || options.mode || 'merge';
-        if (mergeMode === 'replace') {
-            return await writeStats(stats);
-        }
-
-        const existing = await readStats({ fallback: {} });
-        const merged = Object.assign({}, existing);
-        Object.entries(stats).forEach(([key, value]) => {
-            if (value === undefined || value === null) {
-                return;
-            }
-            const current = existing[key];
-            if (typeof value === 'number' && typeof current === 'number') {
-                merged[key] = Math.max(value, current);
-                return;
-            }
-            if (isPlainObject(value) && isPlainObject(current)) {
-                merged[key] = Object.assign({}, current, value);
-                return;
-            }
-            merged[key] = clonePlainObject(value);
-        });
-
-        return await writeStats(merged);
-    }
-
-    async function updateStatsForSavedRecord(record, options = {}) {
-        if (!record || options.updateStats === false) {
-            return false;
-        }
-
-        await recalculateStats();
-        return true;
-    }
-
-    async function list() {
-        const store = getRecordStore();
-        if (!store || typeof store.listPracticeRecords !== 'function') {
-            throw new Error('PracticeRecordAPI.list: unified store not ready');
-        }
-
-        const records = await store.listPracticeRecords();
-        return Array.isArray(records) ? records : [];
-    }
-
-    /**
-     * 轻量投影查询：返回每条记录的元数据摘要，不含 answers/correctAnswerMap/
-     * suiteEntries[]/realData 等重字段。底层以 clone:false 读取原始数组后即时映射，
-     * 避免大数据量下 structuredClone 全部记录导致内存溢出和渲染卡顿。
-     * 供练习历史列表签名、趋势图、热力图、成就统计等只需时间戳和元数据的消费者使用。
-     */
-    async function listSummary(options = {}) {
-        const store = getRecordStore();
-        if (!store || typeof store.listPracticeRecordSummaries !== 'function') {
-            // 回退：store 尚未支持 summary 时从完整记录投影
-            const records = await list();
-            return records.map(_projectSummary).filter(Boolean);
-        }
-        const summaries = await store.listPracticeRecordSummaries();
-        return Array.isArray(summaries) ? summaries : [];
-    }
-
-    /** 返回记录总数，不加载记录数组到内存 */
-    async function count(options = {}) {
-        const store = getRecordStore();
-        if (store && typeof store.countPracticeRecords === 'function') {
-            return await store.countPracticeRecords();
-        }
-        // 回退：store 不支持 count 时从 summary 长度获取
-        if (store && typeof store.listPracticeRecordSummaries === 'function') {
-            const summaries = await store.listPracticeRecordSummaries();
-            return Array.isArray(summaries) ? summaries.length : 0;
-        }
-        const records = await list();
-        return Array.isArray(records) ? records.length : 0;
-    }
-
-    /** 返回去重后的 examId 列表，供 overview 统计使用 */
-    async function distinctExamIds(options = {}) {
-        const summaries = await listSummary(options);
-        const seen = new Set();
-        const result = [];
-        for (let i = 0; i < summaries.length; i += 1) {
-            const examId = summaries[i] && summaries[i].examId;
-            if (examId && !seen.has(examId)) {
-                seen.add(examId);
-                result.push(examId);
-            }
-        }
-        return result;
-    }
-
-    /** 纯函数投影：从单条完整记录提取轻量 summary */
-    function _projectSummary(record) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const scoreInfo = record.scoreInfo || {};
-        const metadata = record.metadata || {};
-        // 轻量 suiteEntries 投影：仅保留签名字段，不含 answers/correctAnswerMap/realData
-        const rawSuiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
-        const suiteEntries = rawSuiteEntries.map(function (entry) {
-            if (!entry || typeof entry !== 'object') { return null; }
-            const entryMeta = entry.metadata || {};
-            const entryScore = entry.scoreInfo || {};
-            return {
-                id: entry.id || '',
-                examId: entry.examId || entryMeta.examId || '',
-                title: entry.title || entryMeta.examTitle || '',
-                percentage: Number(entry.percentage != null ? entry.percentage : entryScore.percentage) || 0,
-                duration: Number(entry.duration != null ? entry.duration : (entry.rawData && entry.rawData.duration)) || 0
-            };
-        }).filter(Boolean);
-        return {
-            id: record.id || record.sessionId || '',
-            sessionId: record.sessionId || null,
-            examId: record.examId || metadata.examId || null,
-            title: record.title || metadata.examTitle || '',
-            type: record.type || metadata.type || 'reading',
-            practiceType: record.practiceType || metadata.practiceType || metadata.examType || null,
-            url: record.url || metadata.url || null,
-            startTime: record.startTime || null,
-            endTime: record.endTime || null,
-            date: record.date || null,
-            duration: Number(record.duration != null ? record.duration : (scoreInfo.duration != null ? scoreInfo.duration : scoreInfo.timeSpent)) || 0,
-            percentage: Number(record.percentage != null ? record.percentage : scoreInfo.percentage) || 0,
-            accuracy: Number(record.accuracy != null ? record.accuracy : scoreInfo.accuracy) || 0,
-            score: Number(record.score != null ? record.score : scoreInfo.score) || 0,
-            totalQuestions: Number(record.totalQuestions != null ? record.totalQuestions : scoreInfo.total) || 0,
-            correctAnswers: Number(record.correctAnswers != null ? record.correctAnswers : scoreInfo.correct) || 0,
-            status: record.status || 'completed',
-            suiteMode: Boolean(record.suiteMode),
-            suiteEntryCount: rawSuiteEntries.length,
-            suiteEntries: suiteEntries,
-            suiteSessionId: record.suiteSessionId || metadata.suiteSessionId || null,
-            questionTypePerformance: record.questionTypePerformance || null,
-            scoreInfo: {
-                accuracy: scoreInfo.accuracy != null ? scoreInfo.accuracy : null,
-                duration: scoreInfo.duration != null ? scoreInfo.duration : null,
-                timeSpent: scoreInfo.timeSpent != null ? scoreInfo.timeSpent : null,
-                percentage: scoreInfo.percentage != null ? scoreInfo.percentage : null,
-                score: scoreInfo.score != null ? scoreInfo.score : null,
-                total: scoreInfo.total != null ? scoreInfo.total : null,
-                correct: scoreInfo.correct != null ? scoreInfo.correct : null
-            },
-            metadata: {
-                category: metadata.category || record.category || null,
-                examTitle: metadata.examTitle || record.title || '',
-                frequency: metadata.frequency || record.frequency || 'unknown',
-                type: metadata.type || record.type || null,
-                examType: metadata.examType || null,
-                practiceType: metadata.practiceType || null,
-                examId: metadata.examId || null,
-                title: metadata.title || null,
-                url: metadata.url || null
-            },
-            updatedAt: record.updatedAt || null,
-            createdAt: record.createdAt || null
-        };
-    }
-
-    async function getById(recordId) {
-        const targetId = toIdString(recordId);
-        if (!targetId) {
-            return null;
-        }
-        const records = await list();
-        return records.find((record) => {
-            if (!record || typeof record !== 'object') {
-                return false;
-            }
-            return toIdString(record.id) === targetId || toIdString(record.sessionId) === targetId;
-        }) || null;
-    }
-
-    async function replace(records, options = {}) {
-        if (!Array.isArray(records)) {
-            throw new Error('PracticeRecordAPI.replace requires an array of records');
-        }
-        const finalRecords = records;
-        const saveOptions = getDefaultSaveOptions(options);
-        const store = getRecordStore();
-        if (store && typeof store.replacePracticeRecords === 'function') {
-            await store.replacePracticeRecords(finalRecords, saveOptions);
-            if (options.updateStats !== false) {
-                await recalculateStats();
-            }
-            return finalRecords;
-        }
-
-        throw new Error('PracticeRecordAPI.replace: unified store not ready');
-    }
-
-    async function mergeRecords(records, options = {}) {
-        if (!Array.isArray(records)) {
-            throw new Error('PracticeRecordAPI.mergeRecords requires an array of records');
-        }
-
-        const mergeMode = options.mergeMode || options.mode || 'merge';
-        const normalizeOptions = getDefaultSaveOptions(options);
-        const incomingRecords = records
-            .map((record, index) => normalizeRecord(record, Object.assign({}, normalizeOptions, {
-                preserveIds: options.preserveIds !== false,
-                fallbackIdPrefix: options.fallbackIdPrefix || 'record',
-                index
-            })))
-            .filter(Boolean);
-        const existingRecords = await list();
-
-        if (mergeMode === 'replace') {
-            await replace(incomingRecords, Object.assign({}, options, { updateStats: options.updateStats !== false }));
-            return {
-                importedCount: incomingRecords.length,
-                updatedCount: existingRecords.length,
-                skippedCount: 0,
-                finalCount: incomingRecords.length,
-                records: incomingRecords
-            };
-        }
-
-        const indexMap = new Map();
-        existingRecords.forEach((record, index) => {
-            if (record && record.id !== undefined && record.id !== null) {
-                indexMap.set(String(record.id), { record, index });
-            }
-        });
-
-        const mergedRecords = existingRecords.slice();
-        let importedCount = 0;
-        let updatedCount = 0;
-        let skippedCount = 0;
-
-        incomingRecords.forEach((record) => {
-            if (!record || record.id === undefined || record.id === null) {
-                return;
-            }
-
-            const key = String(record.id);
-            const existing = indexMap.get(key);
-
-            if (!existing) {
-                mergedRecords.push(record);
-                indexMap.set(key, { record, index: mergedRecords.length - 1 });
-                importedCount += 1;
-                return;
-            }
-
-            if (mergeMode === 'skip') {
-                skippedCount += 1;
-                return;
-            }
-
-            const existingTimestamp = getRecordTimestamp(existing.record);
-            const incomingTimestamp = getRecordTimestamp(record);
-            if (incomingTimestamp >= existingTimestamp) {
-                const merged = mergeRecordDetails(existing.record, record, normalizeOptions);
-                mergedRecords[existing.index] = merged;
-                indexMap.set(key, { record: merged, index: existing.index });
-                updatedCount += 1;
-                return;
-            }
-
-            skippedCount += 1;
-        });
-
-        mergedRecords.sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
-        await replace(mergedRecords, Object.assign({}, options, { updateStats: options.updateStats !== false }));
-
-        return {
-            importedCount,
-            updatedCount,
-            skippedCount,
-            finalCount: mergedRecords.length,
-            records: mergedRecords
-        };
-    }
-
-    async function restoreRecords(records, options = {}) {
-        if (!Array.isArray(records)) {
-            throw new Error('PracticeRecordAPI.restoreRecords requires an array of records');
-        }
-
-        await replace(records, Object.assign({}, options, { updateStats: false }));
-        if (isPlainObject(options.stats)) {
-            await writeStats(options.stats);
-        } else if (options.updateStats !== false) {
-            await recalculateStats();
-        }
-        return {
-            restoredCount: records.length,
-            statsRestored: isPlainObject(options.stats)
-        };
-    }
-
-    async function clear(options = {}) {
-        await replace([], Object.assign({}, options, { updateStats: false }));
-        if (options.updateStats === true) {
-            await resetStats();
-        }
-        return true;
-    }
-
-    async function deleteMany(recordIds, options = {}) {
-        const ids = Array.isArray(recordIds) ? recordIds.map(toIdString).filter(Boolean) : [];
-        if (ids.length === 0) {
-            return { deletedCount: 0, deletedRecords: [], records: await list() };
-        }
-
-        const idSet = new Set(ids);
-        // 默认仅按 record.id 删除，避免共享 sessionId 的不同记录被误删。
-        // matchBy: 'sessionId' 时才按 sessionId 匹配（用于 suite 子记录清理等显式场景）。
-        const matchBySessionId = options.matchBy === 'sessionId';
-        const records = await list();
-        const deletedRecords = [];
-        const remainingRecords = [];
-
-        (Array.isArray(records) ? records : []).forEach((record) => {
-            const recordId = toIdString(record && record.id);
-            const sessionId = toIdString(record && record.sessionId);
-            const idMatch = recordId && idSet.has(recordId);
-            const sessionMatch = matchBySessionId && sessionId && idSet.has(sessionId);
-            if (idMatch || sessionMatch) {
-                deletedRecords.push(record);
-                return;
-            }
-            remainingRecords.push(record);
-        });
-
-        if (deletedRecords.length > 0) {
-            await replace(remainingRecords, options);
-        }
-
-        return {
-            deletedCount: deletedRecords.length,
-            deletedRecords,
-            records: remainingRecords
-        };
-    }
-
-    async function deleteById(recordId, options = {}) {
-        const result = await deleteMany([recordId], options);
-        return {
-            deleted: result.deletedCount > 0,
-            record: result.deletedRecords[0] || null,
-            records: result.records
-        };
-    }
-
-    async function saveRecord(record, options = {}) {
-        if (!record || typeof record !== 'object') {
-            throw new Error('PracticeRecordAPI.saveRecord requires a record object');
-        }
-
-        const saveOptions = getDefaultSaveOptions(options);
-        const store = getRecordStore();
-        if (!store || typeof store.savePracticeRecord !== 'function') {
-            throw new Error('PracticeRecordAPI.saveRecord: PracticeCore store not ready');
-        }
-        const normalizedRecord = normalizeRecord(record, saveOptions);
-        if (!normalizedRecord || !normalizedRecord.examId) {
-            throw new Error('PracticeRecordAPI.saveRecord requires a canonical examId');
-        }
-
-        const savedRecord = await store.savePracticeRecord(normalizedRecord, saveOptions);
-
-        if (options.updateStats !== false) {
-            await updateStatsForSavedRecord(savedRecord, options);
-        }
-
-        return savedRecord;
-    }
-
-    function fromCompletion(payload, context = {}, examEntry = null, options = {}) {
-        const core = getPracticeCore();
-        if (!core || !core.ingestor || typeof core.ingestor.fromCompletion !== 'function') {
-            return null;
-        }
-        return core.ingestor.fromCompletion(payload, context || {}, examEntry || null, getDefaultSaveOptions(options));
-    }
-
-    async function saveCompletion(payload, context = {}, examEntry = null, options = {}) {
-        const record = fromCompletion(payload, context, examEntry, options);
-        if (!record) {
-            throw new Error('PracticeRecordAPI.saveCompletion could not build canonical record');
-        }
-        return await saveRecord(record, options);
-    }
-
-    function normalizeAccuracy(value) {
-        const numeric = Number(value);
-        if (!Number.isFinite(numeric) || numeric < 0) {
-            return 0;
-        }
-        if (numeric > 1 && numeric <= 100) {
-            return numeric / 100;
-        }
-        return Math.min(numeric, 1);
-    }
-
-    function toSummaryMetrics(record = {}) {
-        const total = Number(record.totalQuestions ?? record.scoreInfo?.total ?? record.scoreInfo?.totalQuestions ?? record.realData?.scoreInfo?.total ?? record.realData?.totalQuestions);
-        const correct = Number(record.correctAnswers ?? record.score ?? record.scoreInfo?.correct ?? record.scoreInfo?.score ?? record.realData?.scoreInfo?.correct ?? record.realData?.score);
-        const safeTotal = Number.isFinite(total) && total >= 0 ? total : 0;
-        const safeCorrect = Number.isFinite(correct) && correct >= 0 ? correct : 0;
-
-        let accuracy = normalizeAccuracy(record.accuracy ?? record.scoreInfo?.accuracy ?? record.realData?.scoreInfo?.accuracy ?? (safeTotal > 0 ? safeCorrect / safeTotal : 0));
-        const percentageCandidate = Number(record.percentage ?? record.scoreInfo?.percentage ?? record.realData?.scoreInfo?.percentage);
-        const percentage = Number.isFinite(percentageCandidate) && percentageCandidate >= 0 && percentageCandidate <= 100
-            ? percentageCandidate
-            : Math.round(accuracy * 100);
-        const hasExplicitAccuracy = record.accuracy != null
-            || record.scoreInfo?.accuracy != null
-            || record.realData?.scoreInfo?.accuracy != null;
-        accuracy = percentage > 1 && !hasExplicitAccuracy
-            ? percentage / 100
-            : accuracy;
-
-        return {
-            totalQuestions: safeTotal,
-            correctAnswers: safeCorrect,
-            accuracy,
-            percentage,
-            duration: Number(record.duration ?? record.realData?.duration) || 0
-        };
-    }
-
-    function toReplayEntries(record, projector) {
-        if (typeof projector === 'function') {
-            return projector(record);
-        }
-        return [];
-    }
-
-    global.PracticeRecordAPI = {
-        __stable: true,
-        version: '0.6.2-fix',
-        list,
-        listSummary,
-        count,
-        distinctExamIds,
-        getById,
-        replace,
-        mergeRecords,
-        restoreRecords,
-        clear,
-        deleteById,
-        deleteMany,
-        saveRecord,
-        normalizeRecord,
-        fromCompletion,
-        saveCompletion,
-        toSummaryMetrics,
-        toReplayEntries,
-        getDefaultStats,
-        prepareStats,
-        readStats,
-        writeStats,
-        mergeStats,
-        resetStats,
-        recalculateStats,
-        updateStatsForSavedRecord
-    };
-
-    if (global.persistentStore && typeof global.persistentStore.migrateLegacyData === 'function') {
-        Promise.resolve()
-            .then(() => global.persistentStore.migrateLegacyData({ skipReady: true }))
-            .catch((error) => {
-                console.warn('[PracticeRecordAPI] 延后练习记录迁移失败:', error);
-            });
-    }
-})(typeof window !== 'undefined' ? window : globalThis);
-
-
-/* ===== js/core/backupAPI.js ===== */
-(function initBackupAPI(global) {
-    'use strict';
-
-    if (global.BackupAPI && global.BackupAPI.__stable === true) {
-        return;
-    }
-
-    const DEFAULT_VERSION = '0.6.2-form';
-    const DEFAULT_MAX_BACKUPS = 20;
-
-    function isPlainObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value);
-    }
-
-    function cloneJson(value) {
-        if (value == null) return value;
-        try {
-            return JSON.parse(JSON.stringify(value));
-        } catch (_) {
-            return value;
-        }
-    }
-
-    function getStorageFacade() {
-        if (global.storage && typeof global.storage.get === 'function') {
-            return global.storage;
-        }
-        // Some boot paths / VM tests expose bare global storage without attaching to window
-        try {
-            if (typeof storage !== 'undefined' && storage && typeof storage.get === 'function') {
-                return storage;
-            }
-        } catch (_) { /* ignore ReferenceError in strict scopes */ }
-        return null;
-    }
-
-    function getRepositories() {
-        if (global.dataRepositories && global.dataRepositories.backups) {
-            return global.dataRepositories;
-        }
-        const registry = global.StorageProviderRegistry;
-        if (registry && typeof registry.getCurrentProviders === 'function') {
-            const current = registry.getCurrentProviders();
-            if (current && current.repositories && current.repositories.backups) {
-                return current.repositories;
-            }
-        }
-        if (global.simpleStorageWrapper && global.simpleStorageWrapper.backupRepo) {
-            return {
-                backups: global.simpleStorageWrapper.backupRepo,
-                meta: global.simpleStorageWrapper.metaRepo || null,
-                settings: global.simpleStorageWrapper.settingsRepo || null
-            };
-        }
-        return null;
-    }
-
-    function getBackupRepo() {
-        const repos = getRepositories();
-        return repos && repos.backups ? repos.backups : null;
-    }
-
-    function getMetaRepo() {
-        const repos = getRepositories();
-        return repos && repos.meta ? repos.meta : null;
-    }
-
-    async function readMeta(key, fallback = null) {
-        const meta = getMetaRepo();
-        if (meta && typeof meta.get === 'function') {
-            return await meta.get(key, fallback);
-        }
-        const storageFacade = getStorageFacade();
-        if (storageFacade) {
-            return await storageFacade.get(key, fallback);
-        }
-        return fallback;
-    }
-
-    async function writeMeta(key, value) {
-        const meta = getMetaRepo();
-        if (meta && typeof meta.set === 'function') {
-            await meta.set(key, value);
-            return true;
-        }
-        const storageFacade = getStorageFacade();
-        if (storageFacade) {
-            await storageFacade.set(key, value);
-            return true;
-        }
-        throw new Error('BackupAPI: meta store not ready');
-    }
-
-    function resolvePracticeRecords(data) {
-        if (!data || typeof data !== 'object') return null;
-        if (Array.isArray(data.practice_records)) return data.practice_records;
-        if (Array.isArray(data.practiceRecords)) return data.practiceRecords;
-        return null;
-    }
-
-    function resolveUserStats(data) {
-        if (!data || typeof data !== 'object') return null;
-        if (isPlainObject(data.user_stats)) return data.user_stats;
-        if (isPlainObject(data.userStats)) return data.userStats;
-        return null;
-    }
-
-    function resolveExamIndex(data) {
-        if (!data || typeof data !== 'object') return null;
-        if (Array.isArray(data.exam_index)) return data.exam_index;
-        if (Array.isArray(data.examIndex)) return data.examIndex;
-        return null;
-    }
-
-    function resolveStorageVersion(data) {
-        if (!data || typeof data !== 'object') return null;
-        if (data.storage_version != null) return data.storage_version;
-        if (data.storageVersion != null) return data.storageVersion;
-        return null;
-    }
-
-    /**
-     * Canonical dual-schema payload so any legacy restore path can read snake or camel keys.
-     */
-    function normalizePayload(data = {}) {
-        const source = isPlainObject(data) ? data : {};
-        const records = resolvePracticeRecords(source);
-        const stats = resolveUserStats(source);
-        const examIndex = resolveExamIndex(source);
-        const storageVersion = resolveStorageVersion(source);
-        const payload = { ...source };
-
-        if (records) {
-            payload.practice_records = records;
-            payload.practiceRecords = records;
-        }
-        if (stats) {
-            payload.user_stats = stats;
-            payload.userStats = stats;
-        }
-        if (examIndex) {
-            payload.exam_index = examIndex;
-            payload.examIndex = examIndex;
-        }
-        if (storageVersion != null) {
-            payload.storage_version = storageVersion;
-            payload.storageVersion = storageVersion;
-        }
-        return payload;
-    }
-
-    async function captureSnapshot(extra = {}) {
-        let practiceRecords = [];
-        let userStats = null;
-
-        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
-            const listed = await global.PracticeRecordAPI.list();
-            practiceRecords = Array.isArray(listed) ? listed : [];
-        }
-        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.readStats === 'function') {
-            userStats = await global.PracticeRecordAPI.readStats();
-        }
-
-        const examIndex = await readMeta('exam_index', []);
-        const storageVersion = await readMeta('storage_version', null);
-
-        return normalizePayload({
-            practice_records: practiceRecords,
-            user_stats: userStats,
-            exam_index: Array.isArray(examIndex) ? examIndex : [],
-            storage_version: storageVersion,
-            ...(isPlainObject(extra) ? extra : {})
-        });
-    }
-
-    async function list(options = {}) {
-        const repo = getBackupRepo();
-        if (repo && typeof repo.list === 'function') {
-            const backups = await repo.list(options);
-            return Array.isArray(backups) ? backups : [];
-        }
-        const storageFacade = getStorageFacade();
-        if (storageFacade) {
-            const backups = await storageFacade.get('manual_backups', []);
-            return Array.isArray(backups) ? backups : [];
-        }
-        throw new Error('BackupAPI.list: backup repository not ready');
-    }
-
-    async function getById(id, options = {}) {
-        if (!id) return null;
-        const repo = getBackupRepo();
-        if (repo && typeof repo.getById === 'function') {
-            return await repo.getById(id, options);
-        }
-        const backups = await list(options);
-        return backups.find((item) => item && String(item.id) === String(id)) || null;
-    }
-
-    async function add(backup, options = {}) {
-        const repo = getBackupRepo();
-        const normalizedData = normalizePayload(backup && backup.data ? backup.data : {});
-        const entry = {
-            ...(backup && typeof backup === 'object' ? backup : {}),
-            id: (backup && backup.id) || `backup_${Date.now()}`,
-            timestamp: (backup && backup.timestamp) || new Date().toISOString(),
-            type: (backup && backup.type) || 'manual',
-            version: (backup && backup.version) || DEFAULT_VERSION,
-            data: normalizedData
-        };
-        entry.size = entry.size || JSON.stringify(entry.data).length;
-
-        if (repo && typeof repo.add === 'function') {
-            return await repo.add(entry, options);
-        }
-
-        // Fallback: raw storage (tests / early boot)
-        const storageFacade = getStorageFacade();
-        if (storageFacade) {
-            const backups = await storageFacade.get('manual_backups', []);
-            const list = Array.isArray(backups) ? backups.slice() : [];
-            list.unshift(entry);
-            const max = options.maxBackups || DEFAULT_MAX_BACKUPS;
-            while (list.length > max) {
-                list.pop();
-            }
-            await storageFacade.set('manual_backups', list);
-            return entry;
-        }
-
-        throw new Error('BackupAPI.add: backup repository not ready');
-    }
-
-    async function create(options = {}) {
-        const {
-            id = null,
-            type = 'manual',
-            data = null,
-            extra = null,
-            version = DEFAULT_VERSION
-        } = options;
-
-        const snapshot = data != null
-            ? normalizePayload(data)
-            : await captureSnapshot(extra || {});
-
-        const backupId = id || `backup_${Date.now()}`;
-        const entry = await add({
-            id: backupId,
-            timestamp: new Date().toISOString(),
-            type,
-            version,
-            data: snapshot
-        });
-
-        return entry && entry.id ? entry.id : backupId;
-    }
-
-    async function restorePayload(data, options = {}) {
-        const payload = normalizePayload(data || {});
-        const records = resolvePracticeRecords(payload);
-        const stats = resolveUserStats(payload);
-        const examIndex = resolveExamIndex(payload);
-        const storageVersion = resolveStorageVersion(payload);
-        const restoreRecords = options.restoreRecords !== false;
-        const restoreExamIndex = options.restoreExamIndex !== false;
-        const restoreStorageVersion = options.restoreStorageVersion !== false;
-
-        if (restoreRecords && records != null) {
-            if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.restoreRecords === 'function') {
-                await global.PracticeRecordAPI.restoreRecords(records, {
-                    stats: isPlainObject(stats) ? stats : null,
-                    updateStats: true
-                });
-            } else {
-                throw new Error('BackupAPI.restore: PracticeRecordAPI.restoreRecords not ready');
-            }
-        } else if (isPlainObject(stats) && global.PracticeRecordAPI && typeof global.PracticeRecordAPI.resetStats === 'function') {
-            await global.PracticeRecordAPI.resetStats(stats);
-        }
-
-        if (restoreExamIndex && examIndex) {
-            await writeMeta('exam_index', examIndex);
-        }
-
-        if (restoreStorageVersion && storageVersion != null) {
-            await writeMeta('storage_version', storageVersion);
-        }
-
-        // Optional system settings (DataIntegrityManager snapshots)
-        if (isPlainObject(payload.system_settings)) {
-            const repos = getRepositories();
-            if (repos && repos.settings && typeof repos.settings.getAll === 'function') {
-                const current = await repos.settings.getAll();
-                await repos.settings.saveAll({ ...current, ...payload.system_settings });
-            }
-        }
-
-        return {
-            restoredRecords: records != null,
-            restoredStats: isPlainObject(stats),
-            restoredExamIndex: Boolean(restoreExamIndex && examIndex),
-            restoredStorageVersion: Boolean(restoreStorageVersion && storageVersion != null)
-        };
-    }
-
-    async function restore(backupId, options = {}) {
-        if (!backupId) {
-            throw new Error('BackupAPI.restore: invalid backup id');
-        }
-        const backup = await getById(backupId);
-        if (!backup) {
-            throw new Error(`BackupAPI.restore: backup ${backupId} not found`);
-        }
-        const result = await restorePayload(backup.data || {}, options);
-        return { backup, ...result };
-    }
-
-    async function clear(options = {}) {
-        const repo = getBackupRepo();
-        if (repo && typeof repo.clear === 'function') {
-            await repo.clear(options);
-            return true;
-        }
-        const storageFacade = getStorageFacade();
-        if (storageFacade) {
-            await storageFacade.set('manual_backups', []);
-            return true;
-        }
-        throw new Error('BackupAPI.clear: backup repository not ready');
-    }
-
-    async function remove(id, options = {}) {
-        const repo = getBackupRepo();
-        if (repo && typeof repo.delete === 'function') {
-            return await repo.delete(id, options);
-        }
-        const backups = await list();
-        const next = backups.filter((item) => item && String(item.id) !== String(id));
-        if (next.length === backups.length) return false;
-        if (repo && typeof repo.saveAll === 'function') {
-            await repo.saveAll(next, options);
-            return true;
-        }
-        const storageFacade = getStorageFacade();
-        if (storageFacade) {
-            await storageFacade.set('manual_backups', next);
-            return true;
-        }
-        return false;
-    }
-
-    async function prune(limit, options = {}) {
-        const repo = getBackupRepo();
-        if (repo && typeof repo.prune === 'function') {
-            return await repo.prune(limit, options);
-        }
-        const max = typeof limit === 'number' && limit > 0 ? limit : DEFAULT_MAX_BACKUPS;
-        const backups = await list();
-        if (backups.length <= max) return backups.length;
-        const next = backups.slice(0, max);
-        if (repo && typeof repo.saveAll === 'function') {
-            await repo.saveAll(next, options);
-        } else {
-            const storageFacade = getStorageFacade();
-            if (storageFacade) {
-                await storageFacade.set('manual_backups', next);
-            }
-        }
-        return next.length;
-    }
-
-    global.BackupAPI = {
-        __stable: true,
-        version: DEFAULT_VERSION,
-        list,
-        getById,
-        add,
-        create,
-        captureSnapshot,
-        normalizePayload,
-        restore,
-        restorePayload,
-        clear,
-        remove,
-        prune,
-        resolvePracticeRecords,
-        resolveUserStats,
-        resolveExamIndex,
-        resolveStorageVersion
-    };
-})(typeof window !== 'undefined' ? window : globalThis);
-
-
-/* ===== js/core/externalBackupService.js ===== */
-/**
- * External disk backup via File System Access API.
- * Browser-internal backups (manual_backups) cannot survive site-data clears;
- * this service writes JSON into a user-chosen local folder.
- *
- * Policy:
- * - Silent write only when a directory handle already has granted permission.
- * - Daily reminder at most once per calendar day (permission / bind / stale write).
- * - Download export is never auto-triggered; only after explicit user click.
- */
-(function initExternalBackupService(global) {
-    'use strict';
-
-    if (global.ExternalBackupService && global.ExternalBackupService.__stable === true) {
-        return;
-    }
-
-    var META_KEY = 'exam_system_external_backup_meta';
-    var DB_NAME = 'ExamSystemExternalBackup';
-    var DB_VERSION = 1;
-    var STORE_NAME = 'handles';
-    var HANDLE_KEY = 'backup_directory';
-    var LATEST_FILENAME = 'practice-backup-latest.json';
-    var DAY_MS = 24 * 60 * 60 * 1000;
-    var STALE_WRITE_MS = DAY_MS;
-    var REMIND_BANNER_ID = 'external-backup-remind-banner';
-    var VERSION = '0.6.2-fix';
-
-    var state = {
-        ready: false,
-        readyPromise: null,
-        directoryHandle: null,
-        meta: null,
-        dirty: false,
-        writing: false,
-        lastSnapshotHash: null,
-        silentFlushTimer: null
-    };
-
-    function nowIso() {
-        return new Date().toISOString();
-    }
-
-    function dayKey(date) {
-        var d = date instanceof Date ? date : new Date(date || Date.now());
-        if (Number.isNaN(d.getTime())) {
-            d = new Date();
-        }
-        var y = d.getFullYear();
-        var m = String(d.getMonth() + 1).padStart(2, '0');
-        var day = String(d.getDate()).padStart(2, '0');
-        return y + '-' + m + '-' + day;
-    }
-
-    function isPlainObject(value) {
-        return value && typeof value === 'object' && !Array.isArray(value);
-    }
-
-    function notify(message, type) {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage(message, type || 'info');
-        }
-    }
-
-    function defaultMeta() {
-        return {
-            enabled: false,
-            directoryName: null,
-            lastWriteAt: null,
-            lastWriteOk: false,
-            lastWriteError: null,
-            lastRemindDay: null,
-            lastPermissionOk: false,
-            lastRestorePromptDay: null,
-            recordCountAtLastWrite: 0,
-            createdAt: nowIso(),
-            updatedAt: nowIso()
-        };
-    }
-
-    function readMeta() {
-        try {
-            var raw = global.localStorage && global.localStorage.getItem(META_KEY);
-            if (!raw) {
-                return defaultMeta();
-            }
-            var parsed = JSON.parse(raw);
-            return Object.assign(defaultMeta(), isPlainObject(parsed) ? parsed : {});
-        } catch (_) {
-            return defaultMeta();
-        }
-    }
-
-    function writeMeta(patch) {
-        var next = Object.assign({}, state.meta || readMeta(), isPlainObject(patch) ? patch : {}, {
-            updatedAt: nowIso()
-        });
-        state.meta = next;
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(META_KEY, JSON.stringify(next));
-            }
-        } catch (error) {
-            console.warn('[ExternalBackup] meta write failed:', error);
-        }
-        dispatchStatus();
-        return next;
-    }
-
-    function dispatchStatus() {
-        try {
-            global.dispatchEvent(new CustomEvent('external-backup-status', {
-                detail: getStatus()
-            }));
-        } catch (_) { /* ignore */ }
-    }
-
-    function supportsFileSystemAccess() {
-        return !!(
-            global.showDirectoryPicker &&
-            typeof global.showDirectoryPicker === 'function' &&
-            global.isSecureContext !== false
-        );
-    }
-
-    function supportsFilePickerRead() {
-        return !!(global.showOpenFilePicker && typeof global.showOpenFilePicker === 'function');
-    }
-
-    function openHandleDb() {
-        return new Promise(function (resolve, reject) {
-            if (!global.indexedDB) {
-                reject(new Error('IndexedDB unavailable'));
-                return;
-            }
-            var request = global.indexedDB.open(DB_NAME, DB_VERSION);
-            request.onerror = function () {
-                reject(request.error || new Error('Failed to open external backup DB'));
-            };
-            request.onupgradeneeded = function (event) {
-                var db = event.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
-                }
-            };
-            request.onsuccess = function () {
-                resolve(request.result);
-            };
-        });
-    }
-
-    function idbRequest(request) {
-        return new Promise(function (resolve, reject) {
-            request.onsuccess = function () { resolve(request.result); };
-            request.onerror = function () { reject(request.error); };
-        });
-    }
-
-    async function saveDirectoryHandle(handle) {
-        var db = await openHandleDb();
-        try {
-            var tx = db.transaction(STORE_NAME, 'readwrite');
-            var store = tx.objectStore(STORE_NAME);
-            await idbRequest(store.put(handle, HANDLE_KEY));
-        } finally {
-            try { db.close(); } catch (_) { /* ignore */ }
-        }
-    }
-
-    async function loadDirectoryHandle() {
-        var db = await openHandleDb();
-        try {
-            var tx = db.transaction(STORE_NAME, 'readonly');
-            var store = tx.objectStore(STORE_NAME);
-            return await idbRequest(store.get(HANDLE_KEY));
-        } finally {
-            try { db.close(); } catch (_) { /* ignore */ }
-        }
-    }
-
-    async function clearDirectoryHandle() {
-        var db = await openHandleDb();
-        try {
-            var tx = db.transaction(STORE_NAME, 'readwrite');
-            var store = tx.objectStore(STORE_NAME);
-            await idbRequest(store.delete(HANDLE_KEY));
-        } finally {
-            try { db.close(); } catch (_) { /* ignore */ }
-        }
-    }
-
-    async function queryHandlePermission(handle, mode) {
-        if (!handle) {
-            return 'denied';
-        }
-        try {
-            if (typeof handle.queryPermission === 'function') {
-                return await handle.queryPermission({ mode: mode || 'readwrite' });
-            }
-        } catch (_) { /* ignore */ }
-        return 'prompt';
-    }
-
-    async function requestHandlePermission(handle, mode) {
-        if (!handle) {
-            return 'denied';
-        }
-        try {
-            if (typeof handle.requestPermission === 'function') {
-                return await handle.requestPermission({ mode: mode || 'readwrite' });
-            }
-        } catch (_) { /* ignore */ }
-        // Some Chromium builds treat existing handles as usable without requestPermission.
-        return await queryHandlePermission(handle, mode);
-    }
-
-    async function ensurePermission(handle, interactive) {
-        if (!handle) {
-            return false;
-        }
-        var current = await queryHandlePermission(handle, 'readwrite');
-        if (current === 'granted') {
-            writeMeta({ lastPermissionOk: true });
-            return true;
-        }
-        if (!interactive) {
-            writeMeta({ lastPermissionOk: false });
-            return false;
-        }
-        var next = await requestHandlePermission(handle, 'readwrite');
-        var ok = next === 'granted';
-        writeMeta({ lastPermissionOk: ok });
-        return ok;
-    }
-
-    async function requestPersistentStorage() {
-        try {
-            if (!global.navigator || !global.navigator.storage || typeof global.navigator.storage.persist !== 'function') {
-                return false;
-            }
-            var already = typeof global.navigator.storage.persisted === 'function'
-                ? await global.navigator.storage.persisted()
-                : false;
-            if (already) {
-                return true;
-            }
-            return await global.navigator.storage.persist();
-        } catch (error) {
-            console.warn('[ExternalBackup] persist() failed:', error);
-            return false;
-        }
-    }
-
-    async function captureSnapshot() {
-        if (global.BackupAPI && typeof global.BackupAPI.captureSnapshot === 'function') {
-            var snapshot = await global.BackupAPI.captureSnapshot();
-            return global.BackupAPI.normalizePayload
-                ? global.BackupAPI.normalizePayload(snapshot)
-                : snapshot;
-        }
-
-        var practiceRecords = [];
-        var userStats = null;
-        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
-            var listed = await global.PracticeRecordAPI.list();
-            practiceRecords = Array.isArray(listed) ? listed : [];
-        }
-        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.readStats === 'function') {
-            userStats = await global.PracticeRecordAPI.readStats();
-        }
-
-        var examIndex = [];
-        var storageVersion = null;
-        try {
-            if (global.storage && typeof global.storage.get === 'function') {
-                examIndex = await global.storage.get('exam_index', []);
-                storageVersion = await global.storage.get('storage_version', null);
-            }
-        } catch (_) { /* ignore */ }
-
-        return {
-            practice_records: practiceRecords,
-            practiceRecords: practiceRecords,
-            user_stats: userStats,
-            userStats: userStats,
-            exam_index: Array.isArray(examIndex) ? examIndex : [],
-            examIndex: Array.isArray(examIndex) ? examIndex : [],
-            storage_version: storageVersion,
-            storageVersion: storageVersion
-        };
-    }
-
-    function buildExportDocument(snapshot) {
-        return {
-            exportDate: nowIso(),
-            version: VERSION,
-            source: 'external-backup-service',
-            note: 'Disk backup for IELTS Atlas. Survives browser cache clears. Import via 设置 → 导入数据.',
-            data: snapshot
-        };
-    }
-
-    function stableHash(payload) {
-        try {
-            var text = JSON.stringify(payload);
-            var hash = 0;
-            for (var i = 0; i < text.length; i += 1) {
-                hash = ((hash << 5) - hash) + text.charCodeAt(i);
-                hash |= 0;
-            }
-            return String(hash);
-        } catch (_) {
-            return String(Date.now());
-        }
-    }
-
-    async function writeTextFile(directoryHandle, filename, text) {
-        var fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
-        var writable = await fileHandle.createWritable();
-        try {
-            await writable.write(text);
-            await writable.close();
-        } catch (error) {
-            try { await writable.abort(); } catch (_) { /* ignore */ }
-            throw error;
-        }
-    }
-
-    async function readTextFile(directoryHandle, filename) {
-        var fileHandle = await directoryHandle.getFileHandle(filename, { create: false });
-        var file = await fileHandle.getFile();
-        return await file.text();
-    }
-
-    async function writeToBoundDirectory(options) {
-        var opts = options || {};
-        if (state.writing) {
-            return { success: false, reason: 'busy' };
-        }
-        if (!state.directoryHandle) {
-            return { success: false, reason: 'unbound' };
-        }
-
-        state.writing = true;
-        try {
-            var interactive = opts.interactive === true;
-            var permitted = await ensurePermission(state.directoryHandle, interactive);
-            if (!permitted) {
-                writeMeta({ lastWriteOk: false, lastWriteError: 'permission_denied' });
-                return { success: false, reason: 'permission_denied' };
-            }
-
-            var snapshot = await captureSnapshot();
-            var doc = buildExportDocument(snapshot);
-            var text = JSON.stringify(doc, null, 2);
-            var hash = stableHash(doc.data);
-
-            if (!opts.force && hash === state.lastSnapshotHash && state.meta && state.meta.lastWriteOk) {
-                return { success: true, reason: 'unchanged', skipped: true };
-            }
-
-            await writeTextFile(state.directoryHandle, LATEST_FILENAME, text);
-
-            if (opts.datedCopy !== false) {
-                try {
-                    var dated = 'practice-backup-' + dayKey(new Date()) + '.json';
-                    await writeTextFile(state.directoryHandle, dated, text);
-                } catch (datedError) {
-                    console.warn('[ExternalBackup] dated copy failed:', datedError);
-                }
-            }
-
-            var recordCount = Array.isArray(snapshot.practice_records)
-                ? snapshot.practice_records.length
-                : (Array.isArray(snapshot.practiceRecords) ? snapshot.practiceRecords.length : 0);
-
-            state.lastSnapshotHash = hash;
-            state.dirty = false;
-            writeMeta({
-                enabled: true,
-                lastWriteAt: nowIso(),
-                lastWriteOk: true,
-                lastWriteError: null,
-                lastPermissionOk: true,
-                recordCountAtLastWrite: recordCount
-            });
-
-            return {
-                success: true,
-                reason: 'written',
-                filename: LATEST_FILENAME,
-                recordCount: recordCount,
-                bytes: text.length
-            };
-        } catch (error) {
-            console.error('[ExternalBackup] write failed:', error);
-            writeMeta({
-                lastWriteOk: false,
-                lastWriteError: error && error.message ? error.message : String(error)
-            });
-            return {
-                success: false,
-                reason: 'write_error',
-                error: error
-            };
-        } finally {
-            state.writing = false;
-        }
-    }
-
-    async function bindDirectory(options) {
-        if (!supportsFileSystemAccess()) {
-            throw new Error('当前浏览器不支持绑定本地文件夹（需要 Chrome/Edge，且非 file:// 打开）');
-        }
-
-        var handle = await global.showDirectoryPicker({
-            id: 'ielts-atlas-external-backup',
-            mode: 'readwrite',
-            startIn: 'documents'
-        });
-
-        if (!handle) {
-            throw new Error('未选择文件夹');
-        }
-
-        var permitted = await ensurePermission(handle, true);
-        if (!permitted) {
-            throw new Error('未获得文件夹读写权限');
-        }
-
-        await saveDirectoryHandle(handle);
-        state.directoryHandle = handle;
-        writeMeta({
-            enabled: true,
-            directoryName: handle.name || 'backup',
-            lastPermissionOk: true,
-            lastWriteError: null
-        });
-
-        var writeNow = !options || options.writeNow !== false;
-        var writeResult = null;
-        if (writeNow) {
-            writeResult = await writeToBoundDirectory({ interactive: true, force: true });
-        }
-
-        await requestPersistentStorage();
-        return {
-            directoryName: handle.name || 'backup',
-            writeResult: writeResult
-        };
-    }
-
-    async function unbindDirectory() {
-        state.directoryHandle = null;
-        state.lastSnapshotHash = null;
-        try {
-            await clearDirectoryHandle();
-        } catch (error) {
-            console.warn('[ExternalBackup] clear handle failed:', error);
-        }
-        writeMeta({
-            enabled: false,
-            directoryName: null,
-            lastPermissionOk: false,
-            lastWriteError: null
-        });
-        return true;
-    }
-
-    async function restoreFromLatest(options) {
-        var opts = options || {};
-        if (!state.directoryHandle) {
-            throw new Error('尚未绑定备份文件夹');
-        }
-        var permitted = await ensurePermission(state.directoryHandle, opts.interactive !== false);
-        if (!permitted) {
-            throw new Error('需要文件夹读取权限才能恢复');
-        }
-
-        var text = await readTextFile(state.directoryHandle, LATEST_FILENAME);
-        var payload = JSON.parse(text);
-        var data = payload && payload.data ? payload.data : payload;
-
-        if (global.BackupAPI && typeof global.BackupAPI.restorePayload === 'function') {
-            await global.BackupAPI.restorePayload(data, opts);
-        } else if (global.DataBackupManager || global.dataBackupManager) {
-            throw new Error('请使用设置页「导入数据」选择备份文件完成恢复');
-        } else {
-            throw new Error('恢复 API 未就绪');
-        }
-
-        writeMeta({ lastRestorePromptDay: dayKey(new Date()) });
-        return true;
-    }
-
-    async function pickAndRestoreFile() {
-        if (supportsFilePickerRead()) {
-            var handles = await global.showOpenFilePicker({
-                multiple: false,
-                types: [{
-                    description: 'IELTS Atlas backup JSON',
-                    accept: { 'application/json': ['.json'] }
-                }]
-            });
-            var fileHandle = handles && handles[0];
-            if (!fileHandle) {
-                throw new Error('未选择文件');
-            }
-            var file = await fileHandle.getFile();
-            var text = await file.text();
-            var payload = JSON.parse(text);
-            var data = payload && payload.data ? payload.data : payload;
-            if (global.BackupAPI && typeof global.BackupAPI.restorePayload === 'function') {
-                await global.BackupAPI.restorePayload(data);
-                return true;
-            }
-            throw new Error('恢复 API 未就绪');
-        }
-
-        // Fallback: reuse existing import flow
-        if (typeof global.importData === 'function') {
-            global.importData();
-            return false;
-        }
-        throw new Error('当前环境不支持文件选择器，请使用「导入数据」');
-    }
-
-    async function countPracticeRecords() {
-        try {
-            if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
-                var list = await global.PracticeRecordAPI.list();
-                return Array.isArray(list) ? list.length : 0;
-            }
-        } catch (_) { /* ignore */ }
-        return 0;
-    }
-
-    async function hasReadableLatestBackup() {
-        if (!state.directoryHandle) {
-            return false;
-        }
-        try {
-            var permitted = await ensurePermission(state.directoryHandle, false);
-            if (!permitted) {
-                return false;
-            }
-            await state.directoryHandle.getFileHandle(LATEST_FILENAME, { create: false });
-            return true;
-        } catch (_) {
-            return false;
-        }
-    }
-
-    function buildReminder(status) {
-        if (!status) {
-            return null;
-        }
-
-        if (!status.supported) {
-            return null;
-        }
-
-        if (!status.bound) {
-            return {
-                level: 'info',
-                code: 'bind',
-                title: '建议绑定本地备份文件夹',
-                message: '练习数据只存在浏览器内，清缓存会丢失。绑定文件夹后可一键写入磁盘备份。',
-                primaryAction: 'bind',
-                primaryLabel: '绑定文件夹',
-                secondaryAction: null,
-                secondaryLabel: null
-            };
-        }
-
-        if (!status.permissionGranted) {
-            return {
-                level: 'warning',
-                code: 'permission',
-                title: '本地备份需要重新授权',
-                message: '已绑定「' + (status.directoryName || '备份文件夹') + '」，但当前没有写入权限。',
-                primaryAction: 'reauth',
-                primaryLabel: '重新授权并写入',
-                secondaryAction: 'unbind',
-                secondaryLabel: '解除绑定'
-            };
-        }
-
-        if (status.staleWrite || status.dirty) {
-            return {
-                level: 'info',
-                code: 'write',
-                title: '本地备份可更新',
-                message: status.lastWriteAt
-                    ? ('距上次写入已超过一天或有新练习数据（上次：' + formatTime(status.lastWriteAt) + '）。')
-                    : '尚未写入磁盘备份，建议现在写入。',
-                primaryAction: 'write',
-                primaryLabel: '立即写入备份',
-                secondaryAction: null,
-                secondaryLabel: null
-            };
-        }
-
-        return null;
-    }
-
-    function formatTime(iso) {
-        if (!iso) return '—';
-        try {
-            return new Date(iso).toLocaleString();
-        } catch (_) {
-            return String(iso);
-        }
-    }
-
-    function shouldShowDailyReminder(reminder) {
-        if (!reminder) {
-            return false;
-        }
-        var meta = state.meta || readMeta();
-        var today = dayKey(new Date());
-        if (meta.lastRemindDay === today) {
-            return false;
-        }
-        return true;
-    }
-
-    function markReminded() {
-        writeMeta({ lastRemindDay: dayKey(new Date()) });
-    }
-
-    function removeRemindBanner() {
-        var el = global.document && global.document.getElementById(REMIND_BANNER_ID);
-        if (el && el.parentNode) {
-            el.parentNode.removeChild(el);
-        }
-    }
-
-    function renderRemindBanner(reminder) {
-        if (!global.document || !global.document.body || !reminder) {
-            return;
-        }
-
-        removeRemindBanner();
-
-        var banner = global.document.createElement('div');
-        banner.id = REMIND_BANNER_ID;
-        banner.className = 'external-backup-banner external-backup-banner--' + (reminder.level || 'info');
-        banner.setAttribute('role', 'status');
-
-        var glass = global.document.createElement('div');
-        glass.className = 'external-backup-banner__glass';
-
-        var text = global.document.createElement('div');
-        text.className = 'external-backup-banner__text';
-        var title = global.document.createElement('strong');
-        title.textContent = reminder.title;
-        var msg = global.document.createElement('span');
-        msg.textContent = reminder.message;
-        text.appendChild(title);
-        text.appendChild(msg);
-
-        var actions = global.document.createElement('div');
-        actions.className = 'external-backup-banner__actions';
-
-        function makeBtn(label, action, primary) {
-            var btn = global.document.createElement('button');
-            btn.type = 'button';
-            btn.className = primary
-                ? 'btn external-backup-banner__btn external-backup-banner__btn--primary'
-                : 'btn external-backup-banner__btn external-backup-banner__btn--ghost';
-            btn.textContent = label;
-            btn.addEventListener('click', function () {
-                handleReminderAction(action);
-            });
-            return btn;
-        }
-
-        if (reminder.primaryAction) {
-            actions.appendChild(makeBtn(reminder.primaryLabel || '确定', reminder.primaryAction, true));
-        }
-        if (reminder.secondaryAction) {
-            actions.appendChild(makeBtn(reminder.secondaryLabel || '取消', reminder.secondaryAction, false));
-        }
-
-        var dismiss = global.document.createElement('button');
-        dismiss.type = 'button';
-        dismiss.className = 'external-backup-banner__dismiss';
-        dismiss.setAttribute('aria-label', '关闭提醒');
-        dismiss.textContent = '×';
-        dismiss.addEventListener('click', function () {
-            markReminded();
-            removeRemindBanner();
-        });
-
-        glass.appendChild(text);
-        glass.appendChild(actions);
-        glass.appendChild(dismiss);
-        banner.appendChild(glass);
-        global.document.body.appendChild(banner);
-        markReminded();
-    }
-
-    async function handleReminderAction(action) {
-        try {
-            if (action === 'bind') {
-                var bound = await bindDirectory({ writeNow: true });
-                removeRemindBanner();
-                if (bound.writeResult && bound.writeResult.success) {
-                    notify('已绑定并写入本地备份：' + (bound.directoryName || ''), 'success');
-                } else {
-                    notify('已绑定文件夹：' + (bound.directoryName || '') + '，请点击「立即写入备份」', 'info');
-                }
-                refreshUi();
-                return;
-            }
-            if (action === 'reauth' || action === 'write') {
-                var result = await writeToBoundDirectory({ interactive: true, force: true });
-                removeRemindBanner();
-                if (result.success) {
-                    notify(result.skipped ? '备份已是最新' : '本地备份已写入', 'success');
-                } else if (result.reason === 'permission_denied') {
-                    notify('仍未获得文件夹权限，请在浏览器弹窗中允许访问', 'warning');
-                } else if (result.reason === 'unbound') {
-                    notify('尚未绑定备份文件夹', 'warning');
-                } else {
-                    notify('写入失败：' + (result.error && result.error.message ? result.error.message : result.reason), 'error');
-                }
-                refreshUi();
-                return;
-            }
-            if (action === 'unbind') {
-                await unbindDirectory();
-                removeRemindBanner();
-                notify('已解除本地备份文件夹绑定', 'info');
-                refreshUi();
-            }
-        } catch (error) {
-            if (error && error.name === 'AbortError') {
-                notify('已取消', 'info');
-                return;
-            }
-            console.error('[ExternalBackup] reminder action failed:', error);
-            notify(error && error.message ? error.message : '操作失败', 'error');
-        }
-    }
-
-    function getStatus() {
-        var meta = state.meta || readMeta();
-        var lastWriteAt = meta.lastWriteAt || null;
-        var lastWriteAge = lastWriteAt ? (Date.now() - new Date(lastWriteAt).getTime()) : Infinity;
-        var staleWrite = !lastWriteAt || !Number.isFinite(lastWriteAge) || lastWriteAge >= STALE_WRITE_MS;
-        var permissionGranted = !!(state.directoryHandle && meta.lastPermissionOk);
-
-        return {
-            supported: supportsFileSystemAccess(),
-            secureContext: global.isSecureContext !== false,
-            bound: !!(state.directoryHandle && meta.enabled),
-            directoryName: meta.directoryName || null,
-            permissionGranted: permissionGranted,
-            lastWriteAt: lastWriteAt,
-            lastWriteOk: !!meta.lastWriteOk,
-            lastWriteError: meta.lastWriteError || null,
-            lastWriteAgeMs: Number.isFinite(lastWriteAge) ? lastWriteAge : null,
-            staleWrite: staleWrite,
-            dirty: !!state.dirty,
-            writing: !!state.writing,
-            recordCountAtLastWrite: meta.recordCountAtLastWrite || 0,
-            latestFilename: LATEST_FILENAME,
-            lastRemindDay: meta.lastRemindDay || null
-        };
-    }
-
-    async function refreshPermissionFlag() {
-        if (!state.directoryHandle) {
-            writeMeta({ lastPermissionOk: false });
-            return false;
-        }
-        var ok = await ensurePermission(state.directoryHandle, false);
-        return ok;
-    }
-
-    async function maybeShowDailyReminder(options) {
-        var opts = options || {};
-        await ensureReady();
-        await refreshPermissionFlag();
-        var status = getStatus();
-        var reminder = buildReminder(status);
-        if (!reminder) {
-            if (opts.force) {
-                removeRemindBanner();
-            }
-            return null;
-        }
-        if (opts.force || shouldShowDailyReminder(reminder)) {
-            if (opts.render !== false) {
-                renderRemindBanner(reminder);
-            }
-            return reminder;
-        }
-        return null;
-    }
-
-    async function maybePromptEmptyStoreRecovery() {
-        await ensureReady();
-        var count = await countPracticeRecords();
-        if (count > 0) {
-            return false;
-        }
-        var readable = await hasReadableLatestBackup();
-        if (!readable) {
-            return false;
-        }
-
-        var meta = state.meta || readMeta();
-        var today = dayKey(new Date());
-        if (meta.lastRestorePromptDay === today) {
-            return false;
-        }
-        writeMeta({ lastRestorePromptDay: today });
-
-        var dirName = (state.meta && state.meta.directoryName) || '备份文件夹';
-        var ok = false;
-        try {
-            ok = global.confirm(
-                '检测到浏览器内练习记录为空，但本地备份文件夹「' + dirName +
-                '」中有 ' + LATEST_FILENAME + '。是否立即恢复？'
-            );
-        } catch (_) {
-            ok = false;
-        }
-        if (!ok) {
-            return false;
-        }
-        try {
-            await restoreFromLatest({ interactive: true });
-            notify('已从本地备份文件夹恢复数据', 'success');
-            try {
-                if (typeof global.updateOverview === 'function') {
-                    global.updateOverview();
-                }
-            } catch (_) { /* ignore */ }
-            try {
-                global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
-                    detail: { source: 'external-backup-restore' }
-                }));
-            } catch (_) { /* ignore */ }
-            return true;
-        } catch (error) {
-            console.error('[ExternalBackup] restore failed:', error);
-            notify('恢复失败：' + (error && error.message ? error.message : error), 'error');
-            return false;
-        }
-    }
-
-    function markDirty() {
-        state.dirty = true;
-        dispatchStatus();
-        scheduleSilentFlush();
-    }
-
-    /**
-     * When folder permission is already granted, write silently after data changes.
-     * Never auto-downloads; never prompts for permission here.
-     */
-    function scheduleSilentFlush() {
-        if (state.silentFlushTimer) {
-            global.clearTimeout(state.silentFlushTimer);
-        }
-        state.silentFlushTimer = global.setTimeout(function () {
-            state.silentFlushTimer = null;
-            flushSilentlyIfPermitted().catch(function (error) {
-                console.warn('[ExternalBackup] silent flush failed:', error);
-            });
-        }, 8000);
-    }
-
-    async function flushSilentlyIfPermitted() {
-        await ensureReady();
-        if (!state.directoryHandle || !state.dirty || state.writing) {
-            return { success: false, reason: 'skip' };
-        }
-        var permitted = await ensurePermission(state.directoryHandle, false);
-        if (!permitted) {
-            // Permission missing: daily banner handles re-auth; do not prompt here.
-            return { success: false, reason: 'permission_denied' };
-        }
-        return writeToBoundDirectory({ interactive: false, force: false });
-    }
-
-    function refreshUi() {
-        try {
-            if (typeof global.refreshExternalBackupPanel === 'function') {
-                global.refreshExternalBackupPanel();
-            }
-        } catch (_) { /* ignore */ }
-        dispatchStatus();
-    }
-
-    function formatStatusText(status) {
-        if (!status.supported) {
-            return '当前环境不支持文件夹绑定（请用 Chrome/Edge 通过 http(s) 打开；file:// 下请用「导出到下载」）。';
-        }
-        if (!status.bound) {
-            return '未绑定本地备份文件夹。绑定后可一键写入磁盘，避免清缓存丢数据。';
-        }
-        var parts = [];
-        parts.push('已绑定：' + (status.directoryName || '文件夹'));
-        if (!status.permissionGranted) {
-            parts.push('权限失效，需重新授权');
-        } else if (status.lastWriteAt) {
-            parts.push('上次写入 ' + formatTime(status.lastWriteAt));
-            if (status.lastWriteOk === false) {
-                parts.push('最近一次写入失败');
-            }
-        } else {
-            parts.push('尚未写入');
-        }
-        if (status.dirty) {
-            parts.push('有未备份的新数据');
-        }
-        return parts.join(' · ');
-    }
-
-    function formatEntryLabel(status) {
-        if (!status.supported) {
-            return '📁 本地磁盘备份';
-        }
-        if (!status.bound) {
-            return '📁 本地磁盘备份';
-        }
-        if (!status.permissionGranted) {
-            return '📁 本地备份 · 需授权';
-        }
-        if (status.staleWrite || status.dirty) {
-            return '📁 本地备份 · 待更新';
-        }
-        return '📁 本地备份 · 已就绪';
-    }
-
-    var ENTRY_ID = 'external-backup-entry-btn';
-    var MODAL_ID = 'external-backup-modal';
-    var modalBound = false;
-
-    function getModal() {
-        return global.document ? global.document.getElementById(MODAL_ID) : null;
-    }
-
-    function openModal() {
-        ensureModalDom();
-        var modal = getModal();
-        if (modal) {
-            modal.classList.add('show');
-            refreshExternalBackupPanel();
-        }
-    }
-
-    function closeModal() {
-        var modal = getModal();
-        if (modal) {
-            modal.classList.remove('show');
-        }
-    }
-
-    function makeActionButton(id, label) {
-        var btn = global.document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn data-mgmt-btn';
-        btn.id = id;
-        btn.textContent = label;
-        return btn;
-    }
-
-    function ensureEntryButton() {
-        var panel = global.document && global.document.querySelector('#settings-view .data-management-panel');
-        if (!panel) {
-            return null;
-        }
-        var entry = global.document.getElementById(ENTRY_ID);
-        if (entry) {
-            return entry;
-        }
-
-        var actions = panel.querySelector('.hero-settings-actions');
-        if (!actions) {
-            return null;
-        }
-
-        entry = global.document.createElement('button');
-        entry.type = 'button';
-        entry.className = 'btn data-mgmt-btn';
-        entry.id = ENTRY_ID;
-        entry.textContent = '📁 本地磁盘备份';
-
-        // Prefer leading position so the recommended action is easy to find.
-        if (actions.firstChild) {
-            actions.insertBefore(entry, actions.firstChild);
-        } else {
-            actions.appendChild(entry);
-        }
-        return entry;
-    }
-
-    function ensureModalDom() {
-        if (!global.document || !global.document.body) {
-            return null;
-        }
-
-        var modal = getModal();
-        if (modal) {
-            if (!modalBound) {
-                bindModalEvents(modal);
-            }
-            return modal;
-        }
-
-        modal = global.document.createElement('div');
-        modal.id = MODAL_ID;
-        modal.className = 'theme-modal external-backup-modal shui-secondary-modal shui-secondary-modal--sm';
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-modal', 'true');
-        modal.setAttribute('aria-labelledby', 'external-backup-title');
-
-        var content = global.document.createElement('div');
-        content.className = 'theme-modal-content external-backup-modal__content shui-secondary-modal__content';
-
-        var header = global.document.createElement('div');
-        header.className = 'theme-modal-header external-backup-modal__header shui-secondary-modal__header';
-
-        var titleGroup = global.document.createElement('div');
-        titleGroup.className = 'external-backup-modal__title-group shui-secondary-modal__title-group';
-
-        var eyebrow = global.document.createElement('div');
-        eyebrow.className = 'external-backup-modal__eyebrow shui-secondary-modal__eyebrow';
-        eyebrow.textContent = 'DISK BACKUP';
-
-        var title = global.document.createElement('h3');
-        title.id = 'external-backup-title';
-        title.textContent = '本地磁盘备份';
-
-        titleGroup.appendChild(eyebrow);
-        titleGroup.appendChild(title);
-
-        var closeBtn = global.document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'theme-modal-close';
-        closeBtn.setAttribute('aria-label', '关闭');
-        closeBtn.innerHTML = '&times;';
-
-        header.appendChild(titleGroup);
-        header.appendChild(closeBtn);
-
-        var body = global.document.createElement('div');
-        body.className = 'theme-modal-body external-backup-modal__body shui-secondary-modal__body';
-
-        var host = global.document.createElement('div');
-        host.id = 'external-backup-panel';
-        host.className = 'external-backup-panel external-backup-panel--modal';
-
-        var desc = global.document.createElement('p');
-        desc.className = 'external-backup-panel__desc';
-        desc.textContent = '绑定本地文件夹后，可把练习数据写入磁盘 JSON。清浏览器缓存不会删除该文件夹中的文件；已授权时可在后台静默更新；每天最多提醒一次，且不会自动下载。';
-
-        var statusCard = global.document.createElement('div');
-        statusCard.className = 'external-backup-status-card';
-
-        var statusLabel = global.document.createElement('div');
-        statusLabel.className = 'external-backup-status-card__label';
-        statusLabel.textContent = '当前状态';
-
-        var status = global.document.createElement('div');
-        status.id = 'external-backup-status';
-        status.className = 'external-backup-panel__status';
-        status.textContent = '状态加载中…';
-
-        statusCard.appendChild(statusLabel);
-        statusCard.appendChild(status);
-
-        var tips = global.document.createElement('ul');
-        tips.className = 'external-backup-panel__tips';
-        [
-            '推荐使用 Chrome / Edge，通过 http(s) 或 localhost 打开',
-            'file:// 环境通常无法绑定文件夹，请改用「导出到下载」',
-            '应用内备份只防导入误操作，防不了清缓存'
-        ].forEach(function (line) {
-            var li = global.document.createElement('li');
-            li.textContent = line;
-            tips.appendChild(li);
-        });
-
-        var actions = global.document.createElement('div');
-        actions.className = 'external-backup-panel__actions';
-
-        var bindBtn = makeActionButton('external-backup-bind-btn', '📁 绑定备份文件夹');
-        var writeBtn = makeActionButton('external-backup-write-btn', '💾 立即写入备份');
-        var restoreBtn = makeActionButton('external-backup-restore-btn', '♻️ 从文件夹恢复');
-        var unbindBtn = makeActionButton('external-backup-unbind-btn', '🔓 解除绑定');
-        unbindBtn.classList.add('external-backup-btn--ghost');
-
-        actions.appendChild(bindBtn);
-        actions.appendChild(writeBtn);
-        actions.appendChild(restoreBtn);
-        actions.appendChild(unbindBtn);
-
-        host.appendChild(desc);
-        host.appendChild(statusCard);
-        host.appendChild(tips);
-        host.appendChild(actions);
-        body.appendChild(host);
-
-        content.appendChild(header);
-        content.appendChild(body);
-        modal.appendChild(content);
-        global.document.body.appendChild(modal);
-
-        bindBtn.addEventListener('click', async function () {
-            try {
-                await ensureReady();
-                var result = await bindDirectory({ writeNow: true });
-                if (result.writeResult && result.writeResult.success) {
-                    notify('已绑定并写入：' + result.directoryName, 'success');
-                } else {
-                    notify('已绑定：' + result.directoryName, 'success');
-                }
-            } catch (error) {
-                if (error && error.name === 'AbortError') {
-                    notify('已取消选择文件夹', 'info');
-                } else {
-                    notify(error && error.message ? error.message : '绑定失败', 'error');
-                }
-            } finally {
-                refreshExternalBackupPanel();
-            }
-        });
-
-        writeBtn.addEventListener('click', async function () {
-            try {
-                await ensureReady();
-                var result = await writeToBoundDirectory({ interactive: true, force: true });
-                if (result.success) {
-                    notify(result.skipped ? '备份内容无变化' : ('已写入 ' + (result.filename || LATEST_FILENAME)), 'success');
-                } else if (result.reason === 'unbound') {
-                    notify('请先绑定备份文件夹', 'warning');
-                } else if (result.reason === 'permission_denied') {
-                    notify('需要允许文件夹访问权限', 'warning');
-                } else {
-                    notify('写入失败：' + (result.error && result.error.message ? result.error.message : result.reason), 'error');
-                }
-            } catch (error) {
-                notify(error && error.message ? error.message : '写入失败', 'error');
-            } finally {
-                refreshExternalBackupPanel();
-            }
-        });
-
-        restoreBtn.addEventListener('click', async function () {
-            try {
-                await ensureReady();
-                var statusNow = getStatus();
-                if (!statusNow.bound) {
-                    await pickAndRestoreFile();
-                    notify('已从文件恢复（或已打开导入流程）', 'success');
-                    return;
-                }
-                var ok = true;
-                try {
-                    ok = global.confirm('将用文件夹中的 ' + LATEST_FILENAME + ' 覆盖/恢复练习数据，是否继续？');
-                } catch (_) { /* ignore */ }
-                if (!ok) {
-                    return;
-                }
-                await restoreFromLatest({ interactive: true });
-                notify('已从本地备份文件夹恢复', 'success');
-                try {
-                    if (typeof global.updateOverview === 'function') {
-                        global.updateOverview();
-                    }
-                } catch (_) { /* ignore */ }
-            } catch (error) {
-                if (error && error.name === 'AbortError') {
-                    notify('已取消', 'info');
-                } else {
-                    notify(error && error.message ? error.message : '恢复失败', 'error');
-                }
-            } finally {
-                refreshExternalBackupPanel();
-            }
-        });
-
-        unbindBtn.addEventListener('click', async function () {
-            try {
-                await ensureReady();
-                var ok = true;
-                try {
-                    ok = global.confirm('解除绑定后将不再写入该文件夹（磁盘上的备份文件仍保留）。确定？');
-                } catch (_) { /* ignore */ }
-                if (!ok) {
-                    return;
-                }
-                await unbindDirectory();
-                notify('已解除绑定', 'info');
-            } catch (error) {
-                notify(error && error.message ? error.message : '解除绑定失败', 'error');
-            } finally {
-                refreshExternalBackupPanel();
-            }
-        });
-
-        bindModalEvents(modal);
-        return modal;
-    }
-
-    function bindModalEvents(modal) {
-        if (!modal || modalBound) {
-            return;
-        }
-        modalBound = true;
-
-        var closeBtn = modal.querySelector('.theme-modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closeModal);
-        }
-        modal.addEventListener('click', function (event) {
-            if (event.target === modal) {
-                closeModal();
-            }
-        });
-        global.document.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' && modal.classList.contains('show')) {
-                closeModal();
-            }
-        });
-
-        var entry = ensureEntryButton();
-        if (entry && !entry.__externalBackupBound) {
-            entry.__externalBackupBound = true;
-            entry.addEventListener('click', function (event) {
-                event.preventDefault();
-                openModal();
-            });
-        }
-    }
-
-    function ensurePanelDom() {
-        // Compact entry on settings page + secondary modal body.
-        ensureEntryButton();
-        var modal = ensureModalDom();
-        return modal ? modal.querySelector('#external-backup-panel') : null;
-    }
-
-    function refreshExternalBackupPanel() {
-        var host = ensurePanelDom();
-        var status = getStatus();
-
-        var entry = global.document && global.document.getElementById(ENTRY_ID);
-        if (entry) {
-            entry.textContent = formatEntryLabel(status);
-            entry.dataset.state = status.bound
-                ? (status.permissionGranted ? (status.staleWrite || status.dirty ? 'stale' : 'ok') : 'need-auth')
-                : (status.supported ? 'unbound' : 'unsupported');
-            entry.title = formatStatusText(status);
-        }
-
-        if (!host) {
-            return;
-        }
-
-        var statusEl = host.querySelector('#external-backup-status');
-        if (statusEl) {
-            statusEl.textContent = formatStatusText(status);
-            statusEl.dataset.state = status.bound
-                ? (status.permissionGranted ? (status.staleWrite || status.dirty ? 'stale' : 'ok') : 'need-auth')
-                : (status.supported ? 'unbound' : 'unsupported');
-        }
-
-        var writeBtn = host.querySelector('#external-backup-write-btn');
-        var unbindBtn = host.querySelector('#external-backup-unbind-btn');
-        var restoreBtn = host.querySelector('#external-backup-restore-btn');
-        var bindBtn = host.querySelector('#external-backup-bind-btn');
-
-        if (bindBtn) {
-            bindBtn.disabled = !status.supported;
-            bindBtn.textContent = status.bound ? '📁 更换备份文件夹' : '📁 绑定备份文件夹';
-        }
-        if (writeBtn) {
-            writeBtn.disabled = !status.bound || status.writing;
-        }
-        if (unbindBtn) {
-            unbindBtn.disabled = !status.bound;
-        }
-        if (restoreBtn) {
-            restoreBtn.disabled = false;
-        }
-    }
-
-    function onStorageSync(event) {
-        var key = event && event.detail ? event.detail.key : null;
-        if (!key || key === '*' || key === 'practice_records' || key === 'user_stats' ||
-            String(key).indexOf('practice') !== -1 || String(key).indexOf('vocab') !== -1) {
-            markDirty();
-        }
-    }
-
-    async function ensureReady() {
-        if (state.ready) {
-            return true;
-        }
-        if (state.readyPromise) {
-            return state.readyPromise;
-        }
-        state.readyPromise = (async function () {
-            state.meta = readMeta();
-            try {
-                var handle = await loadDirectoryHandle();
-                if (handle) {
-                    state.directoryHandle = handle;
-                    var ok = await ensurePermission(handle, false);
-                    writeMeta({
-                        enabled: true,
-                        directoryName: handle.name || state.meta.directoryName || 'backup',
-                        lastPermissionOk: ok
-                    });
-                }
-            } catch (error) {
-                console.warn('[ExternalBackup] load handle failed:', error);
-            }
-            state.ready = true;
-            return true;
-        })();
-        return state.readyPromise;
-    }
-
-    async function init() {
-        await ensureReady();
-        ensurePanelDom();
-        refreshExternalBackupPanel();
-        await requestPersistentStorage();
-
-        // Daily reminder + empty-store recovery (deferred so PracticeRecordAPI can boot)
-        global.setTimeout(function () {
-            maybeShowDailyReminder({ render: true }).catch(function (error) {
-                console.warn('[ExternalBackup] daily reminder failed:', error);
-            });
-            maybePromptEmptyStoreRecovery().catch(function (error) {
-                console.warn('[ExternalBackup] recovery prompt failed:', error);
-            });
-        }, 1800);
-
-        // Re-check when user returns to the tab (still at most once/day)
-        if (global.document) {
-            global.document.addEventListener('visibilitychange', function () {
-                if (global.document.visibilityState === 'visible') {
-                    maybeShowDailyReminder({ render: true }).catch(function () { /* ignore */ });
-                    refreshExternalBackupPanel();
-                } else if (global.document.visibilityState === 'hidden') {
-                    // Best-effort silent write when leaving the tab (no permission prompt)
-                    flushSilentlyIfPermitted().catch(function () { /* ignore */ });
-                }
-            });
-        }
-    }
-
-    // Listen for data changes early
-    try {
-        global.addEventListener('storage-sync', onStorageSync);
-        global.addEventListener('practiceRecordsUpdated', markDirty);
-    } catch (_) { /* ignore */ }
-
-    global.ExternalBackupService = {
-        __stable: true,
-        LATEST_FILENAME: LATEST_FILENAME,
-        supportsFileSystemAccess: supportsFileSystemAccess,
-        ensureReady: ensureReady,
-        init: init,
-        openModal: openModal,
-        closeModal: closeModal,
-        bindDirectory: bindDirectory,
-        unbindDirectory: unbindDirectory,
-        writeNow: function (options) {
-            return writeToBoundDirectory(Object.assign({ interactive: true, force: true }, options || {}));
-        },
-        restoreFromLatest: restoreFromLatest,
-        pickAndRestoreFile: pickAndRestoreFile,
-        getStatus: getStatus,
-        formatStatusText: formatStatusText,
-        maybeShowDailyReminder: maybeShowDailyReminder,
-        maybePromptEmptyStoreRecovery: maybePromptEmptyStoreRecovery,
-        markDirty: markDirty,
-        flushSilentlyIfPermitted: flushSilentlyIfPermitted,
-        refreshPanel: refreshExternalBackupPanel,
-        requestPersistentStorage: requestPersistentStorage
-    };
-
-    global.refreshExternalBackupPanel = refreshExternalBackupPanel;
-
-    function boot() {
-        init().catch(function (error) {
-            console.warn('[ExternalBackup] init failed:', error);
-        });
-    }
-
-    if (global.document && global.document.readyState === 'loading') {
-        global.document.addEventListener('DOMContentLoaded', boot);
-    } else {
-        boot();
-    }
-})(typeof window !== 'undefined' ? window : globalThis);
-
-
-/* ===== js/core/practiceStore.js ===== */
-(function initPracticeStore(global) {
-    'use strict';
-
-    function getPracticeRecordAPI() {
-        if (!global.PracticeRecordAPI) {
-            throw new Error('PracticeStore: PracticeRecordAPI not ready');
-        }
-        return global.PracticeRecordAPI;
-    }
-
-    async function list() {
-        var api = getPracticeRecordAPI();
-        if (typeof api.list !== 'function') {
-            throw new Error('PracticeStore.list: PracticeRecordAPI.list not ready');
-        }
-        var records = await api.list();
-        return Array.isArray(records) ? records : [];
-    }
-
-    async function replace(records, options) {
-        var finalRecords = Array.isArray(records) ? records : [];
-        var api = getPracticeRecordAPI();
-        if (typeof api.replace !== 'function') {
-            throw new Error('PracticeStore.replace: PracticeRecordAPI.replace not ready');
-        }
-        await api.replace(finalRecords, Object.assign({ updateStats: true }, options || {}));
-        return true;
-    }
-
-    async function save(record, options) {
-        var api = getPracticeRecordAPI();
-        if (typeof api.saveRecord !== 'function') {
-            throw new Error('PracticeStore.save: PracticeRecordAPI.saveRecord not ready');
-        }
-        return api.saveRecord(record, Object.assign({ updateStats: true }, options || {}));
-    }
-
-    async function clear(options) {
-        var api = getPracticeRecordAPI();
-        if (typeof api.clear === 'function') {
-            await api.clear(Object.assign({ updateStats: true }, options || {}));
-            return true;
-        }
-        return replace([], options || {});
-    }
-
-    global.PracticeStore = Object.assign({}, global.PracticeStore || {}, {
-        list: list,
-        replace: replace,
-        save: save,
-        clear: clear
-    });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -9245,8 +6496,6 @@ storageManager.ready
 
     const PATH_PROTOCOL_RE = /^(?:[a-z]+:)?\/\//i;
     const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
-    const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-    const BASE_PREFIX_STORAGE_KEY = 'resource.basePrefix';
     const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
@@ -9413,10 +6662,6 @@ storageManager.ready
         return result;
     }
 
-    function getPathMapStorageKey(key) {
-        return PATH_MAP_STORAGE_PREFIX + key;
-    }
-
     function setActivePathMap(map) {
         const normalized = normalizePathMap(map);
         try { global.__activeLibraryPathMap = normalized; } catch (_) { }
@@ -9435,14 +6680,10 @@ storageManager.ready
     }
 
     async function loadPathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.get !== 'function') {
-            return clonePathMap(DEFAULT_PATH_MAP);
-        }
+        if (!key || !global.AppData || !global.AppData.library) return clonePathMap(DEFAULT_PATH_MAP);
         try {
-            const stored = await global.storage.get(getPathMapStorageKey(key));
-            if (stored && typeof stored === 'object') {
-                return normalizePathMap(stored, DEFAULT_PATH_MAP);
-            }
+            const index = await global.AppData.library.getIndex(key);
+            return index.length ? derivePathMapFromIndex(index, DEFAULT_PATH_MAP) : clonePathMap(DEFAULT_PATH_MAP);
         } catch (error) {
             console.warn('[ResourceCore] 读取路径映射失败:', error);
         }
@@ -9459,14 +6700,6 @@ storageManager.ready
             ? normalizePathMap(overrideMap, fallback)
             : derivePathMapFromIndex(exams, fallback);
 
-        if (global.storage && typeof global.storage.set === 'function') {
-            try {
-                await global.storage.set(getPathMapStorageKey(key), derived);
-            } catch (error) {
-                console.warn('[ResourceCore] 写入路径映射失败:', error);
-            }
-        }
-
         if (options.setActive) {
             setActivePathMap(derived);
         }
@@ -9474,25 +6707,16 @@ storageManager.ready
     }
 
     async function deletePathMapForConfiguration(key) {
-        if (!key || !global.storage || typeof global.storage.remove !== 'function') {
-            return false;
-        }
-        try {
-            await global.storage.remove(getPathMapStorageKey(key));
-            return true;
-        } catch (error) {
-            console.warn('[ResourceCore] 删除路径映射失败:', error);
-            return false;
-        }
+        return Boolean(key);
     }
 
     async function refreshPathMap() {
-        if (!global.storage || typeof global.storage.get !== 'function') {
+        if (!global.AppData || !global.AppData.library) {
             return setActivePathMap(getPathMap());
         }
         try {
-            const key = await global.storage.get('active_exam_index_key', 'exam_index');
-            const next = await loadPathMapForConfiguration(key || 'exam_index');
+            const key = await global.AppData.library.getActive();
+            const next = await loadPathMapForConfiguration(key);
             return setActivePathMap(next);
         } catch (error) {
             console.warn('[ResourceCore] 刷新路径映射失败:', error);
@@ -9618,22 +6842,13 @@ storageManager.ready
         return null;
     }
 
-    function loadStoredBasePrefix() {
-        try {
-            return localStorage.getItem(BASE_PREFIX_STORAGE_KEY) || '';
-        } catch (_) {
-            return '';
-        }
-    }
+    let storedBasePrefix = '';
 
     function storeBasePrefix(value) {
-        try {
-            if (value) {
-                localStorage.setItem(BASE_PREFIX_STORAGE_KEY, value);
-            } else {
-                localStorage.removeItem(BASE_PREFIX_STORAGE_KEY);
-            }
-        } catch (_) { }
+        storedBasePrefix = value || '';
+        if (global.AppData && global.AppData.preferences) {
+            global.AppData.preferences.setResourceBasePrefix(storedBasePrefix).catch(() => {});
+        }
     }
 
     function getBasePrefix() {
@@ -9642,7 +6857,7 @@ storageManager.ready
             return direct;
         }
 
-        const stored = normalizeBasePrefix(loadStoredBasePrefix());
+        const stored = normalizeBasePrefix(storedBasePrefix);
         if (stored && stored !== './') {
             global.RESOURCE_BASE_PREFIX = stored;
             return stored;
@@ -9662,6 +6877,13 @@ storageManager.ready
         global.RESOURCE_BASE_PREFIX = normalized;
         storeBasePrefix(normalized === './' ? '' : normalized);
         return normalized;
+    }
+
+    if (global.AppData && global.AppData.preferences) {
+        global.AppData.preferences.getResourceBasePrefix().then((value) => {
+            storedBasePrefix = value || '';
+            if (!global.RESOURCE_BASE_PREFIX && storedBasePrefix) global.RESOURCE_BASE_PREFIX = normalizeBasePrefix(storedBasePrefix);
+        }).catch(() => {});
     }
 
     function resolveGeneratedReadingRuntimeUrl(exam, kind = 'html') {
@@ -9898,14 +7120,12 @@ storageManager.ready
         version: '0.6.2-fix',
         RAW_DEFAULT_PATH_MAP,
         DEFAULT_PATH_MAP,
-        PATH_MAP_STORAGE_PREFIX,
         PATH_FALLBACK_ORDER,
         clonePathMap,
         normalizePathRoot,
         mergeRootWithFallback,
         buildOverridePathMap,
         derivePathMapFromIndex,
-        getPathMapStorageKey,
         getPathMap,
         setActivePathMap,
         loadPathMapForConfiguration,
@@ -9934,3486 +7154,3517 @@ storageManager.ready
     "listening": "ListeningPractice/"
   };
   const manifest = {
-    "p1-high-01": {
-      "examId": "p1-high-01",
-      "dataKey": "p1-high-01",
-      "script": "./p1-high-01.js",
-      "title": "A Brief History of Tea 茶叶简史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/1. P1 - A Brief History of Tea 茶叶简史【高】/",
-      "filename": "1. P1 - A Brief History of Tea 茶叶简史【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/1. P1 - A Brief History of Tea 茶叶简史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-02": {
-      "examId": "p1-low-02",
-      "dataKey": "p1-low-02",
-      "script": "./p1-low-02.js",
-      "title": "Maori Fish Hooks 毛利鱼钩",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/10. P1 - Maori Fish Hooks 毛利鱼钩/",
-      "filename": "10. P1 - Maori Fish Hooks 毛利鱼钩.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/10. P1 - Maori Fish Hooks 毛利鱼钩.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-03": {
-      "examId": "p3-high-03",
-      "dataKey": "p3-high-03",
-      "script": "./p3-high-03.js",
-      "title": "What makes a musical expert_ 音乐天赋",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/100. P3 - What makes a musical expert_ 音乐天赋【高】/",
-      "filename": "100. P3 - What makes a musical expert_ 音乐天赋【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/100. P3 - What makes a musical expert_ 音乐天赋.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-04": {
-      "examId": "p3-high-04",
-      "dataKey": "p3-high-04",
-      "script": "./p3-high-04.js",
-      "title": "Yawning 打呵欠",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/",
-      "filename": "101. P3 - Yawning 打呵欠【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/101. P3 - Yawning 打哈欠.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-05": {
-      "examId": "p1-high-05",
-      "dataKey": "p1-high-05",
-      "script": "./p1-high-05.js",
-      "title": "Katherine Mansfield 新西兰作家",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/102. P1 - Katherine Mansfield 新西兰作家【高】/",
-      "filename": "102. P1 - Katherine Mansfield 新西兰作家【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/102. P1 - Katherine Mansfield 新西兰作家.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-06": {
-      "examId": "p2-low-06",
-      "dataKey": "p2-low-06",
-      "script": "./p2-low-06.js",
-      "title": "Biomimicry 仿生学",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
-      "filename": "103. P2 - Biomimicry 仿生学.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-07": {
-      "examId": "p3-low-07",
-      "dataKey": "p3-low-07",
-      "script": "./p3-low-07.js",
-      "title": "Star Performers 明星员工",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/",
-      "filename": "104. P3 - Star Performers 明星员工.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/104. P3 - Star Performers 明星员工.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-08": {
-      "examId": "p2-low-08",
-      "dataKey": "p2-low-08",
-      "script": "./p2-low-08.js",
-      "title": "How the Petri dish supports scientific advances 培养皿",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/105. P2 - How the Petri dish supports scientific advances 培养皿/",
-      "filename": "105. P2 - How the Petri dish supports scientific advances 培养皿.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/105. P2 - How the Petri dish supports scientific advances 培养皿.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-09": {
-      "examId": "p2-high-09",
-      "dataKey": "p2-high-09",
-      "script": "./p2-high-09.js",
-      "title": "Early Approaches to Organisational Design 组织设计",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/106. P2 - Early Approaches to Organisational Design 组织设计【高】/",
-      "filename": "106. P2 - Early Approaches to Organisational Design 组织设计【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/106. P2 - Early Approaches to Organisational Design 组织设计.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-10": {
-      "examId": "p2-medium-10",
-      "dataKey": "p2-medium-10",
-      "script": "./p2-medium-10.js",
-      "title": "A study of western celebrity 西方名人",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/107. P2 - A study of western celebrity 西方名人【次】/",
-      "filename": "107. P2 - A study of western celebrity 西方名人【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/107. P2 - A study of western celebrity 西方名人.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-11": {
-      "examId": "p1-low-11",
-      "dataKey": "p1-low-11",
-      "script": "./p1-low-11.js",
-      "title": "Bovids 牛科动物",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/108. P1 - Bovids 牛科动物/",
-      "filename": "108. P1 - Bovids 牛科动物.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/108. P1 - Bovids 牛科动物.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-12": {
-      "examId": "p3-low-12",
-      "dataKey": "p3-low-12",
-      "script": "./p3-low-12.js",
-      "title": "Humanities and the health professional 人文医学",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/109. P3 - Humanities and the health professional 人文医学/",
-      "filename": "109. P3 - Humanities and the health professional 人文医学.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/109. P3 - Humanities and the health professional 人文医学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-13": {
-      "examId": "p1-low-13",
-      "dataKey": "p1-low-13",
-      "script": "./p1-low-13.js",
-      "title": "Report on a university drama project 大学戏剧项目报告",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/11. P1 - Report on a university drama project 大学戏剧项目报告/",
-      "filename": "11. P1 - Report on a university drama project 大学戏剧项目报告.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/11. P1 - Report on a university drama project 大学戏剧项目报告.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-14": {
-      "examId": "p2-high-14",
-      "dataKey": "p2-high-14",
-      "script": "./p2-high-14.js",
-      "title": "Should space be explored by robots or by humans 人机太空探索",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/",
-      "filename": "110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/110. P2 - Should space be explored by robots or by humans 人机太空探索.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-15": {
-      "examId": "p3-high-15",
-      "dataKey": "p3-high-15",
-      "script": "./p3-high-15.js",
-      "title": "Whale Culture 鲸鱼文化",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/111. P3 - Whale Culture 鲸鱼文化【高】/",
-      "filename": "111. P3 - Whale Culture 鲸鱼文化【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/111. P3 - Whale Culture 鲸鱼文化.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-16": {
-      "examId": "p2-high-16",
-      "dataKey": "p2-high-16",
-      "script": "./p2-high-16.js",
-      "title": "The Importance of Law 法律的意义",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/",
-      "filename": "112. P2 - The Importance of Law 法律的意义【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/112. P2 - The Importance of Law 法律的意义.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-17": {
-      "examId": "p2-high-17",
-      "dataKey": "p2-high-17",
-      "script": "./p2-high-17.js",
-      "title": "Herbal Medicines 新西兰草药",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
-      "filename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/113. P2 - Herbal Medicines 新西兰草药.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-18": {
-      "examId": "p3-medium-18",
-      "dataKey": "p3-medium-18",
-      "script": "./p3-medium-18.js",
-      "title": "Unlocking the mystery of dreams 梦的解析",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/114. P3 - Unlocking the mystery of dreams 梦的解析【次】/",
-      "filename": "114. P3 - Unlocking the mystery of dreams 梦的解析【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/114. P3 - Unlocking the mystery of dreams 梦的解析.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-19": {
-      "examId": "p2-high-19",
-      "dataKey": "p2-high-19",
-      "script": "./p2-high-19.js",
-      "title": "Mind Music 脑海中的音乐(心灵音乐)",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/",
-      "filename": "115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/115. P2 - Mind Music 脑海中的音乐(心灵音乐).pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-20": {
-      "examId": "p1-medium-20",
-      "dataKey": "p1-medium-20",
-      "script": "./p1-medium-20.js",
-      "title": "The Development of Plastics 塑料的发展史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/",
-      "filename": "116. P1 - The Development of Plastics 塑料的发展史【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-21": {
-      "examId": "p2-high-21",
-      "dataKey": "p2-high-21",
-      "script": "./p2-high-21.js",
-      "title": "Stress Less 工作压力",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/",
-      "filename": "117. P2 - Stress Less 工作压力【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/117. P2 - Stress Less 工作压力.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-22": {
-      "examId": "p3-medium-22",
-      "dataKey": "p3-medium-22",
-      "script": "./p3-medium-22.js",
-      "title": "Neanderthal Technology 尼安德特人的生存技艺",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
-      "filename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/118. P3 - Neanderthal Technology 尼安德特人的生存技艺.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-23": {
-      "examId": "p2-high-23",
-      "dataKey": "p2-high-23",
-      "script": "./p2-high-23.js",
-      "title": "The Constant Evolution of the Humble Tomato 番茄的演化",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】/",
-      "filename": "119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-24": {
-      "examId": "p1-high-24",
-      "dataKey": "p1-high-24",
-      "script": "./p1-high-24.js",
-      "title": "Rubber 橡胶",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/12. P1 - Rubber 橡胶【高】/",
-      "filename": "12. P1 - Rubber 橡胶【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/12. P1 - Rubber 橡胶.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-25": {
-      "examId": "p2-high-25",
-      "dataKey": "p2-high-25",
-      "script": "./p2-high-25.js",
-      "title": "Will Eating Less Make You Live Longer 节食与长寿",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/",
-      "filename": "120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/120. P2 - Will Eating Less Make You Live Longer 节食与长寿.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-27": {
-      "examId": "p1-high-27",
-      "dataKey": "p1-high-27",
-      "script": "./p1-high-27.js",
-      "title": "Footprints in the Mud 恐龙脚印",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/122. P1 - Footprints in the Mud 恐龙脚印【高】/",
-      "filename": "122. P1 - Footprints in the Mud 恐龙脚印【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/122. P1 - Footprints in the Mud 恐龙脚印.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-28": {
-      "examId": "p3-low-28",
-      "dataKey": "p3-low-28",
-      "script": "./p3-low-28.js",
-      "title": "Images and Places 风景与印记",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/",
-      "filename": "123. P3 - Images and Places 风景与印记.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/123. P3 - Images and Places 风景与印记.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-29": {
-      "examId": "p1-medium-29",
-      "dataKey": "p1-medium-29",
-      "script": "./p1-medium-29.js",
-      "title": "The extinction of the cave bear 洞熊的灭绝",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
-      "filename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/124. P1 - The extinction of the cave bear 洞熊的灭绝.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-30": {
-      "examId": "p1-low-30",
-      "dataKey": "p1-low-30",
-      "script": "./p1-low-30.js",
-      "title": "Investing in the Future 投资未来",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/",
-      "filename": "125. P1 - Investing in the Future 投资未来.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/125. P1 - Investing in the Future 投资未来.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-31": {
-      "examId": "p1-high-31",
-      "dataKey": "p1-high-31",
-      "script": "./p1-high-31.js",
-      "title": "Dolls through the ages 玩偶的变迁史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/",
-      "filename": "126. P1 - Dolls through the ages 玩偶的变迁史【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/126. P1 - Dolls through the ages 玩偶的变迁史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-32": {
-      "examId": "p3-high-32",
-      "dataKey": "p3-high-32",
-      "script": "./p3-high-32.js",
-      "title": "Science and Filmmaking 电影科学(CGI)",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/127. P3 - Science and Filmmaking 电影科学(CGI)【高】/",
-      "filename": "127. P3 - Science and Filmmaking 电影科学(CGI)【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/127. P3 - Science and Filmmaking 电影科学(CGI).pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-33": {
-      "examId": "p1-medium-33",
-      "dataKey": "p1-medium-33",
-      "script": "./p1-medium-33.js",
-      "title": "The Pyramid of Cestius 罗马金字塔",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/",
-      "filename": "128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/128. P1 - The Pyramid of Cestius 罗马金字塔.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-34": {
-      "examId": "p1-low-34",
-      "dataKey": "p1-low-34",
-      "script": "./p1-low-34.js",
-      "title": "The Slow Food Organization 慢食运动组织",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
-      "filename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-35": {
-      "examId": "p1-low-35",
-      "dataKey": "p1-low-35",
-      "script": "./p1-low-35.js",
-      "title": "Sweet Trouble 澳洲制糖产业",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/13. P1 - Sweet Trouble 澳洲制糖产业/",
-      "filename": "13. P1 - Sweet Trouble 澳洲制糖产业.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/13. P1 - Sweet Trouble 澳洲制糖产业.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-36": {
-      "examId": "p3-low-36",
-      "dataKey": "p3-low-36",
-      "script": "./p3-low-36.js",
-      "title": "Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA/",
-      "filename": "130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-37": {
-      "examId": "p2-low-37",
-      "dataKey": "p2-low-37",
-      "script": "./p2-low-37.js",
-      "title": "Keeping the water away 洪水防控",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/",
-      "filename": "131. P2 - Keeping the water away 洪水防控.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/131. P2 - Keeping the water away 洪水防控.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-38": {
-      "examId": "p3-low-38",
-      "dataKey": "p3-low-38",
-      "script": "./p3-low-38.js",
-      "title": "Research into the effects of different teaching styles 教学风格研究",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/132. P3 - Research into the effects of different teaching styles 教学风格研究/",
-      "filename": "132. P3 - Research into the effects of different teaching styles 教学风格研究.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-39": {
-      "examId": "p2-low-39",
-      "dataKey": "p2-low-39",
-      "script": "./p2-low-39.js",
-      "title": "How to be Happy 如何获得幸福",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/",
-      "filename": "133. P2 - How to be Happy 如何获得幸福.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/133. P2 - How to be Happy 如何获得幸福.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-40": {
-      "examId": "p1-low-40",
-      "dataKey": "p1-low-40",
-      "script": "./p1-low-40.js",
-      "title": "Dyes and fabric dyeing 染料的历史",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/",
-      "filename": "134. P1 - Dyes and fabric dyeing 染料的历史.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-41": {
-      "examId": "p2-low-41",
-      "dataKey": "p2-low-41",
-      "script": "./p2-low-41.js",
-      "title": "The Myth of the Eight-hour Sleep 八小时睡眠",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/",
-      "filename": "135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-42": {
-      "examId": "p3-low-42",
-      "dataKey": "p3-low-42",
-      "script": "./p3-low-42.js",
-      "title": "The peopling of Patagonia 巴塔哥尼亚的人类迁徙",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/",
-      "filename": "136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-43": {
-      "examId": "p3-low-43",
-      "dataKey": "p3-low-43",
-      "script": "./p3-low-43.js",
-      "title": "What is social history 社会史",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/137. P3 - What is social history 社会史/",
-      "filename": "137. P3 - What is social history 社会史.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/137. P3 - What is social history 社会史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-44": {
-      "examId": "p3-low-44",
-      "dataKey": "p3-low-44",
-      "script": "./p3-low-44.js",
-      "title": "Conformity 从众心理",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/138. P3 - Conformity 从众心理/",
-      "filename": "138. P3 - Conformity 从众心理.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/138. P3 - Conformity 从众心理.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-45": {
-      "examId": "p1-low-45",
-      "dataKey": "p1-low-45",
-      "script": "./p1-low-45.js",
-      "title": "Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究/",
-      "filename": "139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-46": {
-      "examId": "p1-low-46",
-      "dataKey": "p1-low-46",
-      "script": "./p1-low-46.js",
-      "title": "Sydney Opera House 悉尼歌剧院",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/14. P1 - Sydney Opera House 悉尼歌剧院/",
-      "filename": "14. P1 - Sydney Opera House 悉尼歌剧院.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/14. P1 - Sydney Opera House 悉尼歌剧院.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-47": {
-      "examId": "p1-low-47",
-      "dataKey": "p1-low-47",
-      "script": "./p1-low-47.js",
-      "title": "The Burgess Shale fossils 伯吉斯页岩",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/140. P1 - The Burgess Shale fossils 伯吉斯页岩/",
-      "filename": "140. P1 - The Burgess Shale fossils 伯吉斯页岩.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-48": {
-      "examId": "p1-low-48",
-      "dataKey": "p1-low-48",
-      "script": "./p1-low-48.js",
-      "title": "The history of the guitar 吉他的历史",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/141. P1 - The history of the guitar 吉他的历史/",
-      "filename": "141. P1 - The history of the guitar 吉他的历史.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-49": {
-      "examId": "p2-low-49",
-      "dataKey": "p2-low-49",
-      "script": "./p2-low-49.js",
-      "title": "Born to Trade 交易的本能",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/",
-      "filename": "142. P2 - Born to Trade 交易的本能.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/142. P2 - Born to Trade 交易的本能.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-50": {
-      "examId": "p2-low-50",
-      "dataKey": "p2-low-50",
-      "script": "./p2-low-50.js",
-      "title": "Jellyfish – The Dominant Species 水母·海洋中的优势物种",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/",
-      "filename": "143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-51": {
-      "examId": "p2-low-51",
-      "dataKey": "p2-low-51",
-      "script": "./p2-low-51.js",
-      "title": "The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/",
-      "filename": "144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-52": {
-      "examId": "p1-low-52",
-      "dataKey": "p1-low-52",
-      "script": "./p1-low-52.js",
-      "title": "Caral an ancient South American city 卡拉尔古城",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/",
-      "filename": "145. P1 - Caral an ancient South American city 卡拉尔古城.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-53": {
-      "examId": "p1-low-53",
-      "dataKey": "p1-low-53",
-      "script": "./p1-low-53.js",
-      "title": "The Early History of Olive Oil 橄榄油的历史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/",
-      "filename": "146. P1 - The Early History of Olive Oil 橄榄油的历史.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-54": {
-      "examId": "p3-low-54",
-      "dataKey": "p3-low-54",
-      "script": "./p3-low-54.js",
-      "title": "Movement Underwater 水下运动",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/147. P3 - Movement Underwater 水下运动/",
-      "filename": "147. P3 - Movement Underwater 水下运动.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/147. P3 - Movement Underwater 水下运动.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-55": {
-      "examId": "p3-low-55",
-      "dataKey": "p3-low-55",
-      "script": "./p3-low-55.js",
-      "title": "Improving Patient Safety 药品包装设计",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
-      "filename": "148. P3 - Improving Patient Safety 药品包装设计.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-56": {
-      "examId": "p3-low-56",
-      "dataKey": "p3-low-56",
-      "script": "./p3-low-56.js",
-      "title": "Learning to be bilingual 双语学习",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/149. P3 - Learning to be bilingual 双语学习/",
-      "filename": "149. P3 - Learning to be bilingual 双语学习.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/149. P3 - Learning to be bilingual 双语学习.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-57": {
-      "examId": "p1-medium-57",
-      "dataKey": "p1-medium-57",
-      "script": "./p1-medium-57.js",
-      "title": "The Blockbuster Phenomenon 博物馆爆款现象",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/",
-      "filename": "15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-58": {
-      "examId": "p2-medium-58",
-      "dataKey": "p2-medium-58",
-      "script": "./p2-medium-58.js",
-      "title": "Insect Decision-Making 昆虫决策",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/",
-      "filename": "150. P2 - Insect Decision-Making 昆虫决策【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/150. P2 - Insect Decision-Making 昆虫决策.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-59": {
-      "examId": "p3-low-59",
-      "dataKey": "p3-low-59",
-      "script": "./p3-low-59.js",
-      "title": "Inside the mind of a fan 观赛心境",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/",
-      "filename": "151. P3 - Inside the mind of a fan 观赛心境.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/151. P3 - Inside the mind of a fan 观赛心境.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-60": {
-      "examId": "p1-medium-60",
-      "dataKey": "p1-medium-60",
-      "script": "./p1-medium-60.js",
-      "title": "Sorry—who are you 脸盲症",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/",
-      "filename": "152. P1 - Sorry—who are you 脸盲症【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/152. P1 - Sorry—who are you 脸盲症.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-61": {
-      "examId": "p1-low-61",
-      "dataKey": "p1-low-61",
-      "script": "./p1-low-61.js",
-      "title": "Carnivorous plants 食虫植物",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
-      "filename": "153. P1 - Carnivorous plants 食虫植物.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-62": {
-      "examId": "p2-low-62",
-      "dataKey": "p2-low-62",
-      "script": "./p2-low-62.js",
-      "title": "The purpose of facial expressions 面部表情",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/154. P2 - The purpose of facial expressions 面部表情/",
-      "filename": "154. P2 - The purpose of facial expressions 面部表情.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/154. P2 - The purpose of facial expressions 面部表情.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-63": {
-      "examId": "p1-medium-63",
-      "dataKey": "p1-medium-63",
-      "script": "./p1-medium-63.js",
-      "title": "A Brief History of Humans and Food 人类食物的历史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
-      "filename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-64": {
-      "examId": "p2-low-64",
-      "dataKey": "p2-low-64",
-      "script": "./p2-low-64.js",
-      "title": "New filter promises clean water for millions 新型泥土净水器",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/",
-      "filename": "156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-65": {
-      "examId": "p2-low-65",
-      "dataKey": "p2-low-65",
-      "script": "./p2-low-65.js",
-      "title": "Boring Buildings 无聊建筑",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/",
-      "filename": "157. P2 - Boring Buildings 无聊建筑.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/157. P2 - Boring Buildings 无聊建筑.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-66": {
-      "examId": "p3-medium-66",
-      "dataKey": "p3-medium-66",
-      "script": "./p3-medium-66.js",
-      "title": "Mercator - The Map Maker 地理制图师",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
-      "filename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-67": {
-      "examId": "p1-low-67",
-      "dataKey": "p1-low-67",
-      "script": "./p1-low-67.js",
-      "title": "Scented Plants 植物的味道",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/",
-      "filename": "159. P1 - Scented Plants 植物的味道.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/159. P1 - Scented Plants 植物的味道.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-68": {
-      "examId": "p1-low-68",
-      "dataKey": "p1-low-68",
-      "script": "./p1-low-68.js",
-      "title": "The Clipper Races 帆船竞速",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/",
-      "filename": "16. P1 - The Clipper Races 帆船竞速.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/16. P1 - The Clipper Races 帆船竞速.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-69": {
-      "examId": "p1-low-69",
-      "dataKey": "p1-low-69",
-      "script": "./p1-low-69.js",
-      "title": "An important language development 楔形文字",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
-      "filename": "160. P1 - An important language development 楔形文字.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-70": {
-      "examId": "p1-low-70",
-      "dataKey": "p1-low-70",
-      "script": "./p1-low-70.js",
-      "title": "Fluorescence Deep sea discovery深海发光生物研究",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/",
-      "filename": "161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/161. P1 - Deep sea discovery 深海发光生物研究.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-71": {
-      "examId": "p3-low-71",
-      "dataKey": "p3-low-71",
-      "script": "./p3-low-71.js",
-      "title": "Sea Change for Salinity 土地盐碱化",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
-      "filename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/162. P3 - Sea Change for Salinity 土地盐碱化.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-72": {
-      "examId": "p1-low-72",
-      "dataKey": "p1-low-72",
-      "script": "./p1-low-72.js",
-      "title": "How to find your way out of a food desert 城市食物荒漠",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/",
-      "filename": "163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-73": {
-      "examId": "p2-low-73",
-      "dataKey": "p2-low-73",
-      "script": "./p2-low-73.js",
-      "title": "The Power of Smell 嗅觉的力量",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/",
-      "filename": "164. P2 - The Power of Smell 嗅觉的力量.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/164. P2 - The Power of Smell 嗅觉的力量.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-74": {
-      "examId": "p3-low-74",
-      "dataKey": "p3-low-74",
-      "script": "./p3-low-74.js",
-      "title": "The Placebo Effect5 安慰剂效应",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/165. P3 - The Placebo Effect5 安慰剂效应/",
-      "filename": "165. P3 - The Placebo Effect5 安慰剂效应.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/165. P3 - The Placebo Effect5 安慰剂效应.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-75": {
-      "examId": "p2-low-75",
-      "dataKey": "p2-low-75",
-      "script": "./p2-low-75.js",
-      "title": "Lean Production Innovation 精益生产",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/166. P2 - Lean Production Innovation 精益生产/",
-      "filename": "166. P2 - Lean Production Innovation 精益生产.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/166. P2 - Lean Production Innovation 精益生产.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-76": {
-      "examId": "p3-low-76",
-      "dataKey": "p3-low-76",
-      "script": "./p3-low-76.js",
-      "title": "Sign, Baby, Sign! 美国手语",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/",
-      "filename": "167. P3 - Sign, Baby, Sign! 美国手语.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-77": {
-      "examId": "p2-low-77",
-      "dataKey": "p2-low-77",
-      "script": "./p2-low-77.js",
-      "title": "Mammoth Kill 猛犸象的灭绝",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/168. P2 - Mammoth Kill 猛犸象的灭绝/",
-      "filename": "168. P2 - Mammoth Kill 猛犸象的灭绝.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/168. P2 - Mammoth Kill 猛犸象的灭绝.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-78": {
-      "examId": "p3-low-78",
-      "dataKey": "p3-low-78",
-      "script": "./p3-low-78.js",
-      "title": "The Costs of Brand Loyalty 品牌忠诚的代价",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/",
-      "filename": "169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-79": {
-      "examId": "p1-high-79",
-      "dataKey": "p1-high-79",
-      "script": "./p1-high-79.js",
-      "title": "The Development of The Silk Industry 丝绸产业发展",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/",
-      "filename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/17. P1 - The Development of The Silk Industry 丝绸产业发展.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-80": {
-      "examId": "p1-low-80",
-      "dataKey": "p1-low-80",
-      "script": "./p1-low-80.js",
-      "title": "The unsung sense 被低估的嗅觉",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/",
-      "filename": "170. P1 - The unsung sense 被低估的嗅觉.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/170. P1 - The unsung sense 被低估的嗅觉.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-81": {
-      "examId": "p1-low-81",
-      "dataKey": "p1-low-81",
-      "script": "./p1-low-81.js",
-      "title": "Salt  盐的历史",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/171. P1 - Salt  盐的历史/",
-      "filename": "171. P1 - Salt  盐的历史.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/171. P1 - Salt  盐的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-82": {
-      "examId": "p1-high-82",
-      "dataKey": "p1-high-82",
-      "script": "./p1-high-82.js",
-      "title": "Think Small 微观科学",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/",
-      "filename": "172. P1 - Think Small 微观科学.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/172. P1 - Think Small 微观科学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-83": {
-      "examId": "p3-low-83",
-      "dataKey": "p3-low-83",
-      "script": "./p3-low-83.js",
-      "title": "1018纸笔 Looking for inspiration 寻找灵感",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感/",
-      "filename": "173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/173. P3(1018纸笔 ) - Looking for inspiration 寻找灵感.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-84": {
-      "examId": "p1-low-84",
-      "dataKey": "p1-low-84",
-      "script": "./p1-low-84.js",
-      "title": "Why good ideas fail TF公司",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/",
-      "filename": "174. P1 - Why good ideas fail TF公司.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/174. P1 - Why good ideas fail TF公司.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-85": {
-      "examId": "p3-low-85",
-      "dataKey": "p3-low-85",
-      "script": "./p3-low-85.js",
-      "title": "Music soothes and awes 音乐疗愈",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/175. P3 - Music soothes and awes 音乐疗愈/",
-      "filename": "175. P3 - Music soothes and awes 音乐疗愈.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/175. P3 - Music soothes and awes 音乐疗愈.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-86": {
-      "examId": "p2-medium-86",
-      "dataKey": "p2-medium-86",
-      "script": "./p2-medium-86.js",
-      "title": "Urban Regeneration 柏林公园改造",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/",
-      "filename": "176. P2 - Urban Regeneration 柏林公园改造.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-87": {
-      "examId": "p2-low-87",
-      "dataKey": "p2-low-87",
-      "script": "./p2-low-87.js",
-      "title": "1025纸笔Speaking of Nothing [Pretest] 闲聊的意义",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义/",
-      "filename": "177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/177. P2（1025纸笔）[Pretest]  - Speaking of Nothing 闲聊的意义.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-88": {
-      "examId": "p3-low-88",
-      "dataKey": "p3-low-88",
-      "script": "./p3-low-88.js",
-      "title": "1025纸笔Translating a key to international understanding 翻译的艺术",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术/",
-      "filename": "178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/178. P3（1025纸笔）[Pretest]  - Translating a key to international understanding 翻译的艺术.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-89": {
-      "examId": "p3-high-89",
-      "dataKey": "p3-high-89",
-      "script": "./p3-high-89.js",
-      "title": "Looking at daily life in ancient Rome  古罗马的日常",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
-      "filename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-90": {
-      "examId": "p1-high-90",
-      "dataKey": "p1-high-90",
-      "script": "./p1-high-90.js",
-      "title": "The History of Tea 茶叶的历史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/18. P1 - The History of Tea 茶叶的历史【高】/",
-      "filename": "18. P1 - The History of Tea 茶叶的历史【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/18. P1 - The History of Tea 茶叶的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-91": {
-      "examId": "p2-high-91",
-      "dataKey": "p2-high-91",
-      "script": "./p2-high-91.js",
-      "title": "Australia’s camouflaged creatures 澳洲伪装生物",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/",
-      "filename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-92": {
-      "examId": "p1-high-92",
-      "dataKey": "p1-high-92",
-      "script": "./p1-high-92.js",
-      "title": "Dust and the American West 美国西部尘埃",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/",
-      "filename": "181. P1 - Dust and the American West 美国西部尘埃.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/181. P1 - Dust and the American West 美国西部尘埃.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-93": {
-      "examId": "p2-medium-93",
-      "dataKey": "p2-medium-93",
-      "script": "./p2-medium-93.js",
-      "title": "Antarctic research 南极考察",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/",
-      "filename": "182. P2 - Antarctic research 南极考察.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/182. P2 - Antarctic research 南极考察.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-94": {
-      "examId": "p2-low-94",
-      "dataKey": "p2-low-94",
-      "script": "./p2-low-94.js",
-      "title": "The importance of being playful 玩耍的重要性",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/",
-      "filename": "183. P2 - The importance of being playful 玩耍的重要性.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/183. P2 - The importance of being playful 玩耍的重要性.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-95": {
-      "examId": "p3-low-95",
-      "dataKey": "p3-low-95",
-      "script": "./p3-low-95.js",
-      "title": "The strange world of sight 奇异的视觉世界",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/",
-      "filename": "184. P3 - The strange world of sight 奇异的视觉世界.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-96": {
-      "examId": "p2-low-96",
-      "dataKey": "p2-low-96",
-      "script": "./p2-low-96.js",
-      "title": "[Pretest] Why Do We Need Sleep 睡眠的目的",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/",
-      "filename": "185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-97": {
-      "examId": "p3-low-97",
-      "dataKey": "p3-low-97",
-      "script": "./p3-low-97.js",
-      "title": "Saving languages 拯救濒危语言",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/186. P3 - Saving languages 拯救濒危语言/",
-      "filename": "186. P3 - Saving languages 拯救濒危语言.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/186. P3 - Saving languages 拯救濒危语言.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-98": {
-      "examId": "p3-low-98",
-      "dataKey": "p3-low-98",
-      "script": "./p3-low-98.js",
-      "title": "Petrol power an eco-revolution 交通的革命",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/",
-      "filename": "187. P3 - Petrol power an eco-revolution 交通的革命.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-99": {
-      "examId": "p1-low-99",
-      "dataKey": "p1-low-99",
-      "script": "./p1-low-99.js",
-      "title": "The history of the bar code 条形码的历史",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/",
-      "filename": "188. P1 - The history of the bar code 条形码的历史.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/188. P1 - The history of the bar code 条形码的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-100": {
-      "examId": "p3-low-100",
-      "dataKey": "p3-low-100",
-      "script": "./p3-low-100.js",
-      "title": "Mirror 镜子研究",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/189. P3 - Mirror 镜子研究/",
-      "filename": "189. P3 - Mirror 镜子研究.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/189. P3 - Mirror 镜子研究.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-101": {
-      "examId": "p1-high-101",
-      "dataKey": "p1-high-101",
-      "script": "./p1-high-101.js",
-      "title": "The Impact of the Potato 土豆的影响",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 1,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/19. P1 - The Impact of the Potato 土豆的影响【高】/",
-      "filename": "19. P1 - The Impact of the Potato 土豆的影响【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/19. P1 - The Impact of the Potato 土豆的影响.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-102": {
-      "examId": "p2-low-102",
-      "dataKey": "p2-low-102",
-      "script": "./p2-low-102.js",
-      "title": "The power of music 音乐的力量",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/190. P2 - The power of music 音乐的力量/",
-      "filename": "190. P2 - The power of music 音乐的力量.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/190. P2 - The power of music 音乐的力量.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-103": {
-      "examId": "p2-low-103",
-      "dataKey": "p2-low-103",
-      "script": "./p2-low-103.js",
-      "title": "The economic effect of climate 气候对经济的影响",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/191. P2 - The economic effect of climate 气候对经济的影响/",
-      "filename": "191. P2 - The economic effect of climate 气候对经济的影响.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/191. P2 - The economic effect of climate 气候对经济的影响.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-104": {
-      "examId": "p2-low-104",
-      "dataKey": "p2-low-104",
-      "script": "./p2-low-104.js",
-      "title": "1115纸笔Should we stop eating meat 是否应该吃素",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/",
-      "filename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-105": {
-      "examId": "p1-high-105",
-      "dataKey": "p1-high-105",
-      "script": "./p1-high-105.js",
-      "title": "A survivor’s story 新西兰猫头鹰",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/",
-      "filename": "2. P1 - A survivor’s story 新西兰猫头鹰【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/2. P1 - A survivor’s story 新西兰猫头鹰.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-106": {
-      "examId": "p1-low-106",
-      "dataKey": "p1-low-106",
-      "script": "./p1-low-106.js",
-      "title": "The Importance of Business Cards 名片的重要性",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/",
-      "filename": "20. P1 - The Importance of Business Cards 名片的重要性.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/20. P1 - The Importance of Business Cards 名片的重要性.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-107": {
-      "examId": "p1-low-107",
-      "dataKey": "p1-low-107",
-      "script": "./p1-low-107.js",
-      "title": "The life of Beatrix Potter 彼得兔作家",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/",
-      "filename": "21. P1 - The life of Beatrix Potter 彼得兔作家.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/21. P1 - The life of Beatrix Potter 彼得兔作家.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-108": {
-      "examId": "p1-low-108",
-      "dataKey": "p1-low-108",
-      "script": "./p1-low-108.js",
-      "title": "The nature of Yawning 打哈欠的本质",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/22. P1 - The nature of Yawning 打哈欠的本质/",
-      "filename": "22. P1 - The nature of Yawning 打哈欠的本质.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/22. P1 - The nature of Yawning 打哈欠的本质.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-109": {
-      "examId": "p1-low-109",
-      "dataKey": "p1-low-109",
-      "script": "./p1-low-109.js",
-      "title": "The Origin of Paper 造纸术起源",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/",
-      "filename": "23. P1 - The Origin of Paper 造纸术起源.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/23. P1 - The Origin of Paper 造纸术起源.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-110": {
-      "examId": "p1-high-110",
-      "dataKey": "p1-high-110",
-      "script": "./p1-high-110.js",
-      "title": "The Pearls 珍珠",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/",
-      "filename": "24. P1 - The Pearls 珍珠【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/24. P1 - The Pearls 珍珠.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-111": {
-      "examId": "p1-low-111",
-      "dataKey": "p1-low-111",
-      "script": "./p1-low-111.js",
-      "title": "The Rise and Fall of Detective Stories 侦探小说的兴衰",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
-      "filename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-112": {
-      "examId": "p1-low-112",
-      "dataKey": "p1-low-112",
-      "script": "./p1-low-112.js",
-      "title": "The Tuatara of New Zealand 新西兰蜥蜴",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/",
-      "filename": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-113": {
-      "examId": "p1-low-113",
-      "dataKey": "p1-low-113",
-      "script": "./p1-low-113.js",
-      "title": "Thomas Young The last man who knew everything 托马斯·杨",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/",
-      "filename": "27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-114": {
-      "examId": "p1-low-114",
-      "dataKey": "p1-low-114",
-      "script": "./p1-low-114.js",
-      "title": "Triumph of the City 城市的胜利",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 1.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
-      "filename": "28. P1 - Triumph of the City 城市的胜利.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-115": {
-      "examId": "p1-medium-115",
-      "dataKey": "p1-medium-115",
-      "script": "./p1-medium-115.js",
-      "title": "Tunnelling under the Thames 泰晤士河隧道",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】/",
-      "filename": "29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/29. P1 - Tunnelling under the Thames 泰晤士河隧道.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-116": {
-      "examId": "p1-low-116",
-      "dataKey": "p1-low-116",
-      "script": "./p1-low-116.js",
-      "title": "Advertising Needs Attention 广告的吸引力",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/3. P1 - Advertising Needs Attention 广告的吸引力/",
-      "filename": "3. P1 - Advertising Needs Attention 广告的吸引力.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/3. P1 - Advertising Needs Attention 广告的吸引力.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-117": {
-      "examId": "p1-medium-117",
-      "dataKey": "p1-medium-117",
-      "script": "./p1-medium-117.js",
-      "title": "What Lucy Taught Us 露西化石",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/30. P1 - What Lucy Taught Us 露西化石【次】/",
-      "filename": "30. P1 - What Lucy Taught Us 露西化石【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/30. P1 - What Lucy Taught Us 露西化石.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-118": {
-      "examId": "p1-high-118",
-      "dataKey": "p1-high-118",
-      "script": "./p1-high-118.js",
-      "title": "William Gilbert and Magnetism 电磁学之父",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/",
-      "filename": "31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/31. P1 - William Gilbert and Magnetism 电磁学之父.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-119": {
-      "examId": "p1-medium-119",
-      "dataKey": "p1-medium-119",
-      "script": "./p1-medium-119.js",
-      "title": "Wood 新西兰木材产业",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/",
-      "filename": "32. P1 - Wood 新西兰木材产业【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-120": {
-      "examId": "p2-high-120",
-      "dataKey": "p2-high-120",
-      "script": "./p2-high-120.js",
-      "title": "A new look for Talbot Park 奥克兰社区改造",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
-      "filename": "ai_studio_code (9).html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/33. P2 - A new look for Talbot Park 奥克兰社区改造.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-121": {
-      "examId": "p2-medium-121",
-      "dataKey": "p2-medium-121",
-      "script": "./p2-medium-121.js",
-      "title": "A unique golden textile 蜘蛛丝",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/34. P2 - A unique golden textile 蜘蛛丝【次】/",
-      "filename": "34. P2 - A unique golden textile 蜘蛛丝【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/34. P2 - A unique golden textile 蜘蛛丝.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-122": {
-      "examId": "p2-low-122",
-      "dataKey": "p2-low-122",
-      "script": "./p2-low-122.js",
-      "title": "Biophilic Design 亲自然设计",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
-      "filename": "35. P2 - Biophilic Design 亲自然设计.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-123": {
-      "examId": "p2-high-123",
-      "dataKey": "p2-high-123",
-      "script": "./p2-high-123.js",
-      "title": "Bird Migration 鸟类迁徙",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/",
-      "filename": "36. P2 - Bird Migration 鸟类迁徙【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-124": {
-      "examId": "p2-high-124",
-      "dataKey": "p2-high-124",
-      "script": "./p2-high-124.js",
-      "title": "Corporate Social Responsibility  企业社会责任",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/37. P2 - Corporate Social Responsibility  企业社会责任【高】/",
-      "filename": "37. P2 - Corporate Social Responsibility  企业社会责任【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/37. P2 - Corporate Social Responsibility  企业社会责任.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-125": {
-      "examId": "p2-low-125",
-      "dataKey": "p2-low-125",
-      "script": "./p2-low-125.js",
-      "title": "Egypt’s ancient boat-builders 古埃及造船",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/38. P2 - Egypt’s ancient boat-builders 古埃及造船/",
-      "filename": "38. P2 - Egypt’s ancient boat-builders 古埃及造船.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-126": {
-      "examId": "p2-medium-126",
-      "dataKey": "p2-medium-126",
-      "script": "./p2-medium-126.js",
-      "title": "How are deserts formed 沙漠成因",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/",
-      "filename": "39. P2 - How are deserts formed 沙漠成因【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/39. P2 - How are deserts formed 沙漠成因.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-127": {
-      "examId": "p1-low-127",
-      "dataKey": "p1-low-127",
-      "script": "./p1-low-127.js",
-      "title": "Ambergris 龙涎香",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/4. P1 - Ambergris 龙涎香/",
-      "filename": "4. P1 - Ambergris 龙涎香.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/4. P1 - Ambergris 龙涎香.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-128": {
-      "examId": "p2-high-128",
-      "dataKey": "p2-high-128",
-      "script": "./p2-high-128.js",
-      "title": "How Well Do We Concentrate_  多任务处理",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/40. P2 - How Well Do We Concentrate_  多任务处理【高】/",
-      "filename": "40. P2 - How Well Do We Concentrate_  多任务处理【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/40. P2 - How Well Do We Concentrate_  多任务处理.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-129": {
-      "examId": "p2-medium-129",
-      "dataKey": "p2-medium-129",
-      "script": "./p2-medium-129.js",
-      "title": "Intelligent behaviour in birds 鸟类智慧行为",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/",
-      "filename": "41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/41. P2 - Intelligent behaviour in birds 鸟类智慧行为.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-130": {
-      "examId": "p2-high-130",
-      "dataKey": "p2-high-130",
-      "script": "./p2-high-130.js",
-      "title": "Investment in shares versus investment in other assets 回报数据分析",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】/",
-      "filename": "42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/42. P2 - Investment in shares versus investment in other assets 回报数据分析.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-131": {
-      "examId": "p2-high-131",
-      "dataKey": "p2-high-131",
-      "script": "./p2-high-131.js",
-      "title": "Learning from the Romans 罗马混凝土",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/",
-      "filename": "43. P2 - Learning from the Romans 罗马混凝土【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/43. P2 - Learning from the Romans 罗马混凝土.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-132": {
-      "examId": "p2-low-132",
-      "dataKey": "p2-low-132",
-      "script": "./p2-low-132.js",
-      "title": "Orientation of Birds 鸟类的定位能力",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/44. P2 - Orientation of Birds 鸟类的定位能力/",
-      "filename": "44. P2 - Orientation of Birds 鸟类的定位能力.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/44. P2 - Orientation of Birds 鸟类的定位能力.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-133": {
-      "examId": "p2-high-133",
-      "dataKey": "p2-high-133",
-      "script": "./p2-high-133.js",
-      "title": "Playing soccer 街头足球",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/45. P2 - Playing soccer 街头足球【高】/",
-      "filename": "45. P2 - Playing soccer 街头足球【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/45. P2 - Playing soccer 街头足球.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-134": {
-      "examId": "p2-high-134",
-      "dataKey": "p2-high-134",
-      "script": "./p2-high-134.js",
-      "title": "Roller coaster 过山车",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/46. P2 - Roller coaster 过山车【高】/",
-      "filename": "46. P2 - Roller coaster 过山车【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/46. P2 - Roller coaster 过山车.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-135": {
-      "examId": "p2-low-135",
-      "dataKey": "p2-low-135",
-      "script": "./p2-low-135.js",
-      "title": "Skyscraper Farming 摩天大楼种植",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/47. P2 - Skyscraper Farming 摩天大楼种植/",
-      "filename": "47. P2 - Skyscraper Farming 摩天大楼种植.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/47. P2 - Skyscraper Farming 摩天大楼种植.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-136": {
-      "examId": "p2-high-136",
-      "dataKey": "p2-high-136",
-      "script": "./p2-high-136.js",
-      "title": "Solving the problem of waste disposal 垃圾处理",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/",
-      "filename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/48. P2 - Solving the problem of waste disposal 垃圾处理.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-137": {
-      "examId": "p2-high-137",
-      "dataKey": "p2-high-137",
-      "script": "./p2-high-137.js",
-      "title": "Surviving city life 动物适应城市",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/",
-      "filename": "49. P2 - Surviving city life 动物适应城市【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/49. P2 - Surviving city life 动物适应城市.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-138": {
-      "examId": "p1-low-138",
-      "dataKey": "p1-low-138",
-      "script": "./p1-low-138.js",
-      "title": "Australian artist Margaret Preston 澳大利亚艺术家",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家/",
-      "filename": "5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-139": {
-      "examId": "p2-high-139",
-      "dataKey": "p2-high-139",
-      "script": "./p2-high-139.js",
-      "title": "The conquest of malaria in Italy 意大利疟疾防治",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】/",
-      "filename": "50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/50. P2 - The conquest of malaria in Italy 意大利疟疾防治.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-140": {
-      "examId": "p2-low-140",
-      "dataKey": "p2-low-140",
-      "script": "./p2-low-140.js",
-      "title": "The dingo debate 澳洲野犬",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/",
-      "filename": "51. P2 - The dingo debate 澳洲野犬.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-141": {
-      "examId": "p2-high-141",
-      "dataKey": "p2-high-141",
-      "script": "./p2-high-141.js",
-      "title": "The fascinating world of attine ants 切叶蚁",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/52. P2 - The fascinating world of attine ants 切叶蚁【高】/",
-      "filename": "52. P2 - The fascinating world of attine ants 切叶蚁【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/52. P2 - The fascinating world of attine ants 切叶蚁.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-142": {
-      "examId": "p2-low-142",
-      "dataKey": "p2-low-142",
-      "script": "./p2-low-142.js",
-      "title": "The fashion industry 时尚产业",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
-      "filename": "53. P2 - The fashion industry 时尚产业.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-143": {
-      "examId": "p2-low-143",
-      "dataKey": "p2-low-143",
-      "script": "./p2-low-143.js",
-      "title": "The impact of invasive species 入侵物种的影响",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/",
-      "filename": "54. P2 - The impact of invasive species 入侵物种的影响.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/54. P2 - The impact of invasive species 入侵物种的影响.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-144": {
-      "examId": "p2-medium-144",
-      "dataKey": "p2-medium-144",
-      "script": "./p2-medium-144.js",
-      "title": "The plan to bring an asteroid to Earth 捕获小行星",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】/",
-      "filename": "55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/55. P2 - The plan to bring an asteroid to Earth 捕获小行星.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-145": {
-      "examId": "p2-high-145",
-      "dataKey": "p2-high-145",
-      "script": "./p2-high-145.js",
-      "title": "The return of monkey life 猴群回归",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/",
-      "filename": "56. P2 - The return of monkey life 猴群回归【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/56. P2 - The return of monkey life 猴群回归.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-146": {
-      "examId": "p2-medium-146",
-      "dataKey": "p2-medium-146",
-      "script": "./p2-medium-146.js",
-      "title": "The Tasmanian Tiger 袋狼",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/",
-      "filename": "57. P2 - The Tasmanian Tiger 袋狼【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/57. P2 - The Tasmanian Tiger 袋狼.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-147": {
-      "examId": "p2-low-147",
-      "dataKey": "p2-low-147",
-      "script": "./p2-low-147.js",
-      "title": "Who wrote Shakespeare's plays 莎士比亚",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/",
-      "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-148": {
-      "examId": "p2-low-148",
-      "dataKey": "p2-low-148",
-      "script": "./p2-low-148.js",
-      "title": "Why do we need the arts_ 艺术的意义",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/59. P2 - Why do we need the arts_ 艺术的意义/",
-      "filename": "59. P2 - Why do we need the arts_ 艺术的意义.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/59. P2 - Why do we need the arts_ 艺术的意义.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-149": {
-      "examId": "p1-low-149",
-      "dataKey": "p1-low-149",
-      "script": "./p1-low-149.js",
-      "title": "Categorizing societies 社会分类",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/6. P1 - Categorizing societies 社会分类/",
-      "filename": "6. P1 - Categorizing societies 社会分类html.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/6. P1 - Categorizing societies 社会分类.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-150": {
-      "examId": "p3-high-150",
-      "dataKey": "p3-high-150",
-      "script": "./p3-high-150.js",
-      "title": "A closer examination of a study on verbal and non-verbal messages 语言表达研究",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/",
-      "filename": "60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-151": {
-      "examId": "p3-low-151",
-      "dataKey": "p3-low-151",
-      "script": "./p3-low-151.js",
-      "title": "Book Review The Discovery of Slowness 富兰克林(慢的发现)",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/",
-      "filename": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-152": {
-      "examId": "p3-medium-152",
-      "dataKey": "p3-medium-152",
-      "script": "./p3-medium-152.js",
-      "title": "Charles Darwin and Evolutionary Psychology 进化心理学",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/",
-      "filename": "62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-153": {
-      "examId": "p3-low-153",
-      "dataKey": "p3-low-153",
-      "script": "./p3-low-153.js",
-      "title": "Crossing the Threshold 奥克兰美术馆",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/63. P3 - Crossing the Threshold 奥克兰美术馆/",
-      "filename": "63. P3 - Crossing the Threshold 奥克兰美术馆.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/63. P3 - Crossing the Threshold 奥克兰美术馆.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-154": {
-      "examId": "p3-medium-154",
-      "dataKey": "p3-medium-154",
-      "script": "./p3-medium-154.js",
-      "title": "Decisions, Decisions 决策之间",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/64. P3 - Decisions, Decisions 决策之间【次】/",
-      "filename": "64. P3 - Decisions, Decisions 决策之间【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/64. P3 - Decisions, Decisions 决策之间.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-155": {
-      "examId": "p3-medium-155",
-      "dataKey": "p3-medium-155",
-      "script": "./p3-medium-155.js",
-      "title": "Does class size matter_ 课堂规模",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/65. P3 - Does class size matter_ 课堂规模【次】/",
-      "filename": "65. P3 - Does class size matter_ 课堂规模【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-156": {
-      "examId": "p3-high-156",
-      "dataKey": "p3-high-156",
-      "script": "./p3-high-156.js",
-      "title": "Elephant Communication 大象交流",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/",
-      "filename": "66. P3 - Elephant Communication 大象交流【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/66. P3 - Elephant Communication 大象交流.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-157": {
-      "examId": "p3-high-157",
-      "dataKey": "p3-high-157",
-      "script": "./p3-high-157.js",
-      "title": "Flower Power 鲜花的力量(花之力)",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/",
-      "filename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/67. P3 - Flower Power 鲜花的力量(花之力).pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-158": {
-      "examId": "p3-low-158",
-      "dataKey": "p3-low-158",
-      "script": "./p3-low-158.js",
-      "title": "Game theory 博弈论",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/68. P3 - Game theory 博弈论/",
-      "filename": "68. P3 - Game theory 博弈论.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/68. P3 - Game theory 博弈论.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-159": {
-      "examId": "p3-high-159",
-      "dataKey": "p3-high-159",
-      "script": "./p3-high-159.js",
-      "title": "Grimm’s Fairy Tales 格林童话",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/69. P3 - Grimm’s Fairy Tales 格林童话【高】/",
-      "filename": "69. P3 - Grimm’s Fairy Tales 格林童话【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/69. P3 - Grimm’s Fairy Tales 格林童话.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-160": {
-      "examId": "p1-low-160",
-      "dataKey": "p1-low-160",
-      "script": "./p1-low-160.js",
-      "title": "Chili peppers 辣椒的历史",
-      "category": "P1",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/7. P1 - Chili peppers 辣椒的历史/",
-      "filename": "7. P1 - Chili peppers 辣椒的历史.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/7. P1 - Chili peppers 辣椒的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-161": {
-      "examId": "p3-high-161",
-      "dataKey": "p3-high-161",
-      "script": "./p3-high-161.js",
-      "title": "Insect-inspired robots 昆虫机器人",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/",
-      "filename": "70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/70. P3 - Insect-inspired robots 昆虫机器人.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-162": {
-      "examId": "p3-medium-162",
-      "dataKey": "p3-medium-162",
-      "script": "./p3-medium-162.js",
-      "title": "Jean Piaget (1896–1980) 让·皮亚杰",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/",
-      "filename": "71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-163": {
-      "examId": "p3-low-163",
-      "dataKey": "p3-low-163",
-      "script": "./p3-low-163.js",
-      "title": "Keeping the Fun in Funfairs 游乐场设计科学",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学/",
-      "filename": "72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-164": {
-      "examId": "p3-high-164",
-      "dataKey": "p3-high-164",
-      "script": "./p3-high-164.js",
-      "title": "Language Strategy in Multinational Companies 跨国公司语言策略",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】/",
-      "filename": "73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-165": {
-      "examId": "p3-low-165",
-      "dataKey": "p3-low-165",
-      "script": "./p3-low-165.js",
-      "title": "Let’s teach them how to teach 教他们如何教学",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/74. P3 - Let’s teach them how to teach 教他们如何教学/",
-      "filename": "74. P3 - Let’s teach them how to teach 教他们如何教学.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/74. P3 - Let’s teach them how to teach 教他们如何教学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-166": {
-      "examId": "p3-low-166",
-      "dataKey": "p3-low-166",
-      "script": "./p3-low-166.js",
-      "title": "Life on Mars_ 火星地球化改造",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/",
-      "filename": "75. P3 - Life on Mars_ 火星地球化改造.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/75. P3 - Life on Mars 火星地球化改造.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-167": {
-      "examId": "p3-high-167",
-      "dataKey": "p3-high-167",
-      "script": "./p3-high-167.js",
-      "title": "Living dunes 流动沙丘",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/76. P3 - Living dunes 流动沙丘【高】/",
-      "filename": "76. P3 - Living dunes 流动沙丘【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/76. P3 - Living dunes 流动沙丘.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-168": {
-      "examId": "p3-medium-168",
-      "dataKey": "p3-medium-168",
-      "script": "./p3-medium-168.js",
-      "title": "Marketing and the information age 信息时代营销",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
-      "filename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/77. P3 - Marketing and the information age 信息时代营销.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-169": {
-      "examId": "p3-medium-169",
-      "dataKey": "p3-medium-169",
-      "script": "./p3-medium-169.js",
-      "title": "（无题目）  Music Language We All Speak 音乐语言",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/",
-      "filename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-170": {
-      "examId": "p3-high-170",
-      "dataKey": "p3-high-170",
-      "script": "./p3-high-170.js",
-      "title": "Pacific Navigation and Voyaging 太平洋航海",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/",
-      "filename": "79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/79. P3 - Pacific Navigation and Voyaging 太平洋航海.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-171": {
-      "examId": "p1-high-171",
-      "dataKey": "p1-high-171",
-      "script": "./p1-high-171.js",
-      "title": "Fishbourne Roman Palace 罗马宫殿",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/",
-      "filename": "8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/8. P1 - Fishbourne Roman Palace 罗马宫殿.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-172": {
-      "examId": "p3-low-172",
-      "dataKey": "p3-low-172",
-      "script": "./p3-low-172.js",
-      "title": "Rebranding art museums 博物馆品牌重塑",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/80. P3 - Rebranding art museums 博物馆品牌重塑/",
-      "filename": "80. P3 - Rebranding art museums 博物馆品牌重塑.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/80. P3 - Rebranding art museums 博物馆品牌重塑.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-173": {
-      "examId": "p3-high-173",
-      "dataKey": "p3-high-173",
-      "script": "./p3-high-173.js",
-      "title": "Robert Louis Stevenson 苏格兰作家",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/",
-      "filename": "81. P3 - Robert Louis Stevenson 苏格兰作家【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/81. P3 - Robert Louis Stevenson 苏格兰作家.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-174": {
-      "examId": "p3-high-174",
-      "dataKey": "p3-high-174",
-      "script": "./p3-high-174.js",
-      "title": "Some views on the use of headphones 耳机使用",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/82. P3 - Some views on the use of headphones 耳机使用【高】/",
-      "filename": "82. P3 - Some views on the use of headphones 耳机使用【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/82. P3 - Some views on the use of headphones 耳机使用.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-175": {
-      "examId": "p3-low-175",
-      "dataKey": "p3-low-175",
-      "script": "./p3-low-175.js",
-      "title": "Termite Mounds 白蚁丘",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/83. P3 - Termite Mounds 白蚁丘/",
-      "filename": "83. P3 - Termite Mounds 白蚁丘.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/83. P3 - Termite Mounds 白蚁丘.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-176": {
-      "examId": "p3-medium-176",
-      "dataKey": "p3-medium-176",
-      "script": "./p3-medium-176.js",
-      "title": "The Analysis of Fear 猴子恐惧实验",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/84. P3 - The Analysis of Fear 猴子恐惧实验【次】/",
-      "filename": "84. P3 - The Analysis of Fear 猴子恐惧实验【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/84. P3 - The Analysis of Fear 猴子恐惧实验.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-177": {
-      "examId": "p3-medium-177",
-      "dataKey": "p3-medium-177",
-      "script": "./p3-medium-177.js",
-      "title": "The Art of Deception 欺骗的艺术",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/85. P3 - The Art of Deception 欺骗的艺术【次】/",
-      "filename": "85. P3 - The Art of Deception 欺骗的艺术【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/85. P3 - The Art of Deception 欺骗的艺术.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-178": {
-      "examId": "p3-high-178",
-      "dataKey": "p3-high-178",
-      "script": "./p3-high-178.js",
-      "title": "The benefits of learning an instrument 学乐器的好处",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/86. P3 - The benefits of learning an instrument 学乐器的好处【高】/",
-      "filename": "86. P3 - The benefits of learning an instrument 学乐器的好处【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/86. P3 - The benefits of learning an instrument 学乐器的好处.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-179": {
-      "examId": "p3-medium-179",
-      "dataKey": "p3-medium-179",
-      "script": "./p3-medium-179.js",
-      "title": "The Exploration of Mars 火星探索",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/87. P3 - The Exploration of Mars 火星探索【次】/",
-      "filename": "87. P3 - The Exploration of Mars 火星探索【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/87. P3 - The Exploration of Mars 火星探索.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-180": {
-      "examId": "p3-high-180",
-      "dataKey": "p3-high-180",
-      "script": "./p3-high-180.js",
-      "title": "The fluoridation controversy 氟化水争议",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/",
-      "filename": "88. P3 - The fluoridation controversy 氟化水争议【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/88. P3 - The fluoridation controversy 氟化水争议.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-181": {
-      "examId": "p3-high-181",
-      "dataKey": "p3-high-181",
-      "script": "./p3-high-181.js",
-      "title": "The Fruit Book 果实之书",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/89. P3 - The Fruit Book 果实之书【高】/",
-      "filename": "89. P3 - The Fruit Book 果实之书【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/89. P3 - The Fruit Book 果实之书.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-medium-182": {
-      "examId": "p1-medium-182",
-      "dataKey": "p1-medium-182",
-      "script": "./p1-medium-182.js",
-      "title": "Listening to the Ocean 海洋探测",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/",
-      "filename": "9. P1 - Listening to the Ocean 海洋探测【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/9. P1 - Listening to the Ocean 海洋探测.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-183": {
-      "examId": "p3-medium-183",
-      "dataKey": "p3-medium-183",
-      "script": "./p3-medium-183.js",
-      "title": "The hazards of multitasking 多任务处理",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/90. P3 - The hazards of multitasking 多任务处理【次】/",
-      "filename": "90. P3 - The hazards of multitasking 多任务处理【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/90. P3 - The hazards of multitasking 多任务处理.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-184": {
-      "examId": "p3-high-184",
-      "dataKey": "p3-high-184",
-      "script": "./p3-high-184.js",
-      "title": "The New Zealand writer Margaret Mahy 新西兰女作家",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】/",
-      "filename": "91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-185": {
-      "examId": "p3-medium-185",
-      "dataKey": "p3-medium-185",
-      "script": "./p3-medium-185.js",
-      "title": "The Pirahã people of Brazil  巴西皮拉罕部落语言",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】/",
-      "filename": "92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-186": {
-      "examId": "p3-low-186",
-      "dataKey": "p3-low-186",
-      "script": "./p3-low-186.js",
-      "title": "The Robbers Cave Study (山洞)群体行为实验",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/93. P3 - The Robbers Cave Study (山洞)群体行为实验/",
-      "filename": "93. P3 - The Robbers Cave Study (山洞)群体行为实验.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-187": {
-      "examId": "p3-low-187",
-      "dataKey": "p3-low-187",
-      "script": "./p3-low-187.js",
-      "title": "The science of sleep 睡眠的科学",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/94. P3 - The science of sleep 睡眠的科学/",
-      "filename": "94. P3 - The science of sleep 睡眠的科学.pdf.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/94. P3 - The science of sleep 睡眠的科学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-188": {
-      "examId": "p3-medium-188",
-      "dataKey": "p3-medium-188",
-      "script": "./p3-medium-188.js",
-      "title": "The Significant Role of Mother Tongue in Education 母语教育",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/",
-      "filename": "95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/95. P3 - The Significant Role of Mother Tongue in Education 母语教育.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-189": {
-      "examId": "p3-high-189",
-      "dataKey": "p3-high-189",
-      "script": "./p3-high-189.js",
-      "title": "The tuatara – past and future 新西兰蜥蜴",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/96. P3 - The tuatara – past and future 新西兰蜥蜴【高】/",
-      "filename": "96. P3 - The tuatara – past and future 新西兰蜥蜴【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/96. P3 - The tuatara – past and future 新西兰蜥蜴.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-190": {
-      "examId": "p3-low-190",
-      "dataKey": "p3-low-190",
-      "script": "./p3-low-190.js",
-      "title": "The value of literary prizes 文学奖项的价值",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/97. P3 - The value of literary prizes 文学奖项的价值/",
-      "filename": "97. P3 - The value of literary prizes 文学奖项的价值.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/97. P3 - The value of literary prizes 文学奖项的价值.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-191": {
-      "examId": "p3-medium-191",
-      "dataKey": "p3-medium-191",
-      "script": "./p3-medium-191.js",
-      "title": "Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】/",
-      "filename": "98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-192": {
-      "examId": "p3-high-192",
-      "dataKey": "p3-high-192",
-      "script": "./p3-high-192.js",
-      "title": "Voynich Manuscript 伏尼契手稿",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/",
-      "filename": "99. P3 - Voynich Manuscript 伏尼契手稿【高】.html",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/99. P3 - Voynich Manuscript 伏尼契手稿.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-200": {
-      "examId": "p1-high-200",
-      "dataKey": "p1-high-200",
-      "script": "./p1-high-200.js",
-      "title": "Australia’s Airborne Dentists 澳洲飞行牙医",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2,
-      "path": "三月/1.P1 高频/",
-      "filename": "200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-211": {
-      "examId": "p1-high-211",
-      "dataKey": "p1-high-211",
-      "script": "./p1-high-211.js",
-      "title": "Ahead of its time 新西兰头骨",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "三月/1.P1 高频/",
-      "filename": "211. P1 - Ahead of its time 新西兰头骨【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/211. P1 - Ahead of its time 新西兰头骨.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-216": {
-      "examId": "p1-high-216",
-      "dataKey": "p1-high-216",
-      "script": "./p1-high-216.js",
-      "title": "Australia’s cane toad problem 澳洲蟾蜍",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "三月/1.P1 高频/",
-      "filename": "216. P1 - Australia’s cane toad problem 澳洲蟾蜍【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/216. P1 - Australia’s cane toad problem 澳洲蟾蜍.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-194": {
-      "examId": "p1-high-194",
-      "dataKey": "p1-high-194",
-      "script": "./p1-high-194.js",
-      "title": "The history of the British wool industry 英国羊毛产业的历史",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 2.5,
-      "path": "三月/2.P1 次高频/",
-      "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-222": {
-      "examId": "p2-low-222",
-      "dataKey": "p2-low-222",
-      "script": "./p2-low-222.js",
-      "title": "Ideal Homes 理想居所",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "三月/",
-      "filename": "222. P2 - Ideal Homes 理想居所.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/222. P2 - Ideal Homes 理想居所.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-low-223": {
-      "examId": "p1-low-223",
-      "dataKey": "p1-low-223",
-      "script": "./p1-low-223.js",
-      "title": "Effect and Cause 湖泊海啸研究",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 3.5,
-      "path": "三月/",
-      "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-201": {
-      "examId": "p2-high-201",
-      "dataKey": "p2-high-201",
-      "script": "./p2-high-201.js",
-      "title": "Multi-tasking and the brain 大脑与多任务处理",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "三月/3.P2 高频/",
-      "filename": "201. P2 - Multi-tasking and the brain 大脑与多任务处理【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/201. P2 - Multi-tasking and the brain 大脑与多任务处理.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-217": {
-      "examId": "p2-medium-217",
-      "dataKey": "p2-medium-217",
-      "script": "./p2-medium-217.js",
-      "title": "A mechanical friend for children 孩子的机器人朋友",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "三月/3.P2 高频/",
-      "filename": "217. P2 - A mechanical friend for children 孩子的机器人朋友【次】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/217. P2 - A mechanical friend for children 孩子的机器人朋友.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-192": {
-      "examId": "p2-high-192",
-      "dataKey": "p2-high-192",
-      "script": "./p2-high-192.js",
-      "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "三月/4.P2 次高频/",
-      "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-209": {
-      "examId": "p2-medium-209",
-      "dataKey": "p2-medium-209",
-      "script": "./p2-medium-209.js",
-      "title": "Decision Fatigue 决策疲劳",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "三月/4.P2 次高频/",
-      "filename": "209. P2 - Decision Fatigue 决策疲劳【次】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/209. P2 - Decision Fatigue 决策疲劳.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-213": {
-      "examId": "p2-medium-213",
-      "dataKey": "p2-medium-213",
-      "script": "./p2-medium-213.js",
-      "title": "Growing more for less 卫星农业",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "三月/4.P2 次高频/",
-      "filename": "213. P2 - Growing more for less 卫星农业【次】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/213. P2 - Growing more for less 卫星农业.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-051": {
-      "examId": "p2-low-051",
-      "dataKey": "p2-low-051",
-      "script": "./p2-low-051.js",
-      "title": "The dingo debate 澳洲野犬_澳洲野狗",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "三月/4.P2 次高频/",
-      "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-medium-058": {
-      "examId": "p2-medium-058",
-      "dataKey": "p2-medium-058",
-      "script": "./p2-medium-058.js",
-      "title": "Who wrote Shakespeare's plays 莎士比亚",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "三月/4.P2 次高频/",
-      "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-204": {
-      "examId": "p3-high-204",
-      "dataKey": "p3-high-204",
-      "script": "./p3-high-204.js",
-      "title": "When people are ‘deaf’ to music 失乐症",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "三月/5.P3 高频/",
-      "filename": "204. P3 - When people are ‘deaf’ to music 失乐症【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/204. P3 - When people are ‘deaf’ to music 失乐症.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-206": {
-      "examId": "p3-high-206",
-      "dataKey": "p3-high-206",
-      "script": "./p3-high-206.js",
-      "title": "200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "三月/5.P3 高频/",
-      "filename": "206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-212": {
-      "examId": "p3-high-212",
-      "dataKey": "p3-high-212",
-      "script": "./p3-high-212.js",
-      "title": "Children’s literature studies today 儿童文学",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "三月/5.P3 高频/",
-      "filename": "212. P3 - Children’s literature studies today 儿童文学【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/212. P3 - Children’s literature studies today 儿童文学.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-218": {
-      "examId": "p3-high-218",
-      "dataKey": "p3-high-218",
-      "script": "./p3-high-218.js",
-      "title": "The Causes of Linguistic Change 语音的演变",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "三月/5.P3 高频/",
-      "filename": "218. P3 - The Causes of Linguistic Change 语音的演变【高】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/218. P3 - The Causes of Linguistic Change 语音的演变.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-219": {
-      "examId": "p3-low-219",
-      "dataKey": "p3-low-219",
-      "script": "./p3-low-219.js",
-      "title": "The origin of language 语言的起源",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "三月/5.P3 高频/",
-      "filename": "219. P3 - The origin of language 语言的起源.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/219. P3 - The origin of language 语言的起源.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-999": {
-      "examId": "p3-low-999",
-      "dataKey": "p3-low-999",
-      "script": "./p3-low-999.js",
-      "title": "Risk taking",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "三月/5.P3 高频/",
-      "filename": "P3 - Risk taking.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-197": {
-      "examId": "p3-medium-197",
-      "dataKey": "p3-medium-197",
-      "script": "./p3-medium-197.js",
-      "title": "Australia’s Megafauna Controversy 巨兽灭绝",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "三月/6.P3 次高频/",
-      "filename": "197. P3 - Australia’s Megafauna Controversy 巨兽灭绝【次】.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/197. P3 - Australia’s Megafauna Controversy 巨兽灭绝.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-198": {
-      "examId": "p3-low-198",
-      "dataKey": "p3-low-198",
-      "script": "./p3-low-198.js",
-      "title": "Child’s Play in Medieval England 中世纪的游戏",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "三月/6.P3 次高频/",
-      "filename": "198. P3 - Child’s Play in Medieval England 中世纪的游戏.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/198. P3 - Child’s Play in Medieval England 中世纪的游戏.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-078": {
-      "examId": "p3-low-078",
-      "dataKey": "p3-low-078",
-      "script": "./p3-low-078.js",
-      "title": "P3 (ds做出来的) - Music Language We All Speak 音乐语言",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": 4.5,
-      "path": "三月/6.P3 次高频/",
-      "filename": "78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-227": {
-      "examId": "p1-high-227",
-      "dataKey": "p1-high-227",
-      "script": "./p1-high-227.js",
-      "title": "The Whale Goes to Court 鲸鱼油",
-      "category": "P1",
-      "frequency": "次高频",
-      "difficultyScore": 3,
-      "path": "ReadingPractice/PDF/",
-      "filename": "227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-225": {
-      "examId": "p2-high-225",
-      "dataKey": "p2-high-225",
-      "script": "./p2-high-225.js",
-      "title": "The problem of graffiti 涂鸦之困",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3.5,
-      "path": "ReadingPractice/PDF/",
-      "filename": "225. P2 - The problem of graffiti 涂鸦之困.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/225. P2 - The problem of graffiti 涂鸦之困.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-228": {
-      "examId": "p3-high-228",
-      "dataKey": "p3-high-228",
-      "script": "./p3-high-228.js",
-      "title": "On art and artists 艺术与艺术家",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": 4.5,
-      "path": "ReadingPractice/PDF/",
-      "filename": "228. P3 - On art and artists 艺术与艺术家.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-229": {
-      "examId": "p1-high-229",
-      "dataKey": "p1-high-229",
-      "script": "./p1-high-229.js",
-      "title": "New Understanding of Giraffes in the Wild 野生长颈鹿",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2.5,
-      "path": "ReadingPractice/PDF/",
-      "filename": "229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-230": {
-      "examId": "p1-high-230",
-      "dataKey": "p1-high-230",
-      "script": "./p1-high-230.js",
-      "title": "The History of the Pencil 铅笔的历史",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 1.5,
-      "path": "ReadingPractice/PDF/",
-      "filename": "230. P1 - The History of the Pencil 铅笔的历史.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/230. P1 - The History of the Pencil 铅笔的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-231": {
-      "examId": "p1-high-231",
-      "dataKey": "p1-high-231",
-      "script": "./p1-high-231.js",
-      "title": "The History of the Pencil 铅笔的历史（流程图版）",
-      "category": "P1",
-      "frequency": "高频",
-      "difficultyScore": 2,
-      "path": "ReadingPractice/PDF/",
-      "filename": "231. P1 - The History of the Pencil 铅笔的历史（流程图版）.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/231. P1 - The History of the Pencil 铅笔的历史（流程图版）.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-232": {
-      "examId": "p2-high-232",
-      "dataKey": "p2-high-232",
-      "script": "./p2-high-232.js",
-      "title": "The origin and development of applause 掌声的历史",
-      "category": "P2",
-      "frequency": "次高频",
-      "difficultyScore": 4,
-      "path": "ReadingPractice/PDF/",
-      "filename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-233": {
-      "examId": "p2-high-233",
-      "dataKey": "p2-high-233",
-      "script": "./p2-high-233.js",
-      "title": "Why don’t we sleep 失眠的原因",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 3,
-      "path": "ReadingPractice/PDF/",
-      "filename": "233. P2 - Why don’t we sleep 失眠的原因.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/233. P2 - Why don’t we sleep 失眠的原因.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-234": {
-      "examId": "p2-high-234",
-      "dataKey": "p2-high-234",
-      "script": "./p2-high-234.js",
-      "title": "How do plants talk to each other 植物交流",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": 4,
-      "path": "ReadingPractice/PDF/",
-      "filename": "234. P2 - The Secret Language of Plants 植物交流.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/234. P2 - The Secret Language of Plants 植物交流.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-221": {
-      "examId": "p3-high-221",
-      "dataKey": "p3-high-221",
-      "script": "./p3-high-221.js",
-      "title": "The Animal Connection 动物联结",
-      "category": "P3",
-      "frequency": "次高频",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "221. P3 - The Animal Connection 动物联结.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/221. P3 - The Animal Connection 动物联结.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-235": {
-      "examId": "p2-high-235",
-      "dataKey": "p2-high-235",
-      "script": "./p2-high-235.js",
-      "title": "The return of the black-footed ferret 黑足鼬",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-236": {
-      "examId": "p2-high-236",
-      "dataKey": "p2-high-236",
-      "script": "./p2-high-236.js",
-      "title": "War of the Plants 植物的战争",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": null,
-      "path": "",
-      "filename": "",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "",
-      "sourceKind": "generated-reading"
-    },
-    "p3-high-229": {
-      "examId": "p3-high-229",
-      "dataKey": "p3-high-229",
-      "script": "./p3-high-229.js",
-      "title": "All in the family 兄弟姐妹的影响",
-      "category": "P3",
-      "frequency": "高频",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-high-239": {
-      "examId": "p2-high-239",
-      "dataKey": "p2-high-239",
-      "script": "./p2-high-239.js",
-      "title": "Nanotechnology: the science of the very small 纳米科技",
-      "category": "P2",
-      "frequency": "高频",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-240": {
-      "examId": "p2-low-240",
-      "dataKey": "p2-low-240",
-      "script": "./p2-low-240.js",
-      "title": "Coins - the first form of money 硬币起源",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "assets/generated/reading-exams/",
-      "filename": "reading-practice-unified.html",
-      "hasHtml": true,
-      "hasPdf": false,
-      "pdfFilename": "",
-      "sourceKind": "generated-reading"
-    },
-    "p1-high-240": {
-      "examId": "p1-high-240",
-      "dataKey": "p1-high-240",
-      "script": "./p1-high-240.js",
-      "title": "The Origins of Weather Forecasting 天气预报",
-      "category": "P1",
-      "frequency": "high",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p2-low-242": {
-      "examId": "p2-low-242",
-      "dataKey": "p2-low-242",
-      "script": "./p2-low-242.js",
-      "title": "Walking and shoes in eighteenth-century London 伦敦鞋子的发展史",
-      "category": "P2",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-low-240": {
-      "examId": "p3-low-240",
-      "dataKey": "p3-low-240",
-      "script": "./p3-low-240.js",
-      "title": "How a prehistoric predator took to the skies 翼龙飞行",
-      "category": "P3",
-      "frequency": "low",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "P3 - How a prehistoric predator took to the skies.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf",
-      "sourceKind": "generated-reading"
-    },
-    "p3-medium-241": {
-      "examId": "p3-medium-241",
-      "dataKey": "p3-medium-241",
-      "script": "./p3-medium-241.js",
-      "title": "Who looks after the children in today's Britain? 育儿分工",
-      "category": "P3",
-      "frequency": "medium",
-      "difficultyScore": null,
-      "path": "ReadingPractice/PDF/",
-      "filename": "P3 - Who looks after the children in today's Britain.pdf",
-      "hasHtml": true,
-      "hasPdf": true,
-      "pdfFilename": "ReadingPractice/PDF/P3 - Who looks after the children in today's Britain.pdf",
-      "sourceKind": "generated-reading"
-    }
+  "p1-high-01": {
+    "examId": "p1-high-01",
+    "dataKey": "p1-high-01",
+    "script": "./p1-high-01.js",
+    "title": "A Brief History of Tea 茶叶简史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/1. P1 - A Brief History of Tea 茶叶简史【高】/",
+    "filename": "1. P1 - A Brief History of Tea 茶叶简史【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/1. P1 - A Brief History of Tea 茶叶简史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-02": {
+    "examId": "p1-low-02",
+    "dataKey": "p1-low-02",
+    "script": "./p1-low-02.js",
+    "title": "Maori Fish Hooks 毛利鱼钩",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/10. P1 - Maori Fish Hooks 毛利鱼钩/",
+    "filename": "10. P1 - Maori Fish Hooks 毛利鱼钩.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/10. P1 - Maori Fish Hooks 毛利鱼钩.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-03": {
+    "examId": "p3-high-03",
+    "dataKey": "p3-high-03",
+    "script": "./p3-high-03.js",
+    "title": "What makes a musical expert_ 音乐天赋",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/100. P3 - What makes a musical expert_ 音乐天赋【高】/",
+    "filename": "100. P3 - What makes a musical expert_ 音乐天赋【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/100. P3 - What makes a musical expert_ 音乐天赋.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-04": {
+    "examId": "p3-high-04",
+    "dataKey": "p3-high-04",
+    "script": "./p3-high-04.js",
+    "title": "Yawning 打呵欠",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/",
+    "filename": "101. P3 - Yawning 打呵欠【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/101. P3 - Yawning 打哈欠.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-05": {
+    "examId": "p1-high-05",
+    "dataKey": "p1-high-05",
+    "script": "./p1-high-05.js",
+    "title": "Katherine Mansfield 新西兰作家",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/102. P1 - Katherine Mansfield 新西兰作家【高】/",
+    "filename": "102. P1 - Katherine Mansfield 新西兰作家【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/102. P1 - Katherine Mansfield 新西兰作家.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-06": {
+    "examId": "p2-low-06",
+    "dataKey": "p2-low-06",
+    "script": "./p2-low-06.js",
+    "title": "Biomimicry 仿生学",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
+    "filename": "103. P2 - Biomimicry 仿生学.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-07": {
+    "examId": "p3-low-07",
+    "dataKey": "p3-low-07",
+    "script": "./p3-low-07.js",
+    "title": "Star Performers 明星员工",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/",
+    "filename": "104. P3 - Star Performers 明星员工.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/104. P3 - Star Performers 明星员工.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-08": {
+    "examId": "p2-low-08",
+    "dataKey": "p2-low-08",
+    "script": "./p2-low-08.js",
+    "title": "How the Petri dish supports scientific advances 培养皿",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/105. P2 - How the Petri dish supports scientific advances 培养皿/",
+    "filename": "105. P2 - How the Petri dish supports scientific advances 培养皿.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/105. P2 - How the Petri dish supports scientific advances 培养皿.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-09": {
+    "examId": "p2-high-09",
+    "dataKey": "p2-high-09",
+    "script": "./p2-high-09.js",
+    "title": "Early Approaches to Organisational Design 组织设计",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/106. P2 - Early Approaches to Organisational Design 组织设计【高】/",
+    "filename": "106. P2 - Early Approaches to Organisational Design 组织设计【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/106. P2 - Early Approaches to Organisational Design 组织设计.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-10": {
+    "examId": "p2-medium-10",
+    "dataKey": "p2-medium-10",
+    "script": "./p2-medium-10.js",
+    "title": "A study of western celebrity 西方名人",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/107. P2 - A study of western celebrity 西方名人【次】/",
+    "filename": "107. P2 - A study of western celebrity 西方名人【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/107. P2 - A study of western celebrity 西方名人.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-11": {
+    "examId": "p1-low-11",
+    "dataKey": "p1-low-11",
+    "script": "./p1-low-11.js",
+    "title": "Bovids 牛科动物",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/108. P1 - Bovids 牛科动物/",
+    "filename": "108. P1 - Bovids 牛科动物.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/108. P1 - Bovids 牛科动物.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-12": {
+    "examId": "p3-low-12",
+    "dataKey": "p3-low-12",
+    "script": "./p3-low-12.js",
+    "title": "Humanities and the health professional 人文医学",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/109. P3 - Humanities and the health professional 人文医学/",
+    "filename": "109. P3 - Humanities and the health professional 人文医学.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/109. P3 - Humanities and the health professional 人文医学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-13": {
+    "examId": "p1-low-13",
+    "dataKey": "p1-low-13",
+    "script": "./p1-low-13.js",
+    "title": "Report on a university drama project 大学戏剧项目报告",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/11. P1 - Report on a university drama project 大学戏剧项目报告/",
+    "filename": "11. P1 - Report on a university drama project 大学戏剧项目报告.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/11. P1 - Report on a university drama project 大学戏剧项目报告.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-14": {
+    "examId": "p2-high-14",
+    "dataKey": "p2-high-14",
+    "script": "./p2-high-14.js",
+    "title": "Should space be explored by robots or by humans 人机太空探索",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/",
+    "filename": "110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/110. P2 - Should space be explored by robots or by humans 人机太空探索.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-15": {
+    "examId": "p3-high-15",
+    "dataKey": "p3-high-15",
+    "script": "./p3-high-15.js",
+    "title": "Whale Culture 鲸鱼文化",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/111. P3 - Whale Culture 鲸鱼文化【高】/",
+    "filename": "111. P3 - Whale Culture 鲸鱼文化【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/111. P3 - Whale Culture 鲸鱼文化.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-16": {
+    "examId": "p2-high-16",
+    "dataKey": "p2-high-16",
+    "script": "./p2-high-16.js",
+    "title": "The Importance of Law 法律的意义",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/",
+    "filename": "112. P2 - The Importance of Law 法律的意义【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/112. P2 - The Importance of Law 法律的意义.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-17": {
+    "examId": "p2-high-17",
+    "dataKey": "p2-high-17",
+    "script": "./p2-high-17.js",
+    "title": "Herbal Medicines 新西兰草药",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
+    "filename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/113. P2 - Herbal Medicines 新西兰草药.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-18": {
+    "examId": "p3-medium-18",
+    "dataKey": "p3-medium-18",
+    "script": "./p3-medium-18.js",
+    "title": "Unlocking the mystery of dreams 梦的解析",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/114. P3 - Unlocking the mystery of dreams 梦的解析【次】/",
+    "filename": "114. P3 - Unlocking the mystery of dreams 梦的解析【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/114. P3 - Unlocking the mystery of dreams 梦的解析.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-19": {
+    "examId": "p2-high-19",
+    "dataKey": "p2-high-19",
+    "script": "./p2-high-19.js",
+    "title": "Mind Music 脑海中的音乐(心灵音乐)",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/",
+    "filename": "115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/115. P2 - Mind Music 脑海中的音乐(心灵音乐).pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-20": {
+    "examId": "p1-medium-20",
+    "dataKey": "p1-medium-20",
+    "script": "./p1-medium-20.js",
+    "title": "The Development of Plastics 塑料的发展史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/",
+    "filename": "116. P1 - The Development of Plastics 塑料的发展史【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-21": {
+    "examId": "p2-high-21",
+    "dataKey": "p2-high-21",
+    "script": "./p2-high-21.js",
+    "title": "Stress Less 工作压力",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/",
+    "filename": "117. P2 - Stress Less 工作压力【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/117. P2 - Stress Less 工作压力.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-22": {
+    "examId": "p3-medium-22",
+    "dataKey": "p3-medium-22",
+    "script": "./p3-medium-22.js",
+    "title": "Neanderthal Technology 尼安德特人的生存技艺",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
+    "filename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/118. P3 - Neanderthal Technology 尼安德特人的生存技艺.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-23": {
+    "examId": "p2-high-23",
+    "dataKey": "p2-high-23",
+    "script": "./p2-high-23.js",
+    "title": "The Constant Evolution of the Humble Tomato 番茄的演化",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】/",
+    "filename": "119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-24": {
+    "examId": "p1-high-24",
+    "dataKey": "p1-high-24",
+    "script": "./p1-high-24.js",
+    "title": "Rubber 橡胶",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/12. P1 - Rubber 橡胶【高】/",
+    "filename": "12. P1 - Rubber 橡胶【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/12. P1 - Rubber 橡胶.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-25": {
+    "examId": "p2-high-25",
+    "dataKey": "p2-high-25",
+    "script": "./p2-high-25.js",
+    "title": "Will Eating Less Make You Live Longer 节食与长寿",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/",
+    "filename": "120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/120. P2 - Will Eating Less Make You Live Longer 节食与长寿.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-27": {
+    "examId": "p1-high-27",
+    "dataKey": "p1-high-27",
+    "script": "./p1-high-27.js",
+    "title": "Footprints in the Mud 恐龙脚印",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/122. P1 - Footprints in the Mud 恐龙脚印【高】/",
+    "filename": "122. P1 - Footprints in the Mud 恐龙脚印【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/122. P1 - Footprints in the Mud 恐龙脚印.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-28": {
+    "examId": "p3-low-28",
+    "dataKey": "p3-low-28",
+    "script": "./p3-low-28.js",
+    "title": "Images and Places 风景与印记",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/",
+    "filename": "123. P3 - Images and Places 风景与印记.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/123. P3 - Images and Places 风景与印记.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-29": {
+    "examId": "p1-medium-29",
+    "dataKey": "p1-medium-29",
+    "script": "./p1-medium-29.js",
+    "title": "The extinction of the cave bear 洞熊的灭绝",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
+    "filename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/124. P1 - The extinction of the cave bear 洞熊的灭绝.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-30": {
+    "examId": "p1-low-30",
+    "dataKey": "p1-low-30",
+    "script": "./p1-low-30.js",
+    "title": "Investing in the Future 投资未来",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/",
+    "filename": "125. P1 - Investing in the Future 投资未来.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/125. P1 - Investing in the Future 投资未来.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-31": {
+    "examId": "p1-high-31",
+    "dataKey": "p1-high-31",
+    "script": "./p1-high-31.js",
+    "title": "Dolls through the ages 玩偶的变迁史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/",
+    "filename": "126. P1 - Dolls through the ages 玩偶的变迁史【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/126. P1 - Dolls through the ages 玩偶的变迁史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-32": {
+    "examId": "p3-high-32",
+    "dataKey": "p3-high-32",
+    "script": "./p3-high-32.js",
+    "title": "Science and Filmmaking 电影科学(CGI)",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/127. P3 - Science and Filmmaking 电影科学(CGI)【高】/",
+    "filename": "127. P3 - Science and Filmmaking 电影科学(CGI)【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/127. P3 - Science and Filmmaking 电影科学(CGI).pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-33": {
+    "examId": "p1-medium-33",
+    "dataKey": "p1-medium-33",
+    "script": "./p1-medium-33.js",
+    "title": "The Pyramid of Cestius 罗马金字塔",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/",
+    "filename": "128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/128. P1 - The Pyramid of Cestius 罗马金字塔.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-34": {
+    "examId": "p1-low-34",
+    "dataKey": "p1-low-34",
+    "script": "./p1-low-34.js",
+    "title": "The Slow Food Organization 慢食运动组织",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
+    "filename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-35": {
+    "examId": "p1-low-35",
+    "dataKey": "p1-low-35",
+    "script": "./p1-low-35.js",
+    "title": "Sweet Trouble 澳洲制糖产业",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/13. P1 - Sweet Trouble 澳洲制糖产业/",
+    "filename": "13. P1 - Sweet Trouble 澳洲制糖产业.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/13. P1 - Sweet Trouble 澳洲制糖产业.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-36": {
+    "examId": "p3-low-36",
+    "dataKey": "p3-low-36",
+    "script": "./p3-low-36.js",
+    "title": "Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA/",
+    "filename": "130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-37": {
+    "examId": "p2-low-37",
+    "dataKey": "p2-low-37",
+    "script": "./p2-low-37.js",
+    "title": "Keeping the water away 洪水防控",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/",
+    "filename": "131. P2 - Keeping the water away 洪水防控.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/131. P2 - Keeping the water away 洪水防控.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-38": {
+    "examId": "p3-low-38",
+    "dataKey": "p3-low-38",
+    "script": "./p3-low-38.js",
+    "title": "Research into the effects of different teaching styles 教学风格研究",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/132. P3 - Research into the effects of different teaching styles 教学风格研究/",
+    "filename": "132. P3 - Research into the effects of different teaching styles 教学风格研究.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-39": {
+    "examId": "p2-low-39",
+    "dataKey": "p2-low-39",
+    "script": "./p2-low-39.js",
+    "title": "How to be Happy 如何获得幸福",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/",
+    "filename": "133. P2 - How to be Happy 如何获得幸福.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/133. P2 - How to be Happy 如何获得幸福.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-40": {
+    "examId": "p1-low-40",
+    "dataKey": "p1-low-40",
+    "script": "./p1-low-40.js",
+    "title": "Dyes and fabric dyeing 染料的历史",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/",
+    "filename": "134. P1 - Dyes and fabric dyeing 染料的历史.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-41": {
+    "examId": "p2-low-41",
+    "dataKey": "p2-low-41",
+    "script": "./p2-low-41.js",
+    "title": "The Myth of the Eight-hour Sleep 八小时睡眠",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/",
+    "filename": "135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-42": {
+    "examId": "p3-low-42",
+    "dataKey": "p3-low-42",
+    "script": "./p3-low-42.js",
+    "title": "The peopling of Patagonia 巴塔哥尼亚的人类迁徙",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/",
+    "filename": "136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-43": {
+    "examId": "p3-low-43",
+    "dataKey": "p3-low-43",
+    "script": "./p3-low-43.js",
+    "title": "What is social history 社会史",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/137. P3 - What is social history 社会史/",
+    "filename": "137. P3 - What is social history 社会史.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/137. P3 - What is social history 社会史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-44": {
+    "examId": "p3-low-44",
+    "dataKey": "p3-low-44",
+    "script": "./p3-low-44.js",
+    "title": "Conformity 从众心理",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/138. P3 - Conformity 从众心理/",
+    "filename": "138. P3 - Conformity 从众心理.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/138. P3 - Conformity 从众心理.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-45": {
+    "examId": "p1-low-45",
+    "dataKey": "p1-low-45",
+    "script": "./p1-low-45.js",
+    "title": "Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究/",
+    "filename": "139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-46": {
+    "examId": "p1-low-46",
+    "dataKey": "p1-low-46",
+    "script": "./p1-low-46.js",
+    "title": "Sydney Opera House 悉尼歌剧院",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/14. P1 - Sydney Opera House 悉尼歌剧院/",
+    "filename": "14. P1 - Sydney Opera House 悉尼歌剧院.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/14. P1 - Sydney Opera House 悉尼歌剧院.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-47": {
+    "examId": "p1-low-47",
+    "dataKey": "p1-low-47",
+    "script": "./p1-low-47.js",
+    "title": "The Burgess Shale fossils 伯吉斯页岩",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/140. P1 - The Burgess Shale fossils 伯吉斯页岩/",
+    "filename": "140. P1 - The Burgess Shale fossils 伯吉斯页岩.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-48": {
+    "examId": "p1-low-48",
+    "dataKey": "p1-low-48",
+    "script": "./p1-low-48.js",
+    "title": "The history of the guitar 吉他的历史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/141. P1 - The history of the guitar 吉他的历史/",
+    "filename": "141. P1 - The history of the guitar 吉他的历史.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-49": {
+    "examId": "p2-low-49",
+    "dataKey": "p2-low-49",
+    "script": "./p2-low-49.js",
+    "title": "Born to Trade 交易的本能",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/",
+    "filename": "142. P2 - Born to Trade 交易的本能.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/142. P2 - Born to Trade 交易的本能.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-50": {
+    "examId": "p2-low-50",
+    "dataKey": "p2-low-50",
+    "script": "./p2-low-50.js",
+    "title": "Jellyfish – The Dominant Species 水母·海洋中的优势物种",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/",
+    "filename": "143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-51": {
+    "examId": "p2-low-51",
+    "dataKey": "p2-low-51",
+    "script": "./p2-low-51.js",
+    "title": "The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/",
+    "filename": "144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-52": {
+    "examId": "p1-low-52",
+    "dataKey": "p1-low-52",
+    "script": "./p1-low-52.js",
+    "title": "Caral an ancient South American city 卡拉尔古城",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/",
+    "filename": "145. P1 - Caral an ancient South American city 卡拉尔古城.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-53": {
+    "examId": "p1-low-53",
+    "dataKey": "p1-low-53",
+    "script": "./p1-low-53.js",
+    "title": "The Early History of Olive Oil 橄榄油的历史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/",
+    "filename": "146. P1 - The Early History of Olive Oil 橄榄油的历史.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-54": {
+    "examId": "p3-low-54",
+    "dataKey": "p3-low-54",
+    "script": "./p3-low-54.js",
+    "title": "Movement Underwater 水下运动",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/147. P3 - Movement Underwater 水下运动/",
+    "filename": "147. P3 - Movement Underwater 水下运动.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/147. P3 - Movement Underwater 水下运动.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-55": {
+    "examId": "p3-low-55",
+    "dataKey": "p3-low-55",
+    "script": "./p3-low-55.js",
+    "title": "Improving Patient Safety 药品包装设计",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
+    "filename": "148. P3 - Improving Patient Safety 药品包装设计.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-56": {
+    "examId": "p3-low-56",
+    "dataKey": "p3-low-56",
+    "script": "./p3-low-56.js",
+    "title": "Learning to be bilingual 双语学习",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/149. P3 - Learning to be bilingual 双语学习/",
+    "filename": "149. P3 - Learning to be bilingual 双语学习.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/149. P3 - Learning to be bilingual 双语学习.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-57": {
+    "examId": "p1-medium-57",
+    "dataKey": "p1-medium-57",
+    "script": "./p1-medium-57.js",
+    "title": "The Blockbuster Phenomenon 博物馆爆款现象",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/",
+    "filename": "15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-58": {
+    "examId": "p2-medium-58",
+    "dataKey": "p2-medium-58",
+    "script": "./p2-medium-58.js",
+    "title": "Insect Decision-Making 昆虫决策",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/",
+    "filename": "150. P2 - Insect Decision-Making 昆虫决策【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/150. P2 - Insect Decision-Making 昆虫决策.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-59": {
+    "examId": "p3-low-59",
+    "dataKey": "p3-low-59",
+    "script": "./p3-low-59.js",
+    "title": "Inside the mind of a fan 观赛心境",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/",
+    "filename": "151. P3 - Inside the mind of a fan 观赛心境.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/151. P3 - Inside the mind of a fan 观赛心境.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-60": {
+    "examId": "p1-medium-60",
+    "dataKey": "p1-medium-60",
+    "script": "./p1-medium-60.js",
+    "title": "Sorry—who are you 脸盲症",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/",
+    "filename": "152. P1 - Sorry—who are you 脸盲症【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/152. P1 - Sorry—who are you 脸盲症.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-61": {
+    "examId": "p1-low-61",
+    "dataKey": "p1-low-61",
+    "script": "./p1-low-61.js",
+    "title": "Carnivorous plants 食虫植物",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
+    "filename": "153. P1 - Carnivorous plants 食虫植物.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-62": {
+    "examId": "p2-low-62",
+    "dataKey": "p2-low-62",
+    "script": "./p2-low-62.js",
+    "title": "The purpose of facial expressions 面部表情",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/154. P2 - The purpose of facial expressions 面部表情/",
+    "filename": "154. P2 - The purpose of facial expressions 面部表情.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/154. P2 - The purpose of facial expressions 面部表情.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-63": {
+    "examId": "p1-medium-63",
+    "dataKey": "p1-medium-63",
+    "script": "./p1-medium-63.js",
+    "title": "A Brief History of Humans and Food 人类食物的历史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
+    "filename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-64": {
+    "examId": "p2-low-64",
+    "dataKey": "p2-low-64",
+    "script": "./p2-low-64.js",
+    "title": "New filter promises clean water for millions 新型泥土净水器",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/",
+    "filename": "156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-65": {
+    "examId": "p2-low-65",
+    "dataKey": "p2-low-65",
+    "script": "./p2-low-65.js",
+    "title": "Boring Buildings 无聊建筑",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/",
+    "filename": "157. P2 - Boring Buildings 无聊建筑.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/157. P2 - Boring Buildings 无聊建筑.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-66": {
+    "examId": "p3-medium-66",
+    "dataKey": "p3-medium-66",
+    "script": "./p3-medium-66.js",
+    "title": "Mercator - The Map Maker 地理制图师",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
+    "filename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-67": {
+    "examId": "p1-low-67",
+    "dataKey": "p1-low-67",
+    "script": "./p1-low-67.js",
+    "title": "Scented Plants 植物的味道",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/",
+    "filename": "159. P1 - Scented Plants 植物的味道.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/159. P1 - Scented Plants 植物的味道.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-68": {
+    "examId": "p1-low-68",
+    "dataKey": "p1-low-68",
+    "script": "./p1-low-68.js",
+    "title": "The Clipper Races 帆船竞速",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/",
+    "filename": "16. P1 - The Clipper Races 帆船竞速.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/16. P1 - The Clipper Races 帆船竞速.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-69": {
+    "examId": "p1-low-69",
+    "dataKey": "p1-low-69",
+    "script": "./p1-low-69.js",
+    "title": "An important language development 楔形文字",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
+    "filename": "160. P1 - An important language development 楔形文字.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-70": {
+    "examId": "p1-low-70",
+    "dataKey": "p1-low-70",
+    "script": "./p1-low-70.js",
+    "title": "Fluorescence Deep sea discovery深海发光生物研究",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/",
+    "filename": "161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/161. P1 - Deep sea discovery 深海发光生物研究.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-71": {
+    "examId": "p3-low-71",
+    "dataKey": "p3-low-71",
+    "script": "./p3-low-71.js",
+    "title": "Sea Change for Salinity 土地盐碱化",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
+    "filename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/162. P3 - Sea Change for Salinity 土地盐碱化.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-72": {
+    "examId": "p1-low-72",
+    "dataKey": "p1-low-72",
+    "script": "./p1-low-72.js",
+    "title": "How to find your way out of a food desert 城市食物荒漠",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/",
+    "filename": "163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-73": {
+    "examId": "p2-low-73",
+    "dataKey": "p2-low-73",
+    "script": "./p2-low-73.js",
+    "title": "The Power of Smell 嗅觉的力量",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/",
+    "filename": "164. P2 - The Power of Smell 嗅觉的力量.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/164. P2 - The Power of Smell 嗅觉的力量.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-74": {
+    "examId": "p3-low-74",
+    "dataKey": "p3-low-74",
+    "script": "./p3-low-74.js",
+    "title": "The Placebo Effect5 安慰剂效应",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/165. P3 - The Placebo Effect5 安慰剂效应/",
+    "filename": "165. P3 - The Placebo Effect5 安慰剂效应.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/165. P3 - The Placebo Effect5 安慰剂效应.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-75": {
+    "examId": "p2-low-75",
+    "dataKey": "p2-low-75",
+    "script": "./p2-low-75.js",
+    "title": "Lean Production Innovation 精益生产",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/166. P2 - Lean Production Innovation 精益生产/",
+    "filename": "166. P2 - Lean Production Innovation 精益生产.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/166. P2 - Lean Production Innovation 精益生产.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-76": {
+    "examId": "p3-low-76",
+    "dataKey": "p3-low-76",
+    "script": "./p3-low-76.js",
+    "title": "Sign, Baby, Sign! 美国手语",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/",
+    "filename": "167. P3 - Sign, Baby, Sign! 美国手语.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-77": {
+    "examId": "p2-low-77",
+    "dataKey": "p2-low-77",
+    "script": "./p2-low-77.js",
+    "title": "Mammoth Kill 猛犸象的灭绝",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/168. P2 - Mammoth Kill 猛犸象的灭绝/",
+    "filename": "168. P2 - Mammoth Kill 猛犸象的灭绝.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/168. P2 - Mammoth Kill 猛犸象的灭绝.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-78": {
+    "examId": "p3-low-78",
+    "dataKey": "p3-low-78",
+    "script": "./p3-low-78.js",
+    "title": "The Costs of Brand Loyalty 品牌忠诚的代价",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/",
+    "filename": "169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-79": {
+    "examId": "p1-high-79",
+    "dataKey": "p1-high-79",
+    "script": "./p1-high-79.js",
+    "title": "The Development of The Silk Industry 丝绸产业发展",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/",
+    "filename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/17. P1 - The Development of The Silk Industry 丝绸产业发展.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-80": {
+    "examId": "p1-low-80",
+    "dataKey": "p1-low-80",
+    "script": "./p1-low-80.js",
+    "title": "The unsung sense 被低估的嗅觉",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/",
+    "filename": "170. P1 - The unsung sense 被低估的嗅觉.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/170. P1 - The unsung sense 被低估的嗅觉.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-81": {
+    "examId": "p1-low-81",
+    "dataKey": "p1-low-81",
+    "script": "./p1-low-81.js",
+    "title": "Salt  盐的历史",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/171. P1 - Salt  盐的历史/",
+    "filename": "171. P1 - Salt  盐的历史.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/171. P1 - Salt  盐的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-82": {
+    "examId": "p1-high-82",
+    "dataKey": "p1-high-82",
+    "script": "./p1-high-82.js",
+    "title": "Think Small 微观科学",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/",
+    "filename": "172. P1 - Think Small 微观科学.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/172. P1 - Think Small 微观科学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-83": {
+    "examId": "p3-low-83",
+    "dataKey": "p3-low-83",
+    "script": "./p3-low-83.js",
+    "title": "1018纸笔 Looking for inspiration 寻找灵感",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感/",
+    "filename": "173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/173. P3(1018纸笔 ) - Looking for inspiration 寻找灵感.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-84": {
+    "examId": "p1-low-84",
+    "dataKey": "p1-low-84",
+    "script": "./p1-low-84.js",
+    "title": "Why good ideas fail TF公司",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/",
+    "filename": "174. P1 - Why good ideas fail TF公司.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/174. P1 - Why good ideas fail TF公司.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-85": {
+    "examId": "p3-low-85",
+    "dataKey": "p3-low-85",
+    "script": "./p3-low-85.js",
+    "title": "Music soothes and awes 音乐疗愈",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/175. P3 - Music soothes and awes 音乐疗愈/",
+    "filename": "175. P3 - Music soothes and awes 音乐疗愈.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/175. P3 - Music soothes and awes 音乐疗愈.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-86": {
+    "examId": "p2-medium-86",
+    "dataKey": "p2-medium-86",
+    "script": "./p2-medium-86.js",
+    "title": "Urban Regeneration 柏林公园改造",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/",
+    "filename": "176. P2 - Urban Regeneration 柏林公园改造.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-87": {
+    "examId": "p2-low-87",
+    "dataKey": "p2-low-87",
+    "script": "./p2-low-87.js",
+    "title": "1025纸笔Speaking of Nothing [Pretest] 闲聊的意义",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义/",
+    "filename": "177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/177. P2（1025纸笔）[Pretest]  - Speaking of Nothing 闲聊的意义.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-88": {
+    "examId": "p3-low-88",
+    "dataKey": "p3-low-88",
+    "script": "./p3-low-88.js",
+    "title": "1025纸笔Translating a key to international understanding 翻译的艺术",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术/",
+    "filename": "178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/178. P3（1025纸笔）[Pretest]  - Translating a key to international understanding 翻译的艺术.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-89": {
+    "examId": "p3-high-89",
+    "dataKey": "p3-high-89",
+    "script": "./p3-high-89.js",
+    "title": "Looking at daily life in ancient Rome  古罗马的日常",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
+    "filename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-90": {
+    "examId": "p1-high-90",
+    "dataKey": "p1-high-90",
+    "script": "./p1-high-90.js",
+    "title": "The History of Tea 茶叶的历史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/18. P1 - The History of Tea 茶叶的历史【高】/",
+    "filename": "18. P1 - The History of Tea 茶叶的历史【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/18. P1 - The History of Tea 茶叶的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-91": {
+    "examId": "p2-high-91",
+    "dataKey": "p2-high-91",
+    "script": "./p2-high-91.js",
+    "title": "Australia’s camouflaged creatures 澳洲伪装生物",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/",
+    "filename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-92": {
+    "examId": "p1-high-92",
+    "dataKey": "p1-high-92",
+    "script": "./p1-high-92.js",
+    "title": "Dust and the American West 美国西部尘埃",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/",
+    "filename": "181. P1 - Dust and the American West 美国西部尘埃.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/181. P1 - Dust and the American West 美国西部尘埃.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-93": {
+    "examId": "p2-medium-93",
+    "dataKey": "p2-medium-93",
+    "script": "./p2-medium-93.js",
+    "title": "Antarctic research 南极考察",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/",
+    "filename": "182. P2 - Antarctic research 南极考察.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/182. P2 - Antarctic research 南极考察.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-94": {
+    "examId": "p2-low-94",
+    "dataKey": "p2-low-94",
+    "script": "./p2-low-94.js",
+    "title": "The importance of being playful 玩耍的重要性",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/",
+    "filename": "183. P2 - The importance of being playful 玩耍的重要性.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/183. P2 - The importance of being playful 玩耍的重要性.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-95": {
+    "examId": "p3-low-95",
+    "dataKey": "p3-low-95",
+    "script": "./p3-low-95.js",
+    "title": "The strange world of sight 奇异的视觉世界",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/",
+    "filename": "184. P3 - The strange world of sight 奇异的视觉世界.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-96": {
+    "examId": "p2-low-96",
+    "dataKey": "p2-low-96",
+    "script": "./p2-low-96.js",
+    "title": "[Pretest] Why Do We Need Sleep 睡眠的目的",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/",
+    "filename": "185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-97": {
+    "examId": "p3-low-97",
+    "dataKey": "p3-low-97",
+    "script": "./p3-low-97.js",
+    "title": "Saving languages 拯救濒危语言",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/186. P3 - Saving languages 拯救濒危语言/",
+    "filename": "186. P3 - Saving languages 拯救濒危语言.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/186. P3 - Saving languages 拯救濒危语言.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-98": {
+    "examId": "p3-low-98",
+    "dataKey": "p3-low-98",
+    "script": "./p3-low-98.js",
+    "title": "Petrol power an eco-revolution 交通的革命",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/",
+    "filename": "187. P3 - Petrol power an eco-revolution 交通的革命.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-99": {
+    "examId": "p1-low-99",
+    "dataKey": "p1-low-99",
+    "script": "./p1-low-99.js",
+    "title": "The history of the bar code 条形码的历史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/",
+    "filename": "188. P1 - The history of the bar code 条形码的历史.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/188. P1 - The history of the bar code 条形码的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-100": {
+    "examId": "p3-low-100",
+    "dataKey": "p3-low-100",
+    "script": "./p3-low-100.js",
+    "title": "Mirror 镜子研究",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/189. P3 - Mirror 镜子研究/",
+    "filename": "189. P3 - Mirror 镜子研究.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/189. P3 - Mirror 镜子研究.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-101": {
+    "examId": "p1-high-101",
+    "dataKey": "p1-high-101",
+    "script": "./p1-high-101.js",
+    "title": "The Impact of the Potato 土豆的影响",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 1,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/19. P1 - The Impact of the Potato 土豆的影响【高】/",
+    "filename": "19. P1 - The Impact of the Potato 土豆的影响【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/19. P1 - The Impact of the Potato 土豆的影响.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-102": {
+    "examId": "p2-low-102",
+    "dataKey": "p2-low-102",
+    "script": "./p2-low-102.js",
+    "title": "The power of music 音乐的力量",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/190. P2 - The power of music 音乐的力量/",
+    "filename": "190. P2 - The power of music 音乐的力量.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/190. P2 - The power of music 音乐的力量.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-103": {
+    "examId": "p2-low-103",
+    "dataKey": "p2-low-103",
+    "script": "./p2-low-103.js",
+    "title": "The economic effect of climate 气候对经济的影响",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/191. P2 - The economic effect of climate 气候对经济的影响/",
+    "filename": "191. P2 - The economic effect of climate 气候对经济的影响.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/191. P2 - The economic effect of climate 气候对经济的影响.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-104": {
+    "examId": "p2-low-104",
+    "dataKey": "p2-low-104",
+    "script": "./p2-low-104.js",
+    "title": "1115纸笔Should we stop eating meat 是否应该吃素",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/",
+    "filename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-105": {
+    "examId": "p1-high-105",
+    "dataKey": "p1-high-105",
+    "script": "./p1-high-105.js",
+    "title": "A survivor’s story 新西兰猫头鹰",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/",
+    "filename": "2. P1 - A survivor’s story 新西兰猫头鹰【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/2. P1 - A survivor’s story 新西兰猫头鹰.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-106": {
+    "examId": "p1-low-106",
+    "dataKey": "p1-low-106",
+    "script": "./p1-low-106.js",
+    "title": "The Importance of Business Cards 名片的重要性",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/",
+    "filename": "20. P1 - The Importance of Business Cards 名片的重要性.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/20. P1 - The Importance of Business Cards 名片的重要性.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-107": {
+    "examId": "p1-low-107",
+    "dataKey": "p1-low-107",
+    "script": "./p1-low-107.js",
+    "title": "The life of Beatrix Potter 彼得兔作家",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/",
+    "filename": "21. P1 - The life of Beatrix Potter 彼得兔作家.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/21. P1 - The life of Beatrix Potter 彼得兔作家.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-108": {
+    "examId": "p1-low-108",
+    "dataKey": "p1-low-108",
+    "script": "./p1-low-108.js",
+    "title": "The nature of Yawning 打哈欠的本质",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/22. P1 - The nature of Yawning 打哈欠的本质/",
+    "filename": "22. P1 - The nature of Yawning 打哈欠的本质.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/22. P1 - The nature of Yawning 打哈欠的本质.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-109": {
+    "examId": "p1-low-109",
+    "dataKey": "p1-low-109",
+    "script": "./p1-low-109.js",
+    "title": "The Origin of Paper 造纸术起源",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/",
+    "filename": "23. P1 - The Origin of Paper 造纸术起源.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/23. P1 - The Origin of Paper 造纸术起源.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-110": {
+    "examId": "p1-high-110",
+    "dataKey": "p1-high-110",
+    "script": "./p1-high-110.js",
+    "title": "The Pearls 珍珠",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/",
+    "filename": "24. P1 - The Pearls 珍珠【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/24. P1 - The Pearls 珍珠.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-111": {
+    "examId": "p1-low-111",
+    "dataKey": "p1-low-111",
+    "script": "./p1-low-111.js",
+    "title": "The Rise and Fall of Detective Stories 侦探小说的兴衰",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
+    "filename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-112": {
+    "examId": "p1-low-112",
+    "dataKey": "p1-low-112",
+    "script": "./p1-low-112.js",
+    "title": "The Tuatara of New Zealand 新西兰蜥蜴",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/",
+    "filename": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-113": {
+    "examId": "p1-low-113",
+    "dataKey": "p1-low-113",
+    "script": "./p1-low-113.js",
+    "title": "Thomas Young The last man who knew everything 托马斯·杨",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/",
+    "filename": "27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-114": {
+    "examId": "p1-low-114",
+    "dataKey": "p1-low-114",
+    "script": "./p1-low-114.js",
+    "title": "Triumph of the City 城市的胜利",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 1.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
+    "filename": "28. P1 - Triumph of the City 城市的胜利.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-115": {
+    "examId": "p1-medium-115",
+    "dataKey": "p1-medium-115",
+    "script": "./p1-medium-115.js",
+    "title": "Tunnelling under the Thames",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】/",
+    "filename": "29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/29. P1 - Tunnelling under the Thames 泰晤士河隧道.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-116": {
+    "examId": "p1-low-116",
+    "dataKey": "p1-low-116",
+    "script": "./p1-low-116.js",
+    "title": "Advertising Needs Attention 广告的吸引力",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/3. P1 - Advertising Needs Attention 广告的吸引力/",
+    "filename": "3. P1 - Advertising Needs Attention 广告的吸引力.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/3. P1 - Advertising Needs Attention 广告的吸引力.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-117": {
+    "examId": "p1-medium-117",
+    "dataKey": "p1-medium-117",
+    "script": "./p1-medium-117.js",
+    "title": "What Lucy Taught Us 露西化石",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/30. P1 - What Lucy Taught Us 露西化石【次】/",
+    "filename": "30. P1 - What Lucy Taught Us 露西化石【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/30. P1 - What Lucy Taught Us 露西化石.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-118": {
+    "examId": "p1-high-118",
+    "dataKey": "p1-high-118",
+    "script": "./p1-high-118.js",
+    "title": "William Gilbert and Magnetism 电磁学之父",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/",
+    "filename": "31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/31. P1 - William Gilbert and Magnetism 电磁学之父.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-119": {
+    "examId": "p1-medium-119",
+    "dataKey": "p1-medium-119",
+    "script": "./p1-medium-119.js",
+    "title": "Wood 新西兰木材产业",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/",
+    "filename": "32. P1 - Wood 新西兰木材产业【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-120": {
+    "examId": "p2-high-120",
+    "dataKey": "p2-high-120",
+    "script": "./p2-high-120.js",
+    "title": "A new look for Talbot Park 奥克兰社区改造",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
+    "filename": "ai_studio_code (9).html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/33. P2 - A new look for Talbot Park 奥克兰社区改造.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-121": {
+    "examId": "p2-medium-121",
+    "dataKey": "p2-medium-121",
+    "script": "./p2-medium-121.js",
+    "title": "A unique golden textile 蜘蛛丝",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/34. P2 - A unique golden textile 蜘蛛丝【次】/",
+    "filename": "34. P2 - A unique golden textile 蜘蛛丝【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/34. P2 - A unique golden textile 蜘蛛丝.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-122": {
+    "examId": "p2-low-122",
+    "dataKey": "p2-low-122",
+    "script": "./p2-low-122.js",
+    "title": "Biophilic Design 亲自然设计",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
+    "filename": "35. P2 - Biophilic Design 亲自然设计.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-123": {
+    "examId": "p2-high-123",
+    "dataKey": "p2-high-123",
+    "script": "./p2-high-123.js",
+    "title": "Bird Migration 鸟类迁徙",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/",
+    "filename": "36. P2 - Bird Migration 鸟类迁徙【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-124": {
+    "examId": "p2-high-124",
+    "dataKey": "p2-high-124",
+    "script": "./p2-high-124.js",
+    "title": "Corporate Social Responsibility  企业社会责任",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/37. P2 - Corporate Social Responsibility  企业社会责任【高】/",
+    "filename": "37. P2 - Corporate Social Responsibility  企业社会责任【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/37. P2 - Corporate Social Responsibility  企业社会责任.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-125": {
+    "examId": "p2-low-125",
+    "dataKey": "p2-low-125",
+    "script": "./p2-low-125.js",
+    "title": "Egypt’s ancient boat-builders 古埃及造船",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/38. P2 - Egypt’s ancient boat-builders 古埃及造船/",
+    "filename": "38. P2 - Egypt’s ancient boat-builders 古埃及造船.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-126": {
+    "examId": "p2-medium-126",
+    "dataKey": "p2-medium-126",
+    "script": "./p2-medium-126.js",
+    "title": "How are deserts formed 沙漠成因",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/",
+    "filename": "39. P2 - How are deserts formed 沙漠成因【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/39. P2 - How are deserts formed 沙漠成因.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-127": {
+    "examId": "p1-low-127",
+    "dataKey": "p1-low-127",
+    "script": "./p1-low-127.js",
+    "title": "Ambergris 龙涎香",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/4. P1 - Ambergris 龙涎香/",
+    "filename": "4. P1 - Ambergris 龙涎香.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/4. P1 - Ambergris 龙涎香.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-128": {
+    "examId": "p2-high-128",
+    "dataKey": "p2-high-128",
+    "script": "./p2-high-128.js",
+    "title": "How Well Do We Concentrate_  多任务处理",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/40. P2 - How Well Do We Concentrate_  多任务处理【高】/",
+    "filename": "40. P2 - How Well Do We Concentrate_  多任务处理【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/40. P2 - How Well Do We Concentrate_  多任务处理.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-129": {
+    "examId": "p2-medium-129",
+    "dataKey": "p2-medium-129",
+    "script": "./p2-medium-129.js",
+    "title": "Intelligent behaviour in birds 鸟类智慧行为",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/",
+    "filename": "41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/41. P2 - Intelligent behaviour in birds 鸟类智慧行为.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-130": {
+    "examId": "p2-high-130",
+    "dataKey": "p2-high-130",
+    "script": "./p2-high-130.js",
+    "title": "Investment in shares versus investment in other assets 回报数据分析",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】/",
+    "filename": "42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/42. P2 - Investment in shares versus investment in other assets 回报数据分析.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-131": {
+    "examId": "p2-high-131",
+    "dataKey": "p2-high-131",
+    "script": "./p2-high-131.js",
+    "title": "Learning from the Romans 罗马混凝土",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/",
+    "filename": "43. P2 - Learning from the Romans 罗马混凝土【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/43. P2 - Learning from the Romans 罗马混凝土.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-132": {
+    "examId": "p2-low-132",
+    "dataKey": "p2-low-132",
+    "script": "./p2-low-132.js",
+    "title": "Orientation of Birds 鸟类的定位能力",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/44. P2 - Orientation of Birds 鸟类的定位能力/",
+    "filename": "44. P2 - Orientation of Birds 鸟类的定位能力.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/44. P2 - Orientation of Birds 鸟类的定位能力.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-133": {
+    "examId": "p2-high-133",
+    "dataKey": "p2-high-133",
+    "script": "./p2-high-133.js",
+    "title": "Playing soccer 街头足球",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/45. P2 - Playing soccer 街头足球【高】/",
+    "filename": "45. P2 - Playing soccer 街头足球【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/45. P2 - Playing soccer 街头足球.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-134": {
+    "examId": "p2-high-134",
+    "dataKey": "p2-high-134",
+    "script": "./p2-high-134.js",
+    "title": "Roller coaster 过山车",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/46. P2 - Roller coaster 过山车【高】/",
+    "filename": "46. P2 - Roller coaster 过山车【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/46. P2 - Roller coaster 过山车.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-135": {
+    "examId": "p2-low-135",
+    "dataKey": "p2-low-135",
+    "script": "./p2-low-135.js",
+    "title": "Skyscraper Farming 摩天大楼种植",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/47. P2 - Skyscraper Farming 摩天大楼种植/",
+    "filename": "47. P2 - Skyscraper Farming 摩天大楼种植.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/47. P2 - Skyscraper Farming 摩天大楼种植.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-136": {
+    "examId": "p2-high-136",
+    "dataKey": "p2-high-136",
+    "script": "./p2-high-136.js",
+    "title": "Solving the problem of waste disposal 垃圾处理",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/",
+    "filename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/48. P2 - Solving the problem of waste disposal 垃圾处理.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-137": {
+    "examId": "p2-high-137",
+    "dataKey": "p2-high-137",
+    "script": "./p2-high-137.js",
+    "title": "Surviving city life 动物适应城市",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/",
+    "filename": "49. P2 - Surviving city life 动物适应城市【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/49. P2 - Surviving city life 动物适应城市.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-138": {
+    "examId": "p1-low-138",
+    "dataKey": "p1-low-138",
+    "script": "./p1-low-138.js",
+    "title": "Australian artist Margaret Preston 澳大利亚艺术家",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家/",
+    "filename": "5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-139": {
+    "examId": "p2-high-139",
+    "dataKey": "p2-high-139",
+    "script": "./p2-high-139.js",
+    "title": "The conquest of malaria in Italy 意大利疟疾防治",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】/",
+    "filename": "50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/50. P2 - The conquest of malaria in Italy 意大利疟疾防治.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-140": {
+    "examId": "p2-low-140",
+    "dataKey": "p2-low-140",
+    "script": "./p2-low-140.js",
+    "title": "The dingo debate 澳洲野犬",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/",
+    "filename": "51. P2 - The dingo debate 澳洲野犬.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-141": {
+    "examId": "p2-high-141",
+    "dataKey": "p2-high-141",
+    "script": "./p2-high-141.js",
+    "title": "The fascinating world of attine ants 切叶蚁",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/52. P2 - The fascinating world of attine ants 切叶蚁【高】/",
+    "filename": "52. P2 - The fascinating world of attine ants 切叶蚁【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/52. P2 - The fascinating world of attine ants 切叶蚁.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-142": {
+    "examId": "p2-low-142",
+    "dataKey": "p2-low-142",
+    "script": "./p2-low-142.js",
+    "title": "The fashion industry 时尚产业",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
+    "filename": "53. P2 - The fashion industry 时尚产业.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-143": {
+    "examId": "p2-low-143",
+    "dataKey": "p2-low-143",
+    "script": "./p2-low-143.js",
+    "title": "The impact of invasive species 入侵物种的影响",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/",
+    "filename": "54. P2 - The impact of invasive species 入侵物种的影响.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/54. P2 - The impact of invasive species 入侵物种的影响.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-144": {
+    "examId": "p2-medium-144",
+    "dataKey": "p2-medium-144",
+    "script": "./p2-medium-144.js",
+    "title": "The plan to bring an asteroid to Earth 捕获小行星",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】/",
+    "filename": "55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/55. P2 - The plan to bring an asteroid to Earth 捕获小行星.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-145": {
+    "examId": "p2-high-145",
+    "dataKey": "p2-high-145",
+    "script": "./p2-high-145.js",
+    "title": "The return of monkey life 猴群回归",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/",
+    "filename": "56. P2 - The return of monkey life 猴群回归【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/56. P2 - The return of monkey life 猴群回归.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-146": {
+    "examId": "p2-medium-146",
+    "dataKey": "p2-medium-146",
+    "script": "./p2-medium-146.js",
+    "title": "The Tasmanian Tiger 袋狼",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/",
+    "filename": "57. P2 - The Tasmanian Tiger 袋狼【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/57. P2 - The Tasmanian Tiger 袋狼.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-147": {
+    "examId": "p2-low-147",
+    "dataKey": "p2-low-147",
+    "script": "./p2-low-147.js",
+    "title": "Who wrote Shakespeare's plays 莎士比亚",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/",
+    "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-148": {
+    "examId": "p2-low-148",
+    "dataKey": "p2-low-148",
+    "script": "./p2-low-148.js",
+    "title": "Why do we need the arts_ 艺术的意义",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/59. P2 - Why do we need the arts_ 艺术的意义/",
+    "filename": "59. P2 - Why do we need the arts_ 艺术的意义.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/59. P2 - Why do we need the arts_ 艺术的意义.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-149": {
+    "examId": "p1-low-149",
+    "dataKey": "p1-low-149",
+    "script": "./p1-low-149.js",
+    "title": "Categorizing societies 社会分类",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/6. P1 - Categorizing societies 社会分类/",
+    "filename": "6. P1 - Categorizing societies 社会分类html.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/6. P1 - Categorizing societies 社会分类.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-150": {
+    "examId": "p3-high-150",
+    "dataKey": "p3-high-150",
+    "script": "./p3-high-150.js",
+    "title": "A closer examination of a study on verbal and non-verbal messages 语言表达研究",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/",
+    "filename": "60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-151": {
+    "examId": "p3-low-151",
+    "dataKey": "p3-low-151",
+    "script": "./p3-low-151.js",
+    "title": "Book Review The Discovery of Slowness 富兰克林(慢的发现)",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/",
+    "filename": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-152": {
+    "examId": "p3-medium-152",
+    "dataKey": "p3-medium-152",
+    "script": "./p3-medium-152.js",
+    "title": "Charles Darwin and Evolutionary Psychology 进化心理学",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/",
+    "filename": "62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-153": {
+    "examId": "p3-low-153",
+    "dataKey": "p3-low-153",
+    "script": "./p3-low-153.js",
+    "title": "Crossing the Threshold 奥克兰美术馆",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/63. P3 - Crossing the Threshold 奥克兰美术馆/",
+    "filename": "63. P3 - Crossing the Threshold 奥克兰美术馆.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/63. P3 - Crossing the Threshold 奥克兰美术馆.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-154": {
+    "examId": "p3-medium-154",
+    "dataKey": "p3-medium-154",
+    "script": "./p3-medium-154.js",
+    "title": "Decisions, Decisions 决策之间",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/64. P3 - Decisions, Decisions 决策之间【次】/",
+    "filename": "64. P3 - Decisions, Decisions 决策之间【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/64. P3 - Decisions, Decisions 决策之间.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-155": {
+    "examId": "p3-medium-155",
+    "dataKey": "p3-medium-155",
+    "script": "./p3-medium-155.js",
+    "title": "Does class size matter_ 课堂规模",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/65. P3 - Does class size matter_ 课堂规模【次】/",
+    "filename": "65. P3 - Does class size matter_ 课堂规模【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-156": {
+    "examId": "p3-high-156",
+    "dataKey": "p3-high-156",
+    "script": "./p3-high-156.js",
+    "title": "Elephant Communication 大象交流",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/",
+    "filename": "66. P3 - Elephant Communication 大象交流【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/66. P3 - Elephant Communication 大象交流.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-157": {
+    "examId": "p3-high-157",
+    "dataKey": "p3-high-157",
+    "script": "./p3-high-157.js",
+    "title": "Flower Power 鲜花的力量(花之力)",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/",
+    "filename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/67. P3 - Flower Power 鲜花的力量(花之力).pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-158": {
+    "examId": "p3-low-158",
+    "dataKey": "p3-low-158",
+    "script": "./p3-low-158.js",
+    "title": "Game theory 博弈论",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/68. P3 - Game theory 博弈论/",
+    "filename": "68. P3 - Game theory 博弈论.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/68. P3 - Game theory 博弈论.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-159": {
+    "examId": "p3-high-159",
+    "dataKey": "p3-high-159",
+    "script": "./p3-high-159.js",
+    "title": "Grimm’s Fairy Tales 格林童话",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/69. P3 - Grimm’s Fairy Tales 格林童话【高】/",
+    "filename": "69. P3 - Grimm’s Fairy Tales 格林童话【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/69. P3 - Grimm’s Fairy Tales 格林童话.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-160": {
+    "examId": "p1-low-160",
+    "dataKey": "p1-low-160",
+    "script": "./p1-low-160.js",
+    "title": "Chili peppers 辣椒的历史",
+    "category": "P1",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/7. P1 - Chili peppers 辣椒的历史/",
+    "filename": "7. P1 - Chili peppers 辣椒的历史.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/7. P1 - Chili peppers 辣椒的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-161": {
+    "examId": "p3-high-161",
+    "dataKey": "p3-high-161",
+    "script": "./p3-high-161.js",
+    "title": "Insect-inspired robots 昆虫机器人",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/",
+    "filename": "70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/70. P3 - Insect-inspired robots 昆虫机器人.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-162": {
+    "examId": "p3-medium-162",
+    "dataKey": "p3-medium-162",
+    "script": "./p3-medium-162.js",
+    "title": "Jean Piaget (1896–1980) 让·皮亚杰",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/",
+    "filename": "71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-163": {
+    "examId": "p3-low-163",
+    "dataKey": "p3-low-163",
+    "script": "./p3-low-163.js",
+    "title": "Keeping the Fun in Funfairs 游乐场设计科学",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学/",
+    "filename": "72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-164": {
+    "examId": "p3-high-164",
+    "dataKey": "p3-high-164",
+    "script": "./p3-high-164.js",
+    "title": "Language Strategy in Multinational Companies 跨国公司语言策略",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】/",
+    "filename": "73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-165": {
+    "examId": "p3-low-165",
+    "dataKey": "p3-low-165",
+    "script": "./p3-low-165.js",
+    "title": "Let’s teach them how to teach 教他们如何教学",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/74. P3 - Let’s teach them how to teach 教他们如何教学/",
+    "filename": "74. P3 - Let’s teach them how to teach 教他们如何教学.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/74. P3 - Let’s teach them how to teach 教他们如何教学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-166": {
+    "examId": "p3-low-166",
+    "dataKey": "p3-low-166",
+    "script": "./p3-low-166.js",
+    "title": "Life on Mars_ 火星地球化改造",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/",
+    "filename": "75. P3 - Life on Mars_ 火星地球化改造.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/75. P3 - Life on Mars 火星地球化改造.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-167": {
+    "examId": "p3-high-167",
+    "dataKey": "p3-high-167",
+    "script": "./p3-high-167.js",
+    "title": "Living dunes 流动沙丘",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/76. P3 - Living dunes 流动沙丘【高】/",
+    "filename": "76. P3 - Living dunes 流动沙丘【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/76. P3 - Living dunes 流动沙丘.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-168": {
+    "examId": "p3-medium-168",
+    "dataKey": "p3-medium-168",
+    "script": "./p3-medium-168.js",
+    "title": "Marketing and the information age 信息时代营销",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
+    "filename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/77. P3 - Marketing and the information age 信息时代营销.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-169": {
+    "examId": "p3-medium-169",
+    "dataKey": "p3-medium-169",
+    "script": "./p3-medium-169.js",
+    "title": "（无题目）  Music Language We All Speak 音乐语言",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/",
+    "filename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-170": {
+    "examId": "p3-high-170",
+    "dataKey": "p3-high-170",
+    "script": "./p3-high-170.js",
+    "title": "Pacific Navigation and Voyaging 太平洋航海",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/",
+    "filename": "79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/79. P3 - Pacific Navigation and Voyaging 太平洋航海.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-171": {
+    "examId": "p1-high-171",
+    "dataKey": "p1-high-171",
+    "script": "./p1-high-171.js",
+    "title": "Fishbourne Roman Palace 罗马宫殿",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/",
+    "filename": "8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/8. P1 - Fishbourne Roman Palace 罗马宫殿.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-172": {
+    "examId": "p3-low-172",
+    "dataKey": "p3-low-172",
+    "script": "./p3-low-172.js",
+    "title": "Rebranding art museums 博物馆品牌重塑",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/80. P3 - Rebranding art museums 博物馆品牌重塑/",
+    "filename": "80. P3 - Rebranding art museums 博物馆品牌重塑.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/80. P3 - Rebranding art museums 博物馆品牌重塑.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-173": {
+    "examId": "p3-high-173",
+    "dataKey": "p3-high-173",
+    "script": "./p3-high-173.js",
+    "title": "Robert Louis Stevenson",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/",
+    "filename": "81. P3 - Robert Louis Stevenson 苏格兰作家【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/81. P3 - Robert Louis Stevenson 苏格兰作家.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-174": {
+    "examId": "p3-high-174",
+    "dataKey": "p3-high-174",
+    "script": "./p3-high-174.js",
+    "title": "Some views on the use of headphones 耳机使用",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/82. P3 - Some views on the use of headphones 耳机使用【高】/",
+    "filename": "82. P3 - Some views on the use of headphones 耳机使用【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/82. P3 - Some views on the use of headphones 耳机使用.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-175": {
+    "examId": "p3-low-175",
+    "dataKey": "p3-low-175",
+    "script": "./p3-low-175.js",
+    "title": "Termite Mounds 白蚁丘",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/83. P3 - Termite Mounds 白蚁丘/",
+    "filename": "83. P3 - Termite Mounds 白蚁丘.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/83. P3 - Termite Mounds 白蚁丘.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-176": {
+    "examId": "p3-medium-176",
+    "dataKey": "p3-medium-176",
+    "script": "./p3-medium-176.js",
+    "title": "The Analysis of Fear 猴子恐惧实验",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/84. P3 - The Analysis of Fear 猴子恐惧实验【次】/",
+    "filename": "84. P3 - The Analysis of Fear 猴子恐惧实验【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/84. P3 - The Analysis of Fear 猴子恐惧实验.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-177": {
+    "examId": "p3-medium-177",
+    "dataKey": "p3-medium-177",
+    "script": "./p3-medium-177.js",
+    "title": "The Art of Deception 欺骗的艺术",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/85. P3 - The Art of Deception 欺骗的艺术【次】/",
+    "filename": "85. P3 - The Art of Deception 欺骗的艺术【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/85. P3 - The Art of Deception 欺骗的艺术.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-178": {
+    "examId": "p3-high-178",
+    "dataKey": "p3-high-178",
+    "script": "./p3-high-178.js",
+    "title": "The benefits of learning an instrument 学乐器的好处",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/86. P3 - The benefits of learning an instrument 学乐器的好处【高】/",
+    "filename": "86. P3 - The benefits of learning an instrument 学乐器的好处【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/86. P3 - The benefits of learning an instrument 学乐器的好处.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-179": {
+    "examId": "p3-medium-179",
+    "dataKey": "p3-medium-179",
+    "script": "./p3-medium-179.js",
+    "title": "The Exploration of Mars 火星探索",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/87. P3 - The Exploration of Mars 火星探索【次】/",
+    "filename": "87. P3 - The Exploration of Mars 火星探索【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/87. P3 - The Exploration of Mars 火星探索.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-180": {
+    "examId": "p3-high-180",
+    "dataKey": "p3-high-180",
+    "script": "./p3-high-180.js",
+    "title": "The fluoridation controversy 氟化水争议",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/",
+    "filename": "88. P3 - The fluoridation controversy 氟化水争议【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/88. P3 - The fluoridation controversy 氟化水争议.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-181": {
+    "examId": "p3-high-181",
+    "dataKey": "p3-high-181",
+    "script": "./p3-high-181.js",
+    "title": "The Fruit Book 果实之书",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/89. P3 - The Fruit Book 果实之书【高】/",
+    "filename": "89. P3 - The Fruit Book 果实之书【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/89. P3 - The Fruit Book 果实之书.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-medium-182": {
+    "examId": "p1-medium-182",
+    "dataKey": "p1-medium-182",
+    "script": "./p1-medium-182.js",
+    "title": "Listening to the Ocean 海洋探测",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 3,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/",
+    "filename": "9. P1 - Listening to the Ocean 海洋探测【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/9. P1 - Listening to the Ocean 海洋探测.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-183": {
+    "examId": "p3-medium-183",
+    "dataKey": "p3-medium-183",
+    "script": "./p3-medium-183.js",
+    "title": "The hazards of multitasking 多任务处理",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/90. P3 - The hazards of multitasking 多任务处理【次】/",
+    "filename": "90. P3 - The hazards of multitasking 多任务处理【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/90. P3 - The hazards of multitasking 多任务处理.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-184": {
+    "examId": "p3-high-184",
+    "dataKey": "p3-high-184",
+    "script": "./p3-high-184.js",
+    "title": "The New Zealand writer Margaret Mahy 新西兰女作家",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】/",
+    "filename": "91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-185": {
+    "examId": "p3-medium-185",
+    "dataKey": "p3-medium-185",
+    "script": "./p3-medium-185.js",
+    "title": "The Pirahã people of Brazil  巴西皮拉罕部落语言",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】/",
+    "filename": "92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-186": {
+    "examId": "p3-low-186",
+    "dataKey": "p3-low-186",
+    "script": "./p3-low-186.js",
+    "title": "The Robbers Cave Study (山洞)群体行为实验",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/93. P3 - The Robbers Cave Study (山洞)群体行为实验/",
+    "filename": "93. P3 - The Robbers Cave Study (山洞)群体行为实验.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-187": {
+    "examId": "p3-low-187",
+    "dataKey": "p3-low-187",
+    "script": "./p3-low-187.js",
+    "title": "The science of sleep 睡眠的科学",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/94. P3 - The science of sleep 睡眠的科学/",
+    "filename": "94. P3 - The science of sleep 睡眠的科学.pdf.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/94. P3 - The science of sleep 睡眠的科学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-188": {
+    "examId": "p3-medium-188",
+    "dataKey": "p3-medium-188",
+    "script": "./p3-medium-188.js",
+    "title": "The Significant Role of Mother Tongue in Education 母语教育",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/",
+    "filename": "95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/95. P3 - The Significant Role of Mother Tongue in Education 母语教育.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-189": {
+    "examId": "p3-high-189",
+    "dataKey": "p3-high-189",
+    "script": "./p3-high-189.js",
+    "title": "The tuatara – past and future 新西兰蜥蜴",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/96. P3 - The tuatara – past and future 新西兰蜥蜴【高】/",
+    "filename": "96. P3 - The tuatara – past and future 新西兰蜥蜴【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/96. P3 - The tuatara – past and future 新西兰蜥蜴.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-190": {
+    "examId": "p3-low-190",
+    "dataKey": "p3-low-190",
+    "script": "./p3-low-190.js",
+    "title": "The value of literary prizes 文学奖项的价值",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/97. P3 - The value of literary prizes 文学奖项的价值/",
+    "filename": "97. P3 - The value of literary prizes 文学奖项的价值.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/97. P3 - The value of literary prizes 文学奖项的价值.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-191": {
+    "examId": "p3-medium-191",
+    "dataKey": "p3-medium-191",
+    "script": "./p3-medium-191.js",
+    "title": "Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】/",
+    "filename": "98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-192": {
+    "examId": "p3-high-192",
+    "dataKey": "p3-high-192",
+    "script": "./p3-high-192.js",
+    "title": "Voynich Manuscript 伏尼契手稿",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/",
+    "filename": "99. P3 - Voynich Manuscript 伏尼契手稿【高】.html",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/99. P3 - Voynich Manuscript 伏尼契手稿.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-200": {
+    "examId": "p1-high-200",
+    "dataKey": "p1-high-200",
+    "script": "./p1-high-200.js",
+    "title": "Australia’s Airborne Dentists 澳洲飞行牙医",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2,
+    "path": "三月/1.P1 高频/",
+    "filename": "200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-211": {
+    "examId": "p1-high-211",
+    "dataKey": "p1-high-211",
+    "script": "./p1-high-211.js",
+    "title": "Ahead of its time 新西兰头骨",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "三月/1.P1 高频/",
+    "filename": "211. P1 - Ahead of its time 新西兰头骨【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/211. P1 - Ahead of its time 新西兰头骨.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-216": {
+    "examId": "p1-high-216",
+    "dataKey": "p1-high-216",
+    "script": "./p1-high-216.js",
+    "title": "Australia’s cane toad problem 澳洲蟾蜍",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "三月/1.P1 高频/",
+    "filename": "216. P1 - Australia’s cane toad problem 澳洲蟾蜍【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/216. P1 - Australia’s cane toad problem 澳洲蟾蜍.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-194": {
+    "examId": "p1-high-194",
+    "dataKey": "p1-high-194",
+    "script": "./p1-high-194.js",
+    "title": "The history of the British wool industry 英国羊毛产业的历史",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 2.5,
+    "path": "三月/2.P1 次高频/",
+    "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-222": {
+    "examId": "p2-low-222",
+    "dataKey": "p2-low-222",
+    "script": "./p2-low-222.js",
+    "title": "Ideal Homes 理想居所",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "三月/",
+    "filename": "222. P2 - Ideal Homes 理想居所.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/222. P2 - Ideal Homes 理想居所.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-low-223": {
+    "examId": "p1-low-223",
+    "dataKey": "p1-low-223",
+    "script": "./p1-low-223.js",
+    "title": "Effect and Cause 湖泊海啸研究",
+    "category": "P1",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "三月/",
+    "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-201": {
+    "examId": "p2-high-201",
+    "dataKey": "p2-high-201",
+    "script": "./p2-high-201.js",
+    "title": "Multi-tasking and the brain 大脑与多任务处理",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "三月/3.P2 高频/",
+    "filename": "201. P2 - Multi-tasking and the brain 大脑与多任务处理【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/201. P2 - Multi-tasking and the brain 大脑与多任务处理.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-217": {
+    "examId": "p2-medium-217",
+    "dataKey": "p2-medium-217",
+    "script": "./p2-medium-217.js",
+    "title": "A mechanical friend for children 孩子的机器人朋友",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "三月/3.P2 高频/",
+    "filename": "217. P2 - A mechanical friend for children 孩子的机器人朋友【次】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/217. P2 - A mechanical friend for children 孩子的机器人朋友.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-192": {
+    "examId": "p2-high-192",
+    "dataKey": "p2-high-192",
+    "script": "./p2-high-192.js",
+    "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": 3.5,
+    "path": "三月/4.P2 次高频/",
+    "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-209": {
+    "examId": "p2-medium-209",
+    "dataKey": "p2-medium-209",
+    "script": "./p2-medium-209.js",
+    "title": "Decision Fatigue 决策疲劳",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "三月/4.P2 次高频/",
+    "filename": "209. P2 - Decision Fatigue 决策疲劳【次】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/209. P2 - Decision Fatigue 决策疲劳.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-213": {
+    "examId": "p2-medium-213",
+    "dataKey": "p2-medium-213",
+    "script": "./p2-medium-213.js",
+    "title": "Growing more for less 卫星农业",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "三月/4.P2 次高频/",
+    "filename": "213. P2 - Growing more for less 卫星农业【次】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/213. P2 - Growing more for less 卫星农业.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-051": {
+    "examId": "p2-low-051",
+    "dataKey": "p2-low-051",
+    "script": "./p2-low-051.js",
+    "title": "The dingo debate 澳洲野犬_澳洲野狗",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "三月/4.P2 次高频/",
+    "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-058": {
+    "examId": "p2-medium-058",
+    "dataKey": "p2-medium-058",
+    "script": "./p2-medium-058.js",
+    "title": "Who wrote Shakespeare's plays 莎士比亚",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "三月/4.P2 次高频/",
+    "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-204": {
+    "examId": "p3-high-204",
+    "dataKey": "p3-high-204",
+    "script": "./p3-high-204.js",
+    "title": "When people are ‘deaf’ to music 失乐症",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "三月/5.P3 高频/",
+    "filename": "204. P3 - When people are ‘deaf’ to music 失乐症【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/204. P3 - When people are ‘deaf’ to music 失乐症.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-206": {
+    "examId": "p3-high-206",
+    "dataKey": "p3-high-206",
+    "script": "./p3-high-206.js",
+    "title": "200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "三月/5.P3 高频/",
+    "filename": "206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-212": {
+    "examId": "p3-high-212",
+    "dataKey": "p3-high-212",
+    "script": "./p3-high-212.js",
+    "title": "Children’s literature studies today 儿童文学",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "三月/5.P3 高频/",
+    "filename": "212. P3 - Children’s literature studies today 儿童文学【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/212. P3 - Children’s literature studies today 儿童文学.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-218": {
+    "examId": "p3-high-218",
+    "dataKey": "p3-high-218",
+    "script": "./p3-high-218.js",
+    "title": "The Causes of Linguistic Change 语音的演变",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "三月/5.P3 高频/",
+    "filename": "218. P3 - The Causes of Linguistic Change 语音的演变【高】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/218. P3 - The Causes of Linguistic Change 语音的演变.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-219": {
+    "examId": "p3-low-219",
+    "dataKey": "p3-low-219",
+    "script": "./p3-low-219.js",
+    "title": "The origin of language 语言的起源",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "三月/5.P3 高频/",
+    "filename": "219. P3 - The origin of language 语言的起源.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/219. P3 - The origin of language 语言的起源.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-999": {
+    "examId": "p3-low-999",
+    "dataKey": "p3-low-999",
+    "script": "./p3-low-999.js",
+    "title": "Risk taking",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "三月/5.P3 高频/",
+    "filename": "P3 - Risk taking.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-197": {
+    "examId": "p3-medium-197",
+    "dataKey": "p3-medium-197",
+    "script": "./p3-medium-197.js",
+    "title": "Australia’s Megafauna Controversy 巨兽灭绝",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "三月/6.P3 次高频/",
+    "filename": "197. P3 - Australia’s Megafauna Controversy 巨兽灭绝【次】.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/197. P3 - Australia’s Megafauna Controversy 巨兽灭绝.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-198": {
+    "examId": "p3-low-198",
+    "dataKey": "p3-low-198",
+    "script": "./p3-low-198.js",
+    "title": "Child’s Play in Medieval England 中世纪的游戏",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4,
+    "path": "三月/6.P3 次高频/",
+    "filename": "198. P3 - Child’s Play in Medieval England 中世纪的游戏.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/198. P3 - Child’s Play in Medieval England 中世纪的游戏.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-078": {
+    "examId": "p3-low-078",
+    "dataKey": "p3-low-078",
+    "script": "./p3-low-078.js",
+    "title": "P3 (ds做出来的) - Music Language We All Speak 音乐语言",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": 4.5,
+    "path": "三月/6.P3 次高频/",
+    "filename": "78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-227": {
+    "examId": "p1-high-227",
+    "dataKey": "p1-high-227",
+    "script": "./p1-high-227.js",
+    "title": "The Whale Goes to Court 鲸鱼油",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "ReadingPractice/PDF/",
+    "filename": "227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-225": {
+    "examId": "p2-high-225",
+    "dataKey": "p2-high-225",
+    "script": "./p2-high-225.js",
+    "title": "The problem of graffiti 涂鸦之困",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3.5,
+    "path": "ReadingPractice/PDF/",
+    "filename": "225. P2 - The problem of graffiti 涂鸦之困.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/225. P2 - The problem of graffiti 涂鸦之困.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-228": {
+    "examId": "p3-high-228",
+    "dataKey": "p3-high-228",
+    "script": "./p3-high-228.js",
+    "title": "On art and artists 艺术与艺术家",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": 4.5,
+    "path": "ReadingPractice/PDF/",
+    "filename": "228. P3 - On art and artists 艺术与艺术家.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-229": {
+    "examId": "p1-high-229",
+    "dataKey": "p1-high-229",
+    "script": "./p1-high-229.js",
+    "title": "New Understanding of Giraffes in the Wild 野生长颈鹿",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2.5,
+    "path": "ReadingPractice/PDF/",
+    "filename": "229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-230": {
+    "examId": "p1-high-230",
+    "dataKey": "p1-high-230",
+    "script": "./p1-high-230.js",
+    "title": "The History of the Pencil 铅笔的历史",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 1.5,
+    "path": "ReadingPractice/PDF/",
+    "filename": "230. P1 - The History of the Pencil 铅笔的历史.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/230. P1 - The History of the Pencil 铅笔的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-231": {
+    "examId": "p1-high-231",
+    "dataKey": "p1-high-231",
+    "script": "./p1-high-231.js",
+    "title": "The History of the Pencil 铅笔的历史（流程图版）",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": 2,
+    "path": "ReadingPractice/PDF/",
+    "filename": "231. P1 - The History of the Pencil 铅笔的历史（流程图版）.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/231. P1 - The History of the Pencil 铅笔的历史（流程图版）.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-232": {
+    "examId": "p2-high-232",
+    "dataKey": "p2-high-232",
+    "script": "./p2-high-232.js",
+    "title": "The origin and development of applause 掌声的历史",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "ReadingPractice/PDF/",
+    "filename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-233": {
+    "examId": "p2-high-233",
+    "dataKey": "p2-high-233",
+    "script": "./p2-high-233.js",
+    "title": "Why don’t we sleep 失眠的原因",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 3,
+    "path": "ReadingPractice/PDF/",
+    "filename": "233. P2 - Why don’t we sleep 失眠的原因.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/233. P2 - Why don’t we sleep 失眠的原因.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-234": {
+    "examId": "p2-high-234",
+    "dataKey": "p2-high-234",
+    "script": "./p2-high-234.js",
+    "title": "How do plants talk to each other 植物交流",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": 4,
+    "path": "ReadingPractice/PDF/",
+    "filename": "234. P2 - The Secret Language of Plants 植物交流.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/234. P2 - The Secret Language of Plants 植物交流.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-221": {
+    "examId": "p3-high-221",
+    "dataKey": "p3-high-221",
+    "script": "./p3-high-221.js",
+    "title": "The Animal Connection 动物联结",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "221. P3 - The Animal Connection 动物联结.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/221. P3 - The Animal Connection 动物联结.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-235": {
+    "examId": "p2-high-235",
+    "dataKey": "p2-high-235",
+    "script": "./p2-high-235.js",
+    "title": "The return of the black-footed ferret 黑足鼬",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-236": {
+    "examId": "p2-high-236",
+    "dataKey": "p2-high-236",
+    "script": "./p2-high-236.js",
+    "title": "War of the Plants 植物的战争",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "",
+    "filename": "",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p3-high-229": {
+    "examId": "p3-high-229",
+    "dataKey": "p3-high-229",
+    "script": "./p3-high-229.js",
+    "title": "All in the family 兄弟姐妹的影响",
+    "category": "P3",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-high-239": {
+    "examId": "p2-high-239",
+    "dataKey": "p2-high-239",
+    "script": "./p2-high-239.js",
+    "title": "Nanotechnology: the science of the very small 纳米科技",
+    "category": "P2",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-240": {
+    "examId": "p2-low-240",
+    "dataKey": "p2-low-240",
+    "script": "./p2-low-240.js",
+    "title": "Coins - the first form of money 硬币起源",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": null,
+    "path": "assets/generated/reading-exams/",
+    "filename": "reading-practice-unified.html",
+    "hasHtml": true,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p1-high-240": {
+    "examId": "p1-high-240",
+    "dataKey": "p1-high-240",
+    "script": "./p1-high-240.js",
+    "title": "The Origins of Weather Forecasting 天气预报",
+    "category": "P1",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-low-242": {
+    "examId": "p2-low-242",
+    "dataKey": "p2-low-242",
+    "script": "./p2-low-242.js",
+    "title": "Walking and shoes in eighteenth-century London 伦敦鞋子的发展史",
+    "category": "P2",
+    "frequency": "高频",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-low-240": {
+    "examId": "p3-low-240",
+    "dataKey": "p3-low-240",
+    "script": "./p3-low-240.js",
+    "title": "How a prehistoric predator took to the skies 翼龙飞行",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "P3 - How a prehistoric predator took to the skies.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-241": {
+    "examId": "p3-medium-241",
+    "dataKey": "p3-medium-241",
+    "script": "./p3-medium-241.js",
+    "title": "Who looks after the children in today's Britain? 育儿分工",
+    "category": "P3",
+    "frequency": "low",
+    "difficultyScore": null,
+    "path": "ReadingPractice/PDF/",
+    "filename": "P3 - Who looks after the children in today's Britain.pdf",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P3 - Who looks after the children in today's Britain.pdf",
+    "sourceKind": "generated-reading"
+  },
+  "p2-medium-243": {
+    "examId": "p2-medium-243",
+    "dataKey": "p2-medium-243",
+    "script": "./p2-medium-243.js",
+    "title": "The internal body clock",
+    "category": "P2",
+    "frequency": "次高频",
+    "difficultyScore": 3.5,
+    "path": "",
+    "filename": "",
+    "hasHtml": false,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  },
+  "p3-medium-244": {
+    "examId": "p3-medium-244",
+    "dataKey": "p3-medium-244",
+    "script": "./p3-medium-244.js",
+    "title": "Look who was talking",
+    "category": "P3",
+    "frequency": "次高频",
+    "difficultyScore": 4,
+    "path": "",
+    "filename": "",
+    "hasHtml": false,
+    "hasPdf": false,
+    "pdfFilename": "",
+    "sourceKind": "generated-reading"
+  }
+
   };
 
   function clonePathRoot() {
@@ -13463,402 +10714,12 @@ storageManager.ready
 })(typeof window !== "undefined" ? window : globalThis);
 
 
-/* ===== js/utils/stateSerializer.js ===== */
-/**
- * 状态序列化适配器
- * 解决Set/Map对象无法直接JSON序列化的问题
- */
-
-class StateSerializer {
-    /**
-     * 序列化状态值，处理特殊对象类型
-     */
-    static serialize(value) {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        // 处理Set对象
-        if (value instanceof Set) {
-            return {
-                __type: 'Set',
-                __value: Array.from(value)
-            };
-        }
-
-        // 处理Map对象
-        if (value instanceof Map) {
-            return {
-                __type: 'Map',
-                __value: Array.from(value.entries())
-            };
-        }
-
-        // 处理Date对象
-        if (value instanceof Date) {
-            return {
-                __type: 'Date',
-                __value: value.toISOString()
-            };
-        }
-
-        // 处理普通对象，递归处理嵌套
-        if (typeof value === 'object') {
-            if (Array.isArray(value)) {
-                return value.map(item => StateSerializer.serialize(item));
-            } else {
-                const serialized = {};
-                for (const [key, val] of Object.entries(value)) {
-                    serialized[key] = StateSerializer.serialize(val);
-                }
-                return serialized;
-            }
-        }
-
-        // 基本类型直接返回
-        return value;
-    }
-
-    /**
-     * 反序列化状态值，恢复特殊对象类型
-     */
-    static deserialize(value) {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        // 检查是否是特殊类型对象
-        if (typeof value === 'object' && value !== null && '__type' in value) {
-            switch (value.__type) {
-                case 'Set':
-                    return new Set(value.__value);
-                case 'Map':
-                    return new Map(value.__value);
-                case 'Date':
-                    return new Date(value.__value);
-                default:
-                    console.warn(`[StateSerializer] 未知类型: ${value.__type}`);
-                    return value.__value;
-            }
-        }
-
-        // 处理数组
-        if (Array.isArray(value)) {
-            return value.map(item => StateSerializer.deserialize(item));
-        }
-
-        // 处理普通对象，递归处理嵌套
-        if (typeof value === 'object') {
-            const deserialized = {};
-            for (const [key, val] of Object.entries(value)) {
-                deserialized[key] = StateSerializer.deserialize(val);
-            }
-            return deserialized;
-        }
-
-        // 基本类型直接返回
-        return value;
-    }
-
-    /**
-     * 验证序列化/反序列化的一致性
-     */
-    static validate(originalValue) {
-        try {
-            const serialized = StateSerializer.serialize(originalValue);
-            const deserialized = StateSerializer.deserialize(serialized);
-
-            // 对于Set/Map，深度比较内容
-            if (originalValue instanceof Set) {
-                const originalArray = Array.from(originalValue);
-                const deserializedArray = Array.from(deserialized);
-                return JSON.stringify(originalArray.sort()) === JSON.stringify(deserializedArray.sort());
-            }
-
-            if (originalValue instanceof Map) {
-                const originalArray = Array.from(originalValue.entries()).sort();
-                const deserializedArray = Array.from(deserialized.entries()).sort();
-                return JSON.stringify(originalArray) === JSON.stringify(deserializedArray);
-            }
-
-            // 其他类型直接比较
-            return JSON.stringify(originalValue) === JSON.stringify(deserialized);
-        } catch (error) {
-            console.error('[StateSerializer] 验证失败:', error);
-            return false;
-        }
-    }
-
-    /**
-     * 创建存储适配器，包装storage对象
-     */
-    static createStorageAdapter(baseStorage) {
-        return {
-            async get(key, defaultValue = null) {
-                try {
-                    const value = await baseStorage.get(key, defaultValue);
-                    return StateSerializer.deserialize(value);
-                } catch (error) {
-                    console.error(`[StateSerializer] 获取数据失败 ${key}:`, error);
-                    return defaultValue;
-                }
-            },
-
-            async set(key, value) {
-                try {
-                    const serializedValue = StateSerializer.serialize(value);
-                    return await baseStorage.set(key, serializedValue);
-                } catch (error) {
-                    console.error(`[StateSerializer] 设置数据失败 ${key}:`, error);
-                    throw error;
-                }
-            },
-
-            async remove(key) {
-                try {
-                    return await baseStorage.remove(key);
-                } catch (error) {
-                    console.error(`[StateSerializer] 删除数据失败 ${key}:`, error);
-                    throw error;
-                }
-            },
-
-            async clear() {
-                try {
-                    return await baseStorage.clear();
-                } catch (error) {
-                    console.error('[StateSerializer] 清空存储失败:', error);
-                    throw error;
-                }
-            }
-        };
-    }
-}
-
-// 导出供使用
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = StateSerializer;
-}
-
-
-/* ===== js/utils/simpleStorageWrapper.js ===== */
-(function(window) {
-    class SimpleStorageWrapper {
-        constructor(repositories) {
-            this.repos = repositories;
-        }
-
-        get settingsRepo() { return this.repos.settings; }
-        get backupRepo() { return this.repos.backups; }
-        get metaRepo() { return this.repos.meta; }
-
-        isPracticeDataKey(key) {
-            return key === 'practice_records' || key === 'user_stats';
-        }
-
-        getPracticeRecordAPI() {
-            const api = window.PracticeRecordAPI;
-            if (!api) {
-                throw new Error('PracticeRecordAPI unavailable');
-            }
-            return api;
-        }
-
-        rejectPracticeDataWrite(methodName, targetName) {
-            throw new Error(`SimpleStorageWrapper.${methodName} is disabled; use ${targetName}`);
-        }
-
-        async getPracticeRecords() {
-            const api = this.getPracticeRecordAPI();
-            if (typeof api.list !== 'function') {
-                throw new Error('PracticeRecordAPI.list unavailable');
-            }
-            return await api.list();
-        }
-
-        async savePracticeRecords() {
-            this.rejectPracticeDataWrite('savePracticeRecords', 'PracticeRecordAPI.replace');
-        }
-
-        async addPracticeRecord() {
-            this.rejectPracticeDataWrite('addPracticeRecord', 'PracticeRecordAPI.saveRecord');
-        }
-
-        async getById(id) {
-            const api = this.getPracticeRecordAPI();
-            if (typeof api.getById !== 'function') {
-                throw new Error('PracticeRecordAPI.getById unavailable');
-            }
-            return await api.getById(id);
-        }
-
-        async update() {
-            this.rejectPracticeDataWrite('update', 'PracticeRecordAPI.saveRecord');
-        }
-
-        async delete() {
-            this.rejectPracticeDataWrite('delete', 'PracticeRecordAPI.deleteById');
-        }
-
-        async deletePracticeRecord() {
-            this.rejectPracticeDataWrite('deletePracticeRecord', 'PracticeRecordAPI.deleteById');
-        }
-
-        async deletePracticeRecords() {
-            this.rejectPracticeDataWrite('deletePracticeRecords', 'PracticeRecordAPI.deleteMany');
-        }
-
-        async getPracticeRecordsCount() {
-            const records = await this.getPracticeRecords();
-            return Array.isArray(records) ? records.length : 0;
-        }
-
-        validatePracticeRecord(record) {
-            const errors = [];
-            if (!record || typeof record !== 'object') {
-                errors.push('记录必须是对象');
-            } else {
-                if (!record.id || typeof record.id !== 'string') {
-                    errors.push('记录缺少有效的 id');
-                }
-                if (!record.type || typeof record.type !== 'string') {
-                    errors.push('记录缺少有效的 type');
-                }
-                if (record.score === undefined || record.score === null || typeof record.score !== 'number') {
-                    errors.push('记录缺少有效的 score');
-                }
-                if (record.totalQuestions !== undefined && typeof record.totalQuestions !== 'number') {
-                    errors.push('totalQuestions 必须是数字');
-                }
-                if (record.correctAnswers !== undefined && typeof record.correctAnswers !== 'number') {
-                    errors.push('correctAnswers 必须是数字');
-                }
-                if (record.duration !== undefined && typeof record.duration !== 'number') {
-                    errors.push('duration 必须是数字');
-                }
-                if (!record.date) {
-                    errors.push('记录缺少有效的 date');
-                } else if (Number.isNaN(new Date(record.date).getTime())) {
-                    errors.push('date 格式无效');
-                }
-            }
-            return {
-                isValid: errors.length === 0,
-                errors
-            };
-        }
-
-        async getUserSettings() { return await this.settingsRepo.getAll(); }
-        async saveUserSettings(settings) { await this.settingsRepo.saveAll(settings); return true; }
-        async getUserSetting(key, defaultValue = null) { return await this.settingsRepo.get(key, defaultValue); }
-        async setUserSetting(key, value) { await this.settingsRepo.set(key, value); return true; }
-
-        async getBackups() { return await this.backupRepo.list(); }
-        async saveBackups(backups) { await this.backupRepo.saveAll(backups); return true; }
-        async addBackup(backup) { await this.backupRepo.add(backup); return true; }
-        async deleteBackup(id) { return await this.backupRepo.delete(id); }
-        async clearBackups() { await this.backupRepo.clear(); return true; }
-
-        async get(key, defaultValue = null) {
-            if (this.isPracticeDataKey(key)) {
-                const api = this.getPracticeRecordAPI();
-                if (key === 'practice_records') {
-                    if (typeof api.list !== 'function') {
-                        throw new Error('PracticeRecordAPI.list unavailable');
-                    }
-                    return await api.list();
-                }
-                if (typeof api.readStats !== 'function') {
-                    throw new Error('PracticeRecordAPI.readStats unavailable');
-                }
-                return await api.readStats({ fallback: defaultValue });
-            }
-            return await this.metaRepo.get(key, defaultValue);
-        }
-
-        async set(key, value) {
-            if (this.isPracticeDataKey(key)) {
-                if (key === 'practice_records') {
-                    this.rejectPracticeDataWrite('set(practice_records)', 'PracticeRecordAPI.replace');
-                }
-                this.rejectPracticeDataWrite('set(user_stats)', 'PracticeRecordAPI.writeStats');
-            }
-            await this.metaRepo.set(key, value);
-            return true;
-        }
-
-        async remove(key) {
-            if (this.isPracticeDataKey(key)) {
-                if (key === 'practice_records') {
-                    this.rejectPracticeDataWrite('remove(practice_records)', 'PracticeRecordAPI.clear');
-                }
-                this.rejectPracticeDataWrite('remove(user_stats)', 'PracticeRecordAPI.resetStats');
-            }
-            await this.metaRepo.remove(key);
-            return true;
-        }
-    }
-
-    function connectWrapper(repositories) {
-        if (!repositories) {
-            return;
-        }
-        if (window.simpleStorageWrapper && window.simpleStorageWrapper.repos === repositories) {
-            return;
-        }
-        window.simpleStorageWrapper = new SimpleStorageWrapper(repositories);
-        console.log('[SimpleStorageWrapper] 已连接新的数据仓库接口');
-    }
-
-    const registry = window.StorageProviderRegistry;
-    if (registry && typeof registry.onProvidersReady === 'function') {
-        registry.onProvidersReady(({ repositories }) => connectWrapper(repositories));
-        const current = registry.getCurrentProviders && registry.getCurrentProviders();
-        if (current && current.repositories) {
-            connectWrapper(current.repositories);
-        }
-    } else if (window.dataRepositories) {
-        connectWrapper(window.dataRepositories);
-    } else {
-        console.warn('[SimpleStorageWrapper] 数据仓库尚未可用，等待外部注入');
-    }
-
-    window.SimpleStorageWrapper = SimpleStorageWrapper;
-})(window);
-
-
 /* ===== js/app/state-service.js ===== */
 (function (global) {
     'use strict';
 
     function cloneArray(value) {
         return Array.isArray(value) ? value.slice() : [];
-    }
-
-    function cloneValue(value) {
-        if (value === null || value === undefined) {
-            return value;
-        }
-        if (typeof global.structuredClone === 'function') {
-            try {
-                return global.structuredClone(value);
-            } catch (_) { }
-        }
-        try {
-            return JSON.parse(JSON.stringify(value));
-        } catch (_) {
-            if (Array.isArray(value)) {
-                return value.map((item) => cloneValue(item));
-            }
-            if (value && typeof value === 'object') {
-                return Object.assign({}, value);
-            }
-            return value;
-        }
-    }
-
-    function clonePracticeRecords(records) {
-        return Array.isArray(records) ? records.map((record) => cloneValue(record)) : [];
     }
 
     function cloneSet(value) {
@@ -14001,8 +10862,6 @@ if (typeof module !== 'undefined' && module.exports) {
             this.globalBindingsInstalled = false;
 
             this.state = {
-                examIndex: cloneArray(global.examIndex),
-                practiceRecords: [],
                 filteredExams: Array.isArray(global.filteredExams) ? global.filteredExams : [],
                 browseFilter: normalizeFilter(global.__browseFilter),
                 bulkDeleteMode: !!global.bulkDeleteMode,
@@ -14013,8 +10872,6 @@ if (typeof module !== 'undefined' && module.exports) {
             };
 
             this.listeners = {
-                examIndex: new Set(),
-                practiceRecords: new Set(),
                 filteredExams: new Set(),
                 browseFilter: new Set(),
                 bulkDeleteMode: new Set(),
@@ -14070,13 +10927,11 @@ if (typeof module !== 'undefined' && module.exports) {
 
             try {
                 if (app.state.exam) {
-                    app.state.exam.index = this.state.examIndex;
                     app.state.exam.currentCategory = this.state.browseFilter.category;
                     app.state.exam.currentExamType = this.state.browseFilter.type;
                     app.state.exam.filteredExams = this.state.filteredExams;
                 }
                 if (app.state.practice) {
-                    app.state.practice.records = clonePracticeRecords(this.state.practiceRecords);
                     app.state.practice.selectedRecords = this.state.selectedRecords;
                     app.state.practice.bulkDeleteMode = this.state.bulkDeleteMode;
                 }
@@ -14096,12 +10951,6 @@ if (typeof module !== 'undefined' && module.exports) {
 
         syncFromAppPath(path, value) {
             switch (path) {
-                case 'exam.index':
-                    this.setExamIndex(value, { syncApp: false });
-                    break;
-                case 'practice.records':
-                    this.setPracticeRecords(value, { syncApp: false });
-                    break;
                 case 'exam.filteredExams':
                     this.setFilteredExams(value, { syncApp: false });
                     break;
@@ -14139,41 +10988,6 @@ if (typeof module !== 'undefined' && module.exports) {
                 default:
                     break;
             }
-        }
-
-        getExamIndex() {
-            return this.state.examIndex;
-        }
-
-        setExamIndex(list, options = {}) {
-            const normalized = assignExamSequenceNumbers(cloneArray(list));
-            this.state.examIndex = normalized;
-            if (options.syncApp !== false) {
-                this.applyToApp();
-            }
-            emit(this.listeners, 'examIndex', this.state.examIndex);
-            return this.state.examIndex;
-        }
-
-        getPracticeRecords() {
-            return clonePracticeRecords(this.state.practiceRecords);
-        }
-
-        setPracticeRecords(records, options = {}) {
-            const normalized = clonePracticeRecords(records);
-            this.state.practiceRecords = normalized;
-            if (options.syncApp !== false) {
-                this.applyToApp();
-            }
-            emit(this.listeners, 'practiceRecords', clonePracticeRecords(this.state.practiceRecords));
-            if (typeof global.updateBrowseAnchorsFromRecords === 'function') {
-                try {
-                    global.updateBrowseAnchorsFromRecords(clonePracticeRecords(this.state.practiceRecords));
-                } catch (error) {
-                    console.warn('[AppStateService] updateBrowseAnchorsFromRecords failed:', error);
-                }
-            }
-            return clonePracticeRecords(this.state.practiceRecords);
         }
 
         getFilteredExams() {
@@ -14430,18 +11244,6 @@ if (typeof module !== 'undefined' && module.exports) {
 
             const service = this;
 
-            globalRef.getExamIndexState = function getExamIndexState() {
-                return service.getExamIndex();
-            };
-            globalRef.setExamIndexState = function setExamIndexState(list) {
-                return service.setExamIndex(list);
-            };
-            globalRef.getPracticeRecordsState = function getPracticeRecordsState() {
-                return service.getPracticeRecords();
-            };
-            globalRef.setPracticeRecordsState = function setPracticeRecordsState(records) {
-                return service.setPracticeRecords(records);
-            };
             globalRef.getFilteredExamsState = function getFilteredExamsState() {
                 return service.getFilteredExams();
             };
@@ -14501,14 +11303,6 @@ if (typeof module !== 'undefined' && module.exports) {
             };
             globalRef.assignExamSequenceNumbers = assignExamSequenceNumbers;
 
-            defineGlobalProperty(globalRef, 'examIndex', {
-                get: () => service.getExamIndex(),
-                set: (value) => service.setExamIndex(value)
-            });
-            defineGlobalProperty(globalRef, 'practiceRecords', {
-                get: () => service.getPracticeRecords(),
-                set: (value) => service.setPracticeRecords(value)
-            });
             defineGlobalProperty(globalRef, 'filteredExams', {
                 get: () => service.getFilteredExams(),
                 set: (value) => service.setFilteredExams(value)
@@ -15360,23 +12154,14 @@ if (typeof module !== 'undefined' && module.exports) {
             && global.listeningExamIndex.length > 0;
     }
 
-    function getActiveExamIndexSnapshot() {
-        try {
-            if (typeof global.getExamIndexState === 'function') {
-                return global.getExamIndexState();
-            }
-        } catch (_) { }
-        return Array.isArray(global.examIndex) ? global.examIndex : [];
-    }
-
     function hasActiveListeningLibrary(index) {
-        return hasListeningEntries(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+        return hasListeningEntries(index);
     }
 
     function refreshListeningAvailabilityUI(index) {
         if (typeof global.refreshListeningAvailabilityUI === 'function') {
             try {
-                global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+                global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : []);
                 return;
             } catch (error) {
                 console.warn('[LibraryManager] 刷新听力入口状态失败:', error);
@@ -15465,36 +12250,26 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async getActiveLibraryConfigurationKey() {
-            return global.storage.get('active_exam_index_key', 'exam_index');
+            return global.AppData.library.getActive();
         }
 
         async setActiveLibraryConfiguration(key) {
-            try {
-                await global.storage.set('active_exam_index_key', key);
-            } catch (error) {
-                console.error('[LibraryManager] 设置活动题库配置失败:', error);
-            }
+            return global.AppData.library.activate(typeof key === 'string' && key.trim() ? key.trim() : null);
         }
 
         async getLibraryConfigurations() {
-            return global.storage.get('exam_index_configurations', []);
+            const configurations = await global.AppData.library.listConfigurations();
+            return [{ name: '默认题库', key: '', id: null, builtIn: true, sourceType: 'built-in-manifest' }]
+                .concat(Array.isArray(configurations) ? configurations : []);
         }
 
         async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
             try {
-                let configs = await global.storage.get('exam_index_configurations', []);
-                if (!Array.isArray(configs)) {
-                    configs = [];
-                }
+                if (!key) return;
                 const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
-                const entry = Object.assign({}, safeMetadata, { name, key, examCount, timestamp: Date.now() });
-                const existingIndex = configs.findIndex((item) => item && item.key === key);
-                if (existingIndex >= 0) {
-                    configs[existingIndex] = Object.assign({}, configs[existingIndex], entry);
-                } else {
-                    configs.push(entry);
-                }
-                await global.storage.set('exam_index_configurations', configs);
+                await global.AppData.library.updateConfiguration(Object.assign({}, safeMetadata, {
+                    id: key, key, name, examCount, timestamp: Date.now()
+                }));
             } catch (error) {
                 console.error('[LibraryManager] 保存题库配置失败:', error);
             }
@@ -15590,18 +12365,98 @@ if (typeof module !== 'undefined' && module.exports) {
                 : [];
         }
 
-        finishLibraryLoading(startTime) {
+        finishLibraryLoading(startTime, index) {
             const loadTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() - startTime : 0;
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('题库装载完成', 75);
             }
-            try { global.updateOverview && global.updateOverview(); } catch (_) { }
-            refreshListeningAvailabilityUI();
-            try { global.refreshBrowseProgressFromRecords && global.refreshBrowseProgressFromRecords(); } catch (_) { }
+            try { global.updateOverview && global.updateOverview(index); } catch (_) { }
+            refreshListeningAvailabilityUI(index);
+            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+            }
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded'));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { index: cloneArray(index) } }));
             } catch (_) { }
             return loadTime;
+        }
+
+        async resolveDefaultIndex() {
+            await global.AppData.ready;
+            if (global.ensureExamDataScripts) {
+                try { await global.ensureExamDataScripts(); } catch (_) { }
+            }
+            return this.normalizeIndexForCustomConfig(
+                this.getDefaultReadingIndex().concat(this.resolveDefaultTypeIndex('listening'))
+            );
+        }
+
+        async resolveIndexForConfiguration(configurationId) {
+            await global.AppData.ready;
+            const id = typeof configurationId === 'string' && configurationId.trim()
+                ? configurationId.trim()
+                : null;
+            if (id === null) return this.resolveDefaultIndex();
+            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id));
+        }
+
+        getRecordLibraryProvenance(record) {
+            const metadata = record && record.metadata && typeof record.metadata === 'object'
+                ? record.metadata
+                : {};
+            if (Object.prototype.hasOwnProperty.call(metadata, 'libraryConfigurationId')) {
+                const value = metadata.libraryConfigurationId;
+                return { known: true, configurationId: typeof value === 'string' && value.trim() ? value.trim() : null };
+            }
+            if (record && Object.prototype.hasOwnProperty.call(record, 'libraryConfigurationId')) {
+                const value = record.libraryConfigurationId;
+                return { known: true, configurationId: typeof value === 'string' && value.trim() ? value.trim() : null };
+            }
+            return { known: false, configurationId: null };
+        }
+
+        async resolveIndexForRecord(record) {
+            const provenance = this.getRecordLibraryProvenance(record);
+            // 记录带明确题库来源时严格按来源解析——多题库场景下这能防止同一 examId
+            // 被解析到别的库里的错误题目。
+            if (provenance.known) {
+                return this.resolveIndexForConfiguration(provenance.configurationId);
+            }
+            // 来源未知（几乎都是 v1 迁移来的旧记录：迁移时无法唯一确定来源就不会补
+            // libraryConfigurationId）。条件降级：只有当用户没有任何自定义题库时，
+            // examId 只可能对应默认库里的唯一题目，回退到当前活动题库解析是安全的
+            // （即 v1 一贯行为，修复旧记录回顾/详情/导出全部失败）。一旦存在自定义
+            // 题库，同一 examId 可能在多个库指向不同题目，无来源就无法安全判定，
+            // 保守返回空索引，由调用方按“题目不可用”提示，绝不静默解析到错题。
+            let customConfigCount = 0;
+            try {
+                const configurations = await global.AppData.library.listConfigurations();
+                customConfigCount = Array.isArray(configurations) ? configurations.length : 0;
+            } catch (_) {
+                // 读配置失败时按保守处理，不回退。
+                return [];
+            }
+            if (customConfigCount === 0) {
+                return this.resolveActiveIndex();
+            }
+            return [];
+        }
+
+        async resolveExamForRecord(record) {
+            if (!record || typeof record !== 'object') return null;
+            const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+            const candidateIds = [record.examId, metadata.examId]
+                .filter((value) => value !== null && value !== undefined && String(value).trim())
+                .map((value) => String(value));
+            if (!candidateIds.length) return null;
+            const index = await this.resolveIndexForRecord(record);
+            return index.find((exam) => exam && candidateIds.includes(String(exam.id))) || null;
+        }
+
+        async resolveActiveIndex() {
+            await global.AppData.ready;
+            const activeId = await global.AppData.library.getActive();
+            return this.resolveIndexForConfiguration(activeId);
         }
 
         async loadActiveLibrary(forceReload = false) {
@@ -15611,37 +12466,36 @@ if (typeof module !== 'undefined' && module.exports) {
             }
 
             const rawKey = await this.getActiveLibraryConfigurationKey();
-            const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : 'exam_index';
-            const isDefaultConfig = activeConfigKey === 'exam_index';
+            const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : null;
+            const isDefaultConfig = activeConfigKey === null;
 
             let cachedData = null;
             try {
                 if (!isDefaultConfig) {
-                    cachedData = await global.storage.get(activeConfigKey);
+                    cachedData = await global.AppData.library.getIndex(activeConfigKey);
                 } else {
-                    await global.storage.set('active_exam_index_key', 'exam_index');
+                    await global.AppData.library.activate(null);
                 }
             } catch (error) {
                 console.warn('[LibraryManager] 读取题库缓存失败:', error);
             }
 
-            if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = global.setExamIndexState ? global.setExamIndexState(cachedData) : cachedData;
+            if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
+                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData);
+                if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
                 await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-                this.finishLibraryLoading(startTime);
+                this.finishLibraryLoading(startTime, updatedIndex);
                 return updatedIndex;
             }
 
             if (!isDefaultConfig) {
                 const normalized = Array.isArray(cachedData) ? cachedData : [];
-                if (global.setExamIndexState) {
-                    global.setExamIndexState(normalized);
-                }
                 if (!normalized.length && typeof global.showMessage === 'function') {
-                    global.showMessage('当前题库配置没有数据，请重新导入或切换至默认题库。', 'warning');
+                    global.showMessage('当前题库配置没有数据，已自动切换至默认题库。', 'warning');
                 }
-                this.finishLibraryLoading(startTime);
-                return normalized;
+                // Continue through the built-in manifest path.  Returning the empty
+                // custom index here used to dispatch examIndexLoaded([]) and left an
+                // otherwise valid generated Reading manifest invisible.
             }
 
             try {
@@ -15660,11 +12514,8 @@ if (typeof module !== 'undefined' && module.exports) {
                 const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
-                    if (global.setExamIndexState) {
-                        global.setExamIndexState([]);
-                    }
                     console.warn('[LibraryManager] 未检测到默认题库脚本中的题源数据');
-                    this.finishLibraryLoading(startTime);
+                    this.finishLibraryLoading(startTime, []);
                     return [];
                 }
 
@@ -15672,7 +12523,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
-                const updatedIndex = global.setExamIndexState ? global.setExamIndexState(combined) : combined;
+                const updatedIndex = combined;
 
                 const metadata = {
                     source: 'default-script',
@@ -15691,22 +12542,19 @@ if (typeof module !== 'undefined' && module.exports) {
 
                 const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
 
-                await global.storage.set('exam_index', updatedIndex);
-                await this.saveLibraryConfiguration('默认题库', 'exam_index', updatedIndex.length);
-                await this.setActiveLibraryConfiguration('exam_index');
-                await this.savePathMapForConfiguration('exam_index', updatedIndex, { setActive: true, overrideMap });
+                if (isDefaultConfig) {
+                    await this.setActiveLibraryConfiguration(null);
+                }
+                this.setActivePathMap(overrideMap);
 
-                this.finishLibraryLoading(startTime);
+                this.finishLibraryLoading(startTime, updatedIndex);
                 return updatedIndex;
             } catch (error) {
                 console.error('[LibraryManager] 加载默认题库失败:', error);
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
-                if (global.setExamIndexState) {
-                    global.setExamIndexState([]);
-                }
-                this.finishLibraryLoading(startTime);
+                this.finishLibraryLoading(startTime, []);
                 return [];
             }
         }
@@ -15730,7 +12578,7 @@ if (typeof module !== 'undefined' && module.exports) {
                         if (entry.trim() === key) {
                             mutated = true;
                             return {
-                                name: key === 'exam_index' ? '默认题库' : key,
+                                name: key,
                                 key,
                                 examCount,
                                 timestamp: now
@@ -15748,7 +12596,8 @@ if (typeof module !== 'undefined' && module.exports) {
                     return entry;
                 });
                 if (mutated) {
-                    await global.storage.set('exam_index_configurations', updated);
+                    const target = updated.find((entry) => entry && entry.key === key);
+                    if (target) await global.AppData.library.updateConfiguration(target);
                 }
             } catch (error) {
                 console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
@@ -15756,11 +12605,10 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async fetchLibraryDataset(key) {
-            if (!key) {
-                return [];
-            }
             try {
-                const dataset = await global.storage.get(key);
+                const dataset = !key
+                    ? this.resolveDefaultTypeIndex('reading').concat(this.resolveDefaultTypeIndex('listening'))
+                    : await global.AppData.library.getIndex(key);
                 return Array.isArray(dataset) ? dataset : [];
             } catch (error) {
                 console.warn('[LibraryManager] 无法读取题库数据:', key, error);
@@ -15786,20 +12634,13 @@ if (typeof module !== 'undefined' && module.exports) {
 
         async resolveBaseLibraryIndex(activeKey) {
             let currentIndex = [];
-            const key = typeof activeKey === 'string' && activeKey.trim() ? activeKey.trim() : 'exam_index';
+            const key = typeof activeKey === 'string' && activeKey.trim() ? activeKey.trim() : null;
             try {
                 currentIndex = await this.fetchLibraryDataset(key);
             } catch (_) {
                 currentIndex = [];
             }
-            if (!Array.isArray(currentIndex) || currentIndex.length === 0) {
-                try {
-                    currentIndex = global.getExamIndexState ? global.getExamIndexState() : [];
-                } catch (_) {
-                    currentIndex = [];
-                }
-            }
-            if ((!Array.isArray(currentIndex) || currentIndex.length === 0) && key === 'exam_index') {
+            if ((!Array.isArray(currentIndex) || currentIndex.length === 0) && key === null) {
                 const reading = this.resolveDefaultTypeIndex('reading');
                 const listening = this.resolveDefaultTypeIndex('listening');
                 currentIndex = reading.concat(listening);
@@ -15823,7 +12664,7 @@ if (typeof module !== 'undefined' && module.exports) {
             return this.normalizeIndexForCustomConfig(next);
         }
 
-        async buildUniqueImportedConfigKey(prefix = 'exam_index') {
+        async buildUniqueImportedConfigKey(prefix = 'library_import') {
             let configs = [];
             try {
                 configs = await this.getLibraryConfigurations();
@@ -15842,16 +12683,8 @@ if (typeof module !== 'undefined' && module.exports) {
                 if (used.has(key)) {
                     continue;
                 }
-                try {
-                    const stored = global.storage && typeof global.storage.get === 'function'
-                        ? await global.storage.get(key)
-                        : null;
-                    if (!stored) {
-                        return key;
-                    }
-                } catch (_) {
-                    return key;
-                }
+                const stored = await global.AppData.library.getIndex(key);
+                if (!stored.length) return key;
             }
             return `${prefix}_${now}_${Math.random().toString(36).slice(2, 8)}`;
         }
@@ -15922,7 +12755,7 @@ if (typeof module !== 'undefined' && module.exports) {
                 try { global.assignExamSequenceNumbers(newIndex); } catch (_) { }
             }
 
-            const key = options.key || await this.buildUniqueImportedConfigKey('exam_index');
+            const key = options.key || await this.buildUniqueImportedConfigKey('library_import');
             const name = options.name || this.buildImportedConfigName(type, mode, options.label);
             const counts = countIndexTypes(newIndex);
             const sourceReport = options.discoveryResult && options.discoveryResult.report
@@ -15936,22 +12769,23 @@ if (typeof module !== 'undefined' && module.exports) {
                     mode,
                     accepted: additions.length,
                     rejected: sourceReport ? Number(sourceReport.rejected) || 0 : 0,
-                    createdFrom: activeKey || 'exam_index',
+                    createdFrom: activeKey || null,
                     label: options.label || '',
                     timestamp: Date.now()
                 }
             };
 
-            await global.storage.set(key, newIndex);
-            const pathFallback = await this.loadPathMapForConfiguration(activeKey || 'exam_index');
+            const pathFallback = await this.loadPathMapForConfiguration(activeKey);
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(newIndex, pathFallback || this.DEFAULT_PATH_MAP)
                 : (pathFallback || null);
-            await this.savePathMapForConfiguration(key, newIndex, {
-                overrideMap: pathMap,
-                setActive: options.activate !== false
+            await global.AppData.library.import({
+                id: key,
+                configuration: Object.assign({}, metadata, { id: key, key, name, examCount: newIndex.length, timestamp: Date.now() }),
+                index: newIndex,
+                operationId: options.operationId
             });
-            await this.saveLibraryConfiguration(name, key, newIndex.length, metadata);
+            if (options.activate !== false) this.setActivePathMap(pathMap);
 
             let applied = true;
             if (options.activate !== false) {
@@ -15982,15 +12816,13 @@ if (typeof module !== 'undefined' && module.exports) {
                 return false;
             }
 
+            await this.setActiveLibraryConfiguration(key);
             const currentPathMap = await this.loadPathMapForConfiguration(key);
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
                 : (currentPathMap || null);
             this.setActivePathMap(pathMap);
 
-            if (global.setExamIndexState) {
-                global.setExamIndexState(exams);
-            }
             refreshListeningAvailabilityUI(exams);
             if (typeof global.setBrowseFilterState === 'function') {
                 global.setBrowseFilterState('all', 'all');
@@ -15999,24 +12831,18 @@ if (typeof module !== 'undefined' && module.exports) {
                 global.setFilteredExamsState([]);
             }
 
-            try {
-                await this.setActiveLibraryConfiguration(key);
-            } catch (error) {
-                console.warn('[LibraryManager] 无法写入当前题库配置:', error);
-            }
-
             await this.updateLibraryConfigurationMetadata(key, exams.length);
             await this.savePathMapForConfiguration(key, exams, {
                 overrideMap: pathMap,
                 setActive: true
             });
 
-            try { global.updateSystemInfo && global.updateSystemInfo(); } catch (_) { }
-            try { global.updateOverview && global.updateOverview(); } catch (_) { }
-            try { global.loadExamList && global.loadExamList(); } catch (_) { }
+            try { global.updateSystemInfo && global.updateSystemInfo(exams); } catch (_) { }
+            try { global.updateOverview && global.updateOverview(exams); } catch (_) { }
+            try { global.loadExamList && global.loadExamList(exams); } catch (_) { }
 
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key } }));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
             }
@@ -16042,10 +12868,6 @@ if (typeof module !== 'undefined' && module.exports) {
             if (!configKey) {
                 return { deleted: false, reason: 'invalid-key' };
             }
-            if (configKey === 'exam_index') {
-                return { deleted: false, reason: 'default-config' };
-            }
-
             const activeKey = await this.getActiveLibraryConfigurationKey();
             if (activeKey === configKey) {
                 return { deleted: false, reason: 'active-config' };
@@ -16088,12 +12910,8 @@ if (typeof module !== 'undefined' && module.exports) {
                 return { deleted: false, reason: 'not-found' };
             }
 
-            if (!global.storage || typeof global.storage.remove !== 'function') {
-                return { deleted: false, reason: 'storage-remove-unavailable' };
-            }
-            await global.storage.remove(configKey);
+            await global.AppData.library.remove(configKey);
             await this.deletePathMapForConfiguration(configKey);
-            await global.storage.set('exam_index_configurations', nextConfigs);
 
             return {
                 deleted: true,
@@ -16103,7 +12921,8 @@ if (typeof module !== 'undefined' && module.exports) {
         }
 
         async loadLibrary(keyOrForceReload) {
-            if (keyOrForceReload === 'default' || keyOrForceReload === 'exam_index') {
+            if (keyOrForceReload === 'default' || keyOrForceReload === null) {
+                await this.setActiveLibraryConfiguration(null);
                 return this.loadActiveLibrary(true);
             }
             if (typeof keyOrForceReload === 'string' && keyOrForceReload) {
@@ -16124,7 +12943,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
     async function switchLibraryConfig(key) {
         const manager = getInstance();
-        const nextKey = key || await manager.getActiveLibraryConfigurationKey() || 'exam_index';
+        const nextKey = typeof key === 'string' && key.trim() ? key.trim() : null;
         return manager.applyLibraryConfiguration(nextKey);
     }
 
@@ -16132,10 +12951,25 @@ if (typeof module !== 'undefined' && module.exports) {
         return getInstance().loadLibrary(keyOrForceReload);
     }
 
+    async function resolveActiveLibraryIndex() {
+        return getInstance().resolveActiveIndex();
+    }
+
+    async function resolveLibraryIndexForPracticeRecord(record) {
+        return getInstance().resolveIndexForRecord(record);
+    }
+
+    async function resolveExamForPracticeRecord(record) {
+        return getInstance().resolveExamForRecord(record);
+    }
+
     global.LibraryManager = {
         getInstance,
         switchLibraryConfig,
         loadLibrary,
+        resolveActiveIndex: resolveActiveLibraryIndex,
+        resolveIndexForRecord: resolveLibraryIndexForPracticeRecord,
+        resolveExamForRecord: resolveExamForPracticeRecord,
         get RAW_DEFAULT_PATH_MAP() {
             const manager = getInstance();
             return manager.RAW_DEFAULT_PATH_MAP;
@@ -16174,6 +13008,9 @@ if (typeof module !== 'undefined' && module.exports) {
     global.isBuiltInListeningLibraryAvailable = isBuiltInListeningLibraryAvailable;
     global.switchLibraryConfig = switchLibraryConfig;
     global.loadLibrary = loadLibrary;
+    global.resolveActiveLibraryIndex = resolveActiveLibraryIndex;
+    global.resolveLibraryIndexForPracticeRecord = resolveLibraryIndexForPracticeRecord;
+    global.resolveExamForPracticeRecord = resolveExamForPracticeRecord;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -16183,25 +13020,15 @@ if (typeof module !== 'undefined' && module.exports) {
         global.AppLazyLoader.markProvided([
     "js/utils/environmentDetector.js",
     "js/utils/logger.js",
-    "js/utils/storage.js",
-    "js/core/storageProviderRegistry.js",
-    "js/data/dataSources/storageDataSource.js",
-    "js/data/repositories/baseRepository.js",
-    "js/data/repositories/dataRepositoryRegistry.js",
-    "js/data/repositories/practiceRepository.js",
-    "js/data/repositories/settingsRepository.js",
-    "js/data/repositories/backupRepository.js",
-    "js/data/repositories/metaRepository.js",
-    "js/data/index.js",
-    "js/core/practiceCore.js",
-    "js/core/practiceRecordAPI.js",
-    "js/core/backupAPI.js",
+    "js/data/practiceRecordSource.js",
+    "js/data/v2/dataCatalog.js",
+    "js/data/v2/dataKernel.js",
+    "js/data/v2/appData.js",
     "js/core/externalBackupService.js",
-    "js/core/practiceStore.js",
+    "js/core/siteDataReset.js",
+    "js/core/practiceCore.js",
     "js/core/resourceCore.js",
     "assets/generated/reading-exams/manifest.js",
-    "js/utils/stateSerializer.js",
-    "js/utils/simpleStorageWrapper.js",
     "js/app/state-service.js",
     "js/services/libraryDiscovery.js",
     "js/services/libraryManager.js"
