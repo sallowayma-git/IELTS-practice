@@ -389,9 +389,8 @@ async function main() {
         assert.match(migrated.activeId, /^legacy-library-/);
         assert.equal(migrated.activeIndex[0].id, 'legacy-custom-exam');
 
-        // A completed reconciliation marker never suppresses the next startup.
-        // Add one v2-only record and then append a new row to the surviving v1
-        // source; the next realm must keep the former and migrate the latter.
+        // The completion marker makes v1 a one-time source. A later v1 write must
+        // not resurrect data after the user has moved on to v2.
         await page.evaluate(async () => {
             await window.AppData.practice.completeAttempt({
                 operationId: 'persistent-v2-only',
@@ -433,12 +432,11 @@ async function main() {
             v2Only: await window.AppData.practice.get('persistent-v2-only'),
             migration: (await window.AppData.backups.export({ scope: 'partial', logicalKeys: [] })).schemaVersion
         }));
-        assert.equal(secondBoot.legacyAdded.correctAnswers, 1);
+        assert.equal(secondBoot.legacyAdded, null);
         assert.equal(secondBoot.v2Only.answers.q1, 'V2');
         assert.equal(secondBoot.migration, 2);
 
-        // A third realm still reads v1, but an unchanged union produces no
-        // document or entity revision/checksum churn.
+        // Later boots remain stable and do not churn v2 business state.
         const secondBusinessState = await persistedBusinessState(page);
         await page.reload();
         await loadAppData(page);

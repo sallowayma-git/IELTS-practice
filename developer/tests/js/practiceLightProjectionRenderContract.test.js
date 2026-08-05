@@ -159,6 +159,13 @@ function loadRealAppData() {
             const rows = Array.from(shared.entities.get(store).values());
             return options.withMeta ? clone(rows) : rows.map((row) => clone(row.data));
         }
+        async readPracticeSnapshot(recordIds = null, options = {}) {
+            const ids = recordIds == null ? null : new Set((Array.isArray(recordIds) ? recordIds : [recordIds]).map(String));
+            const stores = options.stores || ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
+            return Object.fromEntries(stores.map((store) => [store, Array.from(shared.entities.get(store).values())
+                .filter((row) => !ids || ids.has(String(row.recordId)))
+                .map((row) => options.withMeta ? clone(row) : clone(row.data))]));
+        }
         async mutateEntities(operations, options = {}) {
             const op = String(options.operationId || `entity-${++shared.counter}`);
             const revisions = {};

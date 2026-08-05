@@ -2622,36 +2622,7 @@
             }
             this.messageHandlers.set(examId, messageHandler);
 
-            // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
-            const sendInitEnvelope = async (targetWindow) => {
-                try {
-                    const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
-                    if (
-                        windowInfo
-                        && !windowInfo.reviewMode
-                        && !windowInfo.suiteSessionId
-                        && String(windowInfo.practiceMode || '').toLowerCase() !== 'memorize'
-                        && typeof this.getReadingDraftForExam === 'function'
-                    ) {
-                        try {
-                            const restoredDraft = await this.getReadingDraftForExam(examId, {
-                                sessionId: windowInfo.expectedSessionId
-                            });
-                            if (restoredDraft) {
-                                windowInfo.lastReadingDraft = restoredDraft;
-                                this.examWindows && this.examWindows.set(examId, windowInfo);
-                            }
-                        } catch (_) {
-                            // draft restore is best-effort
-                        }
-                    }
-                    const initPayload = this._buildExamInitPayload(examId, windowInfo);
-                    this._postExamMessage(examId, targetWindow, 'INIT_SESSION', initPayload);
-                    this._postExamMessage(examId, targetWindow, 'init_exam_session', initPayload);
-                } catch (initError) {
-                    console.warn('[App] 发送初始化消息失败:', initError);
-                }
-            };
+            const sendInitEnvelope = (targetWindow) => this._sendExamInitEnvelope(examId, targetWindow);
 
             const tryAttachInitHandler = (targetWindow) => {
                 if (!targetWindow || isFileProtocol) {
@@ -2702,31 +2673,10 @@
                 if (examWindow && !examWindow.closed) {
                     try {
                         const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                        if (
-                            windowInfo
-                            && !windowInfo.reviewMode
-                            && !windowInfo.suiteSessionId
-                            && String(windowInfo.practiceMode || '').toLowerCase() !== 'memorize'
-                            && typeof this.getReadingDraftForExam === 'function'
-                        ) {
-                            try {
-                                const restoredDraft = await this.getReadingDraftForExam(examId, {
-                                    sessionId: windowInfo.expectedSessionId
-                                });
-                                if (restoredDraft) {
-                                    windowInfo.lastReadingDraft = restoredDraft;
-                                }
-                            } catch (_) {
-                                // draft restore is best-effort
-                            }
-                        }
-                        const initPayload = this._buildExamInitPayload(examId, windowInfo);
                         windowInfo.handshakeAttempts = attempts + 1;
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
-                        // 直接发送两种事件名，确保增强器任何实现都能收到
-                        this._postExamMessage(examId, examWindow, 'INIT_SESSION', initPayload);
-                        this._postExamMessage(examId, examWindow, 'init_exam_session', initPayload);
+                        await this._sendExamInitEnvelope(examId, examWindow);
                     } catch (_) { /* 忽略 */ }
                 }
                 attempts++;

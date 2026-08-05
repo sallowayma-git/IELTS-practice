@@ -7289,22 +7289,6 @@
         attachDragDrop();
         attachPaneResizer();
 
-        // Ensure drag items can return home when replaced or discarded
-        function initDragPools() {
-            document.querySelectorAll('.pool-items').forEach((pool, index) => {
-                if (!pool.id) {
-                    pool.id = `practice-pool-${index}`;
-                }
-            });
-            document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
-                if (!item.dataset.originPool) {
-                    const pool = item.closest('.pool-items');
-                    if (pool?.id) {
-                        item.dataset.originPool = pool.id;
-                    }
-                }
-            });
-        }
         initDragPools();
 
         attachUnifiedTimer();

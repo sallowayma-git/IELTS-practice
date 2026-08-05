@@ -1698,6 +1698,7 @@
         }
         return '';
     }
+
     function importedLibraryId(value, options = {}) {
         const id = value === null || value === undefined ? '' : String(value).trim();
         if (!id && options.nullable) return null;
@@ -1766,143 +1767,92 @@
         };
     }
 
-    function nonNegativeScalar(value) {
-        if (value === undefined || value === null || value === '' || typeof value === 'boolean') return null;
-        if (typeof value !== 'number' && typeof value !== 'string') return null;
-        const numeric = Number(value);
-        return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
-    }
-
-    function firstNonNegativeScalar(...values) {
+    function firstNonNegative(...values) {
         for (const value of values) {
-            const numeric = nonNegativeScalar(value);
-            if (numeric !== null) return numeric;
+            if (value === null || value === undefined || value === '' || typeof value === 'object') continue;
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 0) return numeric;
         }
         return null;
     }
 
-    function normalizeAnswerQuestionId(value, index = 0) {
-        const text = value === undefined || value === null ? '' : String(value).trim();
-        return text || `q${index + 1}`;
-    }
-
-    function normalizeAnswerValue(value) {
-        if (value === undefined || value === null) return '';
-        if (Array.isArray(value)) return value.map((item) => normalizeAnswerValue(item));
-        if (value && typeof value === 'object') {
-            if (hasOwn(value, 'answer')) return normalizeAnswerValue(value.answer);
-            if (hasOwn(value, 'userAnswer')) return normalizeAnswerValue(value.userAnswer);
-            if (hasOwn(value, 'value')) return normalizeAnswerValue(value.value);
-            return jsonValue(value, 'practice answer');
-        }
-        return typeof value === 'string' ? value : String(value);
-    }
-
-    function normalizeAnswerMap(value) {
-        const normalized = {};
-        if (Array.isArray(value)) {
-            value.forEach((entry, index) => {
-                if (entry === undefined || entry === null) return;
-                const item = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
-                const questionId = normalizeAnswerQuestionId(item.questionId ?? item.id ?? item.name, index);
-                normalized[questionId] = normalizeAnswerValue(
-                    hasOwn(item, 'answer') ? item.answer
-                        : hasOwn(item, 'userAnswer') ? item.userAnswer
-                            : hasOwn(item, 'value') ? item.value
-                                : entry
-                );
-            });
-            return normalized;
-        }
-        if (!value || typeof value !== 'object') return normalized;
-        Object.entries(value).forEach(([questionId, answer], index) => {
-            if (questionId === '__proto__' || questionId === 'prototype' || questionId === 'constructor') return;
-            normalized[normalizeAnswerQuestionId(questionId, index)] = normalizeAnswerValue(answer);
-        });
-        return normalized;
-    }
-
-    function mergeAnswerMaps(...sources) {
-        const merged = {};
-        for (const source of sources) {
-            const normalized = normalizeAnswerMap(source);
-            for (const [questionId, answer] of Object.entries(normalized)) {
-                if (!hasOwn(merged, questionId)) merged[questionId] = answer;
-            }
-        }
-        return merged;
-    }
-
-    function canonicalizeAnswerSource(record) {
-        const realData = asObject(record.realData);
-        const rawData = asObject(record.rawData);
-        const rawRealData = asObject(rawData.realData);
-        record.answers = mergeAnswerMaps(
-            record.answers,
-            record.answerMap,
-            record.answerList,
-            realData.answers,
-            realData.answerMap,
-            rawData.answers,
-            rawData.answerMap,
-            rawRealData.answers
-        );
-        // These names remain accepted only at the compatibility boundary.  The
-        // canonical detail layer owns one user-answer source: `answers`.
-        delete record.answerMap;
-        delete record.answerList;
-    }
-
-    function normalizePracticeScoreFields(record) {
+    function normalizePracticeScore(record) {
         const scoreInfo = asObject(record.scoreInfo);
-        const realScoreInfo = asObject(asObject(record.realData).scoreInfo);
-        const rawScoreInfo = asObject(asObject(record.rawData).scoreInfo);
-        const overloadedCorrectAnswers = record.correctAnswers;
-        const isAnswerMap = overloadedCorrectAnswers && typeof overloadedCorrectAnswers === 'object';
-        if (isAnswerMap) {
-            const existingMap = record.correctAnswerMap;
-            const overloadedObject = asObject(overloadedCorrectAnswers);
-            const existingObject = asObject(existingMap);
-            if (Object.keys(overloadedObject).length) {
-                record.correctAnswerMap = Object.assign({}, clone(overloadedObject), clone(existingObject));
-            } else if (!existingMap || (Array.isArray(existingMap) && !existingMap.length)) {
-                record.correctAnswerMap = clone(overloadedCorrectAnswers);
-            }
+        const legacyScoreInfo = asObject(asObject(record.realData).scoreInfo);
+        const overloadedAnswers = record.correctAnswers;
+        if (overloadedAnswers && typeof overloadedAnswers === 'object') {
+            record.correctAnswerMap = Object.assign(
+                {},
+                clone(asObject(overloadedAnswers)),
+                clone(asObject(record.correctAnswerMap))
+            );
         }
-
-        let correctAnswers = firstNonNegativeScalar(
-            overloadedCorrectAnswers,
+        const correct = firstNonNegative(
+            overloadedAnswers,
             record.correctAnswersCount,
-            record.correctCount,
             scoreInfo.correctAnswers,
             scoreInfo.correct,
-            realScoreInfo.correctAnswers,
-            realScoreInfo.correct,
-            rawScoreInfo.correctAnswers,
-            rawScoreInfo.correct
+            legacyScoreInfo.correctAnswers,
+            legacyScoreInfo.correct
         );
-        if (correctAnswers === null) {
-            const comparisons = asArray(record.answerComparison).length
-                ? asArray(record.answerComparison)
-                : asArray(asObject(record.realData).answerComparison);
-            if (comparisons.length) {
-                correctAnswers = comparisons.filter((item) => item && item.isCorrect === true).length;
-            }
-        }
-        if (correctAnswers !== null) record.correctAnswers = correctAnswers;
-        else if (isAnswerMap) record.correctAnswers = 0;
-
-        const totalQuestions = firstNonNegativeScalar(
+        if (correct !== null) record.correctAnswers = correct;
+        else if (overloadedAnswers && typeof overloadedAnswers === 'object') record.correctAnswers = 0;
+        const total = firstNonNegative(
             record.totalQuestions,
             record.questionCount,
             scoreInfo.totalQuestions,
             scoreInfo.total,
-            realScoreInfo.totalQuestions,
-            realScoreInfo.total,
-            rawScoreInfo.totalQuestions,
-            rawScoreInfo.total
+            legacyScoreInfo.totalQuestions,
+            legacyScoreInfo.total
         );
-        if (totalQuestions !== null) record.totalQuestions = totalQuestions;
+        if (total !== null) record.totalQuestions = total;
+    }
+
+    function mergeAnswers(target, source) {
+        if (Array.isArray(source)) {
+            source.forEach((item, index) => {
+                if (!item || typeof item !== 'object') return;
+                const questionId = idOf(item, ['questionId', 'questionNumber', 'id', 'number']) || String(index + 1);
+                const answer = item.answer ?? item.value ?? item.userAnswer ?? item.selectedAnswer;
+                if (answer !== undefined) target[questionId] = clone(answer);
+            });
+            return;
+        }
+        for (const [questionId, answer] of Object.entries(asObject(source))) {
+            target[String(questionId)] = clone(answer);
+        }
+    }
+
+    function normalizePracticeAnswers(record) {
+        const answers = {};
+        const raw = asObject(record.rawData);
+        const rawReal = asObject(raw.realData);
+        const real = asObject(record.realData);
+        for (const source of [
+            rawReal.answerMap, rawReal.answerList, rawReal.answers,
+            raw.answerMap, raw.answerList, raw.answers,
+            real.answerMap, real.answerList, real.answers,
+            record.answerMap, record.answerList, record.answers
+        ]) mergeAnswers(answers, source);
+        if (Object.keys(answers).length) record.answers = answers;
+    }
+
+    function questionTypeErrorCounts(source) {
+        const counts = {};
+        const add = (type, count = 1) => {
+            const key = String(type || '').trim();
+            if (key && count > 0) counts[key] = (counts[key] || 0) + count;
+        };
+        for (const [type, value] of Object.entries(asObject(source && source.questionTypePerformance))) {
+            const metrics = asObject(value);
+            const total = firstNonNegative(metrics.totalQuestions, metrics.total);
+            const correct = firstNonNegative(metrics.correctAnswers, metrics.correct);
+            if (total !== null && correct !== null) add(type, Math.max(0, total - correct));
+        }
+        for (const detail of Object.values(asObject(asObject(source && source.scoreInfo).details))) {
+            if (detail && detail.isCorrect === false) add(detail.questionType || detail.type);
+        }
+        return counts;
     }
 
     function canonicalizeRecord(input) {
@@ -1916,8 +1866,8 @@
         record.metadata = asObject(record.metadata);
         if (!record.metadata.examId && record.examId) record.metadata.examId = record.examId;
         if (!record.examId && record.metadata.examId) record.examId = record.metadata.examId;
-        canonicalizeAnswerSource(record);
-        normalizePracticeScoreFields(record);
+        normalizePracticeAnswers(record);
+        normalizePracticeScore(record);
         for (const field of ['duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'totalScore']) {
             if (record[field] === undefined || record[field] === null || record[field] === '') continue;
             const numeric = Number(record[field]);
@@ -1928,97 +1878,13 @@
         return jsonValue(record, 'canonical practice record');
     }
 
-    function deriveQuestionTypeErrorCounts(source) {
-        const record = asObject(source);
-        const realData = asObject(record.realData);
-        const rawData = asObject(record.rawData);
-        const counts = {};
-        const addCount = (type, value) => {
-            const key = String(type || 'other').trim() || 'other';
-            const amount = Math.max(0, Number(value) || 0);
-            if (amount > 0) counts[key] = (counts[key] || 0) + amount;
-        };
-        const performanceSources = [
-            record.questionTypePerformance,
-            realData.questionTypePerformance,
-            rawData.questionTypePerformance
-        ];
-        let hasPerformanceData = false;
-        for (const performanceMap of performanceSources) {
-            if (!performanceMap || typeof performanceMap !== 'object' || Array.isArray(performanceMap)) continue;
-            let sourceHasPerformanceData = false;
-            for (const [type, value] of Object.entries(performanceMap)) {
-                const performance = asObject(value);
-                const total = Number(performance.total ?? performance.totalQuestions);
-                const correct = Number(performance.correct ?? performance.correctAnswers);
-                if (!Number.isFinite(total) || !Number.isFinite(correct)) continue;
-                hasPerformanceData = true;
-                sourceHasPerformanceData = true;
-                addCount(type, total - correct);
-            }
-            if (sourceHasPerformanceData) break;
-        }
-        if (hasPerformanceData) return counts;
-
-        const questionTypeMap = Object.assign(
-            {},
-            asObject(rawData.questionTypeMap),
-            asObject(realData.questionTypeMap),
-            asObject(record.questionTypeMap)
-        );
-        const normalizedTypeMap = {};
-        for (const [questionId, type] of Object.entries(questionTypeMap)) {
-            normalizedTypeMap[String(questionId).trim().toLowerCase()] = type;
-        }
-        const detailSources = [
-            record.answerDetails,
-            asObject(record.scoreInfo).details,
-            realData.answerDetails,
-            asObject(realData.scoreInfo).details,
-            rawData.answerDetails,
-            asObject(rawData.scoreInfo).details
-        ];
-        const seenQuestions = new Set();
-        for (const details of detailSources) {
-            if (!details || typeof details !== 'object' || Array.isArray(details)) continue;
-            for (const [questionId, value] of Object.entries(details)) {
-                const detail = asObject(value);
-                const normalizedId = String(questionId).trim().toLowerCase();
-                if (!normalizedId || seenQuestions.has(normalizedId)) continue;
-                let isWrong = detail.isCorrect === false || detail.correct === false;
-                if (detail.isCorrect === true || detail.correct === true) isWrong = false;
-                else if (!isWrong) {
-                    const userAnswer = String(detail.userAnswer ?? detail.answer ?? detail.value ?? '').trim().toLowerCase();
-                    const correctAnswer = String(detail.correctAnswer ?? detail.expectedAnswer ?? detail.expected ?? '').trim().toLowerCase();
-                    isWrong = Boolean(correctAnswer && userAnswer && userAnswer !== correctAnswer);
-                }
-                if (!isWrong) continue;
-                seenQuestions.add(normalizedId);
-                addCount(detail.questionType || detail.type || normalizedTypeMap[normalizedId] || 'other', 1);
-            }
-        }
-        return counts;
-    }
-
     function lightSuiteEntry(source, fallbackType = null) {
         const entry = asObject(source);
         const scoreInfo = asObject(entry.scoreInfo);
         const realScoreInfo = asObject(asObject(entry.realData).scoreInfo);
         const metadata = asObject(entry.metadata);
-        const totalQuestions = firstNonNegativeScalar(
-            entry.totalQuestions,
-            scoreInfo.totalQuestions,
-            scoreInfo.total,
-            realScoreInfo.totalQuestions,
-            realScoreInfo.total
-        ) ?? 0;
-        const correctAnswers = firstNonNegativeScalar(
-            entry.correctAnswers,
-            scoreInfo.correctAnswers,
-            scoreInfo.correct,
-            realScoreInfo.correctAnswers,
-            realScoreInfo.correct
-        ) ?? 0;
+        const totalQuestions = firstNonNegative(entry.totalQuestions, scoreInfo.totalQuestions, scoreInfo.total, realScoreInfo.totalQuestions, realScoreInfo.total) ?? 0;
+        const correctAnswers = firstNonNegative(entry.correctAnswers, scoreInfo.correctAnswers, scoreInfo.correct, realScoreInfo.correctAnswers, realScoreInfo.correct) ?? 0;
         const explicitAccuracy = entry.accuracy ?? scoreInfo.accuracy ?? realScoreInfo.accuracy;
         const accuracy = normalizeAccuracyRatio(
             explicitAccuracy === undefined && totalQuestions > 0 ? correctAnswers / totalQuestions : (explicitAccuracy ?? 0),
@@ -2030,14 +1896,14 @@
             sessionId: entry.sessionId || null,
             examId: entry.examId || metadata.examId || null,
             title: entry.title || entry.examTitle || metadata.examTitle || metadata.title || '',
-            type: entry.type || metadata.type || metadata.examType || fallbackType || null,
+            type: entry.type || metadata.type || fallbackType,
             date: entry.date || entry.completedAt || entry.timestamp || null,
             duration: Number(entry.duration ?? scoreInfo.duration ?? realScoreInfo.duration ?? 0) || 0,
             totalQuestions,
             correctAnswers,
             accuracy,
             percentage,
-            questionTypeErrorCounts: deriveQuestionTypeErrorCounts(entry)
+            questionTypeErrorCounts: questionTypeErrorCounts(entry)
         }, 'suite entry light projection');
     }
 
@@ -2074,6 +1940,7 @@
             accuracy,
             percentage: Number(source.percentage ?? scoreInfo.percentage ?? realScoreInfo.percentage ?? (accuracy * 100)) || 0,
             score: source.score ?? scoreInfo.score ?? realScoreInfo.score ?? null,
+            questionTypeErrorCounts: questionTypeErrorCounts(source),
             // 缺失时必须留空而不是写 null：消费方按 `dataSource === 'real' || === undefined`
             // 过滤记录（js/main.js updatePracticeView），null 两者都不匹配会让记录整条消失。
             // jsonValue 走 JSON.stringify，undefined 字段会被丢弃，读取时即为 undefined。
@@ -2087,8 +1954,10 @@
                 'dataSource', 'source', 'libraryConfigurationId'
             ].filter((field) => hasOwn(metadata, field)).map((field) => [field, clone(metadata[field])])),
             suite: source.suite == null ? null : clone(asObject(source.suite)),
-            suiteEntrySummaries: asArray(source.suiteEntries).map((entry) => lightSuiteEntry(entry, practiceType(source))),
-            questionTypeErrorCounts: deriveQuestionTypeErrorCounts(source)
+            suiteEntrySummaries: asArray(source.suiteEntries).map((entry) => lightSuiteEntry(
+                entry,
+                String(source.type || '').replace(/-suite$/, '') || null
+            ))
         }, 'practice light projection');
     }
 
@@ -2109,7 +1978,7 @@
         return first === undefined ? {} : clone(first);
     }
 
-    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries', 'questionTypeErrorCounts']);
+    const SUMMARY_FIELDS = new Set(['id', 'sessionId', 'examId', 'title', 'type', 'mode', 'timestamp', 'completedAt', 'date', 'startTime', 'endTime', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'score', 'questionTypeErrorCounts', 'dataSource', 'metadata', 'suite', 'suiteEntrySummaries']);
     const ANNOTATION_FIELDS = new Set(['markedQuestions', 'highlights', 'notes', 'noteOutlines', 'noteText', 'scrollY', 'interactions', 'annotations']);
 
     function withoutRawData(value) {
@@ -2128,11 +1997,10 @@
         const detail = { recordId: source.id };
         const annotations = { recordId: source.id };
         for (const [key, value] of Object.entries(source)) {
-            if (key === 'realData' || key === 'rawData' || SUMMARY_FIELDS.has(key)) continue;
+            if (key === 'realData' || key === 'rawData' || key === 'answerMap' || key === 'answerList' || SUMMARY_FIELDS.has(key)) continue;
             if (ANNOTATION_FIELDS.has(key)) annotations[key] = withoutRawData(value);
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
-                canonicalizeAnswerSource(next);
                 const replaySource = Object.assign({}, asObject(next.rawData), asObject(next.realData));
                 for (const replayKey of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
                     if (!hasOwn(next, replayKey) && hasOwn(replaySource, replayKey)) next[replayKey] = clone(replaySource[replayKey]);
@@ -2154,7 +2022,7 @@
         }
         // Accept the old mirror only as an input normalization boundary; it is never persisted.
         const realData = asObject(source.realData); const rawData = asObject(source.rawData);
-        for (const key of ['correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
+        for (const key of ['answers', 'correctAnswerMap', 'answerComparison', 'answerDetails', 'scoreInfo', 'questionTypePerformance']) {
             if (!hasOwn(detail, key)) detail[key] = firstNonEmpty(source[key], realData[key], rawData[key]);
         }
         for (const key of ANNOTATION_FIELDS) {
@@ -2367,8 +2235,6 @@
 
     // Entity records are authoritative. Projections are assembled on reads, never cached or
     // scheduled as follow-up work; this keeps a successful write immediately observable.
-    async function mutateAndProject(changes, options) { return kernel.mutate(changes, options); }
-
     async function retryMergeConflict(options, task, maxAttempts = 3) {
         const explicitRevision = hasOwn(options, 'expectedRevision');
         let lastError;
@@ -2468,51 +2334,10 @@
     function practiceLayerId(row) {
         return String(row && (row.recordId || row.id || row.sessionId) || '');
     }
-    async function practiceProjectionSnapshot(recordIds = null, withMeta = false, stores = null) {
-        // The real kernel reads all three entity stores in one readonly
-        // IndexedDB transaction.  Keep the fallback for deliberately minimal
-        // embedders and unit-test kernels that only expose the original methods.
-        if (typeof kernel.readPracticeSnapshot === 'function') {
-            return kernel.readPracticeSnapshot(recordIds, { withMeta, stores: stores || undefined });
-        }
-        const ids = recordIds === null || recordIds === undefined
-            ? null
-            : (Array.isArray(recordIds) ? recordIds : [recordIds])
-                .map((value) => String(value || ''))
-                .filter(Boolean);
-        const summaries = ids === null
-            ? await kernel.listEntities('practiceSummaries', { withMeta })
-            : (await Promise.all(ids.map((id) => kernel.readEntity('practiceSummaries', id, { withMeta })))).filter(Boolean);
-        const targetIds = summaries.map(practiceLayerId).filter(Boolean);
-        const requestedStores = stores && stores.length ? stores : ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
-        const readLayer = (store) => Promise.all(targetIds.map((id) => kernel.readEntity(store, id, { withMeta })))
-            .then((rows) => rows.filter(Boolean));
-        return {
-            practiceSummaries: requestedStores.includes('practiceSummaries') ? summaries : [],
-            practiceDetails: requestedStores.includes('practiceDetails') ? await readLayer('practiceDetails') : [],
-            practiceAnnotations: requestedStores.includes('practiceAnnotations') ? await readLayer('practiceAnnotations') : []
-        };
-    }
     async function practiceLayers(recordId, withMeta = false) {
-        const snapshot = await practiceProjectionSnapshot([recordId], withMeta);
+        const snapshot = await kernel.readPracticeSnapshot([recordId], { withMeta });
         const find = (store) => asArray(snapshot[store]).find((row) => practiceLayerId(row) === String(recordId)) || null;
-        return {
-            summary: find('practiceSummaries'),
-            detail: find('practiceDetails'),
-            annotations: find('practiceAnnotations')
-        };
-    }
-    async function suiteChildRecordIds(command, aggregateRecordId) {
-        const ids = new Set(asArray(command.childRecordIds).map(String).filter(Boolean));
-        const sessionIds = new Set(asArray(command.childSessionIds).map(String).filter(Boolean));
-        if (sessionIds.size) {
-            const summaries = await kernel.listEntities('practiceSummaries');
-            for (const summary of summaries) {
-                if (sessionIds.has(String(summary && summary.sessionId || ''))) ids.add(String(summary.id));
-            }
-        }
-        ids.delete(String(aggregateRecordId));
-        return ids;
+        return { summary: find('practiceSummaries'), detail: find('practiceDetails'), annotations: find('practiceAnnotations') };
     }
     function entityRevision(row) { return row ? Number(row.revision) : 0; }
     function practiceUpserts(recordId, layers, existing = {}) {
@@ -2524,76 +2349,30 @@
     }
     async function joinedPractice(recordId, projection, snapshot = null) {
         const mode = String(projection || 'full').toLowerCase();
-        const layers = snapshot || await practiceProjectionSnapshot([recordId], false,
-            mode === 'light' || mode === 'summary'
-                ? ['practiceSummaries']
-                : (mode === 'detail' || mode === 'medium'
-                    ? ['practiceSummaries', 'practiceDetails']
-                    : null));
-        const summary = asArray(layers.practiceSummaries)
-            .find((row) => practiceLayerId(row) === String(recordId)) || null;
+        const stores = mode === 'light' || mode === 'summary'
+            ? ['practiceSummaries']
+            : (mode === 'detail' || mode === 'medium' ? ['practiceSummaries', 'practiceDetails'] : undefined);
+        const layers = snapshot || await kernel.readPracticeSnapshot([recordId], { stores });
+        const find = (store) => asArray(layers[store]).find((row) => practiceLayerId(row) === String(recordId)) || null;
+        const summary = find('practiceSummaries');
         if (!summary) return null;
         if (mode === 'light' || mode === 'summary') return clone(summary);
-        const detail = asArray(layers.practiceDetails)
-            .find((row) => practiceLayerId(row) === String(recordId)) || null;
+        const detail = find('practiceDetails');
         if (mode === 'detail' || mode === 'medium') return joinPracticeRecord(summary, detail, null, mode);
-        const annotations = asArray(layers.practiceAnnotations)
-            .find((row) => practiceLayerId(row) === String(recordId)) || null;
-        return joinPracticeRecord(summary, detail, annotations, mode);
-    }
-    function practiceSummaryTime(summary) {
-        const time = new Date(summary && (summary.completedAt || summary.date || summary.timestamp || summary.endTime || summary.startTime)).getTime();
-        return Number.isFinite(time) ? time : 0;
-    }
-    function isReadingInsightSummary(summary) {
-        const suiteEntries = asArray(summary && summary.suiteEntrySummaries);
-        if (suiteEntries.length) {
-            return suiteEntries.some((entry) => practiceType(entry) === 'reading');
-        }
-        return practiceType(asObject(summary)) === 'reading';
-    }
-    function needsQuestionTypeInsightBackfill(summary) {
-        const suiteEntries = asArray(summary && summary.suiteEntrySummaries);
-        if (suiteEntries.length) {
-            return suiteEntries.some((entry) =>
-                practiceType(entry) === 'reading'
-                && !hasOwn(asObject(entry), 'questionTypeErrorCounts'));
-        }
-        return !hasOwn(asObject(summary), 'questionTypeErrorCounts');
+        return joinPracticeRecord(summary, detail, find('practiceAnnotations'), mode);
     }
     const practice = Object.freeze({
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
-            const snapshot = await practiceProjectionSnapshot(null, false,
-                projection === 'light' || projection === 'summary'
-                    ? ['practiceSummaries']
-                    : null);
-            const summaries = asArray(snapshot.practiceSummaries);
+            const summaries = await kernel.listEntities('practiceSummaries');
             if (projection === 'light' || projection === 'summary') return summaries;
-            return (await Promise.all(summaries
-                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot))))
-                .filter(Boolean);
-        },
-        async listInsights(options = {}) {
-            await ready;
-            const requestedLimit = Number(options.limit);
-            const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
-                ? Math.min(requestedLimit, 50)
-                : 10;
-            const snapshot = await practiceProjectionSnapshot(null, false, ['practiceSummaries', 'practiceDetails']);
-            const summaries = asArray(snapshot.practiceSummaries)
-                .filter(isReadingInsightSummary)
-                .sort((left, right) => practiceSummaryTime(right) - practiceSummaryTime(left))
-                .slice(0, limit);
-            return summaries.map((summary) => {
-                if (!needsQuestionTypeInsightBackfill(summary)) return clone(summary);
-                const detail = asArray(snapshot.practiceDetails)
-                    .find((row) => practiceLayerId(row) === practiceLayerId(summary)) || null;
-                return detail
-                    ? projectLight(joinPracticeRecord(summary, detail, null, 'detail'))
-                    : clone(summary);
-            });
+            const stores = projection === 'detail' || projection === 'medium'
+                ? ['practiceSummaries', 'practiceDetails']
+                : undefined;
+            const snapshot = await kernel.readPracticeSnapshot(null, { stores });
+            return (await Promise.all(asArray(snapshot.practiceSummaries)
+                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean);
         },
         async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
         async completeAttempt(command) {
@@ -2613,9 +2392,13 @@
             const input = await practiceRecordWithLibraryProvenance(command.record || command.aggregate || command, command, { includeSuiteEntries: true });
             if (!idOf(input, ['id', 'recordId', 'sessionId'])) input.id = deterministicEntityId('suite', mutation.operationId);
             const layers = splitPracticeRecord(input); const recordId = layers.summary.id;
+            const childIdentities = asArray(command.childRecordIds || command.childSessionIds).map(String);
+            const children = new Set((await kernel.listEntities('practiceSummaries'))
+                .filter((summary) => practiceRecordMatches(summary, childIdentities))
+                .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
+            children.delete(recordId);
             const receipt = await retryMergeConflict(command, async () => {
                 const existing = await practiceLayers(recordId, true);
-                const children = await suiteChildRecordIds(command, recordId);
                 const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
                 return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)), mutation);
             });
@@ -2658,6 +2441,22 @@
             const receipt = await kernel.mutateEntities(ids.flatMap((recordId) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId }))), mutationOptions(command, 'practice-delete-many', { recordIds })); return Object.assign({}, receipt, { deletedCount: ids.length });
         },
         async clear(command = {}) { await ready; return kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'clear', store })), mutationOptions(command, 'practice-clear', { all: true })); },
+        async listInsights(options = {}) {
+            await ready;
+            const limit = Math.max(1, Math.min(50, Number(options.limit) || 10));
+            const summaries = (await kernel.listEntities('practiceSummaries'))
+                .slice()
+                .sort((left, right) => String(right.date || right.completedAt || right.timestamp || '')
+                    .localeCompare(String(left.date || left.completedAt || left.timestamp || '')))
+                .slice(0, limit);
+            return Promise.all(summaries.map(async (summary) => {
+                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return clone(summary);
+                const detail = await kernel.readEntity('practiceDetails', summary.id);
+                return jsonValue(Object.assign({}, clone(summary), {
+                    questionTypeErrorCounts: questionTypeErrorCounts(detail)
+                }), 'practice insight');
+            }));
+        },
         async getStats() { await ready; return computeStats(await kernel.listEntities('practiceSummaries')); },
         projectLight,
         projectDetail
@@ -2905,88 +2704,6 @@
         'library.activeConfigurationId'
     ]);
 
-    function parseLegacyImportValue(value) {
-        if (typeof internals.parseLegacyValue !== 'function') {
-            throw new AppDataError('INITIALIZATION_BLOCKED', 'AppData v2 requires the canonical legacy value parser');
-        }
-        return internals.parseLegacyValue(value);
-    }
-
-    function decodePoisonedDocument(logicalKey, wrapped) {
-        const aliases = POISONED_V2_WRAPPER_ALIASES[logicalKey];
-        if (!aliases || !isPlainImportObject(wrapped)
-            || !Object.prototype.hasOwnProperty.call(wrapped, 'key')
-            || !Object.prototype.hasOwnProperty.call(wrapped, 'value')
-            || !aliases.includes(String(wrapped.key))) {
-            return { matched: false, value: null };
-        }
-        const decoded = parseLegacyImportValue(wrapped.value);
-        if (!isPlainImportObject(decoded)) return { matched: true, value: null };
-        const overlay = {};
-        for (const [key, value] of Object.entries(wrapped)) {
-            if (key === 'key' || key === 'value' || key === 'timestamp') continue;
-            overlay[key] = clone(value);
-        }
-        return {
-            matched: true,
-            value: Object.assign({}, decoded, overlay)
-        };
-    }
-
-    function repairPoisonedImportEnvelope(logicalKey, envelope, repairedKeys, warnings) {
-        if (!envelope || envelope.state !== 'present') return envelope;
-        const wrapped = envelope.data;
-        const decoded = decodePoisonedDocument(logicalKey, wrapped);
-        if (!decoded.matched || !decoded.value) return envelope;
-        const entry = catalog.get(logicalKey);
-        const next = internals.makeEnvelope(entry, decoded.value, {
-            revision: Number(envelope.revision) || 1,
-            operationId: String(envelope.operationId || randomId('import-repair')),
-            updatedAt: envelope.updatedAt
-        });
-        repairedKeys.push(logicalKey);
-        warnings.push(`Repaired legacy storage wrapper: ${logicalKey}`);
-        return next;
-    }
-
-    function validateLibraryImportBundle(envelopes) {
-        const presentKeys = LIBRARY_IMPORT_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(envelopes, key));
-        if (!presentKeys.length) return { valid: true, presentKeys };
-        if (presentKeys.length !== LIBRARY_IMPORT_KEYS.length) {
-            return { valid: false, presentKeys, reason: 'library snapshot is missing configurations, indexes, or active id' };
-        }
-        const values = {};
-        for (const key of LIBRARY_IMPORT_KEYS) {
-            const envelope = envelopes[key];
-            values[key] = envelope.state === 'cleared' ? catalog.get(key).defaultValue() : envelope.data;
-        }
-        const configurations = asArray(values['library.configurations']);
-        const indexes = asObject(values['library.importedIndexes']);
-        const configurationIds = new Set();
-        for (const configuration of configurations) {
-            const source = asObject(configuration);
-            const id = idOf(source, ['id', 'key', 'configId']);
-            if (!id || !acceptedLibraryId(id) || source.builtIn === true
-                || !Array.isArray(indexes[id]) || !indexes[id].length) {
-                return { valid: false, presentKeys, reason: 'library configuration does not have a matching non-empty custom index' };
-            }
-            configurationIds.add(id);
-        }
-        for (const [id, index] of Object.entries(indexes)) {
-            if (!acceptedLibraryId(id) || !configurationIds.has(id) || !Array.isArray(index) || !index.length) {
-                return { valid: false, presentKeys, reason: 'library index is orphaned or invalid' };
-            }
-        }
-        const activeId = values['library.activeConfigurationId'];
-        if (activeId !== null && (!acceptedLibraryId(activeId)
-            || !configurationIds.has(String(activeId))
-            || !Array.isArray(indexes[String(activeId)])
-            || !indexes[String(activeId)].length)) {
-            return { valid: false, presentKeys, reason: 'active library id is dangling or invalid' };
-        }
-        return { valid: true, presentKeys };
-    }
-
     function canonicalizeV2Import(parsed) {
         const warnings = [];
         const repairedKeys = [];
@@ -2994,41 +2711,43 @@
         const envelopes = {};
         for (const [logicalKey, rawEnvelope] of Object.entries(parsed.envelopes)) {
             if (!catalog.has(logicalKey)) throw new AppDataError('VALIDATION', `Unknown import key: ${logicalKey}`);
-            if (logicalKey === 'library.activeConfigurationId'
-                && rawEnvelope && rawEnvelope.state === 'present'
-                && String(rawEnvelope.data) === '[object Object]') {
+            const envelope = clone(rawEnvelope);
+            const data = envelope && envelope.state === 'present' ? envelope.data : null;
+            if (logicalKey === 'library.activeConfigurationId' && String(data) === '[object Object]') {
                 ignoredKeys.push(logicalKey);
                 warnings.push('Skipped poisoned active library id');
                 continue;
             }
-            const repairCount = repairedKeys.length;
-            const repaired = repairPoisonedImportEnvelope(
-                logicalKey,
-                clone(rawEnvelope),
-                repairedKeys,
-                warnings
-            );
-            const rawData = rawEnvelope && rawEnvelope.state === 'present' ? rawEnvelope.data : null;
-            const isLegacyRowWrapper = isPlainImportObject(rawData)
-                && Object.prototype.hasOwnProperty.call(rawData, 'key')
-                && Object.prototype.hasOwnProperty.call(rawData, 'value')
-                && String(rawData.key || '').startsWith('exam_system_');
-            if (isLegacyRowWrapper && repairedKeys.length === repairCount) {
-                ignoredKeys.push(logicalKey);
-                warnings.push(`Skipped mismatched legacy storage wrapper: ${logicalKey}`);
-                continue;
+            if (isPlainImportObject(data)
+                && Object.prototype.hasOwnProperty.call(data, 'key')
+                && Object.prototype.hasOwnProperty.call(data, 'value')
+                && String(data.key || '').startsWith('exam_system_')) {
+                const aliases = POISONED_V2_WRAPPER_ALIASES[logicalKey] || [];
+                const decoded = aliases.includes(String(data.key)) ? internals.parseLegacyValue(data.value) : null;
+                if (!isPlainImportObject(decoded)) {
+                    ignoredKeys.push(logicalKey);
+                    warnings.push(`Skipped mismatched legacy storage wrapper: ${logicalKey}`);
+                    continue;
+                }
+                const overlay = Object.fromEntries(Object.entries(data)
+                    .filter(([key]) => key !== 'key' && key !== 'value' && key !== 'timestamp'));
+                envelope.data = Object.assign({}, decoded, overlay);
+                envelope.checksum = checksum(envelope.data);
+                repairedKeys.push(logicalKey);
+                warnings.push(`Repaired legacy storage wrapper: ${logicalKey}`);
             }
-            envelopes[logicalKey] = repaired;
+            envelopes[logicalKey] = envelope;
         }
-        const library = parsed.scope === 'full'
-            ? validateLibraryImportBundle(envelopes)
-            : { valid: true, presentKeys: [] };
-        if (!library.valid) {
-            for (const logicalKey of library.presentKeys) {
-                delete envelopes[logicalKey];
-                ignoredKeys.push(logicalKey);
+
+        if (parsed.scope === 'full') {
+            const presentLibraryKeys = LIBRARY_IMPORT_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(envelopes, key));
+            if (presentLibraryKeys.length && presentLibraryKeys.length !== LIBRARY_IMPORT_KEYS.length) {
+                for (const key of presentLibraryKeys) {
+                    delete envelopes[key];
+                    ignoredKeys.push(key);
+                }
+                warnings.push('Skipped incomplete library data');
             }
-            warnings.push(`Skipped unsafe library data: ${library.reason}`);
         }
         const exportableKeys = catalog.list()
             .filter((entry) => entry.export === true && isImportableEntry(entry))
@@ -3036,9 +2755,7 @@
         const missingKeys = parsed.scope === 'full'
             ? exportableKeys.filter((key) => !Object.prototype.hasOwnProperty.call(envelopes, key))
             : [];
-        if (parsed.scope === 'full' && missingKeys.length) {
-            warnings.push(`Full snapshot is sparse; missing keys will be preserved: ${missingKeys.join(', ')}`);
-        }
+        const degraded = parsed.scope === 'full' && (missingKeys.length || ignoredKeys.length);
         return {
             envelopes,
             warnings,
@@ -3046,10 +2763,8 @@
             ignoredKeys,
             missingKeys,
             declaredScope: parsed.scope,
-            effectiveScope: parsed.scope === 'full' && (missingKeys.length || ignoredKeys.length) ? 'partial' : parsed.scope,
-            trust: parsed.scope === 'full' && !missingKeys.length && !ignoredKeys.length
-                ? 'trusted-full'
-                : 'degraded-partial'
+            effectiveScope: degraded ? 'partial' : parsed.scope,
+            trust: degraded ? 'degraded-partial' : (parsed.scope === 'full' ? 'trusted-full' : 'partial')
         };
     }
 
@@ -3310,9 +3025,6 @@
     }
 
     async function currentEntitySnapshot() {
-        if (typeof kernel.readPracticeSnapshot === 'function') {
-            return kernel.readPracticeSnapshot(null, { withMeta: true });
-        }
         const summaries = await kernel.listEntities('practiceSummaries', { withMeta: true });
         const result = {};
         for (const store of PRACTICE_ENTITY_STORES) {
@@ -3349,17 +3061,29 @@
                 warnings.push(`Skipped cleared import key in merge mode: ${logicalKey}`);
                 continue;
             }
-            const currentRead = await kernel.read(logicalKey, { withMeta: true });
-            const currentData = currentRead && Object.prototype.hasOwnProperty.call(currentRead, 'data') ? currentRead.data : currentRead;
-            const currentEnvelope = currentRead && currentRead.envelope;
-            revisionToken.documents[logicalKey] = currentEnvelope ? Number(currentEnvelope.revision) || 0 : 0;
+            const current = await kernel.read(logicalKey, { withMeta: true });
+            revisionToken.documents[logicalKey] = current.envelope ? Number(current.envelope.revision) || 0 : 0;
             let next = envelope;
             if (!replaceDocuments && envelope.state === 'present') {
-                next = internals.makeEnvelope(entry, mergeImportValue(entry, currentData, envelope.data), { operationId: randomId('import-merge') });
+                next = internals.makeEnvelope(entry, mergeImportValue(entry, current.data, envelope.data), { operationId: randomId('import-merge') });
             }
             snapshot.envelopes[logicalKey] = next;
             keys.push(logicalKey);
             if (next.state === 'cleared') clearedKeys.push(logicalKey);
+        }
+
+        // A full replace mirrors all exportable user data. Missing physical
+        // envelopes mean catalog defaults, represented here as explicit clears.
+        if (replaceDocuments && parsed.scope === 'full') {
+            for (const entry of catalog.list().filter((candidate) => candidate.export === true && isImportableEntry(candidate))) {
+                if (Object.prototype.hasOwnProperty.call(snapshot.envelopes, entry.logicalKey)) continue;
+                snapshot.envelopes[entry.logicalKey] = internals.makeEnvelope(entry, null, {
+                    state: 'cleared',
+                    operationId: randomId('import-clear')
+                });
+                keys.push(entry.logicalKey);
+                clearedKeys.push(entry.logicalKey);
+            }
         }
 
         // Any successful practice import installs all three stores together. Merge
@@ -3574,7 +3298,7 @@
             const mutation = optionsMutationOptions(options, 'vocab-words', words);
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.words', { withMeta: true });
-                return mutateAndProject([{
+                return kernel.mutate([{
                     logicalKey: 'vocab.words',
                     data: words,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -3616,7 +3340,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), { [collectionId]: clone(value) });
-                return mutateAndProject([{
+                return kernel.mutate([{
                     logicalKey: 'vocab.lists',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -3631,7 +3355,7 @@
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const next = Object.assign({}, asObject(current.data), upserts);
-                return mutateAndProject([{
+                return kernel.mutate([{
                     logicalKey: 'vocab.lists',
                     data: next,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -3658,7 +3382,7 @@
                 if (index >= 0) list.words[index] = nextWord; else list.words.push(nextWord);
                 list.updatedAt = nowIso();
                 collections[id] = list;
-                const receipt = await mutateAndProject([{
+                const receipt = await kernel.mutate([{
                     logicalKey: 'vocab.lists',
                     data: collections,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -3676,7 +3400,7 @@
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const collections = Object.assign({}, asObject(current.data));
                 collections[id] = Object.assign({}, asObject(collections[id]), { id, words, updatedAt: nowIso() });
-                return mutateAndProject([{
+                return kernel.mutate([{
                     logicalKey: 'vocab.lists',
                     data: collections,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -3742,7 +3466,7 @@
                             { id: listId, words: merged, updatedAt: nowIso() }
                         )
                     });
-                const receipt = await mutateAndProject([{
+                const receipt = await kernel.mutate([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
@@ -3775,7 +3499,7 @@
                     : Object.assign({}, collections, {
                         [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words: next, updatedAt: nowIso() })
                     });
-                const receipt = await mutateAndProject([{
+                const receipt = await kernel.mutate([{
                     logicalKey,
                     data,
                     expectedRevision: options.expectedRevision ?? (current.envelope ? Number(current.envelope.revision) : 0)
@@ -3802,7 +3526,7 @@
                     lists[listId] = Object.assign({}, asObject(lists[listId]), { id: listId, words });
                     changes.push({ logicalKey: 'vocab.lists', data: lists, expectedRevision: listsMeta.envelope ? listsMeta.envelope.revision : 0 });
                 }
-                return mutateAndProject(changes, mutation);
+                return kernel.mutate(changes, mutation);
             });
         }
     });
@@ -3937,253 +3661,95 @@
         'preferences.values': ['ui_preferences'], 'goals.items': ['learning_goals'],
         'achievements.manual': ['achievement_manual_state', 'user_achievements']
     });
-    const ONE_SHOT_LEGACY_DOCUMENTS = new Set([
-        'recovery.activeSessions',
-        'recovery.drafts',
-        'recovery.interrupted',
-        'recovery.rejectedCompletions'
-    ]);
     const LEGACY_PREFERENCE_ALIASES = Object.freeze({
         theme: 'theme', preferred_theme: 'theme', browse_state: 'browse', browse_preferences: 'browse',
         practice_timer_preferences: 'timer', suite_preference: 'suite', candidate_code: 'candidateCode',
         ielts_reading_display_preferences_v1: 'readingDisplay', onboarding_completed: 'onboarding.completed'
     });
 
-    function legacyRecordArray(value) {
-        return Array.isArray(value) ? value : asArray(asObject(value).data);
-    }
-    function mergeLegacyExternalBackup(legacyValue, externalValue) {
-        const legacy = Object.assign({}, asObject(legacyValue));
+    function mergeLegacySources(indexedDbValue, externalValue) {
+        const indexedDb = asObject(indexedDbValue);
         const external = asObject(externalValue);
-        const externalRecordKey = ['practice_records', 'practiceRecords']
-            .find((key) => Object.prototype.hasOwnProperty.call(external, key));
-        if (externalRecordKey) {
-            const records = new Map();
-            for (const record of legacyRecordArray(external[externalRecordKey]).concat(legacyRecordArray(legacy.practice_records))) {
-                const recordId = idOf(record, ['id', 'recordId', 'sessionId']);
-                records.set(recordId ? `id:${recordId}` : `content:${checksum(record)}`, clone(record));
-            }
-            legacy.practice_records = Array.from(records.values());
-        }
-        for (const [target, aliases] of Object.entries({
-            user_stats: ['user_stats', 'userStats'],
-            exam_index: ['exam_index', 'examIndex'],
-            storage_version: ['storage_version', 'storageVersion']
-        })) {
-            if (Object.prototype.hasOwnProperty.call(legacy, target)) continue;
-            const alias = aliases.find((key) => Object.prototype.hasOwnProperty.call(external, key));
-            if (alias) legacy[target] = clone(external[alias]);
-        }
-        return legacy;
-    }
-
-    function acceptedLibraryId(value) {
-        const id = value === null || value === undefined ? '' : String(value).trim();
-        if (!id || id === '[object Object]' || /^exam_index(?:_|$)/.test(id)) return null;
-        try { return importedLibraryId(id); } catch (_) { return null; }
-    }
-
-    function remapLegacyLibraryId(value) {
-        return `legacy-library-${checksum(String(value)).replace(/^fnv1a-/, '')}`;
-    }
-
-    async function migrateLegacyLibraryData(legacy) {
-        const [configMeta, indexMeta, activeMeta] = await Promise.all([
-            kernel.read('library.configurations', { withMeta: true }),
-            kernel.read('library.importedIndexes', { withMeta: true }),
-            kernel.read('library.activeConfigurationId', { withMeta: true })
-        ]);
-        const legacyIdMap = new Map();
-        const indexes = {};
-        const addLegacyIndex = (oldId, value) => {
-            if (!/^exam_index_/.test(oldId) || oldId === 'exam_index_configurations') return;
-            const index = asArray(value);
-            if (!index.length) return;
-            const mappedId = remapLegacyLibraryId(oldId);
-            legacyIdMap.set(oldId, mappedId);
-            indexes[mappedId] = clone(index);
+        const merged = Object.assign({}, external, indexedDb);
+        const records = new Map();
+        const addRecords = (value) => {
+            const list = Array.isArray(value) ? value : asArray(asObject(value).data);
+            list.forEach((record) => {
+                const id = idOf(record, ['id', 'recordId', 'sessionId']);
+                records.set(id ? `id:${id}` : `content:${checksum(record)}`, clone(record));
+            });
         };
+        addRecords(external.practice_records || external.practiceRecords);
+        addRecords(indexedDb.practice_records);
+        if (records.size) merged.practice_records = Array.from(records.values());
+        return merged;
+    }
 
-        for (const [id, value] of Object.entries(asObject(legacy))) addLegacyIndex(id, value);
-        // Reconciliation is a union. A healthy current v2 value wins for the same
-        // deterministic library ID, while missing legacy libraries are restored.
-        for (const [id, value] of Object.entries(asObject(indexMeta.data))) {
-            if (/^exam_index_/.test(id)) addLegacyIndex(id, value);
-            else {
-                const acceptedId = acceptedLibraryId(id);
-                if (acceptedId && asArray(value).length) indexes[acceptedId] = clone(value);
-            }
+    function legacyLibraryBundle(legacy) {
+        const idMap = new Map();
+        const indexes = {};
+        for (const [oldId, value] of Object.entries(asObject(legacy))) {
+            if (!/^exam_index_/.test(oldId) || oldId === 'exam_index_configurations' || !asArray(value).length) continue;
+            const id = `legacy-library-${checksum(oldId).replace(/^fnv1a-/, '')}`;
+            idMap.set(oldId, id);
+            indexes[id] = clone(value);
         }
-
+        if (!idMap.size) return null;
         const configurations = new Map();
-        const addConfiguration = (configuration) => {
-            const source = asObject(configuration);
-            const oldId = idOf(source, ['id', 'key', 'configId']);
-            if (!oldId || oldId === 'exam_index') return;
-            const id = legacyIdMap.get(oldId) || acceptedLibraryId(oldId);
-            if (!id || !asArray(indexes[id]).length) return;
-            configurations.set(id, Object.assign({}, clone(source), {
+        asArray(legacy.exam_index_configurations).forEach((configuration) => {
+            const oldId = idOf(configuration, ['id', 'key', 'configId']);
+            const id = idMap.get(oldId);
+            if (id) configurations.set(id, Object.assign({}, clone(configuration), { id, key: id, examCount: indexes[id].length }));
+        });
+        for (const [oldId, id] of idMap) {
+            if (!configurations.has(id)) configurations.set(id, {
                 id,
                 key: id,
-                examCount: indexes[id].length
-            }));
-        };
-        asArray(legacy.exam_index_configurations).forEach(addConfiguration);
-        asArray(configMeta.data).forEach(addConfiguration);
-        for (const [oldId, id] of legacyIdMap) {
-            if (!configurations.has(id)) {
-                configurations.set(id, {
-                    id,
-                    key: id,
-                    name: `迁移的自定义题库 (${oldId})`,
-                    examCount: indexes[id].length,
-                    sourceType: 'legacy-import'
-                });
-            }
-        }
-
-        const resolveActive = (value) => {
-            const oldId = value === null || value === undefined ? '' : String(value).trim();
-            if (!oldId || oldId === 'exam_index' || oldId === '[object Object]') return null;
-            const id = legacyIdMap.get(oldId) || acceptedLibraryId(oldId);
-            return id && asArray(indexes[id]).length ? id : null;
-        };
-        const currentRawActive = activeMeta.data;
-        let activeId = resolveActive(currentRawActive);
-        const currentIsExplicitDefault = Boolean(activeMeta.envelope)
-            && (currentRawActive === null || String(currentRawActive || '').trim() === '');
-        if (!activeMeta.envelope || (!currentIsExplicitDefault && !activeId)) {
-            activeId = resolveActive(legacy.active_exam_index_key);
-        }
-
-        const nextConfigurations = Array.from(configurations.values());
-        const changes = [];
-        if (checksum(nextConfigurations) !== checksum(asArray(configMeta.data))) {
-            changes.push({ logicalKey: 'library.configurations', data: nextConfigurations, expectedRevision: configMeta.envelope ? Number(configMeta.envelope.revision) : 0 });
-        }
-        if (checksum(indexes) !== checksum(asObject(indexMeta.data))) {
-            changes.push({ logicalKey: 'library.importedIndexes', data: indexes, expectedRevision: indexMeta.envelope ? Number(indexMeta.envelope.revision) : 0 });
-        }
-        if (activeId !== activeMeta.data) {
-            changes.push({ logicalKey: 'library.activeConfigurationId', data: activeId, expectedRevision: activeMeta.envelope ? Number(activeMeta.envelope.revision) : 0 });
-        }
-        if (changes.length) {
-            await kernel.mutate(changes, {
-                operationId: `legacy-library-repair-v2-${checksum(changes)}`
+                name: `迁移的自定义题库 (${oldId})`,
+                examCount: indexes[id].length,
+                sourceType: 'legacy-import'
             });
         }
+        return {
+            configurations: Array.from(configurations.values()),
+            indexes,
+            activeId: idMap.get(String(legacy.active_exam_index_key || '')) || null
+        };
     }
 
     async function migrateLegacyData() {
         // Unit embedders may provide a deliberately minimal kernel bootstrap.
         if (typeof internals.readLegacyValues !== 'function') return;
-        const legacySource = await internals.readLegacyValues();
-        if (legacySource && legacySource.__legacyReadComplete === false) {
-            throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy IndexedDB could not be read completely; migration will retry on next startup');
-        }
         const migrationMeta = await kernel.read('system.migrations', { withMeta: true });
         const migrationState = asObject(migrationMeta.data);
+        const v1Complete = asObject(migrationState.v1ToV2).status === 'complete';
+        const externalConsumed = asObject(migrationState.externalBackupV1).status === 'consumed';
         let externalBackup = null;
-        if (asObject(migrationState.externalBackupV1).status !== 'consumed'
-            && typeof internals.readLegacyExternalBackup === 'function') {
-            try {
-                externalBackup = await internals.readLegacyExternalBackup();
-            } catch (error) {
+        if (!externalConsumed && typeof internals.readLegacyExternalBackup === 'function') {
+            try { externalBackup = await internals.readLegacyExternalBackup(); }
+            catch (error) {
                 if (global.console && console.warn) console.warn('[AppData v2] legacy external backup skipped:', error && error.message);
             }
         }
-        const legacy = externalBackup
-            ? mergeLegacyExternalBackup(legacySource, externalBackup)
-            : legacySource;
-        if (!legacy || !Object.keys(legacy).length) return;
+        if (v1Complete && !externalBackup) return;
 
-        const documentMetas = {};
-        for (const logicalKey of Object.keys(POISONED_V2_WRAPPER_ALIASES)) {
-            documentMetas[logicalKey] = await kernel.read(logicalKey, { withMeta: true });
+        const indexedDb = await internals.readLegacyValues();
+        if (indexedDb && indexedDb.__legacyReadComplete === false) {
+            throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy IndexedDB could not be read completely; migration will retry on next startup');
         }
-        const [indexMeta, activeMeta] = await Promise.all([
-            kernel.read('library.importedIndexes', { withMeta: true }),
-            kernel.read('library.activeConfigurationId', { withMeta: true })
-        ]);
-        const documentRepairs = [];
-        const poisonedDocumentKeys = [];
-        for (const [logicalKey, current] of Object.entries(documentMetas)) {
-            if (!current.envelope || current.envelope.state !== 'present') continue;
-            const decoded = decodePoisonedDocument(logicalKey, current.data);
-            if (!decoded.matched) continue;
-            poisonedDocumentKeys.push(logicalKey);
-            const aliases = LEGACY_DOCUMENT_ALIASES[logicalKey] || [];
-            const legacyAlias = aliases.find((key) => Object.prototype.hasOwnProperty.call(legacy, key));
-            const legacyValue = legacyAlias ? legacy[legacyAlias] : null;
-            let repairValue = decoded.value;
-            if (isPlainImportObject(legacyValue)) {
-                repairValue = Object.assign({}, asObject(decoded.value), clone(legacyValue));
-            }
-            if (!repairValue) continue;
-            documentRepairs.push({
-                logicalKey,
-                data: repairValue,
-                expectedRevision: Number(current.envelope.revision)
-            });
-        }
-        const poisonedIndex = Object.values(asObject(indexMeta.data)).some((value) =>
-            isPlainImportObject(value)
-            && Object.prototype.hasOwnProperty.call(value, 'key')
-            && Object.prototype.hasOwnProperty.call(value, 'value')
-            && /^exam_system_exam_index_/.test(String(value.key || '')));
-        const poisonedActive = String(activeMeta.data) === '[object Object]';
-        const libraryPoisoned = poisonedIndex || poisonedActive;
-        const poisonDetected = poisonedDocumentKeys.length > 0 || libraryPoisoned;
-
-        await migrateLegacyLibraryData(legacy);
-        if (documentRepairs.length) {
-            await kernel.mutate(documentRepairs, {
-                operationId: `legacy-wrapper-repair-v1-${checksum(documentRepairs)}`
-            });
-        }
-
+        const legacy = mergeLegacySources(indexedDb, externalBackup);
         const changes = [];
         for (const [logicalKey, aliases] of Object.entries(LEGACY_DOCUMENT_ALIASES)) {
-            const currentAudit = asObject(migrationState.v1ToV2);
-            if (ONE_SHOT_LEGACY_DOCUMENTS.has(logicalKey) && currentAudit.status === 'complete') {
-                continue;
-            }
             const current = await kernel.getEnvelope(logicalKey);
+            if (current) continue;
             const alias = aliases.find((key) => Object.prototype.hasOwnProperty.call(legacy, key));
-            if (!alias) continue;
-            const legacyValue = legacy[alias];
-            if (!current) {
-                changes.push({ logicalKey, data: legacyValue, expectedRevision: 0 });
-                continue;
-            }
-            const isBadMigrationWrite = current.state === 'present'
-                && /^legacy-documents-/.test(String(current.operationId || ''));
-            if (isBadMigrationWrite && checksum(current.data) !== checksum(legacyValue)) {
-                changes.push({
-                    logicalKey,
-                    data: legacyValue,
-                    expectedRevision: Number(current.revision)
-                });
-                continue;
-            }
-            const entry = catalog.get(logicalKey);
-            if (current.state !== 'present' || !['patch', 'merge-by-id'].includes(entry.import)) continue;
-            let merged;
-            try {
-                merged = mergeImportValue(entry, legacyValue, current.data);
-            } catch (error) {
-                if (global.console && console.warn) {
-                    console.warn(`[AppData v2] skipping malformed legacy document ${logicalKey}:`, error && error.message);
-                }
-                continue;
-            }
-            if (checksum(merged) !== checksum(current.data)) {
-                changes.push({
-                    logicalKey,
-                    data: merged,
-                    expectedRevision: Number(current.revision)
-                });
-            }
+            if (alias) changes.push({ logicalKey, data: legacy[alias], expectedRevision: 0 });
+        }
+        const libraryBundle = legacyLibraryBundle(legacy);
+        if (libraryBundle) {
+            if (!(await kernel.getEnvelope('library.configurations'))) changes.push({ logicalKey: 'library.configurations', data: libraryBundle.configurations, expectedRevision: 0 });
+            if (!(await kernel.getEnvelope('library.importedIndexes'))) changes.push({ logicalKey: 'library.importedIndexes', data: libraryBundle.indexes, expectedRevision: 0 });
+            if (!(await kernel.getEnvelope('library.activeConfigurationId'))) changes.push({ logicalKey: 'library.activeConfigurationId', data: libraryBundle.activeId, expectedRevision: 0 });
         }
         if (!(await kernel.getEnvelope('preferences.values')) && !changes.some((change) => change.logicalKey === 'preferences.values')) {
             const preferences = {};
@@ -4198,84 +3764,52 @@
         if (!(await kernel.getEnvelope('vocab.userConfig')) && !changes.some((change) => change.logicalKey === 'vocab.userConfig') && Object.prototype.hasOwnProperty.call(legacy, 'vocab_active_list_id')) {
             changes.push({ logicalKey: 'vocab.userConfig', data: { activeListId: legacy.vocab_active_list_id }, expectedRevision: 0 });
         }
-        if (changes.length) await kernel.mutate(changes, { operationId: `legacy-documents-reconcile-v4-${internals.checksum(changes)}` });
+        if (changes.length) await kernel.mutate(changes, { operationId: `legacy-documents-${internals.checksum(changes)}` });
         const recordsValue = legacy.practice_records;
         const records = Array.isArray(recordsValue) ? recordsValue : asArray(asObject(recordsValue).data);
         const operations = [];
-        let skippedRecords = 0;
-        const reconciledRecordIds = new Set();
-        for (let index = 0; index < records.length; index += 1) {
-            const record = records[index];
-            let canonical;
-            let parts;
+        for (const [index, record] of records.entries()) {
             try {
-                const candidate = jsonValue(record, 'legacy practice record');
-                if (!idOf(candidate, ['id', 'recordId', 'sessionId'])) {
-                    candidate.id = `legacy_${index}_${internals.checksum(record)}`;
+                const candidate = clone(record);
+                if (!idOf(candidate, ['id', 'recordId', 'sessionId'])) candidate.id = `legacy_${index}_${internals.checksum(record)}`;
+                const canonical = canonicalizeRecord(candidate);
+                const parts = splitPracticeRecord(canonical);
+                for (const [store, data] of [
+                    ['practiceSummaries', parts.summary],
+                    ['practiceDetails', parts.detail],
+                    ['practiceAnnotations', parts.annotations]
+                ]) {
+                    if (!await kernel.readEntity(store, canonical.id)) {
+                        operations.push({ type: 'upsert', store, recordId: canonical.id, data, expectedRevision: 0 });
+                    }
                 }
-                canonical = canonicalizeRecord(candidate);
-                parts = splitPracticeRecord(canonical);
             } catch (error) {
-                skippedRecords += 1;
                 if (global.console && console.warn) console.warn(`[AppData v2] skipping malformed legacy practice record #${index}:`, error && error.message);
-                continue;
             }
-            if (reconciledRecordIds.has(canonical.id)) continue;
-            reconciledRecordIds.add(canonical.id);
-            // Storage errors are not malformed records. Let them abort this repair so the
-            // completion marker is not written and the next startup can retry safely.
-            const existing = await practiceLayers(canonical.id, true);
-            if (existing.summary && existing.detail && existing.annotations) continue;
-            operations.push(...practiceUpserts(canonical.id, parts, existing));
         }
         if (operations.length) {
-            await kernel.mutateEntities(operations, { operationId: `legacy-practice-reconcile-v4-${internals.checksum(operations)}` });
+            await kernel.mutateEntities(operations, { operationId: `legacy-practice-${internals.checksum(records)}` });
         }
-        const migrationAudit = {
-            version: 4,
+
+        const nextMigrationState = Object.assign({}, migrationState);
+        if (!v1Complete) nextMigrationState.v1ToV2 = {
+            version: 1,
             status: 'complete',
-            mode: 'persistent-reconcile',
-            sourceChecksum: checksum(legacy),
-            sourceRecordCount: records.length,
-            skippedRecordCount: skippedRecords
+            completedAt: nowIso(),
+            sourceChecksum: checksum(indexedDb),
+            sourceRecordCount: asArray(indexedDb.practice_records).length
         };
-        const currentAudit = asObject(migrationState.v1ToV2);
-        const comparableCurrentAudit = {
-            version: currentAudit.version,
-            status: currentAudit.status,
-            mode: currentAudit.mode,
-            sourceChecksum: currentAudit.sourceChecksum,
-            sourceRecordCount: currentAudit.sourceRecordCount,
-            skippedRecordCount: currentAudit.skippedRecordCount
-        };
-        const externalAudit = externalBackup ? {
+        if (externalBackup) nextMigrationState.externalBackupV1 = {
             version: 1,
             status: 'consumed',
+            completedAt: nowIso(),
             sourceChecksum: checksum(externalBackup)
-        } : null;
-        const currentExternalAudit = asObject(migrationState.externalBackupV1);
-        if (checksum(comparableCurrentAudit) !== checksum(migrationAudit)
-            || (externalAudit && (currentExternalAudit.status !== externalAudit.status
-                || currentExternalAudit.sourceChecksum !== externalAudit.sourceChecksum))) {
-            const nextMigrationState = Object.assign({}, migrationState, {
-                v1ToV2: Object.assign({}, migrationAudit, {
-                    completedAt: nowIso(),
-                    poisonDetected,
-                    poisonedDocumentKeys,
-                    libraryPoisoned
-                })
-            });
-            if (externalAudit) {
-                nextMigrationState.externalBackupV1 = Object.assign({}, externalAudit, { completedAt: nowIso() });
-            }
-            await kernel.mutate([{
-                logicalKey: 'system.migrations',
-                data: nextMigrationState,
-                expectedRevision: migrationMeta.envelope ? Number(migrationMeta.envelope.revision) : 0
-            }], {
-                operationId: `legacy-migration-reconcile-v4-${checksum(migrationAudit)}`
-            });
-        }
+        };
+        await kernel.mutate([{
+            logicalKey: 'system.migrations',
+            data: nextMigrationState,
+            expectedRevision: migrationMeta.envelope ? Number(migrationMeta.envelope.revision) : 0
+        }], { operationId: `legacy-migration-${checksum(nextMigrationState)}` });
     }
 
     const ready = kernel.initialize()
@@ -5304,678 +4838,128 @@
 
 
 /* ===== js/core/siteDataReset.js ===== */
-/**
- * Destructive browser-site reset.
- *
- * This path deliberately bypasses AppData domain mutations. A reset must not
- * append operation journals, rebuild projectors, or flush an empty snapshot to
- * the bound external backup folder.
- */
+/** Clear all browser-local IELTS Atlas data while preserving external JSON files. */
 (function initSiteDataReset(global) {
     'use strict';
 
     if (global.SiteDataReset && global.SiteDataReset.__v2 === true) {
-        if (typeof global.clearCache !== 'function') {
-            global.clearCache = global.SiteDataReset.request;
-        }
+        global.clearCache = global.SiteDataReset.request;
         return;
     }
 
-    var DATABASE_NAMES = Object.freeze([
+    const DATABASE_NAMES = Object.freeze([
         'IELTSAtlasDataV2',
         'ExamSystemDB',
         'IELTSAtlasExternalBackupV2'
     ]);
-    /**
-     * How long a `blocked` deletion is allowed to keep waiting before it is
-     * reported as a failure.
-     *
-     * A cooperative peer (data kernel connections install `onversionchange` and
-     * close immediately) releases the database within a tick, while a peer that
-     * is in the middle of a long write can legitimately hold it for a few
-     * seconds. Waiting far beyond that only makes an unrecoverable block look
-     * like a frozen UI, and every database is deleted in parallel, so this is
-     * the worst case for the whole reset rather than a per-database cost.
-     */
-    var BLOCKED_DELETE_TIMEOUT_MS = 8000;
-    var EXTERNAL_BACKUP_QUIESCE_TIMEOUT_MS = 8000;
-    /**
-     * `IDBFactory.deleteDatabase()` has no `abort()`. Once the blocked timeout
-     * wins, the browser keeps the request armed and will drop the database the
-     * moment the peer connection closes — possibly minutes later, possibly after
-     * this page reloaded and started using a freshly created database.
-     *
-     * `pendingDeletions` is that un-cancellable tail: a database name stays here
-     * from the moment we give up waiting until the browser actually reports the
-     * request as done. While a name is listed the reset is "armed but not
-     * finished", which is a materially different state from both "succeeded" and
-     * "failed" and must be surfaced as such.
-     */
-    var pendingDeletions = new Map();
-    var pendingDeletionSequence = 0;
-    /**
-     * Cross-refresh recovery marker.
-     *
-     * A reloaded page cannot observe the previous page's `IDBRequest` — that
-     * object died with the old realm — so the in-memory registry above is lost on
-     * every reload. The marker carries the *fact* that a reset is still armed
-     * across the reload so the new page can tell the user the truth instead of
-     * looking pristine.
-     *
-     * It never re-arms a delete by itself. A later realm must obtain explicit
-     * recovery confirmation before it may queue a replacement deletion.
-     */
-    var PENDING_DELETION_MARKER_KEY = 'ielts_atlas:v2:site-reset:pending-deletions';
-    var WINDOW_NAME_MARKER_PREFIX = '__IELTS_ATLAS_SITE_RESET__:';
-    /**
-     * The marker is written *after* `clearWebStorage()` (it would be wiped
-     * otherwise), which means it is the one key that survives a "clear
-     * everything" run. Age is used to strengthen the recovery warning, not to
-     * guess that the underlying request completed. Explicit recovery confirmation
-     * is the bounded escape hatch for a marker whose old realm is gone forever.
-     */
-    var PENDING_DELETION_MARKER_TTL_MS = 600000;
-    var adoptedPendingDatabases = [];
-    var adoptedPendingMarkerState = null;
-    var resetPromise = null;
+    let resetPromise = null;
 
-    function nowMs() {
-        try {
-            if (typeof Date === 'function' && typeof Date.now === 'function') return Date.now();
-        } catch (_) { /* exotic host */ }
-        return 0;
-    }
-
-    function notify(message, type) {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage(message, type || 'info');
-        } else if (global.console && typeof global.console.log === 'function') {
-            global.console.log('[SiteDataReset] ' + message);
+    function notify(message, type = 'info') {
+        if (typeof global.showMessage === 'function') global.showMessage(message, type);
+        else if (global.console && typeof global.console.log === 'function') {
+            global.console.log(`[SiteDataReset] ${message}`);
         }
     }
 
-    // Timers are looked up defensively: this module is also loaded inside test
-    // realms and worker-like hosts that do not expose the full window surface.
-    function hostSetTimeout(callback, delay) {
-        try {
-            if (global && typeof global.setTimeout === 'function') {
-                return { id: global.setTimeout(callback, delay), host: global };
-            }
-        } catch (_) { /* fall through to the ambient timer */ }
-        if (typeof setTimeout === 'function') {
-            return { id: setTimeout(callback, delay), host: null };
-        }
-        return null;
-    }
-
-    function hostClearTimeout(handle) {
-        if (!handle) return null;
-        try {
-            if (handle.host && typeof handle.host.clearTimeout === 'function') {
-                handle.host.clearTimeout(handle.id);
-                return null;
-            }
-        } catch (_) {
-            return null;
-        }
-        if (typeof clearTimeout === 'function') clearTimeout(handle.id);
-        return null;
-    }
-
-    function createBlockedError(name) {
-        var error = new Error(
-            '数据库被其他 IELTS Atlas 标签页占用，未能删除：' + name
-            + '（等待 ' + Math.round(BLOCKED_DELETE_TIMEOUT_MS / 1000) + ' 秒后放弃）。'
-        );
-        error.code = 'DELETE_DATABASE_BLOCKED';
-        error.blocked = true;
-        error.database = name;
-        error.timeoutMs = BLOCKED_DELETE_TIMEOUT_MS;
-        return error;
-    }
-
-    function createQuiesceTimeoutError() {
-        var error = new Error(
-            '外部备份停止写入超时（等待 '
-            + Math.round(EXTERNAL_BACKUP_QUIESCE_TIMEOUT_MS / 1000) + ' 秒）。'
-        );
-        error.code = 'EXTERNAL_BACKUP_QUIESCE_TIMEOUT';
-        error.timeoutMs = EXTERNAL_BACKUP_QUIESCE_TIMEOUT_MS;
-        return error;
-    }
-
-    function readStorage(name) {
-        try {
-            var storage = global[name];
-            if (storage && typeof storage.getItem === 'function') return storage;
-        } catch (_) { /* storage disabled by policy or a sandboxed frame */ }
-        return null;
-    }
-
-    function markerStorages() {
-        return [readStorage('localStorage'), readStorage('sessionStorage')].filter(function (storage, index, all) {
-            return !!storage && all.indexOf(storage) === index;
-        });
-    }
-
-    function readWindowNameMarker() {
-        var value = '';
-        try { value = typeof global.name === 'string' ? global.name : ''; } catch (_) { return null; }
-        var parts = value.split('\n');
-        for (var index = parts.length - 1; index >= 0; index -= 1) {
-            if (parts[index].indexOf(WINDOW_NAME_MARKER_PREFIX) === 0) {
-                return parts[index].slice(WINDOW_NAME_MARKER_PREFIX.length);
-            }
-        }
-        return null;
-    }
-
-    function replaceWindowNameMarker(raw) {
-        var value = '';
-        try { value = typeof global.name === 'string' ? global.name : ''; } catch (_) { return false; }
-        var retained = value.split('\n').filter(function (part) {
-            return part.indexOf(WINDOW_NAME_MARKER_PREFIX) !== 0;
-        });
-        if (retained.length === 1 && retained[0] === '') retained = [];
-        if (raw) retained.push(WINDOW_NAME_MARKER_PREFIX + raw);
-        try {
-            global.name = retained.join('\n');
-            return raw ? readWindowNameMarker() === raw : readWindowNameMarker() === null;
-        } catch (_) {
-            return false;
-        }
-    }
-
-    /**
-     * Persist the recovery marker. Called only from the tail of `perform`, after
-     * `clearWebStorage()`, so the value is not immediately erased by the very
-     * reset that produced it.
-     */
-    function writePendingDeletionMarker(names) {
-        if (!names || !names.length) {
-            clearPendingDeletionMarker();
-            return true;
-        }
-        var value = JSON.stringify({ state: 'pending', databases: names.slice(), at: nowMs() });
-        var persisted = false;
-        markerStorages().forEach(function (storage) {
-            if (typeof storage.setItem !== 'function') return;
-            try {
-                storage.setItem(PENDING_DELETION_MARKER_KEY, value);
-                persisted = storage.getItem(PENDING_DELETION_MARKER_KEY) === value || persisted;
-            } catch (_) { /* try the other storage */ }
-        });
-        persisted = replaceWindowNameMarker(value) || persisted;
-        return persisted;
-    }
-
-    function clearPendingDeletionMarker() {
-        markerStorages().forEach(function (storage) {
-            if (typeof storage.removeItem !== 'function') return;
-            try {
-                storage.removeItem(PENDING_DELETION_MARKER_KEY);
-            } catch (_) { /* best-effort */ }
-        });
-        replaceWindowNameMarker(null);
-    }
-
-    /**
-     * Read a marker left by a previous page load.
-     *
-     * Expired or malformed evidence cannot prove that the old request completed.
-     * Keep the page in a recoverable confirmation-required state instead of
-     * silently turning uncertainty into "safe".
-     */
-    function readPendingDeletionMarker() {
-        var sawMarker = false;
-        var invalidMarker = false;
-        var validCandidate = null;
-        var rawMarkers = [];
-        markerStorages().forEach(function (storage) {
-            try { rawMarkers.push(storage.getItem(PENDING_DELETION_MARKER_KEY)); } catch (_) { /* unreadable */ }
-        });
-        rawMarkers.push(readWindowNameMarker());
-        rawMarkers.forEach(function (raw) {
-            if (!raw) return;
-            sawMarker = true;
-            var parsed = null;
-            try { parsed = JSON.parse(raw); } catch (_) { invalidMarker = true; return; }
-            var names = parsed && parsed.databases;
-            var state = parsed && parsed.state;
-            if (state && state !== 'pending' && state !== 'unknown') {
-                invalidMarker = true;
-                return;
-            }
-            if (!names || typeof names.length !== 'number' || !names.length) {
-                invalidMarker = true;
-                return;
-            }
-            var adopted = [];
-            for (var index = 0; index < names.length; index += 1) {
-                if (DATABASE_NAMES.indexOf(names[index]) !== -1 && adopted.indexOf(names[index]) === -1) {
-                    adopted.push(names[index]);
-                }
-            }
-            if (!adopted.length) { invalidMarker = true; return; }
-            var at = Number(parsed.at);
-            var age = nowMs() - (isFinite(at) ? at : 0);
-            validCandidate = {
-                databases: adopted,
-                state: 'unknown',
-                expired: !isFinite(at) || age < 0 || age > PENDING_DELETION_MARKER_TTL_MS
-            };
-        });
-        if (validCandidate) return validCandidate;
-        if (sawMarker || invalidMarker) {
-            return { databases: DATABASE_NAMES.slice(), state: 'unknown', corrupt: true };
-        }
-        return { databases: [], state: 'retired' };
-    }
-
-    /**
-     * Register a deletion request we stopped waiting for, and keep watching it.
-     *
-     * The handlers installed here are intentionally *not* the ones `settle()`
-     * detached: those could still resolve the caller's promise and rewrite an
-     * outcome that has already been reported. These are pure observers — their
-     * only job is to notice that the un-cancellable request finally ran, so the
-     * pending state can be retired truthfully instead of by timeout.
-     */
-    function trackPendingDeletion(name, request) {
-        pendingDeletionSequence += 1;
-        var token = pendingDeletionSequence;
-        pendingDeletions.set(name, { token: token, at: nowMs(), request: request });
-
-        function retire() {
-            var entry = pendingDeletions.get(name);
-            // A newer reset attempt may have replaced this entry; only the owner
-            // of the current token may retire it.
-            if (!entry || entry.token !== token) return;
-            pendingDeletions.delete(name);
-            var remaining = listLivePendingDeletions();
-            if (remaining.length) {
-                writePendingDeletionMarker(remaining);
-            } else {
-                clearPendingDeletionMarker();
-            }
-        }
-
-        try {
-            request.onsuccess = function () { retire(); };
-            request.onerror = function () { retire(); };
-            // A repeated `onblocked` means the peer is still holding on. Nothing
-            // to retire yet, but swallow it so it cannot reach a stale handler.
-            request.onblocked = function () { };
-        } catch (_) {
-            // Read-only handlers are rare, but guessing completion would be
-            // unsafe. The entry therefore remains restricted until this realm is
-            // torn down and the cross-refresh recovery flow takes over.
-        }
-        return token;
-    }
-
-    /**
-     * Live pending deletions: requests this realm issued and can still observe.
-     *
-     * Only these gate a new reset. An entry leaves this list the moment the
-     * browser reports the deletion done, so the common "close the other tab and
-     * retry" path unblocks immediately rather than waiting out a timer.
-     */
-    function listLivePendingDeletions() {
-        var names = [];
-        pendingDeletions.forEach(function (_entry, name) {
-            if (names.indexOf(name) === -1) names.push(name);
-        });
-        return names;
-    }
-
-    /** Live plus adopted names — everything worth telling the user about. */
-    function listPendingDeletions() {
-        var names = listLivePendingDeletions();
-        for (var index = 0; index < adoptedPendingDatabases.length; index += 1) {
-            if (names.indexOf(adoptedPendingDatabases[index]) === -1) names.push(adoptedPendingDatabases[index]);
-        }
-        return names;
-    }
-
-    function currentDeletionState() {
-        if (listLivePendingDeletions().length) return 'pending';
-        if (adoptedPendingDatabases.length) return 'unknown';
-        return 'retired';
-    }
-
-    /**
-     * The reason a caller must not start a new reset right now, or null.
-     *
-     * Live requests only retire on their real terminal event. Cross-refresh
-     * evidence can be recovered from, but only after explicit confirmation; this
-     * avoids both an automatic false-safe state and a permanent marker lockout.
-     */
-    function pendingDeletionBlock(options) {
-        var live = listLivePendingDeletions();
-        var adopted = adoptedPendingDatabases.slice();
-        if (!live.length && !adopted.length) return null;
-        var recoveryRequired = !live.length && adopted.length > 0
-            && !(options && options.recoveryConfirmed === true);
-        if (!live.length && !recoveryRequired) return null;
-        return {
-            success: false,
-            reason: recoveryRequired ? 'recovery_confirmation_required' : 'deletion_pending',
-            deletionPending: true,
-            pendingDatabases: listPendingDeletions(),
-            retryable: true,
-            recoveryConfirmationRequired: recoveryRequired,
-            deletionState: currentDeletionState(),
-            markerExpired: !!(adoptedPendingMarkerState && adoptedPendingMarkerState.expired),
-            markerCorrupt: !!(adoptedPendingMarkerState && adoptedPendingMarkerState.corrupt),
-            terminal: false,
-            databases: DATABASE_NAMES.slice(),
-            externalBackupFilesPreserved: true
-        };
-    }
-
-    function pendingDeletionMessage(names) {
-        return '上一次清理仍在等待其他 IELTS Atlas 标签页关闭：' + names.join('、')
-            + '。浏览器无法取消这个删除请求，它会在其他标签页关闭后自动执行；'
-            + '在那之前请不要录入新数据，否则可能被这次迟到的删除一并清掉。';
-    }
-
-    function settleWithTimeout(value, timeoutMs, createTimeoutError) {
-        return new Promise(function (resolve, reject) {
-            var settled = false;
-            var timer = hostSetTimeout(function () {
-                if (settled) return;
-                settled = true;
-                reject(createTimeoutError());
-            }, timeoutMs);
-            if (!timer) {
-                reject(createTimeoutError());
-                return;
-            }
-            Promise.resolve(value).then(function (result) {
-                if (settled) return;
-                settled = true;
-                hostClearTimeout(timer);
-                resolve(result);
-            }, function (error) {
-                if (settled) return;
-                settled = true;
-                hostClearTimeout(timer);
-                reject(error);
-            });
-        });
-    }
-
-    function deleteDatabaseStrict(name) {
-        return new Promise(function (resolve, reject) {
-            var indexedDb;
-            try {
-                indexedDb = global.indexedDB || null;
-            } catch (_) {
-                indexedDb = null;
-            }
-            if (!indexedDb || typeof indexedDb.deleteDatabase !== 'function') {
-                resolve({ name: name, skipped: true });
+    function deleteDatabase(name) {
+        return new Promise((resolve, reject) => {
+            const indexedDB = global.indexedDB;
+            if (!indexedDB || typeof indexedDB.deleteDatabase !== 'function') {
+                resolve({ name, skipped: true });
                 return;
             }
 
-            var request;
-            try {
-                request = indexedDb.deleteDatabase(name);
-            } catch (error) {
-                reject(error);
-                return;
-            }
+            let request;
+            try { request = indexedDB.deleteDatabase(name); }
+            catch (error) { reject(error); return; }
 
-            var settled = false;
-            var blockedTimer = null;
-
-            function settle(complete, payload) {
-                if (settled) return;
-                settled = true;
-                blockedTimer = hostClearTimeout(blockedTimer);
-                // An IndexedDB deleteDatabase request cannot be aborted. When the
-                // blocked timeout wins, the browser keeps the request pending and
-                // will still drop the database once the other tab releases its
-                // connection. Detaching the handlers here stops a late event from
-                // rewriting an outcome the caller already acted on; the request is
-                // then handed to `trackPendingDeletion`, whose observer handlers do
-                // nothing but retire the pending state when the delete really runs.
-                try {
-                    request.onsuccess = null;
-                    request.onerror = null;
-                    request.onblocked = null;
-                } catch (_) { /* exotic hosts may expose read-only handlers */ }
-                var abandoned = !!(payload && payload.code === 'DELETE_DATABASE_BLOCKED');
-                if (abandoned) trackPendingDeletion(name, request);
-                complete(payload);
-            }
-
-            request.onsuccess = function () {
-                settle(resolve, { name: name, deleted: true });
-            };
-            request.onerror = function () {
-                settle(reject, request.error || new Error('删除数据库失败：' + name));
-            };
-            request.onblocked = function () {
-                if (settled || blockedTimer) return;
-                notify(
-                    '清理被其他 IELTS Atlas 标签页阻塞，请立即关闭其他标签页；'
-                    + Math.round(BLOCKED_DELETE_TIMEOUT_MS / 1000) + ' 秒内未释放将中止本次清理。',
-                    'warning'
-                );
-                blockedTimer = hostSetTimeout(function () {
-                    settle(reject, createBlockedError(name));
-                }, BLOCKED_DELETE_TIMEOUT_MS);
-                if (!blockedTimer) {
-                    // No timer API at all: fail fast rather than wait forever.
-                    settle(reject, createBlockedError(name));
-                }
-            };
+            request.onsuccess = () => resolve({ name, deleted: true });
+            request.onerror = () => reject(request.error || new Error(`删除数据库失败：${name}`));
+            request.onblocked = () => notify(
+                `数据库 ${name} 正被其他 IELTS Atlas 标签页占用。请关闭其他标签页，清理会自动继续。`,
+                'warning'
+            );
         });
+    }
+
+    async function stopExternalBackup() {
+        const service = global.ExternalBackupService;
+        if (!service) return;
+        if (typeof service.prepareForFullReset === 'function') {
+            await service.prepareForFullReset();
+        } else if (typeof service.unbindDirectory === 'function') {
+            await service.unbindDirectory();
+        }
     }
 
     function clearWebStorage() {
-        var failures = [];
-        ['localStorage', 'sessionStorage'].forEach(function (name) {
-            var storage;
+        const errors = [];
+        for (const name of ['localStorage', 'sessionStorage']) {
             try {
-                storage = global[name];
+                const storage = global[name];
+                if (storage && typeof storage.clear === 'function') storage.clear();
             } catch (error) {
-                failures.push({ storage: name, error: error });
-                return;
+                errors.push({ stage: 'clear-web-storage', storage: name, error });
             }
-            if (!storage || typeof storage.clear !== 'function') return;
-            try {
-                storage.clear();
-            } catch (error) {
-                failures.push({ storage: name, error: error });
-            }
-        });
-        return failures;
-    }
-
-    function reloadTerminal(options) {
-        if (options && options.reload === false) return false;
-        if (global.location && typeof global.location.reload === 'function') {
-            global.location.reload();
-            return true;
         }
-        return false;
+        return errors;
     }
 
-    async function perform(options) {
-        var opts = options || {};
+    function reload(options) {
+        if (options.reload === false) return false;
+        if (!global.location || typeof global.location.reload !== 'function') return false;
+        global.location.reload();
+        return true;
+    }
+
+    async function perform(options = {}) {
         if (resetPromise) return resetPromise;
-        // Refuse to queue a second un-cancellable deletion behind one that is
-        // still armed. Checked before the singleton is installed so the refusal
-        // is never cached as "the" result of a reset.
-        var blockedByPending = pendingDeletionBlock(opts);
-        if (blockedByPending) {
-            notify(pendingDeletionMessage(blockedByPending.pendingDatabases), 'warning');
-            return blockedByPending;
-        }
-        resetPromise = (async function () {
-            var externalBackup = global.ExternalBackupService;
-            var errors = [];
+        resetPromise = (async () => {
             try {
-                if (externalBackup && typeof externalBackup.prepareForFullReset === 'function') {
-                    await settleWithTimeout(
-                        externalBackup.prepareForFullReset(),
-                        EXTERNAL_BACKUP_QUIESCE_TIMEOUT_MS,
-                        createQuiesceTimeoutError
-                    );
-                } else if (externalBackup && typeof externalBackup.unbindDirectory === 'function') {
-                    await settleWithTimeout(
-                        externalBackup.unbindDirectory(),
-                        EXTERNAL_BACKUP_QUIESCE_TIMEOUT_MS,
-                        createQuiesceTimeoutError
-                    );
-                }
+                await stopExternalBackup();
             } catch (error) {
-                errors.push({ stage: 'external-backup-quiesce', error: error });
-            }
-
-            var deletionResults = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabaseStrict));
-            var blockedDatabases = [];
-            deletionResults.forEach(function (result, index) {
-                if (result.status !== 'rejected') return;
-                var reason = result.reason;
-                var isBlocked = !!(reason && reason.code === 'DELETE_DATABASE_BLOCKED');
-                if (isBlocked) blockedDatabases.push(DATABASE_NAMES[index]);
-                errors.push({
-                    stage: isBlocked ? 'delete-database-blocked' : 'delete-database',
-                    database: DATABASE_NAMES[index],
-                    blocked: isBlocked,
-                    error: reason
-                });
-            });
-            clearWebStorage().forEach(function (failure) {
-                errors.push({
-                    stage: 'clear-web-storage',
-                    storage: failure.storage,
-                    error: failure.error
-                });
-            });
-
-            // Written after clearWebStorage() on purpose: the reset wipes every
-            // key, so a marker persisted any earlier would erase itself. This is
-            // the one key that legitimately survives a full reset, which is why
-            // it carries its own TTL.
-            //
-            // Adopted names are dropped unconditionally here. This run issued a
-            // fresh deleteDatabase() for every name, and the connection queue is
-            // FIFO per database: whatever a previous realm queued was necessarily
-            // processed ahead of the request we just awaited, so it is no longer
-            // outstanding regardless of how this run ended.
-            adoptedPendingDatabases = [];
-            adoptedPendingMarkerState = null;
-            var stillPending = listLivePendingDeletions();
-            var markerPersisted = true;
-            if (stillPending.length) {
-                markerPersisted = writePendingDeletionMarker(stillPending);
-                if (!markerPersisted) {
-                    errors.push({
-                        stage: 'pending-deletion-marker',
-                        error: new Error('无法持久化仍在等待的数据库删除状态。')
-                    });
-                }
-            } else {
-                clearPendingDeletionMarker();
-            }
-
-            if (errors.length) {
-                if (blockedDatabases.length) {
-                    notify(
-                        '清理未完成：' + blockedDatabases.join('、')
-                        + ' 仍被其他 IELTS Atlas 标签页占用。浏览器无法取消该删除请求，'
-                        + '它会在其他标签页关闭后自动执行。请关闭全部其他标签页（含练习/听力弹窗）后，'
-                        + '等待当前页面确认删除完成后再重试，在此之前不要继续录入新数据。',
-                        'error'
-                    );
-                } else {
-                    notify('本地数据仅部分清除，页面将刷新；请刷新后再次执行清理。', 'error');
-                }
-                // Keep this realm alive while it owns observable delete requests.
-                // Reloading would discard the only truthful success/error observer.
-                var reloadedAfterFailure = stillPending.length ? false : reloadTerminal(opts);
+                notify('外部备份仍在写入，本次清理已取消。', 'error');
                 return {
                     success: false,
-                    reason: 'partial_reset',
-                    blocked: blockedDatabases.length > 0,
-                    blockedDatabases: blockedDatabases,
-                    deletionPending: stillPending.length > 0,
-                    pendingDatabases: stillPending,
-                    markerPersisted: markerPersisted,
-                    deletionState: stillPending.length ? 'pending' : 'retired',
-                    retryable: true,
-                    // `terminal` means "this page was actually torn down". Callers
-                    // use it to decide whether they still own a live document, so
-                    // reporting a reload that never happened strands them on a
-                    // page they believe is gone.
-                    terminal: reloadedAfterFailure,
-                    errors: errors,
+                    reason: 'external_backup_busy',
+                    terminal: false,
+                    error,
                     databases: DATABASE_NAMES.slice(),
                     externalBackupFilesPreserved: true
                 };
             }
-            var reloaded = reloadTerminal(opts);
+
+            const results = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));
+            const errors = results.flatMap((result, index) => result.status === 'rejected'
+                ? [{ stage: 'delete-database', database: DATABASE_NAMES[index], error: result.reason }]
+                : []);
+            errors.push(...clearWebStorage());
+            if (errors.length) {
+                notify('本地数据仅部分清除，请关闭其他标签页后重试。', 'error');
+                return {
+                    success: false,
+                    reason: 'partial_reset',
+                    terminal: false,
+                    errors,
+                    databases: DATABASE_NAMES.slice(),
+                    externalBackupFilesPreserved: true
+                };
+            }
+
             return {
                 success: true,
-                terminal: reloaded,
-                deletionState: 'retired',
+                terminal: reload(options),
                 databases: DATABASE_NAMES.slice(),
                 externalBackupFilesPreserved: true
             };
         })();
-        try {
-            var outcome = await resetPromise;
-            // The singleton exists only to collapse duplicate clicks on one
-            // in-flight run; it is not a result cache. Anything already settled
-            // must be released, or the next click replays a stale outcome without
-            // clearing a single byte.
-            //
-            // The one case worth keeping is a reset that really did call
-            // location.reload(): the document is being torn down, and holding the
-            // resolved promise suppresses clicks landing in that teardown window
-            // rather than firing a second delete against a dying realm. Reload is
-            // asynchronous, so those clicks are genuinely reachable.
-            if (!outcome || outcome.terminal !== true) resetPromise = null;
-            return outcome;
-        } catch (error) {
-            resetPromise = null;
-            throw error;
-        }
+
+        try { return await resetPromise; }
+        finally { resetPromise = null; }
     }
 
-    async function request(options) {
-        var opts = options || {};
-        // Checked before the confirm dialog: asking the user to authorise a
-        // destructive action we are about to refuse is worse than useless, and a
-        // second `deleteDatabase()` for a name that is already queued only grows
-        // the un-cancellable backlog.
-        var blockedByPending = pendingDeletionBlock(opts);
-        if (blockedByPending) {
-            if (blockedByPending.recoveryConfirmationRequired) {
-                var recoveryConfirmed = false;
-                try {
-                    recoveryConfirmed = global.confirm(
-                        '浏览器记录显示上一次数据库删除可能仍在等待。继续恢复会重新排队删除，'
-                        + '请先关闭其他 IELTS Atlas 标签页；确定继续吗？'
-                    );
-                } catch (_) { recoveryConfirmed = false; }
-                if (recoveryConfirmed) {
-                    opts = Object.assign({}, opts, { recoveryConfirmed: true });
-                } else {
-                    notify(pendingDeletionMessage(blockedByPending.pendingDatabases), 'warning');
-                    return blockedByPending;
-                }
-            } else {
-                notify(pendingDeletionMessage(blockedByPending.pendingDatabases), 'warning');
-                return blockedByPending;
-            }
-        }
-        var confirmed = opts.confirmed === true;
+    async function request(options = {}) {
+        let confirmed = options.confirmed === true;
         if (!confirmed) {
             try {
                 confirmed = global.confirm(
@@ -5983,94 +4967,23 @@
                     + '练习记录、题库、词汇、设置、应用内备份和本地文件夹绑定都会清除；'
                     + '外部文件夹中的 JSON 备份不会删除。'
                 );
-            } catch (_) {
-                confirmed = false;
-            }
+            } catch (_) { confirmed = false; }
         }
-        if (!confirmed) return {
-            success: false,
-            reason: 'cancelled',
-            deletionState: currentDeletionState()
-        };
+        if (!confirmed) return { success: false, reason: 'cancelled', terminal: false };
 
-        notify('正在清除全部本地数据…', 'info');
-        try {
-            return await perform(opts);
-        } catch (error) {
+        notify('正在清除全部本地数据...', 'info');
+        try { return await perform(options); }
+        catch (error) {
             if (global.console && typeof global.console.error === 'function') {
                 global.console.error('[SiteDataReset] full reset failed:', error);
             }
-            notify('清除失败：' + (error && error.message ? error.message : '浏览器存储不可用'), 'error');
-            return {
-                success: false,
-                reason: 'reset_failed',
-                deletionState: currentDeletionState(),
-                error: error
-            };
+            notify(`清除失败：${error && error.message ? error.message : '浏览器存储不可用'}`, 'error');
+            return { success: false, reason: 'reset_failed', terminal: false, error };
         }
     }
 
-    /**
-     * Adopt a marker written before the last reload and warn once.
-     *
-     * It never issues a delete. It does require explicit confirmation before a
-     * recovery reset, so stale evidence remains recoverable without being treated
-     * as proof that the late-deletion hazard disappeared.
-     *
-     * The warning is deferred because this module ships in core-foundation,
-     * which index.html loads *before* the ui-shell/legacy bundles that define
-     * `showMessage`. Warning synchronously would route the one notice the user
-     * actually needs into console.log instead of the message center.
-     */
-    function adoptPendingDeletionsFromPreviousPage() {
-        adoptedPendingMarkerState = readPendingDeletionMarker();
-        adoptedPendingDatabases = adoptedPendingMarkerState.databases;
-        if (!adoptedPendingDatabases.length) return;
-        var announced = false;
-        function announce() {
-            if (announced) return;
-            announced = true;
-            // Re-read: a reset may have completed and retired the marker while we
-            // were waiting for the UI layer to come up.
-            if (!adoptedPendingDatabases.length) return;
-            notify(pendingDeletionMessage(adoptedPendingDatabases), 'warning');
-        }
-        if (typeof global.showMessage === 'function') {
-            announce();
-            return;
-        }
-        var attempts = 0;
-        function poll() {
-            attempts += 1;
-            if (typeof global.showMessage === 'function' || attempts >= 20) {
-                announce();
-                return;
-            }
-            hostSetTimeout(poll, 250);
-        }
-        if (!hostSetTimeout(poll, 250)) announce();
-    }
-
-    global.SiteDataReset = Object.freeze({
-        __v2: true,
-        DATABASE_NAMES: DATABASE_NAMES,
-        PENDING_DELETION_MARKER_KEY: PENDING_DELETION_MARKER_KEY,
-        deleteDatabaseStrict: deleteDatabaseStrict,
-        perform: perform,
-        request: request,
-        /** Names whose un-cancellable deletion has not reported back yet. */
-        pendingDeletions: listPendingDeletions,
-        /** True while a previous deletion is still armed; see `pendingDeletions`. */
-        isDeletionPending: function () {
-            return listPendingDeletions().length > 0;
-        },
-        recoveryConfirmationRequired: function () {
-            return adoptedPendingDatabases.length > 0;
-        },
-        deletionState: currentDeletionState
-    });
+    global.SiteDataReset = Object.freeze({ __v2: true, DATABASE_NAMES, perform, request });
     global.clearCache = request;
-    adoptPendingDeletionsFromPreviousPage();
 })(typeof window !== 'undefined' ? window : globalThis);
 
 

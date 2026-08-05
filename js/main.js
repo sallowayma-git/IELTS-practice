@@ -269,12 +269,6 @@ async function initializeLegacyComponents() {
 
     setupBrowsePreferenceUI();
 
-    // Setup UI Listeners
-    const folderPicker = document.getElementById('folder-picker');
-    if (folderPicker) {
-        folderPicker.addEventListener('change', handleFolderSelection);
-    }
-
     // Initialize components
     if (window.PDFHandler) {
         pdfHandler = new PDFHandler();
@@ -2943,9 +2937,6 @@ async function setActiveLibraryConfiguration(key) {
         return await manager.setActiveLibraryConfiguration(key);
     }
 }
-function triggerFolderPicker() { document.getElementById('folder-picker').click(); }
-function handleFolderSelection(event) { /* legacy stub - replaced by modal-specific inputs */ }
-
 // --- Library Loader Modal and Index Management ---
 // ... other utility and management functions can be moved here ...
 // --- Functions Restored from Backup ---

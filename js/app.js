@@ -165,23 +165,7 @@ class ExamSystemApp {
             }
         },
         async initializeComponents() {
-            const optionalComponents = [];
-            try {
-                await this.initializeCoreComponents();
-                if (optionalComponents.length > 0) {
-                    try {
-                        await this.waitForComponents(optionalComponents, 5000);
-                        await this.initializeOptionalComponents();
-                    } catch (_) {
-                        await this.initializeAvailableOptionalComponents();
-                    }
-                } else {
-                    await this.initializeOptionalComponents();
-                }
-            } catch (error) {
-                console.error('[App] 核心组件加载失败:', error);
-                throw error;
-            }
+            await this.initializeCoreComponents();
         },
         async initializeCoreComponents() {
             if (this.instantiatePracticeRecorder()) {
@@ -372,7 +356,6 @@ class ExamSystemApp {
                     }
                     activeSessions.set(data.examId, existing);
                 },
-                handleRealPracticeData: async () => null,
                 savePracticeRecord: async (record) => {
                     const receipt = await window.AppData.practice.completeAttempt({ record });
                     return receipt && receipt.record ? receipt.record : null;
@@ -404,43 +387,6 @@ class ExamSystemApp {
             this._practiceRecorderUpgradeTimer = setInterval(tryUpgrade, interval);
             tryUpgrade();
         },
-        async initializeOptionalComponents() {},
-        async initializeAvailableOptionalComponents() {
-            const availableComponents = [].filter((name) => window[name]);
-            if (availableComponents.length > 0) {
-                await this.initializeOptionalComponents();
-            } else {
-                console.warn('[App] 没有发现可用的可选组件');
-            }
-        },
-        async waitForComponents(requiredClasses = ['ExamBrowser'], timeout = 3000) {
-            const startTime = Date.now();
-            const checkInterval = 100;
-            while (Date.now() - startTime < timeout) {
-                const loadingStatus = requiredClasses.map((className) => {
-                    const isLoaded = window[className] && typeof window[className] === 'function';
-                    if (!isLoaded) {
-                        console.debug(`[App] 等待组件: ${className}`);
-                    }
-                    return { className, isLoaded };
-                });
-                const allLoaded = loadingStatus.every((status) => status.isLoaded);
-                if (allLoaded) {
-                    return true;
-                }
-                await new Promise((resolve) => setTimeout(resolve, checkInterval));
-            }
-            const missingClasses = requiredClasses.filter((className) => !window[className] || typeof window[className] !== 'function');
-            const loadedClasses = requiredClasses.filter((className) => window[className] && typeof window[className] === 'function');
-            const errorMessage = [
-                `组件加载超时 (${timeout}ms)`,
-                `已加载: ${loadedClasses.join(', ') || '无'}`,
-                `缺失: ${missingClasses.join(', ')}`,
-                '请检查组件文件是否正确加载'
-            ].join('\n');
-            console.error('[App] 组件加载失败:', errorMessage);
-            throw new Error(errorMessage);
-        }
     };
 
     const integratedFallbackMixin = {
