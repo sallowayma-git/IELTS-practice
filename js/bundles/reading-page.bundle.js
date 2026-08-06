@@ -10106,7 +10106,7 @@
         const questionGroup = buildQuestionGroupLookup(state.dataset).get(firstQuestionId) || null;
         if (
             questionGroup
-            && questionGroup.kind === 'multi_choice'
+            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
             && Array.isArray(questionGroup.questionIds)
             && questionGroup.questionIds.length === 1
             && Array.isArray(answerKey[firstQuestionId])
@@ -10329,7 +10329,7 @@
             const normalized = normalizeAnswerValue(correctAnswer);
             const isMultiChoiceGroup = Boolean(
                 questionGroup
-                && questionGroup.kind === 'multi_choice'
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
                 && Array.isArray(questionGroup.questionIds)
             );
             if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
@@ -10365,15 +10365,17 @@
             const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
             const questionGroup = questionGroupLookup.get(normalizedQuestionId) || null;
             const questionType = questionTypeMap[normalizedQuestionId] || 'other';
-            const isSplitMultiChoiceGroup = Boolean(
+            const isMultiChoiceKind = (
                 questionGroup
-                && questionGroup.kind === 'multi_choice'
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            );
+            const isSplitMultiChoiceGroup = Boolean(
+                isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length > 1
             );
             const isSingleKeyMultiChoiceGroup = Boolean(
-                questionGroup
-                && questionGroup.kind === 'multi_choice'
+                isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length === 1
                 && Array.isArray(correctAnswer)
@@ -10527,12 +10529,62 @@
             return;
         }
         const comparison = results.answerComparison;
-        // 先清除所有旧标记，再按判卷结果重新标记
-        document.querySelectorAll('.drop-target-summary, .paragraph-dropzone, .match-dropzone, .radio-options label, .checkbox-options label, .options label, .question-item label, .choice-item label, .matching-table td').forEach((node) => {
+        // 先清除所有旧标记，再按判卷结果重新标记。
+        // 选择器覆盖所有可能被标记的容器（含 .options/.tfng-options/.mcq-group/.radio-group 等）。
+        document.querySelectorAll('.drop-target-summary, .paragraph-dropzone, .match-dropzone, .radio-options label, .radio-group label, .checkbox-options label, .options label, .options-list label, .multiple-choice-options label, .matching-options label, .mcq-group label, .multiple-choice label, .question-item label, .choice-item label, .tfng-options label, .tfng-item label, .matching-table td').forEach((node) => {
             node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong');
         });
+        // 把 comparison 条目按 checkbox/radio 组聚合：组内任一拆分子题的正确答案
+        // 都属于该组，避免拆分多选题时"正确选项在另一子题被当成用户错选"而标红。
+        const groupEntries = new Map();
         Object.values(comparison).forEach((entry) => {
             const questionId = entry.questionId;
+            const inputNodes = collectChoiceInputsForQuestion(questionId);
+            if (!inputNodes.length) {
+                return; // 无 input 时走 dropzone 分支
+            }
+            const groupKey = inputNodes[0].name || questionId;
+            if (!groupEntries.has(groupKey)) {
+                groupEntries.set(groupKey, {
+                    inputs: inputNodes,
+                    correctValues: new Set(),
+                    userValues: new Set()
+                });
+            }
+            const group = groupEntries.get(groupKey);
+            (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
+                .map((value) => canonicalizeAnswerToken(value))
+                .filter(Boolean)
+                .forEach((value) => group.correctValues.add(value));
+            (Array.isArray(entry.userAnswer) ? entry.userAnswer : [entry.userAnswer])
+                .map((value) => canonicalizeAnswerToken(value))
+                .filter(Boolean)
+                .forEach((value) => group.userValues.add(value));
+        });
+        groupEntries.forEach((group) => {
+            group.inputs.forEach((input) => {
+                const label = input.closest('label');
+                const highlightTarget = label || input.closest('td');
+                if (!highlightTarget) {
+                    return;
+                }
+                const inputValue = canonicalizeAnswerToken(input.value);
+                if (!inputValue) {
+                    return;
+                }
+                if (group.correctValues.has(inputValue)) {
+                    highlightTarget.classList.add('option-correct');
+                } else if (group.userValues.has(inputValue)) {
+                    highlightTarget.classList.add('option-wrong');
+                }
+            });
+        });
+        // 剩余条目：dropzone（拖拽/表格非 input 类）单独处理
+        Object.values(comparison).forEach((entry) => {
+            const questionId = entry.questionId;
+            if (collectChoiceInputsForQuestion(questionId).length) {
+                return; // 已按组处理
+            }
             const isCorrect = Boolean(entry.isCorrect);
             const aliases = resolveAnswerAliases(questionId);
             const selector = aliases.map((alias) => {
@@ -10553,47 +10605,30 @@
             }
             if (dropzoneNode) {
                 dropzoneNode.classList.add(isCorrect ? 'correct' : 'wrong');
-                return;
             }
-            // 选择题：标记正确/错误选项
-            // 先尝试直接按 questionId 查找 input；多选题的 name 可能是 q10_11 或 q11-12-13，
-            // 需要扫描所有 checkbox 组匹配。
-            let inputNodes = document.querySelectorAll(`input[name="${escapeSelector(questionId)}"]`);
-            if (!inputNodes.length) {
-                document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
-                    const name = input.name || '';
-                    const ids = expandQuestionSequence(name);
-                    if (ids.some((id) => normalizeQuestionId(id) === normalizeQuestionId(questionId))) {
-                        inputNodes = document.querySelectorAll(`input[name="${escapeSelector(name)}"]`);
-                    }
-                });
-            }
-            if (!inputNodes.length) {
-                return;
-            }
-            const correctValues = (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
-                .map((value) => String(value == null ? '' : value).trim().toLowerCase())
-                .filter(Boolean);
-            const userValues = (Array.isArray(entry.userAnswer) ? entry.userAnswer : [entry.userAnswer])
-                .map((value) => String(value == null ? '' : value).trim().toLowerCase())
-                .filter(Boolean);
-            inputNodes.forEach((input) => {
-                // 优先找 label 包裹（选择题），表格题型无 label 时直接高亮 td 单元格
-                const label = input.closest('label');
-                const highlightTarget = label || input.closest('td');
-                if (!highlightTarget) {
-                    return;
-                }
-                const inputValue = String(input.value || '').trim().toLowerCase();
-                const isCorrectOption = correctValues.some((value) => value === inputValue);
-                const isUserOption = userValues.some((value) => value === inputValue);
-                if (isCorrectOption) {
-                    highlightTarget.classList.add('option-correct');
-                } else if (isUserOption) {
-                    highlightTarget.classList.add('option-wrong');
-                }
-            });
         });
+    }
+
+    function collectChoiceInputsForQuestion(questionId) {
+        const normalizedTarget = normalizeQuestionId(questionId);
+        // 直接匹配
+        let inputs = document.querySelectorAll(`input[name="${escapeSelector(questionId)}"]`);
+        if (inputs.length) {
+            return Array.from(inputs);
+        }
+        // 扫描所有 checkbox/radio 组，匹配 name 展开后的题目序列
+        const matched = [];
+        document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
+            const name = input.name || '';
+            const ids = expandQuestionSequence(name);
+            if (ids.some((id) => normalizeQuestionId(id) === normalizedTarget)) {
+                matched.push(input);
+            }
+        });
+        if (matched.length) {
+            return matched;
+        }
+        return [];
     }
 
     function normalizeReplayQuestionId(rawValue) {
