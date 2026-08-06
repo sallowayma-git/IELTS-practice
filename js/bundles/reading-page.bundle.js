@@ -10285,6 +10285,13 @@
             ? questionGroup.questionIds.map((entry) => normalizeQuestionId(entry)).filter(Boolean)
             : [];
         const selectedTokens = collectGroupChoiceTokens(answers, questionIds);
+        // 数量校验：用户选择数不能超过正确答案总数（如 5选2 最多选 2 个）。
+        // 超选（如全选 A-E）视为整组错误，防止通过多选选项刷满分。
+        const expectedCount = questionIds
+            .map((questionId) => canonicalizeAnswerToken(answerKey[questionId]))
+            .filter(Boolean)
+            .length;
+        const overSelected = expectedCount > 0 && selectedTokens.length > expectedCount;
         const remainingTokens = selectedTokens.slice();
         const assignments = new Map();
 
@@ -10320,7 +10327,8 @@
                 ? selectedTokens.slice()
                 : (assignedToken || answers[normalizedTargetId] || ''),
             expectedToken,
-            isCorrect: Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
+            isCorrect: !overSelected
+                && Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
         };
     }
 
