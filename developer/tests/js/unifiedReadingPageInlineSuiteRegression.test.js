@@ -439,6 +439,19 @@ async function testWindowSessionMessageGuard() {
         true,
         '更高注册代际必须覆盖旧 token'
     );
+    hooks.setTestState({
+        windowSessionToken: 'token-current-no-generation',
+        windowSessionIssuedAtMs: 6000,
+        windowSessionGeneration: 0
+    });
+    assert.strictEqual(
+        hooks.shouldAcceptWindowSessionMessage({
+            windowSessionToken: 'token-equal-ms-no-generation',
+            messageIssuedAtMs: 6000
+        }, sourceWindow),
+        false,
+        '缺少注册代际且时间戳相等的不同 token 必须拒绝'
+    );
     hooks.stopReadingDraftSync();
     hooks.stopSimulationDraftSync();
 }

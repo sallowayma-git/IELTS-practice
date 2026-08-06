@@ -5901,7 +5901,10 @@
         if (Number.isInteger(currentGeneration) && currentGeneration > 0) {
             return false;
         }
-        if (incomingIssuedAtMs && currentIssuedAtMs && incomingIssuedAtMs >= currentIssuedAtMs) {
+        // A timestamp alone cannot establish ordering when two registrations
+        // occur in the same millisecond.  Without a generation, keep the
+        // current token rather than allowing an ambiguous message to replace it.
+        if (incomingIssuedAtMs && currentIssuedAtMs && incomingIssuedAtMs > currentIssuedAtMs) {
             return true;
         }
         return false;

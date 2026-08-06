@@ -3492,9 +3492,23 @@
             if (!draft.sessionId) {
                 return false;
             }
+            const isCurrentRegistration = () => {
+                const current = this.examWindows && this.examWindows.get(examId);
+                return current === info
+                    && (!current.window || !current.window.closed)
+                    && (!Number.isInteger(data.windowSessionGeneration)
+                        || !Number.isInteger(info.sessionGeneration)
+                        || Number(data.windowSessionGeneration) === Number(info.sessionGeneration));
+            };
+            if (!isCurrentRegistration()) {
+                return false;
+            }
             // 必须在写队列里重新读取最新 store 再合并，否则并发不同 exam 的 write 会互相覆盖、
             // 后写者会丢掉前者的草稿（整个 map 是同一个存储 key，read-modify-write 非原子）。
             const store = await this._readReadingDraftStore();
+            if (!isCurrentRegistration()) {
+                return false;
+            }
             const previous = store[String(draft.id)] || null;
             const previousNumericUpdatedAt = Number(previous && previous.updatedAt);
             const previousUpdatedAt = Number.isFinite(previousNumericUpdatedAt)
@@ -3514,7 +3528,13 @@
                 return false;
             }
             store[String(draft.id)] = draft;
+            if (!isCurrentRegistration()) {
+                return false;
+            }
             if (!await this._writeReadingDraftStore(store, draft)) {
+                return false;
+            }
+            if (!isCurrentRegistration()) {
                 return false;
             }
             info.lastReadingDraft = draft;
