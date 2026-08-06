@@ -11252,6 +11252,10 @@
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
         document.body.classList.remove('timer-locked-mode');
+        // 清除判卷残留的绿/红标记，避免切回作答态后用户看到旧的对错反馈
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
+            node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
+        });
         enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
