@@ -407,14 +407,25 @@ async function run() {
         session.autoAdvanceAfterSubmit = false;
         session.results = [
             {
+                examId: 'reading-p1', title: 'Passage 1', duration: 10,
+                answers: { q1: 'A' }, answerComparison: {},
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {}
+            },
+            {
                 examId: 'reading-p2',
                 title: 'Passage 2',
+                duration: 10,
                 answers: { q1: 'B' },
                 answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
                 scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
                 highlights: [],
                 scrollY: 0,
                 rawData: {}
+            },
+            {
+                examId: 'reading-p3', title: 'Passage 3', duration: 10,
+                answers: { q1: 'C' }, answerComparison: {},
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {}
             }
         ];
         session.draftsByExam['reading-p2'] = {
@@ -452,9 +463,9 @@ async function run() {
         const session = makeSession('suite_final_highlight');
         const p2Highlights = [{ scope: 'groups', text: 'P2 answer evidence', color: 'green' }];
         session.results = [
-            { examId: 'reading-p1', title: 'Passage 1', answers: { q1: 'A' }, answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} },
-            { examId: 'reading-p2', title: 'Passage 2', answers: { q1: 'B' }, answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, highlights: p2Highlights, scrollY: 240, rawData: { highlights: p2Highlights, scrollY: 240 } },
-            { examId: 'reading-p3', title: 'Passage 3', answers: { q1: 'C' }, answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} }
+            { examId: 'reading-p1', title: 'Passage 1', duration: 10, answers: { q1: 'A' }, answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} },
+            { examId: 'reading-p2', title: 'Passage 2', duration: 10, answers: { q1: 'B' }, answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, highlights: p2Highlights, scrollY: 240, rawData: { highlights: p2Highlights, scrollY: 240 } },
+            { examId: 'reading-p3', title: 'Passage 3', duration: 10, answers: { q1: 'C' }, answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} }
         ];
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
@@ -795,6 +806,50 @@ async function run() {
         assert.strictEqual(session.draftsByExam['reading-p1'], undefined, 'P2 草稿不能误写到 P1');
         assert.deepStrictEqual(session.draftsByExam['reading-p2'].answers, { q1: 'P2 answer' }, 'P2 草稿应按 payload.examId 保存');
         assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应保存');
+    }
+
+    // Case 2.4.1a: a queued classic draft cannot write through a replaced registration.
+    {
+        const app = createApp(windowStub);
+        const oldWindow = createStubWindow('old-reading-window');
+        const newWindow = createStubWindow('new-reading-window');
+        const oldInfo = {
+            window: oldWindow,
+            expectedSessionId: 'reading-session',
+            sessionGeneration: 1,
+            practiceMode: 'classic',
+            suiteSessionId: null,
+            reviewMode: false
+        };
+        const newInfo = { ...oldInfo, window: newWindow, sessionGeneration: 2 };
+        app.examWindows = new Map([['reading-p1', oldInfo]]);
+        let releaseQueue;
+        app._readingDraftStoreQueue = new Promise((resolve) => { releaseQueue = resolve; });
+        const pending = app._queueReadingDraftSync('reading-p1', {
+            sessionId: 'reading-session',
+            draft: { answers: { q1: 'stale' }, updatedAt: 100 },
+            draftUpdatedAt: 100
+        }, oldInfo);
+        app.examWindows.set('reading-p1', newInfo);
+        releaseQueue();
+        assert.strictEqual(await pending, false, '窗口重注册后排队中的旧草稿必须被拒绝');
+    }
+
+    // Case 2.4.1b: suite handler failure must not fall back to a standalone v2 attempt.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_no_standalone_fallback');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        app.handleSuitePracticeComplete = async () => { throw new Error('suite handler failure'); };
+        let standaloneWrites = 0;
+        app.saveRealPracticeData = async () => { standaloneWrites += 1; return { id: 'unexpected' }; };
+        assert.strictEqual(await app.handlePracticeComplete('reading-p1', {
+            suiteSessionId: session.id,
+            answers: { q1: 'A' },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        }, session.windowRef), false);
+        assert.strictEqual(standaloneWrites, 0, '套题处理失败不得写入单篇 fallback');
     }
 
     // Case 2.4.2: inline simulation 草稿同步必须按篇拆分 elapsed，并镜像回窗口会话域
@@ -1321,7 +1376,7 @@ async function run() {
         assert.deepStrictEqual(p3.answers, { q1: 'C' }, '最终提交应覆盖旧快照答案');
     }
 
-    // Case 4: 套题意外关闭后，已作答篇应按单篇普通流程保存
+    // Case 4: 显式中断只清理 v2 套题会话，不拆分写入 v1 单篇记录
     {
         const app = createApp(windowStub);
         const session = makeSession('suite_abort');
@@ -1353,7 +1408,7 @@ async function run() {
         };
 
         await app._abortSuiteSession(session, {});
-        assert.deepStrictEqual(savedExamIds.sort(), ['reading-p1', 'reading-p2'], '中断后应保存所有已作答篇章');
+        assert.deepStrictEqual(savedExamIds, [], '中断后不得通过 v1 单篇路径写入记录');
     }
 
     // Case 5: AppData window-session mirror must be cleared after teardown

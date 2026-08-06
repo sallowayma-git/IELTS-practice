@@ -5620,7 +5620,8 @@
         parentOrigin: '',
         parentOriginIsOpaque: false,
         windowSessionToken: '',
-        windowSessionIssuedAtMs: 0
+        windowSessionIssuedAtMs: 0,
+        windowSessionGeneration: 0
     };
 
     const dom = {
@@ -5881,6 +5882,10 @@
         var displaySeconds;
         var elapsed = getPageElapsedSeconds();
         var limitSeconds;
+        const isSuiteTimer = Boolean(state.suiteSessionId);
+        const suiteTimerMode = isSuiteTimer && state.suiteTimerMode === 'elapsed'
+            ? 'elapsed'
+            : (isSuiteTimer ? 'countdown' : '');
         const rawLimitSeconds = Number(state.suiteTimerLimitSeconds);
         if (Number.isFinite(rawLimitSeconds) && rawLimitSeconds > 0) {
             limitSeconds = Math.floor(rawLimitSeconds);
@@ -5901,21 +5906,26 @@
             }
             var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
             timer.textContent = remainingMinutes + ' minutes remaining';
+        } else if (suiteTimerMode === 'countdown') {
+            displaySeconds = Math.max(0, Number(limitSeconds || 0) - elapsed);
+            var suiteRemainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+            timer.textContent = suiteRemainingMinutes + ' minutes remaining';
+        } else if (suiteTimerMode === 'elapsed') {
+            displaySeconds = elapsed;
+            timer.textContent = formatTimerSeconds(displaySeconds);
         } else if (preferences.mode === 'countdown') {
             const countdownSeconds = minutesToSeconds(preferences.countdownMinutes, 60);
             displaySeconds = Math.max(0, countdownSeconds - elapsed);
             timer.textContent = formatTimerSeconds(displaySeconds);
-        } else if (state.suiteSessionId && Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0) {
-            displaySeconds = Math.max(0, limitSeconds - elapsed);
-            var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
-            timer.textContent = remainingMinutes + ' minutes remaining';
         } else {
             displaySeconds = elapsed;
             timer.textContent = formatTimerSeconds(displaySeconds);
         }
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
-        var countdownExpired = preferences.mode === 'countdown' && !hasEndlessCountdown && displaySeconds <= 0;
-        var limitExpired = Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds);
+        var countdownExpired = !isSuiteTimer && preferences.mode === 'countdown' && !hasEndlessCountdown && displaySeconds <= 0;
+        var limitExpired = suiteTimerMode === 'countdown'
+            ? Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds)
+            : (!isSuiteTimer && Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0 && elapsed >= Number(limitSeconds));
         var expired = Boolean(countdownExpired || limitExpired);
         state.timerExpired = expired;
         if (expired) {
@@ -5924,12 +5934,18 @@
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.classList.toggle('timer-expired', expired);
         if (timer.dataset) {
-            timer.dataset.timerMode = preferences.mode;
+            timer.dataset.timerMode = suiteTimerMode || preferences.mode;
             timer.dataset.expiryAction = preferences.expiryAction;
         }
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
         var _warnRemaining = !hasEndlessCountdown
-            && (preferences.mode === 'countdown' || (Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0))
+            && (
+                suiteTimerMode === 'countdown'
+                || (!isSuiteTimer && (
+                    preferences.mode === 'countdown'
+                    || (Number.isFinite(Number(limitSeconds)) && Number(limitSeconds) > 0)
+                ))
+            )
             && Number.isFinite(Number(displaySeconds))
             ? Math.max(0, Number(displaySeconds))
             : null;
@@ -6719,8 +6735,8 @@
         const baseUpdatedAt = Number(baseDraft && baseDraft.updatedAt);
         const nextUpdatedAt = Number(nextDraft && nextDraft.updatedAt);
         return Number.isFinite(baseUpdatedAt)
-            && Number.isFinite(nextUpdatedAt)
-            && nextUpdatedAt < baseUpdatedAt;
+            && baseUpdatedAt > 0
+            && (!Number.isFinite(nextUpdatedAt) || nextUpdatedAt <= baseUpdatedAt);
     }
 
     function mergeDraft(baseDraft, nextDraft) {
@@ -11276,6 +11292,7 @@
                 suiteTimerMode: state.suiteTimerMode,
                 suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                 windowSessionToken: state.windowSessionToken || null,
+                windowSessionGeneration: Number.isInteger(state.windowSessionGeneration) ? state.windowSessionGeneration : 0,
                 messageIssuedAtMs,
                 source: MESSAGE_SOURCE
             }, payload || {}),
@@ -11322,6 +11339,8 @@
         const currentIssuedAtMs = Number.isFinite(Number(state.windowSessionIssuedAtMs))
             ? Number(state.windowSessionIssuedAtMs)
             : 0;
+        const incomingGeneration = Number(data && data.windowSessionGeneration);
+        const currentGeneration = Number(state.windowSessionGeneration);
 
         if (sourceWindow && state.parentWindow && sourceWindow !== state.parentWindow && currentToken) {
             return false;
@@ -11335,6 +11354,15 @@
         if (incomingToken === currentToken) {
             return true;
         }
+        if (Number.isInteger(incomingGeneration) && incomingGeneration > 0) {
+            if (Number.isInteger(currentGeneration) && currentGeneration > 0) {
+                return incomingGeneration > currentGeneration;
+            }
+            return true;
+        }
+        if (Number.isInteger(currentGeneration) && currentGeneration > 0) {
+            return false;
+        }
         if (incomingIssuedAtMs && currentIssuedAtMs && incomingIssuedAtMs >= currentIssuedAtMs) {
             return true;
         }
@@ -11344,6 +11372,7 @@
     function adoptWindowSessionMessage(data = {}, sourceWindow = null) {
         const incomingToken = normalizeWindowSessionToken(data && data.windowSessionToken);
         const incomingIssuedAtMs = readMessageIssuedAtMs(data);
+        const incomingGeneration = Number(data && data.windowSessionGeneration);
         if (incomingToken) {
             state.windowSessionToken = incomingToken;
         }
@@ -11351,6 +11380,9 @@
             state.windowSessionIssuedAtMs = incomingIssuedAtMs;
         } else if (incomingToken && !state.windowSessionIssuedAtMs) {
             state.windowSessionIssuedAtMs = Date.now();
+        }
+        if (Number.isInteger(incomingGeneration) && incomingGeneration > 0) {
+            state.windowSessionGeneration = incomingGeneration;
         }
     }
 
@@ -11603,7 +11635,7 @@
                 updatedAt: Date.now()
             });
         } catch (_) {
-            // ignore sessionStorage failures in restricted environments
+            // AppData v2 recovery is best-effort during page teardown.
         }
     }
 
@@ -11633,7 +11665,7 @@
         try {
             global.AppData.recovery.windowSession.discard(name);
         } catch (_) {
-            // ignore sessionStorage failures in restricted environments
+            // AppData v2 recovery is best-effort during page teardown.
         }
     }
 
@@ -11694,6 +11726,7 @@
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds(),
+            timerSnapshot: getPracticeTimerSnapshot(),
             reason
         });
     }
@@ -11719,6 +11752,10 @@
     }
 
     function flushReadingDraftOnLifecycle(reason = 'pagehide') {
+        if (state.simulationMode && state.suiteSessionId) {
+            syncSimulationDraftSnapshot(reason);
+            return;
+        }
         if (canSyncReadingDraft()) {
             syncReadingDraftSnapshot(reason);
             return;
@@ -11760,7 +11797,9 @@
             examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
-            elapsed: getPageElapsedSeconds()
+            elapsed: getPageElapsedSeconds(),
+            timerSnapshot: getPracticeTimerSnapshot(),
+            reason
         });
     }
 

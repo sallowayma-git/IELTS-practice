@@ -36,7 +36,23 @@ function createWindowSessionStub() {
 function createDocumentStub() {
     const radio = { checked: true, value: 'A' };
     const notes = { value: 'fresh note' };
+    const timerClasses = new Set();
+    const timer = {
+        textContent: '',
+        dataset: {},
+        style: {},
+        classList: {
+            add(...names) { names.forEach((name) => timerClasses.add(name)); },
+            remove(...names) { names.forEach((name) => timerClasses.delete(name)); },
+            toggle(name, enabled) {
+                if (enabled) timerClasses.add(name);
+                else timerClasses.delete(name);
+            },
+            contains(name) { return timerClasses.has(name); }
+        }
+    };
     return {
+        __timer: timer,
         body: {
             dataset: {},
             classList: {
@@ -58,8 +74,8 @@ function createDocumentStub() {
             }
             return [];
         },
-        getElementById() {
-            return null;
+        getElementById(id) {
+            return id === 'timer' ? timer : null;
         },
         addEventListener() {},
         removeEventListener() {}
@@ -153,14 +169,14 @@ function createContext() {
 }
 
 function loadHooks() {
-    const { context, window, windowSession } = createContext();
+    const { context, window, document, windowSession } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, windowSession };
+    return { hooks, window, document, windowSession };
 }
 
 function plain(value) {
@@ -189,6 +205,31 @@ async function testDraftArbitration() {
     assert.deepStrictEqual(plain(fresh.highlights), [{ id: 'new' }], 'newer draft must win highlights');
     assert.strictEqual(fresh.scrollY, 9, 'newer draft must win scrollY');
     assert.strictEqual(fresh.updatedAt, 3000, 'newer draft must win updatedAt');
+}
+
+async function testSuiteTimerModePrecedence() {
+    const { hooks, document } = loadHooks();
+    const pausedAtMs = Date.now();
+    hooks.setTestState({
+        suiteSessionId: 'suite-timer',
+        suiteTimerMode: 'elapsed',
+        suiteTimerLimitSeconds: 60,
+        suiteTimerAnchorMs: pausedAtMs - 120000,
+        pagePausedAtMs: pausedAtMs,
+        pagePausedOffsetMs: 0
+    });
+    hooks.renderTimer();
+    assert.strictEqual(document.__timer.textContent, '02:00', 'elapsed 套题必须显示正计时');
+    assert.strictEqual(document.__timer.dataset.timerMode, 'elapsed');
+    assert.strictEqual(document.__timer.classList.contains('timer-expired'), false, 'elapsed 套题不得按 limit 触发倒计时过期');
+
+    hooks.setTestState({
+        suiteTimerMode: 'countdown',
+        suiteTimerLimitSeconds: 3600
+    });
+    hooks.renderTimer();
+    assert.strictEqual(document.__timer.textContent, '58 minutes remaining');
+    assert.strictEqual(document.__timer.dataset.timerMode, 'countdown');
 }
 
 async function testInlineEnvelopeGuard() {
@@ -316,6 +357,7 @@ async function testWindowSessionMessageGuard() {
         parentOriginIsOpaque: false,
         windowSessionToken: 'token-new',
         windowSessionIssuedAtMs: 5000,
+        windowSessionGeneration: 2,
         lastInitSignature: '',
         simulationCtx: { examId: 'reading-p2', flowMode: 'simulation', currentIndex: 1 },
         suite: {
@@ -336,6 +378,7 @@ async function testWindowSessionMessageGuard() {
                 sessionId: 'session-new',
                 suiteSessionId: 'suite-new',
                 windowSessionToken: 'token-old',
+                windowSessionGeneration: 1,
                 messageIssuedAtMs: 4000,
                 parentOrigin: 'http://localhost'
     }));
@@ -352,6 +395,7 @@ async function testWindowSessionMessageGuard() {
                 currentIndex: 0,
                 total: 3,
                 windowSessionToken: 'token-old',
+                windowSessionGeneration: 1,
                 messageIssuedAtMs: 4000,
                 suiteSequence: [
                     { examId: 'reading-p1' },
@@ -368,6 +412,7 @@ async function testWindowSessionMessageGuard() {
                 sessionId: 'session-newer',
                 suiteSessionId: 'suite-new',
                 windowSessionToken: 'token-newer',
+                windowSessionGeneration: 3,
                 messageIssuedAtMs: 6000,
                 parentOrigin: 'http://localhost'
     }));
@@ -375,6 +420,25 @@ async function testWindowSessionMessageGuard() {
     state = hooks.getTestState();
     assert.strictEqual(state.sessionId, 'session-newer', 'newer INIT_SESSION must still be accepted');
     assert.strictEqual(state.windowSessionToken, 'token-newer', 'newer INIT_SESSION must adopt the latest window token');
+
+    assert.strictEqual(
+        hooks.shouldAcceptWindowSessionMessage({
+            windowSessionToken: 'token-same-ms-old',
+            windowSessionGeneration: 3,
+            messageIssuedAtMs: 6000
+        }, sourceWindow),
+        false,
+        '同一注册代际的旧 token 即使时间戳相同也必须拒绝'
+    );
+    assert.strictEqual(
+        hooks.shouldAcceptWindowSessionMessage({
+            windowSessionToken: 'token-next-generation',
+            windowSessionGeneration: 4,
+            messageIssuedAtMs: 6000
+        }, sourceWindow),
+        true,
+        '更高注册代际必须覆盖旧 token'
+    );
     hooks.stopReadingDraftSync();
     hooks.stopSimulationDraftSync();
 }
@@ -678,6 +742,7 @@ async function testSubmitAcknowledgementStateMachine() {
 
 async function main() {
     await testDraftArbitration();
+    await testSuiteTimerModePrecedence();
     await testInlineEnvelopeGuard();
     await testInlineReinitSnapshot();
     await testWindowSessionMessageGuard();
