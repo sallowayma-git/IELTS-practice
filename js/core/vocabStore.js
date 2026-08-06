@@ -50,6 +50,12 @@
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
+    const CONFIG_LIMITS = Object.freeze({
+        dailyNew: { min: 0, max: 200 },
+        reviewLimit: { min: 1, max: 300 },
+        masteryCount: { min: 1, max: 10 }
+    });
+    const VALID_THEMES = new Set(['auto', 'light', 'dark']);
 
     const state = {
         words: [],
@@ -298,12 +304,22 @@
 
     function mergeConfig(config) {
         const base = { ...DEFAULT_CONFIG };
-        if (config && typeof config === 'object') {
-            Object.keys(DEFAULT_CONFIG).forEach((key) => {
-                if (typeof config[key] !== 'undefined') {
-                    base[key] = config[key];
-                }
-            });
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            return base;
+        }
+        Object.keys(CONFIG_LIMITS).forEach((key) => {
+            const value = config[key];
+            const limits = CONFIG_LIMITS[key];
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return;
+            }
+            base[key] = Math.min(limits.max, Math.max(limits.min, Math.floor(value)));
+        });
+        if (typeof config.theme === 'string' && VALID_THEMES.has(config.theme)) {
+            base.theme = config.theme;
+        }
+        if (typeof config.notify === 'boolean') {
+            base.notify = config.notify;
         }
         return base;
     }
@@ -554,15 +570,17 @@
         return getConfig();
     }
 
-    async function replaceProgress(words, config = {}, listId = null) {
+    async function replaceProgress(words, config, listId) {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            throw new Error('进度备份缺少有效配置');
+        }
+        const requestedListId = typeof listId === 'string' ? listId.trim() : '';
+        if (!requestedListId || !VOCAB_LISTS[requestedListId]) {
+            throw new Error('进度备份包含未知词表');
+        }
         const normalized = Array.isArray(words)
             ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
-        const requestedListId = typeof listId === 'string' && listId.trim()
-            ? listId.trim()
-            : (typeof config.activeListId === 'string' && config.activeListId.trim()
-                ? config.activeListId.trim()
-                : state.activeListId);
         const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
         const vocab = await requireVocabData();
         await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });

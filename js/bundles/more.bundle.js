@@ -24,6 +24,10 @@
 
     const DEFAULT_EXPORT_VERSION = '0.6.2-fix';
 
+    function isPlainObject(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function normalizeFrequency(value) {
         if (value == null || value === '') {
             return null;
@@ -96,26 +100,21 @@
     }
 
     function cloneProgressEntry(raw) {
-        if (!raw || typeof raw !== 'object') {
+        if (!isPlainObject(raw)) {
             return null;
         }
-        if (!raw.word || !raw.meaning) {
+        const word = typeof raw.word === 'string' ? raw.word.trim() : '';
+        const meaning = typeof raw.meaning === 'string' ? raw.meaning.trim() : '';
+        if (!word || !meaning) {
             return null;
         }
-        const clone = {};
-        Object.keys(raw).forEach((key) => {
-            clone[key] = raw[key];
-        });
-        return clone;
+        return { ...raw, word, meaning };
     }
 
     function buildImportResult(type, entries, meta = {}) {
         const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
         const normalizedMeta = { ...meta };
         normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
-        if (Array.isArray(normalizedMeta.reviewQueue)) {
-            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
-        }
         return {
             type,
             entries: safeEntries,
@@ -239,12 +238,22 @@
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
             const metaCategory = extractCategory(payload.meta, null);
-            const category = extractCategory(payload, metaCategory || 'external');
-            const looksProgress = typeof payload.version === 'string'
-                || Array.isArray(payload.reviewQueue)
-                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+            const declaredType = typeof payload.type === 'string' ? payload.type.trim().toLowerCase() : '';
+            const explicitProgress = declaredType === 'progress' || declaredType === 'progress-backup';
+            const hasListId = typeof payload.listId === 'string' && payload.listId.trim();
+            const hasV2ProgressEnvelope = typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && hasListId;
+            if (explicitProgress && !hasV2ProgressEnvelope) {
+                throw new Error('进度备份缺少 v2 词表或配置数据');
+            }
+            const looksProgress = (explicitProgress || !declaredType) && hasV2ProgressEnvelope;
+            const category = extractCategory(payload, metaCategory || (looksProgress ? 'user' : 'external'));
             if (looksProgress) {
-                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                const entries = payload.words.map(cloneProgressEntry);
+                if (entries.some((entry) => !entry)) {
+                    throw new Error('进度备份包含无效词汇数据');
+                }
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
@@ -253,7 +262,7 @@
                         : undefined,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
-                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
+                    config: isPlainObject(payload.config) ? { ...payload.config } : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
@@ -323,18 +332,23 @@
         return normalizedResult;
     }
 
-    async function exportProgress() {
+    async function exportProgress(words) {
         if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
+        if (!Array.isArray(words)) throw new Error('当前词表尚未加载');
         await window.AppData.ready;
         const config = await window.AppData.vocab.getConfig();
         const listId = config.activeListId || 'default';
-        const list = await window.AppData.vocab.readList(listId);
+        const entries = words.map(cloneProgressEntry);
+        if (entries.some((entry) => !entry)) {
+            throw new Error('当前词表包含无效词汇数据');
+        }
         const payload = {
+            type: 'progress',
             version: DEFAULT_EXPORT_VERSION,
             exportedAt: new Date().toISOString(),
             listId,
             config,
-            words: Array.isArray(list) ? list : (list && Array.isArray(list.words) ? list.words : [])
+            words: entries
         };
         return new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     }
@@ -770,6 +784,12 @@
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
+    const CONFIG_LIMITS = Object.freeze({
+        dailyNew: { min: 0, max: 200 },
+        reviewLimit: { min: 1, max: 300 },
+        masteryCount: { min: 1, max: 10 }
+    });
+    const VALID_THEMES = new Set(['auto', 'light', 'dark']);
 
     const state = {
         words: [],
@@ -1018,12 +1038,22 @@
 
     function mergeConfig(config) {
         const base = { ...DEFAULT_CONFIG };
-        if (config && typeof config === 'object') {
-            Object.keys(DEFAULT_CONFIG).forEach((key) => {
-                if (typeof config[key] !== 'undefined') {
-                    base[key] = config[key];
-                }
-            });
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            return base;
+        }
+        Object.keys(CONFIG_LIMITS).forEach((key) => {
+            const value = config[key];
+            const limits = CONFIG_LIMITS[key];
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return;
+            }
+            base[key] = Math.min(limits.max, Math.max(limits.min, Math.floor(value)));
+        });
+        if (typeof config.theme === 'string' && VALID_THEMES.has(config.theme)) {
+            base.theme = config.theme;
+        }
+        if (typeof config.notify === 'boolean') {
+            base.notify = config.notify;
         }
         return base;
     }
@@ -1274,15 +1304,17 @@
         return getConfig();
     }
 
-    async function replaceProgress(words, config = {}, listId = null) {
+    async function replaceProgress(words, config, listId) {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            throw new Error('进度备份缺少有效配置');
+        }
+        const requestedListId = typeof listId === 'string' ? listId.trim() : '';
+        if (!requestedListId || !VOCAB_LISTS[requestedListId]) {
+            throw new Error('进度备份包含未知词表');
+        }
         const normalized = Array.isArray(words)
             ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
-        const requestedListId = typeof listId === 'string' && listId.trim()
-            ? listId.trim()
-            : (typeof config.activeListId === 'string' && config.activeListId.trim()
-                ? config.activeListId.trim()
-                : state.activeListId);
         const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
         const vocab = await requireVocabData();
         await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
@@ -2281,6 +2313,9 @@
         reviewLimit: { min: 1, max: 300 },
         masteryCount: { min: 1, max: 10 }
     });
+    const LIST_PAGE_SIZE = 200;
+    const LIST_SEARCH_DEBOUNCE_MS = 180;
+    const MODAL_FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
     const state = {
         container: null,
@@ -2295,9 +2330,18 @@
         menuOpen: false,
         ui: {
             sidePanelManual: null,
-            lastFocus: null,
             importing: false,
             exporting: false,
+            listBrowserQuery: '',
+            listBrowserLearnedOnly: false,
+            listBrowserPage: 1,
+            listSearchTimer: null,
+            modalEpoch: 0,
+            modalOwner: null,
+            settingsRestoreFocus: null,
+            listRestoreFocus: null,
+            settingsSaveToken: 0,
+            settingsSaveTail: Promise.resolve(),
             listSwitcher: null,
             listSwitcherListenerAttached: false
         },
@@ -2354,6 +2398,52 @@
 
     function isSettingsModalOpen() {
         return state.elements.settingsModal?.dataset.open === 'true';
+    }
+
+    function isListModalOpen() {
+        return state.elements.listModal?.dataset.open === 'true';
+    }
+
+    function isListModalPending() {
+        return state.ui.modalOwner === 'list-pending';
+    }
+
+    function focusElement(target) {
+        const fallback = state.elements.menuButton;
+        const focusTarget = target && typeof target.focus === 'function' ? target : fallback;
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            focusTarget.focus();
+        }
+    }
+
+    function trapModalFocus(event, dialog) {
+        if (!dialog) {
+            return;
+        }
+        const focusable = Array.from(dialog.querySelectorAll(MODAL_FOCUSABLE_SELECTOR))
+            .filter((element) => !element.hidden && !element.disabled);
+        if (!focusable.length) {
+            event.preventDefault();
+            focusElement(dialog);
+            return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (event.shiftKey && (active === first || !dialog.contains(active))) {
+            event.preventDefault();
+            focusElement(last);
+        } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+            event.preventDefault();
+            focusElement(first);
+        }
+    }
+
+    function clearListSearchTimer() {
+        if (state.ui.listSearchTimer) {
+            clearTimeout(state.ui.listSearchTimer);
+            state.ui.listSearchTimer = null;
+        }
     }
 
     function clampNumber(value, min, max) {
@@ -2463,6 +2553,7 @@
                             <div class="vocab-menu" data-vocab-role="menu" hidden>
                                 <div class="vocab-menu__panel" data-vocab-role="menu-panel-main">
                                     <button type="button" data-action="menu-lists">切换词表</button>
+                                    <button type="button" data-action="menu-view-list">查看词表</button>
                                     <button type="button" data-action="menu-import">导入词表</button>
                                     <button type="button" data-action="menu-export">导出进度</button>
                                     <button type="button" data-action="menu-settings">学习设置</button>
@@ -2520,9 +2611,31 @@
             </main>
             <div class="visually-hidden" aria-live="polite" data-vocab-role="live-region"></div>
             <input type="file" accept=".json,.csv" data-vocab-role="import-input" hidden>
+            <div class="vocab-list-modal" data-vocab-role="list-modal" hidden>
+                <div class="vocab-list-modal__backdrop" data-action="close-list-modal" tabindex="-1"></div>
+                <div class="vocab-list-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vocab-list-title" data-vocab-role="list-dialog" tabindex="-1">
+                    <header class="vocab-list-modal__header">
+                        <div>
+                            <h3 id="vocab-list-title">词表</h3>
+                            <p class="vocab-list-modal__subtitle" data-vocab-role="list-subtitle">当前词表 0 个词</p>
+                        </div>
+                        <button class="btn btn-icon" type="button" data-action="close-list-modal" aria-label="关闭词表">×</button>
+                    </header>
+                    <div class="vocab-list-modal__toolbar">
+                        <input type="search" data-vocab-role="list-search" placeholder="搜索单词、释义、笔记">
+                        <label class="vocab-list-modal__filter">
+                            <input type="checkbox" data-vocab-role="list-learned-only">
+                            <span>只看已学</span>
+                        </label>
+                        <button class="btn btn-sm btn-outline" type="button" data-action="export-current-list">导出可分享词表</button>
+                    </div>
+                    <div class="vocab-list-modal__stats" data-vocab-role="list-stats"></div>
+                    <div class="vocab-list-modal__body" data-vocab-role="list-body"></div>
+                </div>
+            </div>
             <div class="vocab-settings-modal" data-vocab-role="settings-modal" hidden>
                 <div class="vocab-settings-modal__backdrop" data-action="close-settings" tabindex="-1"></div>
-                <div class="vocab-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vocab-settings-title" data-vocab-role="settings-dialog">
+                <div class="vocab-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vocab-settings-title" data-vocab-role="settings-dialog" tabindex="-1">
                     <header class="vocab-settings-modal__header">
                         <div>
                             <h3 id="vocab-settings-title">学习设置</h3>
@@ -2582,6 +2695,13 @@
             noteStatus: layout.querySelector('[data-field=\"note-status\"]'),
             liveRegion: layout.querySelector('[data-vocab-role=\"live-region\"]'),
             importInput: layout.querySelector('[data-vocab-role=\"import-input\"]'),
+            listModal: layout.querySelector('[data-vocab-role=\"list-modal\"]'),
+            listDialog: layout.querySelector('[data-vocab-role=\"list-dialog\"]'),
+            listSubtitle: layout.querySelector('[data-vocab-role=\"list-subtitle\"]'),
+            listSearch: layout.querySelector('[data-vocab-role=\"list-search\"]'),
+            listLearnedOnly: layout.querySelector('[data-vocab-role=\"list-learned-only\"]'),
+            listStats: layout.querySelector('[data-vocab-role=\"list-stats\"]'),
+            listBody: layout.querySelector('[data-vocab-role=\"list-body\"]'),
             settingsModal: layout.querySelector('[data-vocab-role=\"settings-modal\"]'),
             settingsForm: layout.querySelector('[data-vocab-role=\"settings-form\"]'),
             settingsError: layout.querySelector('[data-vocab-role=\"settings-error\"]'),
@@ -2775,7 +2895,14 @@
                     switchMenuPanel('main');
                     return;
                 }
+                const restoreFocus = action === 'menu-view-list' || action === 'menu-settings'
+                    ? state.elements.menuButton
+                    : null;
                 closeMenu();
+                if (action === 'menu-view-list') {
+                    openListModal(restoreFocus);
+                    return;
+                }
                 if (action === 'menu-import') {
                     handleImportRequest();
                     return;
@@ -2785,7 +2912,7 @@
                     return;
                 }
                 if (action === 'menu-settings') {
-                    openSettingsModal();
+                    openSettingsModal(restoreFocus);
                 }
             });
             state.elements.menu.dataset.bound = 'true';
@@ -2817,8 +2944,30 @@
         }
         if (!state.keyboardHandler) {
             state.keyboardHandler = (event) => {
+                if (event.code === 'Tab' || event.key === 'Tab') {
+                    if (isListModalOpen()) {
+                        trapModalFocus(event, state.elements.listDialog);
+                        return;
+                    }
+                    if (isSettingsModalOpen()) {
+                        trapModalFocus(event, state.elements.settingsDialog);
+                        return;
+                    }
+                }
                 const command = KEY_BINDINGS[event.code];
                 if (!command) {
+                    return;
+                }
+                if (command === 'escape' && isListModalPending()) {
+                    event.preventDefault();
+                    closeListModal();
+                    return;
+                }
+                if (isListModalOpen()) {
+                    if (command === 'escape') {
+                        event.preventDefault();
+                        closeListModal();
+                    }
                     return;
                 }
                 if (isSettingsModalOpen()) {
@@ -2868,6 +3017,58 @@
         if (state.elements.sessionCard && !state.elements.sessionCard.dataset.bound) {
             state.elements.sessionCard.addEventListener('click', handleCardAction);
             state.elements.sessionCard.dataset.bound = 'true';
+        }
+        if (state.elements.listModal && !state.elements.listModal.dataset.bound) {
+            state.elements.listModal.addEventListener('click', (event) => {
+                const trigger = event.target.closest('[data-action]');
+                const action = trigger?.dataset?.action;
+                if (!action) {
+                    return;
+                }
+                if (action === 'close-list-modal') {
+                    event.preventDefault();
+                    closeListModal();
+                    return;
+                }
+                if (action === 'export-current-list') {
+                    event.preventDefault();
+                    exportCurrentList();
+                    return;
+                }
+                if (action === 'list-page-prev' && state.ui.listBrowserPage > 1) {
+                    event.preventDefault();
+                    state.ui.listBrowserPage -= 1;
+                    renderListBrowser();
+                    return;
+                }
+                if (action === 'list-page-next') {
+                    event.preventDefault();
+                    state.ui.listBrowserPage += 1;
+                    renderListBrowser();
+                }
+            });
+            state.elements.listModal.dataset.bound = 'true';
+        }
+        if (state.elements.listSearch && !state.elements.listSearch.dataset.bound) {
+            state.elements.listSearch.addEventListener('input', (event) => {
+                state.ui.listBrowserQuery = event.target.value || '';
+                state.ui.listBrowserPage = 1;
+                clearListSearchTimer();
+                state.ui.listSearchTimer = setTimeout(() => {
+                    state.ui.listSearchTimer = null;
+                    renderListBrowser();
+                }, LIST_SEARCH_DEBOUNCE_MS);
+            });
+            state.elements.listSearch.dataset.bound = 'true';
+        }
+        if (state.elements.listLearnedOnly && !state.elements.listLearnedOnly.dataset.bound) {
+            state.elements.listLearnedOnly.addEventListener('change', (event) => {
+                state.ui.listBrowserLearnedOnly = !!event.target.checked;
+                state.ui.listBrowserPage = 1;
+                clearListSearchTimer();
+                renderListBrowser();
+            });
+            state.elements.listLearnedOnly.dataset.bound = 'true';
         }
         if (state.elements.importInput && !state.elements.importInput.dataset.bound) {
             state.elements.importInput.addEventListener('change', handleImportInputChange);
@@ -2935,13 +3136,24 @@
         }
     }
 
-    function openSettingsModal() {
+    function openSettingsModal(restoreFocus = document.activeElement) {
         if (!state.elements.settingsModal) {
             showFeedbackMessage('设置面板未加载', 'warning');
             return;
         }
+        let restoreTarget = restoreFocus;
+        if ((isListModalOpen() || isListModalPending()) && state.elements.listDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.listRestoreFocus;
+        } else if (isSettingsModalOpen() && state.elements.settingsDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.settingsRestoreFocus;
+        }
+        closeListModal(false);
+        closeSettingsModal(false);
         populateSettingsForm();
-        state.ui.lastFocus = document.activeElement;
+        state.ui.modalEpoch += 1;
+        state.ui.modalOwner = 'settings';
+        state.ui.settingsRestoreFocus = restoreTarget || state.elements.menuButton;
+        state.ui.settingsSaveToken += 1;
         state.elements.settingsModal.removeAttribute('hidden');
         state.elements.settingsModal.dataset.open = 'true';
         const focusTarget = state.elements.settingsDialog?.querySelector('input, button, select, textarea');
@@ -2950,7 +3162,14 @@
         }
     }
 
-    function closeSettingsModal() {
+    function closeSettingsModal(restoreFocus = true) {
+        const ownsModal = state.ui.modalOwner === 'settings';
+        const previousFocus = state.ui.settingsRestoreFocus;
+        state.ui.settingsSaveToken += 1;
+        state.ui.modalEpoch += 1;
+        if (ownsModal) {
+            state.ui.modalOwner = null;
+        }
         if (!state.elements.settingsModal) {
             return;
         }
@@ -2959,11 +3178,10 @@
         if (state.elements.settingsError) {
             state.elements.settingsError.textContent = '';
         }
-        const previousFocus = state.ui.lastFocus;
-        if (previousFocus && typeof previousFocus.focus === 'function') {
-            previousFocus.focus();
+        if (ownsModal && restoreFocus) {
+            focusElement(previousFocus);
         }
-        state.ui.lastFocus = null;
+        state.ui.settingsRestoreFocus = null;
     }
 
     async function handleSettingsSubmit(event) {
@@ -2991,14 +3209,31 @@
             return;
         }
 
+        const saveToken = ++state.ui.settingsSaveToken;
+        const modalToken = state.ui.modalEpoch;
         try {
-            await state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify });
+            const commit = state.ui.settingsSaveTail.then(
+                () => state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify }),
+                () => state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify })
+            );
+            state.ui.settingsSaveTail = commit.catch(() => undefined);
+            await commit;
+            if (saveToken !== state.ui.settingsSaveToken
+                || modalToken !== state.ui.modalEpoch
+                || state.ui.modalOwner !== 'settings') {
+                return;
+            }
             state.session.batchSize = Math.max(1, Math.min(reviewLimit, DEFAULT_BATCH_SIZE));
             closeSettingsModal();
             refreshDashboard();
             render();
             showFeedbackMessage('学习设置已更新', 'success');
         } catch (error) {
+            if (saveToken !== state.ui.settingsSaveToken
+                || modalToken !== state.ui.modalEpoch
+                || state.ui.modalOwner !== 'settings') {
+                return;
+            }
             console.error('[VocabSessionView] 设置保存失败:', error);
             if (state.elements.settingsError) {
                 state.elements.settingsError.textContent = error.message || '保存失败，请稍后再试。';
@@ -3110,7 +3345,7 @@
         try {
             state.ui.exporting = true;
             await state.store.init();
-            const blob = await io.exportProgress();
+            const blob = await io.exportProgress(state.store.getWords());
             const filename = `vocab-progress-${formatTimestamp()}.json`;
             triggerDownload(blob, filename);
             showFeedbackMessage('词汇进度已导出', 'success');
@@ -3369,6 +3604,263 @@
             .replace(/'/g, '&#039;');
     }
 
+    function formatDateTime(value) {
+        if (!value) {
+            return '-';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return '-';
+        }
+        return date.toLocaleString();
+    }
+
+    function getActiveListLabel() {
+        if (!state.store || typeof state.store.getActiveListId !== 'function') {
+            return '当前词表';
+        }
+        const listId = state.store.getActiveListId();
+        const lists = state.store.VOCAB_LISTS || {};
+        return lists[listId]?.name || '当前词表';
+    }
+
+    function getWordStatus(word, config) {
+        const masteredTarget = Number(config?.masteryCount || 4);
+        const correctCount = Number(word?.correctCount || 0);
+        if (word?.nextReview) {
+            const next = new Date(word.nextReview);
+            if (!Number.isNaN(next.getTime()) && next <= new Date()) {
+                return { label: '待复习', tone: 'due' };
+            }
+        }
+        if (correctCount >= masteredTarget) {
+            return { label: '已掌握', tone: 'mastered' };
+        }
+        if (word?.nextReview) {
+            return { label: '学习中', tone: 'reviewing' };
+        }
+        if (word?.lastReviewed || correctCount > 0) {
+            return { label: '学习中', tone: 'reviewing' };
+        }
+        return { label: '未学习', tone: 'new' };
+    }
+
+    function isLearnedWord(word) {
+        return Boolean(word?.lastReviewed || word?.nextReview || Number(word?.correctCount || 0) > 0);
+    }
+
+    function analyzeListWords() {
+        const words = state.store && typeof state.store.getWords === 'function'
+            ? state.store.getWords()
+            : [];
+        const config = state.store && typeof state.store.getConfig === 'function'
+            ? state.store.getConfig()
+            : {};
+        const query = state.ui.listBrowserQuery.trim().toLowerCase();
+        const learnedOnly = state.ui.listBrowserLearnedOnly;
+        const visible = [];
+        let learnedCount = 0;
+        let masteredCount = 0;
+        let dueCount = 0;
+        const masteryTarget = Number(config.masteryCount || 4);
+        words.forEach((word) => {
+            if (!word || typeof word.word !== 'string') {
+                return;
+            }
+            const learned = isLearnedWord(word);
+            const status = getWordStatus(word, config);
+            if (learned) {
+                learnedCount += 1;
+            }
+            if (Number(word.correctCount || 0) >= masteryTarget) {
+                masteredCount += 1;
+            }
+            if (status.tone === 'due') {
+                dueCount += 1;
+            }
+            if (learnedOnly && !learned) {
+                return;
+            }
+            const haystack = [
+                word.word,
+                word.meaning,
+                word.example,
+                word.note,
+                word.source
+            ].map((value) => String(value || '').toLowerCase()).join('\n');
+            if (!query || haystack.includes(query)) {
+                visible.push({ word, status });
+            }
+        });
+        return { words, visible, learnedCount, masteredCount, dueCount };
+    }
+
+    function renderListBrowser() {
+        if (!state.elements.listBody || !state.store) {
+            return;
+        }
+        const analysis = analyzeListWords();
+        const totalPages = Math.max(1, Math.ceil(analysis.visible.length / LIST_PAGE_SIZE));
+        state.ui.listBrowserPage = Math.min(totalPages, Math.max(1, state.ui.listBrowserPage));
+        const pageStart = (state.ui.listBrowserPage - 1) * LIST_PAGE_SIZE;
+        const pageWords = analysis.visible.slice(pageStart, pageStart + LIST_PAGE_SIZE);
+
+        if (state.elements.listSubtitle) {
+            state.elements.listSubtitle.textContent = `${getActiveListLabel()} · 共 ${analysis.words.length} 个词`;
+        }
+        if (state.elements.listStats) {
+            state.elements.listStats.innerHTML = `
+                <span>已学 ${analysis.learnedCount}</span>
+                <span>待复习 ${analysis.dueCount}</span>
+                <span>已掌握 ${analysis.masteredCount}</span>
+                <span>当前显示 ${analysis.visible.length}</span>
+            `;
+        }
+
+        if (!analysis.visible.length) {
+            state.elements.listBody.innerHTML = '<div class="vocab-list-empty">没有匹配的词条</div>';
+            return;
+        }
+
+        const rows = pageWords.map(({ word, status }, index) => `
+                <tr>
+                    <td>${pageStart + index + 1}</td>
+                    <td><strong>${escapeHtml(word.word)}</strong></td>
+                    <td>${escapeHtml(word.meaning || '-')}</td>
+                    <td><span class="vocab-list-status vocab-list-status--${status.tone}">${status.label}</span></td>
+                    <td>${Number(word.correctCount || 0)}</td>
+                    <td>${formatDateTime(word.lastReviewed)}</td>
+                    <td>${formatDateTime(word.nextReview)}</td>
+                    <td>${escapeHtml(word.note || word.source || '-')}</td>
+                </tr>
+            `).join('');
+        state.elements.listBody.innerHTML = `
+            <div class="vocab-list-table-wrap">
+                <table class="vocab-list-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>单词</th>
+                            <th>释义</th>
+                            <th>状态</th>
+                            <th>正确</th>
+                            <th>上次复习</th>
+                            <th>下次复习</th>
+                            <th>笔记/来源</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${totalPages > 1 ? `
+                <div class="vocab-list-pagination" aria-label="词表分页">
+                    <button class="btn btn-icon" type="button" data-action="list-page-prev" aria-label="上一页" ${state.ui.listBrowserPage === 1 ? 'disabled' : ''}>‹</button>
+                    <span>第 ${state.ui.listBrowserPage} / ${totalPages} 页</span>
+                    <button class="btn btn-icon" type="button" data-action="list-page-next" aria-label="下一页" ${state.ui.listBrowserPage === totalPages ? 'disabled' : ''}>›</button>
+                </div>
+            ` : ''}
+        `;
+    }
+
+    async function openListModal(restoreFocus = document.activeElement) {
+        if (!state.store || typeof state.store.init !== 'function') {
+            showFeedbackMessage('词汇数据尚未准备就绪', 'warning');
+            return;
+        }
+        let restoreTarget = restoreFocus;
+        if (isSettingsModalOpen() && state.elements.settingsDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.settingsRestoreFocus;
+        } else if ((isListModalOpen() || isListModalPending()) && state.elements.listDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.listRestoreFocus;
+        }
+        closeSettingsModal(false);
+        closeListModal(false);
+        const openToken = ++state.ui.modalEpoch;
+        state.ui.modalOwner = 'list-pending';
+        state.ui.listRestoreFocus = restoreTarget || state.elements.menuButton;
+        try {
+            await state.store.init();
+        } catch (error) {
+            if (openToken !== state.ui.modalEpoch || state.ui.modalOwner !== 'list-pending') {
+                return;
+            }
+            console.error('[VocabSessionView] 词表加载失败:', error);
+            showFeedbackMessage('词表加载失败，请刷新后重试', 'error');
+            closeListModal();
+            return;
+        }
+        if (openToken !== state.ui.modalEpoch || state.ui.modalOwner !== 'list-pending') {
+            return;
+        }
+        if (!state.elements.listModal) {
+            showFeedbackMessage('词表面板未加载', 'warning');
+            closeListModal();
+            return;
+        }
+        state.ui.modalOwner = 'list';
+        state.ui.listBrowserPage = 1;
+        state.elements.listModal.removeAttribute('hidden');
+        state.elements.listModal.dataset.open = 'true';
+        if (state.elements.listSearch) {
+            state.elements.listSearch.value = state.ui.listBrowserQuery;
+        }
+        if (state.elements.listLearnedOnly) {
+            state.elements.listLearnedOnly.checked = state.ui.listBrowserLearnedOnly;
+        }
+        renderListBrowser();
+        if (state.elements.listSearch && typeof state.elements.listSearch.focus === 'function') {
+            state.elements.listSearch.focus();
+        }
+    }
+
+    function closeListModal(restoreFocus = true) {
+        const ownsModal = state.ui.modalOwner === 'list' || state.ui.modalOwner === 'list-pending';
+        const previousFocus = state.ui.listRestoreFocus;
+        clearListSearchTimer();
+        state.ui.modalEpoch += 1;
+        if (ownsModal) {
+            state.ui.modalOwner = null;
+        }
+        if (!state.elements.listModal) {
+            return;
+        }
+        state.elements.listModal.setAttribute('hidden', 'hidden');
+        state.elements.listModal.dataset.open = 'false';
+        if (ownsModal && restoreFocus) {
+            focusElement(previousFocus);
+        }
+        state.ui.listRestoreFocus = null;
+    }
+
+    function exportCurrentList() {
+        if (!state.store || typeof state.store.getWords !== 'function') {
+            showFeedbackMessage('词汇数据尚未加载', 'warning');
+            return;
+        }
+        const entries = state.store.getWords().map((word) => {
+            const entry = {
+                word: String(word?.word || '').trim(),
+                meaning: String(word?.meaning || '').trim(),
+                example: String(word?.example || '').trim()
+            };
+            if (typeof word?.freq === 'number' && Number.isFinite(word.freq)) {
+                entry.freq = word.freq;
+            }
+            return entry;
+        });
+        const payload = {
+            type: 'wordlist',
+            exportedAt: new Date().toISOString(),
+            listId: state.store.getActiveListId ? state.store.getActiveListId() : null,
+            name: getActiveListLabel(),
+            category: 'external',
+            entries
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        triggerDownload(blob, `vocab-list-${formatTimestamp()}.json`);
+        showFeedbackMessage('可分享词表已导出', 'success');
+    }
+
     function buildFeedbackSummary(status, word) {
         const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '稍后安排';
         if (status === 'correct') {
@@ -3390,7 +3882,7 @@
     }
 
     function handleCardAction(event) {
-        if (isSettingsModalOpen()) {
+        if (isSettingsModalOpen() || isListModalOpen()) {
             return;
         }
         const trigger = event.target.closest('[data-action]');
