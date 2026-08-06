@@ -5255,6 +5255,9 @@
         ]);
 
         let correctCount = 0;
+        // replay 发生在同一试卷页面，state.dataset 包含该试卷的 questionGroups，
+        // 用于识别拆分多选题组并正确分配评分。
+        const replayQuestionGroupLookup = buildQuestionGroupLookup(state.dataset);
         questionIds.forEach((questionId) => {
             const rawEntry = rawComparison[questionId];
             const comparisonEntry = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
@@ -5266,6 +5269,30 @@
             const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
             const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
             let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
+            // 拆分多选题组：保存的 userAnswer 是整组的选中集合（数组），
+            // 需要按拆分逻辑分配每个子题的答案，避免数组与标量比较导致历史记录全错。
+            const replayGroup = replayQuestionGroupLookup.get(normalizeQuestionId(questionId)) || null;
+            const isReplaySplitGroup = Boolean(
+                replayGroup
+                && (replayGroup.kind === 'multi_choice' || replayGroup.kind === 'multiple_choice')
+                && Array.isArray(replayGroup.questionIds)
+                && replayGroup.questionIds.length > 1
+            );
+            if (isReplaySplitGroup && Array.isArray(userAnswer)) {
+                const replayAnswers = {};
+                replayGroup.questionIds.forEach((qid) => {
+                    replayAnswers[qid] = userAnswer;
+                });
+                const splitSelection = resolveSplitMultiChoiceSelection(
+                    replayAnswers,
+                    normalizedCorrectAnswers,
+                    replayGroup,
+                    questionId
+                );
+                if (splitSelection.expectedToken) {
+                    isCorrect = splitSelection.isCorrect;
+                }
+            }
             if (isCorrect) {
                 correctCount += 1;
             }
