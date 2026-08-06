@@ -5100,18 +5100,27 @@
         }
         const comparison = results.answerComparison;
         // 先清除所有旧标记，再按判卷结果重新标记。
-        // 选择器覆盖所有可能被标记的容器（含 .options/.tfng-options/.mcq-group/.radio-group 等）。
-        document.querySelectorAll('.drop-target-summary, .paragraph-dropzone, .match-dropzone, .radio-options label, .radio-group label, .checkbox-options label, .options label, .options-list label, .multiple-choice-options label, .matching-options label, .mcq-group label, .multiple-choice label, .question-item label, .choice-item label, .tfng-options label, .tfng-item label, .matching-table td').forEach((node) => {
+        // 按 class 全局清除（不依赖容器选择器），确保 legacy 容器（.mcq/.location-options 等）
+        // 的旧绿/红标记也被清理，避免 replay 不同记录时残留。
+        document.querySelectorAll('.option-correct, .option-wrong, .drop-target-summary.correct, .drop-target-summary.wrong, .paragraph-dropzone.correct, .paragraph-dropzone.wrong, .match-dropzone.correct, .match-dropzone.wrong').forEach((node) => {
             node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong');
         });
         // 把 comparison 条目按 checkbox/radio 组聚合：组内任一拆分子题的正确答案
         // 都属于该组，避免拆分多选题时"正确选项在另一子题被当成用户错选"而标红。
+        // 正确答案未知（legacy 记录无 correctAnswerMap，isCorrect 为 null）时跳过该组，
+        // 避免把历史记录的所有选择都标红。
         const groupEntries = new Map();
         Object.values(comparison).forEach((entry) => {
             const questionId = entry.questionId;
             const inputNodes = collectChoiceInputsForQuestion(questionId);
             if (!inputNodes.length) {
                 return; // 无 input 时走 dropzone 分支
+            }
+            const correctValues = (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
+                .map((value) => canonicalizeAnswerToken(value))
+                .filter(Boolean);
+            if (correctValues.length === 0) {
+                return; // 正确答案未知，不标记对错
             }
             const groupKey = inputNodes[0].name || questionId;
             if (!groupEntries.has(groupKey)) {
@@ -5122,10 +5131,7 @@
                 });
             }
             const group = groupEntries.get(groupKey);
-            (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
-                .map((value) => canonicalizeAnswerToken(value))
-                .filter(Boolean)
-                .forEach((value) => group.correctValues.add(value));
+            correctValues.forEach((value) => group.correctValues.add(value));
             (Array.isArray(entry.userAnswer) ? entry.userAnswer : [entry.userAnswer])
                 .map((value) => canonicalizeAnswerToken(value))
                 .filter(Boolean)
@@ -5155,6 +5161,10 @@
             if (collectChoiceInputsForQuestion(questionId).length) {
                 return; // 已按组处理
             }
+            // 正确答案未知（isCorrect 为 null）时跳过，避免历史记录被误标红
+            if (entry.isCorrect === null || entry.isCorrect === undefined) {
+                return;
+            }
             const isCorrect = Boolean(entry.isCorrect);
             const aliases = resolveAnswerAliases(questionId);
             const selector = aliases.map((alias) => {
@@ -5175,6 +5185,10 @@
             }
             if (dropzoneNode) {
                 dropzoneNode.classList.add(isCorrect ? 'correct' : 'wrong');
+                // 未作答的拖拽区：补上 filled 状态，让 wrong/correct 样式能生效
+                if (!dropzoneNode.classList.contains('dropzone-filled')) {
+                    dropzoneNode.classList.add('dropzone-filled');
+                }
             }
         });
     }
