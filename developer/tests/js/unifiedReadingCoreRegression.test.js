@@ -443,6 +443,15 @@ function testPersistedChoiceStringSplitsForHighlighting() {
     );
 }
 
+function testJudgementChoicesRemainAvailableForHighlighting() {
+    const { hooks } = loadHooks();
+    assert.deepStrictEqual(
+        plain(hooks.normalizeChoiceTokenList(['TRUE', 'FALSE', 'NOT GIVEN'])),
+        ['false', 'NOT GIVEN', 'true'],
+        'judgement answers should not be discarded by letter-choice normalization'
+    );
+}
+
 function testSuiteTimerIgnoresEmptyLimitValues() {
     const { hooks, timer } = loadHooks();
     hooks.setTestState({
@@ -462,6 +471,7 @@ async function main() {
         testReplaySplitCheckboxStringScoresByToken();
         testSplitCheckboxRequiresExpectedSelectionCount();
         testPersistedChoiceStringSplitsForHighlighting();
+        testJudgementChoicesRemainAvailableForHighlighting();
         process.stdout.write(JSON.stringify({
             status: 'pass',
             detail: 'unified reading replay regression covered'
@@ -477,6 +487,7 @@ async function main() {
     testReplaySplitCheckboxStringScoresByToken();
     testSplitCheckboxRequiresExpectedSelectionCount();
     testPersistedChoiceStringSplitsForHighlighting();
+    testJudgementChoicesRemainAvailableForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();
     process.stdout.write(JSON.stringify({
         status: 'pass',

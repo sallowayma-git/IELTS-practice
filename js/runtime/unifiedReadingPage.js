@@ -4795,9 +4795,6 @@
             if (!token) {
                 return;
             }
-            if (!/^[A-Z]$/.test(token)) {
-                return;
-            }
             if (!normalized.some((existing) => areAnswerTokensEquivalent(existing, token))) {
                 normalized.push(token);
             }
