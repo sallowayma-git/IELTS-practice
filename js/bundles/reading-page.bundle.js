@@ -10351,7 +10351,31 @@
     function hasAnswer(questionId) {
         const answers = collectAnswers();
         const value = answers[questionId];
-        return splitAnswerTokens(value).length > 0;
+        const tokens = splitAnswerTokens(value);
+        if (tokens.length === 0) {
+            return false;
+        }
+        // 拆分多选题组：一个 questionId 持有了整组的选中集合，
+        // 需按组内期望数量判断是否真正作答完毕（如 5选2 需选满 2 个）。
+        const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+        const questionGroup = buildQuestionGroupLookup(state.dataset).get(normalizedQuestionId) || null;
+        const isSplitMultiChoiceGroup = Boolean(
+            questionGroup
+            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            && Array.isArray(questionGroup.questionIds)
+            && questionGroup.questionIds.length > 1
+        );
+        if (isSplitMultiChoiceGroup) {
+            const answerKey = state.dataset?.answerKey || {};
+            const expectedCount = questionGroup.questionIds
+                .map((id) => canonicalizeAnswerToken(answerKey[id]))
+                .filter(Boolean)
+                .length;
+            if (expectedCount > 0) {
+                return tokens.length >= expectedCount;
+            }
+        }
+        return true;
     }
 
     function buildResultsFromAnswers(dataset, answers = {}) {
