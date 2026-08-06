@@ -4111,6 +4111,8 @@
         if (!dropzone) return;
         dropzone.dataset.answerValue = '';
         dropzone.dataset.answerLabel = '';
+        // 清除判卷残留的标记，避免重置后旧颜色残留
+        dropzone.classList.remove('correct', 'wrong');
         if (dropzone.classList.contains('drop-target-summary')) {
             dropzone.innerHTML = '';
         } else {
@@ -4194,6 +4196,8 @@
         const normalizedLabel = String(label || value || '').trim();
         dropzone.dataset.answerValue = normalizedValue;
         dropzone.dataset.answerLabel = normalizedLabel;
+        // 作答阶段移除判卷残留的标记，避免旧颜色泄露
+        dropzone.classList.remove('correct', 'wrong');
         const holder = ensureDropzoneHolder(dropzone);
         if (!holder) {
             return;
@@ -4604,8 +4608,8 @@
                 answers[questionIds[0]] = sorted.length > 1 ? sorted : (sorted[0] || '');
                 return;
             }
-            questionIds.forEach((questionId, index) => {
-                answers[questionId] = sorted[index] || '';
+            questionIds.forEach((questionId) => {
+                answers[questionId] = sorted;
             });
         });
 
@@ -5042,6 +5046,7 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
+        applyResultsToQuestionArea(results);
     }
 
     function escapeSelector(value) {
@@ -5053,6 +5058,80 @@
             }
         }
         return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    function applyResultsToQuestionArea(results) {
+        if (!results || !results.answerComparison) {
+            return;
+        }
+        const comparison = results.answerComparison;
+        // 先清除所有旧标记，再按判卷结果重新标记
+        document.querySelectorAll('.drop-target-summary, .paragraph-dropzone, .match-dropzone, .radio-options label, .checkbox-options label, .options label, .question-item label, .choice-item label, .matching-table td').forEach((node) => {
+            node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong');
+        });
+        Object.values(comparison).forEach((entry) => {
+            const questionId = entry.questionId;
+            const isCorrect = Boolean(entry.isCorrect);
+            const aliases = resolveAnswerAliases(questionId);
+            const selector = aliases.map((alias) => {
+                const escaped = escapeSelector(alias);
+                return [
+                    `.drop-target-summary[data-question="${escaped}"]`,
+                    `.paragraph-dropzone[data-question="${escaped}"]`,
+                    `.match-dropzone[data-question="${escaped}"]`
+                ].join(', ');
+            }).join(', ');
+            let dropzoneNode = null;
+            if (selector) {
+                try {
+                    dropzoneNode = document.querySelector(selector);
+                } catch (_) {
+                    // ignore invalid selector
+                }
+            }
+            if (dropzoneNode) {
+                dropzoneNode.classList.add(isCorrect ? 'correct' : 'wrong');
+                return;
+            }
+            // 选择题：标记正确/错误选项
+            // 先尝试直接按 questionId 查找 input；多选题的 name 可能是 q10_11 或 q11-12-13，
+            // 需要扫描所有 checkbox 组匹配。
+            let inputNodes = document.querySelectorAll(`input[name="${escapeSelector(questionId)}"]`);
+            if (!inputNodes.length) {
+                document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
+                    const name = input.name || '';
+                    const ids = expandQuestionSequence(name);
+                    if (ids.some((id) => normalizeQuestionId(id) === normalizeQuestionId(questionId))) {
+                        inputNodes = document.querySelectorAll(`input[name="${escapeSelector(name)}"]`);
+                    }
+                });
+            }
+            if (!inputNodes.length) {
+                return;
+            }
+            const correctValues = (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
+                .map((value) => String(value == null ? '' : value).trim().toLowerCase())
+                .filter(Boolean);
+            const userValues = (Array.isArray(entry.userAnswer) ? entry.userAnswer : [entry.userAnswer])
+                .map((value) => String(value == null ? '' : value).trim().toLowerCase())
+                .filter(Boolean);
+            inputNodes.forEach((input) => {
+                // 优先找 label 包裹（选择题），表格题型无 label 时直接高亮 td 单元格
+                const label = input.closest('label');
+                const highlightTarget = label || input.closest('td');
+                if (!highlightTarget) {
+                    return;
+                }
+                const inputValue = String(input.value || '').trim().toLowerCase();
+                const isCorrectOption = correctValues.some((value) => value === inputValue);
+                const isUserOption = userValues.some((value) => value === inputValue);
+                if (isCorrectOption) {
+                    highlightTarget.classList.add('option-correct');
+                } else if (isUserOption) {
+                    highlightTarget.classList.add('option-wrong');
+                }
+            });
+        });
     }
 
     function normalizeReplayQuestionId(rawValue) {
@@ -6632,6 +6711,10 @@
         });
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);
+        });
+        // 清除选择题/表格判卷残留的绿/红标记
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
+            node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
         });
     }
 
