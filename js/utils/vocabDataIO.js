@@ -231,6 +231,14 @@
             const hasV2ProgressEnvelope = typeof payload.version === 'string'
                 && isPlainObject(payload.config)
                 && hasListId;
+            const legacyProgressEnvelope = !declaredType
+                && typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && Array.isArray(payload.reviewQueue)
+                && !hasListId;
+            if (legacyProgressEnvelope) {
+                throw new Error('不支持 v1 进度备份，请使用 v2 格式重新导出');
+            }
             if (explicitProgress && !hasV2ProgressEnvelope) {
                 throw new Error('进度备份缺少 v2 词表或配置数据');
             }

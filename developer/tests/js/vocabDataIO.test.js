@@ -67,6 +67,16 @@ await assert.rejects(
     /v2|配置|词表/i
 );
 
+await assert.rejects(
+    window.VocabDataIO.importWordList(makeJsonFile({
+        version: '0.6.2-fix',
+        config: { activeListId: 'default' },
+        words: [{ word: 'alpha', meaning: 'A', correctCount: 2 }],
+        reviewQueue: ['alpha']
+    }, 'v1-progress.json')),
+    /不支持 v1 进度备份/
+);
+
 const exportBlob = await window.VocabDataIO.exportProgress([
     { id: 'word-1', word: 'garden', meaning: '花园', userInput: 'gardon' }
 ]);
