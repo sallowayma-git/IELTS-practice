@@ -293,6 +293,67 @@ async function testDefaultLexiconWriteFailureRejectsInitialization() {
     assert.strictEqual(vocabStore.state.ready, false, '持久化失败时不得把词汇域标记为 ready');
 }
 
+async function testConfigUsesCentralBoundsAndTypes() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        dataSeed: {
+            words: [{ id: 'word-1', word: 'alpha', meaning: 'A' }]
+        }
+    });
+    await vocabStore.init();
+
+    await vocabStore.setConfig({
+        dailyNew: -10,
+        reviewLimit: 999,
+        masteryCount: 2.9,
+        notify: 'yes',
+        theme: 'neon'
+    });
+    let config = vocabStore.getConfig();
+    assert.strictEqual(config.dailyNew, 0);
+    assert.strictEqual(config.reviewLimit, 300);
+    assert.strictEqual(config.masteryCount, 2);
+    assert.strictEqual(config.notify, true);
+    assert.strictEqual(config.theme, 'auto');
+
+    await vocabStore.setConfig({
+        dailyNew: '10',
+        reviewLimit: Number.NaN,
+        masteryCount: Number.POSITIVE_INFINITY,
+        notify: false,
+        theme: 'dark'
+    });
+    config = vocabStore.getConfig();
+    assert.strictEqual(config.dailyNew, 20);
+    assert.strictEqual(config.reviewLimit, 100);
+    assert.strictEqual(config.masteryCount, 4);
+    assert.strictEqual(config.notify, false);
+    assert.strictEqual(config.theme, 'dark');
+}
+
+async function testProgressRestoreRequiresCompleteV2Identity() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        dataSeed: {
+            words: [{ id: 'word-1', word: 'alpha', meaning: 'A' }]
+        }
+    });
+    await vocabStore.init();
+
+    await assert.rejects(
+        vocabStore.replaceProgress([{ word: 'beta', meaning: 'B' }], { dailyNew: 10 }, null),
+        /未知词表/
+    );
+    await assert.rejects(
+        vocabStore.replaceProgress([{ word: 'beta', meaning: 'B' }], null, 'custom'),
+        /有效配置/
+    );
+    await assert.rejects(
+        vocabStore.replaceProgress([{ word: 'beta', meaning: 'B' }], { dailyNew: 10 }, 'other-list'),
+        /未知词表/
+    );
+}
+
 async function main() {
     const results = [];
     try {
@@ -306,6 +367,10 @@ async function main() {
         results.push({ name: '背诵更新保留错词业务元数据', status: 'pass' });
         await testDefaultLexiconWriteFailureRejectsInitialization();
         results.push({ name: '默认词库持久化失败会阻断 ready', status: 'pass' });
+        await testConfigUsesCentralBoundsAndTypes();
+        results.push({ name: '配置写入遵守统一范围和类型', status: 'pass' });
+        await testProgressRestoreRequiresCompleteV2Identity();
+        results.push({ name: '进度恢复要求完整 v2 词表身份', status: 'pass' });
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

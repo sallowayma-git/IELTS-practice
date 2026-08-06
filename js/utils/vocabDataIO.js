@@ -11,6 +11,10 @@
 
     const DEFAULT_EXPORT_VERSION = '0.6.2-fix';
 
+    function isPlainObject(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function normalizeFrequency(value) {
         if (value == null || value === '') {
             return null;
@@ -83,26 +87,21 @@
     }
 
     function cloneProgressEntry(raw) {
-        if (!raw || typeof raw !== 'object') {
+        if (!isPlainObject(raw)) {
             return null;
         }
-        if (!raw.word || !raw.meaning) {
+        const word = typeof raw.word === 'string' ? raw.word.trim() : '';
+        const meaning = typeof raw.meaning === 'string' ? raw.meaning.trim() : '';
+        if (!word || !meaning) {
             return null;
         }
-        const clone = {};
-        Object.keys(raw).forEach((key) => {
-            clone[key] = raw[key];
-        });
-        return clone;
+        return { ...raw, word, meaning };
     }
 
     function buildImportResult(type, entries, meta = {}) {
         const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
         const normalizedMeta = { ...meta };
         normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
-        if (Array.isArray(normalizedMeta.reviewQueue)) {
-            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
-        }
         return {
             type,
             entries: safeEntries,
@@ -226,12 +225,30 @@
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
             const metaCategory = extractCategory(payload.meta, null);
-            const category = extractCategory(payload, metaCategory || 'external');
-            const looksProgress = typeof payload.version === 'string'
-                || Array.isArray(payload.reviewQueue)
-                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+            const declaredType = typeof payload.type === 'string' ? payload.type.trim().toLowerCase() : '';
+            const explicitProgress = declaredType === 'progress' || declaredType === 'progress-backup';
+            const hasListId = typeof payload.listId === 'string' && payload.listId.trim();
+            const hasV2ProgressEnvelope = typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && hasListId;
+            const legacyProgressEnvelope = !declaredType
+                && typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && Array.isArray(payload.reviewQueue)
+                && !hasListId;
+            if (legacyProgressEnvelope) {
+                throw new Error('不支持 v1 进度备份，请使用 v2 格式重新导出');
+            }
+            if (explicitProgress && !hasV2ProgressEnvelope) {
+                throw new Error('进度备份缺少 v2 词表或配置数据');
+            }
+            const looksProgress = (explicitProgress || !declaredType) && hasV2ProgressEnvelope;
+            const category = extractCategory(payload, metaCategory || (looksProgress ? 'user' : 'external'));
             if (looksProgress) {
-                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                const entries = payload.words.map(cloneProgressEntry);
+                if (entries.some((entry) => !entry)) {
+                    throw new Error('进度备份包含无效词汇数据');
+                }
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
@@ -240,7 +257,7 @@
                         : undefined,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
-                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
+                    config: isPlainObject(payload.config) ? { ...payload.config } : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
@@ -310,18 +327,23 @@
         return normalizedResult;
     }
 
-    async function exportProgress() {
+    async function exportProgress(words) {
         if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
+        if (!Array.isArray(words)) throw new Error('当前词表尚未加载');
         await window.AppData.ready;
         const config = await window.AppData.vocab.getConfig();
         const listId = config.activeListId || 'default';
-        const list = await window.AppData.vocab.readList(listId);
+        const entries = words.map(cloneProgressEntry);
+        if (entries.some((entry) => !entry)) {
+            throw new Error('当前词表包含无效词汇数据');
+        }
         const payload = {
+            type: 'progress',
             version: DEFAULT_EXPORT_VERSION,
             exportedAt: new Date().toISOString(),
             listId,
             config,
-            words: Array.isArray(list) ? list : (list && Array.isArray(list.words) ? list.words : [])
+            words: entries
         };
         return new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     }
