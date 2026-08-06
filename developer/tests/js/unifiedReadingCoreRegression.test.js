@@ -408,6 +408,41 @@ function testReplaySplitCheckboxStringScoresByToken() {
     assert.strictEqual(results.answerComparison.q9.isCorrect, true, 'second persisted choice should match its split key');
 }
 
+function testSplitCheckboxRequiresExpectedSelectionCount() {
+    const { hooks } = loadHooks();
+    const dataset = {
+        questionGroups: [{
+            groupId: 'mc-inline-count',
+            kind: 'multiple_choice',
+            questionIds: ['q8', 'q9']
+        }],
+        answerKey: {
+            q8: 'A',
+            q9: 'C'
+        }
+    };
+
+    assert.strictEqual(
+        hooks.hasAnswerInDataset('q8', { q8: ['A'], q9: ['A'] }, dataset),
+        false,
+        'one selected token must not mark every split question answered'
+    );
+    assert.strictEqual(
+        hooks.hasAnswerInDataset('q8', { q8: ['A', 'C'], q9: ['A', 'C'] }, dataset),
+        true,
+        'the split group should count as answered after the expected selections are present'
+    );
+}
+
+function testPersistedChoiceStringSplitsForHighlighting() {
+    const { hooks } = loadHooks();
+    assert.deepStrictEqual(
+        plain(hooks.normalizeChoiceTokenList('A,B')),
+        ['A', 'B'],
+        'persisted split choices should expose each selected option for review highlighting'
+    );
+}
+
 function testSuiteTimerIgnoresEmptyLimitValues() {
     const { hooks, timer } = loadHooks();
     hooks.setTestState({
@@ -425,6 +460,8 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 async function main() {
     if (process.env.UNIFIED_READING_REPLAY_ONLY === '1') {
         testReplaySplitCheckboxStringScoresByToken();
+        testSplitCheckboxRequiresExpectedSelectionCount();
+        testPersistedChoiceStringSplitsForHighlighting();
         process.stdout.write(JSON.stringify({
             status: 'pass',
             detail: 'unified reading replay regression covered'
@@ -438,6 +475,8 @@ async function main() {
     testGroupedCheckboxSingleKeyArrayScoresPartially();
     testAcceptedAnswerArraysStaySinglePoint();
     testReplaySplitCheckboxStringScoresByToken();
+    testSplitCheckboxRequiresExpectedSelectionCount();
+    testPersistedChoiceStringSplitsForHighlighting();
     testSuiteTimerIgnoresEmptyLimitValues();
     process.stdout.write(JSON.stringify({
         status: 'pass',

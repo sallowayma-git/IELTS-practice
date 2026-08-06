@@ -8332,8 +8332,7 @@
                     const labelMap = dataset?.questionDisplayMap || {};
                     const label = labelMap[qId] || String(qId).replace(/^q/i, '');
                     let status = statusMap.get(qId) || '';
-                    const answered = Object.prototype.hasOwnProperty.call(answers, qId)
-                        && splitAnswerTokens(answers[qId]).length > 0;
+                    const answered = hasAnswerInDataset(qId, answers, dataset);
                     if (answered && !status) {
                         status = 'answered';
                     }
@@ -10348,8 +10347,7 @@
         return 1;
     }
 
-    function hasAnswer(questionId) {
-        const answers = collectAnswers();
+    function hasAnswerInDataset(questionId, answers, dataset) {
         const value = answers[questionId];
         const tokens = splitAnswerTokens(value);
         if (tokens.length === 0) {
@@ -10358,7 +10356,7 @@
         // 拆分多选题组：一个 questionId 持有了整组的选中集合，
         // 需按组内期望数量判断是否真正作答完毕（如 5选2 需选满 2 个）。
         const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
-        const questionGroup = buildQuestionGroupLookup(state.dataset).get(normalizedQuestionId) || null;
+        const questionGroup = buildQuestionGroupLookup(dataset).get(normalizedQuestionId) || null;
         const isSplitMultiChoiceGroup = Boolean(
             questionGroup
             && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
@@ -10366,7 +10364,7 @@
             && questionGroup.questionIds.length > 1
         );
         if (isSplitMultiChoiceGroup) {
-            const answerKey = state.dataset?.answerKey || {};
+            const answerKey = dataset?.answerKey || {};
             const expectedCount = questionGroup.questionIds
                 .map((id) => canonicalizeAnswerToken(answerKey[id]))
                 .filter(Boolean)
@@ -10376,6 +10374,10 @@
             }
         }
         return true;
+    }
+
+    function hasAnswer(questionId) {
+        return hasAnswerInDataset(questionId, collectAnswers(), state.dataset);
     }
 
     function buildResultsFromAnswers(dataset, answers = {}) {
@@ -10598,9 +10600,7 @@
             }
             const group = groupEntries.get(groupKey);
             correctValues.forEach((value) => group.correctValues.add(value));
-            (Array.isArray(entry.userAnswer) ? entry.userAnswer : [entry.userAnswer])
-                .map((value) => canonicalizeAnswerToken(value))
-                .filter(Boolean)
+            normalizeChoiceTokenList(entry.userAnswer)
                 .forEach((value) => group.userValues.add(value));
         });
         groupEntries.forEach((group) => {
@@ -10799,6 +10799,8 @@
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
                 buildReplayResults,
+                hasAnswerInDataset,
+                normalizeChoiceTokenList,
                 buildResultsFromAnswers,
                 renderTimer,
                 handleSubmit
@@ -11039,6 +11041,8 @@
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
                 buildReplayResults,
+                hasAnswerInDataset,
+                normalizeChoiceTokenList,
                 mergeDraft,
                 normalizeNotes,
                 normalizeNoteOutlines,
