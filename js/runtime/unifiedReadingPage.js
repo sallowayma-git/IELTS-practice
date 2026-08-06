@@ -5151,7 +5151,7 @@
                 }
                 if (group.correctValues.has(inputValue)) {
                     highlightTarget.classList.add('option-correct');
-                } else if (group.userValues.has(inputValue)) {
+                } else if (input.checked || group.userValues.has(inputValue)) {
                     highlightTarget.classList.add('option-wrong');
                 }
             });
