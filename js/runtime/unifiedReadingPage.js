@@ -5102,8 +5102,12 @@
         // 先清除所有旧标记，再按判卷结果重新标记。
         // 按 class 全局清除（不依赖容器选择器），确保 legacy 容器（.mcq/.location-options 等）
         // 的旧绿/红标记也被清理，避免 replay 不同记录时残留。
-        document.querySelectorAll('.option-correct, .option-wrong, .drop-target-summary.correct, .drop-target-summary.wrong, .paragraph-dropzone.correct, .paragraph-dropzone.wrong, .match-dropzone.correct, .match-dropzone.wrong').forEach((node) => {
+        document.querySelectorAll('.option-correct, .option-wrong, .drop-target-summary.correct, .drop-target-summary.wrong, .paragraph-dropzone.correct, .paragraph-dropzone.wrong, .match-dropzone.correct, .match-dropzone.wrong, [data-result-filled="true"]').forEach((node) => {
             node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong');
+            if (node.dataset && node.dataset.resultFilled === 'true') {
+                node.classList.remove('dropzone-filled');
+                delete node.dataset.resultFilled;
+            }
         });
         // 把 comparison 条目按 checkbox/radio 组聚合：组内任一拆分子题的正确答案
         // 都属于该组，避免拆分多选题时"正确选项在另一子题被当成用户错选"而标红。
@@ -5188,6 +5192,7 @@
                 // 未作答的拖拽区：补上 filled 状态，让 wrong/correct 样式能生效
                 if (!dropzoneNode.classList.contains('dropzone-filled')) {
                     dropzoneNode.classList.add('dropzone-filled');
+                    dropzoneNode.dataset.resultFilled = 'true';
                 }
             }
         });
@@ -5196,7 +5201,7 @@
     function collectChoiceInputsForQuestion(questionId) {
         const normalizedTarget = normalizeQuestionId(questionId);
         // 直接匹配
-        let inputs = document.querySelectorAll(`input[name="${escapeSelector(questionId)}"]`);
+        let inputs = document.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
         if (inputs.length) {
             return Array.from(inputs);
         }
@@ -5278,10 +5283,11 @@
                 && Array.isArray(replayGroup.questionIds)
                 && replayGroup.questionIds.length > 1
             );
-            if (isReplaySplitGroup && Array.isArray(userAnswer)) {
+            const replaySelectedTokens = Array.isArray(userAnswer) ? userAnswer : splitAnswerTokens(userAnswer);
+            if (isReplaySplitGroup && replaySelectedTokens.length > 0) {
                 const replayAnswers = {};
                 replayGroup.questionIds.forEach((qid) => {
-                    replayAnswers[qid] = userAnswer;
+                    replayAnswers[qid] = replaySelectedTokens;
                 });
                 const splitSelection = resolveSplitMultiChoiceSelection(
                     replayAnswers,
@@ -5864,8 +5870,12 @@
         document.body.classList.remove('review-readonly-mode');
         document.body.classList.remove('timer-locked-mode');
         // 清除判卷残留的绿/红标记，避免切回作答态后用户看到旧的对错反馈
-        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong, [data-result-filled="true"]').forEach((node) => {
             node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
+            if (node.dataset && node.dataset.resultFilled === 'true') {
+                node.classList.remove('dropzone-filled');
+                delete node.dataset.resultFilled;
+            }
         });
         enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {

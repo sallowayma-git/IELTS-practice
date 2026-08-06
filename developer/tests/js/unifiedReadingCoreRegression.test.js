@@ -380,6 +380,34 @@ function testAcceptedAnswerArraysStaySinglePoint() {
     assert.strictEqual(results.answerComparison.q8.isCorrect, true, 'accepted textual alternative should still match');
 }
 
+function testReplaySplitCheckboxStringScoresByToken() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        dataset: {
+            questionGroups: [{
+                groupId: 'mc-replay-string',
+                kind: 'multi_choice',
+                questionIds: ['q8', 'q9']
+            }]
+        }
+    });
+    const results = hooks.buildReplayResults({
+        answers: {
+            q8: 'A,C',
+            q9: 'A,C'
+        },
+        correctAnswerMap: {
+            q8: 'A',
+            q9: 'C'
+        },
+        allQuestionIds: ['q8', 'q9']
+    });
+
+    assert.strictEqual(results.scoreInfo.correct, 2, 'persisted comma-delimited split choices should replay as two correct tokens');
+    assert.strictEqual(results.answerComparison.q8.isCorrect, true, 'first persisted choice should match its split key');
+    assert.strictEqual(results.answerComparison.q9.isCorrect, true, 'second persisted choice should match its split key');
+}
+
 function testSuiteTimerIgnoresEmptyLimitValues() {
     const { hooks, timer } = loadHooks();
     hooks.setTestState({
@@ -395,12 +423,21 @@ function testSuiteTimerIgnoresEmptyLimitValues() {
 }
 
 async function main() {
+    if (process.env.UNIFIED_READING_REPLAY_ONLY === '1') {
+        testReplaySplitCheckboxStringScoresByToken();
+        process.stdout.write(JSON.stringify({
+            status: 'pass',
+            detail: 'unified reading replay regression covered'
+        }));
+        return;
+    }
     await testSubmitPostsBeforeExplanationRenderFinishes();
     testDraftBearingInitIsNotSuppressed();
     testSuiteReviewAnnotationsUseDraftChannel();
     testGroupedCheckboxSplitKeysScorePartially();
     testGroupedCheckboxSingleKeyArrayScoresPartially();
     testAcceptedAnswerArraysStaySinglePoint();
+    testReplaySplitCheckboxStringScoresByToken();
     testSuiteTimerIgnoresEmptyLimitValues();
     process.stdout.write(JSON.stringify({
         status: 'pass',
