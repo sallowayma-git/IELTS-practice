@@ -243,6 +243,29 @@
             line-height: 1.35;
         }
 
+        /* Table radio cell result highlighting */
+        .matching-table tbody td.option-correct {
+            background: #dcfce7;
+            border-radius: 6px;
+            box-shadow: inset 0 0 0 1px #10b981;
+        }
+
+        .matching-table tbody td.option-wrong {
+            background: #fee2e2;
+            border-radius: 6px;
+            box-shadow: inset 0 0 0 1px #ef4444;
+        }
+
+        body.dark-mode .matching-table tbody td.option-correct {
+            background: rgba(16, 185, 129, 0.15);
+            box-shadow: inset 0 0 0 1px #10b981;
+        }
+
+        body.dark-mode .matching-table tbody td.option-wrong {
+            background: rgba(239, 68, 68, 0.15);
+            box-shadow: inset 0 0 0 1px #ef4444;
+        }
+
         .paragraph-dropzone,
         .match-dropzone {
             min-height: 40px;
@@ -266,6 +289,22 @@
         .paragraph-dropzone.dropzone-filled,
         .match-dropzone.dropzone-filled {
             border-style: solid;
+            border-color: #64748b;
+            background: rgba(100, 116, 139, 0.1);
+        }
+
+        /* Correct answer - green */
+        .paragraph-dropzone.dropzone-filled.correct,
+        .match-dropzone.dropzone-filled.correct {
+            border-color: var(--success);
+            background: #dcfce7;
+        }
+
+        /* Wrong answer - red */
+        .paragraph-dropzone.dropzone-filled.wrong,
+        .match-dropzone.dropzone-filled.wrong {
+            border-color: #ef4444;
+            background: #fee2e2;
         }
 
         .paragraph-label {
@@ -320,6 +359,37 @@
         .drag-item[draggable="false"] {
             cursor: pointer;
             border-style: solid;
+        }
+
+        /* Draggable word styles for summary completion */
+        .draggable-word {
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #eff6ff;
+            padding: 6px 10px;
+            cursor: grab;
+            font-size: 0.9rem;
+            user-select: none;
+            display: inline-block;
+            margin: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .draggable-word:hover {
+            background: #dbeafe;
+            border-color: #93c5fd;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .draggable-word.dragging {
+            opacity: 0.55;
+            cursor: grabbing;
+        }
+
+        .draggable-word[draggable="false"] {
+            cursor: not-allowed;
+            opacity: 0.5;
         }
 
         .practice-nav {
@@ -705,10 +775,16 @@
             border-color: #475569;
         }
 
-        body.dark-mode .drag-item {
+        body.dark-mode .drag-item,
+        body.dark-mode .draggable-word {
             background: #334155;
             border-color: #64748b;
             color: #f8fafc;
+        }
+
+        body.dark-mode .draggable-word:hover {
+            background: #475569;
+            border-color: #94a3b8;
         }
 
         body.dark-mode #timer,
@@ -904,6 +980,61 @@
             line-height: 1.5;
         }
 
+        /* Result highlighting for choice options */
+        .choice-item label.option-correct,
+        .checkbox-options label.option-correct,
+        .options-list label.option-correct,
+        .multiple-choice-options label.option-correct,
+        .matching-options label.option-correct,
+        .mcq-group label.option-correct,
+        .radio-options label.option-correct,
+        .radio-group label.option-correct,
+        .multiple-choice label.option-correct,
+        .true-false-ng label.option-correct {
+            background: #dcfce7;
+            border-color: var(--success);
+            color: #065f46;
+            border-radius: 8px;
+            padding: 6px 10px;
+            border: 1px solid;
+        }
+
+        .choice-item label.option-wrong,
+        .checkbox-options label.option-wrong,
+        .options-list label.option-wrong,
+        .multiple-choice-options label.option-wrong,
+        .matching-options label.option-wrong,
+        .mcq-group label.option-wrong,
+        .radio-options label.option-wrong,
+        .radio-group label.option-wrong,
+        .multiple-choice label.option-wrong,
+        .true-false-ng label.option-wrong {
+            background: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+            border-radius: 8px;
+            padding: 6px 10px;
+            border: 1px solid;
+        }
+
+        body.dark-mode .choice-item label.option-correct,
+        body.dark-mode .checkbox-options label.option-correct,
+        body.dark-mode .radio-options label.option-correct,
+        body.dark-mode .true-false-ng label.option-correct {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: #10b981;
+            color: #6ee7b7;
+        }
+
+        body.dark-mode .choice-item label.option-wrong,
+        body.dark-mode .checkbox-options label.option-wrong,
+        body.dark-mode .radio-options label.option-wrong,
+        body.dark-mode .true-false-ng label.option-wrong {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: #ef4444;
+            color: #fca5a5;
+        }
+
         .choice-item label input[type="checkbox"],
         .checkbox-options label input[type="checkbox"],
         .options-list label input[type="checkbox"],
@@ -1019,10 +1150,24 @@
         }
 
         .drop-target-summary.dropzone-filled {
+            border-bottom-color: #64748b;
+            background: rgba(100, 116, 139, 0.1);
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        /* Correct answer - green */
+        .drop-target-summary.dropzone-filled.correct {
             border-bottom-color: var(--success);
             background: #dcfce7;
             color: var(--success);
-            font-weight: 600;
+        }
+
+        /* Wrong answer - red */
+        .drop-target-summary.dropzone-filled.wrong {
+            border-bottom-color: #ef4444;
+            background: #fee2e2;
+            color: #dc2626;
         }
 
         .drop-target-summary .drag-item {
