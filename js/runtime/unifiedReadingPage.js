@@ -5140,8 +5140,7 @@
         });
         groupEntries.forEach((group) => {
             group.inputs.forEach((input) => {
-                const label = input.closest('label');
-                const highlightTarget = label || input.closest('td');
+                const highlightTarget = resolveChoiceHighlightTarget(input);
                 if (!highlightTarget) {
                     return;
                 }
@@ -5193,6 +5192,28 @@
                 }
             }
         });
+    }
+
+    function resolveChoiceHighlightTarget(input) {
+        const explicitTarget = input.closest([
+            'label',
+            'td',
+            '.heading-option',
+            '.choice-option',
+            '.answer-option',
+            '.radio-option',
+            '.checkbox-option',
+            '.option-item'
+        ].join(', '));
+        if (explicitTarget) {
+            return explicitTarget;
+        }
+        const parent = input.parentElement;
+        if (!parent) {
+            return null;
+        }
+        const siblingChoices = parent.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+        return siblingChoices.length === 1 ? parent : null;
     }
 
     function collectChoiceInputsForQuestion(questionId) {
