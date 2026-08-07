@@ -12291,7 +12291,7 @@
         /**
          * 处理题目窗口关闭
          */
-        handleExamWindowClosed(examId, closedWindow = null) {
+        async handleExamWindowClosed(examId, closedWindow = null) {
             const info = this.examWindows && this.examWindows.get(examId);
             const expectedWindow = info && info.window ? info.window : null;
             if (closedWindow && expectedWindow && closedWindow !== expectedWindow) {
@@ -12316,12 +12316,22 @@
                 if (closedWindow && suite.windowRef && closedWindow !== suite.windowRef) {
                     return false;
                 }
+                const pausedAtMs = Date.now();
+                if (suite.suiteTimerRunning !== false
+                    || !Number.isFinite(Number(suite.suiteTimerPausedAtMs))) {
+                    suite.suiteTimerPausedAtMs = pausedAtMs;
+                }
+                suite.suiteTimerRunning = false;
                 suite.windowRef = null;
                 suite.status = 'active';
-                suite.lastUpdate = Date.now();
-                const persisted = typeof this._mirrorSessionToStorage === 'function'
-                    ? this._mirrorSessionToStorage(suite)
-                    : false;
+                suite.lastUpdate = pausedAtMs;
+                let persisted = false;
+                if (typeof this._commitSuiteRecovery === 'function') {
+                    persisted = await this._commitSuiteRecovery(suite, { reason: 'window-close' });
+                }
+                if (!persisted && typeof this._mirrorSessionToStorage === 'function') {
+                    this._mirrorSessionToStorage(suite);
+                }
                 if (persisted) {
                     window.showMessage && window.showMessage('套题练习窗口已关闭，当前进度已暂停并保留，可从套题模式继续。', 'warning');
                 } else {

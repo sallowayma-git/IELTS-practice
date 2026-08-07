@@ -199,6 +199,12 @@ async function main() {
             } finally {
                 kernel.driver.db = realDb;
             }
+            const firefoxQuotaCode = kernel._latch({
+                name: 'NS_ERROR_DOM_QUOTA_REACHED',
+                code: 1014,
+                message: 'Firefox quota full'
+            }).code;
+            const statusAfterFirefoxQuota = kernel.status();
             const remoteCommitPromise = new Promise((resolve, reject) => {
                 const timer = setTimeout(() => reject(new Error('cross-realm commit notification timed out')), 3000);
                 const unsubscribe = remoteKernel.onCommitted((event) => {
@@ -227,6 +233,28 @@ async function main() {
                 { type: 'upsert', store: 'practiceDetails', recordId: 'r1', data: { answers: ['A'], correctAnswers: ['B'] }, expectedRevision: 0 },
                 { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { notes: ['review'] }, expectedRevision: 0 }
             ], { operationId: 'entity-1' });
+            const intent = { command: 'practice-suite', payload: { recordId: 'intent-r1' } };
+            const intentFirst = await kernel.mutateEntities([{
+                type: 'upsert', store: 'practiceSummaries', recordId: 'intent-r1',
+                data: { title: 'Intent replay' }, expectedRevision: 0
+            }], { operationId: 'entity-intent-replay', intent });
+            const intentReplay = await kernel.mutateEntities([{
+                type: 'upsert', store: 'practiceSummaries', recordId: 'intent-r1',
+                data: { title: 'Intent replay' }, expectedRevision: 1
+            }], { operationId: 'entity-intent-replay', intent });
+            let intentConflict = null;
+            try {
+                await kernel.mutateEntities([{
+                    type: 'upsert', store: 'practiceSummaries', recordId: 'intent-r1',
+                    data: { title: 'Different intent' }, expectedRevision: 1
+                }], {
+                    operationId: 'entity-intent-replay',
+                    intent: { command: 'practice-suite', payload: { recordId: 'different' } }
+                });
+            } catch (error) { intentConflict = error.code; }
+            await kernel.mutateEntities([{
+                type: 'delete', store: 'practiceSummaries', recordId: 'intent-r1', expectedRevision: 1
+            }], { operationId: 'entity-intent-cleanup' });
             const practiceProjection = await kernel.readPracticeSnapshot(['r1']);
             let detailsListCode = null;
             try { await kernel.listEntities('practiceDetails'); } catch (error) { detailsListCode = error.code; }
@@ -302,12 +330,17 @@ async function main() {
                 status: kernel.status(),
                 stores,
                 quotaTransactionErrorName,
+                firefoxQuotaCode,
+                statusAfterFirefoxQuota,
                 remoteCommit,
                 first,
                 retry,
                 conflict,
                 entities,
                 entityRetry,
+                intentFirst,
+                intentReplay,
+                intentConflict,
                 practiceProjection,
                 detailsListCode,
                 snapshot,
@@ -347,6 +380,8 @@ async function main() {
         assert.equal(result.promptFileRead, false, 'startup migration must never prompt for or read without permission');
         assert.deepEqual(result.stores, ['documents', 'practiceAnnotations', 'practiceDetails', 'practiceSummaries', 'system']);
         assert.equal(result.quotaTransactionErrorName, 'QuotaExceededError', 'transaction abort must preserve the real quota cause');
+        assert.equal(result.firefoxQuotaCode, 'QUOTA_EXCEEDED');
+        assert.equal(result.statusAfterFirefoxQuota.state, 'ready', 'Firefox quota must not permanently latch the backend');
         assert.equal(result.first.revision, 1);
         assert.equal(result.remoteCommit.operationId, 'cross-realm-commit');
         assert.equal(result.remoteCommit.remote, true);
@@ -354,6 +389,8 @@ async function main() {
         assert.deepEqual(result.retry, result.first);
         assert.equal(result.conflict, 'CONFLICT');
         assert.deepEqual(result.entityRetry, result.entities);
+        assert.deepEqual(result.intentReplay, result.intentFirst, 'semantic intent must replay after derived operations change');
+        assert.equal(result.intentConflict, 'CONFLICT', 'different semantic intent must still conflict');
         assert.deepEqual(Object.keys(result.practiceProjection).sort(), ['practiceAnnotations', 'practiceDetails', 'practiceSummaries']);
         assert.equal(result.practiceProjection.practiceSummaries[0].title, 'Reading');
         assert.equal(result.practiceProjection.practiceDetails[0].answers[0], 'A');

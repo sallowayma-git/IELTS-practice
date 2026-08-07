@@ -407,6 +407,7 @@ async function run() {
     }, { expectedEntityRevision: 1 });
     assert.strictEqual(staleSave.committed, false, 'stale tabs must not overwrite a newer active-session entity');
     assert.strictEqual(staleSave.code, 'STALE_RECOVERY_WRITE');
+    assert.strictEqual(staleSave.item, undefined, 'stale receipt must not expose another tab current entity as the saved item');
     assert.strictEqual((await app.recovery.getActiveSession('active-cas')).marker, 'second');
     const staleDiscard = await app.recovery.discardActiveSession('active-cas', { expectedEntityRevision: 1 });
     assert.strictEqual(staleDiscard.committed, false, 'stale tabs must not discard a newer active-session entity');
@@ -434,6 +435,30 @@ async function run() {
         marker: 'delayed-after-cleanup'
     }, { expectedEntityRevision: 0 });
     assert.strictEqual(delayedAfterCleanup.committed, false, 'cleanup must not reopen a discarded entity revision');
+    const recoveryKey = 'recovery.activeSessions';
+    const recoveryDocument = shared.docs.get(recoveryKey);
+    const expiredRecoveryItems = clone(recoveryDocument.data);
+    const expiredTombstone = expiredRecoveryItems.find((item) => item && item.id === 'active-cas');
+    expiredTombstone.updatedAt = new Date(Date.now() - (31 * 24 * 60 * 60 * 1000)).toISOString();
+    shared.docs.set(recoveryKey, envelope(
+        recoveryKey,
+        expiredRecoveryItems,
+        'present',
+        recoveryDocument.revision + 1,
+        'expire-recovery-tombstone'
+    ));
+    const expiredTombstoneCleanup = await app.recovery.cleanupForRetry();
+    assert.deepStrictEqual(
+        Array.from(expiredTombstoneCleanup.removedByKind.activeSession),
+        ['active-cas'],
+        'existing recovery TTL must remove tombstones older than 30 days'
+    );
+    const recreatedAfterTtl = await app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 1,
+        marker: 'recreated-after-ttl'
+    }, { expectedEntityRevision: 0 });
+    assert.strictEqual(recreatedAfterTtl.committed, true);
     const suiteClaimA = await app.recovery.saveActiveSession({
         id: 'suite-claim-a',
         revision: 1,

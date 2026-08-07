@@ -896,7 +896,6 @@
             const items = asArray(current.data);
             const cutoff = Date.now() - RECOVERY_TTL_MS;
             const retained = items.filter((item) => {
-                if (item && item._recoveryTombstone === true) return true;
                 const timestamp = recoveryTimestamp(item);
                 return timestamp === null || timestamp > cutoff;
             });
@@ -1019,6 +1018,7 @@
             if (index >= 0) current.items[index] = item; else current.items.push(item);
             return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
         }));
+        if (!receipt || receipt.committed !== true) return receipt;
         const committedItem = (await kernel.read(key))
             .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
         return Object.assign({}, receipt, { item: clone(committedItem || item) });
@@ -1091,12 +1091,13 @@
                 const cutoff = Date.now() - RECOVERY_TTL_MS;
                 const removedIds = [];
                 const retained = current.items.filter((item) => {
-                    if (item && item._recoveryTombstone === true) return true;
                     const id = idOf(item, ['id', 'sessionId', 'recordId']);
                     if (id && preservedIds.has(String(id))) return true;
                     const timestamp = recoveryTimestamp(item);
                     const expired = timestamp !== null && timestamp <= cutoff;
-                    const explicitlyDiscardable = Boolean(id && discardableIds.has(String(id)));
+                    const tombstone = item && item._recoveryTombstone === true;
+                    if (tombstone && !expired) return true;
+                    const explicitlyDiscardable = !tombstone && Boolean(id && discardableIds.has(String(id)));
                     if (expired || explicitlyDiscardable) {
                         if (id) removedIds.push(String(id));
                         return false;

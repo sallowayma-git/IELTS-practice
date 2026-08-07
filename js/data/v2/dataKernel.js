@@ -595,9 +595,11 @@
             const quotaCode = String(error && error.code || '').toUpperCase();
             if (error && (
                 quotaName === 'QUOTAEXCEEDEDERROR'
+                || quotaName === 'NS_ERROR_DOM_QUOTA_REACHED'
                 || quotaCode === 'NS_ERROR_DOM_QUOTA_REACHED'
                 || quotaCode === 'QUOTAEXCEEDEDERROR'
                 || quotaCode === '22'
+                || quotaCode === '1014'
             )) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
             return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
@@ -653,7 +655,9 @@
             });
             const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
             if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
-            const fingerprint = checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings });
+            const fingerprint = options.intent === undefined
+                ? checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings })
+                : checksum({ mutationType: 'documents', intent: canonicalizeJson(options.intent, '$.intent'), warnings });
             return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
         }
         async mutate(changes, options = {}) {
@@ -753,7 +757,10 @@
             }
             const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
             if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
-            const spec = { operationId: opId, warnings, pending: [], fingerprint: checksum({ operations: items, warnings }), stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))) };
+            const fingerprint = options.intent === undefined
+                ? checksum({ operations: items, warnings })
+                : checksum({ mutationType: 'entities', intent: canonicalizeJson(options.intent, '$.intent'), warnings });
+            const spec = { operationId: opId, warnings, pending: [], fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))) };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
                     const replay = journalResult(journal, spec); if (replay) { done(replay); return; }

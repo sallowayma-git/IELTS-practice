@@ -351,21 +351,19 @@ async function main() {
     });
     const failedPromotionApp = walOrderingHarness.makeApp();
     failedPromotionApp.initializeSuiteMode();
+    const staleWalSession = failedPromotionApp.currentSuiteSession;
     await failedPromotionApp._ensureSuiteRecoveryReady();
-    assert.equal(failedPromotionApp.currentSuiteSession.currentIndex, 0, 'failed promotion must retain the higher-revision WAL for retry');
-    assert.equal(failedPromotionApp.currentSuiteSession.activeExamId, 'p1');
-    assert.equal(failedPromotionApp.currentSuiteSession._lastDurableRecoveryRevision, 15, 'stale receipt must advance the next CAS baseline');
-    assert.equal(walOrderingHarness.sessionStore.peek('simulation').revision, 16, 'stale promotion must preserve a retryable window WAL across reload');
-    walOrderingHarness.recoveryCalls.saveQueue.push((_value, options) => {
-        assert.equal(options.expectedEntityRevision, 15, 'retry must CAS against the actual durable revision');
-        assert(Number(_value.revision) > options.expectedEntityRevision, 'retry snapshot must advance beyond the v2 CAS baseline');
-        return true;
-    });
-    const retriedPromotionApp = walOrderingHarness.makeApp();
-    retriedPromotionApp.initializeSuiteMode();
-    await retriedPromotionApp._ensureSuiteRecoveryReady();
-    assert.equal(retriedPromotionApp.currentSuiteSession.activeExamId, 'p1', 'reload must retry the retained WAL state');
-    assert.equal(walOrderingHarness.activeSessionStore.get(orderingBase.id).activeExamId, 'p1', 'retry must promote the retained WAL state');
+    assert.equal(staleWalSession._suiteRecoveryWritesBlocked, true, 'stale WAL owner must be write-blocked');
+    assert.equal(failedPromotionApp.currentSuiteSession.currentIndex, 1, 'failed promotion must fall back to durable progress');
+    assert.equal(failedPromotionApp.currentSuiteSession.activeExamId, 'p2');
+    assert.equal(failedPromotionApp.currentSuiteSession._lastDurableRecoveryRevision, 10, 'stale receipt must not adopt another tab revision');
+    assert.equal(walOrderingHarness.sessionStore.peek('simulation').revision, 10, 'losing WAL must be replaced by the durable snapshot');
+    const savesBeforeDurableReload = walOrderingHarness.recoveryCalls.save;
+    const durableReloadApp = walOrderingHarness.makeApp();
+    durableReloadApp.initializeSuiteMode();
+    await durableReloadApp._ensureSuiteRecoveryReady();
+    assert.equal(durableReloadApp.currentSuiteSession.activeExamId, 'p2');
+    assert.equal(walOrderingHarness.recoveryCalls.save, savesBeforeDurableReload, 'reload must not retry the losing WAL');
 
     const resumedApp = makeApp();
     resumedApp.initializeSuiteMode();

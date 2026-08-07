@@ -90,6 +90,7 @@
                     await global.AppData.ready;
                 }
                 const items = await recovery.listActiveSessions();
+                this._restorePersistentMultiSuiteSessions(items);
                 const candidates = (Array.isArray(items) ? items : [])
                     .filter((item) => item
                         && item.schema === 'suite-session-v2'
@@ -115,7 +116,12 @@
                                 reason: 'window-wal-promotion'
                             });
                             if (!promoted) {
-                                console.warn('[SuitePractice] 最新窗口 WAL 暂未提升到持久 v2 recovery，恢复前将再次重试。');
+                                if (fastSnapshotSession._suiteRecoveryWritesBlocked === true) {
+                                    selected = restored;
+                                    this._mirrorSuiteRecoverySnapshot(candidate);
+                                } else {
+                                    console.warn('[SuitePractice] 最新窗口 WAL 暂未提升到持久 v2 recovery，恢复前将再次重试。');
+                                }
                             }
                         }
                         this._installRestoredSuiteSession(selected);
@@ -142,6 +148,10 @@
                         reason: 'legacy-window-migration'
                     });
                     if (!migrated) {
+                        if (fastSnapshotSession._suiteRecoveryWritesBlocked === true) {
+                            this._clearSessionStorage(fastSnapshotSession);
+                            return null;
+                        }
                         console.warn('[SuitePractice] 未能将窗口恢复快照迁移到持久 v2 recovery。');
                     }
                     this._notifySuiteResumeAvailable(fastSnapshotSession);
@@ -157,6 +167,34 @@
                 if (fastSnapshotSession) this._notifySuiteResumeAvailable(fastSnapshotSession);
                 return fastSnapshotSession;
             }
+        },
+
+        _restorePersistentMultiSuiteSessions(items) {
+            if (this.multiSuiteSessionsMap instanceof Map) {
+                for (const [baseExamId, session] of this.multiSuiteSessionsMap) {
+                    if (session && session._restoredFromWindowSession === true) {
+                        this.multiSuiteSessionsMap.delete(baseExamId);
+                    }
+                }
+            }
+            const candidates = (Array.isArray(items) ? items : [])
+                .filter((item) => item && item.schema === multiSuiteRecoverySchema && Number(item.version) === 2)
+                .filter((item) => this._isValidMultiSuiteRecoverySnapshot(item) && item.sessions.length === 1)
+                .sort((left, right) => {
+                    const leftTime = Number(left.sessions[0].lastUpdate) || Date.parse(left.updatedAt || '') || 0;
+                    const rightTime = Number(right.sessions[0].lastUpdate) || Date.parse(right.updatedAt || '') || 0;
+                    return rightTime - leftTime;
+                });
+            const restoredBaseIds = new Set();
+            candidates.forEach((candidate) => {
+                const session = this._cloneSuitePlainObject(candidate.sessions[0]);
+                const baseExamId = String(session.baseExamId || '').trim();
+                if (!baseExamId || restoredBaseIds.has(baseExamId)) return;
+                session._lastDurableRecoveryRevision = Math.max(0, Number(candidate.revision) || 0);
+                session.revision = Math.max(session._lastDurableRecoveryRevision, Number(session.revision) || 0);
+                this.multiSuiteSessionsMap.set(baseExamId, session);
+                restoredBaseIds.add(baseExamId);
+            });
         },
 
         async _ensureSuiteRecoveryReady() {
@@ -522,7 +560,7 @@
             if (!this._canContinueSuiteOperation(session)) {
                 return withSubmitOutcome(true, false, 'suite_teardown_in_progress');
             }
-            return withSubmitOutcome(advanced, advanced, advanced ? '' : 'suite_advance_failed');
+            return withSubmitOutcome(true, true, advanced ? '' : 'suite_advance_failed');
         },
 
         async continueSuitePractice() {
@@ -993,6 +1031,7 @@
                 ?? data.updatedAt));
             if (
                 !session
+                || session._suiteRecoveryWritesBlocked === true
                 || !['active', 'initializing'].includes(session.status)
                 || !normalizedExamId
                 || !payloadSuiteId
@@ -1702,8 +1741,7 @@
                 return false;
             }
             if (typeof this.openExam !== 'function') {
-                window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
-                await this._abortSuiteSession(session, { reason: 'missing_open_exam', skipExamId: skipExamIdForAbort || null });
+                window.showMessage && window.showMessage('当前篇已保存，但下一篇未能打开；可从套题模式继续。', 'warning');
                 return false;
             }
 
@@ -1774,8 +1812,7 @@
                 if (openError) {
                     console.warn('[SuitePractice] 套题无法打开下一篇:', openError);
                 }
-                window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
-                await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: skipExamIdForAbort || null });
+                window.showMessage && window.showMessage('当前篇已保存，但下一篇未能打开；可从套题模式继续。', 'warning');
                 return false;
             }
 
@@ -1899,6 +1936,7 @@
         },
 
         _mirrorSessionToStorage(session) {
+            if (!session || session._suiteRecoveryWritesBlocked === true) return false;
             const snapshot = this._buildSuiteRecoverySnapshot(session);
             return this._mirrorSuiteRecoverySnapshot(snapshot);
         },
@@ -1913,14 +1951,18 @@
             const info = examId && this.examWindows && this.examWindows.get(examId);
             if (!info || !info.window || info.window.closed) {
                 const fallbackGeneration = Number(fallback && fallback.sessionGeneration);
+                const fallbackExamId = String(fallback && fallback.examId || '').trim();
                 if (!fallback
+                    || !fallbackExamId
+                    || !Array.isArray(session.sequence)
+                    || !session.sequence.some((entry) => entry && String(entry.examId) === fallbackExamId)
                     || !String(fallback.expectedSessionId || '').trim()
                     || !String(fallback.windowSessionToken || '').trim()
                     || !Number.isInteger(fallbackGeneration)
                     || fallbackGeneration <= 0) {
                     return null;
                 }
-                return { ...this._cloneSuitePlainObject(fallback), examId };
+                return { ...this._cloneSuitePlainObject(fallback), examId: fallbackExamId };
             }
             if (info.suiteSessionId && String(info.suiteSessionId) !== String(session.id)) return null;
             const expectedSessionId = typeof info.expectedSessionId === 'string' ? info.expectedSessionId.trim() : '';
@@ -2042,13 +2084,9 @@
                         notCommitted.code = receipt && receipt.code
                             ? String(receipt.code)
                             : 'RECOVERY_COMMIT_NOT_CONFIRMED';
-                        const actualRevision = Number(receipt && receipt.actualEntityRevision);
                         if (notCommitted.code === 'STALE_RECOVERY_WRITE'
-                            && Number.isInteger(actualRevision) && actualRevision >= 0) {
-                            session._lastDurableRecoveryRevision = actualRevision;
-                            session.revision = Math.max(Number(session.revision) || 0, actualRevision + 1);
-                            snapshot.revision = session.revision;
-                            this._mirrorSuiteRecoverySnapshot(snapshot);
+                            || notCommitted.code === 'RECOVERY_GROUP_CONFLICT') {
+                            session._suiteRecoveryWritesBlocked = true;
                         }
                         throw notCommitted;
                     }
@@ -2242,7 +2280,7 @@
                     windowBinding: snapshot.windowBinding && typeof snapshot.windowBinding === 'object'
                         ? this._cloneSuitePlainObject(snapshot.windowBinding)
                         : null,
-                    windowName: snapshot.windowName || 'ielts-suite-mode-tab',
+                    windowName: this._resolveSuiteWindowName(snapshot.id, snapshot.windowName),
                     lastUpdate: Number.isFinite(Number(snapshot.lastUpdate)) ? Number(snapshot.lastUpdate) : now,
                     revision: Math.max(0, Number(snapshot.revision) || 0),
                     draftRevision: Math.max(0, Number(snapshot.draftRevision) || 0),
@@ -2309,10 +2347,11 @@
             if (this.currentSuiteSession && !this._isSuiteSessionCurrentOwner(session)) {
                 return false;
             }
+            const writesWereBlocked = session._suiteRecoveryWritesBlocked === true;
             session._suiteTeardownInProgress = true;
             await this._freezeSuiteRecoveryWrites(session);
             if (!await this._discardPersistentSuiteRecovery(session)) {
-                session._suiteRecoveryWritesBlocked = false;
+                session._suiteRecoveryWritesBlocked = writesWereBlocked;
                 session._suiteTeardownInProgress = false;
                 return false;
             }
@@ -2477,6 +2516,7 @@
                     canPrev: idx > 0,
                     canNext: idx < session.sequence.length - 1,
                     draft,
+                    draftsByExam: this._cloneSuitePlainObject(session.draftsByExam || {}),
                     elapsed,
                     globalTimerAnchorMs: timerAnchorMs,
                     suiteTimerAnchorMs: timerAnchorMs,
@@ -2727,6 +2767,38 @@
             return this._sendSimulationContext(session, examId, targetWindow);
         },
 
+        _serializeMultiSuiteSession(session) {
+            return {
+                id: String(session.id),
+                baseExamId: String(session.baseExamId),
+                status: session.status || 'active',
+                startTime: Number(session.startTime) || Date.now(),
+                suiteResults: (Array.isArray(session.suiteResults) ? session.suiteResults : []).map((result) => ({
+                    suiteId: String(result.suiteId),
+                    examId: String(result.examId),
+                    answers: this._cloneSuitePlainObject(result.answers || {}),
+                    correctAnswers: this._cloneSuitePlainObject(result.correctAnswers || {}),
+                    answerComparison: this._cloneSuitePlainObject(result.answerComparison || {}),
+                    scoreInfo: this._cloneSuitePlainObject(result.scoreInfo || {}),
+                    spellingErrors: this._cloneSuitePlainObject(Array.isArray(result.spellingErrors) ? result.spellingErrors : []),
+                    timestamp: Number(result.timestamp) || 0,
+                    duration: Number(result.duration) || 0,
+                    metadata: this._cloneSuitePlainObject(result.metadata || {}),
+                    rawData: this._cloneSuitePlainObject(result.rawData || null)
+                })),
+                expectedSuiteCount: session.expectedSuiteCount == null
+                    ? null
+                    : Number(session.expectedSuiteCount),
+                metadata: this._cloneSuitePlainObject(session.metadata || {}),
+                lastUpdate: Number(session.lastUpdate) || Date.now(),
+                revision: Math.max(0, Number(session.revision) || 0),
+                finalizeOperationId: session.finalizeOperationId || null,
+                finalizeRecord: session.finalizeRecord
+                    ? this._cloneSuitePlainObject(session.finalizeRecord)
+                    : null
+            };
+        },
+
         _mirrorMultiSuiteSessionsToStorage() {
             const windowSession = global.AppData?.recovery?.windowSession;
             if (!windowSession || typeof windowSession.save !== 'function') return false;
@@ -2736,35 +2808,7 @@
                     : [])
                     .filter(Boolean)
                     .sort((left, right) => String(left.baseExamId || '').localeCompare(String(right.baseExamId || '')))
-                    .map((session) => ({
-                        id: String(session.id),
-                        baseExamId: String(session.baseExamId),
-                        status: session.status || 'active',
-                        startTime: Number(session.startTime) || Date.now(),
-                        suiteResults: (Array.isArray(session.suiteResults) ? session.suiteResults : []).map((result) => ({
-                            suiteId: String(result.suiteId),
-                            examId: String(result.examId),
-                            answers: this._cloneSuitePlainObject(result.answers || {}),
-                            correctAnswers: this._cloneSuitePlainObject(result.correctAnswers || {}),
-                            answerComparison: this._cloneSuitePlainObject(result.answerComparison || {}),
-                            scoreInfo: this._cloneSuitePlainObject(result.scoreInfo || {}),
-                            spellingErrors: this._cloneSuitePlainObject(Array.isArray(result.spellingErrors) ? result.spellingErrors : []),
-                            timestamp: Number(result.timestamp) || 0,
-                            duration: Number(result.duration) || 0,
-                            metadata: this._cloneSuitePlainObject(result.metadata || {}),
-                            rawData: this._cloneSuitePlainObject(result.rawData || null)
-                        })),
-                        expectedSuiteCount: session.expectedSuiteCount == null
-                            ? null
-                            : Number(session.expectedSuiteCount),
-                        metadata: this._cloneSuitePlainObject(session.metadata || {}),
-                        lastUpdate: Number(session.lastUpdate) || Date.now(),
-                        revision: Math.max(0, Number(session.revision) || 0),
-                        finalizeOperationId: session.finalizeOperationId || null,
-                        finalizeRecord: session.finalizeRecord
-                            ? this._cloneSuitePlainObject(session.finalizeRecord)
-                            : null
-                    }));
+                    .map((session) => this._serializeMultiSuiteSession(session));
                 if (!sessions.length) {
                     return typeof windowSession.discard === 'function'
                         ? windowSession.discard(multiSuiteRecoveryName) !== false
@@ -2782,6 +2826,40 @@
             }
         },
 
+        async _commitMultiSuiteRecovery(session) {
+            const recovery = global.AppData && global.AppData.recovery;
+            if (!session || !session.id || !recovery || typeof recovery.saveActiveSession !== 'function') {
+                return false;
+            }
+            const revision = Math.max(0, Number(session.revision) || 0);
+            const snapshot = {
+                schema: multiSuiteRecoverySchema,
+                version: 2,
+                id: String(session.id),
+                revision,
+                sessions: [this._serializeMultiSuiteSession(session)],
+                updatedAt: Date.now()
+            };
+            try {
+                const receipt = await recovery.saveActiveSession(snapshot, {
+                    operationId: `multi-suite-recovery:${String(session.id)}:${revision}`,
+                    expectedEntityRevision: Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                });
+                if (!receipt || receipt.committed !== true) {
+                    const error = new Error('Multi-suite recovery commit was not confirmed');
+                    error.code = receipt && receipt.code ? String(receipt.code) : 'RECOVERY_COMMIT_NOT_CONFIRMED';
+                    throw error;
+                }
+                session._lastDurableRecoveryRevision = revision;
+                this._mirrorMultiSuiteSessionsToStorage();
+                return true;
+            } catch (error) {
+                console.warn('[MultiSuite] 持久 v2 恢复写入失败:', error);
+                this._showSuiteRecoveryPersistenceFailure(error, 'multi-suite');
+                return false;
+            }
+        },
+
         _restoreMultiSuiteSessionsFromStorage() {
             const windowSession = global.AppData?.recovery?.windowSession;
             if (!windowSession || typeof windowSession.get !== 'function') return false;
@@ -2794,6 +2872,7 @@
                 }
                 snapshot.sessions.forEach((storedSession) => {
                     const session = this._cloneSuitePlainObject(storedSession);
+                    session._restoredFromWindowSession = true;
                     this.multiSuiteSessionsMap.set(session.baseExamId, session);
                 });
                 return true;
@@ -2953,6 +3032,10 @@
 
             if (alreadyRecorded) {
                 console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
+                if (Number(session.revision) > Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                    && !await this._commitMultiSuiteRecovery(session)) {
+                    return false;
+                }
                 if (session.status !== 'completed' && this.isMultiSuiteComplete(session)) {
                     return await this.finalizeMultiSuiteRecord(session);
                 }
@@ -2996,6 +3079,9 @@
             }
             session.revision = Math.max(0, Number(session.revision) || 0) + 1;
             this._mirrorMultiSuiteSessionsToStorage();
+            if (!await this._commitMultiSuiteRecovery(session)) {
+                return false;
+            }
 
             // 检查是否所有套题都已完成
             if (this.isMultiSuiteComplete(session)) {
@@ -3169,16 +3255,24 @@
                 };
 
                 const operationId = `practice-multisuite:${String(session.id)}:finalize`;
-                const frozenRecord = session.finalizeRecord
+                const hasFrozenRecord = Boolean(session.finalizeRecord
                     && session.finalizeOperationId === operationId
-                    && typeof session.finalizeRecord === 'object'
+                    && typeof session.finalizeRecord === 'object');
+                const frozenRecord = hasFrozenRecord
                     ? this._cloneSuitePlainObject(session.finalizeRecord)
                     : record;
                 frozenRecord.operationId = operationId;
                 session.finalizeOperationId = operationId;
                 session.finalizeRecord = this._cloneSuitePlainObject(frozenRecord);
                 session.lastUpdate = Date.now();
+                if (!hasFrozenRecord) {
+                    session.revision = Math.max(0, Number(session.revision) || 0) + 1;
+                }
                 this._mirrorMultiSuiteSessionsToStorage();
+                if (Number(session.revision) > Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                    && !await this._commitMultiSuiteRecovery(session)) {
+                    throw new Error('Multi-suite finalize recovery was not committed');
+                }
 
                 // v2 finalizeSuite is idempotent only when the record and operation
                 // id remain byte-for-byte stable across retries.
@@ -3213,7 +3307,17 @@
             await this._runSuitePostCommitStep('刷新多套题总览', () => {
                 this.refreshOverviewData && this.refreshOverviewData();
             });
-            await this._runSuitePostCommitStep('清理多套题会话', () => {
+            await this._runSuitePostCommitStep('清理多套题会话', async () => {
+                const recovery = global.AppData && global.AppData.recovery;
+                if (recovery && typeof recovery.discardActiveSession === 'function') {
+                    const receipt = await recovery.discardActiveSession(String(session.id), {
+                        operationId: `multi-suite-recovery:${String(session.id)}:discard`,
+                        expectedEntityRevision: Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                    });
+                    if (!receipt || receipt.committed !== true) {
+                        throw new Error('Multi-suite recovery discard was not confirmed');
+                    }
+                }
                 if (this.multiSuiteSessionsMap
                     && this.multiSuiteSessionsMap.get(session.baseExamId)?.id === session.id) {
                     this.multiSuiteSessionsMap.delete(session.baseExamId);
@@ -3914,7 +4018,7 @@
         },
 
         async _launchSuiteSessionFromSequence(sequence, options = {}) {
-            const suiteWindowName = options.suiteWindowName || 'ielts-suite-mode-tab';
+            const requestedSuiteWindowName = options.suiteWindowName || 'ielts-suite-mode-tab';
             const flowMode = options.flowMode || 'simulation';
             const frequencyScope = options.frequencyScope || 'all';
             const launchLabel = options.launchLabel || (
@@ -3953,6 +4057,7 @@
                 this._clearSuiteHandshakes();
 
                 const suiteSessionId = this._generateSuiteSessionId();
+                const suiteWindowName = this._resolveSuiteWindowName(suiteSessionId, requestedSuiteWindowName);
                 const lockedAutoAdvance = flowMode === 'stationary'
                     ? false
                     : true;
@@ -4042,6 +4147,13 @@
         },
         _generateSuiteSessionId() {
             return 'suite_' + Date.now().toString(36) + '_' + Math.random().toString(16).slice(2, 8);
+        },
+
+        _resolveSuiteWindowName(sessionId, requestedName = 'ielts-suite-mode-tab') {
+            const id = String(sessionId || '').trim();
+            const base = String(requestedName || 'ielts-suite-mode-tab').trim() || 'ielts-suite-mode-tab';
+            if (!id || base.endsWith(`-${id}`)) return base;
+            return `${base}-${id}`;
         },
 
         _registerSuiteSequence(session) {
@@ -4507,15 +4619,16 @@
                 return false;
             }
 
+            const writesWereBlocked = session._suiteRecoveryWritesBlocked === true;
             session._suiteTeardownInProgress = true;
             await this._freezeSuiteRecoveryWrites(session);
             if (!this._isSuiteSessionCurrentOwner(session)) {
-                session._suiteRecoveryWritesBlocked = false;
+                session._suiteRecoveryWritesBlocked = writesWereBlocked;
                 session._suiteTeardownInProgress = false;
                 return false;
             }
             if (!await this._discardPersistentSuiteRecovery(session)) {
-                session._suiteRecoveryWritesBlocked = false;
+                session._suiteRecoveryWritesBlocked = writesWereBlocked;
                 session._suiteTeardownInProgress = false;
                 return false;
             }
@@ -4693,7 +4806,13 @@
         async _tryRebindSuiteWindow(session, targetEntry) {
             if (!session || !targetEntry || !targetEntry.examId || !session.windowBinding) return null;
             const binding = session.windowBinding;
-            if (String(binding.examId || '') !== String(targetEntry.examId)) return null;
+            const bindingExamId = String(binding.examId || '').trim();
+            if (!bindingExamId
+                || !Array.isArray(session.sequence)
+                || !session.sequence.some((entry) => entry && String(entry.examId) === bindingExamId)
+                || !session.sequence.some((entry) => entry && String(entry.examId) === String(targetEntry.examId))) {
+                return null;
+            }
             const expectedSessionId = typeof binding.expectedSessionId === 'string'
                 ? binding.expectedSessionId.trim()
                 : '';
@@ -4706,7 +4825,6 @@
             }
             const candidate = this._reacquireSuiteWindow(session.windowName || 'ielts-suite-mode-tab', null);
             if (!candidate || candidate.closed) return null;
-            const candidateExamId = this._readSuiteWindowExamId(candidate);
             let candidateIsBlank = false;
             try {
                 candidateIsBlank = !candidate.location || candidate.location.href === 'about:blank';
@@ -4715,14 +4833,6 @@
             }
             if (candidateIsBlank) {
                 this._safelyCloseWindow(candidate);
-                return null;
-            }
-            if (candidateExamId && candidateExamId !== String(targetEntry.examId)) {
-                session._suiteWindowNameConflict = true;
-                return null;
-            }
-            if (!candidateExamId && !isFileProtocol) {
-                session._suiteWindowNameConflict = true;
                 return null;
             }
             if (!await this._verifySuiteWindowBinding(candidate, session, targetEntry, binding)) {

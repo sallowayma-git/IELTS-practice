@@ -326,8 +326,15 @@ async function run() {
             expectedOrigin: 'http://localhost',
             allowOpaqueOrigin: false
         };
+        session.currentIndex = 1;
+        session.activeExamId = 'reading-p2';
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        assert.strictEqual(
+            app._buildSuiteWindowBinding(session).examId,
+            'reading-p1',
+            'proof 前的 fallback binding 必须保留凭据来源篇章'
+        );
         const liveChild = createStubWindow('ielts-suite-mode-tab');
         liveChild.location.href = session.windowBinding.expectedUrl;
         liveChild.addEventListener = () => {};
@@ -344,7 +351,7 @@ async function run() {
                         data: {
                             challenge: payload.data.challenge,
                             suiteSessionId: session.id,
-                            examId: 'reading-p1',
+                            examId: 'reading-p2',
                             sessionId: 'reading-p1-session',
                             windowSessionToken: 'old-window-token',
                             windowSessionGeneration: 4
@@ -360,24 +367,18 @@ async function run() {
             return liveChild;
         };
         try {
-            const rebound = await app._tryRebindSuiteWindow(session, session.sequence[0]);
+            const rebound = await app._tryRebindSuiteWindow(session, session.sequence[1]);
             assert.strictEqual(rebound.window, liveChild, '应复用同一 WindowProxy');
             assert.deepStrictEqual(observedOpenUrls, [{ url: '', name: 'ielts-suite-mode-tab' }]);
             assert.strictEqual(liveChild.location.href, session.windowBinding.expectedUrl, '重绑定不得改写题页 URL');
-            const info = app.examWindows.get('reading-p1');
+            const info = app.examWindows.get('reading-p2');
             assert.strictEqual(info.expectedSessionId, 'reading-p1-session', '重绑定必须保留练习 session 身份');
             assert.strictEqual(info.sessionGeneration, 5, '重绑定 generation 必须严格递增');
             assert.notStrictEqual(info.windowSessionToken, 'old-window-token', '重绑定必须旋转 token');
-            session.activeExamId = 'reading-p2';
-            const logicalBinding = app._buildSuiteWindowBinding(session);
-            assert.strictEqual(logicalBinding.examId, 'reading-p2', '共享 inline 窗口 binding 必须跟随逻辑活动篇章');
-            assert.strictEqual(logicalBinding.windowSessionToken, session.windowBinding.windowSessionToken, '逻辑切篇必须复用已验证窗口凭据');
-            session.windowBinding = logicalBinding;
-            session.activeExamId = null;
-            assert.strictEqual(app._buildSuiteWindowBinding(session).examId, 'reading-p2', 'finalizing snapshot 必须保留最后活动篇章 binding');
+            assert.strictEqual(session.windowBinding.examId, 'reading-p2', 'proof 成功后才能接管实际活动篇章');
         } finally {
             windowStub.open = originalOpen;
-            const info = app.examWindows && app.examWindows.get('reading-p1');
+            const info = app.examWindows && app.examWindows.get('reading-p2');
             if (info && info.closeMonitor) clearInterval(info.closeMonitor);
             if (app._handshakeTimers) {
                 for (const timer of app._handshakeTimers.values()) clearInterval(timer);
@@ -1693,11 +1694,18 @@ async function run() {
         assert(mirroredSession, '部分结果应保留目标 multi-suite 会话');
         assert.strictEqual(mirroredSession.suiteResults.length, 1, '部分结果应写入 suiteResults');
         assert.strictEqual(mirroredSession.suiteResults[0].suiteId, 'set-1', '恢复快照应保留 suiteId');
+        const durableSession = recoveryControl.events
+            .filter((event) => event.type === 'save' && event.value.schema === 'multi-suite-sessions-v2')
+            .at(-1)?.value;
+        assert(durableSession, '部分结果必须写入 AppData v2 activeSession');
+        assert.strictEqual(durableSession.sessions[0].suiteResults.length, 1);
 
+        windowSessionStore.delete('multi-suite-practice');
         const restoredApp = createApp(windowStub);
         restoredApp.initializeSuiteMode();
+        await restoredApp._ensureSuiteRecoveryReady();
         const restoredSession = restoredApp.multiSuiteSessionsMap.get('listening-100-p1');
-        assert(restoredSession, '新的 app 实例应恢复 multi-suite 会话');
+        assert(restoredSession, '没有窗口镜像时仍应从 v2 恢复 multi-suite 会话');
         assert.strictEqual(restoredSession.status, 'active', '部分恢复会话应保持 active');
         assert.strictEqual(restoredSession.expectedSuiteCount, 2, '恢复会话应保留 expectedSuiteCount');
         assert.strictEqual(restoredSession.suiteResults.length, 1, '恢复会话应保留部分结果');
@@ -1705,6 +1713,45 @@ async function run() {
             plain(restoredSession.suiteResults[0].answerComparison),
             { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
             '恢复会话应保留结果比较数据'
+        );
+
+        const retryApp = createApp(windowStub);
+        const retryPayload = {
+            suiteId: 'set-1',
+            totalSuites: 2,
+            sessionId: 'multi-suite-retry-child',
+            answers: { q1: 'B' },
+            answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        };
+        const saveEventStart = recoveryControl.events.length;
+        recoveryControl.saveQueue.push(false);
+        assert.strictEqual(
+            await retryApp.handleMultiSuitePracticeComplete('listening-retry-p1_set1', retryPayload),
+            false,
+            'durable receipt 未确认时部分结果必须 NACK'
+        );
+        const refreshedAfterNack = createApp(windowStub);
+        refreshedAfterNack.initializeSuiteMode();
+        await refreshedAfterNack._ensureSuiteRecoveryReady();
+        assert.strictEqual(
+            refreshedAfterNack.multiSuiteSessionsMap.has('listening-retry-p1'),
+            false,
+            'v2 枚举成功后不得从 window WAL 恢复未提交结果'
+        );
+        assert.strictEqual(
+            await retryApp.handleMultiSuitePracticeComplete('listening-retry-p1_set1', retryPayload),
+            true,
+            '相同结果重试必须再次尝试 durable save'
+        );
+        assert.strictEqual(
+            recoveryControl.events.slice(saveEventStart).filter((event) => (
+                event.type === 'save'
+                && event.value.schema === 'multi-suite-sessions-v2'
+                && event.value.sessions[0].baseExamId === 'listening-retry-p1'
+            )).length,
+            2,
+            '内存中已存在结果不能绕过未完成的 v2 写入'
         );
     }
 
@@ -2039,6 +2086,95 @@ async function run() {
         assert.deepStrictEqual(savedExamIds, [], '中断后不得通过 v1 单篇路径写入记录');
     }
 
+    // Case 4.2: 下一篇打开失败不得删除已提交结果，且可重试继续。
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_open_next_retry');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        app.openExam = async () => { throw new Error('expected next-window failure'); };
+        const discardCount = recoveryControl.events.filter((event) => event.type === 'discard').length;
+        const outcome = await app.handleSuitePracticeComplete('reading-p1', {
+            suiteSessionId: session.id,
+            submissionId: 'submit-open-next-retry',
+            duration: 30,
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        }, session.windowRef);
+        assert.strictEqual(outcome.handled, true);
+        assert.strictEqual(outcome.committed, true, '当前篇 durable 后必须 ACK');
+        assert.strictEqual(outcome.errorCode, 'suite_advance_failed');
+        assert.strictEqual(session.activeExamId, 'reading-p2', 'recovery 必须指向待打开的下一篇');
+        assert.strictEqual(session.results.length, 1, '已提交结果必须留在 suite session');
+        assert.strictEqual(
+            recoveryControl.events.filter((event) => event.type === 'discard').length,
+            discardCount,
+            '自动切题失败不得 discard recovery'
+        );
+        const retriedWindow = createStubWindow('open-next-retried');
+        app.openExam = async () => retriedWindow;
+        assert.strictEqual(await app.continueSuitePractice(), true, '现有继续入口应能重试打开下一篇');
+    }
+
+    // Case 4.3: 关闭活动子页必须暂停计时并写入 durable recovery。
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_close_pauses_timer');
+        const child = session.windowRef;
+        session.suiteTimerRunning = true;
+        session.suiteTimerPausedAtMs = null;
+        session.suiteTimerPausedOffsetMs = 0;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        app.examWindows = new Map([['reading-p1', { window: child, suiteSessionId: session.id }]]);
+        const saveStart = recoveryControl.events.length;
+        assert.strictEqual(await app.handleExamWindowClosed('reading-p1', child), true);
+        assert.strictEqual(session.suiteTimerRunning, false);
+        assert(Number.isFinite(Number(session.suiteTimerPausedAtMs)));
+        const pausedElapsed = app._computeSuiteElapsedSeconds(session, session.suiteTimerPausedAtMs);
+        assert.strictEqual(
+            app._computeSuiteElapsedSeconds(session, session.suiteTimerPausedAtMs + 60000),
+            pausedElapsed,
+            '窗口关闭后套题总计时不得继续增长'
+        );
+        const saved = recoveryControl.events.slice(saveStart).filter((event) => event.type === 'save').at(-1)?.value;
+        assert(saved && saved.suiteTimerRunning === false, '暂停字段必须写入 AppData v2 recovery');
+        assert.strictEqual(saved.suiteTimerPausedAtMs, session.suiteTimerPausedAtMs);
+    }
+
+    // Case 4.4: 同名入口必须按 suite session 隔离窗口所有权。
+    {
+        const originalOpen = windowStub.open;
+        const windowsByName = new Map();
+        windowStub.open = (_url, name) => {
+            if (!windowsByName.has(name)) {
+                const child = createStubWindow(name);
+                child.close = () => { child.closed = true; };
+                windowsByName.set(name, child);
+            }
+            return windowsByName.get(name);
+        };
+        try {
+            const firstApp = createApp(windowStub);
+            const secondApp = createApp(windowStub);
+            firstApp._generateSuiteSessionId = () => 'suite-window-owner-a';
+            secondApp._generateSuiteSessionId = () => 'suite-window-owner-b';
+            const openExam = async (_examId, options) => windowStub.open('', options.windowName);
+            firstApp.openExam = openExam;
+            secondApp.openExam = openExam;
+            const sequence = makeSession().sequence;
+            assert.strictEqual(await firstApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
+            assert.strictEqual(await secondApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
+            assert.notStrictEqual(firstApp.currentSuiteSession.windowName, secondApp.currentSuiteSession.windowName);
+            const secondWindow = secondApp.currentSuiteSession.windowRef;
+            assert.strictEqual(await firstApp._teardownSuiteSession(firstApp.currentSuiteSession), true);
+            assert.strictEqual(secondWindow.closed, false, '旧主页面 teardown 不得关闭新 session 的子页');
+        } finally {
+            windowStub.open = originalOpen;
+        }
+    }
+
     // Case 5: AppData window-session mirror must be cleared after teardown
     {
         const app = createApp(windowStub);
@@ -2057,6 +2193,7 @@ async function run() {
         const session = makeSession('suite_context');
         const p1Highlights = [{ scope: 'left', text: 'P1 context highlight', color: 'yellow' }];
         session.draftsByExam['reading-p1'] = { answers: { q1: 'A' }, highlights: p1Highlights, scrollY: 0 };
+        session.draftsByExam['reading-p2'] = { answers: { q2: 'B' }, noteText: 'P2 draft' };
         session.elapsedByExam['reading-p1'] = 45;
         app.currentSuiteSession = session;
         const targetWindow = createStubWindow('ctx-window');
@@ -2073,6 +2210,12 @@ async function run() {
         assert.strictEqual(ctxMsg.data.canNext, true, 'P1 可以向后');
         assert.deepStrictEqual(ctxMsg.data.draft.answers, { q1: 'A' }, 'draft 应回传');
         assert.deepStrictEqual(ctxMsg.data.draft.highlights, p1Highlights, 'draft highlights 应随上下文回传，避免切题后丢失高亮');
+        assert.deepStrictEqual(
+            plain(ctxMsg.data.draftsByExam),
+            plain(session.draftsByExam),
+            'inline context 必须同时携带所有篇章草稿'
+        );
+        assert.notStrictEqual(ctxMsg.data.draftsByExam, session.draftsByExam, '草稿集合必须以克隆值发送');
         assert.strictEqual(ctxMsg.data.elapsed, 45, 'elapsed 应回传');
 
         const sentP3 = app._sendSimulationContext(session, 'reading-p3', targetWindow);

@@ -1033,9 +1033,11 @@
             const quotaCode = String(error && error.code || '').toUpperCase();
             if (error && (
                 quotaName === 'QUOTAEXCEEDEDERROR'
+                || quotaName === 'NS_ERROR_DOM_QUOTA_REACHED'
                 || quotaCode === 'NS_ERROR_DOM_QUOTA_REACHED'
                 || quotaCode === 'QUOTAEXCEEDEDERROR'
                 || quotaCode === '22'
+                || quotaCode === '1014'
             )) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
             return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
@@ -1091,7 +1093,9 @@
             });
             const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
             if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
-            const fingerprint = checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings });
+            const fingerprint = options.intent === undefined
+                ? checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings })
+                : checksum({ mutationType: 'documents', intent: canonicalizeJson(options.intent, '$.intent'), warnings });
             return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
         }
         async mutate(changes, options = {}) {
@@ -1191,7 +1195,10 @@
             }
             const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
             if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
-            const spec = { operationId: opId, warnings, pending: [], fingerprint: checksum({ operations: items, warnings }), stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))) };
+            const fingerprint = options.intent === undefined
+                ? checksum({ operations: items, warnings })
+                : checksum({ mutationType: 'entities', intent: canonicalizeJson(options.intent, '$.intent'), warnings });
+            const spec = { operationId: opId, warnings, pending: [], fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))) };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
                     const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
@@ -2238,7 +2245,6 @@
             const items = asArray(current.data);
             const cutoff = Date.now() - RECOVERY_TTL_MS;
             const retained = items.filter((item) => {
-                if (item && item._recoveryTombstone === true) return true;
                 const timestamp = recoveryTimestamp(item);
                 return timestamp === null || timestamp > cutoff;
             });
@@ -2361,6 +2367,7 @@
             if (index >= 0) current.items[index] = item; else current.items.push(item);
             return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
         }));
+        if (!receipt || receipt.committed !== true) return receipt;
         const committedItem = (await kernel.read(key))
             .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
         return Object.assign({}, receipt, { item: clone(committedItem || item) });
@@ -2433,12 +2440,13 @@
                 const cutoff = Date.now() - RECOVERY_TTL_MS;
                 const removedIds = [];
                 const retained = current.items.filter((item) => {
-                    if (item && item._recoveryTombstone === true) return true;
                     const id = idOf(item, ['id', 'sessionId', 'recordId']);
                     if (id && preservedIds.has(String(id))) return true;
                     const timestamp = recoveryTimestamp(item);
                     const expired = timestamp !== null && timestamp <= cutoff;
-                    const explicitlyDiscardable = Boolean(id && discardableIds.has(String(id)));
+                    const tombstone = item && item._recoveryTombstone === true;
+                    if (tombstone && !expired) return true;
+                    const explicitlyDiscardable = !tombstone && Boolean(id && discardableIds.has(String(id)));
                     if (expired || explicitlyDiscardable) {
                         if (id) removedIds.push(String(id));
                         return false;
