@@ -10740,7 +10740,6 @@
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
         const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
-        const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
             ...Object.keys(normalizedAnswers),
@@ -10751,67 +10750,50 @@
                 : [])
         ]);
 
-        let correctCount = 0;
-        // replay 发生在同一试卷页面，state.dataset 包含该试卷的 questionGroups，
-        // 用于识别拆分多选题组并正确分配评分。
-        const replayQuestionGroupLookup = buildQuestionGroupLookup(state.dataset);
+        const replayAnswers = {};
         questionIds.forEach((questionId) => {
             const rawEntry = rawComparison[questionId];
             const comparisonEntry = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
                 ? rawEntry
                 : {};
-            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+            replayAnswers[questionId] = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                 ? comparisonEntry.userAnswer
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
-            const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
-            let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
-            // 拆分多选题组：保存的 userAnswer 是整组的选中集合（数组），
-            // 需要按拆分逻辑分配每个子题的答案，避免数组与标量比较导致历史记录全错。
-            const replayGroup = replayQuestionGroupLookup.get(normalizeQuestionId(questionId)) || null;
-            const isReplaySplitGroup = Boolean(
-                replayGroup
-                && (replayGroup.kind === 'multi_choice' || replayGroup.kind === 'multiple_choice')
-                && Array.isArray(replayGroup.questionIds)
-                && replayGroup.questionIds.length > 1
+        });
+
+        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
+        if (hasCanonicalCorrectAnswers) {
+            const replayResults = buildResultsFromAnswers(
+                Object.assign({}, state.dataset || {}, {
+                    answerKey: normalizedCorrectAnswers,
+                    questionOrder: Array.from(questionIds)
+                }),
+                replayAnswers
             );
-            const replaySelectedTokens = Array.isArray(userAnswer) ? userAnswer : splitAnswerTokens(userAnswer);
-            if (isReplaySplitGroup && replaySelectedTokens.length > 0) {
-                const replayAnswers = {};
-                replayGroup.questionIds.forEach((qid) => {
-                    replayAnswers[qid] = replaySelectedTokens;
-                });
-                const splitSelection = resolveSplitMultiChoiceSelection(
-                    replayAnswers,
-                    normalizedCorrectAnswers,
-                    replayGroup,
-                    questionId
-                );
-                if (splitSelection.expectedToken) {
-                    isCorrect = splitSelection.isCorrect;
-                }
-            }
-            if (isCorrect) {
-                correctCount += 1;
-            }
+            return {
+                answers: normalizedAnswers,
+                correctAnswers: normalizedCorrectAnswers,
+                answerComparison: replayResults.answerComparison,
+                scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
+            };
+        }
+
+        const normalizedComparison = {};
+        questionIds.forEach((questionId) => {
             normalizedComparison[questionId] = {
                 questionId,
-                userAnswer,
-                correctAnswer,
-                isCorrect
+                userAnswer: replayAnswers[questionId],
+                correctAnswer: '',
+                isCorrect: null
             };
         });
 
         const totalQuestions = questionIds.size;
         const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
-        scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? correctCount : Number(scoreInfo.correct);
-        scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? totalQuestions : Number(scoreInfo.total);
-        scoreInfo.totalQuestions = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions)) ? scoreInfo.total : Number(scoreInfo.totalQuestions);
+        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : 0;
+        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
+        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
         scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
-        scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
-            ? Math.round(scoreInfo.accuracy * 100)
-            : Number(scoreInfo.percentage);
         scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
             ? Number(scoreInfo.percentage)
             : Math.round(scoreInfo.accuracy * 100);

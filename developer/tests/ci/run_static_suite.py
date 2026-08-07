@@ -1174,7 +1174,7 @@ def _check_lazy_loader_dedupe(loader_path: Path) -> Tuple[bool, str]:
 
     required_snippets = [
         "function findExistingScriptTag(url)",
-        "var existing = findExistingScriptTag(url);",
+        "var existing = findExistingScriptTag(requestUrl);",
         "scriptStatus[url] = 'loaded';",
     ]
     missing = [snippet for snippet in required_snippets if snippet not in source]
