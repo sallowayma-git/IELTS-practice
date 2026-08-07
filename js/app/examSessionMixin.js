@@ -5,6 +5,15 @@
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
+    function getAssetVersion() {
+        try {
+            const params = new URLSearchParams(global.location?.search || '');
+            return String(params.get('v') || '').trim();
+        } catch (_) {
+            return '';
+        }
+    }
+
     async function getActiveExamIndexSnapshot() {
         if (typeof global.resolveActiveLibraryIndex !== 'function') {
             throw new Error('LibraryManager.resolveActiveIndex is unavailable');
@@ -222,6 +231,10 @@
                 params.set('practiceMode', 'memorize');
                 params.set('mode', 'memorize');
             }
+            const assetVersion = getAssetVersion();
+            if (assetVersion) {
+                params.set('v', assetVersion);
+            }
             const query = params.toString();
             const url = query
                 ? `assets/generated/reading-exams/reading-practice-unified.html?${query}`
@@ -253,6 +266,10 @@
             const params = new URLSearchParams();
             params.set('examId', String(exam.id));
             params.set('sourceUrl', resolvedSourceUrl);
+            const assetVersion = getAssetVersion();
+            if (assetVersion) {
+                params.set('v', assetVersion);
+            }
             const url = `assets/generated/listening-exams/listening-practice-unified.html?${params.toString()}`;
             return typeof this._ensureAbsoluteUrl === 'function'
                 ? this._ensureAbsoluteUrl(url)

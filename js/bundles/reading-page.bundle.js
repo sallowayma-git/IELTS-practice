@@ -6405,18 +6405,30 @@
         if (!url) {
             return Promise.reject(new Error('reading_exam_script_missing'));
         }
-        if (scriptCache.has(url)) {
-            return scriptCache.get(url);
+        let requestUrl = url;
+        try {
+            const params = new URLSearchParams(global.location?.search || '');
+            const assetVersion = String(params.get('v') || '').trim();
+            if (assetVersion) {
+                const resolved = new URL(url, document.baseURI);
+                if (resolved.origin === global.location.origin) {
+                    resolved.searchParams.set('v', assetVersion);
+                    requestUrl = resolved.href;
+                }
+            }
+        } catch (_) { }
+        if (scriptCache.has(requestUrl)) {
+            return scriptCache.get(requestUrl);
         }
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = url;
+            script.src = requestUrl;
             script.defer = true;
             script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${url}`));
+            script.onerror = () => reject(new Error(`reading_exam_script_failed:${requestUrl}`));
             document.head.appendChild(script);
         });
-        scriptCache.set(url, promise);
+        scriptCache.set(requestUrl, promise);
         return promise;
     }
 
