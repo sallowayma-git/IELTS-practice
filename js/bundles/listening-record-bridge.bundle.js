@@ -838,7 +838,13 @@
                 try { tx = this.db.transaction(stores, mode); } catch (error) { reject(error); return; }
                 const settle = withDeadline(tx, mutation ? this.mutationTimeoutMs : this.requestTimeoutMs, description, resolve, reject);
                 tx.oncomplete = () => settle.resolve(clone(value));
-                tx.onerror = () => { failure = failure || tx.error || new Error(`IndexedDB ${description} failed`); };
+                tx.onerror = (event) => {
+                    const requestError = event && event.target && event.target.error;
+                    const transactionError = tx.error;
+                    if (requestError || transactionError) {
+                        failure = failure || requestError || transactionError;
+                    }
+                };
                 tx.onabort = () => settle.reject(failure || tx.error || new Error(`IndexedDB ${description} aborted`));
                 const fail = (error) => { failure = failure || error; try { tx.abort(); } catch (_) {} };
                 try { work(tx, (result) => { value = result; }, fail); } catch (error) { fail(error); }
@@ -1023,7 +1029,14 @@
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
-            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            const quotaName = String(error && error.name || '').toUpperCase();
+            const quotaCode = String(error && error.code || '').toUpperCase();
+            if (error && (
+                quotaName === 'QUOTAEXCEEDEDERROR'
+                || quotaCode === 'NS_ERROR_DOM_QUOTA_REACHED'
+                || quotaCode === 'QUOTAEXCEEDEDERROR'
+                || quotaCode === '22'
+            )) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
             return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
         }
@@ -2225,6 +2238,7 @@
             const items = asArray(current.data);
             const cutoff = Date.now() - RECOVERY_TTL_MS;
             const retained = items.filter((item) => {
+                if (item && item._recoveryTombstone === true) return true;
                 const timestamp = recoveryTimestamp(item);
                 return timestamp === null || timestamp > cutoff;
             });
@@ -2274,18 +2288,76 @@
 
     async function readRecovery(kind, id) {
         await ready;
-        const items = await pruneRecoveryKey(recoveryKey(kind));
+        const items = (await pruneRecoveryKey(recoveryKey(kind)))
+            .filter((item) => !(item && item._recoveryTombstone === true));
         return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
+    }
+    function expectedRecoveryEntityRevision(options = {}) {
+        if (!Object.prototype.hasOwnProperty.call(options, 'expectedEntityRevision')) return null;
+        const revision = Number(options.expectedEntityRevision);
+        if (!Number.isInteger(revision) || revision < 0) {
+            throw new AppDataError('VALIDATION', 'recovery expectedEntityRevision must be a non-negative integer');
+        }
+        return revision;
+    }
+    function recoveryEntityRevision(item) {
+        return Math.max(0, Number(item && item.revision) || 0);
+    }
+    function recoveryExclusiveGroup(options = {}) {
+        const group = String(options && options.exclusiveGroup || '').trim();
+        if (group.length > 128) {
+            throw new AppDataError('VALIDATION', 'recovery exclusiveGroup must not exceed 128 characters');
+        }
+        return group;
+    }
+    function staleRecoveryReceipt(mutation, expectedRevision, actualRevision) {
+        return {
+            committed: false,
+            stale: true,
+            code: 'STALE_RECOVERY_WRITE',
+            operationId: mutation.operationId,
+            expectedEntityRevision: expectedRevision,
+            actualEntityRevision: actualRevision
+        };
     }
     async function saveRecovery(kind, value, options = {}) {
         await ready; assertObject(value, `recovery ${kind} value must be an object`);
         const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
+        const expectedEntityRevision = expectedRecoveryEntityRevision(options);
+        const exclusiveGroup = recoveryExclusiveGroup(options);
         const key = recoveryKey(kind);
         const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
         const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
+        if (exclusiveGroup) item._recoveryExclusiveGroup = exclusiveGroup;
+        if (expectedEntityRevision !== null && recoveryEntityRevision(item) <= expectedEntityRevision) {
+            throw new AppDataError('VALIDATION', 'recovery entity revision must advance beyond expectedEntityRevision');
+        }
         const receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
             const current = await readCollectionMeta(key);
             const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+            if (expectedEntityRevision !== null) {
+                const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
+                if (actualEntityRevision !== expectedEntityRevision) {
+                    return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+                }
+            }
+            if (exclusiveGroup) {
+                const conflicting = current.items.find((entry, entryIndex) => (
+                    entryIndex !== index
+                    && entry
+                    && entry._recoveryTombstone !== true
+                    && String(entry._recoveryExclusiveGroup || '') === exclusiveGroup
+                ));
+                if (conflicting) {
+                    return {
+                        committed: false,
+                        stale: true,
+                        code: 'RECOVERY_GROUP_CONFLICT',
+                        operationId: mutation.operationId,
+                        conflictingEntityId: idOf(conflicting, ['id', 'sessionId', 'recordId']) || null
+                    };
+                }
+            }
             if (index >= 0) current.items[index] = item; else current.items.push(item);
             return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
         }));
@@ -2297,8 +2369,26 @@
         await ready;
         const key = recoveryKey(kind);
         const mutation = optionsMutationOptions(options, `recovery-${kind}-discard`, { id: String(id) });
+        const expectedEntityRevision = expectedRecoveryEntityRevision(options);
         return enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
             const current = await readCollectionMeta(key);
+            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === String(id));
+            if (expectedEntityRevision !== null) {
+                const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
+                if (actualEntityRevision !== expectedEntityRevision) {
+                    return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+                }
+                const tombstone = {
+                    id: String(id),
+                    revision: actualEntityRevision + 1,
+                    _recoveryTombstone: true,
+                    discardedAt: Date.now(),
+                    updatedAt: nowIso()
+                };
+                if (index >= 0) current.items[index] = tombstone;
+                else current.items.push(tombstone);
+                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+            }
             const next = current.items.filter((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) !== String(id));
             return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], mutation);
         }));
@@ -2322,9 +2412,67 @@
         }
         return results;
     }
+    function recoveryIdSet(source, kind) {
+        const values = source && Array.isArray(source[kind]) ? source[kind] : [];
+        return new Set(values.map((value) => String(value || '').trim()).filter(Boolean));
+    }
+    async function cleanupRecoveryForRetry(options = {}) {
+        await ready;
+        const preserve = options.preserve && typeof options.preserve === 'object' ? options.preserve : {};
+        const discardable = options.discardable && typeof options.discardable === 'object' ? options.discardable : {};
+        const removedByKind = {};
+        const receipts = {};
+        let removedCount = 0;
+
+        for (const kind of Object.keys(RECOVERY_KEYS)) {
+            const key = recoveryKey(kind);
+            const preservedIds = recoveryIdSet(preserve, kind);
+            const discardableIds = recoveryIdSet(discardable, kind);
+            const result = await enqueueRecoveryMutation(key, () => retryMergeConflict({}, async () => {
+                const current = await readCollectionMeta(key);
+                const cutoff = Date.now() - RECOVERY_TTL_MS;
+                const removedIds = [];
+                const retained = current.items.filter((item) => {
+                    if (item && item._recoveryTombstone === true) return true;
+                    const id = idOf(item, ['id', 'sessionId', 'recordId']);
+                    if (id && preservedIds.has(String(id))) return true;
+                    const timestamp = recoveryTimestamp(item);
+                    const expired = timestamp !== null && timestamp <= cutoff;
+                    const explicitlyDiscardable = Boolean(id && discardableIds.has(String(id)));
+                    if (expired || explicitlyDiscardable) {
+                        if (id) removedIds.push(String(id));
+                        return false;
+                    }
+                    return true;
+                });
+                if (retained.length === current.items.length) {
+                    return { receipt: null, removedIds: [] };
+                }
+                const receipt = await kernel.mutate([{
+                    logicalKey: key,
+                    data: retained,
+                    expectedRevision: current.revision
+                }], {
+                    operationId: randomId(`recovery-cleanup-${kind}`)
+                });
+                return { receipt, removedIds };
+            }));
+            removedByKind[kind] = result.removedIds;
+            removedCount += result.removedIds.length;
+            if (result.receipt) receipts[kind] = result.receipt;
+        }
+
+        return {
+            committed: true,
+            removedCount,
+            removedByKind,
+            receipts
+        };
+    }
     const recovery = Object.freeze({
         windowSession,
         async clear(options = {}) { return clearAllRecovery(options); },
+        async cleanupForRetry(options = {}) { return cleanupRecoveryForRetry(options); },
         async listActiveSessions() { return readRecovery('activeSession'); },
         async getActiveSession(id) { return readRecovery('activeSession', id); },
         async saveActiveSession(value, options) { return saveRecovery('activeSession', value, options); },

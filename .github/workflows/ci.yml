@@ -71,6 +71,7 @@ jobs:
           node developer/tests/js/unifiedReadingPageInlineSuiteRegression.test.js
           node developer/tests/js/suiteInlineFallback.test.js
           node developer/tests/js/suiteModeRegression.test.js
+          node developer/tests/js/suiteSessionRecoveryV2.test.js
 
       - name: Run Python tests (listening asset quality)
         run: python -m unittest developer.tests.py.test_listening_generate_assets_quality

@@ -177,6 +177,28 @@ async function main() {
             const remoteKernel = new DataKernel();
             await remoteKernel.initialize();
             const stores = Array.from(kernel.driver.db.objectStoreNames);
+            const realDb = kernel.driver.db;
+            const quotaTransaction = {
+                error: null,
+                abort() {
+                    if (typeof this.onabort === 'function') this.onabort();
+                }
+            };
+            kernel.driver.db = { transaction() { return quotaTransaction; } };
+            let quotaTransactionErrorName = null;
+            try {
+                await kernel.driver._transaction(['documents'], 'readwrite', 'quota-probe', (tx) => {
+                    queueMicrotask(() => {
+                        tx.onerror({ target: tx });
+                        tx.error = new DOMException('quota full', 'QuotaExceededError');
+                        tx.onabort();
+                    });
+                }, true);
+            } catch (error) {
+                quotaTransactionErrorName = error && error.name;
+            } finally {
+                kernel.driver.db = realDb;
+            }
             const remoteCommitPromise = new Promise((resolve, reject) => {
                 const timer = setTimeout(() => reject(new Error('cross-realm commit notification timed out')), 3000);
                 const unsubscribe = remoteKernel.onCommitted((event) => {
@@ -279,6 +301,7 @@ async function main() {
                 promptFileRead,
                 status: kernel.status(),
                 stores,
+                quotaTransactionErrorName,
                 remoteCommit,
                 first,
                 retry,
@@ -323,6 +346,7 @@ async function main() {
         assert.equal(result.promptBackup, null);
         assert.equal(result.promptFileRead, false, 'startup migration must never prompt for or read without permission');
         assert.deepEqual(result.stores, ['documents', 'practiceAnnotations', 'practiceDetails', 'practiceSummaries', 'system']);
+        assert.equal(result.quotaTransactionErrorName, 'QuotaExceededError', 'transaction abort must preserve the real quota cause');
         assert.equal(result.first.revision, 1);
         assert.equal(result.remoteCommit.operationId, 'cross-realm-commit');
         assert.equal(result.remoteCommit.remote, true);

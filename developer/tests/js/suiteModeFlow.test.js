@@ -117,7 +117,9 @@ async function main() {
             },
             async listDrafts() { return []; },
             async listActiveSessions() { return []; },
-            async saveActiveSession() { return { committed: true }; }
+            async saveActiveSession() { return { committed: true }; },
+            async discardActiveSession() { return { committed: true }; },
+            async cleanupForRetry() { return { committed: true, removedCount: 0, removedByKind: {} }; }
         }
     };
     windowStub.CustomEvent = function CustomEvent(type, init = {}) {

@@ -37,6 +37,7 @@ function createDocumentStub() {
     const radio = { checked: true, value: 'A' };
     const notes = { value: 'fresh note' };
     const timerClasses = new Set();
+    const pendingScripts = [];
     const timer = {
         textContent: '',
         dataset: {},
@@ -53,6 +54,7 @@ function createDocumentStub() {
     };
     return {
         __timer: timer,
+        __pendingScripts: pendingScripts,
         body: {
             dataset: {},
             classList: {
@@ -77,6 +79,32 @@ function createDocumentStub() {
         getElementById(id) {
             return id === 'timer' ? timer : null;
         },
+        createElement(tagName) {
+            const normalizedTag = String(tagName || '').toLowerCase();
+            if (normalizedTag === 'script') {
+                return { src: '', defer: false, onload: null, onerror: null };
+            }
+            if (normalizedTag === 'template') {
+                return {
+                    innerHTML: '',
+                    content: { querySelectorAll() { return []; } }
+                };
+            }
+            return {
+                dataset: {},
+                style: {},
+                classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+                setAttribute() {},
+                addEventListener() {},
+                appendChild() {}
+            };
+        },
+        head: {
+            appendChild(script) {
+                pendingScripts.push(script);
+                return script;
+            }
+        },
         addEventListener() {},
         removeEventListener() {}
     };
@@ -93,6 +121,8 @@ function hostEvent(sourceWindow, type, data, overrides = {}) {
 function createContext() {
     const windowSession = createWindowSessionStub();
     const document = createDocumentStub();
+    const messages = [];
+    let closeCount = 0;
     const window = {
         location: {
             href: 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1',
@@ -111,7 +141,8 @@ function createContext() {
         removeEventListener() {},
         scrollTo() {},
         scrollY: 0,
-        close() {},
+        close() { closeCount += 1; },
+        showMessage(text, type) { messages.push({ text, type }); },
         console,
         setTimeout,
         clearTimeout,
@@ -165,18 +196,18 @@ function createContext() {
         location: window.location
     };
     sandbox.globalThis = window;
-    return { context: vm.createContext(sandbox), window, document, windowSession };
+    return { context: vm.createContext(sandbox), window, document, windowSession, messages, getCloseCount: () => closeCount };
 }
 
 function loadHooks() {
-    const { context, window, document, windowSession } = createContext();
+    const { context, window, document, windowSession, messages, getCloseCount } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, document, windowSession };
+    return { hooks, window, document, windowSession, messages, getCloseCount };
 }
 
 function plain(value) {
@@ -421,11 +452,28 @@ async function testWindowSessionMessageGuard() {
     assert.strictEqual(state.sessionId, 'session-newer', 'newer INIT_SESSION must still be accepted');
     assert.strictEqual(state.windowSessionToken, 'token-newer', 'newer INIT_SESSION must adopt the latest window token');
 
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'INIT_SESSION', {
+                examId: 'reading-p2',
+                sessionId: 'session-newer',
+                suiteSessionId: 'suite-new',
+                windowSessionToken: 'token-rebound',
+                windowSessionGeneration: 4,
+                messageIssuedAtMs: 7000,
+                parentOrigin: 'http://localhost'
+    }));
+
+    state = hooks.getTestState();
+    assert.strictEqual(
+        state.windowSessionToken,
+        'token-rebound',
+        'same-session rebind INIT must not be suppressed when token/generation rotates'
+    );
+
     assert.strictEqual(
         hooks.shouldAcceptWindowSessionMessage({
             windowSessionToken: 'token-same-ms-old',
-            windowSessionGeneration: 3,
-            messageIssuedAtMs: 6000
+            windowSessionGeneration: 4,
+            messageIssuedAtMs: 7000
         }, sourceWindow),
         false,
         '同一注册代际的旧 token 即使时间戳相同也必须拒绝'
@@ -433,8 +481,8 @@ async function testWindowSessionMessageGuard() {
     assert.strictEqual(
         hooks.shouldAcceptWindowSessionMessage({
             windowSessionToken: 'token-next-generation',
-            windowSessionGeneration: 4,
-            messageIssuedAtMs: 6000
+            windowSessionGeneration: 5,
+            messageIssuedAtMs: 7000
         }, sourceWindow),
         true,
         '更高注册代际必须覆盖旧 token'
@@ -656,7 +704,7 @@ async function testSubmitAcknowledgementStateMachine() {
             delivered.push(message);
         }
     };
-    const { hooks } = loadHooks();
+    const { hooks, messages, getCloseCount } = loadHooks();
     hooks.setTestState({
         examId: 'reading-p1',
         sessionId: 'session-submit-current',
@@ -696,11 +744,15 @@ async function testSubmitAcknowledgementStateMachine() {
         examId: 'reading-p1',
         sessionId: 'session-submit-current',
         submissionId,
-        windowSessionToken: 'token-submit-current'
+        windowSessionToken: 'token-submit-current',
+        errorCode: 'suite_recovery_save_failed'
     }));
     state = hooks.getTestState();
     assert.strictEqual(state.submissionStatus, 'draft');
     assert.strictEqual(state.readOnly, false);
+    assert.strictEqual(messages.length, 1, 'a persistence NACK must be visible in the active question page');
+    assert.strictEqual(messages[0].type, 'error');
+    assert.match(messages[0].text, /未能安全保存/);
     await hooks.handleIncoming(hostEvent(sourceWindow, 'PRACTICE_SUBMIT_ACK', {
         examId: 'reading-p1',
         sessionId: 'session-submit-current',
@@ -724,6 +776,36 @@ async function testSubmitAcknowledgementStateMachine() {
     assert.strictEqual(state.submissionStatus, 'submitted');
     assert.strictEqual(state.submitted, true);
     assert.strictEqual(state.readOnly, true, 'only a valid ACK may lock the page');
+    assert.strictEqual(getCloseCount(), 0, 'single-passage ACK must keep its result page open');
+
+    const suiteHarness = loadHooks();
+    const suiteParent = { postMessage() {} };
+    suiteHarness.hooks.setTestState({
+        examId: 'reading-p3',
+        sessionId: 'session-suite-final',
+        suiteSessionId: 'suite-final',
+        parentWindow: suiteParent,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-suite-final',
+        simulationMode: true,
+        simulationCtx: { isLast: true },
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+    assert.strictEqual(suiteHarness.hooks.beginSubmission('SIMULATION_SUBMIT', {
+        suiteSessionId: 'suite-final'
+    }), true);
+    const suiteSubmissionId = suiteHarness.hooks.getTestState().submissionId;
+    await suiteHarness.hooks.handleIncoming(hostEvent(suiteParent, 'PRACTICE_SUBMIT_ACK', {
+        examId: 'reading-p3',
+        sessionId: 'session-suite-final',
+        suiteSessionId: 'suite-final',
+        submissionId: suiteSubmissionId,
+        windowSessionToken: 'token-suite-final'
+    }));
+    assert.strictEqual(suiteHarness.getCloseCount(), 1, 'final simulation-suite ACK must close the child page');
 
     const timeoutHarness = loadHooks();
     const timeoutParent = { postMessage() {} };
@@ -753,6 +835,150 @@ async function testSubmitAcknowledgementStateMachine() {
     assert.strictEqual(timeoutHarness.hooks.getTestState().readOnly, false);
 }
 
+async function testInteractionDraftWritesParentWalImmediately() {
+    const { hooks, window } = loadHooks();
+    const received = [];
+    const parentWindow = {
+        closed: false,
+        app: {
+            receiveSuiteDraftSnapshotFromChild(examId, payload, sourceWindow) {
+                received.push({ examId, payload: plain(payload), sourceWindow });
+                return Promise.resolve(true);
+            }
+        },
+        postMessage() {}
+    };
+    hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'session-wal',
+        suiteSessionId: 'suite-wal',
+        parentWindow,
+        simulationMode: true,
+        readOnly: false,
+        timerLocked: false,
+        windowSessionToken: 'token-wal',
+        windowSessionGeneration: 7
+    });
+    hooks.scheduleInteractionDraftSync('input');
+    await Promise.resolve();
+    assert.strictEqual(received.length, 1, 'input microtask must write parent WAL without waiting for periodic timer');
+    assert.strictEqual(received[0].examId, 'reading-p1');
+    assert.strictEqual(received[0].payload.suiteSessionId, 'suite-wal');
+    assert.strictEqual(received[0].payload.windowSessionToken, 'token-wal');
+    assert.strictEqual(received[0].payload.windowSessionGeneration, 7);
+    assert.strictEqual(received[0].sourceWindow, window, 'direct WAL must identify the exact child WindowProxy');
+}
+
+async function testStaleInitCannotInstallDatasetsAfterNewerGeneration() {
+    const { hooks, window, document } = loadHooks();
+    const sourceWindow = { postMessage() {} };
+    window.__READING_EXAM_MANIFEST__ = {
+        'reading-slow': {
+            dataKey: 'reading-slow',
+            script: 'slow-reading-dataset.js',
+            title: 'Slow dataset'
+        }
+    };
+    window.__READING_EXAM_DATA__ = new Map();
+    hooks.setTestState({
+        examId: 'reading-slow',
+        sessionId: null,
+        suiteSessionId: null,
+        sessionReadySent: false,
+        parentWindow: sourceWindow,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: '',
+        windowSessionGeneration: 0,
+        hostInitEpoch: 0,
+        lastInitSignature: '',
+        suite: {
+            inline: false,
+            activeExamId: null,
+            currentIndex: 0,
+            sequence: [],
+            slotsByExamId: new Map()
+        }
+    });
+
+    const staleInit = hooks.handleIncoming(hostEvent(sourceWindow, 'INIT_SESSION', {
+        examId: 'reading-slow',
+        sessionId: 'session-stale',
+        suiteSessionId: 'suite-race',
+        suiteFlowMode: 'simulation',
+        suiteSequenceIndex: 0,
+        suiteSequenceTotal: 1,
+        suiteSequence: [{ examId: 'reading-slow', dataKey: 'reading-slow' }],
+        windowSessionToken: 'token-stale',
+        windowSessionGeneration: 1,
+        messageIssuedAtMs: 1000,
+        parentOrigin: 'http://localhost'
+    }));
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.strictEqual(document.__pendingScripts.length, 1, 'stale INIT should be waiting on its dataset script');
+
+    await hooks.handleIncoming(hostEvent(sourceWindow, 'INIT_SESSION', {
+        examId: 'reading-slow',
+        sessionId: 'session-current',
+        suiteSessionId: 'suite-race',
+        windowSessionToken: 'token-current',
+        windowSessionGeneration: 2,
+        messageIssuedAtMs: 2000,
+        parentOrigin: 'http://localhost'
+    }));
+    const currentSignature = hooks.getTestState().lastInitSignature;
+    assert(currentSignature, 'newer INIT should complete before the stale dataset load');
+
+    window.__READING_EXAM_DATA__.set('reading-slow', {
+        meta: { title: 'Slow dataset' },
+        passage: { blocks: [] },
+        questionGroups: [],
+        questionOrder: []
+    });
+    document.__pendingScripts[0].onload();
+    await staleInit;
+
+    const state = hooks.getTestState();
+    assert.strictEqual(state.windowSessionToken, 'token-current', 'stale INIT must not replace the newer token');
+    assert.strictEqual(state.lastInitSignature, currentSignature, 'stale INIT must not replace the newer INIT signature');
+    assert.strictEqual(state.suiteInline, false, 'stale INIT must not install inline suite state after a newer generation');
+    assert.deepStrictEqual(plain(state.suiteSequence), [], 'stale INIT must not overwrite the newer suite sequence');
+}
+
+async function testFileRebindChallengeProvesExistingWindowIdentity() {
+    const { hooks, window } = loadHooks();
+    const proofs = [];
+    const parentWindow = { postMessage(message, origin) { proofs.push({ message: plain(message), origin }); } };
+    window.location.protocol = 'file:';
+    hooks.setTestState({
+        examId: 'reading-p1',
+        sessionId: 'reading-p1-session',
+        suiteSessionId: 'suite-file-proof',
+        parentWindow,
+        windowSessionToken: 'file-proof-token',
+        windowSessionGeneration: 9
+    });
+    await hooks.handleIncoming(hostEvent(parentWindow, 'SUITE_REBIND_CHALLENGE', {
+        challenge: 'challenge-1',
+        suiteSessionId: 'suite-file-proof',
+        examId: 'reading-p1'
+    }, { origin: 'null' }));
+    assert.strictEqual(proofs.length, 1, 'the surviving file child must answer its original parent');
+    assert.strictEqual(proofs[0].origin, '*');
+    assert.strictEqual(proofs[0].message.type, 'SUITE_REBIND_PROOF');
+    assert.strictEqual(proofs[0].message.data.windowSessionToken, 'file-proof-token');
+    assert.strictEqual(proofs[0].message.data.windowSessionGeneration, 9);
+
+    await hooks.handleIncoming(hostEvent({ postMessage() {} }, 'SUITE_REBIND_CHALLENGE', {
+        challenge: 'challenge-forged',
+        suiteSessionId: 'suite-file-proof',
+        examId: 'reading-p1'
+    }, { origin: 'null' }));
+    assert.strictEqual(proofs.length, 1, 'a different WindowProxy must not obtain the proof token');
+}
+
 async function main() {
     await testDraftArbitration();
     await testSuiteTimerModePrecedence();
@@ -762,6 +988,9 @@ async function main() {
     await testReferrerlessInitBindsOnlyTrustedHost();
     await testSavedRecordAcknowledgementSessionGate();
     await testSubmitAcknowledgementStateMachine();
+    await testInteractionDraftWritesParentWalImmediately();
+    await testStaleInitCannotInstallDatasetsAfterNewerGeneration();
+    await testFileRebindChallengeProvesExistingWindowIdentity();
     process.stdout.write(JSON.stringify({
         status: 'pass',
         detail: 'unified reading inline suite regressions covered'

@@ -390,10 +390,27 @@
                 // Register the window first so the host expectedSessionId exists, then start the
                 // recorder with that same id.  Starting the recorder before window setup used
                 // to mint a second session id that never matched INIT/COMPLETE.
+                const suiteBindingCheckpoint = typeof guardOptions.beforeSuiteHandshake === 'function'
+                    ? guardOptions.beforeSuiteHandshake
+                    : (guardOptions.suiteSessionId && typeof this._commitSuiteWindowBindingBeforeHandshake === 'function'
+                        ? (context) => this._commitSuiteWindowBindingBeforeHandshake(
+                            guardOptions.suiteSessionId,
+                            context.examId,
+                            context.examWindow,
+                            context.windowInfo
+                        )
+                        : null);
+                const deferSuiteHandshake = Boolean(guardOptions.suiteSessionId && suiteBindingCheckpoint);
                 this.setupExamWindowManagement(examWindow, examId, exam, {
-                    ...options,
+                    ...guardOptions,
+                    deferInitialHandshake: deferSuiteHandshake,
                     expectedUrl: this._ensureAbsoluteUrl(examUrl)
                 });
+                if (deferSuiteHandshake) {
+                    const registeredInfo = this.ensureExamWindowSession(examId, examWindow);
+                    this._buildExamInitPayload(examId, registeredInfo);
+                    this.examWindows && this.examWindows.set(examId, registeredInfo);
+                }
                 if (!reviewMode && !memorizeMode) {
                     await this.startPracticeSession(examId);
                 }
@@ -429,6 +446,21 @@
                         sessionInfo.suiteSequenceTotal = options.sequenceTotal;
                     }
                     this.examWindows && this.examWindows.set(examId, sessionInfo);
+                    if (deferSuiteHandshake) {
+                        const checkpointCommitted = await suiteBindingCheckpoint({
+                            examId,
+                            examWindow,
+                            windowInfo: sessionInfo
+                        });
+                        if (checkpointCommitted !== true) {
+                            const checkpointError = new Error('Suite window binding was not durably committed before INIT');
+                            checkpointError.code = 'RECOVERY_COMMIT_NOT_CONFIRMED';
+                            throw checkpointError;
+                        }
+                        sessionInfo.handshakeDeferred = false;
+                        this.examWindows && this.examWindows.set(examId, sessionInfo);
+                        this.restartExamHandshake(examWindow, examId);
+                    }
                 }
 
                 if (reviewMode && typeof this._bindReviewWindowRef === 'function') {
@@ -659,6 +691,11 @@
                 return false;
             }
             const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+            const normalizedType = String(type || '').trim().toUpperCase();
+            if ((normalizedType === 'INIT_SESSION' || normalizedType === 'INIT_EXAM_SESSION')
+                && windowInfo.handshakeDeferred === true) {
+                return false;
+            }
             const targetOrigin = windowInfo.expectedOrigin && windowInfo.expectedOrigin !== 'null'
                 ? windowInfo.expectedOrigin
                 : (windowInfo.allowOpaqueOrigin ? '*' : '');
@@ -1769,11 +1806,29 @@
                     ? options.expectedUrl
                     : (exam ? this.buildExamUrl(exam) : '')
             );
+            const adoptedBinding = options && options.adoptWindowBinding && typeof options.adoptWindowBinding === 'object'
+                ? options.adoptWindowBinding
+                : null;
+            const adoptedSessionId = adoptedBinding && typeof adoptedBinding.expectedSessionId === 'string'
+                ? adoptedBinding.expectedSessionId.trim()
+                : '';
+            const adoptedToken = adoptedBinding && typeof adoptedBinding.windowSessionToken === 'string'
+                ? adoptedBinding.windowSessionToken.trim()
+                : '';
+            const adoptedGeneration = Number(adoptedBinding && adoptedBinding.sessionGeneration);
+            const canAdoptBinding = Boolean(
+                adoptedSessionId
+                && adoptedToken
+                && Number.isInteger(adoptedGeneration)
+                && adoptedGeneration > 0
+            );
             const windowInfo = {
                 window: examWindow,
                 startTime: Date.now(),
                 status: 'active',
-                expectedSessionId: null,
+                expectedSessionId: canAdoptBinding ? adoptedSessionId : null,
+                windowSessionToken: canAdoptBinding ? adoptedToken : null,
+                windowSessionTokenSessionId: canAdoptBinding ? adoptedSessionId : null,
                 expectedUrl: endpoint.expectedUrl,
                 expectedOrigin: endpoint.expectedOrigin,
                 allowOpaqueOrigin: endpoint.allowOpaqueOrigin,
@@ -1791,12 +1846,15 @@
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
                     : Boolean(options && options.reviewMode),
+                handshakeDeferred: Boolean(options && options.deferInitialHandshake),
                 // Async INIT/draft work must be tied to this exact registration.
                 // Reusing an exam ID replaces the map entry even when the browser
                 // keeps the same WindowProxy alive.
-                sessionGeneration: previousWindowInfo && Number.isFinite(previousWindowInfo.sessionGeneration)
-                    ? previousWindowInfo.sessionGeneration + 1
-                    : 1,
+                sessionGeneration: canAdoptBinding
+                    ? adoptedGeneration
+                    : (previousWindowInfo && Number.isFinite(previousWindowInfo.sessionGeneration)
+                        ? previousWindowInfo.sessionGeneration + 1
+                        : 1),
                 closeMonitor: null
             };
             this.examWindows.set(examId, windowInfo);
@@ -1831,58 +1889,15 @@
             }
 
             // 启动与练习页的会话握手（file:// 下更可靠）
-            try {
-                this.startExamHandshake(examWindow, examId);
-            } catch (e) {
-                console.warn('[App] 启动握手失败:', e);
+            if (!windowInfo.handshakeDeferred) {
+                try {
+                    this.startExamHandshake(examWindow, examId);
+                } catch (e) {
+                    console.warn('[App] 启动握手失败:', e);
+                }
             }
 
-            const emitInitEnvelope = async () => {
-                const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                const generation = windowInfo && windowInfo.sessionGeneration;
-                const expectedSessionId = windowInfo && windowInfo.expectedSessionId;
-                // 让最早到达的 INIT 即携带 draft，避免无 draft 的 envelope 先被去重守卫登记，
-                // 从而使后续携带 draft 的 INIT 被当作重复而丢弃、草稿无法恢复。
-                if (
-                    windowInfo
-                    && !windowInfo.reviewMode
-                    && !windowInfo.suiteSessionId
-                    && String(windowInfo.practiceMode || '').toLowerCase() !== 'memorize'
-                    && typeof this.getReadingDraftForExam === 'function'
-                ) {
-                    try {
-                        const restoredDraft = await this.getReadingDraftForExam(examId, {
-                            sessionId: windowInfo.expectedSessionId
-                        });
-                        if (restoredDraft) {
-                            windowInfo.lastReadingDraft = restoredDraft;
-                            this.examWindows && this.examWindows.set(examId, windowInfo);
-                        }
-                    } catch (_) {
-                        // draft restore is best-effort
-                    }
-                }
-                // The exam may have been reopened while draft restoration was
-                // pending. Never let the old continuation post its session into
-                // the replacement registration.
-                const currentWindowInfo = this.examWindows && this.examWindows.get(examId);
-                if (
-                    !windowInfo
-                    || currentWindowInfo !== windowInfo
-                    || windowInfo.window !== examWindow
-                    || windowInfo.sessionGeneration !== generation
-                    || windowInfo.expectedSessionId !== expectedSessionId
-                ) {
-                    return;
-                }
-                const initPayload = this._buildExamInitPayload(examId, windowInfo);
-                try {
-                    this._postExamMessage(examId, examWindow, 'INIT_SESSION', initPayload);
-                    this._postExamMessage(examId, examWindow, 'init_exam_session', initPayload);
-                } catch (postError) {
-                    console.warn('[App] 跨源初始化题目窗口失败:', postError);
-                }
-            };
+            const emitInitEnvelope = () => this._sendExamInitEnvelope(examId, examWindow);
 
             if (!isFileProtocol) {
                 try {
@@ -2503,9 +2518,20 @@
                     case 'PRACTICE_RESET_REQUEST':
                         await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow);
                         break;
-                    case 'SUITE_CLOSE_ATTEMPT':
-                        console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
+                    case 'SUITE_CLOSE_ATTEMPT': {
+                        const suiteSession = this.currentSuiteSession;
+                        const requestedSuiteSessionId = String(data && data.suiteSessionId || '').trim();
+                        if (sourceMatched
+                            && suiteSession
+                            && suiteSession.status === 'completed'
+                            && requestedSuiteSessionId === String(suiteSession.id || '')
+                            && typeof this._teardownSuiteSession === 'function') {
+                            await this._teardownSuiteSession(suiteSession);
+                        } else {
+                            console.warn('[SuitePractice] 练习页尝试关闭进行中的套题窗口:', data);
+                        }
                         break;
+                    }
                     case 'SUITE_CONFIG_UPDATE': {
                         const autoAdvance = typeof data.autoAdvanceAfterSubmit === 'boolean'
                             ? data.autoAdvanceAfterSubmit
@@ -4164,6 +4190,15 @@
             }
             try {
                 const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+                if (windowInfo && windowInfo.handshakeDeferred === true) {
+                    return null;
+                }
+                const registrationGeneration = Number(windowInfo && windowInfo.sessionGeneration) || 0;
+                const expectedSessionId = String(windowInfo && windowInfo.expectedSessionId || '');
+                const expectedToken = String(windowInfo && windowInfo.windowSessionToken || '');
+                const initEnvelopeEpoch = Math.max(0, Number(windowInfo && windowInfo.initEnvelopeEpoch) || 0) + 1;
+                windowInfo.initEnvelopeEpoch = initEnvelopeEpoch;
+                let restoredDraft = null;
                 if (
                     windowInfo
                     && !windowInfo.reviewMode
@@ -4173,16 +4208,26 @@
                     && !(extras && Object.prototype.hasOwnProperty.call(extras, 'draft'))
                 ) {
                     try {
-                        const restoredDraft = await this.getReadingDraftForExam(examId, {
+                        restoredDraft = await this.getReadingDraftForExam(examId, {
                             sessionId: windowInfo.expectedSessionId
                         });
-                        if (restoredDraft) {
-                            windowInfo.lastReadingDraft = restoredDraft;
-                            this.examWindows && this.examWindows.set(examId, windowInfo);
-                        }
                     } catch (_) {
                         // draft restore is best-effort
                     }
+                }
+                const currentWindowInfo = this.examWindows && this.examWindows.get(examId);
+                if (!windowInfo
+                    || currentWindowInfo !== windowInfo
+                    || windowInfo.window !== targetWindow
+                    || Number(windowInfo.sessionGeneration) !== registrationGeneration
+                    || String(windowInfo.expectedSessionId || '') !== expectedSessionId
+                    || String(windowInfo.windowSessionToken || '') !== expectedToken
+                    || Number(windowInfo.initEnvelopeEpoch) !== initEnvelopeEpoch
+                    || windowInfo.handshakeDeferred === true) {
+                    return null;
+                }
+                if (restoredDraft) {
+                    windowInfo.lastReadingDraft = restoredDraft;
                 }
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
                 this._postExamMessage(examId, targetWindow, 'INIT_SESSION', initPayload);
@@ -4473,6 +4518,7 @@
             windowInfo.status = 'active';
             windowInfo.startTime = Date.now();
             windowInfo.completedAt = null;
+            windowInfo.sessionGeneration = Math.max(0, Number(windowInfo.sessionGeneration) || 0) + 1;
             windowInfo.expectedSessionId = this.generateSessionId(examId);
             windowInfo.sessionId = null;
             windowInfo.practiceMode = null;

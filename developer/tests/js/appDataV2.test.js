@@ -379,6 +379,94 @@ async function run() {
         (await app.recovery.listActiveSessions()).map((item) => item.id).sort(),
         Array.from({ length: 8 }, (_, index) => `active-${index}`)
     );
+    const casFirst = await app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 1,
+        lastUpdate: 100,
+        marker: 'first'
+    }, { expectedEntityRevision: 0 });
+    assert.strictEqual(casFirst.committed, true);
+    const casSecond = await app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 2,
+        lastUpdate: 200,
+        marker: 'second'
+    }, { expectedEntityRevision: 1 });
+    assert.strictEqual(casSecond.committed, true);
+    await assert.rejects(() => app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 2,
+        lastUpdate: 250,
+        marker: 'non-advancing'
+    }, { expectedEntityRevision: 2 }), { code: 'VALIDATION' });
+    const staleSave = await app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 99,
+        lastUpdate: 999,
+        marker: 'stale-tab'
+    }, { expectedEntityRevision: 1 });
+    assert.strictEqual(staleSave.committed, false, 'stale tabs must not overwrite a newer active-session entity');
+    assert.strictEqual(staleSave.code, 'STALE_RECOVERY_WRITE');
+    assert.strictEqual((await app.recovery.getActiveSession('active-cas')).marker, 'second');
+    const staleDiscard = await app.recovery.discardActiveSession('active-cas', { expectedEntityRevision: 1 });
+    assert.strictEqual(staleDiscard.committed, false, 'stale tabs must not discard a newer active-session entity');
+    assert(await app.recovery.getActiveSession('active-cas'));
+    const currentDiscard = await app.recovery.discardActiveSession('active-cas', { expectedEntityRevision: 2 });
+    assert.strictEqual(currentDiscard.committed, true);
+    assert.strictEqual(await app.recovery.getActiveSession('active-cas'), null);
+    const delayedFirstSave = await app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 1,
+        lastUpdate: 50,
+        marker: 'delayed-first-save'
+    }, { expectedEntityRevision: 0 });
+    assert.strictEqual(delayedFirstSave.committed, false, 'discard tombstone must reject a delayed cross-realm first save');
+    assert.strictEqual(delayedFirstSave.code, 'STALE_RECOVERY_WRITE');
+    assert.strictEqual(await app.recovery.getActiveSession('active-cas'), null);
+    const tombstoneCleanup = await app.recovery.cleanupForRetry({
+        discardable: { activeSession: ['active-cas'] }
+    });
+    assert.deepStrictEqual(Array.from(tombstoneCleanup.removedByKind.activeSession), [], 'cleanup must retain CAS tombstones');
+    const delayedAfterCleanup = await app.recovery.saveActiveSession({
+        id: 'active-cas',
+        revision: 1,
+        lastUpdate: 60,
+        marker: 'delayed-after-cleanup'
+    }, { expectedEntityRevision: 0 });
+    assert.strictEqual(delayedAfterCleanup.committed, false, 'cleanup must not reopen a discarded entity revision');
+    const suiteClaimA = await app.recovery.saveActiveSession({
+        id: 'suite-claim-a',
+        revision: 1,
+        schema: 'suite-session-v2'
+    }, { expectedEntityRevision: 0, exclusiveGroup: 'suite-practice' });
+    assert.strictEqual(suiteClaimA.committed, true);
+    const suiteClaimBConflict = await app.recovery.saveActiveSession({
+        id: 'suite-claim-b',
+        revision: 1,
+        schema: 'suite-session-v2'
+    }, { expectedEntityRevision: 0, exclusiveGroup: 'suite-practice' });
+    assert.strictEqual(suiteClaimBConflict.committed, false, 'only one suite claim may exist across tabs');
+    assert.strictEqual(suiteClaimBConflict.code, 'RECOVERY_GROUP_CONFLICT');
+    await app.recovery.discardActiveSession('suite-claim-a', { expectedEntityRevision: 1 });
+    const suiteClaimBAfterDiscard = await app.recovery.saveActiveSession({
+        id: 'suite-claim-b',
+        revision: 1,
+        schema: 'suite-session-v2'
+    }, { expectedEntityRevision: 0, exclusiveGroup: 'suite-practice' });
+    assert.strictEqual(suiteClaimBAfterDiscard.committed, true, 'a new suite may claim the group after durable discard');
+    const preferencesBeforeRecoveryCleanup = await app.preferences.getAll();
+    const practiceBeforeRecoveryCleanup = await app.practice.get('r1');
+    const cleanupReceipt = await app.recovery.cleanupForRetry({
+        preserve: { activeSession: ['active-0'] },
+        discardable: { activeSession: ['active-0', 'active-1'] }
+    });
+    assert.strictEqual(cleanupReceipt.committed, true);
+    assert.strictEqual(cleanupReceipt.removedCount, 1, 'cleanup should remove only explicitly disposable recovery');
+    assert.deepStrictEqual(Array.from(cleanupReceipt.removedByKind.activeSession), ['active-1']);
+    assert(await app.recovery.getActiveSession('active-0'), 'preserve must win over discardable');
+    assert.strictEqual(await app.recovery.getActiveSession('active-1'), null);
+    assert.deepStrictEqual(await app.preferences.getAll(), preferencesBeforeRecoveryCleanup, 'recovery cleanup must not touch preferences');
+    assert.deepStrictEqual(await app.practice.get('r1'), practiceBeforeRecoveryCleanup, 'recovery cleanup must not touch business records');
     await assert.rejects(() => app.backups.previewImport({ records: [] }), { code: 'VALIDATION' });
     const invalidStore = { format: 'ielts-atlas-data-v2', schemaVersion: 2, scope: 'partial', envelopes: {}, entities: { practiceRecords: [] } }; invalidStore.checksum = checksum({ envelopes: invalidStore.envelopes, entities: invalidStore.entities }); await assert.rejects(() => app.backups.previewImport(invalidStore), { code: 'VALIDATION' });
 

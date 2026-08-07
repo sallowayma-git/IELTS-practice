@@ -29,11 +29,16 @@ function createStubWindow(name) {
     };
 }
 
-function createSandbox() {
+function createSandbox(options = {}) {
     const cloneValue = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
     const windowSessionStore = new Map();
     let activeSessions = [];
     let practiceRecords = [];
+    const recoveryControl = {
+        saveQueue: [],
+        cleanupQueue: [],
+        events: []
+    };
 
     const documentStub = {
         addEventListener() {},
@@ -74,6 +79,29 @@ function createSandbox() {
             recovery: {
                 async listActiveSessions() {
                     return cloneValue(activeSessions);
+                },
+                async saveActiveSession(value) {
+                    recoveryControl.events.push({ type: 'save', value: cloneValue(value) });
+                    const behavior = recoveryControl.saveQueue.length ? recoveryControl.saveQueue.shift() : true;
+                    if (behavior instanceof Error) throw behavior;
+                    if (typeof behavior === 'function') return behavior(value);
+                    if (behavior === false) return { committed: false };
+                    const id = String(value && value.id || '');
+                    const index = activeSessions.findIndex((item) => String(item && item.id || '') === id);
+                    if (index >= 0) activeSessions[index] = cloneValue(value);
+                    else activeSessions.push(cloneValue(value));
+                    return { committed: true, item: cloneValue(value) };
+                },
+                async discardActiveSession(id) {
+                    recoveryControl.events.push({ type: 'discard', id: String(id) });
+                    activeSessions = activeSessions.filter((item) => String(item && item.id || '') !== String(id));
+                    return { committed: true };
+                },
+                async cleanupForRetry(options = {}) {
+                    recoveryControl.events.push({ type: 'cleanup', options: cloneValue(options) });
+                    const behavior = recoveryControl.cleanupQueue.length ? recoveryControl.cleanupQueue.shift() : true;
+                    if (behavior instanceof Error) throw behavior;
+                    return { committed: behavior !== false, removedCount: behavior === false ? 0 : 1, removedByKind: {} };
                 },
                 windowSession: {
                     save(kind, value) {
@@ -135,7 +163,9 @@ function createSandbox() {
         CustomEvent: function CustomEvent(type, init = {}) {
             return { type, detail: init.detail || null };
         },
-        location: { origin: 'http://localhost', href: 'http://localhost/' },
+        location: options.protocol === 'file:'
+            ? { protocol: 'file:', origin: 'null', href: 'file:///index.html' }
+            : { protocol: 'http:', origin: 'http://localhost', href: 'http://localhost/' },
         crypto: webcrypto,
         practiceConfig: { suite: {} },
         __listenerCount(type) {
@@ -143,6 +173,10 @@ function createSandbox() {
             return listenerRegistry.get(type).size;
         },
         __listenerStats: listenerStats
+    };
+    windowStub.__dispatchEvent = (type, event) => {
+        const listeners = listenerRegistry.has(type) ? Array.from(listenerRegistry.get(type)) : [];
+        listeners.forEach((listener) => listener(event));
     };
 
     const sandbox = {
@@ -160,7 +194,7 @@ function createSandbox() {
         Uint8Array
     };
     sandbox.globalThis = sandbox.window;
-    return { sandbox, windowStub, windowSessionStore };
+    return { sandbox, windowStub, windowSessionStore, recoveryControl };
 }
 
 function createApp(windowStub) {
@@ -207,13 +241,376 @@ function makeSession(sessionId = 'suite_test_1') {
 }
 
 async function run() {
-    const { sandbox, windowStub, windowSessionStore } = createSandbox();
+    const { sandbox, windowStub, windowSessionStore, recoveryControl } = createSandbox();
     const context = vm.createContext(sandbox);
     loadScript('js/app/examSessionMixin.js', context);
     loadScript('js/app/suitePracticeMixin.js', context);
 
     if (!windowStub.ExamSystemAppMixins || !windowStub.ExamSystemAppMixins.suitePractice) {
         throw new Error('mixin 加载失败');
+    }
+
+    // Case 0.0: 套题必须先提交 durable v2 recovery；配额错误只清 recovery 后重试一次。
+    {
+        const app = createApp(windowStub);
+        const quotaError = new Error('quota');
+        quotaError.code = 'QUOTA_EXCEEDED';
+        recoveryControl.saveQueue.push(quotaError, true);
+        recoveryControl.events.length = 0;
+        let openCount = 0;
+        app.openExam = async () => {
+            openCount += 1;
+            assert.deepStrictEqual(
+                recoveryControl.events.map((event) => event.type),
+                ['save', 'cleanup', 'save'],
+                '首题窗口只能在清理并确认 durable recovery 后打开'
+            );
+            return createStubWindow('suite-window');
+        };
+        assert.strictEqual(
+            await app._launchSuiteSessionFromSequence(makeSession('suite_start_retry').sequence, { flowMode: 'simulation' }),
+            true,
+            '配额清理后的单次重试成功时应启动套题'
+        );
+        assert.strictEqual(openCount, 1, 'durable commit 成功后只能打开一次首题');
+        const cleanupEvent = recoveryControl.events.find((event) => event.type === 'cleanup');
+        assert.deepStrictEqual(
+            plain(cleanupEvent.options.preserve.activeSession),
+            [app.currentSuiteSession.id],
+            '清理必须保护当前套题 recovery'
+        );
+    }
+
+    // Case 0.0.1: cleanup 后仍失败或存储被拒绝时，套题不得 fail-open。
+    for (const failureMode of ['quota', 'backend']) {
+        const app = createApp(windowStub);
+        const firstError = new Error(failureMode);
+        firstError.code = failureMode === 'quota' ? 'QUOTA_EXCEEDED' : 'BACKEND_UNAVAILABLE';
+        recoveryControl.events.length = 0;
+        recoveryControl.saveQueue.push(firstError);
+        if (failureMode === 'quota') {
+            const retryError = new Error('quota-retry');
+            retryError.code = 'QUOTA_EXCEEDED';
+            recoveryControl.saveQueue.push(retryError);
+        }
+        let openCount = 0;
+        app.openExam = async () => {
+            openCount += 1;
+            return createStubWindow('must-not-open');
+        };
+        assert.strictEqual(
+            await app._launchSuiteSessionFromSequence(makeSession(`suite_start_${failureMode}`).sequence, { flowMode: 'simulation' }),
+            false,
+            `${failureMode} 持久化失败必须阻止启动`
+        );
+        assert.strictEqual(openCount, 0, '未确认 recovery 时不得打开首题');
+        assert.strictEqual(app.currentSuiteSession, null, '未启动会话不得留在内存中伪装成可恢复状态');
+        assert.strictEqual(
+            recoveryControl.events.filter((event) => event.type === 'cleanup').length,
+            failureMode === 'quota' ? 1 : 0,
+            '只有 quota 错误允许触发 recovery cleanup'
+        );
+    }
+
+    // Case 0.0.1a: 刷新后的同名存活题页必须旋转 token 重新绑定，不得导航或重载。
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_live_rebind');
+        session.windowRef = null;
+        session.windowBinding = {
+            examId: 'reading-p1',
+            expectedSessionId: 'reading-p1-session',
+            windowSessionToken: 'old-window-token',
+            sessionGeneration: 4,
+            expectedUrl: 'http://localhost/exam.html?examId=reading-p1',
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false
+        };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        const liveChild = createStubWindow('ielts-suite-mode-tab');
+        liveChild.location.href = session.windowBinding.expectedUrl;
+        liveChild.addEventListener = () => {};
+        const originalOpen = windowStub.open;
+        const observedOpenUrls = [];
+        windowStub.open = (url, name) => {
+            observedOpenUrls.push({ url, name });
+            return liveChild;
+        };
+        try {
+            const rebound = await app._tryRebindSuiteWindow(session, session.sequence[0]);
+            assert.strictEqual(rebound.window, liveChild, '应复用同一 WindowProxy');
+            assert.deepStrictEqual(observedOpenUrls, [{ url: '', name: 'ielts-suite-mode-tab' }]);
+            assert.strictEqual(liveChild.location.href, session.windowBinding.expectedUrl, '重绑定不得改写题页 URL');
+            const info = app.examWindows.get('reading-p1');
+            assert.strictEqual(info.expectedSessionId, 'reading-p1-session', '重绑定必须保留练习 session 身份');
+            assert.strictEqual(info.sessionGeneration, 5, '重绑定 generation 必须严格递增');
+            assert.notStrictEqual(info.windowSessionToken, 'old-window-token', '重绑定必须旋转 token');
+        } finally {
+            windowStub.open = originalOpen;
+            const info = app.examWindows && app.examWindows.get('reading-p1');
+            if (info && info.closeMonitor) clearInterval(info.closeMonitor);
+            if (app._handshakeTimers) {
+                for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+                app._handshakeTimers.clear();
+            }
+        }
+    }
+
+    // Case 0.0.1aa: 首个 INIT 之前必须已有包含 window binding 的 durable v2 snapshot。
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_pre_init_binding');
+        session.windowRef = null;
+        session._suiteGeneration = 1;
+        session._lastDurableRecoveryRevision = 0;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        assert.strictEqual(await app._commitSuiteRecovery(session, { reason: 'pre-init-base' }), true);
+        const child = createStubWindow('ielts-suite-mode-tab');
+        child.addEventListener = () => {};
+        let firstInitDurableSnapshot = null;
+        const originalPostMessage = child.postMessage.bind(child);
+        child.postMessage = (payload) => {
+            if (!firstInitDurableSnapshot && payload && String(payload.type || '').toUpperCase() === 'INIT_SESSION') {
+                const saves = recoveryControl.events.filter((event) => event.type === 'save');
+                firstInitDurableSnapshot = saves.length ? plain(saves[saves.length - 1].value) : null;
+            }
+            originalPostMessage(payload);
+        };
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: 'http://localhost/exam.html?examId=reading-p1'
+        });
+        app.openExamWindow = () => child;
+        app._guardExamWindowContent = (targetWindow) => targetWindow;
+        app._captureLaunchLibraryConfigurationId = async () => null;
+        app.startPracticeSession = async () => 'reading-p1-session';
+        app.injectDataCollectionScript = () => {};
+        const opened = await app.openExam('reading-p1', {
+            examDefinition: session.sequence[0].exam,
+            target: 'tab',
+            windowName: session.windowName,
+            suiteSessionId: session.id,
+            suiteFlowMode: 'simulation',
+            suiteTimerMode: 'countdown',
+            suiteTimerLimitSeconds: 3600,
+            sequenceIndex: 0,
+            sequenceTotal: session.sequence.length
+        });
+        assert.strictEqual(opened, child);
+        assert(firstInitDurableSnapshot && firstInitDurableSnapshot.windowBinding, 'first INIT must observe a durable window binding');
+        const firstInit = child._messages.find((message) => message && String(message.type || '').toUpperCase() === 'INIT_SESSION');
+        assert(firstInit, 'suite window must receive INIT after the checkpoint');
+        assert.strictEqual(firstInitDurableSnapshot.windowBinding.expectedSessionId, firstInit.data.sessionId);
+        assert.strictEqual(firstInitDurableSnapshot.windowBinding.windowSessionToken, firstInit.data.windowSessionToken);
+        const info = app.examWindows && app.examWindows.get('reading-p1');
+        if (info && info.closeMonitor) clearInterval(info.closeMonitor);
+        if (app._handshakeTimers) {
+            for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+            app._handshakeTimers.clear();
+        }
+    }
+
+    // Case 0.0.1ab: an async sender from a replaced registration must not restore the old map entry.
+    {
+        const app = createApp(windowStub);
+        const oldWindow = createStubWindow('old-registration');
+        const newWindow = createStubWindow('new-registration');
+        const oldInfo = app.ensureExamWindowSession('reading-p1', oldWindow);
+        let releaseOldDraft;
+        app.getReadingDraftForExam = async () => new Promise((resolve) => { releaseOldDraft = resolve; });
+        const staleSend = app._sendExamInitEnvelope('reading-p1', oldWindow);
+        await Promise.resolve();
+        const newInfo = {
+            ...oldInfo,
+            window: newWindow,
+            expectedSessionId: 'reading-p1-new-session',
+            windowSessionToken: 'reading-p1-new-token',
+            windowSessionTokenSessionId: 'reading-p1-new-session',
+            sessionGeneration: Number(oldInfo.sessionGeneration) + 1,
+            initEnvelopeEpoch: 0
+        };
+        app.examWindows.set('reading-p1', newInfo);
+        releaseOldDraft({ sessionId: oldInfo.expectedSessionId, updatedAt: 1, answers: { q1: 'OLD' } });
+        assert.strictEqual(await staleSend, null);
+        assert.strictEqual(app.examWindows.get('reading-p1'), newInfo, 'stale sender must not write its old registration back');
+        assert.strictEqual(oldWindow._messages.length, 0, 'stale registration must not receive INIT');
+    }
+
+    // Case 0.0.1ac: within one registration, only the latest async draft sender may emit INIT.
+    {
+        const app = createApp(windowStub);
+        const child = createStubWindow('same-registration');
+        const info = app.ensureExamWindowSession('reading-p1', child);
+        let callCount = 0;
+        let releaseSlowDraft;
+        app.getReadingDraftForExam = async () => {
+            callCount += 1;
+            if (callCount === 1) return new Promise((resolve) => { releaseSlowDraft = resolve; });
+            return { sessionId: info.expectedSessionId, updatedAt: 20, answers: { q1: 'NEW' } };
+        };
+        const slowSend = app._sendExamInitEnvelope('reading-p1', child);
+        await Promise.resolve();
+        const fastPayload = await app._sendExamInitEnvelope('reading-p1', child);
+        assert.strictEqual(fastPayload.draft.answers.q1, 'NEW');
+        releaseSlowDraft({ sessionId: info.expectedSessionId, updatedAt: 10, answers: { q1: 'OLD' } });
+        assert.strictEqual(await slowSend, null);
+        assert.strictEqual(child._messages.length, 2, 'only the latest sender should emit the two INIT aliases');
+        assert(child._messages.every((message) => message.data.draft.answers.q1 === 'NEW'));
+    }
+
+    // Case 0.0.1b: file:// 无法读取子窗口 URL 时，完整持久 binding 仍应允许无导航重绑。
+    {
+        const fileHarness = createSandbox({ protocol: 'file:' });
+        const fileContext = vm.createContext(fileHarness.sandbox);
+        loadScript('js/app/examSessionMixin.js', fileContext);
+        loadScript('js/app/suitePracticeMixin.js', fileContext);
+        const fileApp = createApp(fileHarness.windowStub);
+        const session = makeSession('suite_file_live_rebind');
+        session.windowRef = null;
+        session.windowBinding = {
+            examId: 'reading-p1',
+            expectedSessionId: 'reading-p1-file-session',
+            windowSessionToken: 'old-file-token',
+            sessionGeneration: 7,
+            expectedUrl: 'file:///reading-practice-unified.html?examId=reading-p1',
+            expectedOrigin: 'file://',
+            allowOpaqueOrigin: true
+        };
+        fileApp.currentSuiteSession = session;
+        fileApp.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        const liveChild = createStubWindow('ielts-suite-mode-tab');
+        Object.defineProperty(liveChild, 'location', {
+            configurable: true,
+            get() {
+                const error = new Error('opaque file origin');
+                error.name = 'SecurityError';
+                throw error;
+            }
+        });
+        const observedOpenUrls = [];
+        const originalPostMessage = liveChild.postMessage.bind(liveChild);
+        liveChild.postMessage = (payload, targetOrigin) => {
+            originalPostMessage(payload, targetOrigin);
+            if (payload && payload.type === 'SUITE_REBIND_CHALLENGE') {
+                fileHarness.windowStub.__dispatchEvent('message', {
+                    source: liveChild,
+                    origin: 'null',
+                    data: {
+                        type: 'SUITE_REBIND_PROOF',
+                        source: 'practice_page',
+                        data: {
+                            challenge: payload.data.challenge,
+                            suiteSessionId: session.id,
+                            examId: 'reading-p1',
+                            sessionId: 'reading-p1-file-session',
+                            windowSessionToken: 'old-file-token',
+                            windowSessionGeneration: 7
+                        }
+                    }
+                });
+            }
+        };
+        fileHarness.windowStub.open = (url, name) => {
+            observedOpenUrls.push({ url, name });
+            return liveChild;
+        };
+        const rebound = await fileApp._tryRebindSuiteWindow(session, session.sequence[0]);
+        assert.strictEqual(rebound.window, liveChild, 'file:// must reuse the surviving named WindowProxy');
+        assert.deepStrictEqual(observedOpenUrls, [{ url: '', name: 'ielts-suite-mode-tab' }]);
+        const info = fileApp.examWindows.get('reading-p1');
+        assert.strictEqual(info.expectedSessionId, 'reading-p1-file-session');
+        assert.strictEqual(info.sessionGeneration, 8);
+        assert.notStrictEqual(info.windowSessionToken, 'old-file-token');
+        if (info && info.closeMonitor) clearInterval(info.closeMonitor);
+        if (fileApp._handshakeTimers) {
+            for (const timer of fileApp._handshakeTimers.values()) clearInterval(timer);
+            fileApp._handshakeTimers.clear();
+        }
+    }
+
+    // Case 0.0.2: 每题 recovery 未提交时必须 NACK，且保持当前篇可重试。
+    {
+        const fileHarness = createSandbox({ protocol: 'file:' });
+        const fileContext = vm.createContext(fileHarness.sandbox);
+        loadScript('js/app/examSessionMixin.js', fileContext);
+        loadScript('js/app/suitePracticeMixin.js', fileContext);
+        const fileApp = createApp(fileHarness.windowStub);
+        const session = makeSession('suite_file_blank_window');
+        session.windowRef = null;
+        session.windowBinding = {
+            examId: 'reading-p1',
+            expectedSessionId: 'reading-p1-file-session',
+            windowSessionToken: 'old-file-token',
+            sessionGeneration: 2,
+            expectedUrl: 'file:///reading-practice-unified.html?examId=reading-p1',
+            expectedOrigin: 'file://',
+            allowOpaqueOrigin: true
+        };
+        fileApp.currentSuiteSession = session;
+        const blankChild = createStubWindow('ielts-suite-mode-tab');
+        blankChild.location.href = 'about:blank';
+        blankChild.close = function close() { this.closed = true; };
+        fileHarness.windowStub.open = () => blankChild;
+        assert.strictEqual(await fileApp._tryRebindSuiteWindow(session, session.sequence[0]), null);
+        assert.strictEqual(blankChild.closed, true, 'new file:// about:blank window must be closed instead of treated as a rebound child');
+        assert.strictEqual(Boolean(fileApp.examWindows && fileApp.examWindows.has('reading-p1')), false);
+    }
+
+    // Case 0.0.1c: completed recovery 清理失败时不得并发创建新套题。
+    {
+        const app = createApp(windowStub);
+        const completed = makeSession('suite_completed_cleanup_failure');
+        completed.status = 'completed';
+        app.currentSuiteSession = completed;
+        app._teardownSuiteSession = async () => false;
+        let openCount = 0;
+        app.openExam = async () => {
+            openCount += 1;
+            return createStubWindow('must-not-open');
+        };
+        assert.strictEqual(
+            await app._launchSuiteSessionFromSequence(makeSession('replacement').sequence, { flowMode: 'simulation' }),
+            false
+        );
+        assert.strictEqual(app.currentSuiteSession, completed);
+        assert.strictEqual(openCount, 0);
+    }
+
+    // Case 0.0.2: 每题 recovery 未提交时必须 NACK，且保持当前篇可重试。
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_passage_nack');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        let openCount = 0;
+        app.openExam = async () => {
+            openCount += 1;
+            return createStubWindow('suite-window');
+        };
+        recoveryControl.saveQueue.push(false);
+        const payload = {
+            suiteSessionId: session.id,
+            submissionId: 'submission-p1',
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            draft: { answers: { q1: 'A' }, updatedAt: 100 },
+            draftUpdatedAt: 100
+        };
+        const failed = await app.handleSuitePracticeComplete('reading-p1', payload, session.windowRef);
+        assert.strictEqual(failed.handled, true);
+        assert.strictEqual(failed.committed, false, '未持久化 passage 不得 ACK committed');
+        assert.strictEqual(failed.errorCode, 'suite_recovery_save_failed');
+        assert.strictEqual(session.currentIndex, 0, '失败后必须停留在 P1');
+        assert.strictEqual(session.activeExamId, 'reading-p1');
+        assert.strictEqual(openCount, 0, '失败后不得清题或切到 P2');
+
+        const retried = await app.handleSuitePracticeComplete('reading-p1', payload, session.windowRef);
+        assert.strictEqual(retried.committed, true, '相同 submission 重试提交成功后才 ACK');
+        assert.strictEqual(openCount, 1, '成功重试后只前进一次');
+        assert.strictEqual(session.currentIndex, 1);
     }
 
     // Case 0: 单题历史回顾必须从记录根层或 realData 回灌高亮
@@ -263,7 +660,18 @@ async function run() {
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
 
         const openCalls = [];
+        recoveryControl.events.length = 0;
         app.openExam = async (examId, options = {}) => {
+            const latestSave = recoveryControl.events
+                .filter((event) => event.type === 'save' && event.value && event.value.id === session.id)
+                .at(-1);
+            assert(latestSave, '导航前必须存在当前套题的 durable recovery commit');
+            assert.strictEqual(latestSave.value.activeExamId, examId, '导航前 recovery 必须已指向目标篇章');
+            assert.strictEqual(
+                latestSave.value.currentIndex,
+                session.sequence.findIndex((entry) => entry.examId === examId),
+                '导航前 recovery 索引必须已切到目标篇章'
+            );
             openCalls.push({ examId, options });
             const win = createStubWindow('suite-window');
             win.lastExamId = examId;
@@ -620,6 +1028,7 @@ async function run() {
             }
         }, session.windowRef);
         const secondNavigate = app._handleSimulationNavigate('reading-p1', { direction: 'next' }, session.windowRef);
+        await new Promise((resolve) => setTimeout(resolve, 0));
         assert.strictEqual(openCallCount, 1, '并发切题期间只允许一次窗口切换');
 
         if (typeof resolveOpen === 'function') {
@@ -657,7 +1066,9 @@ async function run() {
             { direction: 'next' },
             session.windowRef
         );
-        await Promise.resolve();
+        for (let attempt = 0; attempt < 10 && typeof releaseFirstOpen !== 'function'; attempt += 1) {
+            await Promise.resolve();
+        }
         const queuedNavigate = app._handleSimulationNavigate(
             'reading-p2',
             { direction: 'next' },
@@ -1091,6 +1502,34 @@ async function run() {
         assert.strictEqual((await windowStub.AppData.practice.list()).length, 1, 'retry must not persist a second suite record');
         clearTimeout(session.submitReceiptTeardownTimer);
         session.submitReceiptTeardownTimer = null;
+
+        let completedCloseTeardownCount = 0;
+        app._teardownSuiteSession = async (targetSession) => {
+            assert.strictEqual(targetSession, session);
+            completedCloseTeardownCount += 1;
+            return true;
+        };
+        app.setupExamWindowCommunication(sourceWindow, examId);
+        const closeAttemptHandler = app.messageHandlers.get(examId);
+        const closeAttemptEvent = {
+            source: sourceWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'SUITE_CLOSE_ATTEMPT',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    suiteSessionId: session.id,
+                    windowSessionToken: 'token-inline-submit-ack'
+                }
+            }
+        };
+        await closeAttemptHandler(closeAttemptEvent);
+        assert.strictEqual(completedCloseTeardownCount, 1, 'final ACK 后子页退出应立即清理已完成套题');
+
+        session.status = 'active';
+        await closeAttemptHandler(closeAttemptEvent);
+        assert.strictEqual(completedCloseTeardownCount, 1, '进行中的套题仍必须拦截子页关闭');
     }
 
     // Case 3.0.3: multi-suite 保存失败必须 NACK，同键重试成功后才 ACK
@@ -1183,6 +1622,48 @@ async function run() {
         }
         const outcome = sourceWindow._messages.filter(message => message && /^PRACTICE_SUBMIT_/.test(message.type)).at(-1);
         assert(outcome && outcome.type === 'PRACTICE_SUBMIT_FAILED', 'uncommitted canonical receipt must NACK');
+    }
+
+    // Case 3.0.4a: suiteId multi-suite partial results must restore into a new app instance
+    {
+        const examId = 'listening-100-p1_set1';
+        const app = createApp(windowStub);
+        app.initializeSuiteMode();
+
+        const handled = await app.handleSuitePracticeComplete(examId, {
+            suiteId: 'set-1',
+            totalSuites: 2,
+            sessionId: 'multi-suite-child-session-1',
+            answers: { q1: 'A' },
+            correctAnswers: { q1: 'A' },
+            answerComparison: {
+                q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true }
+            },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            duration: 42
+        });
+
+        assert.strictEqual(handled, true, 'multi-suite 部分结果应成功处理');
+        const mirrored = windowSessionStore.get('multi-suite-practice');
+        assert.strictEqual(mirrored.schema, 'multi-suite-sessions-v2', 'multi-suite 应写入 v2 恢复快照');
+        assert.strictEqual(mirrored.version, 2, 'multi-suite 恢复快照版本必须为 v2');
+        const mirroredSession = mirrored.sessions.find((session) => session.baseExamId === 'listening-100-p1');
+        assert(mirroredSession, '部分结果应保留目标 multi-suite 会话');
+        assert.strictEqual(mirroredSession.suiteResults.length, 1, '部分结果应写入 suiteResults');
+        assert.strictEqual(mirroredSession.suiteResults[0].suiteId, 'set-1', '恢复快照应保留 suiteId');
+
+        const restoredApp = createApp(windowStub);
+        restoredApp.initializeSuiteMode();
+        const restoredSession = restoredApp.multiSuiteSessionsMap.get('listening-100-p1');
+        assert(restoredSession, '新的 app 实例应恢复 multi-suite 会话');
+        assert.strictEqual(restoredSession.status, 'active', '部分恢复会话应保持 active');
+        assert.strictEqual(restoredSession.expectedSuiteCount, 2, '恢复会话应保留 expectedSuiteCount');
+        assert.strictEqual(restoredSession.suiteResults.length, 1, '恢复会话应保留部分结果');
+        assert.deepStrictEqual(
+            plain(restoredSession.suiteResults[0].answerComparison),
+            { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            '恢复会话应保留结果比较数据'
+        );
     }
 
     // Case 3.0.5: reading suite 聚合提交后的 UI/清理故障不得触发单篇 fallback 或假 NACK
@@ -1342,6 +1823,56 @@ async function run() {
         assert(outcomes.length >= 2 && outcomes.every(message => message.type === 'PRACTICE_SUBMIT_ACK'), `${failingStep}: multi-suite commit and replay must only ACK`);
         assert.strictEqual(aggregateRecords.length, 1, `${failingStep}: multi-suite aggregate must be written exactly once`);
         assert.strictEqual(standaloneFallbacks, 0, `${failingStep}: multi-suite must not enter standalone fallback after commit`);
+    }
+
+    // Case 3.0.7: stale completed-session teardown must not own a newer session
+    {
+        const app = createApp(windowStub);
+        const staleSession = makeSession('suite_stale_completed');
+        staleSession.status = 'completed';
+        staleSession._suiteGeneration = 1;
+        const freshSession = makeSession('suite_fresh_started');
+        freshSession.status = 'active';
+        freshSession._suiteGeneration = 2;
+        freshSession.windowRef = createStubWindow('suite-fresh-window');
+
+        app.currentSuiteSession = freshSession;
+        app.suiteExamMap = new Map(freshSession.sequence.map(item => [item.examId, freshSession.id]));
+        app._mirrorSessionToStorage(freshSession);
+        const freshSnapshot = plain(windowSessionStore.get('simulation'));
+        const freshWindow = freshSession.windowRef;
+        let scheduledTeardown = null;
+        let discardCalls = 0;
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        const originalDiscard = windowStub.AppData.recovery.windowSession.discard;
+
+        sandbox.setTimeout = (callback) => {
+            scheduledTeardown = callback;
+            return { unref() {} };
+        };
+        sandbox.clearTimeout = () => {};
+        windowStub.AppData.recovery.windowSession.discard = (...args) => {
+            discardCalls += 1;
+            return originalDiscard(...args);
+        };
+
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(staleSession), true, '旧 session 应成功注册延迟清理');
+            assert.strictEqual(typeof scheduledTeardown, 'function', '应捕获延迟清理回调');
+            scheduledTeardown();
+            await Promise.resolve();
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+            windowStub.AppData.recovery.windowSession.discard = originalDiscard;
+        }
+
+        assert.strictEqual(app.currentSuiteSession, freshSession, '旧 session teardown 不得替换新 session');
+        assert.strictEqual(freshWindow.closed, false, '旧 session teardown 不得关闭新 session 窗口');
+        assert.strictEqual(app.suiteExamMap.get('reading-p1'), freshSession.id, '旧 session teardown 不得清理新 suiteExamMap');
+        assert.deepStrictEqual(plain(windowSessionStore.get('simulation')), freshSnapshot, '旧 session teardown 不得清理新 snapshot');
+        assert.strictEqual(discardCalls, 0, '旧 session teardown 不得 discard 新 session snapshot');
     }
 
     // Case 3.1: 如果最后一篇已有导航快照，最终提交仍应覆盖并 finalize
@@ -2137,6 +2668,7 @@ async function run() {
         info.expectedSessionId = firstSessionId;
         app._refreshExamWindowToken(examId, info);
         app.examWindows.set(examId, info);
+        const initialGeneration = info.sessionGeneration;
 
         const handler = app.messageHandlers.get(examId);
         assert.strictEqual(typeof handler, 'function', '统一阅读题源应注册 message handler');
@@ -2194,6 +2726,7 @@ async function run() {
 
         const resetInfo = app.examWindows.get(examId);
         assert.strictEqual(resetInfo.expectedSessionId, resetSessionId, 'reset 必须生成新的 expectedSessionId');
+        assert(resetInfo.sessionGeneration > initialGeneration, 'reset 旋转 token 时必须推进 generation');
         assert.strictEqual(resetInfo.status, 'active', 'reset 后窗口应回到 active');
         assert.deepStrictEqual(resetStarts, [examId], 'reset 后必须补建练习会话');
         assert.strictEqual(recorderStarts.length, 1, 'reset 后必须同步 recorder sessionId');

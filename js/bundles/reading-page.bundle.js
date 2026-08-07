@@ -838,7 +838,13 @@
                 try { tx = this.db.transaction(stores, mode); } catch (error) { reject(error); return; }
                 const settle = withDeadline(tx, mutation ? this.mutationTimeoutMs : this.requestTimeoutMs, description, resolve, reject);
                 tx.oncomplete = () => settle.resolve(clone(value));
-                tx.onerror = () => { failure = failure || tx.error || new Error(`IndexedDB ${description} failed`); };
+                tx.onerror = (event) => {
+                    const requestError = event && event.target && event.target.error;
+                    const transactionError = tx.error;
+                    if (requestError || transactionError) {
+                        failure = failure || requestError || transactionError;
+                    }
+                };
                 tx.onabort = () => settle.reject(failure || tx.error || new Error(`IndexedDB ${description} aborted`));
                 const fail = (error) => { failure = failure || error; try { tx.abort(); } catch (_) {} };
                 try { work(tx, (result) => { value = result; }, fail); } catch (error) { fail(error); }
@@ -1023,7 +1029,14 @@
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
-            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            const quotaName = String(error && error.name || '').toUpperCase();
+            const quotaCode = String(error && error.code || '').toUpperCase();
+            if (error && (
+                quotaName === 'QUOTAEXCEEDEDERROR'
+                || quotaCode === 'NS_ERROR_DOM_QUOTA_REACHED'
+                || quotaCode === 'QUOTAEXCEEDEDERROR'
+                || quotaCode === '22'
+            )) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
             return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
         }
@@ -2225,6 +2238,7 @@
             const items = asArray(current.data);
             const cutoff = Date.now() - RECOVERY_TTL_MS;
             const retained = items.filter((item) => {
+                if (item && item._recoveryTombstone === true) return true;
                 const timestamp = recoveryTimestamp(item);
                 return timestamp === null || timestamp > cutoff;
             });
@@ -2274,18 +2288,76 @@
 
     async function readRecovery(kind, id) {
         await ready;
-        const items = await pruneRecoveryKey(recoveryKey(kind));
+        const items = (await pruneRecoveryKey(recoveryKey(kind)))
+            .filter((item) => !(item && item._recoveryTombstone === true));
         return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
+    }
+    function expectedRecoveryEntityRevision(options = {}) {
+        if (!Object.prototype.hasOwnProperty.call(options, 'expectedEntityRevision')) return null;
+        const revision = Number(options.expectedEntityRevision);
+        if (!Number.isInteger(revision) || revision < 0) {
+            throw new AppDataError('VALIDATION', 'recovery expectedEntityRevision must be a non-negative integer');
+        }
+        return revision;
+    }
+    function recoveryEntityRevision(item) {
+        return Math.max(0, Number(item && item.revision) || 0);
+    }
+    function recoveryExclusiveGroup(options = {}) {
+        const group = String(options && options.exclusiveGroup || '').trim();
+        if (group.length > 128) {
+            throw new AppDataError('VALIDATION', 'recovery exclusiveGroup must not exceed 128 characters');
+        }
+        return group;
+    }
+    function staleRecoveryReceipt(mutation, expectedRevision, actualRevision) {
+        return {
+            committed: false,
+            stale: true,
+            code: 'STALE_RECOVERY_WRITE',
+            operationId: mutation.operationId,
+            expectedEntityRevision: expectedRevision,
+            actualEntityRevision: actualRevision
+        };
     }
     async function saveRecovery(kind, value, options = {}) {
         await ready; assertObject(value, `recovery ${kind} value must be an object`);
         const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
+        const expectedEntityRevision = expectedRecoveryEntityRevision(options);
+        const exclusiveGroup = recoveryExclusiveGroup(options);
         const key = recoveryKey(kind);
         const id = idOf(value, ['id', 'sessionId', 'recordId']) || deterministicEntityId('recovery', mutation.operationId);
         const item = Object.assign({}, clone(value), { id: value.id || id, updatedAt: nowIso() });
+        if (exclusiveGroup) item._recoveryExclusiveGroup = exclusiveGroup;
+        if (expectedEntityRevision !== null && recoveryEntityRevision(item) <= expectedEntityRevision) {
+            throw new AppDataError('VALIDATION', 'recovery entity revision must advance beyond expectedEntityRevision');
+        }
         const receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
             const current = await readCollectionMeta(key);
             const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+            if (expectedEntityRevision !== null) {
+                const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
+                if (actualEntityRevision !== expectedEntityRevision) {
+                    return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+                }
+            }
+            if (exclusiveGroup) {
+                const conflicting = current.items.find((entry, entryIndex) => (
+                    entryIndex !== index
+                    && entry
+                    && entry._recoveryTombstone !== true
+                    && String(entry._recoveryExclusiveGroup || '') === exclusiveGroup
+                ));
+                if (conflicting) {
+                    return {
+                        committed: false,
+                        stale: true,
+                        code: 'RECOVERY_GROUP_CONFLICT',
+                        operationId: mutation.operationId,
+                        conflictingEntityId: idOf(conflicting, ['id', 'sessionId', 'recordId']) || null
+                    };
+                }
+            }
             if (index >= 0) current.items[index] = item; else current.items.push(item);
             return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
         }));
@@ -2297,8 +2369,26 @@
         await ready;
         const key = recoveryKey(kind);
         const mutation = optionsMutationOptions(options, `recovery-${kind}-discard`, { id: String(id) });
+        const expectedEntityRevision = expectedRecoveryEntityRevision(options);
         return enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
             const current = await readCollectionMeta(key);
+            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === String(id));
+            if (expectedEntityRevision !== null) {
+                const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
+                if (actualEntityRevision !== expectedEntityRevision) {
+                    return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+                }
+                const tombstone = {
+                    id: String(id),
+                    revision: actualEntityRevision + 1,
+                    _recoveryTombstone: true,
+                    discardedAt: Date.now(),
+                    updatedAt: nowIso()
+                };
+                if (index >= 0) current.items[index] = tombstone;
+                else current.items.push(tombstone);
+                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+            }
             const next = current.items.filter((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) !== String(id));
             return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], mutation);
         }));
@@ -2322,9 +2412,67 @@
         }
         return results;
     }
+    function recoveryIdSet(source, kind) {
+        const values = source && Array.isArray(source[kind]) ? source[kind] : [];
+        return new Set(values.map((value) => String(value || '').trim()).filter(Boolean));
+    }
+    async function cleanupRecoveryForRetry(options = {}) {
+        await ready;
+        const preserve = options.preserve && typeof options.preserve === 'object' ? options.preserve : {};
+        const discardable = options.discardable && typeof options.discardable === 'object' ? options.discardable : {};
+        const removedByKind = {};
+        const receipts = {};
+        let removedCount = 0;
+
+        for (const kind of Object.keys(RECOVERY_KEYS)) {
+            const key = recoveryKey(kind);
+            const preservedIds = recoveryIdSet(preserve, kind);
+            const discardableIds = recoveryIdSet(discardable, kind);
+            const result = await enqueueRecoveryMutation(key, () => retryMergeConflict({}, async () => {
+                const current = await readCollectionMeta(key);
+                const cutoff = Date.now() - RECOVERY_TTL_MS;
+                const removedIds = [];
+                const retained = current.items.filter((item) => {
+                    if (item && item._recoveryTombstone === true) return true;
+                    const id = idOf(item, ['id', 'sessionId', 'recordId']);
+                    if (id && preservedIds.has(String(id))) return true;
+                    const timestamp = recoveryTimestamp(item);
+                    const expired = timestamp !== null && timestamp <= cutoff;
+                    const explicitlyDiscardable = Boolean(id && discardableIds.has(String(id)));
+                    if (expired || explicitlyDiscardable) {
+                        if (id) removedIds.push(String(id));
+                        return false;
+                    }
+                    return true;
+                });
+                if (retained.length === current.items.length) {
+                    return { receipt: null, removedIds: [] };
+                }
+                const receipt = await kernel.mutate([{
+                    logicalKey: key,
+                    data: retained,
+                    expectedRevision: current.revision
+                }], {
+                    operationId: randomId(`recovery-cleanup-${kind}`)
+                });
+                return { receipt, removedIds };
+            }));
+            removedByKind[kind] = result.removedIds;
+            removedCount += result.removedIds.length;
+            if (result.receipt) receipts[kind] = result.receipt;
+        }
+
+        return {
+            committed: true,
+            removedCount,
+            removedByKind,
+            receipts
+        };
+    }
     const recovery = Object.freeze({
         windowSession,
         async clear(options = {}) { return clearAllRecovery(options); },
+        async cleanupForRetry(options = {}) { return cleanupRecoveryForRetry(options); },
         async listActiveSessions() { return readRecovery('activeSession'); },
         async getActiveSession(id) { return readRecovery('activeSession', id); },
         async saveActiveSession(value, options) { return saveRecovery('activeSession', value, options); },
@@ -5590,6 +5738,7 @@
         simulationDraftFingerprint: '',
         readingDraftSyncTimer: null,
         readingDraftFingerprint: '',
+        interactionDraftSyncScheduled: false,
         notes: [],
         noteOutlines: [],
         markedQuestions: [],
@@ -5612,6 +5761,7 @@
             highlights: true
         },
         questionNavCollapsed: false,
+        hostInitEpoch: 0,
         lastInitSignature: '',
         lastReplaySignature: '',
         sessionReadySent: false,
@@ -6950,16 +7100,25 @@
         }
     }
 
-    async function ensureSuiteDatasets(rawSequence = []) {
+    async function ensureSuiteDatasets(rawSequence = [], options = {}) {
         const sequence = normalizeSuiteSequence(rawSequence);
         if (!sequence.length) {
+            return false;
+        }
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        const loadedEntries = await Promise.all(sequence.map(async (entry) => ({
+            entry,
+            loaded: await loadDatasetByEntry(entry)
+        })));
+        if (!isCurrent()) {
             return false;
         }
         state.suite.inline = true;
         state.suite.flowMode = 'simulation';
         state.suite.sequence = sequence;
-        await Promise.all(sequence.map(async (entry) => {
-            const loaded = await loadDatasetByEntry(entry);
+        loadedEntries.forEach(({ entry, loaded }) => {
             const existing = getSuiteSlot(entry.examId);
             const inheritedDraft = state.simulationCtx?.draft
                 && state.simulationCtx.examId === entry.examId
@@ -6976,7 +7135,7 @@
                 lastResults: existing?.lastResults || null,
                 durationSeconds: Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0
             }));
-        }));
+        });
         return true;
     }
 
@@ -10785,6 +10944,27 @@
         return true;
     }
 
+    function showSubmissionFailure(errorCode = '') {
+        const normalizedCode = String(errorCode || '').trim().toLowerCase();
+        const persistenceFailure = normalizedCode === 'suite_recovery_save_failed'
+            || normalizedCode === 'suite_save_failed'
+            || normalizedCode === 'save_failed';
+        const message = persistenceFailure
+            ? '套题进度未能安全保存，本次提交尚未完成。请处理主页面的存储提示后重试。'
+            : (normalizedCode === 'suite_teardown_in_progress'
+                ? '套题会话正在停止，本次提交未保存。'
+                : '本次提交未能完成，请稍后重试。');
+        if (typeof global.showMessage === 'function') {
+            try {
+                global.showMessage(message, 'error');
+                return;
+            } catch (_) { /* fall back to the platform dialog */ }
+        }
+        if (typeof global.alert === 'function') {
+            try { global.alert(message); } catch (_) { /* ignore presentation failures */ }
+        }
+    }
+
     function expirePendingSubmission(submissionId = '') {
         if (state.submissionStatus !== 'submitting') {
             return false;
@@ -10853,6 +11033,9 @@
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
             state.simulationDraftFingerprint = '';
+            if (state.suiteSessionId && typeof global.close === 'function') {
+                try { global.close(); } catch (_) { /* host teardown remains the fallback */ }
+            }
         }
         return true;
     }
@@ -10881,6 +11064,7 @@
                 acceptSubmissionAcknowledgement,
                 expirePendingSubmission,
                 restoreDraftSubmissionState,
+                scheduleInteractionDraftSync,
                 stopReadingDraftSync,
                 stopSimulationDraftSync,
                 getTestState() {
@@ -11491,6 +11675,10 @@
         return JSON.stringify({
             examId: data && data.examId != null ? String(data.examId).trim() : '',
             sessionId: data && data.sessionId != null ? String(data.sessionId).trim() : '',
+            windowSessionToken: data && data.windowSessionToken != null ? String(data.windowSessionToken).trim() : '',
+            windowSessionGeneration: Number.isInteger(Number(data && data.windowSessionGeneration))
+                ? Number(data.windowSessionGeneration)
+                : 0,
             suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
             reviewSessionId: data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
             reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
@@ -11535,6 +11723,7 @@
         state.sessionId = null;
         state.sessionReadySent = false;
         state.lastInitSignature = '';
+        state.hostInitEpoch = Math.max(0, Number(state.hostInitEpoch) || 0) + 1;
         dispatchReady();
         startInitLoop();
     }
@@ -11722,7 +11911,7 @@
         if (!mirroredDraft) {
             return;
         }
-        postMessage('READING_DRAFT_SYNC', {
+        const payload = {
             examId: state.examId,
             sessionId: state.sessionId || null,
             windowSessionToken: state.windowSessionToken || null,
@@ -11731,7 +11920,9 @@
             elapsed: getPageElapsedSeconds(),
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
-        });
+        };
+        deliverSuiteDraftToParentWal(payload);
+        postMessage('READING_DRAFT_SYNC', payload);
     }
 
     function stopReadingDraftSync() {
@@ -11796,13 +11987,49 @@
         if (!state.suite?.inline) {
             persistSimulationDraftMirror(mirroredDraft);
         }
-        postMessage('SIMULATION_DRAFT_SYNC', {
+        const payload = {
             examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds(),
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
+        };
+        deliverSuiteDraftToParentWal(payload);
+        postMessage('SIMULATION_DRAFT_SYNC', payload);
+    }
+
+    function deliverSuiteDraftToParentWal(payload = {}) {
+        if (!state.suiteSessionId || !state.windowSessionToken) return false;
+        const parentWindow = state.parentWindow || (global.opener && !global.opener.closed ? global.opener : null);
+        if (!parentWindow || parentWindow.closed) return false;
+        try {
+            const parentApp = parentWindow.app;
+            if (!parentApp || typeof parentApp.receiveSuiteDraftSnapshotFromChild !== 'function') return false;
+            const result = parentApp.receiveSuiteDraftSnapshotFromChild(state.examId, Object.assign({}, payload, {
+                suiteSessionId: state.suiteSessionId,
+                windowSessionToken: state.windowSessionToken,
+                windowSessionGeneration: Number.isInteger(state.windowSessionGeneration)
+                    ? state.windowSessionGeneration
+                    : 0
+            }), global);
+            if (result && typeof result.catch === 'function') result.catch(() => {});
+            return result !== false;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function scheduleInteractionDraftSync(reason = 'input') {
+        if (state.interactionDraftSyncScheduled) return;
+        state.interactionDraftSyncScheduled = true;
+        Promise.resolve().then(() => {
+            state.interactionDraftSyncScheduled = false;
+            if (state.simulationMode && state.suiteSessionId) {
+                syncSimulationDraftSnapshot(reason);
+            } else if (canSyncReadingDraft()) {
+                syncReadingDraftSnapshot(reason);
+            }
         });
     }
 
@@ -12319,10 +12546,19 @@
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
         dom.exitBtn?.addEventListener('click', handleExitClick);
-        document.addEventListener('change', () => updateNavStatuses());
-        document.addEventListener('input', () => updateNavStatuses());
+        document.addEventListener('change', () => {
+            updateNavStatuses();
+            scheduleInteractionDraftSync('change');
+        });
+        document.addEventListener('input', () => {
+            updateNavStatuses();
+            scheduleInteractionDraftSync('input');
+        });
         document.addEventListener('drop', () => {
-            global.setTimeout(() => updateNavStatuses(), 0);
+            global.setTimeout(() => {
+                updateNavStatuses();
+                scheduleInteractionDraftSync('drop');
+            }, 0);
         }, true);
     }
 
@@ -12362,11 +12598,20 @@
         if (flowMode && flowMode !== 'simulation') {
             return false;
         }
-        await ensureSuiteDatasets(sequence);
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        const datasetsReady = await ensureSuiteDatasets(sequence, { isCurrent });
+        if (!datasetsReady || !isCurrent()) {
+            return false;
+        }
         captureInlineSuiteDraftBeforeReinit('reinit');
+        if (!isCurrent()) {
+            return false;
+        }
         mergeSuiteDraftPayload(data || {});
         const targetExamId = resolveSuiteTargetExamId(data || {}, options);
-        if (!targetExamId) {
+        if (!targetExamId || !isCurrent()) {
             return false;
         }
         const activated = await activateSuiteSlot(targetExamId, {
@@ -12392,6 +12637,48 @@
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
         const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
+        if (type === 'SUITE_REBIND_CHALLENGE') {
+            const challenge = String(data && data.challenge || '').trim();
+            const suiteSessionId = String(data && data.suiteSessionId || '').trim();
+            const examId = String(data && data.examId || '').trim();
+            const expectedParent = state.parentWindow || (global.opener && !global.opener.closed ? global.opener : null);
+            const fileProtocol = global.location && global.location.protocol === 'file:';
+            const opaqueOrigin = !event || event.origin === 'null' || event.origin === 'file://';
+            if (!fileProtocol
+                || !opaqueOrigin
+                || !sourceWindow
+                || sourceWindow !== expectedParent
+                || String(payload.source || '') !== 'exam_host'
+                || !challenge
+                || !state.windowSessionToken
+                || !state.sessionId
+                || !state.suiteSessionId
+                || suiteSessionId !== String(state.suiteSessionId)
+                || examId !== String(state.examId || '')
+                || typeof sourceWindow.postMessage !== 'function') {
+                return;
+            }
+            try {
+                sourceWindow.postMessage({
+                    type: 'SUITE_REBIND_PROOF',
+                    source: 'practice_page',
+                    timestamp: Date.now(),
+                    data: {
+                        challenge,
+                        suiteSessionId: state.suiteSessionId,
+                        examId: state.examId,
+                        sessionId: state.sessionId,
+                        windowSessionToken: state.windowSessionToken,
+                        windowSessionGeneration: Number.isInteger(state.windowSessionGeneration)
+                            ? state.windowSessionGeneration
+                            : 0
+                    }
+                }, '*');
+            } catch (_) {
+                // The old page stays untouched when its opener cannot receive the proof.
+            }
+            return;
+        }
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
             if (!acceptHostInitMessage(event, payload, data)) {
                 return;
@@ -12418,6 +12705,8 @@
             if (isDuplicateInit && state.sessionReadySent) {
                 return;
             }
+            const acceptedInitEpoch = Math.max(0, Number(state.hostInitEpoch) || 0) + 1;
+            state.hostInitEpoch = acceptedInitEpoch;
             adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
@@ -12495,8 +12784,12 @@
                     }), {
                         skipDraftSync: true,
                         silent: true,
-                        preferExistingActive: true
+                        preferExistingActive: true,
+                        isCurrent: () => state.hostInitEpoch === acceptedInitEpoch
                     });
+                    if (state.hostInitEpoch !== acceptedInitEpoch) {
+                        return;
+                    }
                 }
             } else if (initFlowMode) {
                 state.simulationMode = false;
@@ -12559,6 +12852,7 @@
         if (type === 'PRACTICE_SUBMIT_FAILED') {
             if (matchesPendingSubmission(data || {})) {
                 restoreDraftSubmissionState(String(data.submissionId || ''));
+                showSubmissionFailure(data && data.errorCode);
             }
             return;
         }

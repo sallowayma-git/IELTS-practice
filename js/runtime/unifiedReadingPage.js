@@ -128,6 +128,7 @@
         simulationDraftFingerprint: '',
         readingDraftSyncTimer: null,
         readingDraftFingerprint: '',
+        interactionDraftSyncScheduled: false,
         notes: [],
         noteOutlines: [],
         markedQuestions: [],
@@ -150,6 +151,7 @@
             highlights: true
         },
         questionNavCollapsed: false,
+        hostInitEpoch: 0,
         lastInitSignature: '',
         lastReplaySignature: '',
         sessionReadySent: false,
@@ -1488,16 +1490,25 @@
         }
     }
 
-    async function ensureSuiteDatasets(rawSequence = []) {
+    async function ensureSuiteDatasets(rawSequence = [], options = {}) {
         const sequence = normalizeSuiteSequence(rawSequence);
         if (!sequence.length) {
+            return false;
+        }
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        const loadedEntries = await Promise.all(sequence.map(async (entry) => ({
+            entry,
+            loaded: await loadDatasetByEntry(entry)
+        })));
+        if (!isCurrent()) {
             return false;
         }
         state.suite.inline = true;
         state.suite.flowMode = 'simulation';
         state.suite.sequence = sequence;
-        await Promise.all(sequence.map(async (entry) => {
-            const loaded = await loadDatasetByEntry(entry);
+        loadedEntries.forEach(({ entry, loaded }) => {
             const existing = getSuiteSlot(entry.examId);
             const inheritedDraft = state.simulationCtx?.draft
                 && state.simulationCtx.examId === entry.examId
@@ -1514,7 +1525,7 @@
                 lastResults: existing?.lastResults || null,
                 durationSeconds: Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0
             }));
-        }));
+        });
         return true;
     }
 
@@ -5323,6 +5334,27 @@
         return true;
     }
 
+    function showSubmissionFailure(errorCode = '') {
+        const normalizedCode = String(errorCode || '').trim().toLowerCase();
+        const persistenceFailure = normalizedCode === 'suite_recovery_save_failed'
+            || normalizedCode === 'suite_save_failed'
+            || normalizedCode === 'save_failed';
+        const message = persistenceFailure
+            ? '套题进度未能安全保存，本次提交尚未完成。请处理主页面的存储提示后重试。'
+            : (normalizedCode === 'suite_teardown_in_progress'
+                ? '套题会话正在停止，本次提交未保存。'
+                : '本次提交未能完成，请稍后重试。');
+        if (typeof global.showMessage === 'function') {
+            try {
+                global.showMessage(message, 'error');
+                return;
+            } catch (_) { /* fall back to the platform dialog */ }
+        }
+        if (typeof global.alert === 'function') {
+            try { global.alert(message); } catch (_) { /* ignore presentation failures */ }
+        }
+    }
+
     function expirePendingSubmission(submissionId = '') {
         if (state.submissionStatus !== 'submitting') {
             return false;
@@ -5391,6 +5423,9 @@
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
             state.simulationDraftFingerprint = '';
+            if (state.suiteSessionId && typeof global.close === 'function') {
+                try { global.close(); } catch (_) { /* host teardown remains the fallback */ }
+            }
         }
         return true;
     }
@@ -5419,6 +5454,7 @@
                 acceptSubmissionAcknowledgement,
                 expirePendingSubmission,
                 restoreDraftSubmissionState,
+                scheduleInteractionDraftSync,
                 stopReadingDraftSync,
                 stopSimulationDraftSync,
                 getTestState() {
@@ -6029,6 +6065,10 @@
         return JSON.stringify({
             examId: data && data.examId != null ? String(data.examId).trim() : '',
             sessionId: data && data.sessionId != null ? String(data.sessionId).trim() : '',
+            windowSessionToken: data && data.windowSessionToken != null ? String(data.windowSessionToken).trim() : '',
+            windowSessionGeneration: Number.isInteger(Number(data && data.windowSessionGeneration))
+                ? Number(data.windowSessionGeneration)
+                : 0,
             suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
             reviewSessionId: data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
             reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
@@ -6073,6 +6113,7 @@
         state.sessionId = null;
         state.sessionReadySent = false;
         state.lastInitSignature = '';
+        state.hostInitEpoch = Math.max(0, Number(state.hostInitEpoch) || 0) + 1;
         dispatchReady();
         startInitLoop();
     }
@@ -6260,7 +6301,7 @@
         if (!mirroredDraft) {
             return;
         }
-        postMessage('READING_DRAFT_SYNC', {
+        const payload = {
             examId: state.examId,
             sessionId: state.sessionId || null,
             windowSessionToken: state.windowSessionToken || null,
@@ -6269,7 +6310,9 @@
             elapsed: getPageElapsedSeconds(),
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
-        });
+        };
+        deliverSuiteDraftToParentWal(payload);
+        postMessage('READING_DRAFT_SYNC', payload);
     }
 
     function stopReadingDraftSync() {
@@ -6334,13 +6377,49 @@
         if (!state.suite?.inline) {
             persistSimulationDraftMirror(mirroredDraft);
         }
-        postMessage('SIMULATION_DRAFT_SYNC', {
+        const payload = {
             examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds(),
             timerSnapshot: getPracticeTimerSnapshot(),
             reason
+        };
+        deliverSuiteDraftToParentWal(payload);
+        postMessage('SIMULATION_DRAFT_SYNC', payload);
+    }
+
+    function deliverSuiteDraftToParentWal(payload = {}) {
+        if (!state.suiteSessionId || !state.windowSessionToken) return false;
+        const parentWindow = state.parentWindow || (global.opener && !global.opener.closed ? global.opener : null);
+        if (!parentWindow || parentWindow.closed) return false;
+        try {
+            const parentApp = parentWindow.app;
+            if (!parentApp || typeof parentApp.receiveSuiteDraftSnapshotFromChild !== 'function') return false;
+            const result = parentApp.receiveSuiteDraftSnapshotFromChild(state.examId, Object.assign({}, payload, {
+                suiteSessionId: state.suiteSessionId,
+                windowSessionToken: state.windowSessionToken,
+                windowSessionGeneration: Number.isInteger(state.windowSessionGeneration)
+                    ? state.windowSessionGeneration
+                    : 0
+            }), global);
+            if (result && typeof result.catch === 'function') result.catch(() => {});
+            return result !== false;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function scheduleInteractionDraftSync(reason = 'input') {
+        if (state.interactionDraftSyncScheduled) return;
+        state.interactionDraftSyncScheduled = true;
+        Promise.resolve().then(() => {
+            state.interactionDraftSyncScheduled = false;
+            if (state.simulationMode && state.suiteSessionId) {
+                syncSimulationDraftSnapshot(reason);
+            } else if (canSyncReadingDraft()) {
+                syncReadingDraftSnapshot(reason);
+            }
         });
     }
 
@@ -6857,10 +6936,19 @@
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
         dom.exitBtn?.addEventListener('click', handleExitClick);
-        document.addEventListener('change', () => updateNavStatuses());
-        document.addEventListener('input', () => updateNavStatuses());
+        document.addEventListener('change', () => {
+            updateNavStatuses();
+            scheduleInteractionDraftSync('change');
+        });
+        document.addEventListener('input', () => {
+            updateNavStatuses();
+            scheduleInteractionDraftSync('input');
+        });
         document.addEventListener('drop', () => {
-            global.setTimeout(() => updateNavStatuses(), 0);
+            global.setTimeout(() => {
+                updateNavStatuses();
+                scheduleInteractionDraftSync('drop');
+            }, 0);
         }, true);
     }
 
@@ -6900,11 +6988,20 @@
         if (flowMode && flowMode !== 'simulation') {
             return false;
         }
-        await ensureSuiteDatasets(sequence);
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        const datasetsReady = await ensureSuiteDatasets(sequence, { isCurrent });
+        if (!datasetsReady || !isCurrent()) {
+            return false;
+        }
         captureInlineSuiteDraftBeforeReinit('reinit');
+        if (!isCurrent()) {
+            return false;
+        }
         mergeSuiteDraftPayload(data || {});
         const targetExamId = resolveSuiteTargetExamId(data || {}, options);
-        if (!targetExamId) {
+        if (!targetExamId || !isCurrent()) {
             return false;
         }
         const activated = await activateSuiteSlot(targetExamId, {
@@ -6930,6 +7027,48 @@
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
         const sourceWindow = event && typeof event === 'object' ? (event.source || null) : null;
+        if (type === 'SUITE_REBIND_CHALLENGE') {
+            const challenge = String(data && data.challenge || '').trim();
+            const suiteSessionId = String(data && data.suiteSessionId || '').trim();
+            const examId = String(data && data.examId || '').trim();
+            const expectedParent = state.parentWindow || (global.opener && !global.opener.closed ? global.opener : null);
+            const fileProtocol = global.location && global.location.protocol === 'file:';
+            const opaqueOrigin = !event || event.origin === 'null' || event.origin === 'file://';
+            if (!fileProtocol
+                || !opaqueOrigin
+                || !sourceWindow
+                || sourceWindow !== expectedParent
+                || String(payload.source || '') !== 'exam_host'
+                || !challenge
+                || !state.windowSessionToken
+                || !state.sessionId
+                || !state.suiteSessionId
+                || suiteSessionId !== String(state.suiteSessionId)
+                || examId !== String(state.examId || '')
+                || typeof sourceWindow.postMessage !== 'function') {
+                return;
+            }
+            try {
+                sourceWindow.postMessage({
+                    type: 'SUITE_REBIND_PROOF',
+                    source: 'practice_page',
+                    timestamp: Date.now(),
+                    data: {
+                        challenge,
+                        suiteSessionId: state.suiteSessionId,
+                        examId: state.examId,
+                        sessionId: state.sessionId,
+                        windowSessionToken: state.windowSessionToken,
+                        windowSessionGeneration: Number.isInteger(state.windowSessionGeneration)
+                            ? state.windowSessionGeneration
+                            : 0
+                    }
+                }, '*');
+            } catch (_) {
+                // The old page stays untouched when its opener cannot receive the proof.
+            }
+            return;
+        }
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
             if (!acceptHostInitMessage(event, payload, data)) {
                 return;
@@ -6956,6 +7095,8 @@
             if (isDuplicateInit && state.sessionReadySent) {
                 return;
             }
+            const acceptedInitEpoch = Math.max(0, Number(state.hostInitEpoch) || 0) + 1;
+            state.hostInitEpoch = acceptedInitEpoch;
             adoptWindowSessionMessage(data, sourceWindow);
             if (incomingExamId && !currentExamId) {
                 state.examId = incomingExamId;
@@ -7033,8 +7174,12 @@
                     }), {
                         skipDraftSync: true,
                         silent: true,
-                        preferExistingActive: true
+                        preferExistingActive: true,
+                        isCurrent: () => state.hostInitEpoch === acceptedInitEpoch
                     });
+                    if (state.hostInitEpoch !== acceptedInitEpoch) {
+                        return;
+                    }
                 }
             } else if (initFlowMode) {
                 state.simulationMode = false;
@@ -7097,6 +7242,7 @@
         if (type === 'PRACTICE_SUBMIT_FAILED') {
             if (matchesPendingSubmission(data || {})) {
                 restoreDraftSubmissionState(String(data.submissionId || ''));
+                showSubmissionFailure(data && data.errorCode);
             }
             return;
         }

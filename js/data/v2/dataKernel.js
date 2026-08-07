@@ -400,7 +400,13 @@
                 try { tx = this.db.transaction(stores, mode); } catch (error) { reject(error); return; }
                 const settle = withDeadline(tx, mutation ? this.mutationTimeoutMs : this.requestTimeoutMs, description, resolve, reject);
                 tx.oncomplete = () => settle.resolve(clone(value));
-                tx.onerror = () => { failure = failure || tx.error || new Error(`IndexedDB ${description} failed`); };
+                tx.onerror = (event) => {
+                    const requestError = event && event.target && event.target.error;
+                    const transactionError = tx.error;
+                    if (requestError || transactionError) {
+                        failure = failure || requestError || transactionError;
+                    }
+                };
                 tx.onabort = () => settle.reject(failure || tx.error || new Error(`IndexedDB ${description} aborted`));
                 const fail = (error) => { failure = failure || error; try { tx.abort(); } catch (_) {} };
                 try { work(tx, (result) => { value = result; }, fail); } catch (error) { fail(error); }
@@ -585,7 +591,14 @@
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
-            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            const quotaName = String(error && error.name || '').toUpperCase();
+            const quotaCode = String(error && error.code || '').toUpperCase();
+            if (error && (
+                quotaName === 'QUOTAEXCEEDEDERROR'
+                || quotaCode === 'NS_ERROR_DOM_QUOTA_REACHED'
+                || quotaCode === 'QUOTAEXCEEDEDERROR'
+                || quotaCode === '22'
+            )) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
             return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
         }

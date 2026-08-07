@@ -1432,7 +1432,10 @@
     // Phase 3: 套题/随机练习/导出功能
     // ============================================================================
 
+    var suitePracticeLaunchPromise = null;
+
     function startSuitePractice() {
+        if (suitePracticeLaunchPromise) return suitePracticeLaunchPromise;
         function getSuitePreferenceUtils() {
             return global.SuitePreferenceUtils || null;
         }
@@ -1609,16 +1612,59 @@
             });
         }
 
+        function promptSuiteRecoveryChoice(candidate) {
+            return new Promise(function resolveRecoveryChoice(resolve) {
+                if (!global.document || !global.document.body) {
+                    resolve(null);
+                    return;
+                }
+                var existing = global.document.getElementById('suite-recovery-choice-modal');
+                if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+                var completedCount = Math.max(0, Number(candidate && candidate.completedCount) || 0);
+                var total = Math.max(0, Number(candidate && candidate.total) || 0);
+                var escapedTitle = String(candidate && candidate.title || '当前篇章')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+                var host = global.document.createElement('div');
+                host.id = 'suite-recovery-choice-modal';
+                host.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;';
+                host.innerHTML = [
+                    '<div role="dialog" aria-modal="true" aria-labelledby="suite-recovery-title" style="width:min(440px,100%);background:var(--color-white, #fff);border:1px solid var(--color-gray-200, #e2e8f0);border-radius:8px;padding:24px;box-shadow:var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1));font-family:var(--font-family-primary, sans-serif);">',
+                    '<h3 id="suite-recovery-title" style="margin:0 0 8px;font-size:20px;font-weight:700;color:var(--color-gray-900, #0f172a);letter-spacing:0;">发现未完成套题</h3>',
+                    '<p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:var(--color-gray-700, #334155);">' + escapedTitle + '</p>',
+                    '<p style="margin:0 0 20px;font-size:13px;line-height:1.6;color:var(--color-gray-500, #64748b);">已完成 ' + completedCount + ' / ' + total + ' 篇。放弃后将删除这套未完成进度，但不会生成单篇记录。</p>',
+                    '<div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;">',
+                    '<button type="button" data-suite-recovery-choice="cancel" style="padding:10px 14px;border:1px solid var(--color-gray-300, #cbd5e1);border-radius:8px;background:var(--color-white, #fff);color:var(--color-gray-700, #334155);font-weight:600;cursor:pointer;">取消</button>',
+                    '<button type="button" data-suite-recovery-choice="discard" style="padding:10px 14px;border:1px solid #dc2626;border-radius:8px;background:var(--color-white, #fff);color:#b91c1c;font-weight:600;cursor:pointer;">放弃并新建</button>',
+                    '<button type="button" data-suite-recovery-choice="continue" style="padding:10px 14px;border:1px solid var(--color-brand-primary, #4f46e5);border-radius:8px;background:var(--color-brand-primary, #4f46e5);color:#fff;font-weight:600;cursor:pointer;">继续上次套题</button>',
+                    '</div>',
+                    '</div>'
+                ].join('');
+                host.addEventListener('click', function onRecoveryChoice(event) {
+                    var target = event.target && event.target.closest ? event.target.closest('button[data-suite-recovery-choice]') : null;
+                    if (!target) return;
+                    var choice = target.getAttribute('data-suite-recovery-choice');
+                    if (host.parentNode) host.parentNode.removeChild(host);
+                    resolve(choice === 'continue' || choice === 'discard' ? choice : null);
+                });
+                global.document.body.appendChild(host);
+            });
+        }
+
         var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
             ? global.AppEntry.ensureSessionSuiteReady()
             : ensurePracticeSuite();
 
-        return Promise.resolve(ensureSuiteReady).then(function afterReady() {
-            return promptSuiteModeSelection().then(function handleMode(selection) {
+        var launchPromise = Promise.resolve(ensureSuiteReady).then(function afterReady() {
+            var appInstance = global.app;
+            var launchNewSuite = function launchNewSuite() {
+                return promptSuiteModeSelection().then(function handleMode(selection) {
                 if (!selection || !selection.flowMode) {
                     return undefined;
                 }
-                var appInstance = global.app;
                 if (appInstance && typeof appInstance.startSuitePractice === 'function') {
                     try {
                         return appInstance.startSuitePractice({
@@ -1642,12 +1688,42 @@
                 }
                 return undefined;
             });
+            };
+
+            if (!appInstance || typeof appInstance.getSuiteRecoveryCandidate !== 'function') {
+                return launchNewSuite();
+            }
+            return Promise.resolve(appInstance.getSuiteRecoveryCandidate()).then(function handleRecoveryCandidate(candidate) {
+                if (!candidate) return launchNewSuite();
+                return promptSuiteRecoveryChoice(candidate).then(function handleRecoveryChoice(choice) {
+                    if (choice === 'continue') {
+                        return appInstance.startSuitePractice({
+                            recoveryAction: 'continue',
+                            recoverySessionId: candidate.id
+                        });
+                    }
+                    if (choice === 'discard') {
+                        if (typeof appInstance.abandonSuiteRecovery !== 'function') return undefined;
+                        return Promise.resolve(appInstance.abandonSuiteRecovery(candidate.id)).then(function afterAbandon(abandoned) {
+                            if (!abandoned) return undefined;
+                            return launchNewSuite();
+                        });
+                    }
+                    return undefined;
+                });
+            });
         }).catch(function handleSuiteError(error) {
             console.error('[AppActions] 套题模块加载失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('套题模块加载失败，请稍后重试', 'error');
             }
             return undefined;
+        });
+        suitePracticeLaunchPromise = launchPromise;
+        return launchPromise.finally(function clearSuitePracticeLaunchPromise() {
+            if (suitePracticeLaunchPromise === launchPromise) {
+                suitePracticeLaunchPromise = null;
+            }
         });
     }
 
