@@ -9,6 +9,32 @@
     var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
+    var assetVersion = resolveAssetVersion();
+
+    function resolveAssetVersion() {
+        try {
+            var params = new URLSearchParams(global.location && global.location.search ? global.location.search : '');
+            return String(params.get('v') || '').trim();
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function versionScriptUrl(url) {
+        if (!url || !assetVersion) {
+            return url;
+        }
+        try {
+            var resolved = new URL(url, document.baseURI);
+            if (resolved.origin !== global.location.origin) {
+                return url;
+            }
+            resolved.searchParams.set('v', assetVersion);
+            return resolved.href;
+        } catch (_) {
+            return url;
+        }
+    }
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
@@ -75,7 +101,7 @@
             return '';
         }
         try {
-            return new URL(url, document.baseURI).href;
+            return new URL(versionScriptUrl(url), document.baseURI).href;
         } catch (_) {
             return String(url);
         }
@@ -140,7 +166,8 @@
             return scriptStatus[url];
         }
 
-        var existing = findExistingScriptTag(url);
+        var requestUrl = versionScriptUrl(url);
+        var existing = findExistingScriptTag(requestUrl);
         if (existing) {
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
@@ -148,7 +175,7 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
-            script.src = url;
+            script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
                 scriptStatus[url] = 'loaded';

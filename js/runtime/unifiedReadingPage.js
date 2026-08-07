@@ -943,18 +943,30 @@
         if (!url) {
             return Promise.reject(new Error('reading_exam_script_missing'));
         }
-        if (scriptCache.has(url)) {
-            return scriptCache.get(url);
+        let requestUrl = url;
+        try {
+            const params = new URLSearchParams(global.location?.search || '');
+            const assetVersion = String(params.get('v') || '').trim();
+            if (assetVersion) {
+                const resolved = new URL(url, document.baseURI);
+                if (resolved.origin === global.location.origin) {
+                    resolved.searchParams.set('v', assetVersion);
+                    requestUrl = resolved.href;
+                }
+            }
+        } catch (_) { }
+        if (scriptCache.has(requestUrl)) {
+            return scriptCache.get(requestUrl);
         }
         const promise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = url;
+            script.src = requestUrl;
             script.defer = true;
             script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error(`reading_exam_script_failed:${url}`));
+            script.onerror = () => reject(new Error(`reading_exam_script_failed:${requestUrl}`));
             document.head.appendChild(script);
         });
-        scriptCache.set(url, promise);
+        scriptCache.set(requestUrl, promise);
         return promise;
     }
 
@@ -2870,8 +2882,7 @@
                     const labelMap = dataset?.questionDisplayMap || {};
                     const label = labelMap[qId] || String(qId).replace(/^q/i, '');
                     let status = statusMap.get(qId) || '';
-                    const answered = Object.prototype.hasOwnProperty.call(answers, qId)
-                        && splitAnswerTokens(answers[qId]).length > 0;
+                    const answered = hasAnswerInDataset(qId, answers, dataset);
                     if (answered && !status) {
                         status = 'answered';
                     }
@@ -4111,6 +4122,8 @@
         if (!dropzone) return;
         dropzone.dataset.answerValue = '';
         dropzone.dataset.answerLabel = '';
+        // 清除判卷残留的标记，避免重置后旧颜色残留
+        dropzone.classList.remove('correct', 'wrong');
         if (dropzone.classList.contains('drop-target-summary')) {
             dropzone.innerHTML = '';
         } else {
@@ -4194,6 +4207,8 @@
         const normalizedLabel = String(label || value || '').trim();
         dropzone.dataset.answerValue = normalizedValue;
         dropzone.dataset.answerLabel = normalizedLabel;
+        // 作答阶段移除判卷残留的标记，避免旧颜色泄露
+        dropzone.classList.remove('correct', 'wrong');
         const holder = ensureDropzoneHolder(dropzone);
         if (!holder) {
             return;
@@ -4604,8 +4619,8 @@
                 answers[questionIds[0]] = sorted.length > 1 ? sorted : (sorted[0] || '');
                 return;
             }
-            questionIds.forEach((questionId, index) => {
-                answers[questionId] = sorted[index] || '';
+            questionIds.forEach((questionId) => {
+                answers[questionId] = sorted;
             });
         });
 
@@ -4640,7 +4655,7 @@
         const questionGroup = buildQuestionGroupLookup(state.dataset).get(firstQuestionId) || null;
         if (
             questionGroup
-            && questionGroup.kind === 'multi_choice'
+            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
             && Array.isArray(questionGroup.questionIds)
             && questionGroup.questionIds.length === 1
             && Array.isArray(answerKey[firstQuestionId])
@@ -4792,9 +4807,6 @@
             if (!token) {
                 return;
             }
-            if (!/^[A-Z]$/.test(token)) {
-                return;
-            }
             if (!normalized.some((existing) => areAnswerTokensEquivalent(existing, token))) {
                 normalized.push(token);
             }
@@ -4819,6 +4831,13 @@
             ? questionGroup.questionIds.map((entry) => normalizeQuestionId(entry)).filter(Boolean)
             : [];
         const selectedTokens = collectGroupChoiceTokens(answers, questionIds);
+        // 数量校验：用户选择数不能超过正确答案总数（如 5选2 最多选 2 个）。
+        // 超选（如全选 A-E）视为整组错误，防止通过多选选项刷满分。
+        const expectedCount = questionIds
+            .map((questionId) => canonicalizeAnswerToken(answerKey[questionId]))
+            .filter(Boolean)
+            .length;
+        const overSelected = expectedCount > 0 && selectedTokens.length > expectedCount;
         const remainingTokens = selectedTokens.slice();
         const assignments = new Map();
 
@@ -4854,7 +4873,8 @@
                 ? selectedTokens.slice()
                 : (assignedToken || answers[normalizedTargetId] || ''),
             expectedToken,
-            isCorrect: Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
+            isCorrect: !overSelected
+                && Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
         };
     }
 
@@ -4863,7 +4883,7 @@
             const normalized = normalizeAnswerValue(correctAnswer);
             const isMultiChoiceGroup = Boolean(
                 questionGroup
-                && questionGroup.kind === 'multi_choice'
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
                 && Array.isArray(questionGroup.questionIds)
             );
             if (isMultiChoiceGroup && Array.isArray(normalized) && normalized.length > 0) {
@@ -4874,10 +4894,37 @@
         return 1;
     }
 
-    function hasAnswer(questionId) {
-        const answers = collectAnswers();
+    function hasAnswerInDataset(questionId, answers, dataset) {
         const value = answers[questionId];
-        return splitAnswerTokens(value).length > 0;
+        const tokens = splitAnswerTokens(value);
+        if (tokens.length === 0) {
+            return false;
+        }
+        // 拆分多选题组：一个 questionId 持有了整组的选中集合，
+        // 需按组内期望数量判断是否真正作答完毕（如 5选2 需选满 2 个）。
+        const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+        const questionGroup = buildQuestionGroupLookup(dataset).get(normalizedQuestionId) || null;
+        const isSplitMultiChoiceGroup = Boolean(
+            questionGroup
+            && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            && Array.isArray(questionGroup.questionIds)
+            && questionGroup.questionIds.length > 1
+        );
+        if (isSplitMultiChoiceGroup) {
+            const answerKey = dataset?.answerKey || {};
+            const expectedCount = questionGroup.questionIds
+                .map((id) => canonicalizeAnswerToken(answerKey[id]))
+                .filter(Boolean)
+                .length;
+            if (expectedCount > 0) {
+                return tokens.length >= expectedCount;
+            }
+        }
+        return true;
+    }
+
+    function hasAnswer(questionId) {
+        return hasAnswerInDataset(questionId, collectAnswers(), state.dataset);
     }
 
     function buildResultsFromAnswers(dataset, answers = {}) {
@@ -4899,15 +4946,17 @@
             const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
             const questionGroup = questionGroupLookup.get(normalizedQuestionId) || null;
             const questionType = questionTypeMap[normalizedQuestionId] || 'other';
-            const isSplitMultiChoiceGroup = Boolean(
+            const isMultiChoiceKind = (
                 questionGroup
-                && questionGroup.kind === 'multi_choice'
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+            );
+            const isSplitMultiChoiceGroup = Boolean(
+                isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length > 1
             );
             const isSingleKeyMultiChoiceGroup = Boolean(
-                questionGroup
-                && questionGroup.kind === 'multi_choice'
+                isMultiChoiceKind
                 && Array.isArray(questionGroup.questionIds)
                 && questionGroup.questionIds.length === 1
                 && Array.isArray(correctAnswer)
@@ -5042,6 +5091,7 @@
         dom.results.querySelectorAll?.('[data-result-question-id]').forEach((button) => {
             button.addEventListener('click', () => jumpToQuestionEvidence(button.dataset.resultQuestionId || ''));
         });
+        applyResultsToQuestionArea(results);
     }
 
     function escapeSelector(value) {
@@ -5053,6 +5103,151 @@
             }
         }
         return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    function applyResultsToQuestionArea(results) {
+        if (!results || !results.answerComparison) {
+            return;
+        }
+        const comparison = results.answerComparison;
+        // 先清除所有旧标记，再按判卷结果重新标记。
+        // 按 class 全局清除（不依赖容器选择器），确保 legacy 容器（.mcq/.location-options 等）
+        // 的旧绿/红标记也被清理，避免 replay 不同记录时残留。
+        document.querySelectorAll('.option-correct, .option-wrong, .drop-target-summary.correct, .drop-target-summary.wrong, .paragraph-dropzone.correct, .paragraph-dropzone.wrong, .match-dropzone.correct, .match-dropzone.wrong, [data-result-filled="true"]').forEach((node) => {
+            node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong');
+            if (node.dataset && node.dataset.resultFilled === 'true') {
+                node.classList.remove('dropzone-filled');
+                delete node.dataset.resultFilled;
+            }
+        });
+        // 把 comparison 条目按 checkbox/radio 组聚合：组内任一拆分子题的正确答案
+        // 都属于该组，避免拆分多选题时"正确选项在另一子题被当成用户错选"而标红。
+        // 正确答案未知（legacy 记录无 correctAnswerMap，isCorrect 为 null）时跳过该组，
+        // 避免把历史记录的所有选择都标红。
+        const groupEntries = new Map();
+        Object.values(comparison).forEach((entry) => {
+            const questionId = entry.questionId;
+            const inputNodes = collectChoiceInputsForQuestion(questionId);
+            if (!inputNodes.length) {
+                return; // 无 input 时走 dropzone 分支
+            }
+            const correctValues = (Array.isArray(entry.correctAnswer) ? entry.correctAnswer : [entry.correctAnswer])
+                .map((value) => canonicalizeAnswerToken(value))
+                .filter(Boolean);
+            if (correctValues.length === 0) {
+                return; // 正确答案未知，不标记对错
+            }
+            const groupKey = inputNodes[0].name || questionId;
+            if (!groupEntries.has(groupKey)) {
+                groupEntries.set(groupKey, {
+                    inputs: inputNodes,
+                    correctValues: new Set(),
+                    userValues: new Set()
+                });
+            }
+            const group = groupEntries.get(groupKey);
+            correctValues.forEach((value) => group.correctValues.add(value));
+            normalizeChoiceTokenList(entry.userAnswer)
+                .forEach((value) => group.userValues.add(value));
+        });
+        groupEntries.forEach((group) => {
+            group.inputs.forEach((input) => {
+                const highlightTarget = resolveChoiceHighlightTarget(input);
+                if (!highlightTarget) {
+                    return;
+                }
+                const inputValue = canonicalizeAnswerToken(input.value);
+                if (!inputValue) {
+                    return;
+                }
+                if (group.correctValues.has(inputValue)) {
+                    highlightTarget.classList.add('option-correct');
+                } else if (input.checked || group.userValues.has(inputValue)) {
+                    highlightTarget.classList.add('option-wrong');
+                }
+            });
+        });
+        // 剩余条目：dropzone（拖拽/表格非 input 类）单独处理
+        Object.values(comparison).forEach((entry) => {
+            const questionId = entry.questionId;
+            if (collectChoiceInputsForQuestion(questionId).length) {
+                return; // 已按组处理
+            }
+            // 正确答案未知（isCorrect 为 null）时跳过，避免历史记录被误标红
+            if (entry.isCorrect === null || entry.isCorrect === undefined) {
+                return;
+            }
+            const isCorrect = Boolean(entry.isCorrect);
+            const aliases = resolveAnswerAliases(questionId);
+            const selector = aliases.map((alias) => {
+                const escaped = escapeSelector(alias);
+                return [
+                    `.drop-target-summary[data-question="${escaped}"]`,
+                    `.paragraph-dropzone[data-question="${escaped}"]`,
+                    `.match-dropzone[data-question="${escaped}"]`
+                ].join(', ');
+            }).join(', ');
+            let dropzoneNode = null;
+            if (selector) {
+                try {
+                    dropzoneNode = document.querySelector(selector);
+                } catch (_) {
+                    // ignore invalid selector
+                }
+            }
+            if (dropzoneNode) {
+                dropzoneNode.classList.add(isCorrect ? 'correct' : 'wrong');
+                // 未作答的拖拽区：补上 filled 状态，让 wrong/correct 样式能生效
+                if (!dropzoneNode.classList.contains('dropzone-filled')) {
+                    dropzoneNode.classList.add('dropzone-filled');
+                    dropzoneNode.dataset.resultFilled = 'true';
+                }
+            }
+        });
+    }
+
+    function resolveChoiceHighlightTarget(input) {
+        const explicitTarget = input.closest([
+            'label',
+            'td',
+            '.heading-option',
+            '.choice-option',
+            '.answer-option',
+            '.radio-option',
+            '.checkbox-option',
+            '.option-item'
+        ].join(', '));
+        if (explicitTarget) {
+            return explicitTarget;
+        }
+        const parent = input.parentElement;
+        if (!parent) {
+            return null;
+        }
+        const siblingChoices = parent.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+        return siblingChoices.length === 1 ? parent : null;
+    }
+
+    function collectChoiceInputsForQuestion(questionId) {
+        const normalizedTarget = normalizeQuestionId(questionId);
+        // 直接匹配
+        let inputs = document.querySelectorAll(`input[type="checkbox"][name="${escapeSelector(questionId)}"], input[type="radio"][name="${escapeSelector(questionId)}"]`);
+        if (inputs.length) {
+            return Array.from(inputs);
+        }
+        // 扫描所有 checkbox/radio 组，匹配 name 展开后的题目序列
+        const matched = [];
+        document.querySelectorAll('input[type="checkbox"][name], input[type="radio"][name]').forEach((input) => {
+            const name = input.name || '';
+            const ids = expandQuestionSequence(name);
+            if (ids.some((id) => normalizeQuestionId(id) === normalizedTarget)) {
+                matched.push(input);
+            }
+        });
+        if (matched.length) {
+            return matched;
+        }
+        return [];
     }
 
     function normalizeReplayQuestionId(rawValue) {
@@ -5083,7 +5278,6 @@
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
         const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
-        const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
             ...Object.keys(normalizedAnswers),
@@ -5094,39 +5288,50 @@
                 : [])
         ]);
 
-        let correctCount = 0;
+        const replayAnswers = {};
         questionIds.forEach((questionId) => {
             const rawEntry = rawComparison[questionId];
             const comparisonEntry = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
                 ? rawEntry
                 : {};
-            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+            replayAnswers[questionId] = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                 ? comparisonEntry.userAnswer
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId);
-            const correctAnswer = hasCanonicalCorrectAnswer ? normalizedCorrectAnswers[questionId] : '';
-            let isCorrect = hasCanonicalCorrectAnswer ? compareAnswers(userAnswer, correctAnswer) : null;
-            if (isCorrect) {
-                correctCount += 1;
-            }
+        });
+
+        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
+        if (hasCanonicalCorrectAnswers) {
+            const replayResults = buildResultsFromAnswers(
+                Object.assign({}, state.dataset || {}, {
+                    answerKey: normalizedCorrectAnswers,
+                    questionOrder: Array.from(questionIds)
+                }),
+                replayAnswers
+            );
+            return {
+                answers: normalizedAnswers,
+                correctAnswers: normalizedCorrectAnswers,
+                answerComparison: replayResults.answerComparison,
+                scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
+            };
+        }
+
+        const normalizedComparison = {};
+        questionIds.forEach((questionId) => {
             normalizedComparison[questionId] = {
                 questionId,
-                userAnswer,
-                correctAnswer,
-                isCorrect
+                userAnswer: replayAnswers[questionId],
+                correctAnswer: '',
+                isCorrect: null
             };
         });
 
         const totalQuestions = questionIds.size;
         const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
-        scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? correctCount : Number(scoreInfo.correct);
-        scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? totalQuestions : Number(scoreInfo.total);
-        scoreInfo.totalQuestions = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.totalQuestions)) ? scoreInfo.total : Number(scoreInfo.totalQuestions);
+        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : 0;
+        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
+        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
         scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
-        scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
-            ? Math.round(scoreInfo.accuracy * 100)
-            : Number(scoreInfo.percentage);
         scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
             ? Number(scoreInfo.percentage)
             : Math.round(scoreInfo.accuracy * 100);
@@ -5144,6 +5349,8 @@
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
                 buildReplayResults,
+                hasAnswerInDataset,
+                normalizeChoiceTokenList,
                 buildResultsFromAnswers,
                 renderTimer,
                 handleSubmit
@@ -5384,6 +5591,8 @@
             global.__IELTS_UNIFIED_READING_PAGE_TEST__ || {},
             {
                 buildReplayResults,
+                hasAnswerInDataset,
+                normalizeChoiceTokenList,
                 mergeDraft,
                 normalizeNotes,
                 normalizeNoteOutlines,
@@ -5676,6 +5885,14 @@
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
         document.body.classList.remove('timer-locked-mode');
+        // 清除判卷残留的绿/红标记，避免切回作答态后用户看到旧的对错反馈
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong, [data-result-filled="true"]').forEach((node) => {
+            node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
+            if (node.dataset && node.dataset.resultFilled === 'true') {
+                node.classList.remove('dropzone-filled');
+                delete node.dataset.resultFilled;
+            }
+        });
         enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
@@ -6632,6 +6849,10 @@
         });
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);
+        });
+        // 清除选择题/表格判卷残留的绿/红标记
+        document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
+            node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
         });
     }
 
