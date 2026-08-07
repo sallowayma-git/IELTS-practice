@@ -957,13 +957,16 @@ async function testFileRebindChallengeProvesExistingWindowIdentity() {
         sessionId: 'reading-p1-session',
         suiteSessionId: 'suite-file-proof',
         parentWindow,
+        parentOrigin: 'null',
+        parentOriginIsOpaque: true,
         windowSessionToken: 'file-proof-token',
         windowSessionGeneration: 9
     });
     await hooks.handleIncoming(hostEvent(parentWindow, 'SUITE_REBIND_CHALLENGE', {
         challenge: 'challenge-1',
         suiteSessionId: 'suite-file-proof',
-        examId: 'reading-p1'
+        examId: 'reading-p1',
+        windowSessionToken: 'file-proof-token'
     }, { origin: 'null' }));
     assert.strictEqual(proofs.length, 1, 'the surviving file child must answer its original parent');
     assert.strictEqual(proofs[0].origin, '*');
@@ -974,7 +977,8 @@ async function testFileRebindChallengeProvesExistingWindowIdentity() {
     await hooks.handleIncoming(hostEvent({ postMessage() {} }, 'SUITE_REBIND_CHALLENGE', {
         challenge: 'challenge-forged',
         suiteSessionId: 'suite-file-proof',
-        examId: 'reading-p1'
+        examId: 'reading-p1',
+        windowSessionToken: 'file-proof-token'
     }, { origin: 'null' }));
     assert.strictEqual(proofs.length, 1, 'a different WindowProxy must not obtain the proof token');
 }

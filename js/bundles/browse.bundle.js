@@ -9523,6 +9523,10 @@
                             if (sourceWindow && !sourceWindow.closed) {
                                 this.currentSuiteSession.windowRef = sourceWindow;
                             }
+                            if (typeof this._buildSuiteWindowBinding === 'function') {
+                                const binding = this._buildSuiteWindowBinding(this.currentSuiteSession);
+                                if (binding) this.currentSuiteSession.windowBinding = binding;
+                            }
                             if (Number.isFinite(Number(data.elapsed))) {
                                 if (typeof this._deriveSuiteExamElapsedSeconds === 'function') {
                                     this.currentSuiteSession.elapsedByExam[routedExamId] = this._deriveSuiteExamElapsedSeconds(
@@ -10783,11 +10787,17 @@
             if (session.submitReceiptTeardownTimer) {
                 clearTimeout(session.submitReceiptTeardownTimer);
             }
-            const timer = setTimeout(() => {
-                session.submitReceiptTeardownTimer = null;
-                this._teardownSuiteSession(session).catch((teardownError) => {
+            const timer = setTimeout(async () => {
+                let tornDown = false;
+                try {
+                    tornDown = await this._teardownSuiteSession(session);
+                } catch (teardownError) {
                     console.warn('[SuitePractice] 提交回执重放窗口结束后清理套题会话失败:', teardownError);
-                });
+                }
+                if (!tornDown && session.submitReceiptTeardownTimer === timer) {
+                    session.submitReceiptTeardownTimer = null;
+                    if (this._isSuiteSessionCurrentOwner(session)) this._scheduleSuiteSubmitTeardown(session);
+                }
             }, 30000);
             session.submitReceiptTeardownTimer = timer;
             if (timer && typeof timer.unref === 'function') {

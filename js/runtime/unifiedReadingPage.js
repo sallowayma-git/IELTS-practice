@@ -7031,14 +7031,7 @@
             const challenge = String(data && data.challenge || '').trim();
             const suiteSessionId = String(data && data.suiteSessionId || '').trim();
             const examId = String(data && data.examId || '').trim();
-            const expectedParent = state.parentWindow || (global.opener && !global.opener.closed ? global.opener : null);
-            const fileProtocol = global.location && global.location.protocol === 'file:';
-            const opaqueOrigin = !event || event.origin === 'null' || event.origin === 'file://';
-            if (!fileProtocol
-                || !opaqueOrigin
-                || !sourceWindow
-                || sourceWindow !== expectedParent
-                || String(payload.source || '') !== 'exam_host'
+            if (!isTrustedHostMessage(event, payload, data)
                 || !challenge
                 || !state.windowSessionToken
                 || !state.sessionId

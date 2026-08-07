@@ -331,6 +331,28 @@ async function run() {
         const liveChild = createStubWindow('ielts-suite-mode-tab');
         liveChild.location.href = session.windowBinding.expectedUrl;
         liveChild.addEventListener = () => {};
+        const originalPostMessage = liveChild.postMessage.bind(liveChild);
+        liveChild.postMessage = (payload, targetOrigin) => {
+            originalPostMessage(payload, targetOrigin);
+            if (payload && payload.type === 'SUITE_REBIND_CHALLENGE') {
+                windowStub.__dispatchEvent('message', {
+                    source: liveChild,
+                    origin: 'http://localhost',
+                    data: {
+                        type: 'SUITE_REBIND_PROOF',
+                        source: 'practice_page',
+                        data: {
+                            challenge: payload.data.challenge,
+                            suiteSessionId: session.id,
+                            examId: 'reading-p1',
+                            sessionId: 'reading-p1-session',
+                            windowSessionToken: 'old-window-token',
+                            windowSessionGeneration: 4
+                        }
+                    }
+                });
+            }
+        };
         const originalOpen = windowStub.open;
         const observedOpenUrls = [];
         windowStub.open = (url, name) => {
@@ -346,6 +368,13 @@ async function run() {
             assert.strictEqual(info.expectedSessionId, 'reading-p1-session', '重绑定必须保留练习 session 身份');
             assert.strictEqual(info.sessionGeneration, 5, '重绑定 generation 必须严格递增');
             assert.notStrictEqual(info.windowSessionToken, 'old-window-token', '重绑定必须旋转 token');
+            session.activeExamId = 'reading-p2';
+            const logicalBinding = app._buildSuiteWindowBinding(session);
+            assert.strictEqual(logicalBinding.examId, 'reading-p2', '共享 inline 窗口 binding 必须跟随逻辑活动篇章');
+            assert.strictEqual(logicalBinding.windowSessionToken, session.windowBinding.windowSessionToken, '逻辑切篇必须复用已验证窗口凭据');
+            session.windowBinding = logicalBinding;
+            session.activeExamId = null;
+            assert.strictEqual(app._buildSuiteWindowBinding(session).examId, 'reading-p2', 'finalizing snapshot 必须保留最后活动篇章 binding');
         } finally {
             windowStub.open = originalOpen;
             const info = app.examWindows && app.examWindows.get('reading-p1');
@@ -1503,6 +1532,19 @@ async function run() {
         clearTimeout(session.submitReceiptTeardownTimer);
         session.submitReceiptTeardownTimer = null;
 
+        let guardedCloseTeardownCount = 0;
+        app._teardownSuiteSession = async () => { guardedCloseTeardownCount += 1; return true; };
+        session.status = 'active';
+        app._ensureSuiteWindowGuard(session, sourceWindow);
+        sourceWindow.close();
+        await Promise.resolve();
+        assert.strictEqual(guardedCloseTeardownCount, 0, '进行中的套题必须继续拦截 guarded close');
+        session.status = 'completed';
+        sourceWindow.close();
+        await Promise.resolve();
+        assert.strictEqual(guardedCloseTeardownCount, 1, '最终 ACK 的 guarded close 必须立即 teardown 已完成套题');
+        app._releaseSuiteWindowGuard(sourceWindow);
+
         let completedCloseTeardownCount = 0;
         app._teardownSuiteSession = async (targetSession) => {
             assert.strictEqual(targetSession, session);
@@ -1873,6 +1915,61 @@ async function run() {
         assert.strictEqual(app.suiteExamMap.get('reading-p1'), freshSession.id, '旧 session teardown 不得清理新 suiteExamMap');
         assert.deepStrictEqual(plain(windowSessionStore.get('simulation')), freshSnapshot, '旧 session teardown 不得清理新 snapshot');
         assert.strictEqual(discardCalls, 0, '旧 session teardown 不得 discard 新 session snapshot');
+    }
+
+    // Case 3.0.8: timer 与进行中的 teardown 重叠时，失败后必须保留一次自动重试。
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_teardown_timer_overlap');
+        session.status = 'completed';
+        session.windowRef.close = function close() { this.closed = true; };
+        const suiteWindow = session.windowRef;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const scheduledTimers = [];
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        sandbox.setTimeout = (callback) => {
+            const timer = { run: callback, unref() {} };
+            scheduledTimers.push(timer);
+            return timer;
+        };
+        sandbox.clearTimeout = () => {};
+
+        let discardAttempts = 0;
+        let markDiscardStarted;
+        let releaseDiscard;
+        const discardStarted = new Promise((resolve) => { markDiscardStarted = resolve; });
+        const discardGate = new Promise((resolve) => { releaseDiscard = resolve; });
+        app._discardPersistentSuiteRecovery = async () => {
+            discardAttempts += 1;
+            if (discardAttempts === 1) {
+                markDiscardStarted();
+                return discardGate;
+            }
+            return true;
+        };
+
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            const firstTeardown = app._teardownSuiteSession(session);
+            await discardStarted;
+            const overlappingTimer = scheduledTimers[0].run();
+            releaseDiscard(false);
+            assert.strictEqual(await firstTeardown, false);
+            await overlappingTimer;
+            assert.strictEqual(scheduledTimers.length, 2, '失败的重叠 teardown 必须重新挂起 fallback timer');
+            assert.strictEqual(session.submitReceiptTeardownTimer, scheduledTimers[1]);
+            await scheduledTimers[1].run();
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+        }
+
+        assert.strictEqual(discardAttempts, 2, 'fallback timer 必须在瞬时失败后重新尝试 discard');
+        assert.strictEqual(app.currentSuiteSession, null, '重试成功后必须完成 teardown');
+        assert.strictEqual(suiteWindow.closed, true, '重试成功后必须关闭已完成题页');
     }
 
     // Case 3.1: 如果最后一篇已有导航快照，最终提交仍应覆盖并 finalize

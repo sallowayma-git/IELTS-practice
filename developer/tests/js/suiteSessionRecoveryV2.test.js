@@ -203,11 +203,15 @@ async function main() {
     await discardFailureApp._ensureSuiteRecoveryReady();
     assert.equal(await discardFailureApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
     const discardFailureSession = discardFailureApp.currentSuiteSession;
+    const discardFallbackTimer = setTimeout(() => {}, 60000);
+    discardFallbackTimer.unref?.();
+    discardFailureSession.submitReceiptTeardownTimer = discardFallbackTimer;
     discardFailureHarness.recoveryCalls.discardQueue.push(false);
     assert.equal(await discardFailureApp.abandonSuiteRecovery(discardFailureSession.id), false);
     assert.equal(discardFailureApp.currentSuiteSession, discardFailureSession, 'discard failure must retain the in-memory suite');
     assert.equal(discardFailureSession.status, 'active', 'discard failure must not mark the suite aborted');
     assert.equal(discardFailureWindow.closed, false, 'discard failure must not close the active question window');
+    assert.equal(discardFailureSession.submitReceiptTeardownTimer, discardFallbackTimer, 'discard failure must preserve the fallback teardown timer');
     assert(discardFailureHarness.activeSessionStore.has(discardFailureSession.id), 'discard failure must retain durable recovery');
     assert.equal(await discardFailureApp.abandonSuiteRecovery(discardFailureSession.id), true, 'discard should remain retryable');
 
@@ -308,9 +312,9 @@ async function main() {
     await walOrderingSource._ensureSuiteRecoveryReady();
     assert.equal(await walOrderingSource._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
     const orderingBase = walOrderingHarness.sessionStore.peek('simulation');
-    const laterTimestampOlderRevision = {
+    const laterTimestampSameRevision = {
         ...structuredClone(orderingBase),
-        revision: 9,
+        revision: 10,
         lastUpdate: 9000,
         currentIndex: 0,
         activeExamId: 'p1'
@@ -322,13 +326,46 @@ async function main() {
         currentIndex: 1,
         activeExamId: 'p2'
     };
-    walOrderingHarness.sessionStore.save('simulation', laterTimestampOlderRevision);
+    walOrderingHarness.sessionStore.save('simulation', laterTimestampSameRevision);
     walOrderingHarness.activeSessionStore.set(orderingBase.id, higherDurableRevision);
+    const savesBeforeEqualRevisionRestore = walOrderingHarness.recoveryCalls.save;
     const walOrderingApp = walOrderingHarness.makeApp();
     walOrderingApp.initializeSuiteMode();
     await walOrderingApp._ensureSuiteRecoveryReady();
-    assert.equal(walOrderingApp.currentSuiteSession.currentIndex, 1, 'higher durable revision must beat a later timestamp on an older WAL revision');
+    assert.equal(walOrderingApp.currentSuiteSession.currentIndex, 1, 'durable recovery must beat a later same-revision WAL branch');
     assert.equal(walOrderingApp.currentSuiteSession.activeExamId, 'p2');
+    assert.equal(walOrderingHarness.recoveryCalls.save, savesBeforeEqualRevisionRestore, 'same-revision WAL must not be promoted');
+
+    walOrderingHarness.sessionStore.save('simulation', {
+        ...laterTimestampSameRevision,
+        revision: 11
+    });
+    walOrderingHarness.activeSessionStore.set(orderingBase.id, higherDurableRevision);
+    walOrderingHarness.recoveryCalls.saveQueue.push((_value, options) => {
+        assert.equal(options.expectedEntityRevision, 10);
+        walOrderingHarness.activeSessionStore.set(orderingBase.id, {
+            ...higherDurableRevision,
+            revision: 15
+        });
+        return { committed: false, code: 'STALE_RECOVERY_WRITE', actualEntityRevision: 15 };
+    });
+    const failedPromotionApp = walOrderingHarness.makeApp();
+    failedPromotionApp.initializeSuiteMode();
+    await failedPromotionApp._ensureSuiteRecoveryReady();
+    assert.equal(failedPromotionApp.currentSuiteSession.currentIndex, 0, 'failed promotion must retain the higher-revision WAL for retry');
+    assert.equal(failedPromotionApp.currentSuiteSession.activeExamId, 'p1');
+    assert.equal(failedPromotionApp.currentSuiteSession._lastDurableRecoveryRevision, 15, 'stale receipt must advance the next CAS baseline');
+    assert.equal(walOrderingHarness.sessionStore.peek('simulation').revision, 16, 'stale promotion must preserve a retryable window WAL across reload');
+    walOrderingHarness.recoveryCalls.saveQueue.push((_value, options) => {
+        assert.equal(options.expectedEntityRevision, 15, 'retry must CAS against the actual durable revision');
+        assert(Number(_value.revision) > options.expectedEntityRevision, 'retry snapshot must advance beyond the v2 CAS baseline');
+        return true;
+    });
+    const retriedPromotionApp = walOrderingHarness.makeApp();
+    retriedPromotionApp.initializeSuiteMode();
+    await retriedPromotionApp._ensureSuiteRecoveryReady();
+    assert.equal(retriedPromotionApp.currentSuiteSession.activeExamId, 'p1', 'reload must retry the retained WAL state');
+    assert.equal(walOrderingHarness.activeSessionStore.get(orderingBase.id).activeExamId, 'p1', 'retry must promote the retained WAL state');
 
     const resumedApp = makeApp();
     resumedApp.initializeSuiteMode();
@@ -526,13 +563,30 @@ async function main() {
         })),
         draftsByExam: {},
         elapsedByExam: {},
-        windowRef: null
+        windowRef: null,
+        windowBinding: {
+            examId: 'p3',
+            expectedSessionId: 'terminal-window-session',
+            windowSessionToken: 'terminal-window-token',
+            sessionGeneration: 2
+        }
+    };
+    const finalChild = {
+        closed: false,
+        postMessage() {},
+        close() { this.closed = true; }
     };
     finalApp.currentSuiteSession = finalSession;
     finalApp._resolveSuiteSequenceNumber = async () => 1;
     finalApp._formatSuiteDateLabel = () => '2026-08-07';
     finalApp._updatePracticeRecordsState = async () => {};
+    finalApp._postExamMessage = () => true;
     finalApp.refreshOverviewData = () => {};
+    let reboundTerminalExamId = '';
+    finalApp._tryRebindSuiteWindow = async (_session, entry) => {
+        reboundTerminalExamId = entry.examId;
+        return { window: finalChild };
+    };
     assert.equal(await finalApp.resumeSuitePractice(finalSession.id), true);
     committedRecord = practiceFinalizes[0] && practiceFinalizes[0].record;
     assert.equal(practiceFinalizes.length, 1, '终态恢复必须调用 v2 AppData.practice.finalizeSuite');
@@ -540,6 +594,8 @@ async function main() {
     assert.equal(practiceFinalizes[0].record.operationId, practiceFinalizes[0].operationId);
     assert.equal(sessionStore.peek('simulation'), null);
     assert.equal(finalSession.status, 'completed');
+    assert.equal(reboundTerminalExamId, 'p3', '终态恢复必须按持久 binding 重新绑定存活题页');
+    assert.equal(finalChild.closed, true, '终态恢复完成后必须关闭重新绑定的题页');
     assert.equal(messages.some((entry) => entry.type === 'error'), false);
 
     const divergentId = 'suite_divergent_record';
@@ -587,10 +643,16 @@ async function main() {
     concurrentApp._formatSuiteDateLabel = () => '2026-08-07';
     concurrentApp._updatePracticeRecordsState = async () => {};
     concurrentApp.refreshOverviewData = () => {};
+    concurrentApp._suiteModeReady = true;
     let finalizeCalls = 0;
+    let releaseFinalizeSave;
+    let markFinalizeSaveStarted;
+    const finalizeSaveStarted = new Promise((resolve) => { markFinalizeSaveStarted = resolve; });
+    const finalizeSaveGate = new Promise((resolve) => { releaseFinalizeSave = resolve; });
     concurrentApp._saveSuitePracticeRecord = async (record) => {
         finalizeCalls += 1;
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        markFinalizeSaveStarted();
+        await finalizeSaveGate;
         return record;
     };
     const concurrentPayload = {
@@ -605,10 +667,15 @@ async function main() {
             answerComparison: {}
         }))
     };
-    const concurrentOutcomes = await Promise.all([
+    const concurrentSubmits = [
         concurrentApp._handleInlineSimulationSuiteSubmit('p1', concurrentPayload, concurrentWindow),
         concurrentApp._handleInlineSimulationSuiteSubmit('p1', concurrentPayload, concurrentWindow)
-    ]);
+    ];
+    await finalizeSaveStarted;
+    assert.equal(await concurrentApp.abandonSuiteRecovery(concurrentSession.id), false, 'live finalize 期间不得承诺放弃成功');
+    assert.equal(concurrentApp.currentSuiteSession, concurrentSession, '拒绝放弃时必须保留当前 finalizing session');
+    releaseFinalizeSave();
+    const concurrentOutcomes = await Promise.all(concurrentSubmits);
     assert.equal(finalizeCalls, 1, '并发 inline submit 必须复用同一个 finalize promise');
     assert.equal(concurrentOutcomes.every((outcome) => outcome && outcome.committed === true), true);
 

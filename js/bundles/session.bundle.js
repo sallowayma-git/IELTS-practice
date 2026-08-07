@@ -110,16 +110,10 @@
                         let selected = restored;
                         if (fastSnapshotSession
                             && String(fastSnapshotSession.id) === String(restored.id)
-                            && (
-                                Number(fastSnapshotSession.revision) > Number(restored.revision)
-                                || (
-                                    Number(fastSnapshotSession.revision) === Number(restored.revision)
-                                    && Number(fastSnapshotSession.lastUpdate) > Number(restored.lastUpdate)
-                                )
-                            )) {
+                            && Number(fastSnapshotSession.revision) > Number(restored.revision)) {
                             selected = fastSnapshotSession;
-                            selected._lastDurableRecoveryRevision = restored._lastDurableRecoveryRevision;
-                            const promoted = await this._commitSuiteRecovery(selected, {
+                            fastSnapshotSession._lastDurableRecoveryRevision = restored._lastDurableRecoveryRevision;
+                            const promoted = await this._commitSuiteRecovery(fastSnapshotSession, {
                                 notify: false,
                                 reason: 'window-wal-promotion'
                             });
@@ -583,6 +577,13 @@
                     session.activeExamId = null;
                     if (!await this._commitSuiteRecovery(session, { reason: 'finalize-resume' })) {
                         return false;
+                    }
+                    const boundEntry = session.windowBinding && sequence.find((entry) => (
+                        entry && String(entry.examId) === String(session.windowBinding.examId || '')
+                    ));
+                    if (!session.windowRef && boundEntry) {
+                        const rebound = await this._tryRebindSuiteWindow(session, boundEntry);
+                        if (rebound && rebound.window && !rebound.window.closed) session.windowRef = rebound.window;
                     }
                     return this._finalizeSuiteRecordWithGate(session, { fromRecovery: true });
                 }
@@ -1906,22 +1907,23 @@
         },
 
         _buildSuiteWindowBinding(session) {
-            const examId = session && session.activeExamId != null ? String(session.activeExamId) : '';
+            const fallback = session && session.windowBinding && typeof session.windowBinding === 'object'
+                ? session.windowBinding
+                : null;
+            const examId = session && session.activeExamId != null
+                ? String(session.activeExamId)
+                : String(fallback && fallback.examId || '');
             const info = examId && this.examWindows && this.examWindows.get(examId);
             if (!info || !info.window || info.window.closed) {
-                const fallback = session && session.windowBinding && typeof session.windowBinding === 'object'
-                    ? session.windowBinding
-                    : null;
                 const fallbackGeneration = Number(fallback && fallback.sessionGeneration);
                 if (!fallback
-                    || String(fallback.examId || '') !== examId
                     || !String(fallback.expectedSessionId || '').trim()
                     || !String(fallback.windowSessionToken || '').trim()
                     || !Number.isInteger(fallbackGeneration)
                     || fallbackGeneration <= 0) {
                     return null;
                 }
-                return this._cloneSuitePlainObject(fallback);
+                return { ...this._cloneSuitePlainObject(fallback), examId };
             }
             if (info.suiteSessionId && String(info.suiteSessionId) !== String(session.id)) return null;
             const expectedSessionId = typeof info.expectedSessionId === 'string' ? info.expectedSessionId.trim() : '';
@@ -2043,6 +2045,14 @@
                         notCommitted.code = receipt && receipt.code
                             ? String(receipt.code)
                             : 'RECOVERY_COMMIT_NOT_CONFIRMED';
+                        const actualRevision = Number(receipt && receipt.actualEntityRevision);
+                        if (notCommitted.code === 'STALE_RECOVERY_WRITE'
+                            && Number.isInteger(actualRevision) && actualRevision >= 0) {
+                            session._lastDurableRecoveryRevision = actualRevision;
+                            session.revision = Math.max(Number(session.revision) || 0, actualRevision + 1);
+                            snapshot.revision = session.revision;
+                            this._mirrorSuiteRecoverySnapshot(snapshot);
+                        }
                         throw notCommitted;
                     }
                     return receipt;
@@ -4495,11 +4505,6 @@
         },
 
         async _teardownSuiteSessionInternal(session) {
-            if (session.submitReceiptTeardownTimer) {
-                clearTimeout(session.submitReceiptTeardownTimer);
-                session.submitReceiptTeardownTimer = null;
-            }
-
             // A delayed receipt teardown must never own a newer suite session.
             if (!this._isSuiteSessionCurrentOwner(session)) {
                 return false;
@@ -4516,6 +4521,10 @@
                 session._suiteRecoveryWritesBlocked = false;
                 session._suiteTeardownInProgress = false;
                 return false;
+            }
+            if (session.submitReceiptTeardownTimer) {
+                clearTimeout(session.submitReceiptTeardownTimer);
+                session.submitReceiptTeardownTimer = null;
             }
 
             this._clearSuiteHandshakes();
@@ -4571,6 +4580,12 @@
             if (!session) {
                 return false;
             }
+            if (session._finalizePromise && typeof session._finalizePromise.then === 'function') {
+                if (options.reason === 'user_discard') {
+                    window.showMessage && window.showMessage('套题正在完成保存，请稍候。', 'warning');
+                }
+                return false;
+            }
 
             session._suitePendingTerminalStatus = 'aborted';
             const tornDown = await this._teardownSuiteSession(session);
@@ -4614,7 +4629,7 @@
             return this._openNamedSuiteWindow(windowName, session);
         },
 
-        async _verifyOpaqueSuiteWindowBinding(candidate, session, targetEntry, binding) {
+        async _verifySuiteWindowBinding(candidate, session, targetEntry, binding) {
             if (!candidate || candidate.closed || !session || !targetEntry || !binding
                 || typeof global.addEventListener !== 'function'
                 || typeof global.removeEventListener !== 'function'
@@ -4668,7 +4683,8 @@
                         data: {
                             challenge,
                             suiteSessionId: expectedSuiteId,
-                            examId: expectedExamId
+                            examId: expectedExamId,
+                            windowSessionToken: expectedToken
                         }
                     }, '*');
                 } catch (_) {
@@ -4712,8 +4728,7 @@
                 session._suiteWindowNameConflict = true;
                 return null;
             }
-            if (!candidateExamId && isFileProtocol
-                && !await this._verifyOpaqueSuiteWindowBinding(candidate, session, targetEntry, binding)) {
+            if (!await this._verifySuiteWindowBinding(candidate, session, targetEntry, binding)) {
                 session._suiteWindowNameConflict = true;
                 return null;
             }
@@ -4798,6 +4813,11 @@
 
                 const recordAttempt = (reason) => {
                     this._recordSuiteCloseAttempt(session, reason);
+                    if (session.status === 'completed' && typeof this._teardownSuiteSession === 'function') {
+                        this._teardownSuiteSession(session).catch((teardownError) => {
+                            console.warn('[SuitePractice] 已完成套题窗口清理失败:', teardownError);
+                        });
+                    }
                 };
 
                 const isSelfTarget = (rawTarget) => {
