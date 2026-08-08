@@ -10,6 +10,18 @@
 
 代码授权以 [LICENSE](LICENSE) 为准。题源、文章、音频、PDF、图片和其他第三方内容版权归原权利人所有，仅建议用于个人学习与备考场景。
 
+## 分支概览
+
+本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+
+| 分支 | 说明 | 状态 | 完成度 | 技术特征 |
+|------|------|------|--------|----------|
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版（当前分支），纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
+| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
+| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
+
+> **main** 适合所有用户直接使用；**feature/multi-device-easy-deploy** 面向希望自主部署的用户；**IELTS-WRITING-FEAT** 是 AI native 协作客户端，提供写作评分、阅读教练、自进化等 AI 功能。
+
 ## 项目概述
 
 IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。

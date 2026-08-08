@@ -12,6 +12,8 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 const originalConsoleLog = (console && typeof console.log === 'function')
     ? console.log.bind(console)
     : null;
+let activeDocumentStub = null;
+const modalFocusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function emitResult(payload) {
     const text = JSON.stringify(payload, null, 2);
@@ -65,6 +67,12 @@ function patchVocabSessionView(source) {
         closeMenu,
         bindEvents,
         toggleMenu,
+        getWordStatus,
+        analyzeListWords,
+        openListModal,
+        closeListModal,
+        exportCurrentList,
+        renderListBrowser,
         setElements: (elements) => { state.elements = elements || {}; },
         setStore: (store) => { state.store = store; },
         setScheduler: (scheduler) => { state.scheduler = scheduler; },
@@ -134,6 +142,7 @@ function createElementStub(tag = 'div', overrides = {}) {
         textContent: '',
         value: '',
         hidden: false,
+        disabled: false,
         appendChild(child) {
             if (!child) {
                 return child;
@@ -214,6 +223,9 @@ function createElementStub(tag = 'div', overrides = {}) {
         },
         focus() {
             this._focused = true;
+            if (activeDocumentStub) {
+                activeDocumentStub.activeElement = this;
+            }
         },
         click() {
             this._clicked = true;
@@ -231,7 +243,7 @@ function createDocumentStub() {
     const listeners = new Map();
     const body = createElementStub('body');
 
-    return {
+    const documentStub = {
         body,
         activeElement: null,
         addEventListener(type, handler) {
@@ -271,6 +283,8 @@ function createDocumentStub() {
             return element;
         }
     };
+    activeDocumentStub = documentStub;
+    return documentStub;
 }
 
 function createWindowStub(documentStub) {
@@ -471,6 +485,7 @@ function createSessionElements() {
 
     const settingsModal = createElementStub('div');
     const settingsDialog = createElementStub('div');
+    const settingsClose = createElementStub('button');
     const settingsError = createElementStub('div');
     const settingsForm = createElementStub('form');
 
@@ -482,6 +497,28 @@ function createSessionElements() {
     const listSwitcher = createElementStub('div');
     const menuButton = createElementStub('button');
     const menu = createElementStub('div');
+    const listModal = createElementStub('div');
+    const listDialog = createElementStub('div');
+    const listSubtitle = createElementStub('p');
+    const listSearch = createElementStub('input');
+    const listLearnedOnly = createElementStub('input');
+    const listStats = createElementStub('div');
+    const listBody = createElementStub('div');
+    const listClose = createElementStub('button');
+
+    settingsDialog.appendChild(dailyField);
+    settingsDialog.appendChild(settingsClose);
+    settingsDialog.__queryMap = {
+        'input, button, select, textarea': dailyField
+    };
+    settingsDialog.__queryListMap = {
+        [modalFocusableSelector]: [dailyField, settingsClose]
+    };
+    listDialog.appendChild(listSearch);
+    listDialog.appendChild(listClose);
+    listDialog.__queryListMap = {
+        [modalFocusableSelector]: [listSearch, listClose]
+    };
 
     return {
         root: createElementStub('div'),
@@ -509,7 +546,16 @@ function createSessionElements() {
         },
         listSwitcher,
         menuButton,
-        menu
+        menu,
+        listModal,
+        listDialog,
+        listSubtitle,
+        listSearch,
+        listLearnedOnly,
+        listStats,
+        listBody,
+        settingsClose,
+        listClose
     };
 }
 
@@ -605,11 +651,31 @@ async function run() {
             'data-action="toggle-side-panel"',
             'data-action="save-note"',
             'data-vocab-role="import-input"',
+            'data-action="menu-view-list"',
+            'data-vocab-role="list-modal"',
+            'data-vocab-role="list-dialog"',
+            'data-action="export-current-list"',
             'data-vocab-role="settings-modal"'
         ];
         markers.forEach((marker) => {
             assert.ok(source.includes(marker), `Missing marker: ${marker}`);
         });
+    });
+
+    await record('list modal body owns the table scroll', () => {
+        const css = readSource('css/main.css');
+        const bodyRule = css.match(/\.vocab-list-modal__body\s*\{([^}]*)\}/);
+        const tableWrapRule = css.match(/\.vocab-list-table-wrap\s*\{([^}]*)\}/);
+        assert.ok(bodyRule, 'Missing list modal body rule');
+        assert.ok(tableWrapRule, 'Missing table wrapper rule');
+        assert.match(bodyRule[1], /flex:\s*1 1 220px/);
+        assert.match(bodyRule[1], /min-height:\s*0/);
+        assert.match(bodyRule[1], /overflow:\s*hidden/);
+        assert.match(tableWrapRule[1], /flex:\s*1/);
+        assert.match(tableWrapRule[1], /min-height:\s*0/);
+        assert.match(tableWrapRule[1], /overflow:\s*auto/);
+        assert.doesNotMatch(css, /@media\s*\(max-height:\s*480px\)/);
+        assert.doesNotMatch(css, /@media\s*\(max-height:\s*300px\)/);
     });
 
     const vocabContext = createVocabContext();
@@ -986,6 +1052,7 @@ async function run() {
         };
 
         hooks.state.session.batchSize = 1;
+        hooks.openSettingsModal(elements.menuButton);
         await hooks.handleSettingsSubmit({
             preventDefault() {},
             currentTarget: elements.settingsForm
@@ -1006,6 +1073,287 @@ async function run() {
         hooks.toggleMenu({ stopPropagation() {} });
         assert.strictEqual(hooks.state.menuOpen, false);
         assert.ok(elements.menu.hidden);
+    });
+
+    await record('settings modal restores focus to visible menu trigger', () => {
+        const hiddenMenuItem = createElementStub('button');
+        const trigger = createElementStub('button');
+        trigger.dataset.action = 'menu-settings';
+        documentStub.activeElement = hiddenMenuItem;
+        elements.menuButton._focused = false;
+
+        elements.menu.dispatchEvent({
+            type: 'click',
+            target: {
+                closest(selector) {
+                    return selector === 'button[data-action]' ? trigger : null;
+                }
+            }
+        });
+        hooks.closeSettingsModal();
+
+        assert.strictEqual(elements.menuButton._focused, true);
+        assert.ok(!hiddenMenuItem._focused);
+    });
+
+    await record('list status keeps due mastered words in the review queue', () => {
+        const config = { masteryCount: 4 };
+        const dueMastered = hooks.getWordStatus({
+            correctCount: 4,
+            nextReview: new Date(Date.now() - 60_000).toISOString()
+        }, config);
+        const futureMastered = hooks.getWordStatus({
+            correctCount: 4,
+            nextReview: new Date(Date.now() + 60_000).toISOString()
+        }, config);
+
+        assert.strictEqual(dueMastered.tone, 'due');
+        assert.strictEqual(futureMastered.tone, 'mastered');
+
+        hooks.setStore(createMockStore([
+            { word: 'alpha', meaning: 'A', correctCount: 4, nextReview: new Date(Date.now() - 60_000).toISOString() }
+        ], config));
+        const analysis = hooks.analyzeListWords();
+        assert.strictEqual(analysis.masteredCount, 1);
+        assert.strictEqual(analysis.dueCount, 1);
+    });
+
+    await record('list modal restores focus to visible menu trigger', async () => {
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        const hiddenMenuItem = createElementStub('button');
+        const trigger = createElementStub('button');
+        trigger.dataset.action = 'menu-view-list';
+        hooks.setStore(store);
+        documentStub.activeElement = hiddenMenuItem;
+        elements.menuButton._focused = false;
+
+        elements.menu.dispatchEvent({
+            type: 'click',
+            target: {
+                closest(selector) {
+                    return selector === 'button[data-action]' ? trigger : null;
+                }
+            }
+        });
+        await flushPromises();
+        hooks.closeListModal();
+
+        assert.strictEqual(elements.menuButton._focused, true);
+        assert.ok(!hiddenMenuItem._focused);
+    });
+
+    await record('Escape cancels a pending list modal open', async () => {
+        let resolveInit;
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        store.init = () => new Promise((resolve) => {
+            resolveInit = resolve;
+        });
+        hooks.setStore(store);
+        const opening = hooks.openListModal(elements.menuButton);
+        let prevented = false;
+
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Escape',
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        resolveInit(true);
+        await opening;
+
+        assert.strictEqual(prevented, true);
+        assert.notStrictEqual(elements.listModal.dataset.open, 'true');
+        assert.ok(elements.listModal.hidden);
+    });
+
+    await record('list and settings modals remain mutually exclusive', async () => {
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        hooks.setStore(store);
+
+        await hooks.openListModal(elements.menuButton);
+        hooks.openSettingsModal(elements.menuButton);
+        assert.strictEqual(elements.settingsModal.dataset.open, 'true');
+        assert.strictEqual(elements.listModal.dataset.open, 'false');
+
+        await hooks.openListModal(elements.menuButton);
+        assert.strictEqual(elements.listModal.dataset.open, 'true');
+        assert.strictEqual(elements.settingsModal.dataset.open, 'false');
+        hooks.closeListModal();
+    });
+
+    await record('settings writes keep the latest submitted values', async () => {
+        const pendingSaves = [];
+        const store = createMockStore();
+        store.setConfig = (config) => new Promise((resolve) => {
+            pendingSaves.push(() => {
+                store.config = { ...store.config, ...config };
+                resolve(true);
+            });
+        });
+        hooks.setStore(store);
+        elements.settingsForm.__fields = {
+            dailyNew: '10',
+            reviewLimit: '50',
+            masteryCount: '3'
+        };
+        hooks.openSettingsModal(elements.menuButton);
+        const pendingSave = hooks.handleSettingsSubmit({
+            preventDefault() {},
+            currentTarget: elements.settingsForm
+        });
+        await flushPromises();
+
+        hooks.closeSettingsModal();
+        hooks.openSettingsModal(elements.menuButton);
+        elements.settingsForm.__fields = {
+            dailyNew: '30',
+            reviewLimit: '80',
+            masteryCount: '5',
+            notify: '1'
+        };
+        const latestSave = hooks.handleSettingsSubmit({
+            preventDefault() {},
+            currentTarget: elements.settingsForm
+        });
+        assert.strictEqual(pendingSaves.length, 1);
+
+        pendingSaves.shift()();
+        await pendingSave;
+        await flushPromises();
+        assert.strictEqual(pendingSaves.length, 1);
+        pendingSaves.shift()();
+        await latestSave;
+
+        assert.strictEqual(store.config.dailyNew, 30);
+        assert.strictEqual(store.config.reviewLimit, 80);
+        assert.strictEqual(store.config.masteryCount, 5);
+        assert.strictEqual(store.config.notify, true);
+        assert.strictEqual(elements.settingsModal.dataset.open, 'false');
+    });
+
+    await record('Tab stays inside the active modal', async () => {
+        let prevented = false;
+        hooks.openSettingsModal(elements.menuButton);
+        elements.settingsClose.focus();
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: false,
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        assert.strictEqual(prevented, true);
+        assert.strictEqual(documentStub.activeElement, elements.settingsFields.dailyNew);
+
+        prevented = false;
+        elements.settingsFields.dailyNew.focus();
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: true,
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        assert.strictEqual(prevented, true);
+        assert.strictEqual(documentStub.activeElement, elements.settingsClose);
+        hooks.closeSettingsModal();
+
+        const store = createMockStore([{ word: 'alpha', meaning: 'A' }]);
+        hooks.setStore(store);
+        await hooks.openListModal(elements.menuButton);
+        elements.listClose.focus();
+        documentStub.dispatchEvent({
+            type: 'keydown',
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: false,
+            preventDefault() {}
+        });
+        assert.strictEqual(documentStub.activeElement, elements.listSearch);
+        hooks.closeListModal();
+    });
+
+    await record('list rendering is paged and resets after search', async () => {
+        const words = Array.from({ length: 401 }, (_, index) => ({
+            word: `word-${String(index + 1).padStart(3, '0')}`,
+            meaning: `Meaning ${index + 1}`
+        }));
+        const store = createMockStore(words);
+        let getWordsCalls = 0;
+        const originalGetWords = store.getWords.bind(store);
+        store.getWords = () => {
+            getWordsCalls += 1;
+            return originalGetWords();
+        };
+        hooks.setStore(store);
+        hooks.state.ui.listBrowserQuery = '';
+        hooks.state.ui.listBrowserLearnedOnly = false;
+        hooks.state.ui.listBrowserPage = 1;
+
+        hooks.renderListBrowser();
+        const firstBody = elements.listBody.innerHTML.match(/<tbody>([\s\S]*?)<\/tbody>/)[1];
+        assert.strictEqual((firstBody.match(/<tr>/g) || []).length, 200);
+        assert.strictEqual(getWordsCalls, 1);
+
+        hooks.state.ui.listBrowserPage = 2;
+        hooks.renderListBrowser();
+        assert.match(elements.listBody.innerHTML, /<td>201<\/td>/);
+        elements.listSearch.dispatchEvent({ type: 'input', target: { value: 'word-401' } });
+        assert.strictEqual(hooks.state.ui.listBrowserPage, 1);
+        await new Promise((resolve) => setTimeout(resolve, 220));
+        assert.match(elements.listBody.innerHTML, /word-401/);
+    });
+
+    await record('filtered list export remains a complete mergeable word list', async () => {
+        const store = createMockStore([
+            { word: 'alpha', meaning: 'A', example: 'First', freq: 0.8, correctCount: 2 },
+            { word: 'beta', meaning: 'B', note: 'private note', questionId: 'internal-id' }
+        ]);
+        hooks.setStore(store);
+        hooks.state.ui.listBrowserQuery = 'alpha';
+        hooks.state.ui.listBrowserLearnedOnly = true;
+        windowStub.URL.created.length = 0;
+        const anchor = createElementStub('a');
+        vocabContext.document.createElement = () => anchor;
+
+        hooks.exportCurrentList();
+
+        const download = windowStub.URL.created.at(-1);
+        assert.ok(download, 'Expected an exported blob');
+        const payload = JSON.parse(await download.blob.text());
+        assert.strictEqual(payload.type, 'wordlist');
+        assert.strictEqual(payload.category, 'external');
+        assert.strictEqual(payload.entries.length, 2);
+        assert.deepStrictEqual(Array.from(payload.entries, (entry) => entry.word), ['alpha', 'beta']);
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload, 'version'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload, 'words'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[0], 'correctCount'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[1], 'questionId'));
+        assert.match(windowStub.messages.at(-1).text, /可分享词表/);
+    });
+
+    await record('card actions are ignored while list modal is open', () => {
+        hooks.state.session.stage = 'recognition';
+        elements.listModal.dataset.open = 'true';
+        let prevented = false;
+        hooks.handleCardAction({
+            target: {
+                closest() {
+                    return { dataset: { action: 'reveal-meaning' } };
+                }
+            },
+            preventDefault() {
+                prevented = true;
+            }
+        });
+        assert.strictEqual(hooks.state.session.stage, 'recognition');
+        assert.strictEqual(prevented, false);
+        elements.listModal.dataset.open = 'false';
     });
 
     await record('import request triggers input', () => {
