@@ -97,7 +97,27 @@
                 }
                 const items = await recovery.listActiveSessions();
                 this._restorePersistentMultiSuiteSessions(items);
-                const candidates = (Array.isArray(items) ? items : [])
+                const fastSnapshotSessionId = fastSnapshotSession && fastSnapshotSession.id != null
+                    ? String(fastSnapshotSession.id)
+                    : '';
+                const durableEntityId = (item) => {
+                    for (const field of ['id', 'sessionId', 'recordId']) {
+                        if (item && item[field] !== undefined && item[field] !== null && item[field] !== '') {
+                            return String(item[field]);
+                        }
+                    }
+                    return '';
+                };
+                const scopedItems = (Array.isArray(items) ? items : []).filter((item) => (
+                    isFileProtocol || (fastSnapshotSessionId
+                        && durableEntityId(item) === fastSnapshotSessionId)
+                ));
+                const firstDurableItemsById = new Map();
+                scopedItems.forEach((item) => {
+                    const id = durableEntityId(item);
+                    if (id && !firstDurableItemsById.has(id)) firstDurableItemsById.set(id, item);
+                });
+                const candidates = Array.from(firstDurableItemsById.values())
                     .filter((item) => item
                         && item.schema === 'suite-session-v2'
                         && Number(item.version) === 2
@@ -110,11 +130,12 @@
                 for (const candidate of candidates) {
                     const restored = this._restoreSessionFromStorage(candidate);
                     if (restored) {
-                        restored._lastDurableRecoveryRevision = Math.max(0, Number(candidate.revision) || 0);
+                        restored._lastDurableRecoveryRevision = normalizeRecoveryEntityRevision(candidate.revision);
                         let selected = restored;
                         if (fastSnapshotSession
                             && String(fastSnapshotSession.id) === String(restored.id)
-                            && Number(fastSnapshotSession.revision) > Number(restored.revision)) {
+                            && normalizeRecoveryEntityRevision(fastSnapshotSession.revision)
+                                > normalizeRecoveryEntityRevision(restored.revision)) {
                             selected = fastSnapshotSession;
                             fastSnapshotSession._lastDurableRecoveryRevision = restored._lastDurableRecoveryRevision;
                             const promoted = await this._commitSuiteRecovery(fastSnapshotSession, {
@@ -134,10 +155,45 @@
                         this._notifySuiteResumeAvailable(selected);
                         return selected;
                     }
+                    if (fastSnapshotSession
+                        && durableEntityId(candidate) === fastSnapshotSessionId) {
+                        // The WAL proves this tab owns the exact CAS identity. Repair an
+                        // invalid durable payload in place instead of tombstoning it:
+                        // AppData discard writes a higher-revision tombstone, so a later
+                        // expected=0 migration could never safely restore this WAL.
+                        const durableRevision = normalizeRecoveryEntityRevision(candidate.revision);
+                        fastSnapshotSession._lastDurableRecoveryRevision = durableRevision;
+                        fastSnapshotSession.revision = Math.max(
+                            normalizeRecoveryEntityRevision(fastSnapshotSession.revision),
+                            durableRevision
+                        );
+                        const repaired = await this._commitSuiteRecovery(fastSnapshotSession, {
+                            notify: false,
+                            reason: 'window-wal-repair'
+                        });
+                        if (!repaired) {
+                            if (fastSnapshotSession._suiteRecoveryWritesBlocked === true) {
+                                this._clearSessionStorage(fastSnapshotSession);
+                                if (this.currentSuiteSession === fastSnapshotSession) {
+                                    const ownedId = String(fastSnapshotSession.id);
+                                    if (this.suiteExamMap instanceof Map) {
+                                        for (const [examId, suiteId] of this.suiteExamMap) {
+                                            if (String(suiteId) === ownedId) this.suiteExamMap.delete(examId);
+                                        }
+                                    }
+                                    this.currentSuiteSession = null;
+                                }
+                                return null;
+                            }
+                            console.warn('[SuitePractice] 匹配窗口 WAL 的损坏 durable recovery 暂未修复，保留 WAL 供重试。');
+                        }
+                        this._notifySuiteResumeAvailable(fastSnapshotSession);
+                        return fastSnapshotSession;
+                    }
                     if (typeof recovery.discardActiveSession === 'function') {
                         try {
                             const discardReceipt = await recovery.discardActiveSession(candidate.id, {
-                                expectedEntityRevision: Math.max(0, Number(candidate.revision) || 0)
+                                expectedEntityRevision: normalizeRecoveryEntityRevision(candidate.revision)
                             });
                             if (!discardReceipt || discardReceipt.committed !== true) {
                                 console.warn('[SuitePractice] 无效 recovery 已被并发更新，跳过清理:', candidate.id);
@@ -148,6 +204,22 @@
                     }
                 }
                 if (fastSnapshotSession) {
+                    const firstOwner = firstDurableItemsById.get(fastSnapshotSessionId);
+                    if (firstOwner) {
+                        // Another schema owns the AppData findIndex slot for this exact
+                        // identity. Never let legacy migration overwrite that first item.
+                        fastSnapshotSession._suiteRecoveryWritesBlocked = true;
+                        this._clearSessionStorage(fastSnapshotSession);
+                        if (this.currentSuiteSession === fastSnapshotSession) {
+                            if (this.suiteExamMap instanceof Map) {
+                                for (const [examId, suiteId] of this.suiteExamMap) {
+                                    if (String(suiteId) === fastSnapshotSessionId) this.suiteExamMap.delete(examId);
+                                }
+                            }
+                            this.currentSuiteSession = null;
+                        }
+                        return null;
+                    }
                     fastSnapshotSession._lastDurableRecoveryRevision = 0;
                     const migrated = await this._commitSuiteRecovery(fastSnapshotSession, {
                         notify: false,
@@ -185,6 +257,16 @@
                 }
                 return '';
             };
+            const tabOwnedWindowSessionIds = new Set();
+            if (!isFileProtocol && this.multiSuiteSessionsMap instanceof Map) {
+                for (const session of this.multiSuiteSessionsMap.values()) {
+                    if (!session || session._restoredFromWindowSession !== true || session.id == null) continue;
+                    tabOwnedWindowSessionIds.add(String(session.id));
+                }
+            }
+            const hasWindowOwnerEvidence = (item) => (
+                isFileProtocol || tabOwnedWindowSessionIds.has(durableEntityId(item))
+            );
             const firstDurableItemsById = new Map();
             // AppData CAS 对整个 active-session 集合使用 findIndex，必须先锁定原始顺序中的首项再筛 schema。
             rawItems.forEach((item) => {
@@ -209,9 +291,11 @@
             multiSuiteItems.forEach((item) => {
                 // CAS 所有权采用 AppData 的精确 active-session identity；base 相同并不代表是同一实体。
                 const id = durableEntityId(item);
+                if (!hasWindowOwnerEvidence(item)) return;
                 durableRevisionById.set(id, normalizeRecoveryEntityRevision(item.revision));
             });
             const candidates = multiSuiteItems
+                .filter((item) => hasWindowOwnerEvidence(item))
                 .filter((item) => this._isValidMultiSuiteRecoverySnapshot(item) && item.sessions.length === 1)
                 .filter((item) => durableEntityId(item) === String(item.sessions[0].id ?? ''))
                 .sort((left, right) => {
@@ -1936,9 +2020,10 @@
                 session.lastUpdate = Number.isFinite(previousUpdate)
                     ? Math.max(now, previousUpdate + 1)
                     : now;
-                if (options.bumpRevision !== false) {
-                    session.revision = Math.max(0, Number(session.revision) || 0) + 1;
-                }
+                const currentRevision = normalizeRecoveryEntityRevision(session.revision);
+                session.revision = options.bumpRevision !== false
+                    ? Math.min(Number.MAX_SAFE_INTEGER, currentRevision + 1)
+                    : currentRevision;
                 const snapshot = {
                     schema: 'suite-session-v2',
                     version: 2,
@@ -1979,7 +2064,7 @@
                     windowBinding: this._buildSuiteWindowBinding(session),
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     lastUpdate: session.lastUpdate,
-                    revision: session.revision,
+                    revision: normalizeRecoveryEntityRevision(session.revision),
                     draftRevision: Math.max(0, Number(session.draftRevision) || 0),
                     finalizeOperationId: session.finalizeOperationId || null,
                     finalizeRecord: session.finalizeRecord
@@ -2160,8 +2245,9 @@
                     invalid.code = 'VALIDATION';
                     throw invalid;
                 }
-                const operationId = `suite-recovery:${String(session.id)}:${Number(snapshot.revision) || 0}`;
-                const expectedEntityRevision = Math.max(0, Number(session._lastDurableRecoveryRevision) || 0);
+                const snapshotRevision = normalizeRecoveryEntityRevision(snapshot.revision);
+                const operationId = `suite-recovery:${String(session.id)}:${snapshotRevision}`;
+                const expectedEntityRevision = normalizeRecoveryEntityRevision(session._lastDurableRecoveryRevision);
                 const save = async () => {
                     const receipt = await recovery.saveActiveSession(snapshot, {
                         operationId,
@@ -2196,7 +2282,7 @@
                     }
                     await save();
                 }
-                session._lastDurableRecoveryRevision = Number(snapshot.revision) || 0;
+                session._lastDurableRecoveryRevision = snapshotRevision;
                 this._mirrorSuiteRecoverySnapshot(snapshot);
                 return true;
             });
@@ -2371,7 +2457,7 @@
                         : null,
                     windowName: this._resolveSuiteWindowName(snapshot.id, snapshot.windowName),
                     lastUpdate: Number.isFinite(Number(snapshot.lastUpdate)) ? Number(snapshot.lastUpdate) : now,
-                    revision: Math.max(0, Number(snapshot.revision) || 0),
+                    revision: normalizeRecoveryEntityRevision(snapshot.revision),
                     draftRevision: Math.max(0, Number(snapshot.draftRevision) || 0),
                     finalizeOperationId: snapshot.finalizeOperationId || (snapshot.finalizeRecord ? expectedOperationId : null),
                     finalizeRecord: snapshot.finalizeRecord && typeof snapshot.finalizeRecord === 'object'
@@ -2416,7 +2502,7 @@
             if (!recovery || typeof recovery.discardActiveSession !== 'function') return false;
             try {
                 const receipt = await recovery.discardActiveSession(String(session.id), {
-                    expectedEntityRevision: Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                    expectedEntityRevision: normalizeRecoveryEntityRevision(session._lastDurableRecoveryRevision)
                 });
                 if (receipt && receipt.committed === true) return true;
                 const notCommitted = new Error('Suite recovery discard was not confirmed');

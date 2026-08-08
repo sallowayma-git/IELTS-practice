@@ -21,10 +21,18 @@ function createSessionStore() {
     };
 }
 
-function createHarness() {
+function createHarness(options = {}) {
     const sessionStore = createSessionStore();
     const activeSessionStore = new Map();
-    const recoveryCalls = { save: 0, discard: 0, cleanup: 0, saveQueue: [], discardQueue: [], discardOptions: [] };
+    const recoveryCalls = {
+        save: 0,
+        discard: 0,
+        cleanup: 0,
+        saveQueue: [],
+        discardQueue: [],
+        discardOptions: [],
+        listedItems: null
+    };
     const messages = [];
     const practiceFinalizes = [];
     const rawStorageTrap = new Proxy({}, {
@@ -35,8 +43,12 @@ function createHarness() {
             throw new Error('suite recovery must use AppData v2, not raw Web Storage');
         }
     });
+    const protocol = options.protocol === 'file:' ? 'file:' : 'http:';
     const windowStub = {
-        location: { protocol: 'http:', href: 'http://localhost/' },
+        location: {
+            protocol,
+            href: protocol === 'file:' ? 'file:///index.html' : 'http://localhost/'
+        },
         localStorage: rawStorageTrap,
         sessionStorage: rawStorageTrap,
         showMessage(text, type) { messages.push({ text, type }); },
@@ -64,7 +76,10 @@ function createHarness() {
             recovery: {
                 windowSession: sessionStore,
                 async listActiveSessions() {
-                    return Array.from(activeSessionStore.values()).map((value) => structuredClone(value));
+                    const items = Array.isArray(recoveryCalls.listedItems)
+                        ? recoveryCalls.listedItems
+                        : Array.from(activeSessionStore.values());
+                    return items.map((value) => structuredClone(value));
                 },
                 async saveActiveSession(value, options = {}) {
                     recoveryCalls.save += 1;
@@ -138,7 +153,7 @@ function createHarness() {
 }
 
 async function main() {
-    const { sessionStore, messages, practiceFinalizes, makeApp, sequence } = createHarness();
+    const { sessionStore, activeSessionStore, messages, practiceFinalizes, makeApp, sequence } = createHarness();
     const firstApp = makeApp();
     let firstWindow;
     firstApp.openExam = async () => {
@@ -151,6 +166,189 @@ async function main() {
     };
     assert.equal(await firstApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
     assert.equal(sessionStore.peek('simulation').status, 'active');
+
+    const tabOwnedWal = structuredClone(sessionStore.peek('simulation'));
+    const tabOwnedDurable = structuredClone(activeSessionStore.get(tabOwnedWal.id));
+    assert(tabOwnedDurable, 'fixture must persist the tab-owned suite recovery');
+
+    const emptyHttpTabHarness = createHarness();
+    emptyHttpTabHarness.activeSessionStore.set(tabOwnedDurable.id, structuredClone(tabOwnedDurable));
+    const emptyHttpTabApp = emptyHttpTabHarness.makeApp();
+    emptyHttpTabApp.initializeSuiteMode();
+    await emptyHttpTabApp._ensureSuiteRecoveryReady();
+    assert.equal(emptyHttpTabApp.currentSuiteSession, null, 'an HTTP tab without WAL evidence must not adopt another tab durable suite');
+    assert.equal(emptyHttpTabHarness.activeSessionStore.has(tabOwnedDurable.id), true, 'foreign durable recovery must remain untouched');
+    assert.equal(emptyHttpTabHarness.recoveryCalls.discard, 0, 'an HTTP tab must not clean up a foreign durable candidate');
+
+    const mismatchedWalHarness = createHarness();
+    const localWalId = 'suite-local-tab-owner';
+    mismatchedWalHarness.sessionStore.save('simulation', {
+        ...structuredClone(tabOwnedWal),
+        id: localWalId,
+        revision: 1,
+        lastUpdate: Number(tabOwnedWal.lastUpdate) + 1
+    });
+    mismatchedWalHarness.activeSessionStore.set(tabOwnedDurable.id, structuredClone(tabOwnedDurable));
+    const mismatchedWalApp = mismatchedWalHarness.makeApp();
+    mismatchedWalApp.initializeSuiteMode();
+    await mismatchedWalApp._ensureSuiteRecoveryReady();
+    assert.equal(mismatchedWalApp.currentSuiteSession.id, localWalId, 'an HTTP tab must retain its own WAL instead of adopting a different durable id');
+    assert.equal(mismatchedWalHarness.activeSessionStore.has(tabOwnedDurable.id), true, 'mismatched foreign durable recovery must not be discarded');
+    assert.equal(mismatchedWalHarness.recoveryCalls.discard, 0);
+
+    const matchedWalHarness = createHarness();
+    const matchedLocalWal = {
+        ...structuredClone(tabOwnedWal),
+        currentIndex: 0,
+        activeExamId: 'p1',
+        revision: 10,
+        lastUpdate: 1000
+    };
+    const matchedDurable = {
+        ...structuredClone(tabOwnedDurable),
+        currentIndex: 1,
+        activeExamId: 'p2',
+        revision: 11,
+        lastUpdate: 2000
+    };
+    matchedWalHarness.sessionStore.save('simulation', matchedLocalWal);
+    matchedWalHarness.activeSessionStore.set(matchedDurable.id, matchedDurable);
+    const matchedWalApp = matchedWalHarness.makeApp();
+    matchedWalApp.initializeSuiteMode();
+    await matchedWalApp._ensureSuiteRecoveryReady();
+    assert.equal(matchedWalApp.currentSuiteSession.id, matchedLocalWal.id);
+    assert.equal(matchedWalApp.currentSuiteSession.currentIndex, 1, 'matching HTTP WAL evidence must allow the newer durable snapshot');
+    assert.equal(matchedWalApp.currentSuiteSession.activeExamId, 'p2');
+
+    const fileFallbackHarness = createHarness({ protocol: 'file:' });
+    fileFallbackHarness.activeSessionStore.set(tabOwnedDurable.id, structuredClone(tabOwnedDurable));
+    const fileFallbackApp = fileFallbackHarness.makeApp();
+    fileFallbackApp.initializeSuiteMode();
+    await fileFallbackApp._ensureSuiteRecoveryReady();
+    assert.equal(fileFallbackApp.currentSuiteSession.id, tabOwnedDurable.id, 'file: must retain durable recovery fallback without a window WAL');
+
+    const shadowedSuiteOwnerHarness = createHarness();
+    shadowedSuiteOwnerHarness.sessionStore.save('simulation', structuredClone(tabOwnedWal));
+    shadowedSuiteOwnerHarness.recoveryCalls.listedItems = [{
+        schema: 'foreign-recovery-schema',
+        version: 1,
+        id: tabOwnedWal.id,
+        revision: 0,
+        lastUpdate: 3000
+    }, {
+        ...structuredClone(tabOwnedDurable),
+        revision: 9,
+        lastUpdate: 4000
+    }];
+    const shadowedSuiteOwnerApp = shadowedSuiteOwnerHarness.makeApp();
+    shadowedSuiteOwnerApp.initializeSuiteMode();
+    await shadowedSuiteOwnerApp._ensureSuiteRecoveryReady();
+    assert.equal(shadowedSuiteOwnerApp.currentSuiteSession, null, 'a later suite candidate must not bypass another-schema first ownership of the same AppData id');
+    assert.equal(shadowedSuiteOwnerHarness.sessionStore.peek('simulation'), null, 'unsafe same-id WAL must be cleared instead of migrated over the first owner');
+    assert.equal(shadowedSuiteOwnerHarness.recoveryCalls.save, 0);
+    assert.equal(shadowedSuiteOwnerHarness.recoveryCalls.discard, 0);
+
+    const corruptFirstOwnerHarness = createHarness();
+    corruptFirstOwnerHarness.sessionStore.save('simulation', structuredClone(tabOwnedWal));
+    const corruptFirstOwner = {
+        ...structuredClone(tabOwnedDurable),
+        status: 'invalid',
+        revision: 4,
+        lastUpdate: 3000
+    };
+    const laterValidDuplicate = {
+        ...structuredClone(tabOwnedDurable),
+        currentIndex: 1,
+        activeExamId: 'p2',
+        revision: 9,
+        lastUpdate: 4000
+    };
+    corruptFirstOwnerHarness.recoveryCalls.listedItems = [corruptFirstOwner, laterValidDuplicate];
+    corruptFirstOwnerHarness.recoveryCalls.saveQueue.push((value, options) => {
+        assert.equal(options.expectedEntityRevision, 4, 'repair must CAS against the actual corrupt first owner');
+        assert(value.revision >= 5);
+        assert.equal(value.activeExamId, tabOwnedWal.activeExamId, 'repair must use this tab WAL, not the later duplicate payload');
+        return { committed: true };
+    });
+    const corruptFirstOwnerApp = corruptFirstOwnerHarness.makeApp();
+    corruptFirstOwnerApp.initializeSuiteMode();
+    await corruptFirstOwnerApp._ensureSuiteRecoveryReady();
+    assert.equal(corruptFirstOwnerApp.currentSuiteSession.id, tabOwnedWal.id);
+    assert.equal(corruptFirstOwnerApp.currentSuiteSession.activeExamId, tabOwnedWal.activeExamId);
+    assert.notEqual(corruptFirstOwnerApp.currentSuiteSession._suiteRecoveryWritesBlocked, true);
+    assert.equal(corruptFirstOwnerHarness.recoveryCalls.discard, 0, 'matching corrupt durable must be repaired without a tombstone');
+
+    const multiSuiteSession = {
+        id: 'multi-suite-tab-owner',
+        baseExamId: 'listening-multi-tab-owner',
+        status: 'active',
+        startTime: 1000,
+        suiteResults: [],
+        expectedSuiteCount: 2,
+        metadata: {},
+        lastUpdate: 1000,
+        revision: 3,
+        finalizeOperationId: null,
+        finalizeRecord: null
+    };
+    const multiSuiteWal = {
+        schema: 'multi-suite-sessions-v2',
+        version: 2,
+        sessions: [structuredClone(multiSuiteSession)],
+        updatedAt: 1000
+    };
+    const multiSuiteDurable = {
+        ...structuredClone(multiSuiteWal),
+        id: multiSuiteSession.id,
+        revision: multiSuiteSession.revision
+    };
+
+    const emptyMultiHttpHarness = createHarness();
+    emptyMultiHttpHarness.activeSessionStore.set(multiSuiteDurable.id, structuredClone(multiSuiteDurable));
+    const emptyMultiHttpApp = emptyMultiHttpHarness.makeApp();
+    emptyMultiHttpApp.initializeSuiteMode();
+    await emptyMultiHttpApp._ensureSuiteRecoveryReady();
+    assert.equal(emptyMultiHttpApp.multiSuiteSessionsMap.has(multiSuiteSession.baseExamId), false, 'an HTTP tab without matching multi-suite WAL must ignore foreign durable state');
+    assert.equal(emptyMultiHttpHarness.activeSessionStore.has(multiSuiteDurable.id), true);
+    const foreignMultiBeforeSubmit = structuredClone(emptyMultiHttpHarness.activeSessionStore.get(multiSuiteDurable.id));
+    assert.equal(await emptyMultiHttpApp.handleMultiSuitePracticeComplete(`${multiSuiteSession.baseExamId}_set1`, {
+        suiteId: 'set-1',
+        totalSuites: 2,
+        sessionId: 'new-tab-child-session',
+        answers: { q1: 'A' },
+        answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+        scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+    }), true);
+    const newTabMultiSession = emptyMultiHttpApp.multiSuiteSessionsMap.get(multiSuiteSession.baseExamId);
+    assert(newTabMultiSession);
+    assert.notEqual(newTabMultiSession.id, multiSuiteDurable.id, 'same-base completion in another tab must create a new durable identity');
+    assert.deepEqual(
+        emptyMultiHttpHarness.activeSessionStore.get(multiSuiteDurable.id),
+        foreignMultiBeforeSubmit,
+        'another tab completion must not append to or revise the foreign multi-suite entity'
+    );
+
+    const matchedMultiHttpHarness = createHarness();
+    matchedMultiHttpHarness.sessionStore.save('multi-suite-practice', structuredClone(multiSuiteWal));
+    matchedMultiHttpHarness.activeSessionStore.set(multiSuiteDurable.id, structuredClone(multiSuiteDurable));
+    const matchedMultiHttpApp = matchedMultiHttpHarness.makeApp();
+    matchedMultiHttpApp.initializeSuiteMode();
+    await matchedMultiHttpApp._ensureSuiteRecoveryReady();
+    const matchedMultiSession = matchedMultiHttpApp.multiSuiteSessionsMap.get(multiSuiteSession.baseExamId);
+    assert(matchedMultiSession, 'matching HTTP multi-suite WAL identity must allow durable recovery');
+    assert.equal(matchedMultiSession.id, multiSuiteSession.id);
+    assert.equal(matchedMultiSession._lastDurableRecoveryRevision, multiSuiteSession.revision);
+
+    const multiFileFallbackHarness = createHarness({ protocol: 'file:' });
+    multiFileFallbackHarness.activeSessionStore.set(multiSuiteDurable.id, structuredClone(multiSuiteDurable));
+    const multiFileFallbackApp = multiFileFallbackHarness.makeApp();
+    multiFileFallbackApp.initializeSuiteMode();
+    await multiFileFallbackApp._ensureSuiteRecoveryReady();
+    assert.equal(
+        multiFileFallbackApp.multiSuiteSessionsMap.get(multiSuiteSession.baseExamId).id,
+        multiSuiteSession.id,
+        'file: must retain durable-only multi-suite recovery fallback'
+    );
 
     // Drafts may arrive after the child Window exists but before openExam() resolves.
     // The initializing snapshot must bind that exact source and persist the draft.
@@ -286,24 +484,126 @@ async function main() {
     assert.equal(await walSourceApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
     const validWal = walPreservationHarness.sessionStore.peek('simulation');
     walPreservationHarness.activeSessionStore.clear();
-    walPreservationHarness.activeSessionStore.set('corrupt-durable', {
+    walPreservationHarness.activeSessionStore.set(validWal.id, {
         schema: 'suite-session-v2',
         version: 2,
-        id: 'corrupt-durable',
+        id: validWal.id,
         status: 'invalid',
         revision: 4,
         lastUpdate: Number(validWal.lastUpdate) + 1000
+    });
+    walPreservationHarness.recoveryCalls.saveQueue.push((value, options) => {
+        assert.equal(options.expectedEntityRevision, 4, 'invalid durable repair must CAS against the listed entity revision');
+        assert(value.revision > 4, 'the repaired snapshot must advance beyond the invalid durable revision');
+        return { committed: true };
     });
     const walRestoredApp = walPreservationHarness.makeApp();
     walRestoredApp.initializeSuiteMode();
     await walRestoredApp._ensureSuiteRecoveryReady();
     assert.equal(walRestoredApp.currentSuiteSession.id, validWal.id, 'invalid durable candidates must not erase a valid window WAL');
     assert.equal(walPreservationHarness.sessionStore.peek('simulation').id, validWal.id);
-    assert.equal(
-        walPreservationHarness.recoveryCalls.discardOptions[0].expectedEntityRevision,
-        4,
-        'invalid candidate cleanup must CAS against the listed entity revision'
-    );
+    assert.equal(walPreservationHarness.recoveryCalls.discard, 0, 'matching invalid durable state must be repaired without writing a tombstone');
+    assert.equal(walRestoredApp.currentSuiteSession._suiteRecoveryWritesBlocked, undefined);
+
+    const unsafeRevisionHarness = createHarness();
+    const unsafeRevisionSource = unsafeRevisionHarness.makeApp();
+    unsafeRevisionSource.openExam = async () => ({ closed: false, name: 'unsafe-revision-source' });
+    unsafeRevisionSource.initializeSuiteMode();
+    await unsafeRevisionSource._ensureSuiteRecoveryReady();
+    assert.equal(await unsafeRevisionSource._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
+    const unsafeRevisionWal = unsafeRevisionHarness.sessionStore.peek('simulation');
+    unsafeRevisionHarness.activeSessionStore.clear();
+    unsafeRevisionHarness.activeSessionStore.set(unsafeRevisionWal.id, {
+        schema: 'suite-session-v2',
+        version: 2,
+        id: unsafeRevisionWal.id,
+        status: 'invalid',
+        revision: 1.5,
+        lastUpdate: Number(unsafeRevisionWal.lastUpdate) + 1000
+    });
+    unsafeRevisionHarness.recoveryCalls.saveQueue.push((value, options) => {
+        assert.equal(options.expectedEntityRevision, 0, 'unsafe durable revisions must normalize to the initial CAS revision');
+        assert(value.revision > 0);
+        return { committed: true };
+    });
+    const unsafeRevisionRestoredApp = unsafeRevisionHarness.makeApp();
+    unsafeRevisionRestoredApp.initializeSuiteMode();
+    await unsafeRevisionRestoredApp._ensureSuiteRecoveryReady();
+    assert.equal(unsafeRevisionRestoredApp.currentSuiteSession.id, unsafeRevisionWal.id);
+    assert.equal(unsafeRevisionHarness.recoveryCalls.discard, 0);
+    assert.notEqual(unsafeRevisionRestoredApp.currentSuiteSession._suiteRecoveryWritesBlocked, true);
+
+    // A structurally valid single-suite entity with an unsafe imported revision must
+    // be offered as revision 0, then remain both writable and abandonable under the
+    // same safe-integer CAS contract used by AppData.
+    for (const [label, unsafeRevision] of [
+        ['fractional', 1.5],
+        ['infinite', Number.POSITIVE_INFINITY],
+        ['unsafe-integer', Number.MAX_SAFE_INTEGER + 1]
+    ]) {
+        const validUnsafeHarness = createHarness();
+        const validUnsafeId = `suite-valid-unsafe-${label}`;
+        const validUnsafeSnapshot = {
+            ...structuredClone(tabOwnedDurable),
+            id: validUnsafeId,
+            revision: unsafeRevision,
+            lastUpdate: 7000
+        };
+        validUnsafeHarness.sessionStore.save('simulation', {
+            ...structuredClone(validUnsafeSnapshot),
+            lastUpdate: 6000
+        });
+        validUnsafeHarness.activeSessionStore.set(validUnsafeId, structuredClone(validUnsafeSnapshot));
+        const validUnsafeApp = validUnsafeHarness.makeApp();
+        validUnsafeApp.initializeSuiteMode();
+        await validUnsafeApp._ensureSuiteRecoveryReady();
+        const restoredUnsafeSession = validUnsafeApp.currentSuiteSession;
+        assert.equal(restoredUnsafeSession.id, validUnsafeId);
+        assert.equal(restoredUnsafeSession.revision, 0, `${label} runtime revision must normalize to zero`);
+        assert.equal(restoredUnsafeSession._lastDurableRecoveryRevision, 0, `${label} durable CAS base must normalize to zero`);
+
+        const observedWrites = [];
+        validUnsafeHarness.recoveryCalls.saveQueue.push((value, options) => {
+            observedWrites.push({ value, options });
+            return { committed: true };
+        });
+        validUnsafeHarness.recoveryCalls.saveQueue.push((value, options) => {
+            observedWrites.push({ value, options });
+            return { committed: true };
+        });
+        assert.equal(await validUnsafeApp._commitSuiteRecovery(restoredUnsafeSession, { notify: false }), true);
+        assert.equal(await validUnsafeApp._commitSuiteRecovery(restoredUnsafeSession, { notify: false }), true);
+        assert.equal(observedWrites[0].options.expectedEntityRevision, 0);
+        assert.equal(observedWrites[0].value.revision, 1);
+        assert.equal(observedWrites[1].options.expectedEntityRevision, 1);
+        assert.equal(observedWrites[1].value.revision, 2);
+        assert.equal(restoredUnsafeSession._lastDurableRecoveryRevision, 2);
+
+        const abandonHarness = createHarness();
+        abandonHarness.sessionStore.save('simulation', structuredClone(validUnsafeSnapshot));
+        abandonHarness.activeSessionStore.set(validUnsafeId, structuredClone(validUnsafeSnapshot));
+        const abandonApp = abandonHarness.makeApp();
+        abandonApp.initializeSuiteMode();
+        await abandonApp._ensureSuiteRecoveryReady();
+        assert.equal(await abandonApp.abandonSuiteRecovery(validUnsafeId), true, `${label} recovery must remain abandonable`);
+        assert.equal(abandonHarness.recoveryCalls.discardOptions.at(-1).expectedEntityRevision, 0);
+        assert.equal(abandonApp.currentSuiteSession, null);
+    }
+
+    const invalidUnsafeFileHarness = createHarness({ protocol: 'file:' });
+    invalidUnsafeFileHarness.activeSessionStore.set('suite-invalid-unsafe-file', {
+        schema: 'suite-session-v2',
+        version: 2,
+        id: 'suite-invalid-unsafe-file',
+        status: 'invalid',
+        revision: Number.POSITIVE_INFINITY,
+        lastUpdate: 8000
+    });
+    const invalidUnsafeFileApp = invalidUnsafeFileHarness.makeApp();
+    invalidUnsafeFileApp.initializeSuiteMode();
+    await invalidUnsafeFileApp._ensureSuiteRecoveryReady();
+    assert.equal(invalidUnsafeFileApp.currentSuiteSession, null);
+    assert.equal(invalidUnsafeFileHarness.recoveryCalls.discardOptions[0].expectedEntityRevision, 0);
 
     const walOrderingHarness = createHarness();
     const walOrderingSource = walOrderingHarness.makeApp();

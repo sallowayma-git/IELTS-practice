@@ -2325,8 +2325,28 @@
 
     async function readRecovery(kind, id) {
         await ready;
-        const items = (await pruneRecoveryKey(recoveryKey(kind)))
-            .filter((item) => !(item && item._recoveryTombstone === true));
+        const firstItemsById = new Set();
+        const tombstonedFirstItems = new Set();
+        const items = (await pruneRecoveryKey(recoveryKey(kind))).filter((item) => {
+            const entityId = idOf(item, ['id', 'sessionId', 'recordId']);
+            if (entityId) {
+                const normalizedId = String(entityId);
+                if (!firstItemsById.has(normalizedId)) {
+                    firstItemsById.add(normalizedId);
+                    if (item && item._recoveryTombstone === true) {
+                        tombstonedFirstItems.add(normalizedId);
+                    }
+                } else if (tombstonedFirstItems.has(normalizedId)) {
+                    // saveRecovery/discardRecovery use findIndex over the raw collection.
+                    // If that exact first owner is a tombstone, never expose a later
+                    // duplicate as a writable entity. Non-tombstone duplicates remain
+                    // visible because recovery reconciliation consumes their raw marker
+                    // metadata while independently honoring first-owner CAS semantics.
+                    return false;
+                }
+            }
+            return !(item && item._recoveryTombstone === true);
+        });
         return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
     }
     function expectedRecoveryEntityRevision(options = {}) {

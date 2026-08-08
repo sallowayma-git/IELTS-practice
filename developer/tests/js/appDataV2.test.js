@@ -513,6 +513,73 @@ async function run() {
     }, { expectedEntityRevision: 0 });
     assert.strictEqual(delayedAfterCleanup.committed, false, 'cleanup must not reopen a discarded entity revision');
     const recoveryKey = 'recovery.activeSessions';
+    const shadowedByTombstoneId = 'active-shadowed-by-tombstone';
+    assert.strictEqual((await app.recovery.saveActiveSession({
+        id: shadowedByTombstoneId,
+        revision: 1,
+        marker: 'original-owner'
+    }, { expectedEntityRevision: 0 })).committed, true);
+    assert.strictEqual((await app.recovery.discardActiveSession(shadowedByTombstoneId, {
+        expectedEntityRevision: 1
+    })).committed, true);
+    const duplicateOwnerDocument = shared.docs.get(recoveryKey);
+    const duplicateOwnerItems = clone(duplicateOwnerDocument.data);
+    duplicateOwnerItems.push({
+        id: shadowedByTombstoneId,
+        revision: 9,
+        marker: 'later-imported-duplicate',
+        updatedAt: new Date().toISOString()
+    });
+    shared.docs.set(recoveryKey, envelope(
+        recoveryKey,
+        duplicateOwnerItems,
+        'present',
+        duplicateOwnerDocument.revision + 1,
+        'append-shadowed-recovery-duplicate'
+    ));
+    assert.strictEqual(
+        (await app.recovery.listActiveSessions()).some((item) => item.id === shadowedByTombstoneId),
+        false,
+        'a later duplicate must not become visible when the raw first owner is a tombstone'
+    );
+    assert.strictEqual(await app.recovery.getActiveSession(shadowedByTombstoneId), null);
+    const shadowedDuplicateSave = await app.recovery.saveActiveSession({
+        id: shadowedByTombstoneId,
+        revision: 10,
+        marker: 'must-not-revive'
+    }, { expectedEntityRevision: 9 });
+    assert.strictEqual(shadowedDuplicateSave.committed, false);
+    assert.strictEqual(shadowedDuplicateSave.actualEntityRevision, 2, 'CAS must still target the hidden first tombstone');
+    const visibleMarkerOwnerId = 'active-visible-shadow-marker';
+    assert.strictEqual((await app.recovery.saveActiveSession({
+        id: visibleMarkerOwnerId,
+        revision: 1,
+        schema: 'suite-session-v2',
+        marker: 'first-visible-owner'
+    }, { expectedEntityRevision: 0 })).committed, true);
+    const visibleMarkerDocument = shared.docs.get(recoveryKey);
+    const visibleMarkerItems = clone(visibleMarkerDocument.data);
+    visibleMarkerItems.push({
+        id: visibleMarkerOwnerId,
+        revision: 8,
+        schema: 'multi-suite-sessions-v2',
+        version: 2,
+        sessions: [{ id: 'shadow-marker', baseExamId: 'shadow-marker-base' }],
+        updatedAt: new Date().toISOString()
+    });
+    shared.docs.set(recoveryKey, envelope(
+        recoveryKey,
+        visibleMarkerItems,
+        'present',
+        visibleMarkerDocument.revision + 1,
+        'append-visible-recovery-marker'
+    ));
+    assert.strictEqual(
+        (await app.recovery.listActiveSessions()).filter((item) => item.id === visibleMarkerOwnerId).length,
+        2,
+        'non-tombstone shadow entries must remain visible for raw recovery marker reconciliation'
+    );
+    await app.recovery.discardActiveSession(visibleMarkerOwnerId);
     const recoveryDocument = shared.docs.get(recoveryKey);
     const expiredRecoveryItems = clone(recoveryDocument.data);
     const expiredTombstone = expiredRecoveryItems.find((item) => item && item.id === 'active-cas');

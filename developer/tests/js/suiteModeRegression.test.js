@@ -1727,12 +1727,11 @@ async function run() {
         assert(durableSession, '部分结果必须写入 AppData v2 activeSession');
         assert.strictEqual(durableSession.sessions[0].suiteResults.length, 1);
 
-        windowSessionStore.delete('multi-suite-practice');
         const restoredApp = createApp(windowStub);
         restoredApp.initializeSuiteMode();
         await restoredApp._ensureSuiteRecoveryReady();
         const restoredSession = restoredApp.multiSuiteSessionsMap.get('listening-100-p1');
-        assert(restoredSession, '没有窗口镜像时仍应从 v2 恢复 multi-suite 会话');
+        assert(restoredSession, '匹配当前标签页窗口镜像时应从 v2 恢复 multi-suite 会话');
         assert.strictEqual(restoredSession.status, 'active', '部分恢复会话应保持 active');
         assert.strictEqual(restoredSession.expectedSuiteCount, 2, '恢复会话应保留 expectedSuiteCount');
         assert.strictEqual(restoredSession.suiteResults.length, 1, '恢复会话应保留部分结果');
@@ -1740,6 +1739,16 @@ async function run() {
             plain(restoredSession.suiteResults[0].answerComparison),
             { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
             '恢复会话应保留结果比较数据'
+        );
+
+        windowSessionStore.delete('multi-suite-practice');
+        const foreignTabApp = createApp(windowStub);
+        foreignTabApp.initializeSuiteMode();
+        await foreignTabApp._ensureSuiteRecoveryReady();
+        assert.strictEqual(
+            foreignTabApp.multiSuiteSessionsMap.has('listening-100-p1'),
+            false,
+            'HTTP 标签页没有匹配窗口 WAL 时不得接管其他标签页的 durable multi-suite 会话'
         );
 
         const retryApp = createApp(windowStub);
@@ -2496,15 +2505,15 @@ async function run() {
             updatedAt: Date.now() + 300
         }]);
         assert.strictEqual(
-            restoredApp.multiSuiteSessionsMap.get(competingBaseExamId).id,
-            competingDurable.id,
-            'a valid durable candidate must replace a canonical-base WAL even when their CAS ids differ'
+            restoredApp.multiSuiteSessionsMap.get(competingBaseExamId),
+            competingWal,
+            'a same-base foreign durable marker may preserve the WAL but must not replace its identity'
         );
         assert.strictEqual(
             Array.from(restoredApp.multiSuiteSessionsMap.values())
-                .some((item) => item && item.id === competingWal.id),
+                .some((item) => item && item.id === competingDurable.id),
             false,
-            'the whitespace WAL alias must not remain as a second live base entry'
+            'a foreign durable identity must not become live through a canonical base match'
         );
         restoredApp.multiSuiteSessionsMap.delete(competingBaseExamId);
 
@@ -2601,6 +2610,11 @@ async function run() {
             'active-session id 必须按 AppData 原始字符串精确匹配，不能 trim 后借用 revision'
         );
         assert.strictEqual(exactIdWal.revision, 2);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.get(exactIdWal.baseExamId),
+            exactIdWal,
+            'a same-base marker may retain the WAL without lending its whitespace-different id revision'
+        );
         restoredApp.multiSuiteSessionsMap.delete(exactIdWal.baseExamId);
 
         const mismatchedOwnerWal = {
@@ -2612,21 +2626,33 @@ async function run() {
         };
         delete mismatchedOwnerWal._lastDurableRecoveryRevision;
         restoredApp.multiSuiteSessionsMap.set(mismatchedOwnerWal.baseExamId, mismatchedOwnerWal);
-        const mismatchedDurableSession = plain(mismatchedOwnerWal);
+        const mismatchedDurableSession = {
+            ...plain(mismatchedOwnerWal),
+            id: 'multi-corrupt-nested-owner'
+        };
         delete mismatchedDurableSession._restoredFromWindowSession;
+        const laterValidDuplicate = plain(mismatchedOwnerWal);
+        delete laterValidDuplicate._restoredFromWindowSession;
         restoredApp._restorePersistentMultiSuiteSessions([{
             schema: 'multi-suite-sessions-v2',
             version: 2,
-            id: 'multi-top-level-owner',
+            id: mismatchedOwnerWal.id,
             revision: 11,
             sessions: [mismatchedDurableSession]
+        }, {
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: mismatchedOwnerWal.id,
+            revision: 12,
+            sessions: [laterValidDuplicate]
         }]);
         assert.strictEqual(
             restoredApp.multiSuiteSessionsMap.get(mismatchedOwnerWal.baseExamId),
             mismatchedOwnerWal,
-            '顶层 CAS 实体与 nested session id 错配时不得覆盖同 base 的 window-WAL'
+            'a corrupt first exact-id owner must block a later duplicate from replacing the window WAL'
         );
-        assert.strictEqual(mismatchedOwnerWal._lastDurableRecoveryRevision, undefined);
+        assert.strictEqual(mismatchedOwnerWal._lastDurableRecoveryRevision, 11);
+        assert.strictEqual(mismatchedOwnerWal.revision, 11, 'the retained WAL must inherit the actual first CAS owner revision');
         restoredApp.multiSuiteSessionsMap.delete(mismatchedOwnerWal.baseExamId);
 
         await windowStub.AppData.recovery.discardActiveSession(session.id);
@@ -4509,6 +4535,356 @@ async function run() {
         );
         assert.strictEqual(app.currentSuiteSession, null, 'the successful retry must finish teardown');
         assert.strictEqual(app.examWindows.has(secondExamId), false, 'the newly captured registration must be cleaned');
+    }
+
+    // A failed primary recovery save must retry with the frozen registration id.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-fallback-session-alignment';
+        const ownerSessionId = 'fallback-owner-session';
+        const unrelatedSessionId = 'fallback-unrelated-session';
+        const examWindow = createStubWindow('fallback-session-alignment-window');
+        const windowInfo = {
+            window: examWindow,
+            expectedSessionId: ownerSessionId,
+            windowSessionToken: 'fallback-session-token',
+            windowSessionTokenSessionId: ownerSessionId,
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        const hadOpen = Object.prototype.hasOwnProperty.call(windowStub, 'open');
+        const originalOpen = windowStub.open;
+        const fallbackOpenCalls = [];
+        let generatedSessionIdCount = 0;
+
+        app.examWindows = new Map([[examId, windowInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        app.generateSessionId = () => {
+            generatedSessionIdCount += 1;
+            return 'unexpected-generated-fallback-session';
+        };
+        windowStub.resolveActiveLibraryIndex = async () => [{
+            id: examId,
+            title: 'Fallback Session Alignment',
+            type: 'reading'
+        }];
+        windowStub.open = (url, name) => {
+            fallbackOpenCalls.push({ url, name });
+            return createStubWindow(name);
+        };
+
+        try {
+            await windowStub.AppData.recovery.saveActiveSession({
+                id: `active-session:${unrelatedSessionId}`,
+                examId,
+                sessionId: unrelatedSessionId,
+                status: 'started'
+            });
+            const recoveryEventStart = recoveryControl.events.length;
+            recoveryControl.saveQueue.push(new Error('transient primary recovery failure'), true);
+
+            await app.startPracticeSession(examId);
+
+            const attemptedSaves = recoveryControl.events
+                .slice(recoveryEventStart)
+                .filter((event) => event.type === 'save' && event.value && event.value.examId === examId);
+            assert.strictEqual(attemptedSaves.length, 2, 'primary failure must make one fallback save attempt');
+            attemptedSaves.forEach((event) => {
+                assert.strictEqual(event.value.sessionId, ownerSessionId);
+                assert.strictEqual(event.value.id, `active-session:${ownerSessionId}`);
+            });
+            const activeAfterFallback = await windowStub.AppData.recovery.listActiveSessions();
+            assert(
+                activeAfterFallback.some((item) => item && item.id === `active-session:${ownerSessionId}`),
+                'fallback recovery must use the exact registration id'
+            );
+            assert.strictEqual(windowInfo.expectedSessionId, ownerSessionId);
+            assert.strictEqual(generatedSessionIdCount, 0, 'fallback must not mint another session id');
+            assert.strictEqual(fallbackOpenCalls.length, 1);
+            assert.strictEqual(fallbackOpenCalls[0].name, `practice_${ownerSessionId}`);
+
+            const expectedRegistration = app._captureExamSessionRegistration(examId, windowInfo);
+            assert.strictEqual(
+                await app.cleanupExamSession(examId, { expectedRegistration }),
+                true,
+                'the exact current registration should be cleaned'
+            );
+            const activeAfterCleanup = await windowStub.AppData.recovery.listActiveSessions();
+            assert.strictEqual(
+                activeAfterCleanup.some((item) => item && item.id === `active-session:${ownerSessionId}`),
+                false,
+                'exact cleanup must delete the fallback recovery it owns'
+            );
+            assert.strictEqual(
+                activeAfterCleanup.some((item) => item && item.id === `active-session:${unrelatedSessionId}`),
+                true,
+                'exact cleanup must preserve another session for the same exam'
+            );
+        } finally {
+            await windowStub.AppData.recovery.discardActiveSession(`active-session:${ownerSessionId}`);
+            await windowStub.AppData.recovery.discardActiveSession(`active-session:${unrelatedSessionId}`);
+            await windowStub.AppData.recovery.discardActiveSession('active-session:unexpected-generated-fallback-session');
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+            if (hadOpen) {
+                windowStub.open = originalOpen;
+            } else {
+                delete windowStub.open;
+            }
+        }
+    }
+
+    // A fallback save that loses its exact registration immediately after commit must clean its ghost.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-fallback-inflight-replacement';
+        const ownerSessionId = 'fallback-inflight-owner';
+        const replacementSessionId = 'fallback-inflight-replacement';
+        const ownerInfo = {
+            window: createStubWindow('fallback-inflight-owner-window'),
+            expectedSessionId: ownerSessionId,
+            windowSessionToken: 'fallback-inflight-owner-token',
+            windowSessionTokenSessionId: ownerSessionId,
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const replacementInfo = {
+            window: createStubWindow('fallback-inflight-replacement-window'),
+            expectedSessionId: replacementSessionId,
+            windowSessionToken: 'fallback-inflight-replacement-token',
+            windowSessionTokenSessionId: replacementSessionId,
+            sessionGeneration: 2,
+            suiteSessionId: null
+        };
+        const replacementHandler = () => {};
+        const recovery = windowStub.AppData.recovery;
+        const originalSaveActiveSession = recovery.saveActiveSession;
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        const hadOpen = Object.prototype.hasOwnProperty.call(windowStub, 'open');
+        const originalOpen = windowStub.open;
+        let fallbackOpenCount = 0;
+        let fallbackSaveCount = 0;
+
+        app.examWindows = new Map([[examId, ownerInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        app.components.practiceRecorder = {
+            startPracticeSession() {
+                throw new Error('force final fallback');
+            }
+        };
+        windowStub.resolveActiveLibraryIndex = async () => [{
+            id: examId,
+            title: 'Fallback In-flight Replacement',
+            type: 'reading'
+        }];
+        windowStub.open = () => {
+            fallbackOpenCount += 1;
+            return createStubWindow('unexpected-fallback-window');
+        };
+        recovery.saveActiveSession = async (value, options = {}) => {
+            fallbackSaveCount += 1;
+            const allowed = typeof options.commitGuard === 'function' && options.commitGuard() === true;
+            if (!allowed) {
+                return { committed: false, stale: true, code: 'STALE_RECOVERY_WRITE' };
+            }
+            const receipt = await originalSaveActiveSession(value, options);
+            app.examWindows.set(examId, replacementInfo);
+            app.messageHandlers.set(examId, replacementHandler);
+            return receipt;
+        };
+
+        try {
+            await originalSaveActiveSession({
+                id: `active-session:${replacementSessionId}`,
+                examId,
+                sessionId: replacementSessionId,
+                status: 'started'
+            });
+            assert.strictEqual(
+                await app.startPracticeSessionFallback(examId, {}, { sessionId: 'unowned-fallback-session' }),
+                null,
+                'fallback without an immutable registration tuple must fail closed'
+            );
+            assert.strictEqual(fallbackSaveCount, 0, 'an unowned fallback must not reach recovery storage');
+            assert.strictEqual(await app.startPracticeSession(examId), null);
+            assert.strictEqual(fallbackSaveCount, 1, 'the fallback must make only its owner-bound save attempt');
+            assert.strictEqual(fallbackOpenCount, 0, 'a stale fallback must not open another practice window');
+            assert.strictEqual(app.examWindows.get(examId), replacementInfo, 'the replacement registration must survive');
+            assert.strictEqual(app.messageHandlers.get(examId), replacementHandler, 'the replacement handler must survive');
+            const active = await recovery.listActiveSessions();
+            assert.strictEqual(
+                active.some((item) => item && item.id === `active-session:${ownerSessionId}`),
+                false,
+                'post-commit ownership loss must discard the just-written fallback recovery'
+            );
+            assert.strictEqual(
+                active.some((item) => item && item.id === `active-session:${replacementSessionId}`),
+                true,
+                'post-commit cleanup must preserve the replacement recovery'
+            );
+        } finally {
+            recovery.saveActiveSession = originalSaveActiveSession;
+            await recovery.discardActiveSession(`active-session:${ownerSessionId}`);
+            await recovery.discardActiveSession(`active-session:${replacementSessionId}`);
+            await recovery.discardActiveSession('active-session:unowned-fallback-session');
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+            if (hadOpen) {
+                windowStub.open = originalOpen;
+            } else {
+                delete windowStub.open;
+            }
+        }
+    }
+
+    // The async practice page manager must receive the host id and may realign only its exact owner.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-manager-session-alignment';
+        const hostSessionId = 'manager-host-session';
+        const managerSessionId = 'manager-actual-session';
+        const windowInfo = {
+            window: createStubWindow('manager-session-alignment-window'),
+            expectedSessionId: hostSessionId,
+            windowSessionToken: 'manager-host-token',
+            windowSessionTokenSessionId: hostSessionId,
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const initialToken = windowInfo.windowSessionToken;
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        const hadManager = Object.prototype.hasOwnProperty.call(windowStub, 'practicePageManager');
+        const originalManager = windowStub.practicePageManager;
+
+        app.examWindows = new Map([[examId, windowInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        windowStub.resolveActiveLibraryIndex = async () => [{
+            id: examId,
+            title: 'Manager Session Alignment',
+            type: 'reading'
+        }];
+        windowStub.practicePageManager = {
+            async startPracticeSession(handledExamId, examData) {
+                assert.strictEqual(handledExamId, examId);
+                assert.strictEqual(examData.sessionId, hostSessionId, 'manager must receive the host owner id');
+                await windowStub.AppData.recovery.saveActiveSession({
+                    id: `active-session:${managerSessionId}`,
+                    examId,
+                    sessionId: managerSessionId,
+                    status: 'started'
+                });
+                return managerSessionId;
+            }
+        };
+
+        try {
+            assert.strictEqual(await app.startPracticeSession(examId), managerSessionId);
+            assert.strictEqual(windowInfo.expectedSessionId, managerSessionId);
+            assert.strictEqual(windowInfo.windowSessionTokenSessionId, managerSessionId);
+            assert.notStrictEqual(windowInfo.windowSessionToken, initialToken, 'manager id realignment must rotate the token');
+
+            const expectedRegistration = app._captureExamSessionRegistration(examId, windowInfo);
+            assert.strictEqual(await app.cleanupExamSession(examId, { expectedRegistration }), true);
+            const active = await windowStub.AppData.recovery.listActiveSessions();
+            assert.strictEqual(
+                active.some((item) => item && item.id === `active-session:${managerSessionId}`),
+                false,
+                'cleanup must own the manager-aligned recovery id'
+            );
+        } finally {
+            await windowStub.AppData.recovery.discardActiveSession(`active-session:${managerSessionId}`);
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+            if (hadManager) {
+                windowStub.practicePageManager = originalManager;
+            } else {
+                delete windowStub.practicePageManager;
+            }
+        }
+    }
+
+    // A manager result that arrives after replacement may clean its own ghost, never the new owner.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-manager-inflight-replacement';
+        const hostSessionId = 'manager-inflight-host';
+        const managerSessionId = 'manager-inflight-actual';
+        const replacementSessionId = 'manager-inflight-replacement';
+        const ownerInfo = {
+            window: createStubWindow('manager-inflight-owner-window'),
+            expectedSessionId: hostSessionId,
+            windowSessionToken: 'manager-inflight-owner-token',
+            windowSessionTokenSessionId: hostSessionId,
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const replacementInfo = {
+            window: createStubWindow('manager-inflight-replacement-window'),
+            expectedSessionId: replacementSessionId,
+            windowSessionToken: 'manager-inflight-replacement-token',
+            windowSessionTokenSessionId: replacementSessionId,
+            sessionGeneration: 2,
+            suiteSessionId: null
+        };
+        const replacementHandler = () => {};
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        const hadManager = Object.prototype.hasOwnProperty.call(windowStub, 'practicePageManager');
+        const originalManager = windowStub.practicePageManager;
+
+        app.examWindows = new Map([[examId, ownerInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        windowStub.resolveActiveLibraryIndex = async () => [{
+            id: examId,
+            title: 'Manager In-flight Replacement',
+            type: 'reading'
+        }];
+        windowStub.practicePageManager = {
+            async startPracticeSession(handledExamId, examData) {
+                assert.strictEqual(handledExamId, examId);
+                assert.strictEqual(examData.sessionId, hostSessionId);
+                await windowStub.AppData.recovery.saveActiveSession({
+                    id: `active-session:${managerSessionId}`,
+                    examId,
+                    sessionId: managerSessionId,
+                    status: 'started'
+                });
+                app.examWindows.set(examId, replacementInfo);
+                app.messageHandlers.set(examId, replacementHandler);
+                return managerSessionId;
+            }
+        };
+
+        try {
+            await windowStub.AppData.recovery.saveActiveSession({
+                id: `active-session:${replacementSessionId}`,
+                examId,
+                sessionId: replacementSessionId,
+                status: 'started'
+            });
+            assert.strictEqual(await app.startPracticeSession(examId), null);
+            assert.strictEqual(app.examWindows.get(examId), replacementInfo);
+            assert.strictEqual(app.messageHandlers.get(examId), replacementHandler);
+            assert.strictEqual(replacementInfo.expectedSessionId, replacementSessionId);
+            assert.strictEqual(replacementInfo.windowSessionToken, 'manager-inflight-replacement-token');
+            const active = await windowStub.AppData.recovery.listActiveSessions();
+            assert.strictEqual(
+                active.some((item) => item && item.id === `active-session:${managerSessionId}`),
+                false,
+                'the displaced manager recovery must be discarded by its actual id'
+            );
+            assert.strictEqual(
+                active.some((item) => item && item.id === `active-session:${replacementSessionId}`),
+                true,
+                'the replacement recovery must survive targeted ghost cleanup'
+            );
+        } finally {
+            await windowStub.AppData.recovery.discardActiveSession(`active-session:${managerSessionId}`);
+            await windowStub.AppData.recovery.discardActiveSession(`active-session:${replacementSessionId}`);
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+            if (hadManager) {
+                windowStub.practicePageManager = originalManager;
+            } else {
+                delete windowStub.practicePageManager;
+            }
+        }
     }
 
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));

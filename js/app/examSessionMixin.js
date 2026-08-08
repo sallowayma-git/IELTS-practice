@@ -4784,6 +4784,41 @@
         /**
          * 开始练习会话
          */
+        async _saveOwnedPracticeSessionRecovery(examId, sessionId, expectedRegistration) {
+            const normalizedSessionId = String(sessionId || '').trim();
+            // openExam registers the WindowProxy before starting a session. Calls without that
+            // immutable owner tuple are legacy/stale and must not create unowned recovery data.
+            if (!normalizedSessionId
+                || !expectedRegistration
+                || !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                return null;
+            }
+
+            const sessionData = {
+                id: `active-session:${normalizedSessionId}`,
+                examId: examId,
+                startTime: new Date().toISOString(),
+                status: 'started',
+                sessionId: normalizedSessionId
+            };
+            const receipt = await window.AppData.recovery.saveActiveSession(sessionData, {
+                commitGuard: () => this._isExamSessionRegistrationCurrent(examId, expectedRegistration)
+            });
+            if (!receipt || receipt.committed !== true) {
+                return null;
+            }
+            if (!this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                const current = this.examWindows && this.examWindows.get(examId);
+                if (!current || String(current.expectedSessionId || '').trim() !== normalizedSessionId) {
+                    await this._discardActiveSessionsForExam(examId, {
+                        expectedSessionId: normalizedSessionId
+                    });
+                }
+                return null;
+            }
+            return sessionData;
+        },
+
         async startPracticeSession(examId) {
             const exam = await findExamDefinition(examId);
             if (!exam) {
@@ -4792,23 +4827,53 @@
                 return;
             }
 
+            let hostSessionId = '';
+            let expectedRegistration = null;
             try {
                 const windowInfo = this.examWindows && this.examWindows.get(examId);
-                const hostSessionId = windowInfo && windowInfo.expectedSessionId
-                    ? String(windowInfo.expectedSessionId)
-                    : this.generateSessionId(examId);
-                if (windowInfo && !windowInfo.expectedSessionId) {
+                const registeredSessionId = windowInfo
+                    ? String(windowInfo.expectedSessionId || '').trim()
+                    : '';
+                hostSessionId = registeredSessionId || String(this.generateSessionId(examId)).trim();
+                if (windowInfo && String(windowInfo.expectedSessionId || '').trim() !== hostSessionId) {
                     windowInfo.expectedSessionId = hostSessionId;
+                    this._refreshExamWindowToken(examId, windowInfo);
                     this.examWindows.set(examId, windowInfo);
                 }
+                expectedRegistration = this._captureExamSessionRegistration(examId, windowInfo);
 
                 // 优先使用新的练习页面管理器
                 if (window.practicePageManager) {
-                    const sessionId = await window.practicePageManager.startPracticeSession(examId, exam);
+                    const managerResult = await window.practicePageManager.startPracticeSession(
+                        examId,
+                        Object.assign({}, exam, { sessionId: hostSessionId })
+                    );
+                    const managerSessionId = String(
+                        managerResult && typeof managerResult === 'object'
+                            ? (managerResult.sessionId || '')
+                            : (managerResult || '')
+                    ).trim();
+                    if (!expectedRegistration
+                        || !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                        const staleSessionId = managerSessionId || hostSessionId;
+                        const current = this.examWindows && this.examWindows.get(examId);
+                        if (staleSessionId
+                            && (!current || String(current.expectedSessionId || '').trim() !== staleSessionId)) {
+                            await this._discardActiveSessionsForExam(examId, {
+                                expectedSessionId: staleSessionId
+                            });
+                        }
+                        return null;
+                    }
+                    if (managerSessionId && managerSessionId !== hostSessionId) {
+                        windowInfo.expectedSessionId = managerSessionId;
+                        this._refreshExamWindowToken(examId, windowInfo);
+                        this.examWindows.set(examId, windowInfo);
+                    }
 
                     // 更新题目状态
                     this.updateExamStatus(examId, 'in-progress');
-                    return sessionId;
+                    return managerResult;
                 }
 
                 // 使用练习记录器开始会话
@@ -4843,16 +4908,14 @@
                     }
                 } else {
                     // 降级处理
-                    const sessionId = hostSessionId;
-                    const sessionData = {
-                        id: `active-session:${sessionId}`,
-                        examId: examId,
-                        startTime: new Date().toISOString(),
-                        status: 'started',
-                        sessionId
-                    };
-
-                    await window.AppData.recovery.saveActiveSession(sessionData);
+                    const sessionData = await this._saveOwnedPracticeSessionRecovery(
+                        examId,
+                        hostSessionId,
+                        expectedRegistration
+                    );
+                    if (!sessionData) {
+                        return null;
+                    }
                 }
 
                 // 更新题目状态
@@ -4862,24 +4925,27 @@
                 console.error('[App] 启动练习会话失败:', error);
 
                 // 最终降级方案
-                await this.startPracticeSessionFallback(examId, exam);
+                return await this.startPracticeSessionFallback(examId, exam, {
+                    sessionId: hostSessionId,
+                    expectedRegistration
+                });
             }
         },
 
         /**
          * 降级启动练习会话
          */
-        async startPracticeSessionFallback(examId, exam) {
-            const sessionId = this.generateSessionId(examId);
-            const sessionData = {
-                id: `active-session:${sessionId}`,
-                examId: examId,
-                startTime: new Date().toISOString(),
-                status: 'started',
-                sessionId
-            };
-
-            await window.AppData.recovery.saveActiveSession(sessionData);
+        async startPracticeSessionFallback(examId, exam, options = {}) {
+            const sessionId = String(options && options.sessionId || '').trim();
+            const expectedRegistration = options && options.expectedRegistration || null;
+            const sessionData = await this._saveOwnedPracticeSessionRecovery(
+                examId,
+                sessionId,
+                expectedRegistration
+            );
+            if (!sessionData) {
+                return null;
+            }
 
             // 更新题目状态
             this.updateExamStatus(examId, 'in-progress');
@@ -4887,6 +4953,7 @@
             // 尝试打开练习页面
             const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
             window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
+            return sessionData.sessionId;
         },
 
         /**
