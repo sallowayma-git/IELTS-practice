@@ -174,14 +174,16 @@
         },
 
         _restorePersistentMultiSuiteSessions(items) {
-            if (this.multiSuiteSessionsMap instanceof Map) {
-                for (const [baseExamId, session] of this.multiSuiteSessionsMap) {
-                    if (session && session._restoredFromWindowSession === true) {
-                        this.multiSuiteSessionsMap.delete(baseExamId);
-                    }
-                }
-            }
-            const candidates = (Array.isArray(items) ? items : [])
+            const rawItems = Array.isArray(items) ? items : [];
+            // 所有 schema/version 匹配 multi-suite 的 durable 条目，无论有效与否，
+            // 都代表该 base 曾有持久恢复；有效者覆盖 WAL，损坏者保留 WAL 回退。
+            const durableBaseIds = new Set();
+            rawItems.forEach((item) => {
+                if (!item || item.schema !== multiSuiteRecoverySchema || Number(item.version) !== 2) return;
+                const baseExamId = String(item.sessions && item.sessions[0] && item.sessions[0].baseExamId || '').trim();
+                if (baseExamId) durableBaseIds.add(baseExamId);
+            });
+            const candidates = rawItems
                 .filter((item) => item && item.schema === multiSuiteRecoverySchema && Number(item.version) === 2)
                 .filter((item) => this._isValidMultiSuiteRecoverySnapshot(item) && item.sessions.length === 1)
                 .sort((left, right) => {
@@ -189,6 +191,15 @@
                     const rightTime = Number(right.sessions[0].lastUpdate) || Date.parse(right.updatedAt || '') || 0;
                     return rightTime - leftTime;
                 });
+            // durable 完全不存在（v2 枚举确认无此 base 的恢复）时丢弃 window-WAL；
+            // durable 存在（无论有效损坏）时保留 WAL 回退：有效者随后覆盖，损坏者避免草稿丢失。
+            if (this.multiSuiteSessionsMap instanceof Map) {
+                for (const [baseExamId, session] of this.multiSuiteSessionsMap) {
+                    if (session && session._restoredFromWindowSession === true && !durableBaseIds.has(baseExamId)) {
+                        this.multiSuiteSessionsMap.delete(baseExamId);
+                    }
+                }
+            }
             const restoredBaseIds = new Set();
             candidates.forEach((candidate) => {
                 const session = this._cloneSuitePlainObject(candidate.sessions[0]);
@@ -2832,7 +2843,8 @@
 
         async _commitMultiSuiteRecovery(session) {
             const recovery = global.AppData && global.AppData.recovery;
-            if (!session || !session.id || !recovery || typeof recovery.saveActiveSession !== 'function') {
+            if (!session || !session.id || session._suiteRecoveryWritesBlocked === true
+                || !recovery || typeof recovery.saveActiveSession !== 'function') {
                 return false;
             }
             const revision = Math.max(0, Number(session.revision) || 0);
@@ -2852,6 +2864,9 @@
                 if (!receipt || receipt.committed !== true) {
                     const error = new Error('Multi-suite recovery commit was not confirmed');
                     error.code = receipt && receipt.code ? String(receipt.code) : 'RECOVERY_COMMIT_NOT_CONFIRMED';
+                    if (error.code === 'STALE_RECOVERY_WRITE' || error.code === 'RECOVERY_GROUP_CONFLICT') {
+                        session._suiteRecoveryWritesBlocked = true;
+                    }
                     throw error;
                 }
                 session._lastDurableRecoveryRevision = revision;
@@ -3086,6 +3101,13 @@
 
             // baseExamId 只负责定位当前流程，不能把已经完成的流程变成下一次练习的业务身份。
             if (!session) session = this.getOrCreateMultiSuiteSession(examId);
+
+            // 恢复的 active 会话若结果已齐但尚未聚合（finalize 前崩溃窗口），先幂等收敛，
+            // 避免同 base 新一轮被已记录的同 suiteId 阻塞。
+            if (session.status === 'active' && this.isMultiSuiteComplete(session)) {
+                const converged = await this.finalizeMultiSuiteRecord(session);
+                if (!converged) return false;
+            }
 
             if (session.status === 'finalizing'
                 && !await this.finalizeMultiSuiteRecord(session)) {

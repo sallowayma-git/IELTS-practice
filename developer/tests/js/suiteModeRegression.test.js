@@ -2148,6 +2148,209 @@ async function run() {
         app.multiSuiteSessionsMap.delete(session.baseExamId);
     }
 
+    // Case 3.0.6.4: 恢复的 active-complete 会话（finalize 前崩溃窗口）须先幂等收敛，
+    // 再让同 base 新一轮继续，而不是被已记录的同 suiteId 阻塞 NACK。
+    {
+        const app = createApp(windowStub);
+        await app._ensureSuiteRecoveryReady();
+        const examId = 'listening-multi-active-complete_set1';
+
+        // 直接构造 active-complete 会话（结果已齐、无 frozen record）。
+        // 真实崩溃窗口：最后一次 _commitMultiSuiteRecovery 已把 active 状态写入 durable，
+        // finalize 尚未执行。因此 durable 与 WAL 都存在，durable 为权威。
+        const result = {
+            suiteId: 'set-1',
+            examId: examId,
+            answers: { q1: 'A' },
+            correctAnswers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            spellingErrors: [],
+            timestamp: Date.now(),
+            duration: 10,
+            metadata: { sessionId: 'multi-active-complete-child', submissionId: 'multi-active-complete-sub-1' },
+            rawData: null
+        };
+        const activeCompleteSession = {
+            id: 'multi_listening-multi-active-complete_crash_1',
+            baseExamId: 'listening-multi-active-complete',
+            status: 'active',
+            startTime: Date.now(),
+            suiteResults: [result],
+            expectedSuiteCount: 1,
+            metadata: { source: 'p1', createdAt: new Date().toISOString() },
+            lastUpdate: Date.now(),
+            revision: 1
+        };
+        const durableSnap = {
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: activeCompleteSession.id,
+            revision: 1,
+            sessions: [activeCompleteSession],
+            updatedAt: Date.now()
+        };
+        await windowStub.AppData.recovery.saveActiveSession(durableSnap);
+        windowSessionStore.set('multi-suite-practice', durableSnap);
+
+        const restoredApp = createApp(windowStub);
+        restoredApp.initializeSuiteMode();
+        await restoredApp._ensureSuiteRecoveryReady();
+        const restored = restoredApp.multiSuiteSessionsMap.get('listening-multi-active-complete');
+        assert(restored, 'active-complete durable 快照应可恢复');
+        assert.strictEqual(restored.status, 'active');
+
+        // 新一轮同 suiteId、新身份：应触发收敛 finalize 旧会话，再接纳新结果。
+        const aggregateRecords = [];
+        restoredApp._saveSuitePracticeRecord = async (record) => { aggregateRecords.push(record); };
+        const newPayload = {
+            suiteId: 'set-1',
+            totalSuites: 1,
+            sessionId: 'multi-active-complete-new-child',
+            submissionId: 'multi-active-complete-sub-2',
+            answers: { q1: 'B' },
+            answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        };
+        assert.strictEqual(
+            await restoredApp.handleMultiSuitePracticeComplete(examId, newPayload),
+            true,
+            'active-complete 恢复后同 suiteId 新提交不得被 NACK'
+        );
+        // 旧 active-complete 会话先收敛为一条聚合记录；随后新一轮完成自己的一条。
+        assert.strictEqual(aggregateRecords.length, 2, '旧会话收敛 + 新一轮完成各生成一条记录');
+        const firstRecord = aggregateRecords[0];
+        assert.strictEqual(firstRecord.suiteEntries.length, 1, '收敛记录应包含旧结果');
+        const secondRecord = aggregateRecords[1];
+        assert.strictEqual(secondRecord.suiteEntries[0].answers.q1, 'B', '新一轮结果应聚合进第二条记录');
+        if (restored && restored.id) {
+            await windowStub.AppData.recovery.discardActiveSession(restored.id);
+        }
+        restoredApp.multiSuiteSessionsMap.delete('listening-multi-active-complete');
+    }
+
+    // Case 3.0.6.5: 损坏 durable + 有效 window-WAL 同时存在时，恢复须保留 WAL 回退；
+    // 而 durable 完全不存在（save 从未成功）时仍丢弃 WAL（未提交结果不恢复）。
+    {
+        const app = createApp(windowStub);
+        await app._ensureSuiteRecoveryReady();
+        const examId = 'listening-multi-corrupt-durable_set1';
+        const payload = {
+            suiteId: 'set-1',
+            totalSuites: 2,
+            sessionId: 'multi-corrupt-child',
+            submissionId: 'multi-corrupt-sub-1',
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        };
+        assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, payload), true);
+        const session = app.multiSuiteSessionsMap.get('listening-multi-corrupt-durable');
+
+        // 保留 WAL，同时写入一个损坏的 durable（结构合法但校验失败：finalizeOperationId 错配）。
+        const corruptDurable = plain(session);
+        corruptDurable.finalizeOperationId = 'practice-multisuite:wrong:id:finalize';
+        corruptDurable.finalizeRecord = { id: 'stale-record' };
+        await windowStub.AppData.recovery.saveActiveSession({
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: session.id,
+            revision: session.revision,
+            sessions: [corruptDurable],
+            updatedAt: Date.now()
+        });
+
+        const restoredApp = createApp(windowStub);
+        restoredApp.initializeSuiteMode();
+        await restoredApp._ensureSuiteRecoveryReady();
+        assert(
+            restoredApp.multiSuiteSessionsMap.has('listening-multi-corrupt-durable'),
+            '损坏 durable 存在时应保留 window-WAL 回退，不能把有效草稿抹掉'
+        );
+        await windowStub.AppData.recovery.discardActiveSession(session.id);
+        restoredApp.multiSuiteSessionsMap.delete('listening-multi-corrupt-durable');
+    }
+
+    // Case 3.0.6.6: multi-suite recovery 收到 stale receipt 后必须置 write-block，
+    // 后续提交短路，避免用同一旧 revision 无限重试并反复 NACK 合法提交（F3）。
+    {
+        const app = createApp(windowStub);
+        await app._ensureSuiteRecoveryReady();
+        const session = {
+            id: 'multi-writeblock-session',
+            baseExamId: 'listening-multi-writeblock',
+            status: 'active',
+            startTime: Date.now(),
+            suiteResults: [],
+            expectedSuiteCount: 1,
+            metadata: { source: 'p1' },
+            lastUpdate: Date.now(),
+            revision: 2,
+            _lastDurableRecoveryRevision: 1
+        };
+        app.multiSuiteSessionsMap.set(session.baseExamId, session);
+
+        const saveEventsBefore = recoveryControl.events.filter((event) => event.type === 'save').length;
+        recoveryControl.saveQueue.push(() => ({ committed: false, code: 'STALE_RECOVERY_WRITE' }));
+        assert.strictEqual(
+            await app._commitMultiSuiteRecovery(session),
+            false,
+            'stale receipt 时 multi-suite recovery 提交必须失败'
+        );
+        assert.strictEqual(
+            session._suiteRecoveryWritesBlocked,
+            true,
+            'stale receipt 后 multi-suite session 必须置 write-block'
+        );
+
+        // write-block 后不应再向 AppData 发起任何持久化提交。
+        const saveEventsMid = recoveryControl.events.filter((event) => event.type === 'save').length;
+        assert.strictEqual(
+            await app._commitMultiSuiteRecovery(session),
+            false,
+            'write-block 后提交必须短路返回 false'
+        );
+        const saveEventsAfter = recoveryControl.events.filter((event) => event.type === 'save').length;
+        assert.strictEqual(
+            saveEventsAfter,
+            saveEventsMid,
+            'write-block 后不得再调用 saveActiveSession'
+        );
+        assert(saveEventsAfter > saveEventsBefore, 'stale receipt 必须确实触发过一次持久化提交');
+
+        app.multiSuiteSessionsMap.delete(session.baseExamId);
+        await windowStub.AppData.recovery.discardActiveSession(session.id);
+    }
+
+    // Case 3.0.6.7: 已完成的套题会话关闭末篇子页时，不得把末篇标成 interrupted（H1）。
+    {
+        const app = createApp(windowStub);
+        const suite = makeSession('suite_completed_close');
+        suite.status = 'completed';
+        const child = suite.windowRef;
+        app.currentSuiteSession = suite;
+        app.suiteExamMap = new Map(suite.sequence.map((item) => [item.examId, suite.id]));
+        app.examWindows = new Map([['reading-p1', { window: child, suiteSessionId: suite.id }]]);
+        const statusUpdates = [];
+        app.updateExamStatus = (examId, status) => { statusUpdates.push({ examId, status }); };
+        const cleanupCalls = [];
+        app.cleanupExamSession = async (examId) => { cleanupCalls.push(examId); };
+
+        assert.strictEqual(await app.handleExamWindowClosed('reading-p1', child), true);
+        assert.strictEqual(
+            statusUpdates.some((update) => update.examId === 'reading-p1' && update.status === 'completed'),
+            true,
+            'completed 套题关闭末篇必须标记 completed 而非 interrupted'
+        );
+        assert.strictEqual(
+            statusUpdates.some((update) => update.status === 'interrupted'),
+            false,
+            'completed 套题关闭末篇不得落为 interrupted'
+        );
+        assert.strictEqual(cleanupCalls.includes('reading-p1'), true, 'completed 套题关闭后必须清理 exam session');
+        app.examWindows.delete('reading-p1');
+    }
+
     // Case 3.0.7: stale completed-session teardown must not own a newer session
     {
         const app = createApp(windowStub);

@@ -5421,6 +5421,21 @@
                 && this.suiteExamMap.get(examId) === suite.id
                 && suite.status === 'active'
             );
+            const isCompletedSuiteExam = Boolean(
+                suite
+                && this.suiteExamMap
+                && this.suiteExamMap.get(examId) === suite.id
+                && suite.status === 'completed'
+            );
+            if (isCompletedSuiteExam) {
+                // 记录已提交，子页完成后的关闭不应把末篇标成 interrupted；
+                // 会话清理由 30s teardown / 下次 launch 负责。
+                this.updateExamStatus(examId, 'completed');
+                if (typeof this.cleanupExamSession === 'function') {
+                    this.cleanupExamSession(examId);
+                }
+                return true;
+            }
             if (isSuiteExam) {
                 if (String(suite.activeExamId || '') !== String(examId)) {
                     return false;
