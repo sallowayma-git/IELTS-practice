@@ -59,6 +59,7 @@
             this.currentSuiteSession = null;
             this.suiteExamMap = new Map();
             this.multiSuiteSessionsMap = new Map(); // 新增：存储多套题会话
+            this._multiSuiteCompletionTails = new Map();
             this._suiteSessionGeneration = Math.max(0, Number(this._suiteSessionGeneration) || 0);
             this._restoreMultiSuiteSessionsFromStorage();
             if (typeof this._clearSuiteHandshakes === 'function') {
@@ -2922,6 +2923,7 @@
                 if (Boolean(session.finalizeOperationId) !== Boolean(session.finalizeRecord)) return false;
                 if (session.finalizeRecord && (!session.finalizeOperationId
                     || !this._isValidMultiSuiteFinalizeRecord(session, session.finalizeRecord))) return false;
+                if (status === 'finalizing' && (!session.finalizeOperationId || !session.finalizeRecord)) return false;
                 if (status === 'completed' && (!expectedCount || session.suiteResults.length < expectedCount
                     || !session.finalizeOperationId || !session.finalizeRecord)) return false;
                 sessionIds.add(id);
@@ -2957,9 +2959,11 @@
             const expectedScores = this.aggregateScores(results);
             const expectedAnswers = this.aggregateAnswers(results);
             const expectedComparison = this.aggregateAnswerComparisons(results);
+            const expectedSpellingErrors = this.aggregateSpellingErrors(results);
             const expectedDuration = results.reduce((sum, result) => sum + (Number(result.duration) || 0), 0);
             const operationId = `practice-multisuite:${String(session.id)}:finalize`;
             const numericMatches = (left, right) => Number.isFinite(Number(left)) && Number(left) === Number(right);
+            const spellingContent = (errors) => (Array.isArray(errors) ? errors : []).map(({ timestamp, ...error }) => error);
             const entries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
             return Boolean(
                 String(record.id || '') === String(session.id)
@@ -2974,12 +2978,16 @@
                 && this._isValidSuiteScoreInfo(record.scoreInfo)
                 && numericMatches(record.totalQuestions, expectedScores.total)
                 && numericMatches(record.correctAnswers, expectedScores.correct)
+                && Math.abs(Number(record.accuracy) - Number(expectedScores.accuracy)) < 1e-9
+                && Number(record.percentage) === Number(expectedScores.percentage)
                 && numericMatches(record.scoreInfo.correct, expectedScores.correct)
                 && numericMatches(record.scoreInfo.total, expectedScores.total)
                 && Math.abs(Number(record.scoreInfo.accuracy) - Number(expectedScores.accuracy)) < 1e-9
                 && Number(record.scoreInfo.percentage) === Number(expectedScores.percentage)
                 && this._suiteValuesEqual(record.answers, expectedAnswers)
                 && this._suiteValuesEqual(record.answerComparison, expectedComparison)
+                && Array.isArray(record.spellingErrors)
+                && this._suiteValuesEqual(spellingContent(record.spellingErrors), spellingContent(expectedSpellingErrors))
                 && entries.length === results.length
                 && entries.every((entry, index) => {
                     const result = results[index];
@@ -2988,7 +2996,13 @@
                         && numericMatches(entry.duration, result.duration)
                         && this._suiteValuesEqual(entry.scoreInfo, result.scoreInfo)
                         && this._suiteValuesEqual(entry.answers, result.answers)
-                        && this._suiteValuesEqual(entry.answerComparison, result.answerComparison);
+                        && this._suiteValuesEqual(entry.answerComparison, result.answerComparison)
+                        && this._suiteValuesEqual(entry.spellingErrors, result.spellingErrors || [])
+                        && (entry.metadata
+                            ? this._suiteValuesEqual(entry.metadata, result.metadata || {})
+                            : !result.metadata?.submissionId)
+                        && numericMatches(entry.timestamp, result.timestamp)
+                        && this._suiteValuesEqual(entry.rawData, result.rawData || null);
                 })
                 && record.metadata && typeof record.metadata === 'object'
                 && String(record.metadata.sessionId || '') === String(session.id)
@@ -3003,6 +3017,7 @@
                 && Math.abs(Number(record.realData.accuracy) - Number(expectedScores.accuracy)) < 1e-9
                 && Number(record.realData.percentage) === Number(expectedScores.percentage)
                 && numericMatches(record.realData.duration, expectedDuration)
+                && Number(record.realData.suiteCount) === results.length
                 && record.operationId === operationId
             );
         },
@@ -3019,21 +3034,85 @@
                 return false;
             }
 
+            await this._ensureSuiteRecoveryReady();
+            const baseExamId = String(this._extractBaseExamId(examId) || '').trim();
+            if (!baseExamId) return false;
+
+            const previous = this._multiSuiteCompletionTails.get(baseExamId) || Promise.resolve();
+            const task = previous.catch(() => false)
+                .then(() => this._handleMultiSuitePracticeCompleteInternal(examId, suiteData, baseExamId));
+            this._multiSuiteCompletionTails.set(baseExamId, task);
+            try {
+                return await task;
+            } finally {
+                if (this._multiSuiteCompletionTails.get(baseExamId) === task) {
+                    this._multiSuiteCompletionTails.delete(baseExamId);
+                }
+            }
+        },
+
+        async _handleMultiSuitePracticeCompleteInternal(examId, suiteData, baseExamId) {
+
             console.log('[MultiSuite] 处理套题完成:', examId, '套题ID:', suiteData.suiteId);
 
-            // 获取或创建多套题会话
-            const session = this.getOrCreateMultiSuiteSession(examId);
-            if (!session) {
+            const normalizedSuiteId = String(suiteData.suiteId).trim();
+            const childSessionId = String(suiteData.sessionId || '').trim();
+            const submissionId = String(suiteData.submissionId || '').trim();
+            const isSubmissionReplay = (result) => Boolean(
+                childSessionId
+                && submissionId
+                && String(result?.suiteId || '').trim() === normalizedSuiteId
+                && String(result?.metadata?.sessionId || result?.rawData?.sessionId || '').trim() === childSessionId
+                && String(result?.metadata?.submissionId || result?.rawData?.submissionId || '').trim() === submissionId
+            );
+
+            let session = this.multiSuiteSessionsMap.get(baseExamId);
+            const currentSuiteResult = session && session.suiteResults.find(
+                result => String(result?.suiteId || '').trim() === normalizedSuiteId
+            );
+            const replaysCurrentSession = Boolean(currentSuiteResult
+                && ((!childSessionId || !submissionId) || isSubmissionReplay(currentSuiteResult)));
+
+            // v2 聚合记录是 durable submission receipt。恢复实体已清理或新流程已开始时，
+            // 旧窗口的精确重放仍由 canonical 记录识别，不能创建第二条聚合记录。
+            if (!replaysCurrentSession && childSessionId && submissionId) {
+                const records = await this._listPracticeRecordsViaAPI();
+                const alreadyCommitted = records.some((record) => record && record.multiSuite === true
+                    && String(record.examId || '').trim() === baseExamId
+                    && Array.isArray(record.suiteEntries)
+                    && record.suiteEntries.some(isSubmissionReplay));
+                if (alreadyCommitted) return true;
+            }
+
+            // baseExamId 只负责定位当前流程，不能把已经完成的流程变成下一次练习的业务身份。
+            if (!session) session = this.getOrCreateMultiSuiteSession(examId);
+
+            if (session.status === 'finalizing'
+                && !await this.finalizeMultiSuiteRecord(session)) {
                 return false;
             }
 
+            if (session.status === 'completed') {
+                if (replaysCurrentSession) {
+                    console.warn('[MultiSuite] 已完成套题的原提交重放，跳过:', suiteData.suiteId);
+                    return true;
+                }
+                if (this.multiSuiteSessionsMap.get(session.baseExamId)?.id === session.id) {
+                    this.multiSuiteSessionsMap.delete(session.baseExamId);
+                }
+                session = this.getOrCreateMultiSuiteSession(examId);
+            }
+
             // 检查是否已经记录过这个套题
-            const normalizedSuiteId = String(suiteData.suiteId).trim();
             const alreadyRecorded = session.suiteResults.some(
                 result => String(result.suiteId) === normalizedSuiteId
             );
 
             if (alreadyRecorded) {
+                if (childSessionId && submissionId && !replaysCurrentSession) {
+                    console.warn('[MultiSuite] 同一套题收到不同提交，拒绝误 ACK:', suiteData.suiteId);
+                    return false;
+                }
                 console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
                 if (Number(session.revision) > Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
                     && !await this._commitMultiSuiteRecovery(session)) {
@@ -3058,6 +3137,7 @@
                 duration: suiteData.duration || 0,
                 metadata: {
                     sessionId: suiteData.sessionId,
+                    submissionId: suiteData.submissionId,
                     completedAt: new Date().toISOString()
                 },
                 rawData: (() => {
@@ -3158,6 +3238,16 @@
                 return false;
             }
 
+            const operationId = `practice-multisuite:${String(session.id)}:finalize`;
+            const hasFinalizeState = Boolean(session.finalizeRecord || session.finalizeOperationId);
+            const hasFrozenRecord = Boolean(session.finalizeRecord
+                && session.finalizeOperationId === operationId
+                && this._isValidMultiSuiteFinalizeRecord(session, session.finalizeRecord));
+            if ((session.status === 'finalizing' || hasFinalizeState) && !hasFrozenRecord) {
+                console.warn('[MultiSuite] 聚合快照与当前会话不一致，拒绝使用相同 operationId 重建');
+                return false;
+            }
+
             session.status = 'finalizing';
             session.lastUpdate = Date.now();
             this._mirrorMultiSuiteSessionsToStorage();
@@ -3224,6 +3314,7 @@
                         answers: result.answers,
                         answerComparison: result.answerComparison,
                         spellingErrors: result.spellingErrors || [],
+                        metadata: this._cloneSuitePlainObject(result.metadata || {}),
                         duration: result.duration || 0,
                         timestamp: result.timestamp,
                         rawData: result.rawData || null
@@ -3257,10 +3348,6 @@
                     }
                 };
 
-                const operationId = `practice-multisuite:${String(session.id)}:finalize`;
-                const hasFrozenRecord = Boolean(session.finalizeRecord
-                    && session.finalizeOperationId === operationId
-                    && typeof session.finalizeRecord === 'object');
                 const frozenRecord = hasFrozenRecord
                     ? this._cloneSuitePlainObject(session.finalizeRecord)
                     : record;
@@ -3311,6 +3398,9 @@
                 this.refreshOverviewData && this.refreshOverviewData();
             });
             await this._runSuitePostCommitStep('清理多套题会话', async () => {
+                // Old v2 frozen entries have no canonical submission metadata, so recovery remains their durable receipt.
+                if (session.suiteResults.some((result) => result?.rawData?.submissionId
+                    && !result?.metadata?.submissionId)) return;
                 const recovery = global.AppData && global.AppData.recovery;
                 if (recovery && typeof recovery.discardActiveSession === 'function') {
                     const receipt = await recovery.discardActiveSession(String(session.id), {
@@ -3495,7 +3585,7 @@
                             questionId: error.questionId,
                             suiteId: error.suiteId || result.suiteId,
                             examId: error.examId || result.examId,
-                            timestamp: error.timestamp || Date.now(),
+                            timestamp: error.timestamp || result.timestamp || 0,
                             errorCount: error.errorCount || 1,
                             source: error.source || this._detectMultiSuiteSource(result.examId),
                             acceptedAnswers: Array.isArray(error.acceptedAnswers) ? error.acceptedAnswers.slice() : undefined,

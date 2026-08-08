@@ -1530,6 +1530,9 @@ async function run() {
         ack = sourceWindow._messages.filter(message => message && message.type === 'PRACTICE_SUBMIT_ACK').at(-1);
         assert(ack, 'retry must replay the persisted ACK');
         assert.strictEqual((await windowStub.AppData.practice.list()).length, 1, 'retry must not persist a second suite record');
+        app._announcePracticeSubmitOutcome(examId, { ...payload, suiteId: 'set-1' }, sourceWindow, true);
+        assert.strictEqual(app._replayPracticeSubmitReceipt(examId, { ...payload, suiteId: 'set-1' }, sourceWindow), true);
+        assert.strictEqual(app._replayPracticeSubmitReceipt(examId, { ...payload, suiteId: 'set-2' }, sourceWindow), false, 'ACK receipt 必须包含 suiteId');
         clearTimeout(session.submitReceiptTeardownTimer);
         session.submitReceiptTeardownTimer = null;
 
@@ -1621,10 +1624,34 @@ async function run() {
             suiteSessionId: outcome.data.suiteSessionId
         }), { submissionId, sessionId, examId, suiteSessionId });
 
+        const oldV2Session = app.multiSuiteSessionsMap.get(examId);
+        delete oldV2Session.suiteResults[0].metadata.submissionId;
+        delete oldV2Session.finalizeRecord.suiteEntries[0].metadata;
         assert.strictEqual(await app.handlePracticeComplete(examId, payload, sourceWindow), true);
         outcome = sourceWindow._messages.filter(message => message && /^PRACTICE_SUBMIT_/.test(message.type)).at(-1);
         assert.strictEqual(outcome.type, 'PRACTICE_SUBMIT_ACK');
         assert.strictEqual(saveAttempts, 2, 'retry must re-attempt the failed aggregate save exactly once');
+        assert.strictEqual(app.multiSuiteSessionsMap.get(examId), oldV2Session, '旧 v2 frozen 必须保留 recovery 作为 durable receipt');
+    }
+
+    // Case 3.0.3a: legacy payload 的 finalizing 重试只能收敛原 frozen aggregate
+    {
+        const app = createApp(windowStub);
+        let saveAttempts = 0;
+        app._saveSuitePracticeRecord = async () => {
+            saveAttempts += 1;
+            if (saveAttempts === 1) throw new Error('expected legacy multi-suite save failure');
+        };
+        const payload = {
+            suiteId: 'set-1',
+            totalSuites: 1,
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        };
+        assert.strictEqual(await app.handleMultiSuitePracticeComplete('listening-multi-legacy-retry', payload), false);
+        assert.strictEqual(await app.handleMultiSuitePracticeComplete('listening-multi-legacy-retry', payload), true);
+        assert.strictEqual(saveAttempts, 2, 'legacy retry 只能重放一次原 frozen aggregate，不能创建新 session 再聚合');
     }
 
     // Case 3.0.4: canonical receipt 未确认 committed 时必须 NACK
@@ -1912,6 +1939,213 @@ async function run() {
         assert(outcomes.length >= 2 && outcomes.every(message => message.type === 'PRACTICE_SUBMIT_ACK'), `${failingStep}: multi-suite commit and replay must only ACK`);
         assert.strictEqual(aggregateRecords.length, 1, `${failingStep}: multi-suite aggregate must be written exactly once`);
         assert.strictEqual(standaloneFallbacks, 0, `${failingStep}: multi-suite must not enter standalone fallback after commit`);
+    }
+
+    // Case 3.0.6.1: durable recovery 清理后，v2 聚合记录仍是精确提交的幂等收据
+    {
+        const app = createApp(windowStub);
+        await app._ensureSuiteRecoveryReady();
+        const examId = 'listening-multi-canonical-receipt_set1';
+        const payload = {
+            suiteId: 'set-1',
+            totalSuites: 1,
+            sessionId: 'multi-canonical-child',
+            submissionId: 'multi-canonical-submission',
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        };
+
+        assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, payload), true);
+        assert.strictEqual(app.multiSuiteSessionsMap.has('listening-multi-canonical-receipt'), false, 'cleanup 成功后 runtime recovery 应释放');
+        const committed = await windowStub.AppData.practice.list({ projection: 'detail' });
+        assert.strictEqual(committed.length, 1);
+        assert.strictEqual(committed[0].suiteEntries[0].metadata.sessionId, payload.sessionId);
+        assert.strictEqual(committed[0].suiteEntries[0].metadata.submissionId, payload.submissionId);
+
+        const refreshed = createApp(windowStub);
+        refreshed.initializeSuiteMode();
+        await refreshed._ensureSuiteRecoveryReady();
+        assert.strictEqual(await refreshed.handleMultiSuitePracticeComplete(examId, payload), true, '刷新后的精确重放必须由 canonical 记录 ACK');
+        assert.strictEqual((await windowStub.AppData.practice.list({ projection: 'detail' })).length, 1, 'canonical 重放不能生成第二条聚合记录');
+
+        const concurrentApp = createApp(windowStub);
+        const originalFinalizeSuite = windowStub.AppData.practice.finalizeSuite;
+        let finalizeCalls = 0;
+        windowStub.AppData.practice.finalizeSuite = async (...args) => {
+            finalizeCalls += 1;
+            return originalFinalizeSuite(...args);
+        };
+        try {
+            assert.deepStrictEqual(
+                await Promise.all([
+                    concurrentApp.handleMultiSuitePracticeComplete('listening-multi-concurrent_set1', payload),
+                    concurrentApp.handleMultiSuitePracticeComplete('listening-multi-concurrent_set1', payload)
+                ]),
+                [true, true],
+                '完整 triple 的并发重放必须得到相同 ACK'
+            );
+        } finally {
+            windowStub.AppData.practice.finalizeSuite = originalFinalizeSuite;
+        }
+        assert.strictEqual(finalizeCalls, 1, '并发精确重放只能生成一次 canonical aggregate');
+    }
+
+    // Case 3.0.6.2: completed multi-suite 只拥有原提交重放，不能吞掉同 base 的下一次运行
+    {
+        const app = createApp(windowStub);
+        await app._ensureSuiteRecoveryReady();
+        const examId = 'listening-multi-owner_set1';
+        const aggregateRecords = new Map();
+        const saveAttempts = [];
+        app._saveSuitePracticeRecord = async (record) => {
+            saveAttempts.push(plain(record));
+            aggregateRecords.set(record.operationId, plain(record));
+        };
+        const originalDiscard = windowStub.AppData.recovery.discardActiveSession;
+        const discardCalls = [];
+        windowStub.AppData.recovery.discardActiveSession = async (id, options) => {
+            discardCalls.push({ id: String(id), options: plain(options || {}) });
+            return { committed: false };
+        };
+        const firstPayload = {
+            suiteId: 'set-1',
+            totalSuites: 1,
+            sessionId: 'multi-owner-child',
+            submissionId: 'multi-owner-submission-1',
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            spellingErrors: [{ word: 'practice', userInput: 'practise' }]
+        };
+        const completedSession = app.getOrCreateMultiSuiteSession(examId);
+
+        try {
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, firstPayload), true);
+            assert.strictEqual(aggregateRecords.size, 1, '首次运行只能生成一条聚合记录');
+            assert.strictEqual(saveAttempts.length, 1, '首次运行只能提交一次 aggregate');
+            assert.strictEqual(discardCalls.length, 1, 'aggregate 成功后必须尝试清理 durable recovery');
+            assert.strictEqual(discardCalls[0].id, completedSession.id, 'durable cleanup 必须针对已完成会话');
+            assert.strictEqual(app.multiSuiteSessionsMap.get(completedSession.baseExamId), completedSession, 'durable cleanup 失败时应保留完成态作为重放收据');
+
+            // durable recovery 在 aggregate commit 与 cleanup 之间只可能恢复到 finalizing；
+            // 必须先用原 operationId 收敛旧记录，再解释当前 submission。
+            completedSession.status = 'finalizing';
+            app.multiSuiteSessionsMap.set(completedSession.baseExamId, completedSession);
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, firstPayload), true, 'finalizing 原 submission 必须幂等收敛');
+            assert.strictEqual(aggregateRecords.size, 1, 'finalizing 重放不能创建第二条聚合记录');
+            assert.strictEqual(saveAttempts.length, 2, 'finalizing 重放必须再次提交原 frozen aggregate');
+            assert.deepStrictEqual(saveAttempts[1], saveAttempts[0], 'finalizing 重放的 aggregate 必须保持字节语义稳定');
+
+            const oldV2Snapshot = plain(completedSession);
+            oldV2Snapshot.status = 'finalizing';
+            delete oldV2Snapshot.suiteResults[0].metadata.submissionId;
+            delete oldV2Snapshot.finalizeRecord.suiteEntries[0].metadata;
+            oldV2Snapshot.finalizeRecord.spellingErrors[0].timestamp += 1;
+            assert.strictEqual(app._isValidMultiSuiteRecoverySnapshot({
+                schema: 'multi-suite-sessions-v2', version: 2, sessions: [oldV2Snapshot]
+            }), true, '升级前缺少 entry metadata 的 v2 frozen snapshot 仍应可恢复');
+
+            // 模拟旧实现中 cleanup 失败后残留的 completed runtime session。
+            app.multiSuiteSessionsMap.set(completedSession.baseExamId, completedSession);
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, firstPayload), true, '原 submission 重放必须幂等成功');
+            assert.strictEqual(aggregateRecords.size, 1, '原 submission 重放不能重复聚合');
+            assert.strictEqual(saveAttempts.length, 2, 'completed 原 submission 重放不能再次调用 aggregate 保存');
+
+            const nextPayload = {
+                ...firstPayload,
+                submissionId: 'multi-owner-submission-2',
+                answers: { q1: 'B' },
+                answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } }
+            };
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, nextPayload), true, '新 submission 必须创建新运行');
+            assert.strictEqual(aggregateRecords.size, 2, '同 base 的下一次运行必须生成独立聚合记录');
+            assert.strictEqual(saveAttempts.length, 3, '下一次运行必须只新增一次 aggregate 保存');
+            const records = Array.from(aggregateRecords.values());
+            assert.notStrictEqual(records[0].id, records[1].id, '两次运行必须使用不同 multi-suite session id');
+            assert.strictEqual(records[1].answers['set-1::q1'], 'B', '新聚合必须包含下一次运行的答案');
+            assert.strictEqual(records[1].suiteEntries.length, 1, '新聚合不能混入旧运行结果');
+            assert.strictEqual(records[1].scoreInfo.total, 1, '新聚合分数只能来自当前运行');
+            assert.strictEqual(records[1].suiteEntries[0].rawData.submissionId, nextPayload.submissionId, '新聚合必须归属当前 submission');
+
+            const nextChildPayload = {
+                ...nextPayload,
+                sessionId: 'multi-owner-child-2',
+                answers: { q1: 'C' },
+                answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } }
+            };
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, nextChildPayload), true, '不同 child session 必须创建新运行');
+            assert.strictEqual(aggregateRecords.size, 3, '不同 child session 不能被误判为 completed 重放');
+            assert.strictEqual(saveAttempts.length, 4, '不同 child session 必须只新增一次 aggregate 保存');
+            assert.strictEqual(Array.from(aggregateRecords.values())[2].answers['set-1::q1'], 'C');
+
+            completedSession.status = 'finalizing';
+            completedSession.finalizeOperationId = 'wrong-operation-id';
+            app.multiSuiteSessionsMap.set(completedSession.baseExamId, completedSession);
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, firstPayload), false, '错配 operationId 的 frozen aggregate 必须 fail closed');
+            assert.strictEqual(saveAttempts.length, 4, '错配 operationId 不能触发 aggregate 保存');
+
+            completedSession.finalizeOperationId = completedSession.finalizeRecord.operationId;
+            completedSession.finalizeRecord.spellingErrors = [];
+            assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, firstPayload), false, '损坏的顶层拼写汇总必须 fail closed');
+            assert.strictEqual(saveAttempts.length, 4, '损坏的拼写汇总不能调用保存');
+
+            completedSession.finalizeRecord = plain(saveAttempts[0]);
+            completedSession.finalizeOperationId = completedSession.finalizeRecord.operationId;
+            completedSession.suiteResults[0].answers.q1 = 'tampered';
+            app.multiSuiteSessionsMap.set(completedSession.baseExamId, completedSession);
+            assert.strictEqual(
+                await app.handleMultiSuitePracticeComplete(examId, firstPayload),
+                false,
+                '不一致的 frozen aggregate 必须 fail closed，不能复用 operationId 重建'
+            );
+            assert.strictEqual(aggregateRecords.size, 3, '损坏 frozen aggregate 不能写入新记录');
+            assert.strictEqual(saveAttempts.length, 4, '损坏 frozen aggregate 不能调用保存');
+            app.multiSuiteSessionsMap.delete(completedSession.baseExamId);
+        } finally {
+            windowStub.AppData.recovery.discardActiveSession = originalDiscard;
+            for (const record of aggregateRecords.values()) {
+                await originalDiscard(record.id);
+            }
+        }
+    }
+
+    // Case 3.0.6.3: finalizing 必须携带 frozen pair；同一 active suite 的不同提交不能误 ACK
+    {
+        const app = createApp(windowStub);
+        await app._ensureSuiteRecoveryReady();
+        const examId = 'listening-multi-active-conflict_set1';
+        const firstPayload = {
+            suiteId: 'set-1',
+            totalSuites: 2,
+            sessionId: 'multi-active-child',
+            submissionId: 'multi-active-submission-1',
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        };
+        assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, firstPayload), true);
+        const session = app.multiSuiteSessionsMap.get('listening-multi-active-conflict');
+        assert.strictEqual(await app.handleMultiSuitePracticeComplete(examId, {
+            ...firstPayload,
+            submissionId: 'multi-active-submission-2',
+            answers: { q1: 'B' }
+        }), false, '同一 active suite 的不同 submission 不能 ACK 未持久化答案');
+        assert.strictEqual(session.suiteResults.length, 1);
+        assert.strictEqual(session.suiteResults[0].answers.q1, 'A');
+
+        const missingFrozen = plain(session);
+        missingFrozen.status = 'finalizing';
+        missingFrozen.finalizeOperationId = null;
+        missingFrozen.finalizeRecord = null;
+        assert.strictEqual(await app.finalizeMultiSuiteRecord(missingFrozen), false, 'finalizing 缺少 frozen pair 必须 fail closed');
+        assert.strictEqual(app._isValidMultiSuiteRecoverySnapshot({
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            sessions: [missingFrozen]
+        }), false, '缺少 frozen pair 的 finalizing recovery 不能进入运行态');
+        await windowStub.AppData.recovery.discardActiveSession(session.id);
+        app.multiSuiteSessionsMap.delete(session.baseExamId);
     }
 
     // Case 3.0.7: stale completed-session teardown must not own a newer session

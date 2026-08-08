@@ -3831,7 +3831,7 @@
                 const delivered = this._postExamMessage(examId, targetWindow, type, payload);
                 if (succeeded) {
                     const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
-                    const receiptKey = `${sessionId}:${submissionId}`;
+                    const receiptKey = `${sessionId}:${String(completionData?.suiteId || '').trim()}:${submissionId}`;
                     const receipts = windowInfo.practiceSubmitReceipts && typeof windowInfo.practiceSubmitReceipts === 'object'
                         ? windowInfo.practiceSubmitReceipts
                         : {};
@@ -3884,7 +3884,7 @@
             }
             const windowInfo = this.ensureExamWindowSession(examId, sourceWindow);
             const receipt = windowInfo.practiceSubmitReceipts
-                && windowInfo.practiceSubmitReceipts[`${sessionId}:${submissionId}`];
+                && windowInfo.practiceSubmitReceipts[`${sessionId}:${String(completionData?.suiteId || '').trim()}:${submissionId}`];
             if (!receipt || receipt.succeeded !== true) {
                 return false;
             }
