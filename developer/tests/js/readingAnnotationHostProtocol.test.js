@@ -73,8 +73,20 @@ function createHarness(initialRecord, options = {}) {
             }
             },
             recovery: {
+                async listActiveSessions() { return []; },
+                async discardActiveSession() { return { committed: true }; },
                 async listDrafts() { return clone(drafts); },
-                async saveDraft(value) {
+                async saveDraft(value, saveOptions = {}) {
+                    if (typeof options.beforeDraftCommit === 'function') {
+                        await options.beforeDraftCommit(value, saveOptions);
+                    }
+                    if (typeof saveOptions.commitGuard === 'function') {
+                        let allowed = false;
+                        try { allowed = saveOptions.commitGuard() === true; } catch (_) {}
+                        if (!allowed) {
+                            return { committed: false, stale: true, code: 'STALE_RECOVERY_WRITE' };
+                        }
+                    }
                     const item = { ...clone(value), updatedAt: new Date().toISOString() };
                     const index = drafts.findIndex((draft) => draft.id === item.id);
                     if (index >= 0) drafts[index] = item;
@@ -452,6 +464,161 @@ async function testLiveDraftUsesIsolatedTokenGatedStore() {
     assert.deepStrictEqual(isolatedHarness.getDrafts().map((draft) => draft.id), ['reading-draft:reading-library-live:library-b']);
 }
 
+async function testInFlightDraftCommitUsesRegistrationGuard() {
+    let markCommitEntered;
+    let releaseCommit;
+    const commitEntered = new Promise((resolve) => { markCommitEntered = resolve; });
+    const commitGate = new Promise((resolve) => { releaseCommit = resolve; });
+    const harness = createHarness({ id: 'unused-inflight', examId: 'reading-inflight' }, {
+        async beforeDraftCommit() {
+            markCommitEntered();
+            await commitGate;
+        }
+    });
+    const { info } = bindLiveProtocol(harness, 'reading-inflight');
+    info.sessionGeneration = 1;
+    const pending = harness.app.handleReadingDraftSync('reading-inflight', {
+        examId: 'reading-inflight',
+        sessionId: info.expectedSessionId,
+        windowSessionGeneration: info.sessionGeneration,
+        draftUpdatedAt: 5000,
+        draft: { answers: { q1: 'stale-inflight' }, updatedAt: 5000 }
+    }, info);
+
+    await commitEntered;
+    const replacementWindow = {
+        name: 'practice-reading-inflight-replacement',
+        closed: false,
+        location: { href: 'http://localhost/reading-inflight.html' },
+        postMessage() {}
+    };
+    const replacementInfo = {
+        ...info,
+        window: replacementWindow,
+        expectedSessionId: 'session-reading-inflight-replacement',
+        windowSessionToken: 'token-reading-inflight-replacement',
+        windowSessionTokenSessionId: 'session-reading-inflight-replacement',
+        sessionGeneration: 2
+    };
+    harness.app.examWindows.set('reading-inflight', replacementInfo);
+    releaseCommit();
+
+    assert.strictEqual(await pending, false, 'a replaced registration must reject its in-flight draft commit');
+    assert.deepStrictEqual(harness.getDrafts(), [], 'the rejected generation must not reach recovery storage');
+    assert.strictEqual(harness.app.examWindows.get('reading-inflight'), replacementInfo);
+}
+
+async function testInFlightDraftRejectsInPlaceRegistrationMutation() {
+    let markCommitEntered;
+    let releaseCommit;
+    const commitEntered = new Promise((resolve) => { markCommitEntered = resolve; });
+    const commitGate = new Promise((resolve) => { releaseCommit = resolve; });
+    const harness = createHarness({ id: 'unused-inplace', examId: 'reading-inplace' }, {
+        async beforeDraftCommit() {
+            markCommitEntered();
+            await commitGate;
+        }
+    });
+    const { info } = bindLiveProtocol(harness, 'reading-inplace');
+    const pending = harness.app.handleReadingDraftSync('reading-inplace', {
+        examId: 'reading-inplace',
+        sessionId: info.expectedSessionId,
+        draftUpdatedAt: 5100,
+        draft: { answers: { q1: 'stale-inplace' }, updatedAt: 5100 }
+    }, info);
+
+    await commitEntered;
+    // Reset/rebind paths can mutate the existing object rather than replacing the Map value.
+    info.expectedSessionId = 'session-reading-inplace-rebound';
+    info.windowSessionToken = 'token-reading-inplace-rebound';
+    info.windowSessionTokenSessionId = info.expectedSessionId;
+    info.sessionGeneration = 2;
+    releaseCommit();
+
+    assert.strictEqual(await pending, false, 'an in-place registration mutation must reject the old draft');
+    assert.deepStrictEqual(harness.getDrafts(), [], 'legacy payloads without generation must still be ownership-gated');
+}
+
+async function testInFlightFinalDraftSurvivesWindowClose() {
+    let markCommitEntered;
+    let releaseCommit;
+    const commitEntered = new Promise((resolve) => { markCommitEntered = resolve; });
+    const commitGate = new Promise((resolve) => { releaseCommit = resolve; });
+    const harness = createHarness({ id: 'unused-pagehide', examId: 'reading-pagehide' }, {
+        async beforeDraftCommit() {
+            markCommitEntered();
+            await commitGate;
+        }
+    });
+    const { examWindow, info } = bindLiveProtocol(harness, 'reading-pagehide');
+    info.sessionGeneration = 1;
+    const pending = harness.app._queueReadingDraftSync('reading-pagehide', {
+        examId: 'reading-pagehide',
+        sessionId: info.expectedSessionId,
+        windowSessionGeneration: info.sessionGeneration,
+        draftUpdatedAt: 5200,
+        draft: { answers: { q1: 'final-pagehide' }, updatedAt: 5200 }
+    }, info);
+
+    await commitEntered;
+    // pagehide is accepted while live; the WindowProxy may close before the IDB put.
+    examWindow.closed = true;
+    harness.app.updateExamStatus = () => {};
+    let closeSettled = false;
+    const closePromise = harness.app.handleExamWindowClosed('reading-pagehide', examWindow)
+        .then((value) => { closeSettled = true; return value; });
+    await Promise.resolve();
+    assert.strictEqual(closeSettled, false, 'close cleanup must wait for the accepted draft queue');
+    releaseCommit();
+
+    assert.strictEqual(await pending, true, 'closing an otherwise exact registration must not lose its final draft');
+    assert.strictEqual(await closePromise, true);
+    assert.strictEqual(harness.getDrafts().length, 1);
+    assert.strictEqual(harness.getDrafts()[0].answers.q1, 'final-pagehide');
+    assert.strictEqual(harness.app.examWindows.has('reading-pagehide'), false, 'cleanup may remove the old registration after commit');
+}
+
+async function testWindowCloseCleanupIsRegistrationScoped() {
+    const harness = createHarness({ id: 'unused-close-scope', examId: 'reading-close-scope' });
+
+    // A late close callback with no registration must not wait on an unrelated
+    // draft tail and later broad-delete a registration created during that wait.
+    let releaseUnrelatedQueue;
+    harness.app.examWindows = new Map();
+    harness.app._readingDraftStoreQueue = new Promise((resolve) => { releaseUnrelatedQueue = resolve; });
+    const missingClose = harness.app.handleExamWindowClosed('reading-close-missing');
+    const replacementWithoutPriorOwner = { window: { closed: false }, expectedSessionId: 'new-missing-owner' };
+    harness.app.examWindows.set('reading-close-missing', replacementWithoutPriorOwner);
+    assert.strictEqual(await missingClose, false);
+    assert.strictEqual(harness.app.examWindows.get('reading-close-missing'), replacementWithoutPriorOwner);
+    releaseUnrelatedQueue();
+
+    const { examWindow, info } = bindLiveProtocol(harness, 'reading-close-replaced');
+    info.sessionGeneration = 1;
+    let releaseAcceptedQueue;
+    harness.app._readingDraftStoreQueue = new Promise((resolve) => { releaseAcceptedQueue = resolve; });
+    const closing = harness.app.handleExamWindowClosed('reading-close-replaced', examWindow);
+    await Promise.resolve();
+
+    const replacementWindow = { closed: false };
+    const replacementInfo = {
+        window: replacementWindow,
+        expectedSessionId: 'session-reading-close-replaced-new',
+        windowSessionToken: 'token-reading-close-replaced-new',
+        windowSessionTokenSessionId: 'session-reading-close-replaced-new',
+        sessionGeneration: 2,
+        suiteSessionId: null
+    };
+    const replacementHandler = () => {};
+    harness.app.examWindows.set('reading-close-replaced', replacementInfo);
+    harness.app.messageHandlers.set('reading-close-replaced', replacementHandler);
+    releaseAcceptedQueue();
+
+    assert.strictEqual(await closing, false, 'a close callback must stop owning the map after replacement');
+    assert.strictEqual(harness.app.examWindows.get('reading-close-replaced'), replacementInfo);
+    assert.strictEqual(harness.app.messageHandlers.get('reading-close-replaced'), replacementHandler);
+}
+
 async function testCompletionPersistenceVerification() {
     const persisted = {
         id: 'record-persisted',
@@ -627,6 +794,10 @@ async function main() {
     await testAnnotationWritesAreSerialized();
     await testSubmittedReadingAnnotationSync();
     await testLiveDraftUsesIsolatedTokenGatedStore();
+    await testInFlightDraftCommitUsesRegistrationGuard();
+    await testInFlightDraftRejectsInPlaceRegistrationMutation();
+    await testInFlightFinalDraftSurvivesWindowClose();
+    await testWindowCloseCleanupIsRegistrationScoped();
     await testCompletionPersistenceVerification();
     await testSubmittedRecordAnnouncementRequiresCanonicalPersistence();
     testSuiteDraftCarriesStructuredNotes();

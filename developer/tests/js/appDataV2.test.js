@@ -25,7 +25,25 @@ function harness() {
     class Kernel {
         async initialize() { this.state = 'ready'; this.backend = 'memory'; return this; }
         async read(key, options = {}) { const entry = catalog.get(key); const value = shared.docs.get(key) || null; const data = !value || value.state === 'cleared' ? entry.defaultValue() : value.data; return options.withMeta ? { data: clone(data), envelope: clone(value) } : clone(data); }
-        async mutate(changes, options = {}) { const op = String(options.operationId || `doc-${++shared.counter}`); const revisions = {}; for (const change of changes) { const old = shared.docs.get(change.logicalKey); if (change.expectedRevision !== undefined && Number(change.expectedRevision) !== Number(old && old.revision || 0)) throw new AppDataError('CONFLICT', 'document revision'); const revision = Number(old && old.revision || 0) + 1; shared.docs.set(change.logicalKey, envelope(change.logicalKey, change.data, change.state, revision, op)); revisions[change.logicalKey] = revision; } return { committed: true, operationId: op, revisions, derived: { status: 'ready', pending: [] }, warnings: [] }; }
+        async mutate(changes, options = {}) {
+            const op = String(options.operationId || `doc-${++shared.counter}`);
+            if (typeof options.commitGuard === 'function') {
+                let allowed = false;
+                try { allowed = options.commitGuard() === true; } catch (_) {
+                    throw new AppDataError('PRECONDITION_FAILED', 'commit guard threw');
+                }
+                if (!allowed) throw new AppDataError('PRECONDITION_FAILED', 'commit guard rejected mutation');
+            }
+            const revisions = {};
+            for (const change of changes) {
+                const old = shared.docs.get(change.logicalKey);
+                if (change.expectedRevision !== undefined && Number(change.expectedRevision) !== Number(old && old.revision || 0)) throw new AppDataError('CONFLICT', 'document revision');
+                const revision = Number(old && old.revision || 0) + 1;
+                shared.docs.set(change.logicalKey, envelope(change.logicalKey, change.data, change.state, revision, op));
+                revisions[change.logicalKey] = revision;
+            }
+            return { committed: true, operationId: op, revisions, derived: { status: 'ready', pending: [] }, warnings: [] };
+        }
         async journalNoop(options = {}) { return { committed: true, operationId: options.operationId || `noop-${++shared.counter}`, revisions: {}, derived: { status: 'ready', pending: [] }, warnings: [] }; }
         async readEntity(store, recordId, options = {}) { shared.reads.push(store); const row = shared.entities.get(store).get(String(recordId)) || null; return options.withMeta ? clone(row) : row && clone(row.data); }
         async listEntities(store, options = {}) { if (store !== 'practiceSummaries') throw new AppDataError('VALIDATION', 'details are not listable'); shared.lists.push(store); const rows = Array.from(shared.entities.get(store).values()); return options.withMeta ? clone(rows) : rows.map((row) => clone(row.data)); }
@@ -379,6 +397,30 @@ async function run() {
         (await app.recovery.listActiveSessions()).map((item) => item.id).sort(),
         Array.from({ length: 8 }, (_, index) => `active-${index}`)
     );
+    let rejectedDraftGuardCalls = 0;
+    const rejectedDraft = await app.recovery.saveDraft({
+        id: 'reading-draft:guarded',
+        examId: 'reading-guarded',
+        kind: 'reading_draft'
+    }, {
+        commitGuard() {
+            rejectedDraftGuardCalls += 1;
+            return false;
+        }
+    });
+    assert.strictEqual(rejectedDraft.committed, false);
+    assert.strictEqual(rejectedDraft.code, 'STALE_RECOVERY_WRITE');
+    assert.strictEqual(rejectedDraft.reason, 'COMMIT_GUARD_REJECTED');
+    assert.strictEqual(rejectedDraftGuardCalls, 1);
+    assert.strictEqual(await app.recovery.getDraft('reading-draft:guarded'), null, 'rejected commit guards must not write recovery drafts');
+    const acceptedDraft = await app.recovery.saveDraft({
+        id: 'reading-draft:guarded',
+        examId: 'reading-guarded',
+        kind: 'reading_draft'
+    }, { commitGuard: () => true });
+    assert.strictEqual(acceptedDraft.committed, true);
+    assert(await app.recovery.getDraft('reading-draft:guarded'));
+    await app.recovery.discardDraft('reading-draft:guarded');
     const casFirst = await app.recovery.saveActiveSession({
         id: 'active-cas',
         revision: 1,
@@ -399,6 +441,41 @@ async function run() {
         lastUpdate: 250,
         marker: 'non-advancing'
     }, { expectedEntityRevision: 2 }), { code: 'VALIDATION' });
+    for (const invalidRevision of [1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        const corruptId = `active-cas-invalid-${String(invalidRevision)}`;
+        const corruptSave = await app.recovery.saveActiveSession({
+            id: corruptId,
+            revision: invalidRevision,
+            marker: 'corrupt-revision'
+        });
+        assert.strictEqual(corruptSave.committed, true);
+        const repairedSave = await app.recovery.saveActiveSession({
+            id: corruptId,
+            revision: 1,
+            marker: 'repaired-revision'
+        }, { expectedEntityRevision: 0 });
+        assert.strictEqual(repairedSave.committed, true, 'invalid actual recovery revisions must normalize to zero');
+        assert.strictEqual((await app.recovery.getActiveSession(corruptId)).marker, 'repaired-revision');
+        await assert.rejects(() => app.recovery.saveActiveSession({
+            id: `${corruptId}-invalid-expected`,
+            revision: 1
+        }, { expectedEntityRevision: invalidRevision }), { code: 'VALIDATION' });
+        await app.recovery.discardActiveSession(corruptId, { expectedEntityRevision: 1 });
+    }
+    const maxSafeId = 'active-cas-max-safe';
+    assert.strictEqual((await app.recovery.saveActiveSession({
+        id: maxSafeId,
+        revision: Number.MAX_SAFE_INTEGER
+    }, { expectedEntityRevision: 0 })).committed, true);
+    assert.strictEqual((await app.recovery.discardActiveSession(maxSafeId, {
+        expectedEntityRevision: Number.MAX_SAFE_INTEGER
+    })).committed, true);
+    const delayedAfterMaxSafeDiscard = await app.recovery.saveActiveSession({
+        id: maxSafeId,
+        revision: 1
+    }, { expectedEntityRevision: 0 });
+    assert.strictEqual(delayedAfterMaxSafeDiscard.committed, false);
+    assert.strictEqual(delayedAfterMaxSafeDiscard.actualEntityRevision, Number.MAX_SAFE_INTEGER);
     const staleSave = await app.recovery.saveActiveSession({
         id: 'active-cas',
         revision: 99,

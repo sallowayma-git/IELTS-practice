@@ -6,6 +6,11 @@
     const multiSuiteRecoveryName = 'multi-suite-practice';
     const multiSuiteRecoverySchema = 'multi-suite-sessions-v2';
 
+    function normalizeRecoveryEntityRevision(value) {
+        const revision = Number(value);
+        return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+    }
+
     function getSuitePreferenceUtils() {
         return global.SuitePreferenceUtils || null;
     }
@@ -175,27 +180,95 @@
 
         _restorePersistentMultiSuiteSessions(items) {
             const rawItems = Array.isArray(items) ? items : [];
+            const durableEntityId = (item) => {
+                for (const field of ['id', 'sessionId', 'recordId']) {
+                    if (item && item[field] !== undefined && item[field] !== null && item[field] !== '') {
+                        return String(item[field]);
+                    }
+                }
+                return '';
+            };
+            const firstDurableItemsById = new Map();
+            // AppData CAS 对整个 active-session 集合使用 findIndex，必须先锁定原始顺序中的首项再筛 schema。
+            rawItems.forEach((item) => {
+                const id = durableEntityId(item);
+                if (id && !firstDurableItemsById.has(id)) firstDurableItemsById.set(id, item);
+            });
+            const allMultiSuiteItems = rawItems.filter((item) => item
+                && item.schema === multiSuiteRecoverySchema
+                && Number(item.version) === 2);
+            const multiSuiteItems = Array.from(firstDurableItemsById.values())
+                .filter((item) => item
+                    && item.schema === multiSuiteRecoverySchema
+                    && Number(item.version) === 2);
             // 所有 schema/version 匹配 multi-suite 的 durable 条目，无论有效与否，
             // 都代表该 base 曾有持久恢复；有效者覆盖 WAL，损坏者保留 WAL 回退。
             const durableBaseIds = new Set();
-            rawItems.forEach((item) => {
-                if (!item || item.schema !== multiSuiteRecoverySchema || Number(item.version) !== 2) return;
+            const durableRevisionById = new Map();
+            allMultiSuiteItems.forEach((item) => {
                 const baseExamId = String(item.sessions && item.sessions[0] && item.sessions[0].baseExamId || '').trim();
                 if (baseExamId) durableBaseIds.add(baseExamId);
             });
-            const candidates = rawItems
-                .filter((item) => item && item.schema === multiSuiteRecoverySchema && Number(item.version) === 2)
+            multiSuiteItems.forEach((item) => {
+                // CAS 所有权采用 AppData 的精确 active-session identity；base 相同并不代表是同一实体。
+                const id = durableEntityId(item);
+                durableRevisionById.set(id, normalizeRecoveryEntityRevision(item.revision));
+            });
+            const candidates = multiSuiteItems
                 .filter((item) => this._isValidMultiSuiteRecoverySnapshot(item) && item.sessions.length === 1)
+                .filter((item) => durableEntityId(item) === String(item.sessions[0].id ?? ''))
                 .sort((left, right) => {
                     const leftTime = Number(left.sessions[0].lastUpdate) || Date.parse(left.updatedAt || '') || 0;
                     const rightTime = Number(right.sessions[0].lastUpdate) || Date.parse(right.updatedAt || '') || 0;
                     return rightTime - leftTime;
                 });
+            const validDurableIds = new Set(candidates.map((candidate) => durableEntityId(candidate)));
             // durable 完全不存在（v2 枚举确认无此 base 的恢复）时丢弃 window-WAL；
             // durable 存在（无论有效损坏）时保留 WAL 回退：有效者随后覆盖，损坏者避免草稿丢失。
             if (this.multiSuiteSessionsMap instanceof Map) {
+                // Older window snapshots may contain whitespace aliases. Canonicalize
+                // both key and value before merging so one logical base cannot occupy
+                // two Map entries or miss a corrupt-durable preservation marker.
+                for (const [storedBaseExamId, session] of Array.from(this.multiSuiteSessionsMap.entries())) {
+                    if (!session || session._restoredFromWindowSession !== true) continue;
+                    const canonicalBaseExamId = String(session.baseExamId || storedBaseExamId || '').trim();
+                    if (!canonicalBaseExamId) {
+                        this.multiSuiteSessionsMap.delete(storedBaseExamId);
+                        continue;
+                    }
+                    session.baseExamId = canonicalBaseExamId;
+                    if (storedBaseExamId !== canonicalBaseExamId) {
+                        this.multiSuiteSessionsMap.delete(storedBaseExamId);
+                        if (!this.multiSuiteSessionsMap.has(canonicalBaseExamId)) {
+                            this.multiSuiteSessionsMap.set(canonicalBaseExamId, session);
+                        }
+                    }
+                }
                 for (const [baseExamId, session] of this.multiSuiteSessionsMap) {
-                    if (session && session._restoredFromWindowSession === true && !durableBaseIds.has(baseExamId)) {
+                    if (!session || session._restoredFromWindowSession !== true) continue;
+                    const sessionId = String(session.id ?? '');
+                    const firstOwner = firstDurableItemsById.get(sessionId);
+                    const firstOwnerIsMultiSuite = Boolean(firstOwner
+                        && firstOwner.schema === multiSuiteRecoverySchema
+                        && Number(firstOwner.version) === 2);
+                    // An AppData identity owned by another schema cannot safely be reused.
+                    if (firstOwner && !firstOwnerIsMultiSuite) {
+                        this.multiSuiteSessionsMap.delete(baseExamId);
+                        continue;
+                    }
+                    // A valid durable candidate is authoritative for its exact CAS id and
+                    // will be installed below; never retain a second WAL entry for that id.
+                    if (validDurableIds.has(sessionId)) {
+                        this.multiSuiteSessionsMap.delete(baseExamId);
+                        continue;
+                    }
+                    const durableRevision = durableRevisionById.get(sessionId);
+                    if (durableRevision != null) {
+                        session._lastDurableRecoveryRevision = durableRevision;
+                        session.revision = Math.max(durableRevision, normalizeRecoveryEntityRevision(session.revision));
+                    }
+                    const canonicalBaseExamId = String(session.baseExamId || baseExamId || '').trim();
+                    if (durableRevision == null && !durableBaseIds.has(canonicalBaseExamId)) {
                         this.multiSuiteSessionsMap.delete(baseExamId);
                     }
                 }
@@ -205,8 +278,12 @@
                 const session = this._cloneSuitePlainObject(candidate.sessions[0]);
                 const baseExamId = String(session.baseExamId || '').trim();
                 if (!baseExamId || restoredBaseIds.has(baseExamId)) return;
-                session._lastDurableRecoveryRevision = Math.max(0, Number(candidate.revision) || 0);
-                session.revision = Math.max(session._lastDurableRecoveryRevision, Number(session.revision) || 0);
+                session.baseExamId = baseExamId;
+                session._lastDurableRecoveryRevision = normalizeRecoveryEntityRevision(candidate.revision);
+                session.revision = Math.max(
+                    session._lastDurableRecoveryRevision,
+                    normalizeRecoveryEntityRevision(session.revision)
+                );
                 this.multiSuiteSessionsMap.set(baseExamId, session);
                 restoredBaseIds.add(baseExamId);
             });
@@ -2806,7 +2883,7 @@
                     : Number(session.expectedSuiteCount),
                 metadata: this._cloneSuitePlainObject(session.metadata || {}),
                 lastUpdate: Number(session.lastUpdate) || Date.now(),
-                revision: Math.max(0, Number(session.revision) || 0),
+                revision: normalizeRecoveryEntityRevision(session.revision),
                 finalizeOperationId: session.finalizeOperationId || null,
                 finalizeRecord: session.finalizeRecord
                     ? this._cloneSuitePlainObject(session.finalizeRecord)
@@ -2847,7 +2924,7 @@
                 || !recovery || typeof recovery.saveActiveSession !== 'function') {
                 return false;
             }
-            const revision = Math.max(0, Number(session.revision) || 0);
+            const revision = normalizeRecoveryEntityRevision(session.revision);
             const snapshot = {
                 schema: multiSuiteRecoverySchema,
                 version: 2,
@@ -2859,7 +2936,7 @@
             try {
                 const receipt = await recovery.saveActiveSession(snapshot, {
                     operationId: `multi-suite-recovery:${String(session.id)}:${revision}`,
-                    expectedEntityRevision: Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                    expectedEntityRevision: normalizeRecoveryEntityRevision(session._lastDurableRecoveryRevision)
                 });
                 if (!receipt || receipt.committed !== true) {
                     const error = new Error('Multi-suite recovery commit was not confirmed');
@@ -2891,6 +2968,8 @@
                 }
                 snapshot.sessions.forEach((storedSession) => {
                     const session = this._cloneSuitePlainObject(storedSession);
+                    session.baseExamId = String(session.baseExamId || '').trim();
+                    session.revision = normalizeRecoveryEntityRevision(session.revision);
                     session._restoredFromWindowSession = true;
                     this.multiSuiteSessionsMap.set(session.baseExamId, session);
                 });
@@ -3136,7 +3215,8 @@
                     return false;
                 }
                 console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
-                if (Number(session.revision) > Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                if (normalizeRecoveryEntityRevision(session.revision)
+                    > normalizeRecoveryEntityRevision(session._lastDurableRecoveryRevision)
                     && !await this._commitMultiSuiteRecovery(session)) {
                     return false;
                 }
@@ -3182,7 +3262,7 @@
                 session.expectedSuiteCount = this._detectExpectedSuiteCount(examId, suiteData);
                 console.log('[MultiSuite] 检测到预期套题数量:', session.expectedSuiteCount);
             }
-            session.revision = Math.max(0, Number(session.revision) || 0) + 1;
+            session.revision = normalizeRecoveryEntityRevision(session.revision) + 1;
             this._mirrorMultiSuiteSessionsToStorage();
             if (!await this._commitMultiSuiteRecovery(session)) {
                 return false;
@@ -3378,10 +3458,11 @@
                 session.finalizeRecord = this._cloneSuitePlainObject(frozenRecord);
                 session.lastUpdate = Date.now();
                 if (!hasFrozenRecord) {
-                    session.revision = Math.max(0, Number(session.revision) || 0) + 1;
+                    session.revision = normalizeRecoveryEntityRevision(session.revision) + 1;
                 }
                 this._mirrorMultiSuiteSessionsToStorage();
-                if (Number(session.revision) > Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                if (normalizeRecoveryEntityRevision(session.revision)
+                    > normalizeRecoveryEntityRevision(session._lastDurableRecoveryRevision)
                     && !await this._commitMultiSuiteRecovery(session)) {
                     throw new Error('Multi-suite finalize recovery was not committed');
                 }
@@ -3427,7 +3508,7 @@
                 if (recovery && typeof recovery.discardActiveSession === 'function') {
                     const receipt = await recovery.discardActiveSession(String(session.id), {
                         operationId: `multi-suite-recovery:${String(session.id)}:discard`,
-                        expectedEntityRevision: Math.max(0, Number(session._lastDurableRecoveryRevision) || 0)
+                        expectedEntityRevision: normalizeRecoveryEntityRevision(session._lastDurableRecoveryRevision)
                     });
                     if (!receipt || receipt.committed !== true) {
                         throw new Error('Multi-suite recovery discard was not confirmed');
@@ -3671,6 +3752,7 @@
                 && sequenceIds.every((examId) => resultIds.includes(examId))
             );
             if (!completeResults) {
+                delete session._suiteTeardownRegistrations;
                 const recoveryIndex = invalidSequenceIndex >= 0 ? invalidSequenceIndex : missingResultIndex;
                 const safeIndex = recoveryIndex >= 0
                     ? recoveryIndex
@@ -3686,6 +3768,12 @@
                 return false;
             }
 
+            if (!(session._suiteTeardownRegistrations instanceof Map)) {
+                // Freeze the exact suite-owned WindowProxy before finalization performs
+                // its first durable write. Receipt replay may delay teardown, but late
+                // messages must never replace the ownership snapshot in that interval.
+                session._suiteTeardownRegistrations = this._captureSuiteTeardownRegistrations(session);
+            }
             session.status = 'finalizing';
             session.currentIndex = session.sequence.length;
             session.activeExamId = null;
@@ -4684,6 +4772,124 @@
                 && currentGeneration === sessionGeneration;
         },
 
+        _captureSuiteTeardownRegistrations(session) {
+            const registrations = new Map();
+            const binding = session && session.windowBinding && typeof session.windowBinding === 'object'
+                ? session.windowBinding
+                : null;
+            const examId = String(binding && binding.examId || '').trim();
+            const expectedSessionId = String(binding && binding.expectedSessionId || '').trim();
+            const windowSessionToken = String(binding && binding.windowSessionToken || '').trim();
+            const sessionGeneration = Number(binding && binding.sessionGeneration);
+            if (!examId
+                || !expectedSessionId
+                || !windowSessionToken
+                || !Number.isInteger(sessionGeneration)
+                || sessionGeneration <= 0) {
+                return registrations;
+            }
+
+            const current = this.examWindows && this.examWindows.get(examId);
+            const suiteWindow = session.windowRef || (current && current.window) || null;
+            const exactCurrent = Boolean(
+                current
+                && current.window === suiteWindow
+                && String(current.suiteSessionId || '') === String(session.id || '')
+                && String(current.expectedSessionId || '') === expectedSessionId
+                && String(current.windowSessionToken || '') === windowSessionToken
+                && Number(current.sessionGeneration) === sessionGeneration
+            );
+            registrations.set(examId, {
+                windowInfo: exactCurrent ? current : null,
+                window: suiteWindow,
+                suiteSessionId: session.id,
+                expectedSessionId,
+                windowSessionToken,
+                sessionGeneration
+            });
+            return registrations;
+        },
+
+        _isSuiteTeardownRegistrationCurrent(examId, registration) {
+            if (typeof this._isExamSessionRegistrationCurrent === 'function') {
+                return this._isExamSessionRegistrationCurrent(examId, registration);
+            }
+            const current = this.examWindows && this.examWindows.get(examId);
+            return Boolean(
+                registration
+                && registration.windowInfo
+                && current === registration.windowInfo
+                && current.window === registration.window
+                && String(current.suiteSessionId || '') === String(registration.suiteSessionId || '')
+                && String(current.expectedSessionId || '') === String(registration.expectedSessionId || '')
+                && String(current.windowSessionToken || '') === String(registration.windowSessionToken || '')
+                && Number(current.sessionGeneration) === Number(registration.sessionGeneration)
+            );
+        },
+
+        _isSuiteWindowReassigned(targetWindow, registrations) {
+            if (!targetWindow) {
+                return false;
+            }
+            const remembered = this._reassignedExamWindowRegistrations
+                && this._reassignedExamWindowRegistrations.get(targetWindow);
+            if (remembered && remembered.size) {
+                for (const [examId, registration] of registrations || []) {
+                    const marker = typeof this._buildExamWindowRegistrationMarker === 'function'
+                        ? this._buildExamWindowRegistrationMarker(examId, registration)
+                        : JSON.stringify([
+                            String(examId || ''),
+                            String(registration && registration.suiteSessionId || ''),
+                            String(registration && registration.expectedSessionId || ''),
+                            String(registration && registration.windowSessionToken || ''),
+                            Number.isInteger(Number(registration && registration.sessionGeneration))
+                                ? Number(registration.sessionGeneration)
+                                : null
+                        ]);
+                    if (remembered.has(marker)) {
+                        return true;
+                    }
+                }
+            }
+            if (!this.examWindows) {
+                return false;
+            }
+            for (const [examId, current] of this.examWindows.entries()) {
+                if (!current || current.window !== targetWindow) {
+                    continue;
+                }
+                const registration = registrations && registrations.get(String(examId));
+                if (!registration || !this._isSuiteTeardownRegistrationCurrent(examId, registration)) {
+                    return true;
+                }
+            }
+            return false;
+        },
+
+        _clearSuiteWindowReassignmentMarkers(targetWindow, registrations) {
+            const remembered = targetWindow
+                && this._reassignedExamWindowRegistrations
+                && this._reassignedExamWindowRegistrations.get(targetWindow);
+            if (!remembered || !remembered.size) return;
+            for (const [examId, registration] of registrations || []) {
+                const marker = typeof this._buildExamWindowRegistrationMarker === 'function'
+                    ? this._buildExamWindowRegistrationMarker(examId, registration)
+                    : JSON.stringify([
+                        String(examId || ''),
+                        String(registration && registration.suiteSessionId || ''),
+                        String(registration && registration.expectedSessionId || ''),
+                        String(registration && registration.windowSessionToken || ''),
+                        Number.isInteger(Number(registration && registration.sessionGeneration))
+                            ? Number(registration.sessionGeneration)
+                            : null
+                    ]);
+                remembered.delete(marker);
+            }
+            if (!remembered.size) {
+                this._reassignedExamWindowRegistrations.delete(targetWindow);
+            }
+        },
+
         _isSuiteOperationOwner(session) {
             return Boolean(
                 session
@@ -4734,6 +4940,19 @@
                 return false;
             }
 
+            // Capture the completed suite's exact binding before teardown yields. A normal
+            // practice may reuse both the exam id and WindowProxy while persistence drains.
+            const teardownRegistrations = session._suiteTeardownRegistrations instanceof Map
+                ? session._suiteTeardownRegistrations
+                : this._captureSuiteTeardownRegistrations(session);
+            session._suiteTeardownRegistrations = teardownRegistrations;
+            const frozenWindowEntry = Array.from(teardownRegistrations.entries())
+                .find(([, registration]) => registration && registration.window);
+            const frozenWindowRegistration = frozenWindowEntry && frozenWindowEntry[1];
+            const suiteWindow = frozenWindowRegistration
+                ? frozenWindowRegistration.window
+                : session.windowRef;
+
             const writesWereBlocked = session._suiteRecoveryWritesBlocked === true;
             session._suiteTeardownInProgress = true;
             await this._freezeSuiteRecoveryWrites(session);
@@ -4754,12 +4973,29 @@
 
             this._clearSuiteHandshakes();
 
-            if (session.windowRef && !session.windowRef.closed && typeof session.windowRef.postMessage === 'function') {
+            const suiteWindowWasReassigned = this._isSuiteWindowReassigned(suiteWindow, teardownRegistrations);
+            const suiteWindowRegistrationIsCurrent = Boolean(
+                frozenWindowEntry
+                && this._isSuiteTeardownRegistrationCurrent(frozenWindowEntry[0], frozenWindowRegistration)
+            );
+            const currentFrozenExamRegistration = frozenWindowEntry && this.examWindows
+                ? this.examWindows.get(frozenWindowEntry[0])
+                : null;
+            const suiteWindowWasDisplaced = Boolean(
+                frozenWindowEntry
+                && currentFrozenExamRegistration
+                && currentFrozenExamRegistration !== frozenWindowRegistration.windowInfo
+                && currentFrozenExamRegistration.window
+                && currentFrozenExamRegistration.window !== suiteWindow
+            );
+            const suiteWindowCloseOwnershipProven = suiteWindowRegistrationIsCurrent || suiteWindowWasDisplaced;
+            if (!suiteWindowWasReassigned
+                && suiteWindowRegistrationIsCurrent
+                && suiteWindow
+                && !suiteWindow.closed
+                && typeof suiteWindow.postMessage === 'function') {
                 try {
-                    const activeExamId = session.activeExamId
-                        || (session.sequence && session.sequence[session.currentIndex || 0] && session.sequence[session.currentIndex || 0].examId)
-                        || '';
-                    this._postExamMessage(activeExamId, session.windowRef, 'SUITE_FORCE_CLOSE', {
+                    this._postExamMessage(frozenWindowEntry[0], suiteWindow, 'SUITE_FORCE_CLOSE', {
                         suiteSessionId: session.id || null
                     });
                 } catch (forceCloseError) {
@@ -4767,11 +5003,16 @@
                 }
             }
 
-            this._releaseSuiteWindowGuard(session.windowRef);
-            this._safelyCloseWindow(session.windowRef);
+            this._releaseSuiteWindowGuard(suiteWindow, session.id);
+            if (!suiteWindowWasReassigned && suiteWindowCloseOwnershipProven) {
+                this._safelyCloseWindow(suiteWindow);
+            }
+            this._clearSuiteWindowReassignmentMarkers(suiteWindow, teardownRegistrations);
 
-            if (session.sequence && session.sequence.length) {
-                const cleanupTasks = session.sequence.map(item => this.cleanupExamSession ? this.cleanupExamSession(item.examId) : Promise.resolve());
+            if (this.cleanupExamSession && teardownRegistrations.size) {
+                const cleanupTasks = Array.from(teardownRegistrations.entries()).map(([examId, expectedRegistration]) => (
+                    this.cleanupExamSession(examId, { expectedRegistration })
+                ));
                 await Promise.allSettled(cleanupTasks);
             }
 
@@ -4793,6 +5034,7 @@
 
             session.windowRef = null;
             session._suiteTeardownInProgress = false;
+            delete session._suiteTeardownRegistrations;
             delete session._suitePendingTerminalStatus;
             if (typeof this._clearSuiteHandshakes === 'function') {
                 this._clearSuiteHandshakes();
@@ -4816,6 +5058,13 @@
             const tornDown = await this._teardownSuiteSession(session);
             if (!tornDown) {
                 delete session._suitePendingTerminalStatus;
+                // A failed user abort leaves an active suite free to navigate or
+                // rebind before the next attempt. Re-capture that live ownership
+                // instead of reusing the failed attempt's stale window snapshot.
+                // Completed receipt teardown retries intentionally keep theirs.
+                if (session.status !== 'completed') {
+                    delete session._suiteTeardownRegistrations;
+                }
             }
             return tornDown;
         },
@@ -5101,7 +5350,7 @@
             }
         },
 
-        _releaseSuiteWindowGuard(targetWindow) {
+        _releaseSuiteWindowGuard(targetWindow, expectedSuiteSessionId = '') {
             if (!targetWindow) {
                 return;
             }
@@ -5120,6 +5369,11 @@
             }
 
             if (!guardInfo) {
+                return;
+            }
+            const normalizedExpectedSuiteSessionId = String(expectedSuiteSessionId || '').trim();
+            if (normalizedExpectedSuiteSessionId
+                && String(guardInfo.sessionId || '') !== normalizedExpectedSuiteSessionId) {
                 return;
             }
 

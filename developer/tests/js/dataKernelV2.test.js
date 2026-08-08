@@ -222,6 +222,42 @@ async function main() {
             const retry = await kernel.mutate([{ logicalKey: 'preferences.values', data: { theme: 'dark' }, expectedRevision: 0 }], { operationId: 'document-1' });
             let conflict = null;
             try { await kernel.mutate([{ logicalKey: 'preferences.values', data: { theme: 'light' }, expectedRevision: 1 }], { operationId: 'document-1' }); } catch (error) { conflict = error.code; }
+            let commitGuardCalls = 0;
+            let commitGuardCode = null;
+            try {
+                await kernel.mutate([{
+                    logicalKey: 'goals.items',
+                    data: [{ id: 'must-not-commit' }],
+                    expectedRevision: 0
+                }], {
+                    operationId: 'document-commit-guard-rejected',
+                    commitGuard() {
+                        commitGuardCalls += 1;
+                        return false;
+                    }
+                });
+            } catch (error) { commitGuardCode = error.code; }
+            const guardedDocumentAfterReject = await kernel.read('goals.items', { withMeta: true });
+            const statusAfterCommitGuardReject = kernel.status();
+            const acceptedGuardReceipt = await kernel.mutate([{
+                logicalKey: 'goals.items',
+                data: [{ id: 'committed' }],
+                expectedRevision: 0
+            }], {
+                operationId: 'document-commit-guard-accepted',
+                commitGuard: () => true
+            });
+            let replayGuardCode = null;
+            try {
+                await kernel.mutate([{
+                    logicalKey: 'goals.items',
+                    data: [{ id: 'committed' }],
+                    expectedRevision: 0
+                }], {
+                    operationId: 'document-commit-guard-accepted',
+                    commitGuard: () => false
+                });
+            } catch (error) { replayGuardCode = error.code; }
 
             const entities = await kernel.mutateEntities([
                 { type: 'upsert', store: 'practiceSummaries', recordId: 'r1', data: { title: 'Reading', score: 7 }, expectedRevision: 0 },
@@ -336,6 +372,12 @@ async function main() {
                 first,
                 retry,
                 conflict,
+                commitGuardCalls,
+                commitGuardCode,
+                guardedDocumentAfterReject,
+                statusAfterCommitGuardReject,
+                acceptedGuardReceipt,
+                replayGuardCode,
                 entities,
                 entityRetry,
                 intentFirst,
@@ -388,6 +430,13 @@ async function main() {
         assert.equal(result.remoteCommit.targets[0].logicalKey, 'settings.values');
         assert.deepEqual(result.retry, result.first);
         assert.equal(result.conflict, 'CONFLICT');
+        assert.equal(result.commitGuardCalls, 1, 'commit guard must run at the transaction write boundary');
+        assert.equal(result.commitGuardCode, 'PRECONDITION_FAILED');
+        assert.equal(result.guardedDocumentAfterReject.envelope, null, 'a rejected guard must not advance the document revision');
+        assert.deepEqual(result.guardedDocumentAfterReject.data, []);
+        assert.equal(result.statusAfterCommitGuardReject.state, 'ready', 'an expected guard rejection must not latch the backend');
+        assert.equal(result.acceptedGuardReceipt.committed, true);
+        assert.equal(result.replayGuardCode, 'PRECONDITION_FAILED', 'journal replay must not bypass the current commit guard');
         assert.deepEqual(result.entityRetry, result.entities);
         assert.deepEqual(result.intentReplay, result.intentFirst, 'semantic intent must replay after derived operations change');
         assert.equal(result.intentConflict, 'CONFLICT', 'different semantic intent must still conflict');

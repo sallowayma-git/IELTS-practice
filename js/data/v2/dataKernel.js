@@ -640,6 +640,7 @@
         }
         _documentSpec(changes, options) {
             if (!Array.isArray(changes) || (!changes.length && !options.allowNoop && !options.noop)) throw validation('DataKernel.mutate requires changes');
+            if (options.commitGuard !== undefined && typeof options.commitGuard !== 'function') throw validation('commitGuard must be a synchronous function');
             const opId = operationId(options.operationId); const seen = new Set();
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
@@ -658,16 +659,46 @@
             const fingerprint = options.intent === undefined
                 ? checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings })
                 : checksum({ mutationType: 'documents', intent: canonicalizeJson(options.intent, '$.intent'), warnings });
-            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
+            return {
+                operationId: opId,
+                changes: prepared,
+                pending: [],
+                warnings,
+                fingerprint,
+                commitGuard: typeof options.commitGuard === 'function' ? options.commitGuard : null,
+                stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey)))))
+            };
         }
         async mutate(changes, options = {}) {
             this._assertReady(); const spec = this._documentSpec(changes, options);
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
-                    const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
+                    const assertCommitGuard = () => {
+                        if (!spec.commitGuard) return;
+                        let allowed = false;
+                        try {
+                            allowed = spec.commitGuard() === true;
+                        } catch (error) {
+                            throw new AppDataError('PRECONDITION_FAILED', 'Mutation commit guard threw', {
+                                operationId: spec.operationId,
+                                cause: error && error.message
+                            });
+                        }
+                        if (!allowed) {
+                            throw new AppDataError('PRECONDITION_FAILED', 'Mutation commit guard rejected the write', {
+                                operationId: spec.operationId
+                            });
+                        }
+                    };
+                    const replay = journalResult(journal, spec);
+                    if (replay) {
+                        try { assertCommitGuard(); done(replay); } catch (error) { fail(error); }
+                        return;
+                    }
                     const reads = spec.changes.map((change) => ({ change, request: tx.objectStore(storeFor(change.logicalKey)).get(change.logicalKey) }));
                     let remaining = reads.length;
                     const finish = () => {
+                        assertCommitGuard();
                         const revisions = {};
                         for (const item of reads) {
                             const current = item.request.result ? item.request.result.envelope : null;
@@ -686,7 +717,7 @@
                 } }));
                 const targets = spec.changes.filter((change) => change.entry.owner !== 'backups' && (change.entry.classification === 'authoritative' || change.entry.classification === 'preference')).map((change) => ({ logicalKey: change.logicalKey, state: change.state, owner: change.entry.owner, classification: change.entry.classification }));
                 this._notifyCommitted(targets, receipt); return receipt;
-            } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
+            } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD' || error.code === 'PRECONDITION_FAILED')) throw error; throw this._latch(error); }
         }
         async journalNoop(options = {}) { return this.mutate([], Object.assign({}, options, { allowNoop: true })); }
         async readEntity(store, recordId, options = {}) {

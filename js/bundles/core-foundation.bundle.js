@@ -1409,6 +1409,7 @@
         }
         _documentSpec(changes, options) {
             if (!Array.isArray(changes) || (!changes.length && !options.allowNoop && !options.noop)) throw validation('DataKernel.mutate requires changes');
+            if (options.commitGuard !== undefined && typeof options.commitGuard !== 'function') throw validation('commitGuard must be a synchronous function');
             const opId = operationId(options.operationId); const seen = new Set();
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
@@ -1427,16 +1428,46 @@
             const fingerprint = options.intent === undefined
                 ? checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings })
                 : checksum({ mutationType: 'documents', intent: canonicalizeJson(options.intent, '$.intent'), warnings });
-            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
+            return {
+                operationId: opId,
+                changes: prepared,
+                pending: [],
+                warnings,
+                fingerprint,
+                commitGuard: typeof options.commitGuard === 'function' ? options.commitGuard : null,
+                stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey)))))
+            };
         }
         async mutate(changes, options = {}) {
             this._assertReady(); const spec = this._documentSpec(changes, options);
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
-                    const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
+                    const assertCommitGuard = () => {
+                        if (!spec.commitGuard) return;
+                        let allowed = false;
+                        try {
+                            allowed = spec.commitGuard() === true;
+                        } catch (error) {
+                            throw new AppDataError('PRECONDITION_FAILED', 'Mutation commit guard threw', {
+                                operationId: spec.operationId,
+                                cause: error && error.message
+                            });
+                        }
+                        if (!allowed) {
+                            throw new AppDataError('PRECONDITION_FAILED', 'Mutation commit guard rejected the write', {
+                                operationId: spec.operationId
+                            });
+                        }
+                    };
+                    const replay = journalResult(journal, spec);
+                    if (replay) {
+                        try { assertCommitGuard(); done(replay); } catch (error) { fail(error); }
+                        return;
+                    }
                     const reads = spec.changes.map((change) => ({ change, request: tx.objectStore(storeFor(change.logicalKey)).get(change.logicalKey) }));
                     let remaining = reads.length;
                     const finish = () => {
+                        assertCommitGuard();
                         const revisions = {};
                         for (const item of reads) {
                             const current = item.request.result ? item.request.result.envelope : null;
@@ -1455,7 +1486,7 @@
                 } }));
                 const targets = spec.changes.filter((change) => change.entry.owner !== 'backups' && (change.entry.classification === 'authoritative' || change.entry.classification === 'preference')).map((change) => ({ logicalKey: change.logicalKey, state: change.state, owner: change.entry.owner, classification: change.entry.classification }));
                 this._notifyCommitted(targets, receipt); return receipt;
-            } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
+            } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD' || error.code === 'PRECONDITION_FAILED')) throw error; throw this._latch(error); }
         }
         async journalNoop(options = {}) { return this.mutate([], Object.assign({}, options, { allowNoop: true })); }
         async readEntity(store, recordId, options = {}) {
@@ -2632,13 +2663,14 @@
     function expectedRecoveryEntityRevision(options = {}) {
         if (!Object.prototype.hasOwnProperty.call(options, 'expectedEntityRevision')) return null;
         const revision = Number(options.expectedEntityRevision);
-        if (!Number.isInteger(revision) || revision < 0) {
-            throw new AppDataError('VALIDATION', 'recovery expectedEntityRevision must be a non-negative integer');
+        if (!Number.isSafeInteger(revision) || revision < 0) {
+            throw new AppDataError('VALIDATION', 'recovery expectedEntityRevision must be a non-negative safe integer');
         }
         return revision;
     }
     function recoveryEntityRevision(item) {
-        return Math.max(0, Number(item && item.revision) || 0);
+        const revision = Number(item && item.revision);
+        return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
     }
     function recoveryExclusiveGroup(options = {}) {
         const group = String(options && options.exclusiveGroup || '').trim();
@@ -2657,8 +2689,20 @@
             actualEntityRevision: actualRevision
         };
     }
+    function guardedRecoveryReceipt(mutation) {
+        return {
+            committed: false,
+            stale: true,
+            code: 'STALE_RECOVERY_WRITE',
+            reason: 'COMMIT_GUARD_REJECTED',
+            operationId: mutation.operationId
+        };
+    }
     async function saveRecovery(kind, value, options = {}) {
         await ready; assertObject(value, `recovery ${kind} value must be an object`);
+        if (options.commitGuard !== undefined && typeof options.commitGuard !== 'function') {
+            throw new AppDataError('VALIDATION', 'recovery commitGuard must be a synchronous function');
+        }
         const mutation = optionsMutationOptions(options, `recovery-${kind}-save`, value);
         const expectedEntityRevision = expectedRecoveryEntityRevision(options);
         const exclusiveGroup = recoveryExclusiveGroup(options);
@@ -2669,35 +2713,46 @@
         if (expectedEntityRevision !== null && recoveryEntityRevision(item) <= expectedEntityRevision) {
             throw new AppDataError('VALIDATION', 'recovery entity revision must advance beyond expectedEntityRevision');
         }
-        const receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
-            const current = await readCollectionMeta(key);
-            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
-            if (expectedEntityRevision !== null) {
-                const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
-                if (actualEntityRevision !== expectedEntityRevision) {
-                    return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+        let receipt;
+        try {
+            receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+                const current = await readCollectionMeta(key);
+                const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+                if (expectedEntityRevision !== null) {
+                    const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
+                    if (actualEntityRevision !== expectedEntityRevision) {
+                        return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+                    }
                 }
-            }
-            if (exclusiveGroup) {
-                const conflicting = current.items.find((entry, entryIndex) => (
-                    entryIndex !== index
-                    && entry
-                    && entry._recoveryTombstone !== true
-                    && String(entry._recoveryExclusiveGroup || '') === exclusiveGroup
-                ));
-                if (conflicting) {
-                    return {
-                        committed: false,
-                        stale: true,
-                        code: 'RECOVERY_GROUP_CONFLICT',
-                        operationId: mutation.operationId,
-                        conflictingEntityId: idOf(conflicting, ['id', 'sessionId', 'recordId']) || null
-                    };
+                if (exclusiveGroup) {
+                    const conflicting = current.items.find((entry, entryIndex) => (
+                        entryIndex !== index
+                        && entry
+                        && entry._recoveryTombstone !== true
+                        && String(entry._recoveryExclusiveGroup || '') === exclusiveGroup
+                    ));
+                    if (conflicting) {
+                        return {
+                            committed: false,
+                            stale: true,
+                            code: 'RECOVERY_GROUP_CONFLICT',
+                            operationId: mutation.operationId,
+                            conflictingEntityId: idOf(conflicting, ['id', 'sessionId', 'recordId']) || null
+                        };
+                    }
                 }
+                if (index >= 0) current.items[index] = item; else current.items.push(item);
+                const kernelOptions = typeof options.commitGuard === 'function'
+                    ? Object.assign({}, mutation, { commitGuard: options.commitGuard })
+                    : mutation;
+                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], kernelOptions);
+            }));
+        } catch (error) {
+            if (error && error.code === 'PRECONDITION_FAILED') {
+                return guardedRecoveryReceipt(mutation);
             }
-            if (index >= 0) current.items[index] = item; else current.items.push(item);
-            return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
-        }));
+            throw error;
+        }
         if (!receipt || receipt.committed !== true) return receipt;
         const committedItem = (await kernel.read(key))
             .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
@@ -2718,7 +2773,7 @@
                 }
                 const tombstone = {
                     id: String(id),
-                    revision: actualEntityRevision + 1,
+                    revision: Math.min(Number.MAX_SAFE_INTEGER, actualEntityRevision + 1),
                     _recoveryTombstone: true,
                     discardedAt: Date.now(),
                     updatedAt: nowIso()

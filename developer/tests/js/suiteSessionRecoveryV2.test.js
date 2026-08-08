@@ -583,6 +583,14 @@ async function main() {
     let reboundTerminalExamId = '';
     finalApp._tryRebindSuiteWindow = async (_session, entry) => {
         reboundTerminalExamId = entry.examId;
+        finalApp.examWindows = new Map([[entry.examId, {
+            window: finalChild,
+            suiteSessionId: finalSession.id,
+            expectedSessionId: finalSession.windowBinding.expectedSessionId,
+            windowSessionToken: finalSession.windowBinding.windowSessionToken,
+            windowSessionTokenSessionId: finalSession.windowBinding.expectedSessionId,
+            sessionGeneration: finalSession.windowBinding.sessionGeneration
+        }]]);
         return { window: finalChild };
     };
     assert.equal(await finalApp.resumeSuitePractice(finalSession.id), true);

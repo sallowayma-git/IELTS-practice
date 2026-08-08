@@ -80,11 +80,11 @@ function createSandbox(options = {}) {
                 async listActiveSessions() {
                     return cloneValue(activeSessions);
                 },
-                async saveActiveSession(value) {
-                    recoveryControl.events.push({ type: 'save', value: cloneValue(value) });
+                async saveActiveSession(value, options = {}) {
+                    recoveryControl.events.push({ type: 'save', value: cloneValue(value), options: cloneValue(options) });
                     const behavior = recoveryControl.saveQueue.length ? recoveryControl.saveQueue.shift() : true;
                     if (behavior instanceof Error) throw behavior;
-                    if (typeof behavior === 'function') return behavior(value);
+                    if (typeof behavior === 'function') return behavior(value, options);
                     if (behavior === false) return { committed: false };
                     const id = String(value && value.id || '');
                     const index = activeSessions.findIndex((item) => String(item && item.id || '') === id);
@@ -2251,11 +2251,12 @@ async function run() {
         const corruptDurable = plain(session);
         corruptDurable.finalizeOperationId = 'practice-multisuite:wrong:id:finalize';
         corruptDurable.finalizeRecord = { id: 'stale-record' };
+        const corruptDurableRevision = Number(session.revision) + 7;
         await windowStub.AppData.recovery.saveActiveSession({
             schema: 'multi-suite-sessions-v2',
             version: 2,
             id: session.id,
-            revision: session.revision,
+            revision: corruptDurableRevision,
             sessions: [corruptDurable],
             updatedAt: Date.now()
         });
@@ -2267,6 +2268,367 @@ async function run() {
             restoredApp.multiSuiteSessionsMap.has('listening-multi-corrupt-durable'),
             '损坏 durable 存在时应保留 window-WAL 回退，不能把有效草稿抹掉'
         );
+        const restoredSession = restoredApp.multiSuiteSessionsMap.get('listening-multi-corrupt-durable');
+        assert.strictEqual(
+            restoredSession._lastDurableRecoveryRevision,
+            corruptDurableRevision,
+            '匹配的损坏 durable 必须把实体 revision 交给保留的 window-WAL'
+        );
+        assert.strictEqual(
+            restoredSession.revision,
+            corruptDurableRevision,
+            '保留的 window-WAL 必须追平 durable revision，确保下一次变更可以前进'
+        );
+        restoredSession.revision += 1;
+        recoveryControl.saveQueue.push(async (value, options) => {
+            const currentDurable = (await windowStub.AppData.recovery.listActiveSessions())
+                .find((item) => String(item && item.id || '') === String(value.id));
+            assert.strictEqual(Number(currentDurable && currentDurable.revision), corruptDurableRevision);
+            assert.strictEqual(
+                options.expectedEntityRevision,
+                corruptDurableRevision,
+                'WAL 恢复后的下一次保存必须从匹配的 durable revision 做 CAS'
+            );
+            assert.strictEqual(value.revision, corruptDurableRevision + 1);
+            return { committed: true, item: plain(value) };
+        });
+        assert.strictEqual(
+            await restoredApp._commitMultiSuiteRecovery(restoredSession),
+            true,
+            '继承 durable revision 后的 window-WAL 必须仍可继续保存'
+        );
+        assert.notStrictEqual(restoredSession._suiteRecoveryWritesBlocked, true);
+
+        for (const [label, invalidRevision] of [['fractional', 1.5], ['infinite', Infinity]]) {
+            const invalidRevisionWal = {
+                ...plain(restoredSession),
+                id: `multi-invalid-revision-${label}`,
+                baseExamId: `listening-multi-invalid-revision-${label}`,
+                revision: 2,
+                _restoredFromWindowSession: true
+            };
+            delete invalidRevisionWal._lastDurableRecoveryRevision;
+            restoredApp.multiSuiteSessionsMap.set(invalidRevisionWal.baseExamId, invalidRevisionWal);
+            const invalidRevisionDurable = plain(invalidRevisionWal);
+            delete invalidRevisionDurable._restoredFromWindowSession;
+            invalidRevisionDurable.finalizeOperationId = 'practice-multisuite:wrong:id:finalize';
+            invalidRevisionDurable.finalizeRecord = { id: 'stale-record' };
+            restoredApp._restorePersistentMultiSuiteSessions([{
+                schema: 'multi-suite-sessions-v2',
+                version: 2,
+                id: invalidRevisionWal.id,
+                revision: invalidRevision,
+                sessions: [invalidRevisionDurable]
+            }]);
+            const retainedWal = restoredApp.multiSuiteSessionsMap.get(invalidRevisionWal.baseExamId);
+            assert.strictEqual(retainedWal, invalidRevisionWal);
+            assert.strictEqual(retainedWal._lastDurableRecoveryRevision, 0);
+            assert.strictEqual(retainedWal.revision, 2);
+            retainedWal.revision += 1;
+            recoveryControl.saveQueue.push((value, options) => {
+                assert.strictEqual(options.expectedEntityRevision, 0);
+                assert.strictEqual(value.revision, 3);
+                assert.strictEqual(value.sessions[0].revision, 3);
+                return { committed: true, item: plain(value) };
+            });
+            assert.strictEqual(
+                await restoredApp._commitMultiSuiteRecovery(retainedWal),
+                true,
+                `${label} durable revision 必须按 0 修复且不得锁死有效 WAL`
+            );
+            assert.notStrictEqual(retainedWal._suiteRecoveryWritesBlocked, true);
+            restoredApp.multiSuiteSessionsMap.delete(invalidRevisionWal.baseExamId);
+        }
+
+        const duplicateIdWal = {
+            ...plain(restoredSession),
+            id: 'multi-duplicate-id',
+            baseExamId: 'listening-multi-duplicate-id',
+            revision: 1,
+            _restoredFromWindowSession: true
+        };
+        delete duplicateIdWal._lastDurableRecoveryRevision;
+        restoredApp.multiSuiteSessionsMap.set(duplicateIdWal.baseExamId, duplicateIdWal);
+        restoredApp._restorePersistentMultiSuiteSessions([3, 9].map((revision, index) => {
+            const candidateSession = {
+                ...plain(duplicateIdWal),
+                revision,
+                lastUpdate: 1000 + index
+            };
+            delete candidateSession._restoredFromWindowSession;
+            return {
+                schema: 'multi-suite-sessions-v2',
+                version: 2,
+                id: duplicateIdWal.id,
+                revision,
+                sessions: [candidateSession],
+                updatedAt: 1000 + index
+            };
+        }));
+        const restoredDuplicate = restoredApp.multiSuiteSessionsMap.get(duplicateIdWal.baseExamId);
+        assert.strictEqual(
+            restoredDuplicate._lastDurableRecoveryRevision,
+            3,
+            '重复 active-session id 必须继承 AppData CAS 实际使用的首项 revision'
+        );
+        assert.strictEqual(restoredDuplicate.revision, 3);
+        restoredApp.multiSuiteSessionsMap.delete(duplicateIdWal.baseExamId);
+
+        const durableOwnerId = 'multi-valid-durable-owner';
+        const conflictingWal = {
+            ...plain(restoredDuplicate),
+            id: durableOwnerId,
+            baseExamId: 'listening-valid-owner-window-wal',
+            revision: 2,
+            _restoredFromWindowSession: true
+        };
+        delete conflictingWal._lastDurableRecoveryRevision;
+        restoredApp.multiSuiteSessionsMap.set(conflictingWal.baseExamId, conflictingWal);
+        const durableOwnedSession = {
+            ...plain(restoredDuplicate),
+            id: durableOwnerId,
+            baseExamId: 'listening-valid-owner-durable',
+            revision: 6,
+            lastUpdate: Date.now() + 100
+        };
+        delete durableOwnedSession._restoredFromWindowSession;
+        delete durableOwnedSession._lastDurableRecoveryRevision;
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: durableOwnerId,
+            revision: 6,
+            sessions: [durableOwnedSession],
+            updatedAt: Date.now() + 100
+        }]);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.has(conflictingWal.baseExamId),
+            false,
+            'a valid durable entity must evict a different-base WAL that reuses its exact CAS id'
+        );
+        const restoredDurableOwner = restoredApp.multiSuiteSessionsMap.get(durableOwnedSession.baseExamId);
+        assert(restoredDurableOwner, 'the valid durable owner must still be restored');
+        assert.strictEqual(restoredDurableOwner.id, durableOwnerId);
+        assert.strictEqual(restoredDurableOwner._lastDurableRecoveryRevision, 6);
+        assert.strictEqual(
+            Array.from(restoredApp.multiSuiteSessionsMap.values())
+                .filter((item) => item && String(item.id || '') === durableOwnerId)
+                .length,
+            1,
+            'one AppData identity must produce only one live multi-suite session'
+        );
+        restoredApp.multiSuiteSessionsMap.delete(durableOwnedSession.baseExamId);
+
+        const canonicalOwnerId = 'multi-valid-durable-canonical-owner';
+        const canonicalBaseExamId = 'listening-valid-owner-canonical';
+        const rawWalBaseExamId = ` ${canonicalBaseExamId} `;
+        const nonCanonicalWal = {
+            ...plain(restoredDurableOwner),
+            id: canonicalOwnerId,
+            baseExamId: rawWalBaseExamId,
+            revision: 2,
+            _restoredFromWindowSession: true
+        };
+        delete nonCanonicalWal._lastDurableRecoveryRevision;
+        restoredApp.multiSuiteSessionsMap.set(rawWalBaseExamId, nonCanonicalWal);
+        const canonicalDurableSession = {
+            ...plain(restoredDurableOwner),
+            id: canonicalOwnerId,
+            baseExamId: rawWalBaseExamId,
+            revision: 7,
+            lastUpdate: Date.now() + 200
+        };
+        delete canonicalDurableSession._restoredFromWindowSession;
+        delete canonicalDurableSession._lastDurableRecoveryRevision;
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: canonicalOwnerId,
+            revision: 7,
+            sessions: [canonicalDurableSession],
+            updatedAt: Date.now() + 200
+        }]);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.has(rawWalBaseExamId),
+            false,
+            'a non-canonical WAL key must not coexist with the canonical durable base'
+        );
+        assert(restoredApp.multiSuiteSessionsMap.has(canonicalBaseExamId));
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.get(canonicalBaseExamId).baseExamId,
+            canonicalBaseExamId,
+            'durable restore must canonicalize both the Map key and the session property'
+        );
+        assert.strictEqual(
+            Array.from(restoredApp.multiSuiteSessionsMap.values())
+                .filter((item) => item && String(item.id || '') === canonicalOwnerId)
+                .length,
+            1,
+            'canonicalization differences must not duplicate one CAS identity'
+        );
+        restoredApp.multiSuiteSessionsMap.delete(canonicalBaseExamId);
+
+        const competingBaseExamId = 'listening-valid-owner-competing-id';
+        const competingWal = {
+            ...plain(restoredDurableOwner),
+            id: 'multi-window-owner-competing-id',
+            baseExamId: ` ${competingBaseExamId} `,
+            revision: 2,
+            _restoredFromWindowSession: true
+        };
+        delete competingWal._lastDurableRecoveryRevision;
+        restoredApp.multiSuiteSessionsMap.set(competingWal.baseExamId, competingWal);
+        const competingDurable = {
+            ...plain(restoredDurableOwner),
+            id: 'multi-durable-owner-competing-id',
+            baseExamId: competingBaseExamId,
+            revision: 8,
+            lastUpdate: Date.now() + 300
+        };
+        delete competingDurable._restoredFromWindowSession;
+        delete competingDurable._lastDurableRecoveryRevision;
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: competingDurable.id,
+            revision: 8,
+            sessions: [competingDurable],
+            updatedAt: Date.now() + 300
+        }]);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.get(competingBaseExamId).id,
+            competingDurable.id,
+            'a valid durable candidate must replace a canonical-base WAL even when their CAS ids differ'
+        );
+        assert.strictEqual(
+            Array.from(restoredApp.multiSuiteSessionsMap.values())
+                .some((item) => item && item.id === competingWal.id),
+            false,
+            'the whitespace WAL alias must not remain as a second live base entry'
+        );
+        restoredApp.multiSuiteSessionsMap.delete(competingBaseExamId);
+
+        const crossSchemaWal = {
+            id: 'cross-schema-duplicate-id',
+            baseExamId: 'listening-cross-schema-duplicate',
+            revision: 1,
+            _restoredFromWindowSession: true
+        };
+        restoredApp.multiSuiteSessionsMap.set(crossSchemaWal.baseExamId, crossSchemaWal);
+        const laterMultiSuiteItem = {
+            ...plain(restoredDuplicate),
+            id: crossSchemaWal.id,
+            baseExamId: crossSchemaWal.baseExamId,
+            revision: 9
+        };
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'suite-session-v2',
+            version: 2,
+            id: crossSchemaWal.id,
+            revision: 4
+        }, {
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: crossSchemaWal.id,
+            revision: 9,
+            sessions: [laterMultiSuiteItem]
+        }]);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.has(crossSchemaWal.baseExamId),
+            false,
+            '同 ID 的 AppData 首项属于其他 schema 时，后项 multi-suite 不得声明 CAS 所有权'
+        );
+
+        const shadowedMarkerId = 'cross-schema-shadowed-marker';
+        const shadowedMarkerBase = 'listening-cross-schema-shadowed-marker';
+        const safeFallbackWal = {
+            ...plain(restoredSession),
+            id: 'safe-fallback-wal-id',
+            baseExamId: ` ${shadowedMarkerBase} `,
+            revision: 2,
+            _restoredFromWindowSession: true
+        };
+        delete safeFallbackWal._lastDurableRecoveryRevision;
+        restoredApp.multiSuiteSessionsMap.set(safeFallbackWal.baseExamId, safeFallbackWal);
+        const corruptShadowedMarker = {
+            ...plain(restoredSession),
+            id: shadowedMarkerId,
+            baseExamId: shadowedMarkerBase,
+            revision: 9,
+            finalizeOperationId: 'practice-multisuite:wrong:id:finalize',
+            finalizeRecord: { id: 'stale-record' }
+        };
+        delete corruptShadowedMarker._restoredFromWindowSession;
+        delete corruptShadowedMarker._lastDurableRecoveryRevision;
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'suite-session-v2',
+            version: 2,
+            id: shadowedMarkerId,
+            revision: 4
+        }, {
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: shadowedMarkerId,
+            revision: 9,
+            sessions: [corruptShadowedMarker]
+        }]);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.get(shadowedMarkerBase),
+            safeFallbackWal,
+            'a corrupt durable base marker must retain a different safe WAL id even when its own id is shadowed'
+        );
+        assert.strictEqual(safeFallbackWal.baseExamId, shadowedMarkerBase);
+        assert.strictEqual(safeFallbackWal._lastDurableRecoveryRevision, undefined);
+        restoredApp.multiSuiteSessionsMap.delete(shadowedMarkerBase);
+
+        const exactIdWal = {
+            id: 'multi-exact-id',
+            baseExamId: 'listening-multi-exact-id',
+            revision: 2,
+            _restoredFromWindowSession: true
+        };
+        restoredApp.multiSuiteSessionsMap.set(exactIdWal.baseExamId, exactIdWal);
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: `${exactIdWal.id} `,
+            revision: 8,
+            sessions: [{ baseExamId: exactIdWal.baseExamId }]
+        }]);
+        assert.strictEqual(
+            exactIdWal._lastDurableRecoveryRevision,
+            undefined,
+            'active-session id 必须按 AppData 原始字符串精确匹配，不能 trim 后借用 revision'
+        );
+        assert.strictEqual(exactIdWal.revision, 2);
+        restoredApp.multiSuiteSessionsMap.delete(exactIdWal.baseExamId);
+
+        const mismatchedOwnerWal = {
+            ...plain(restoredSession),
+            id: 'multi-nested-owner',
+            baseExamId: 'listening-multi-mismatched-owner',
+            revision: 2,
+            _restoredFromWindowSession: true
+        };
+        delete mismatchedOwnerWal._lastDurableRecoveryRevision;
+        restoredApp.multiSuiteSessionsMap.set(mismatchedOwnerWal.baseExamId, mismatchedOwnerWal);
+        const mismatchedDurableSession = plain(mismatchedOwnerWal);
+        delete mismatchedDurableSession._restoredFromWindowSession;
+        restoredApp._restorePersistentMultiSuiteSessions([{
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            id: 'multi-top-level-owner',
+            revision: 11,
+            sessions: [mismatchedDurableSession]
+        }]);
+        assert.strictEqual(
+            restoredApp.multiSuiteSessionsMap.get(mismatchedOwnerWal.baseExamId),
+            mismatchedOwnerWal,
+            '顶层 CAS 实体与 nested session id 错配时不得覆盖同 base 的 window-WAL'
+        );
+        assert.strictEqual(mismatchedOwnerWal._lastDurableRecoveryRevision, undefined);
+        restoredApp.multiSuiteSessionsMap.delete(mismatchedOwnerWal.baseExamId);
+
         await windowStub.AppData.recovery.discardActiveSession(session.id);
         restoredApp.multiSuiteSessionsMap.delete('listening-multi-corrupt-durable');
     }
@@ -2408,8 +2770,25 @@ async function run() {
         session.status = 'completed';
         session.windowRef.close = function close() { this.closed = true; };
         const suiteWindow = session.windowRef;
+        const overlapExamId = session.activeExamId;
+        const overlapInfo = {
+            window: suiteWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'teardown-overlap-attempt',
+            windowSessionToken: 'teardown-overlap-token',
+            windowSessionTokenSessionId: 'teardown-overlap-attempt',
+            sessionGeneration: 3
+        };
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[overlapExamId, overlapInfo]]);
+        app.messageHandlers = new Map([[overlapExamId, () => {}]]);
+        session.windowBinding = {
+            examId: overlapExamId,
+            expectedSessionId: overlapInfo.expectedSessionId,
+            windowSessionToken: overlapInfo.windowSessionToken,
+            sessionGeneration: overlapInfo.sessionGeneration
+        };
 
         const scheduledTimers = [];
         const originalSetTimeout = sandbox.setTimeout;
@@ -2437,12 +2816,20 @@ async function run() {
 
         try {
             assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            session.activeExamId = session.sequence[1].examId;
             const firstTeardown = app._teardownSuiteSession(session);
             await discardStarted;
+            const frozenRegistrations = session._suiteTeardownRegistrations;
+            assert(frozenRegistrations && typeof frozenRegistrations.get === 'function' && frozenRegistrations.size === 1);
             const overlappingTimer = scheduledTimers[0].run();
             releaseDiscard(false);
             assert.strictEqual(await firstTeardown, false);
             await overlappingTimer;
+            assert.strictEqual(
+                session._suiteTeardownRegistrations,
+                frozenRegistrations,
+                'completed teardown retry must retain the original exact registration snapshot'
+            );
             assert.strictEqual(scheduledTimers.length, 2, '失败的重叠 teardown 必须重新挂起 fallback timer');
             assert.strictEqual(session.submitReceiptTeardownTimer, scheduledTimers[1]);
             await scheduledTimers[1].run();
@@ -2454,6 +2841,12 @@ async function run() {
         assert.strictEqual(discardAttempts, 2, 'fallback timer 必须在瞬时失败后重新尝试 discard');
         assert.strictEqual(app.currentSuiteSession, null, '重试成功后必须完成 teardown');
         assert.strictEqual(suiteWindow.closed, true, '重试成功后必须关闭已完成题页');
+        assert.strictEqual(
+            app.examWindows.has(session.sequence[1].examId),
+            false,
+            'late activeExamId mutation must not create a ghost registration during force-close'
+        );
+        assert.strictEqual(session._suiteTeardownRegistrations, undefined);
     }
 
     // Case 3.1: 如果最后一篇已有导航快照，最终提交仍应覆盖并 finalize
@@ -3419,6 +3812,703 @@ async function run() {
         );
         assert.strictEqual(restartCount, 1, 'reset 后必须重启握手');
         assert(statuses.some(item => item.examId === examId && item.status === 'in-progress'), 'reset 后题源状态应回到 in-progress');
+    }
+
+    // Finalization must freeze teardown ownership before its first durable await.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_finalize_freezes_owner');
+        const examId = session.activeExamId;
+        const suiteWindow = session.windowRef;
+        suiteWindow.close = function close() { this.closed = true; };
+        session._suiteGeneration = 1;
+        session.results = session.sequence.map((entry, index) => ({
+            examId: entry.examId,
+            title: entry.exam.title,
+            category: entry.exam.category,
+            duration: 10,
+            answers: { q1: String.fromCharCode(65 + index) },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            rawData: {}
+        }));
+        const suiteInfo = {
+            window: suiteWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'suite-finalize-owner-attempt',
+            windowSessionToken: 'suite-finalize-owner-token',
+            windowSessionTokenSessionId: 'suite-finalize-owner-attempt',
+            sessionGeneration: 7
+        };
+        session.windowBinding = {
+            examId,
+            expectedSessionId: suiteInfo.expectedSessionId,
+            windowSessionToken: suiteInfo.windowSessionToken,
+            sessionGeneration: suiteInfo.sessionGeneration
+        };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[examId, suiteInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+
+        let markFinalizeWriteEntered;
+        let releaseFinalizeWrite;
+        const finalizeWriteEntered = new Promise((resolve) => { markFinalizeWriteEntered = resolve; });
+        const finalizeWriteGate = new Promise((resolve) => { releaseFinalizeWrite = resolve; });
+        let recoveryWrites = 0;
+        app._commitSuiteRecovery = async () => {
+            recoveryWrites += 1;
+            if (recoveryWrites === 1) {
+                markFinalizeWriteEntered();
+                await finalizeWriteGate;
+            }
+            return true;
+        };
+        app._saveSuitePracticeRecord = async () => {};
+        app._updatePracticeRecordsState = async () => {};
+        app._discardPersistentSuiteRecovery = async () => true;
+
+        const finalizing = app.finalizeSuiteRecord(session, { deferTeardown: true });
+        await finalizeWriteEntered;
+        const frozenRegistrations = session._suiteTeardownRegistrations;
+        assert(frozenRegistrations && typeof frozenRegistrations.get === 'function');
+        assert.strictEqual(frozenRegistrations.get(examId).windowInfo, suiteInfo);
+
+        const normalWindow = createStubWindow('normal-after-finalize-start');
+        normalWindow.close = function close() { this.closed = true; };
+        const normalInfo = {
+            window: normalWindow,
+            suiteSessionId: null,
+            expectedSessionId: 'normal-after-finalize-attempt',
+            windowSessionToken: 'normal-after-finalize-token',
+            windowSessionTokenSessionId: 'normal-after-finalize-attempt',
+            sessionGeneration: 8
+        };
+        // Simulate a late binding mutation while the first finalize write is in flight.
+        session.windowRef = normalWindow;
+        session.windowBinding = {
+            examId,
+            expectedSessionId: normalInfo.expectedSessionId,
+            windowSessionToken: normalInfo.windowSessionToken,
+            sessionGeneration: normalInfo.sessionGeneration
+        };
+        app.examWindows.set(examId, normalInfo);
+        const normalHandler = () => {};
+        app.messageHandlers.set(examId, normalHandler);
+        releaseFinalizeWrite();
+
+        assert.strictEqual(await finalizing, true);
+        assert.strictEqual(session._suiteTeardownRegistrations, frozenRegistrations);
+        let scheduledTeardown = null;
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        sandbox.setTimeout = (callback) => {
+            scheduledTeardown = callback;
+            return { unref() {} };
+        };
+        sandbox.clearTimeout = () => {};
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            assert.strictEqual(session._suiteTeardownRegistrations, frozenRegistrations, 'delayed scheduling must reuse the pre-finalize snapshot');
+            await scheduledTeardown();
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+        }
+        assert.strictEqual(suiteWindow.closed, true, 'teardown must close the originally frozen suite window');
+        assert.strictEqual(normalWindow.closed, false, 'teardown must not close a late normal replacement');
+        assert.strictEqual(app.examWindows.get(examId), normalInfo);
+        assert.strictEqual(app.messageHandlers.get(examId), normalHandler);
+    }
+
+    // Reusing a suite WindowProxy must invalidate its old owner before openExam's first await.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_reuse_navigation_gap');
+        const examId = session.activeExamId;
+        const sharedWindow = session.windowRef;
+        sharedWindow.close = function close() { this.closed = true; };
+        session.status = 'completed';
+        session._suiteGeneration = 1;
+        const suiteInfo = {
+            window: sharedWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'suite-reuse-gap-attempt',
+            windowSessionToken: 'suite-reuse-gap-token',
+            windowSessionTokenSessionId: 'suite-reuse-gap-attempt',
+            expectedUrl: 'http://localhost/suite-old.html',
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false,
+            sessionGeneration: 5
+        };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[examId, suiteInfo]]);
+        app.setupExamWindowCommunication(sharedWindow, examId, {
+            id: examId,
+            title: 'Suite reuse gap',
+            type: 'reading'
+        });
+        const oldMessageHandler = app.messageHandlers.get(examId);
+        const oldHandshakeTimer = setInterval(() => {}, 60000);
+        app._handshakeTimers = new Map([[examId, oldHandshakeTimer]]);
+        session.windowBinding = {
+            examId,
+            expectedSessionId: suiteInfo.expectedSessionId,
+            windowSessionToken: suiteInfo.windowSessionToken,
+            sessionGeneration: suiteInfo.sessionGeneration
+        };
+        app._ensureSuiteWindowGuard(session, sharedWindow);
+        await windowStub.AppData.recovery.saveActiveSession({ id: session.id, status: 'completed' });
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: `active-session:${suiteInfo.expectedSessionId}`,
+            examId,
+            sessionId: suiteInfo.expectedSessionId,
+            status: 'started'
+        });
+
+        let scheduledTeardown = null;
+        let markReuseCleanupEntered;
+        let releaseReuseCleanup;
+        const reuseCleanupEntered = new Promise((resolve) => { markReuseCleanupEntered = resolve; });
+        const reuseCleanupGate = new Promise((resolve) => { releaseReuseCleanup = resolve; });
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        const originalCleanupReused = app._cleanupReusedWindowSessions;
+        const originalCaptureLibrary = app._captureLaunchLibraryConfigurationId;
+        const originalStartPractice = app.startPracticeSession;
+        const originalInject = app.injectDataCollectionScript;
+        const originalGuard = app._guardExamWindowContent;
+        const originalResolveReading = app.resolveReadingLaunchDescriptor;
+        sandbox.setTimeout = (callback) => {
+            if (!scheduledTeardown) scheduledTeardown = callback;
+            return { unref() {} };
+        };
+        sandbox.clearTimeout = () => {};
+        app._cleanupReusedWindowSessions = async () => {
+            markReuseCleanupEntered();
+            await reuseCleanupGate;
+            return [];
+        };
+        app._captureLaunchLibraryConfigurationId = async () => null;
+        app.startPracticeSession = async () => true;
+        app.injectDataCollectionScript = () => {};
+        app._guardExamWindowContent = (targetWindow) => targetWindow;
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: 'http://localhost/normal-reuse-gap.html'
+        });
+
+        let normalInfo = null;
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            const opening = app.openExam(examId, {
+                examDefinition: { id: examId, title: 'Normal reuse gap', type: 'reading', hasHtml: true },
+                target: 'tab',
+                reuseWindow: sharedWindow,
+                practiceMode: 'single'
+            });
+            await reuseCleanupEntered;
+            const pendingInfo = app.examWindows.get(examId);
+            assert.notStrictEqual(pendingInfo, suiteInfo, 'navigation must synchronously replace the old registration');
+            assert.strictEqual(pendingInfo.window, sharedWindow);
+            assert.strictEqual(pendingInfo.suiteSessionId, null);
+            assert(pendingInfo.sessionGeneration > suiteInfo.sessionGeneration);
+            assert.strictEqual(pendingInfo.handshakeDeferred, true);
+            assert.strictEqual(app.messageHandlers.has(examId), false, 'the navigated-away document handler must be detached synchronously');
+            assert.strictEqual(app._handshakeTimers.has(examId), false, 'the old handshake retry must be stopped synchronously');
+            const messageCountBeforePendingRequest = sharedWindow._messages.length;
+            await oldMessageHandler({
+                source: sharedWindow,
+                origin: 'http://localhost',
+                data: { type: 'REQUEST_INIT', source: 'practice_page', data: { examId } }
+            });
+            assert.strictEqual(
+                sharedWindow._messages.length,
+                messageCountBeforePendingRequest,
+                'a detached handler must fail closed while reassignment is pending'
+            );
+
+            await scheduledTeardown();
+            assert.strictEqual(sharedWindow.closed, false, 'teardown must not close the already navigated normal page');
+            assert.strictEqual(
+                sharedWindow._messages.some(message => message && message.type === 'SUITE_FORCE_CLOSE'),
+                false,
+                'the pending normal reuse must not receive a suite force-close envelope'
+            );
+
+            releaseReuseCleanup();
+            assert.strictEqual(await opening, sharedWindow);
+            normalInfo = app.examWindows.get(examId);
+            assert.strictEqual(normalInfo.window, sharedWindow);
+            assert.strictEqual(normalInfo.suiteSessionId, null);
+            assert.strictEqual(normalInfo.status, 'active');
+        } finally {
+            releaseReuseCleanup && releaseReuseCleanup();
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+            app._cleanupReusedWindowSessions = originalCleanupReused;
+            app._captureLaunchLibraryConfigurationId = originalCaptureLibrary;
+            app.startPracticeSession = originalStartPractice;
+            app.injectDataCollectionScript = originalInject;
+            app._guardExamWindowContent = originalGuard;
+            app.resolveReadingLaunchDescriptor = originalResolveReading;
+        }
+
+        const activeAfterTeardown = await windowStub.AppData.recovery.listActiveSessions();
+        assert.strictEqual(app.currentSuiteSession, null);
+        assert.strictEqual(
+            activeAfterTeardown.some(item => item && item.sessionId === suiteInfo.expectedSessionId),
+            false,
+            'the old suite attempt recovery must still be removed during the navigation gap'
+        );
+        if (normalInfo && normalInfo.closeMonitor) clearInterval(normalInfo.closeMonitor);
+        if (app._handshakeTimers) {
+            for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+            app._handshakeTimers.clear();
+        }
+        app.examWindows.delete(examId);
+        app.messageHandlers.delete(examId);
+    }
+
+    // A raw PDF reuse has no later managed handshake; it must fully detach the old owner.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_pdf_reuse_gap');
+        const examId = session.activeExamId;
+        const sharedWindow = session.windowRef;
+        sharedWindow.close = function close() { this.closed = true; };
+        session.status = 'completed';
+        session._suiteGeneration = 1;
+        const closeMonitorToken = setInterval(() => {}, 60000);
+        const handshakeTimerToken = setInterval(() => {}, 60000);
+        const suiteInfo = {
+            window: sharedWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'suite-pdf-owner-attempt',
+            windowSessionToken: 'suite-pdf-owner-token',
+            windowSessionTokenSessionId: 'suite-pdf-owner-attempt',
+            sessionGeneration: 3,
+            closeMonitor: closeMonitorToken
+        };
+        session.windowBinding = {
+            examId,
+            expectedSessionId: suiteInfo.expectedSessionId,
+            windowSessionToken: suiteInfo.windowSessionToken,
+            sessionGeneration: suiteInfo.sessionGeneration
+        };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[examId, suiteInfo]]);
+        const listenerCountBeforeHandler = windowStub.__listenerCount('message');
+        app.setupExamWindowCommunication(sharedWindow, examId, {
+            id: examId,
+            title: 'Suite PDF reuse',
+            type: 'reading'
+        });
+        assert.strictEqual(windowStub.__listenerCount('message'), listenerCountBeforeHandler + 1);
+        app._handshakeTimers = new Map([[examId, handshakeTimerToken]]);
+        app._discardPersistentSuiteRecovery = async () => true;
+
+        let scheduledTeardown = null;
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        const originalClearInterval = sandbox.clearInterval;
+        const clearedIntervals = new Set();
+        sandbox.setTimeout = (callback) => {
+            scheduledTeardown = callback;
+            return { unref() {} };
+        };
+        sandbox.clearTimeout = () => {};
+        sandbox.clearInterval = (timer) => {
+            clearedIntervals.add(timer);
+            originalClearInterval(timer);
+        };
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            assert.strictEqual(
+                app._openPdfWindow({ id: examId, title: 'Normal PDF' }, 'http://localhost/normal.pdf', {
+                    reuseWindow: sharedWindow,
+                    target: 'tab'
+                }),
+                sharedWindow
+            );
+            assert.strictEqual(sharedWindow.location.href, 'http://localhost/normal.pdf');
+            assert.strictEqual(app.examWindows.has(examId), false, 'unmanaged PDF reuse must not leave a provisional registration');
+            assert.strictEqual(app.messageHandlers.has(examId), false);
+            assert.strictEqual(app._handshakeTimers.has(examId), false);
+            assert.strictEqual(windowStub.__listenerCount('message'), listenerCountBeforeHandler, 'PDF reuse must detach the real old message listener');
+            assert(clearedIntervals.has(closeMonitorToken), 'PDF reuse must stop the old close monitor');
+            assert(clearedIntervals.has(handshakeTimerToken), 'PDF reuse must stop the old handshake timer');
+
+            // A later managed launch may occupy the same exam id on another window.
+            // The invalidated PDF WindowProxy must remain remembered independently
+            // of the current examWindows entry until the frozen teardown completes.
+            const normalWindow = createStubWindow('normal-after-pdf-reuse');
+            normalWindow.close = function close() { this.closed = true; };
+            const normalInfo = {
+                window: normalWindow,
+                suiteSessionId: null,
+                expectedSessionId: 'normal-after-pdf-attempt',
+                windowSessionToken: 'normal-after-pdf-token',
+                windowSessionTokenSessionId: 'normal-after-pdf-attempt',
+                sessionGeneration: 4
+            };
+            const normalHandler = () => {};
+            app.examWindows.set(examId, normalInfo);
+            app.messageHandlers.set(examId, normalHandler);
+
+            await scheduledTeardown();
+            assert.strictEqual(sharedWindow.closed, false, 'delayed teardown must not close the already navigated PDF');
+            assert.strictEqual(normalWindow.closed, false);
+            assert.strictEqual(app.examWindows.get(examId), normalInfo);
+            assert.strictEqual(app.messageHandlers.get(examId), normalHandler);
+            assert.strictEqual(
+                sharedWindow._messages.some(message => message && message.type === 'SUITE_FORCE_CLOSE'),
+                false,
+                'the PDF replacement must not receive a suite force-close envelope'
+            );
+            assert.strictEqual(app.currentSuiteSession, null);
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+            sandbox.clearInterval = originalClearInterval;
+            if (suiteInfo.closeMonitor) clearInterval(suiteInfo.closeMonitor);
+            if (app._handshakeTimers) {
+                for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+                app._handshakeTimers.clear();
+            }
+        }
+    }
+
+    // Delayed completed-suite teardown only owns its exact registration and recovery.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_delayed_exact_owner');
+        const examId = session.activeExamId;
+        const sharedWindow = session.windowRef;
+        sharedWindow.close = function close() { this.closed = true; };
+        session.status = 'completed';
+        session._suiteGeneration = 1;
+        const suiteInfo = {
+            window: sharedWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'suite-owned-attempt',
+            windowSessionToken: 'suite-owned-token',
+            sessionGeneration: 4
+        };
+        const suiteHandler = () => {};
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[examId, suiteInfo]]);
+        app.messageHandlers = new Map([[examId, suiteHandler]]);
+        session.windowBinding = {
+            examId,
+            expectedSessionId: suiteInfo.expectedSessionId,
+            windowSessionToken: suiteInfo.windowSessionToken,
+            sessionGeneration: suiteInfo.sessionGeneration
+        };
+        app._ensureSuiteWindowGuard(session, sharedWindow);
+        assert.strictEqual(sharedWindow.__IELTS_SUITE_PARENT_GUARD__.sessionId, session.id);
+        app._mirrorSessionToStorage(session);
+        await windowStub.AppData.recovery.saveActiveSession({ id: session.id, status: 'completed' });
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: `active-session:${suiteInfo.expectedSessionId}`,
+            examId,
+            sessionId: suiteInfo.expectedSessionId,
+            status: 'started'
+        });
+
+        let scheduledTeardown = null;
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        sandbox.setTimeout = (callback) => {
+            scheduledTeardown = callback;
+            return { unref() {} };
+        };
+        sandbox.clearTimeout = () => {};
+
+        const normalInfo = {
+            window: sharedWindow,
+            // A completed suite may still cause normal initialization to inherit this tag.
+            suiteSessionId: session.id,
+            expectedSessionId: 'normal-reused-attempt',
+            windowSessionToken: 'normal-reused-token',
+            sessionGeneration: suiteInfo.sessionGeneration + 1
+        };
+        const lateWindowRef = createStubWindow('late-normal-window-ref');
+        lateWindowRef.close = function close() { this.closed = true; };
+        const normalHandler = () => {};
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            assert.strictEqual(typeof scheduledTeardown, 'function');
+
+            // The normal practice reuses the same exam id and WindowProxy before the delay expires.
+            app.examWindows.set(examId, normalInfo);
+            app.messageHandlers.set(examId, normalHandler);
+            // Even if a late protocol message mutates the live binding, the scheduled
+            // teardown must retain the completed suite's pre-delay ownership snapshot.
+            session.windowBinding = {
+                examId,
+                expectedSessionId: normalInfo.expectedSessionId,
+                windowSessionToken: normalInfo.windowSessionToken,
+                sessionGeneration: normalInfo.sessionGeneration
+            };
+            session.windowRef = lateWindowRef;
+            await windowStub.AppData.recovery.saveActiveSession({
+                id: `active-session:${normalInfo.expectedSessionId}`,
+                examId,
+                sessionId: normalInfo.expectedSessionId,
+                status: 'started'
+            });
+
+            await scheduledTeardown();
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+        }
+
+        const activeAfterTeardown = await windowStub.AppData.recovery.listActiveSessions();
+        assert.strictEqual(app.currentSuiteSession, null, 'completed suite teardown should still finish');
+        assert.strictEqual(app.suiteExamMap.has(examId), false, 'completed suite routing should be cleared');
+        assert.strictEqual(windowSessionStore.has('simulation'), false, 'completed suite snapshot should be cleared');
+        assert.strictEqual(sharedWindow.closed, false, 'reused normal-practice window must stay open');
+        assert.strictEqual(lateWindowRef.closed, false, 'live windowRef changes must not redirect frozen teardown at another window');
+        assert.strictEqual(
+            sharedWindow.__IELTS_SUITE_PARENT_GUARD__,
+            undefined,
+            'the completed suite guard should be released from the reused window'
+        );
+        assert.strictEqual(
+            sharedWindow._messages.some((message) => message && message.type === 'SUITE_FORCE_CLOSE'),
+            false,
+            'reused normal-practice window must not receive SUITE_FORCE_CLOSE'
+        );
+        assert.strictEqual(app.examWindows.get(examId), normalInfo, 'new registration must survive stale teardown');
+        assert.strictEqual(app.messageHandlers.get(examId), normalHandler, 'new message handler must survive stale teardown');
+        assert.strictEqual(
+            activeAfterTeardown.some((item) => item && item.sessionId === suiteInfo.expectedSessionId),
+            false,
+            'the completed suite attempt recovery should be removed by exact session id'
+        );
+        assert.strictEqual(
+            activeAfterTeardown.some((item) => item && item.sessionId === normalInfo.expectedSessionId),
+            true,
+            'the reused normal-practice recovery must survive stale teardown'
+        );
+
+        app.examWindows.delete(examId);
+        app.messageHandlers.delete(examId);
+        await windowStub.AppData.recovery.discardActiveSession(`active-session:${normalInfo.expectedSessionId}`);
+    }
+
+    // A different-window normal registration must survive while the frozen suite window closes.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_delayed_distinct_window');
+        const examId = session.activeExamId;
+        const suiteWindow = session.windowRef;
+        suiteWindow.close = function close() { this.closed = true; };
+        session.status = 'completed';
+        session._suiteGeneration = 1;
+        const suiteInfo = {
+            window: suiteWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'suite-distinct-attempt',
+            windowSessionToken: 'suite-distinct-token',
+            windowSessionTokenSessionId: 'suite-distinct-attempt',
+            sessionGeneration: 7
+        };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[examId, suiteInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        session.windowBinding = {
+            examId,
+            expectedSessionId: suiteInfo.expectedSessionId,
+            windowSessionToken: suiteInfo.windowSessionToken,
+            sessionGeneration: suiteInfo.sessionGeneration
+        };
+        app._ensureSuiteWindowGuard(session, suiteWindow);
+        await windowStub.AppData.recovery.saveActiveSession({ id: session.id, status: 'completed' });
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: `active-session:${suiteInfo.expectedSessionId}`,
+            examId,
+            sessionId: suiteInfo.expectedSessionId,
+            status: 'started'
+        });
+
+        let scheduledTeardown = null;
+        const originalSetTimeout = sandbox.setTimeout;
+        const originalClearTimeout = sandbox.clearTimeout;
+        sandbox.setTimeout = (callback) => {
+            scheduledTeardown = callback;
+            return { unref() {} };
+        };
+        sandbox.clearTimeout = () => {};
+
+        const normalWindow = createStubWindow('distinct-normal-window');
+        normalWindow.close = function close() { this.closed = true; };
+        const normalInfo = {
+            window: normalWindow,
+            suiteSessionId: null,
+            expectedSessionId: 'normal-distinct-attempt',
+            windowSessionToken: 'normal-distinct-token',
+            windowSessionTokenSessionId: 'normal-distinct-attempt',
+            sessionGeneration: suiteInfo.sessionGeneration + 1
+        };
+        const normalHandler = () => {};
+        try {
+            assert.strictEqual(app._scheduleSuiteSubmitTeardown(session), true);
+            app.examWindows.set(examId, normalInfo);
+            app.messageHandlers.set(examId, normalHandler);
+            session.windowRef = normalWindow;
+            session.windowBinding = {
+                examId,
+                expectedSessionId: normalInfo.expectedSessionId,
+                windowSessionToken: normalInfo.windowSessionToken,
+                sessionGeneration: normalInfo.sessionGeneration
+            };
+            await windowStub.AppData.recovery.saveActiveSession({
+                id: `active-session:${normalInfo.expectedSessionId}`,
+                examId,
+                sessionId: normalInfo.expectedSessionId,
+                status: 'started'
+            });
+            await scheduledTeardown();
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+            sandbox.clearTimeout = originalClearTimeout;
+        }
+
+        const activeAfterTeardown = await windowStub.AppData.recovery.listActiveSessions();
+        assert.strictEqual(suiteWindow.closed, true, 'the frozen suite window must be closed');
+        assert.strictEqual(normalWindow.closed, false, 'the distinct normal window must stay open');
+        assert.strictEqual(
+            suiteWindow._messages.some(message => message && message.type === 'SUITE_FORCE_CLOSE'),
+            false,
+            'teardown must not route a force-close envelope through the replacement registration'
+        );
+        assert.strictEqual(app.examWindows.get(examId), normalInfo, 'the distinct normal registration must survive');
+        assert.strictEqual(normalInfo.window, normalWindow, 'teardown must not rebind the normal registration to the old suite window');
+        assert.strictEqual(normalInfo.windowSessionToken, 'normal-distinct-token', 'teardown must not rotate the normal token');
+        assert.strictEqual(app.messageHandlers.get(examId), normalHandler, 'the distinct normal handler must survive');
+        assert.strictEqual(
+            activeAfterTeardown.some(item => item && item.sessionId === suiteInfo.expectedSessionId),
+            false,
+            'the old suite attempt recovery must be removed'
+        );
+        assert.strictEqual(
+            activeAfterTeardown.some(item => item && item.sessionId === normalInfo.expectedSessionId),
+            true,
+            'the distinct normal recovery must survive'
+        );
+
+        app.examWindows.delete(examId);
+        app.messageHandlers.delete(examId);
+        await windowStub.AppData.recovery.discardActiveSession(`active-session:${normalInfo.expectedSessionId}`);
+    }
+
+    // A failed active-suite abort must recapture ownership after navigation.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_abort_recaptures_registration');
+        const firstExamId = session.sequence[0].examId;
+        const firstWindow = session.windowRef;
+        firstWindow.close = function close() { this.closed = true; };
+        const firstInfo = {
+            window: firstWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'abort-first-attempt',
+            windowSessionToken: 'abort-first-token',
+            windowSessionTokenSessionId: 'abort-first-attempt',
+            sessionGeneration: 1
+        };
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        app.examWindows = new Map([[firstExamId, firstInfo]]);
+        app.messageHandlers = new Map([[firstExamId, () => {}]]);
+        session.windowBinding = {
+            examId: firstExamId,
+            expectedSessionId: firstInfo.expectedSessionId,
+            windowSessionToken: firstInfo.windowSessionToken,
+            sessionGeneration: firstInfo.sessionGeneration
+        };
+
+        let discardAttempts = 0;
+        app._discardPersistentSuiteRecovery = async () => {
+            discardAttempts += 1;
+            return discardAttempts > 1;
+        };
+
+        assert.strictEqual(
+            await app._abortSuiteSession(session, { reason: 'user_discard' }),
+            false,
+            'the first abort should surface the durable discard failure'
+        );
+        assert.strictEqual(session.status, 'active', 'a failed abort must leave the suite active');
+        assert.strictEqual(app.currentSuiteSession, session, 'a failed abort must retain the active owner');
+        assert.strictEqual(
+            session._suiteTeardownRegistrations,
+            undefined,
+            'an active abort failure must discard its frozen teardown registration'
+        );
+        assert.strictEqual(firstWindow.closed, false, 'a failed abort must not close the current window');
+
+        const secondExamId = session.sequence[1].examId;
+        const secondWindow = createStubWindow('suite-window-after-abort-retry');
+        secondWindow.close = function close() { this.closed = true; };
+        const secondInfo = {
+            window: secondWindow,
+            suiteSessionId: session.id,
+            expectedSessionId: 'abort-second-attempt',
+            windowSessionToken: 'abort-second-token',
+            windowSessionTokenSessionId: 'abort-second-attempt',
+            sessionGeneration: 2
+        };
+        session.currentIndex = 1;
+        session.activeExamId = secondExamId;
+        session.windowRef = secondWindow;
+        session.windowBinding = {
+            examId: secondExamId,
+            expectedSessionId: secondInfo.expectedSessionId,
+            windowSessionToken: secondInfo.windowSessionToken,
+            sessionGeneration: secondInfo.sessionGeneration
+        };
+        app.examWindows.delete(firstExamId);
+        app.messageHandlers.delete(firstExamId);
+        app.examWindows.set(secondExamId, secondInfo);
+        app.messageHandlers.set(secondExamId, () => {});
+
+        const recaptured = app._captureSuiteTeardownRegistrations(session);
+        assert.strictEqual(
+            recaptured.get(secondExamId).windowInfo,
+            secondInfo,
+            'the retry precondition must expose the newly bound exact registration'
+        );
+        const cleanupResults = [];
+        const cleanupExamSession = app.cleanupExamSession.bind(app);
+        app.cleanupExamSession = async (...args) => {
+            const result = await cleanupExamSession(...args);
+            cleanupResults.push({ examId: args[0], result });
+            return result;
+        };
+
+        assert.strictEqual(
+            await app._abortSuiteSession(session, { reason: 'user_discard' }),
+            true,
+            'the retry should teardown the registration captured after navigation'
+        );
+        assert.strictEqual(discardAttempts, 2, 'the retry must attempt durable discard again');
+        assert.strictEqual(secondWindow.closed, true, 'the retry must close the newly bound suite window');
+        assert.strictEqual(firstWindow.closed, false, 'the retry must not reuse and close the stale window snapshot');
+        assert.deepStrictEqual(
+            cleanupResults,
+            [{ examId: secondExamId, result: true }],
+            'the retry must run exact cleanup for the newly captured registration'
+        );
+        assert.strictEqual(app.currentSuiteSession, null, 'the successful retry must finish teardown');
+        assert.strictEqual(app.examWindows.has(secondExamId), false, 'the newly captured registration must be cleaned');
     }
 
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));

@@ -486,7 +486,10 @@
             if (options.reuseWindow && !options.reuseWindow.closed) {
                 try {
                     options.reuseWindow.location.href = resolvedPdfUrl;
-                    options.reuseWindow.focus();
+                    this._markExamWindowReusePending(options.reuseWindow, { unmanaged: true });
+                    try {
+                        if (typeof options.reuseWindow.focus === 'function') options.reuseWindow.focus();
+                    } catch (_) {}
                     pdfWin = options.reuseWindow;
                 } catch (reuseError) {
                     console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
@@ -497,10 +500,12 @@
                 if (options.target === 'tab') {
                     try {
                         pdfWin = window.open(resolvedPdfUrl, '_blank');
+                        this._markExamWindowReusePending(pdfWin, { unmanaged: true });
                     } catch (_) { }
                 } else {
                     try {
                         pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                        this._markExamWindowReusePending(pdfWin, { unmanaged: true });
                     } catch (_) { }
                 }
             }
@@ -508,6 +513,7 @@
             if (!pdfWin) {
                 try {
                     window.location.href = resolvedPdfUrl;
+                    this._markExamWindowReusePending(window, { unmanaged: true });
                     return window;
                 } catch (error) {
                     throw new Error('无法打开PDF窗口，请检查弹窗设置');
@@ -553,13 +559,148 @@
         /**
          * 在新窗口中打开题目
          */
+        _buildExamWindowRegistrationMarker(examId, registration) {
+            const info = registration || {};
+            const numericGeneration = Number(info.sessionGeneration);
+            return JSON.stringify([
+                String(examId || ''),
+                String(info.suiteSessionId || ''),
+                String(info.expectedSessionId || ''),
+                String(info.windowSessionToken || ''),
+                Number.isInteger(numericGeneration) ? numericGeneration : null
+            ]);
+        },
+
+        _rememberExamWindowReassignment(targetWindow, examId, registration) {
+            if (!targetWindow || !registration) return false;
+            if (!this._reassignedExamWindowRegistrations) {
+                this._reassignedExamWindowRegistrations = new WeakMap();
+            }
+            let markers = this._reassignedExamWindowRegistrations.get(targetWindow);
+            if (!markers) {
+                markers = new Set();
+                this._reassignedExamWindowRegistrations.set(targetWindow, markers);
+            }
+            markers.add(this._buildExamWindowRegistrationMarker(examId, registration));
+            return true;
+        },
+
+        _markExamWindowReusePending(targetWindow, options = {}) {
+            if (!targetWindow || !this.examWindows) {
+                return 0;
+            }
+            const unmanagedTarget = options && options.unmanaged === true;
+            let marked = 0;
+            for (const [candidateExamId, current] of Array.from(this.examWindows.entries())) {
+                if (!current || current.window !== targetWindow) {
+                    continue;
+                }
+                const previousSessionId = String(current.expectedSessionId || '').trim();
+                const previousSuiteSessionId = String(current.suiteSessionId || '').trim();
+                if (previousSuiteSessionId) {
+                    this._rememberExamWindowReassignment(targetWindow, candidateExamId, current);
+                }
+                const numericGeneration = Number(current.sessionGeneration);
+                const nextGeneration = Number.isSafeInteger(numericGeneration)
+                    && numericGeneration >= 0
+                    && numericGeneration < Number.MAX_SAFE_INTEGER
+                    ? numericGeneration + 1
+                    : 1;
+                let pendingSessionId = '';
+                let pendingToken = null;
+                try {
+                    pendingSessionId = typeof this.generateSessionId === 'function'
+                        ? String(this.generateSessionId(candidateExamId) || '')
+                        : '';
+                    pendingToken = typeof this.generateWindowSessionToken === 'function'
+                        ? this.generateWindowSessionToken(candidateExamId)
+                        : null;
+                } catch (_) {}
+                if (!pendingSessionId) {
+                    pendingSessionId = `reuse-pending:${String(candidateExamId)}:${Date.now()}:${nextGeneration}`;
+                }
+                // Replace (rather than mutate) the registration synchronously after
+                // navigation and before openExam's first await. Delayed suite teardown
+                // and queued draft writes can no longer mistake the reused WindowProxy
+                // for the old suite attempt during that gap.
+                const pendingInfo = {
+                    ...current,
+                    status: 'reassigning',
+                    suiteSessionId: null,
+                    expectedSessionId: pendingSessionId,
+                    sessionId: null,
+                    sessionGeneration: nextGeneration,
+                    windowSessionToken: pendingToken,
+                    windowSessionTokenSessionId: pendingToken ? pendingSessionId : null,
+                    handshakeDeferred: true,
+                    windowReusePending: true
+                };
+
+                // The listener and retry timer belong to the document that was just
+                // navigated away. Leaving either alive would let the replacement page
+                // complete a provisional handshake before openExam installs its final
+                // registration.
+                if (this.messageHandlers && this.messageHandlers.has(candidateExamId)) {
+                    const previousHandler = this.messageHandlers.get(candidateExamId);
+                    try {
+                        if (previousHandler) window.removeEventListener('message', previousHandler);
+                    } catch (_) {}
+                    this.messageHandlers.delete(candidateExamId);
+                }
+                if (this._handshakeTimers && this._handshakeTimers.has(candidateExamId)) {
+                    try { clearInterval(this._handshakeTimers.get(candidateExamId)); } catch (_) {}
+                    this._handshakeTimers.delete(candidateExamId);
+                }
+
+                if (unmanagedTarget) {
+                    // A raw PDF has no enhanced-page handshake and therefore no later
+                    // setupExamWindowManagement call to replace this provisional entry.
+                    // Remove it now, while retaining the old suite recovery for the
+                    // already-frozen delayed teardown.
+                    if (current.closeMonitor) {
+                        try { clearInterval(current.closeMonitor); } catch (_) {}
+                    }
+                    this.examWindows.delete(candidateExamId);
+                    const suite = this.currentSuiteSession;
+                    const binding = suite && suite.windowBinding && typeof suite.windowBinding === 'object'
+                        ? suite.windowBinding
+                        : null;
+                    const isExactSuiteOwner = Boolean(
+                        previousSuiteSessionId
+                        && suite
+                        && String(suite.id || '') === previousSuiteSessionId
+                        && String(binding && binding.examId || '') === String(candidateExamId)
+                        && String(binding && binding.expectedSessionId || '') === previousSessionId
+                        && String(binding && binding.windowSessionToken || '') === String(current.windowSessionToken || '')
+                        && Number(binding && binding.sessionGeneration) === Number(current.sessionGeneration)
+                    );
+                    if (!isExactSuiteOwner
+                        && previousSessionId
+                        && typeof this._discardActiveSessionsForExam === 'function') {
+                        Promise.resolve(this._discardActiveSessionsForExam(candidateExamId, {
+                            expectedSessionId: previousSessionId
+                        })).catch((error) => {
+                            console.warn('[App] 清理 PDF 复用窗口旧恢复会话失败:', candidateExamId, error);
+                        });
+                    }
+                } else {
+                    this.examWindows.set(candidateExamId, pendingInfo);
+                }
+                marked += 1;
+            }
+            return marked;
+        },
+
         openExamWindow(examUrl, exam, options = {}) {
             const reuseWindow = options.reuseWindow;
             const finalUrl = this._ensureAbsoluteUrl(examUrl);
             if (reuseWindow && !reuseWindow.closed) {
                 try {
                     reuseWindow.location.href = finalUrl;
-                    reuseWindow.focus();
+                    this._markExamWindowReusePending(reuseWindow);
+                    try {
+                        if (typeof reuseWindow.focus === 'function') reuseWindow.focus();
+                    } catch (_) {}
                     return reuseWindow;
                 } catch (error) {
                     console.warn('[App] 复用窗口失败，尝试重新打开:', error);
@@ -573,6 +714,7 @@
                     : '_blank';
                 try {
                     tabWindow = window.open(finalUrl, requestedName);
+                    this._markExamWindowReusePending(tabWindow);
                     if (tabWindow && typeof tabWindow.focus === 'function') {
                         tabWindow.focus();
                     }
@@ -594,12 +736,14 @@
                     `exam_${exam.id}`,
                     windowFeatures
                 );
+                this._markExamWindowReusePending(examWindow);
             } catch (_) { }
 
             // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
             if (!examWindow) {
                 try {
                     window.location.href = finalUrl;
+                    this._markExamWindowReusePending(window);
                     return window; // 以当前窗口作为返回引用
                 } catch (e) {
                     throw new Error('无法打开题目页面，请检查弹窗/文件路径设置');
@@ -2102,6 +2246,11 @@
                     return;
                 }
 
+                if (storedInfo.windowReusePending === true) {
+                    this._reportExamMessageRejected(examId, normalized.type, 'window-reassignment-pending', event);
+                    return;
+                }
+
                 const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
                 const expectedSessionId = windowInfo.expectedSessionId || '';
                 // Most messages must still come from the exact exam window.  A small
@@ -2619,6 +2768,7 @@
                     case 'SIMULATION_ACTIVE_EXAM_CHANGE':
                         if (
                             this.currentSuiteSession
+                            && this.currentSuiteSession.status === 'active'
                             && isPayloadExamInActiveSuite
                             && (
                                 !payloadSuiteSessionId
@@ -3466,10 +3616,16 @@
             return store;
         },
 
-        async _writeReadingDraftStore(store, changedDraft = null) {
+        async _writeReadingDraftStore(store, changedDraft = null, options = {}) {
             try {
                 if (changedDraft) {
-                    await window.AppData.recovery.saveDraft(changedDraft);
+                    const saveOptions = typeof options.commitGuard === 'function'
+                        ? { commitGuard: options.commitGuard }
+                        : {};
+                    const receipt = await window.AppData.recovery.saveDraft(changedDraft, saveOptions);
+                    if (!receipt || receipt.committed !== true) {
+                        return false;
+                    }
                 }
                 const drafts = await window.AppData.recovery.listDrafts();
                 const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -3518,25 +3674,36 @@
             if (!expectedSessionId || !payloadSessionId || payloadSessionId !== expectedSessionId) {
                 return false;
             }
-            const draft = this._buildReadingDraftSnapshot(examId, data, info);
-            if (!draft.sessionId) {
+            const expectedRegistration = this._captureExamSessionRegistration(examId, info);
+            if (!expectedRegistration) {
                 return false;
             }
-            const isCurrentRegistration = () => {
-                const current = this.examWindows && this.examWindows.get(examId);
-                return current === info
-                    && (!current.window || !current.window.closed)
-                    && (!Number.isInteger(data.windowSessionGeneration)
-                        || !Number.isInteger(info.sessionGeneration)
-                        || Number(data.windowSessionGeneration) === Number(info.sessionGeneration));
-            };
-            if (!isCurrentRegistration()) {
+            const payloadGeneration = Number(data && data.windowSessionGeneration);
+            if (Number.isInteger(payloadGeneration)
+                && payloadGeneration !== expectedRegistration.sessionGeneration) {
+                return false;
+            }
+            const isExactRegistration = () => (
+                this._isExamSessionRegistrationCurrent(examId, expectedRegistration)
+            );
+            const isLiveRegistration = () => (
+                isExactRegistration()
+                && (!expectedRegistration.window || !expectedRegistration.window.closed)
+            );
+            // Reject already-closed/stale sources at the gateway. Once an accepted
+            // pagehide draft reaches the transaction, ownership (not liveness) is the
+            // commit condition so closing the page cannot discard its final answers.
+            if (!isLiveRegistration()) {
+                return false;
+            }
+            const draft = this._buildReadingDraftSnapshot(examId, data, info);
+            if (!draft.sessionId) {
                 return false;
             }
             // 必须在写队列里重新读取最新 store 再合并，否则并发不同 exam 的 write 会互相覆盖、
             // 后写者会丢掉前者的草稿（整个 map 是同一个存储 key，read-modify-write 非原子）。
             const store = await this._readReadingDraftStore();
-            if (!isCurrentRegistration()) {
+            if (!isExactRegistration()) {
                 return false;
             }
             const previous = store[String(draft.id)] || null;
@@ -3558,13 +3725,13 @@
                 return false;
             }
             store[String(draft.id)] = draft;
-            if (!isCurrentRegistration()) {
+            if (!isExactRegistration()) {
                 return false;
             }
-            if (!await this._writeReadingDraftStore(store, draft)) {
+            if (!await this._writeReadingDraftStore(store, draft, { commitGuard: isExactRegistration })) {
                 return false;
             }
-            if (!isCurrentRegistration()) {
+            if (!isExactRegistration()) {
                 return false;
             }
             info.lastReadingDraft = draft;
@@ -3580,18 +3747,14 @@
             if (!this._readingDraftStoreQueue || typeof this._readingDraftStoreQueue.then !== 'function') {
                 this._readingDraftStoreQueue = Promise.resolve();
             }
+            const queuedRegistration = windowInfo
+                ? this._captureExamSessionRegistration(examId, windowInfo)
+                : null;
             const queued = this._readingDraftStoreQueue
                 .catch(() => undefined)
                 .then(() => {
-                    const currentWindowInfo = this.examWindows && this.examWindows.get(examId);
-                    if (
-                        windowInfo
-                        && (
-                            currentWindowInfo !== windowInfo
-                            || currentWindowInfo.window !== windowInfo.window
-                            || currentWindowInfo.sessionGeneration !== windowInfo.sessionGeneration
-                        )
-                    ) {
+                    if (queuedRegistration
+                        && !this._isExamSessionRegistrationCurrent(examId, queuedRegistration)) {
                         return false;
                     }
                     return this.handleReadingDraftSync(examId, data, windowInfo);
@@ -3895,6 +4058,11 @@
         _scheduleSuiteSubmitTeardown(session) {
             if (!session || typeof this._teardownSuiteSession !== 'function') {
                 return false;
+            }
+            if (!(session._suiteTeardownRegistrations instanceof Map)
+                && typeof this._captureSuiteTeardownRegistrations === 'function') {
+                // Freeze the completed suite's exact binding before the receipt replay delay.
+                session._suiteTeardownRegistrations = this._captureSuiteTeardownRegistrations(session);
             }
             if (session.submitReceiptTeardownTimer) {
                 clearTimeout(session.submitReceiptTeardownTimer);
@@ -4448,10 +4616,64 @@
             }
         },
 
-        async _discardActiveSessionsForExam(examId) {
+        _captureExamSessionRegistration(examId, windowInfo = null) {
+            const info = windowInfo || (this.examWindows && this.examWindows.get(examId));
+            if (!info) {
+                return null;
+            }
+            const numericGeneration = Number(info.sessionGeneration);
+            return Object.freeze({
+                windowInfo: info,
+                window: info.window || null,
+                suiteSessionId: String(info.suiteSessionId || ''),
+                expectedSessionId: String(info.expectedSessionId || ''),
+                windowSessionToken: String(info.windowSessionToken || ''),
+                sessionGeneration: Number.isInteger(numericGeneration) ? numericGeneration : null
+            });
+        },
+
+        _isExamSessionRegistrationCurrent(examId, expectedRegistration) {
+            if (!expectedRegistration || !expectedRegistration.windowInfo || !this.examWindows) {
+                return false;
+            }
+            const current = this.examWindows.get(examId);
+            if (!current || current !== expectedRegistration.windowInfo) {
+                return false;
+            }
+            const numericGeneration = Number(current.sessionGeneration);
+            const currentGeneration = Number.isInteger(numericGeneration) ? numericGeneration : null;
+            return current.window === expectedRegistration.window
+                && String(current.suiteSessionId || '') === String(expectedRegistration.suiteSessionId || '')
+                && String(current.expectedSessionId || '') === String(expectedRegistration.expectedSessionId || '')
+                && String(current.windowSessionToken || '') === String(expectedRegistration.windowSessionToken || '')
+                && currentGeneration === expectedRegistration.sessionGeneration;
+        },
+
+        async _discardActiveSessionsForExam(examId, options = {}) {
+            const hasExpectedSessionId = Object.prototype.hasOwnProperty.call(options, 'expectedSessionId');
+            const expectedSessionId = hasExpectedSessionId
+                ? String(options.expectedSessionId || '').trim()
+                : '';
+            // Ownership-gated cleanup must fail closed when no exact recovery id is known.
+            if (hasExpectedSessionId && !expectedSessionId) {
+                return 0;
+            }
             const activeSessions = await window.AppData.recovery.listActiveSessions();
             const matches = (Array.isArray(activeSessions) ? activeSessions : [])
-                .filter((session) => session && session.examId === examId);
+                .filter((session) => {
+                    if (!session || String(session.examId || '') !== String(examId || '')) {
+                        return false;
+                    }
+                    if (!hasExpectedSessionId) {
+                        return true;
+                    }
+                    const entityId = String(session.id || session.recordId || '').trim();
+                    const entitySessionId = entityId.startsWith('active-session:')
+                        ? entityId.slice('active-session:'.length)
+                        : entityId;
+                    return String(session.sessionId || '').trim() === expectedSessionId
+                        || entitySessionId === expectedSessionId;
+                });
             for (const session of matches) {
                 const entityId = session.id || session.sessionId || session.recordId;
                 if (entityId) {
@@ -5405,6 +5627,12 @@
          */
         async handleExamWindowClosed(examId, closedWindow = null) {
             const info = this.examWindows && this.examWindows.get(examId);
+            if (!info) {
+                return false;
+            }
+            const closedRegistration = info
+                ? this._captureExamSessionRegistration(examId, info)
+                : null;
             const expectedWindow = info && info.window ? info.window : null;
             if (closedWindow && expectedWindow && closedWindow !== expectedWindow) {
                 return false;
@@ -5412,6 +5640,24 @@
             if (info && info.closeMonitor) {
                 try { clearInterval(info.closeMonitor); } catch (_) {}
                 info.closeMonitor = null;
+            }
+
+            // A pagehide draft can already be accepted while its IDB transaction is
+            // still reading. Drain the queue before removing the registration that its
+            // commit guard owns; if a new registration appears while waiting, fail
+            // closed and leave that replacement untouched.
+            const pendingDraftWrites = !closedRegistration.suiteSessionId
+                ? this._readingDraftStoreQueue
+                : null;
+            if (pendingDraftWrites && typeof pendingDraftWrites.then === 'function') {
+                try { await pendingDraftWrites; } catch (_) {}
+            }
+            if (closedRegistration
+                && !this._isExamSessionRegistrationCurrent(examId, closedRegistration)) {
+                if (typeof this.cleanupExamSession === 'function') {
+                    await this.cleanupExamSession(examId, { expectedRegistration: closedRegistration });
+                }
+                return false;
             }
 
             const suite = this.currentSuiteSession;
@@ -5432,7 +5678,9 @@
                 // 会话清理由 30s teardown / 下次 launch 负责。
                 this.updateExamStatus(examId, 'completed');
                 if (typeof this.cleanupExamSession === 'function') {
-                    this.cleanupExamSession(examId);
+                    await this.cleanupExamSession(examId, closedRegistration
+                        ? { expectedRegistration: closedRegistration }
+                        : {});
                 }
                 return true;
             }
@@ -5468,7 +5716,9 @@
 
             this.updateExamStatus(examId, 'interrupted');
             if (typeof this.cleanupExamSession === 'function') {
-                this.cleanupExamSession(examId);
+                await this.cleanupExamSession(examId, closedRegistration
+                    ? { expectedRegistration: closedRegistration }
+                    : {});
             }
             return true;
         },
@@ -5641,7 +5891,27 @@
             return staleExamIds;
         },
 
-        async cleanupExamSession(examId) {
+        async cleanupExamSession(examId, options = {}) {
+            const hasExpectedRegistration = Object.prototype.hasOwnProperty.call(options, 'expectedRegistration');
+            const expectedRegistration = hasExpectedRegistration ? options.expectedRegistration : null;
+            if (hasExpectedRegistration && !this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) {
+                const expectedSessionId = String(expectedRegistration && expectedRegistration.expectedSessionId || '').trim();
+                const current = this.examWindows && this.examWindows.get(examId);
+                // The map/handler now belong to another registration. The old recovery may
+                // still be removed by its exact session id, unless that id has been reused.
+                if (expectedSessionId
+                    && (!current || String(current.expectedSessionId || '').trim() !== expectedSessionId)) {
+                    await this._discardActiveSessionsForExam(examId, { expectedSessionId });
+                }
+                return false;
+            }
+
+            const windowInfo = this.examWindows && this.examWindows.get(examId);
+            if (windowInfo && windowInfo.closeMonitor) {
+                try { clearInterval(windowInfo.closeMonitor); } catch (_) {}
+                windowInfo.closeMonitor = null;
+            }
+
             // 清理窗口引用
             if (this.examWindows && this.examWindows.has(examId)) {
                 this.examWindows.delete(examId);
@@ -5655,7 +5925,14 @@
             }
 
             // 清理活动会话
-            await this._discardActiveSessionsForExam(examId);
+            if (hasExpectedRegistration) {
+                await this._discardActiveSessionsForExam(examId, {
+                    expectedSessionId: expectedRegistration && expectedRegistration.expectedSessionId
+                });
+            } else {
+                await this._discardActiveSessionsForExam(examId);
+            }
+            return true;
         },
 
         /**
