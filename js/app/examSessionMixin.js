@@ -889,11 +889,50 @@
             return false;
         },
 
+        // examWindows 以 examId 建键，但套题模拟模式下多篇复用同一个子窗口，
+        // 只有首篇会拿到真实注册。若回包时直接用消息里的 examId 兜底建注册，
+        // ensureExamWindowSession 会新铸一个子页面并不持有的 windowSessionToken，
+        // 回包随即被子页面的信任校验静默丢弃。因此先解析“真正持有该窗口”的注册键，
+        // 仅在没有任何注册持有该窗口时才沿用传入 examId（保持新窗口的既有行为）。
+        _resolveExamWindowSessionKey(examId, targetWindow) {
+            if (!targetWindow || !this.examWindows || typeof this.examWindows.forEach !== 'function') {
+                return examId;
+            }
+            const exactInfo = typeof this.examWindows.get === 'function'
+                ? this.examWindows.get(examId)
+                : null;
+            if (exactInfo && exactInfo.window === targetWindow) {
+                return examId;
+            }
+            let ownerExamId = null;
+            let ownerInfo = null;
+            this.examWindows.forEach((info, registeredExamId) => {
+                // 仅做引用比较，绝不读取可能跨域/已关闭的 WindowProxy 上的属性。
+                if (!info || info.window !== targetWindow) {
+                    return;
+                }
+                if (!ownerInfo
+                    || (Number(info.registrationId) || 0) >= (Number(ownerInfo.registrationId) || 0)) {
+                    ownerExamId = registeredExamId;
+                    ownerInfo = info;
+                }
+            });
+            return ownerInfo ? ownerExamId : examId;
+        },
+
+        _resolveExamWindowSessionForTarget(examId, targetWindow) {
+            const resolvedExamId = this._resolveExamWindowSessionKey(examId, targetWindow);
+            return {
+                examId: resolvedExamId,
+                windowInfo: this.ensureExamWindowSession(resolvedExamId, targetWindow)
+            };
+        },
+
         _postExamMessage(examId, targetWindow, type, data = {}) {
             if (!targetWindow || targetWindow.closed || typeof targetWindow.postMessage !== 'function') {
                 return false;
             }
-            const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+            const windowInfo = this._resolveExamWindowSessionForTarget(examId, targetWindow).windowInfo;
             const targetOrigin = windowInfo.expectedOrigin && windowInfo.expectedOrigin !== 'null'
                 ? windowInfo.expectedOrigin
                 : (windowInfo.allowOpaqueOrigin ? '*' : '');
@@ -4190,7 +4229,8 @@
                 };
                 const delivered = this._postExamMessage(examId, targetWindow, type, payload);
                 if (succeeded) {
-                    const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+                    const resolvedSession = this._resolveExamWindowSessionForTarget(examId, targetWindow);
+                    const windowInfo = resolvedSession.windowInfo;
                     const receiptKey = `${sessionId}:${submissionId}`;
                     const receipts = windowInfo.practiceSubmitReceipts && typeof windowInfo.practiceSubmitReceipts === 'object'
                         ? windowInfo.practiceSubmitReceipts
@@ -4199,7 +4239,7 @@
                     const keys = Object.keys(receipts);
                     keys.slice(0, Math.max(0, keys.length - 8)).forEach((key) => delete receipts[key]);
                     windowInfo.practiceSubmitReceipts = receipts;
-                    this.examWindows && this.examWindows.set(examId, windowInfo);
+                    this.examWindows && this.examWindows.set(resolvedSession.examId, windowInfo);
                 }
                 return delivered;
             } catch (error) {
@@ -4242,8 +4282,12 @@
             if (!submissionId || !sessionId || !sourceWindow || sourceWindow.closed) {
                 return false;
             }
-            const windowInfo = this.ensureExamWindowSession(examId, sourceWindow);
-            const receipt = windowInfo.practiceSubmitReceipts
+            // 回执重放只做查询：它在 handlePracticeComplete 最前面执行，若在此兜底
+            // 新建以 examId 为键的空注册，随后的回包就会误认为该注册持有窗口。
+            const resolvedExamId = this._resolveExamWindowSessionKey(examId, sourceWindow);
+            const windowInfo = this.examWindows && this.examWindows.get(resolvedExamId);
+            const receipt = windowInfo
+                && windowInfo.practiceSubmitReceipts
                 && windowInfo.practiceSubmitReceipts[`${sessionId}:${submissionId}`];
             if (!receipt || receipt.succeeded !== true) {
                 return false;

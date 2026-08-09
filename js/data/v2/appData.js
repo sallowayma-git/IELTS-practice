@@ -12,7 +12,9 @@
         clone,
         randomId,
         nowIso,
-        checksum
+        checksum,
+        canonicalizeJson: kernelCanonicalizeJson,
+        validateEntityRow: kernelValidateEntityRow
     } = internals;
     const kernel = new DataKernel();
     const importPlans = new Map();
@@ -1026,6 +1028,183 @@
         return Boolean(value && typeof value === 'object' && !Array.isArray(value));
     }
 
+    function fallbackCanonicalizeSnapshotJson(value, path = '$', ancestors = new Set()) {
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) throw new AppDataError('VALIDATION', `Non-finite number at ${path}`, { path });
+            return Object.is(value, -0) ? 0 : value;
+        }
+        if (typeof value !== 'object' || value === undefined || typeof value === 'bigint'
+            || typeof value === 'function' || typeof value === 'symbol') {
+            throw new AppDataError('VALIDATION', `Non-JSON value at ${path}`, { path, type: typeof value });
+        }
+        if (ancestors.has(value)) throw new AppDataError('VALIDATION', `Cyclic data at ${path}`, { path });
+        const prototype = Object.getPrototypeOf(value);
+        if (!Array.isArray(value) && prototype !== null) {
+            const constructor = Object.prototype.hasOwnProperty.call(prototype, 'constructor')
+                ? prototype.constructor
+                : null;
+            if (typeof constructor !== 'function' || constructor.name !== 'Object') {
+                throw new AppDataError('VALIDATION', `Non-plain object at ${path}`, { path });
+            }
+        }
+        if (typeof Reflect === 'object' && typeof Reflect.ownKeys === 'function'
+            && Reflect.ownKeys(value).some((key) => typeof key === 'symbol')) {
+            throw new AppDataError('VALIDATION', `Symbol-keyed property at ${path}`, { path });
+        }
+        ancestors.add(value);
+        try {
+            if (Array.isArray(value)) {
+                return value.map((item, index) => {
+                    if (!Object.prototype.hasOwnProperty.call(value, index)) {
+                        throw new AppDataError('VALIDATION', `Sparse array entry at ${path}[${index}]`, { path });
+                    }
+                    return fallbackCanonicalizeSnapshotJson(item, `${path}[${index}]`, ancestors);
+                });
+            }
+            const result = {};
+            for (const key of Object.keys(value).sort()) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (!descriptor || descriptor.get || descriptor.set) {
+                    throw new AppDataError('VALIDATION', `Accessor property at ${path}.${key}`, { path });
+                }
+                result[key] = fallbackCanonicalizeSnapshotJson(descriptor.value, `${path}.${key}`, ancestors);
+            }
+            return result;
+        } finally { ancestors.delete(value); }
+    }
+
+    function canonicalizeSnapshotJson(value, path = '$') {
+        return typeof kernelCanonicalizeJson === 'function'
+            ? kernelCanonicalizeJson(value, path)
+            : fallbackCanonicalizeSnapshotJson(value, path);
+    }
+
+    function snapshotValidation(message, details) {
+        return new AppDataError('VALIDATION', message, details || {});
+    }
+
+    function assertSnapshotEnvelope(logicalKey, envelope) {
+        const entry = catalog.get(logicalKey);
+        try {
+            if (typeof internals.validateEnvelope === 'function' && !internals.validateEnvelope(entry, envelope)) {
+                throw snapshotValidation(`Invalid snapshot envelope: ${logicalKey}`, { logicalKey });
+            }
+        } catch (error) {
+            if (error && error.code === 'VALIDATION') throw error;
+            throw snapshotValidation(`Invalid snapshot envelope: ${logicalKey}`, {
+                logicalKey,
+                cause: error && error.message
+            });
+        }
+        canonicalizeSnapshotJson(envelope, `$.envelopes.${logicalKey}`);
+        if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
+            || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
+            || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+            || typeof envelope.operationId !== 'string' || !envelope.operationId.trim()
+            || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt.trim()
+            || (envelope.state !== 'present' && envelope.state !== 'cleared')) {
+            throw snapshotValidation(`Invalid snapshot envelope: ${logicalKey}`, { logicalKey });
+        }
+        const data = canonicalizeSnapshotJson(envelope.data, `$.envelopes.${logicalKey}.data`);
+        if ((envelope.state === 'cleared' && data !== null)
+            || (envelope.state === 'present' && !entry.validate(data))) {
+            throw snapshotValidation(`Invalid snapshot envelope data: ${logicalKey}`, { logicalKey });
+        }
+        if (typeof envelope.checksum !== 'string' || envelope.checksum !== checksum(data)) {
+            throw snapshotValidation(`Invalid snapshot envelope checksum: ${logicalKey}`, { logicalKey });
+        }
+        return envelope;
+    }
+
+    function assertSnapshotEntityRow(store, row) {
+        const path = `$.entities.${store}`;
+        canonicalizeSnapshotJson(row, path);
+        if (!row || typeof row !== 'object' || Array.isArray(row)
+            || typeof row.recordId !== 'string' || !row.recordId.trim()
+            || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
+            || typeof row.operationId !== 'string' || !row.operationId.trim()
+            || typeof row.updatedAt !== 'string' || !row.updatedAt.trim()) {
+            throw snapshotValidation(`Invalid snapshot entity: ${store}`, { store, recordId: row && row.recordId || null });
+        }
+        const data = canonicalizeSnapshotJson(row.data, `${path}.${row.recordId}.data`);
+        if (typeof row.checksum !== 'string' || row.checksum !== checksum(data)) {
+            throw snapshotValidation(`Invalid snapshot entity checksum: ${store}/${row.recordId}`, {
+                store,
+                recordId: row.recordId
+            });
+        }
+        if (typeof kernelValidateEntityRow === 'function') {
+            try { kernelValidateEntityRow(store, row); }
+            catch (error) {
+                throw snapshotValidation(`Invalid snapshot entity: ${store}/${row.recordId}`, {
+                    store,
+                    recordId: row.recordId,
+                    cause: error && error.message
+                });
+            }
+        }
+        return row;
+    }
+
+    function assertSnapshotPracticeEntitySets(entities) {
+        const presentStores = PRACTICE_ENTITY_STORES.filter((store) => hasOwn(entities, store));
+        if (!presentStores.length) return;
+        if (presentStores.length !== PRACTICE_ENTITY_STORES.length) {
+            throw snapshotValidation('Practice import entity layers must contain summaries, details, and annotations');
+        }
+        const expected = practiceEntityIds(entities.practiceSummaries);
+        for (const store of PRACTICE_ENTITY_STORES.slice(1)) {
+            const actual = practiceEntityIds(entities[store]);
+            if (actual.size !== expected.size || Array.from(expected).some((recordId) => !actual.has(recordId))) {
+                throw snapshotValidation('Practice import entity layers must contain the same recordIds', {
+                    counts: Object.fromEntries(PRACTICE_ENTITY_STORES.map((name) => [name, practiceEntityIds(entities[name]).size]))
+                });
+            }
+        }
+    }
+
+    function assertV2Snapshot(snapshot) {
+        const parsed = canonicalizeSnapshotJson(snapshot, '$');
+        if (!isPlainImportObject(parsed)
+            || parsed.format !== 'ielts-atlas-data-v2'
+            || Number(parsed.schemaVersion) !== Number(catalog.version)
+            || !isPlainImportObject(parsed.envelopes)
+            || !isPlainImportObject(parsed.entities)
+            || (parsed.scope !== 'full' && parsed.scope !== 'partial')
+            || typeof parsed.checksum !== 'string' || !parsed.checksum) {
+            throw snapshotValidation('Snapshot is invalid');
+        }
+        for (const logicalKey of Object.keys(parsed.envelopes)) {
+            if (!catalog.has(logicalKey)) throw snapshotValidation(`Unknown import key: ${logicalKey}`, { logicalKey });
+            assertSnapshotEnvelope(logicalKey, parsed.envelopes[logicalKey]);
+        }
+        for (const [store, rows] of Object.entries(parsed.entities)) {
+            if (!PRACTICE_ENTITY_STORES.includes(store) || !Array.isArray(rows)) {
+                throw snapshotValidation(`Invalid import entity store: ${store}`, { store });
+            }
+            const ids = new Set();
+            for (const row of rows) {
+                assertSnapshotEntityRow(store, row);
+                if (ids.has(row.recordId)) {
+                    throw snapshotValidation(`Duplicate import entity: ${store}/${row.recordId}`, {
+                        store,
+                        recordId: row.recordId
+                    });
+                }
+                ids.add(row.recordId);
+            }
+        }
+        if (parsed.scope === 'full' && PRACTICE_ENTITY_STORES.some((store) => !hasOwn(parsed.entities, store))) {
+            throw snapshotValidation('Full import is missing a practice entity layer');
+        }
+        assertSnapshotPracticeEntitySets(parsed.entities);
+        if (parsed.checksum !== checksum({ envelopes: parsed.envelopes, entities: parsed.entities })) {
+            throw snapshotValidation('Import checksum mismatch');
+        }
+        return parsed;
+    }
+
     function isV2SnapshotShape(parsed) {
         return isPlainImportObject(parsed)
             && parsed.format === 'ielts-atlas-data-v2'
@@ -1256,41 +1435,19 @@
     }
 
     function parseImportPayload(payload) {
-        let parsed;
-        try { parsed = typeof payload === 'string' ? JSON.parse(payload) : jsonValue(payload, 'import payload'); }
+        let rawParsed;
+        try { rawParsed = typeof payload === 'string' ? JSON.parse(payload) : payload; }
         catch (error) {
             if (error instanceof AppDataError) throw error;
             throw new AppDataError('VALIDATION', 'Import payload is not valid JSON', { cause: error && error.message });
         }
 
         // Bare record arrays are a historical import convenience (UI file pickers).
-        if (Array.isArray(parsed)) return convertLegacyPracticeImport(parsed);
-        if (!parsed || typeof parsed !== 'object') throw new AppDataError('VALIDATION', 'Import payload must be an object');
+        if (Array.isArray(rawParsed)) return convertLegacyPracticeImport(jsonValue(rawParsed, 'import payload'));
+        if (!rawParsed || typeof rawParsed !== 'object') throw new AppDataError('VALIDATION', 'Import payload must be an object');
 
-        if (isV2SnapshotShape(parsed)) {
-            if (Number(parsed.schemaVersion) !== Number(catalog.version)) {
-                throw new AppDataError('VALIDATION', 'Import schema version mismatch');
-            }
-            if (!parsed.checksum || parsed.checksum !== checksum({ envelopes: parsed.envelopes, entities: parsed.entities })) {
-                throw new AppDataError('VALIDATION', 'Import checksum mismatch');
-            }
-            if (parsed.scope !== 'full' && parsed.scope !== 'partial') {
-                throw new AppDataError('VALIDATION', 'Import scope must be full or partial');
-            }
-            const scope = parsed.scope;
-            for (const [store, rows] of Object.entries(parsed.entities)) {
-                if (!PRACTICE_ENTITY_STORES.includes(store) || !Array.isArray(rows)) {
-                    throw new AppDataError('VALIDATION', `Invalid import entity store: ${store}`);
-                }
-                for (const row of rows) {
-                    if (!row || typeof row !== 'object' || Array.isArray(row) || !String(row.recordId || '')) {
-                        throw new AppDataError('VALIDATION', `Invalid import entity: ${store}`);
-                    }
-                }
-            }
-            if (scope === 'full' && PRACTICE_ENTITY_STORES.some((store) => !Object.prototype.hasOwnProperty.call(parsed.entities, store))) {
-                throw new AppDataError('VALIDATION', 'Full import is missing a practice entity layer');
-            }
+        if (isV2SnapshotShape(rawParsed)) {
+            const parsed = assertV2Snapshot(rawParsed);
             const canonical = canonicalizeV2Import(parsed);
             return {
                 format: 'v2',
@@ -1309,11 +1466,11 @@
         }
 
         // Explicit but malformed v2 claims must not fall through to legacy parsers.
-        if (parsed.format === 'ielts-atlas-data-v2') {
+        if (rawParsed.format === 'ielts-atlas-data-v2') {
             throw new AppDataError('VALIDATION', 'Only valid v2 snapshots can be imported');
         }
 
-        return convertLegacyPracticeImport(parsed);
+        return convertLegacyPracticeImport(jsonValue(rawParsed, 'import payload'));
     }
 
     function collectionIdentityFields(logicalKey) {
@@ -1551,25 +1708,47 @@
                 const stored = asArray(await kernel.read('backups.entries'))
                     .find((item) => String(item && item.id) === backupId);
                 if (!stored) throw new AppDataError('VALIDATION', `Unknown backup: ${backupId}`);
+                const validatedSnapshot = assertV2Snapshot(stored.data);
                 const portable = jsonValue(stored, 'stored backup export');
-                if (!portable.data || !portable.checksum || portable.checksum !== portable.data.checksum) {
+                if (!portable.data || typeof portable.checksum !== 'string'
+                    || portable.checksum !== validatedSnapshot.checksum
+                    || portable.data.checksum !== validatedSnapshot.checksum) {
                     throw new AppDataError('VALIDATION', `Backup checksum mismatch: ${backupId}`);
                 }
                 return portable;
             }
-            const domains = Array.isArray(options.domains) ? new Set(options.domains.map(String)) : null;
-            const logicalKeys = domains
-                ? catalog.list()
+            if (Array.isArray(options.domains)) {
+                if (!options.domains.length) throw new AppDataError('VALIDATION', 'backups.export domains cannot be empty');
+                const domains = new Set(options.domains.map(String));
+                const knownDomains = new Set(catalog.list().map((entry) => entry.owner));
+                knownDomains.add('practice');
+                const unknown = Array.from(domains).filter((domain) => !knownDomains.has(domain));
+                if (unknown.length) throw new AppDataError('VALIDATION', `Unknown backup export domain: ${unknown[0]}`);
+                const logicalKeys = catalog.list()
                     .filter((entry) => domains.has(entry.owner) && entry.export === true)
-                    .map((entry) => entry.logicalKey)
-                : null;
-            const entityStores = !domains || domains.has('practice')
-                ? undefined
-                : [];
-            return kernel.exportSnapshot(Object.assign(
-                logicalKeys ? { logicalKeys } : {},
-                entityStores ? { entityStores } : {}
-            ));
+                    .map((entry) => entry.logicalKey);
+                const includesPractice = domains.has('practice');
+                if (!logicalKeys.length && !includesPractice) {
+                    throw new AppDataError('VALIDATION', 'backups.export domains select no exportable data');
+                }
+                const snapshot = await kernel.exportSnapshot(Object.assign(
+                    { logicalKeys },
+                    includesPractice ? {} : { entityStores: [] }
+                ));
+                assertV2Snapshot(snapshot);
+                return snapshot;
+            }
+            const snapshot = await kernel.exportSnapshot();
+            assertV2Snapshot(snapshot);
+            return snapshot;
+        },
+        validateSnapshot(snapshot) {
+            try {
+                assertV2Snapshot(snapshot);
+                return true;
+            } catch (_) {
+                return false;
+            }
         },
         async previewImport(payload, options = {}) {
             await ready; const parsed = parseImportPayload(payload); const prepared = await createImportPlan(parsed, options); const planId = randomId('import-plan');

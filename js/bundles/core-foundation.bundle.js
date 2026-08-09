@@ -1068,16 +1068,30 @@
     }
     function validateEnvelope(entry, envelope) {
         try {
-            if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
-                || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
-                || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
-                || typeof envelope.operationId !== 'string' || !envelope.operationId
-                || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt
-                || (envelope.state !== 'present' && envelope.state !== 'cleared')) return false;
-            const data = canonicalizeJson(envelope.data, `$.${entry.logicalKey}`);
-            return (envelope.state !== 'cleared' || data === null)
-                && (envelope.state !== 'present' || entry.validate(data)) && envelope.checksum === checksum(data);
+            assertValidEnvelope(entry, envelope);
+            return true;
         } catch (_) { return false; }
+    }
+    function assertValidEnvelope(entry, envelope) {
+        if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
+            || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
+            || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+            || typeof envelope.operationId !== 'string' || !envelope.operationId.trim()
+            || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt.trim()
+            || (envelope.state !== 'present' && envelope.state !== 'cleared')) {
+            throw corruption(`Invalid envelope: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        const data = canonicalizeJson(envelope.data, `$.${entry.logicalKey}`);
+        if (envelope.state === 'cleared' && data !== null) {
+            throw corruption(`Cleared envelope contains data: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        if (envelope.state === 'present' && !entry.validate(data)) {
+            throw corruption(`Invalid envelope data: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        if (typeof envelope.checksum !== 'string' || envelope.checksum !== checksum(data)) {
+            throw corruption(`Envelope checksum mismatch: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        return envelope;
     }
     function operationId(value) {
         if (value === undefined || value === null || value === '') return randomId('mutation');
@@ -1264,17 +1278,45 @@
     }
     function validateEntityRow(store, row) {
         if (!row || typeof row !== 'object' || Array.isArray(row)
-            || typeof row.recordId !== 'string' || !row.recordId
+            || typeof row.recordId !== 'string' || !row.recordId.trim()
             || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
-            || typeof row.operationId !== 'string' || !row.operationId
-            || typeof row.updatedAt !== 'string' || !row.updatedAt) {
+            || typeof row.operationId !== 'string' || !row.operationId.trim()
+            || typeof row.updatedAt !== 'string' || !row.updatedAt.trim()) {
             throw corruption(`Invalid entity row: ${store}`, { store, recordId: row && row.recordId || null });
         }
         const data = canonicalizeJson(row.data, `$.${store}.${row.recordId}`);
-        if (row.checksum !== checksum(data)) {
+        if (typeof row.checksum !== 'string' || row.checksum !== checksum(data)) {
             throw corruption(`Entity checksum mismatch: ${store}/${row.recordId}`, { store, recordId: row.recordId });
         }
         return row;
+    }
+    function validateExportedRecords(data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)
+            || !data.envelopes || typeof data.envelopes !== 'object' || Array.isArray(data.envelopes)
+            || !data.entities || typeof data.entities !== 'object' || Array.isArray(data.entities)) {
+            throw corruption('Snapshot export result is invalid');
+        }
+        // Verify the container itself before walking individual records so that
+        // accessors, cycles, sparse arrays, and other non-JSON values cannot be
+        // smuggled into the returned payload.
+        canonicalizeJson(data.envelopes, '$.envelopes');
+        canonicalizeJson(data.entities, '$.entities');
+        for (const [logicalKey, envelope] of Object.entries(data.envelopes)) {
+            if (!catalog.has(logicalKey)) throw corruption(`Unknown exported envelope: ${logicalKey}`, { logicalKey });
+            assertValidEnvelope(lookupEntry(logicalKey), envelope);
+        }
+        for (const [store, rows] of Object.entries(data.entities)) {
+            entityStore(store);
+            if (!Array.isArray(rows)) throw corruption(`Invalid exported entity store: ${store}`, { store });
+            const ids = new Set();
+            for (const row of rows) {
+                validateEntityRow(store, row);
+                const recordId = row.recordId;
+                if (ids.has(recordId)) throw corruption(`Duplicate exported entity: ${store}/${recordId}`, { store, recordId });
+                ids.add(recordId);
+            }
+        }
+        return data;
     }
     function normalizeEntityOperation(operation, index) {
         if (!operation || typeof operation !== 'object' || Array.isArray(operation)) throw validation(`Invalid entity operation at index ${index}`);
@@ -1554,6 +1596,7 @@
                     const selectedStores = new Set(options.entityStores.map(entityStore));
                     for (const store of ENTITY_STORES) if (!selectedStores.has(store)) delete data.entities[store];
                 }
+                validateExportedRecords(data);
                 const payload = { envelopes: data.envelopes, entities: data.entities };
                 return { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: selected ? 'partial' : 'full', createdAt: nowIso(), backend: this.backend, envelopes: data.envelopes, entities: data.entities, checksum: checksum(payload) };
             } catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
@@ -1653,7 +1696,7 @@
         status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
     }
 
-    Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
+    Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, validateEntityRow, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -1672,7 +1715,9 @@
         clone,
         randomId,
         nowIso,
-        checksum
+        checksum,
+        canonicalizeJson: kernelCanonicalizeJson,
+        validateEntityRow: kernelValidateEntityRow
     } = internals;
     const kernel = new DataKernel();
     const importPlans = new Map();
@@ -2686,6 +2731,183 @@
         return Boolean(value && typeof value === 'object' && !Array.isArray(value));
     }
 
+    function fallbackCanonicalizeSnapshotJson(value, path = '$', ancestors = new Set()) {
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) throw new AppDataError('VALIDATION', `Non-finite number at ${path}`, { path });
+            return Object.is(value, -0) ? 0 : value;
+        }
+        if (typeof value !== 'object' || value === undefined || typeof value === 'bigint'
+            || typeof value === 'function' || typeof value === 'symbol') {
+            throw new AppDataError('VALIDATION', `Non-JSON value at ${path}`, { path, type: typeof value });
+        }
+        if (ancestors.has(value)) throw new AppDataError('VALIDATION', `Cyclic data at ${path}`, { path });
+        const prototype = Object.getPrototypeOf(value);
+        if (!Array.isArray(value) && prototype !== null) {
+            const constructor = Object.prototype.hasOwnProperty.call(prototype, 'constructor')
+                ? prototype.constructor
+                : null;
+            if (typeof constructor !== 'function' || constructor.name !== 'Object') {
+                throw new AppDataError('VALIDATION', `Non-plain object at ${path}`, { path });
+            }
+        }
+        if (typeof Reflect === 'object' && typeof Reflect.ownKeys === 'function'
+            && Reflect.ownKeys(value).some((key) => typeof key === 'symbol')) {
+            throw new AppDataError('VALIDATION', `Symbol-keyed property at ${path}`, { path });
+        }
+        ancestors.add(value);
+        try {
+            if (Array.isArray(value)) {
+                return value.map((item, index) => {
+                    if (!Object.prototype.hasOwnProperty.call(value, index)) {
+                        throw new AppDataError('VALIDATION', `Sparse array entry at ${path}[${index}]`, { path });
+                    }
+                    return fallbackCanonicalizeSnapshotJson(item, `${path}[${index}]`, ancestors);
+                });
+            }
+            const result = {};
+            for (const key of Object.keys(value).sort()) {
+                const descriptor = Object.getOwnPropertyDescriptor(value, key);
+                if (!descriptor || descriptor.get || descriptor.set) {
+                    throw new AppDataError('VALIDATION', `Accessor property at ${path}.${key}`, { path });
+                }
+                result[key] = fallbackCanonicalizeSnapshotJson(descriptor.value, `${path}.${key}`, ancestors);
+            }
+            return result;
+        } finally { ancestors.delete(value); }
+    }
+
+    function canonicalizeSnapshotJson(value, path = '$') {
+        return typeof kernelCanonicalizeJson === 'function'
+            ? kernelCanonicalizeJson(value, path)
+            : fallbackCanonicalizeSnapshotJson(value, path);
+    }
+
+    function snapshotValidation(message, details) {
+        return new AppDataError('VALIDATION', message, details || {});
+    }
+
+    function assertSnapshotEnvelope(logicalKey, envelope) {
+        const entry = catalog.get(logicalKey);
+        try {
+            if (typeof internals.validateEnvelope === 'function' && !internals.validateEnvelope(entry, envelope)) {
+                throw snapshotValidation(`Invalid snapshot envelope: ${logicalKey}`, { logicalKey });
+            }
+        } catch (error) {
+            if (error && error.code === 'VALIDATION') throw error;
+            throw snapshotValidation(`Invalid snapshot envelope: ${logicalKey}`, {
+                logicalKey,
+                cause: error && error.message
+            });
+        }
+        canonicalizeSnapshotJson(envelope, `$.envelopes.${logicalKey}`);
+        if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
+            || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
+            || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+            || typeof envelope.operationId !== 'string' || !envelope.operationId.trim()
+            || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt.trim()
+            || (envelope.state !== 'present' && envelope.state !== 'cleared')) {
+            throw snapshotValidation(`Invalid snapshot envelope: ${logicalKey}`, { logicalKey });
+        }
+        const data = canonicalizeSnapshotJson(envelope.data, `$.envelopes.${logicalKey}.data`);
+        if ((envelope.state === 'cleared' && data !== null)
+            || (envelope.state === 'present' && !entry.validate(data))) {
+            throw snapshotValidation(`Invalid snapshot envelope data: ${logicalKey}`, { logicalKey });
+        }
+        if (typeof envelope.checksum !== 'string' || envelope.checksum !== checksum(data)) {
+            throw snapshotValidation(`Invalid snapshot envelope checksum: ${logicalKey}`, { logicalKey });
+        }
+        return envelope;
+    }
+
+    function assertSnapshotEntityRow(store, row) {
+        const path = `$.entities.${store}`;
+        canonicalizeSnapshotJson(row, path);
+        if (!row || typeof row !== 'object' || Array.isArray(row)
+            || typeof row.recordId !== 'string' || !row.recordId.trim()
+            || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
+            || typeof row.operationId !== 'string' || !row.operationId.trim()
+            || typeof row.updatedAt !== 'string' || !row.updatedAt.trim()) {
+            throw snapshotValidation(`Invalid snapshot entity: ${store}`, { store, recordId: row && row.recordId || null });
+        }
+        const data = canonicalizeSnapshotJson(row.data, `${path}.${row.recordId}.data`);
+        if (typeof row.checksum !== 'string' || row.checksum !== checksum(data)) {
+            throw snapshotValidation(`Invalid snapshot entity checksum: ${store}/${row.recordId}`, {
+                store,
+                recordId: row.recordId
+            });
+        }
+        if (typeof kernelValidateEntityRow === 'function') {
+            try { kernelValidateEntityRow(store, row); }
+            catch (error) {
+                throw snapshotValidation(`Invalid snapshot entity: ${store}/${row.recordId}`, {
+                    store,
+                    recordId: row.recordId,
+                    cause: error && error.message
+                });
+            }
+        }
+        return row;
+    }
+
+    function assertSnapshotPracticeEntitySets(entities) {
+        const presentStores = PRACTICE_ENTITY_STORES.filter((store) => hasOwn(entities, store));
+        if (!presentStores.length) return;
+        if (presentStores.length !== PRACTICE_ENTITY_STORES.length) {
+            throw snapshotValidation('Practice import entity layers must contain summaries, details, and annotations');
+        }
+        const expected = practiceEntityIds(entities.practiceSummaries);
+        for (const store of PRACTICE_ENTITY_STORES.slice(1)) {
+            const actual = practiceEntityIds(entities[store]);
+            if (actual.size !== expected.size || Array.from(expected).some((recordId) => !actual.has(recordId))) {
+                throw snapshotValidation('Practice import entity layers must contain the same recordIds', {
+                    counts: Object.fromEntries(PRACTICE_ENTITY_STORES.map((name) => [name, practiceEntityIds(entities[name]).size]))
+                });
+            }
+        }
+    }
+
+    function assertV2Snapshot(snapshot) {
+        const parsed = canonicalizeSnapshotJson(snapshot, '$');
+        if (!isPlainImportObject(parsed)
+            || parsed.format !== 'ielts-atlas-data-v2'
+            || Number(parsed.schemaVersion) !== Number(catalog.version)
+            || !isPlainImportObject(parsed.envelopes)
+            || !isPlainImportObject(parsed.entities)
+            || (parsed.scope !== 'full' && parsed.scope !== 'partial')
+            || typeof parsed.checksum !== 'string' || !parsed.checksum) {
+            throw snapshotValidation('Snapshot is invalid');
+        }
+        for (const logicalKey of Object.keys(parsed.envelopes)) {
+            if (!catalog.has(logicalKey)) throw snapshotValidation(`Unknown import key: ${logicalKey}`, { logicalKey });
+            assertSnapshotEnvelope(logicalKey, parsed.envelopes[logicalKey]);
+        }
+        for (const [store, rows] of Object.entries(parsed.entities)) {
+            if (!PRACTICE_ENTITY_STORES.includes(store) || !Array.isArray(rows)) {
+                throw snapshotValidation(`Invalid import entity store: ${store}`, { store });
+            }
+            const ids = new Set();
+            for (const row of rows) {
+                assertSnapshotEntityRow(store, row);
+                if (ids.has(row.recordId)) {
+                    throw snapshotValidation(`Duplicate import entity: ${store}/${row.recordId}`, {
+                        store,
+                        recordId: row.recordId
+                    });
+                }
+                ids.add(row.recordId);
+            }
+        }
+        if (parsed.scope === 'full' && PRACTICE_ENTITY_STORES.some((store) => !hasOwn(parsed.entities, store))) {
+            throw snapshotValidation('Full import is missing a practice entity layer');
+        }
+        assertSnapshotPracticeEntitySets(parsed.entities);
+        if (parsed.checksum !== checksum({ envelopes: parsed.envelopes, entities: parsed.entities })) {
+            throw snapshotValidation('Import checksum mismatch');
+        }
+        return parsed;
+    }
+
     function isV2SnapshotShape(parsed) {
         return isPlainImportObject(parsed)
             && parsed.format === 'ielts-atlas-data-v2'
@@ -2916,41 +3138,19 @@
     }
 
     function parseImportPayload(payload) {
-        let parsed;
-        try { parsed = typeof payload === 'string' ? JSON.parse(payload) : jsonValue(payload, 'import payload'); }
+        let rawParsed;
+        try { rawParsed = typeof payload === 'string' ? JSON.parse(payload) : payload; }
         catch (error) {
             if (error instanceof AppDataError) throw error;
             throw new AppDataError('VALIDATION', 'Import payload is not valid JSON', { cause: error && error.message });
         }
 
         // Bare record arrays are a historical import convenience (UI file pickers).
-        if (Array.isArray(parsed)) return convertLegacyPracticeImport(parsed);
-        if (!parsed || typeof parsed !== 'object') throw new AppDataError('VALIDATION', 'Import payload must be an object');
+        if (Array.isArray(rawParsed)) return convertLegacyPracticeImport(jsonValue(rawParsed, 'import payload'));
+        if (!rawParsed || typeof rawParsed !== 'object') throw new AppDataError('VALIDATION', 'Import payload must be an object');
 
-        if (isV2SnapshotShape(parsed)) {
-            if (Number(parsed.schemaVersion) !== Number(catalog.version)) {
-                throw new AppDataError('VALIDATION', 'Import schema version mismatch');
-            }
-            if (!parsed.checksum || parsed.checksum !== checksum({ envelopes: parsed.envelopes, entities: parsed.entities })) {
-                throw new AppDataError('VALIDATION', 'Import checksum mismatch');
-            }
-            if (parsed.scope !== 'full' && parsed.scope !== 'partial') {
-                throw new AppDataError('VALIDATION', 'Import scope must be full or partial');
-            }
-            const scope = parsed.scope;
-            for (const [store, rows] of Object.entries(parsed.entities)) {
-                if (!PRACTICE_ENTITY_STORES.includes(store) || !Array.isArray(rows)) {
-                    throw new AppDataError('VALIDATION', `Invalid import entity store: ${store}`);
-                }
-                for (const row of rows) {
-                    if (!row || typeof row !== 'object' || Array.isArray(row) || !String(row.recordId || '')) {
-                        throw new AppDataError('VALIDATION', `Invalid import entity: ${store}`);
-                    }
-                }
-            }
-            if (scope === 'full' && PRACTICE_ENTITY_STORES.some((store) => !Object.prototype.hasOwnProperty.call(parsed.entities, store))) {
-                throw new AppDataError('VALIDATION', 'Full import is missing a practice entity layer');
-            }
+        if (isV2SnapshotShape(rawParsed)) {
+            const parsed = assertV2Snapshot(rawParsed);
             const canonical = canonicalizeV2Import(parsed);
             return {
                 format: 'v2',
@@ -2969,11 +3169,11 @@
         }
 
         // Explicit but malformed v2 claims must not fall through to legacy parsers.
-        if (parsed.format === 'ielts-atlas-data-v2') {
+        if (rawParsed.format === 'ielts-atlas-data-v2') {
             throw new AppDataError('VALIDATION', 'Only valid v2 snapshots can be imported');
         }
 
-        return convertLegacyPracticeImport(parsed);
+        return convertLegacyPracticeImport(jsonValue(rawParsed, 'import payload'));
     }
 
     function collectionIdentityFields(logicalKey) {
@@ -3211,25 +3411,47 @@
                 const stored = asArray(await kernel.read('backups.entries'))
                     .find((item) => String(item && item.id) === backupId);
                 if (!stored) throw new AppDataError('VALIDATION', `Unknown backup: ${backupId}`);
+                const validatedSnapshot = assertV2Snapshot(stored.data);
                 const portable = jsonValue(stored, 'stored backup export');
-                if (!portable.data || !portable.checksum || portable.checksum !== portable.data.checksum) {
+                if (!portable.data || typeof portable.checksum !== 'string'
+                    || portable.checksum !== validatedSnapshot.checksum
+                    || portable.data.checksum !== validatedSnapshot.checksum) {
                     throw new AppDataError('VALIDATION', `Backup checksum mismatch: ${backupId}`);
                 }
                 return portable;
             }
-            const domains = Array.isArray(options.domains) ? new Set(options.domains.map(String)) : null;
-            const logicalKeys = domains
-                ? catalog.list()
+            if (Array.isArray(options.domains)) {
+                if (!options.domains.length) throw new AppDataError('VALIDATION', 'backups.export domains cannot be empty');
+                const domains = new Set(options.domains.map(String));
+                const knownDomains = new Set(catalog.list().map((entry) => entry.owner));
+                knownDomains.add('practice');
+                const unknown = Array.from(domains).filter((domain) => !knownDomains.has(domain));
+                if (unknown.length) throw new AppDataError('VALIDATION', `Unknown backup export domain: ${unknown[0]}`);
+                const logicalKeys = catalog.list()
                     .filter((entry) => domains.has(entry.owner) && entry.export === true)
-                    .map((entry) => entry.logicalKey)
-                : null;
-            const entityStores = !domains || domains.has('practice')
-                ? undefined
-                : [];
-            return kernel.exportSnapshot(Object.assign(
-                logicalKeys ? { logicalKeys } : {},
-                entityStores ? { entityStores } : {}
-            ));
+                    .map((entry) => entry.logicalKey);
+                const includesPractice = domains.has('practice');
+                if (!logicalKeys.length && !includesPractice) {
+                    throw new AppDataError('VALIDATION', 'backups.export domains select no exportable data');
+                }
+                const snapshot = await kernel.exportSnapshot(Object.assign(
+                    { logicalKeys },
+                    includesPractice ? {} : { entityStores: [] }
+                ));
+                assertV2Snapshot(snapshot);
+                return snapshot;
+            }
+            const snapshot = await kernel.exportSnapshot();
+            assertV2Snapshot(snapshot);
+            return snapshot;
+        },
+        validateSnapshot(snapshot) {
+            try {
+                assertV2Snapshot(snapshot);
+                return true;
+            } catch (_) {
+                return false;
+            }
         },
         async previewImport(payload, options = {}) {
             await ready; const parsed = parseImportPayload(payload); const prepared = await createImportPlan(parsed, options); const planId = randomId('import-plan');
@@ -3868,7 +4090,11 @@
     var STORE_NAME = 'binding';
     var HANDLE_KEY = 'directory-handle';
     var META_KEY = 'metadata';
+    var RESET_EPOCH_KEY = 'reset-epoch';
+    var BACKUP_FORMAT = 'ielts-atlas-data-v2';
+    var V2_SCHEMA_VERSION = 2;
     var LATEST_FILENAME = 'ielts-atlas-backup-latest.json';
+    var DATED_GENERATION_PATTERN = /^ielts-atlas-backup-(\d{4}-\d{2}-\d{2})(?:-(\d{9}))?\.json$/;
     var WRITE_DELAY_MS = 8000;
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
@@ -3878,9 +4104,15 @@
         readyPromise: null,
         initialized: false,
         suspended: false,
+        resetPreparing: false,
+        resetPreparation: null,
+        fullResetLockDepth: 0,
+        resetEpoch: 0,
+        resetChannel: null,
         directoryHandle: null,
         permission: 'prompt',
         dirty: false,
+        freshnessUnknown: false,
         dirtyGeneration: 0,
         writing: false,
         writeQueue: Promise.resolve(),
@@ -3929,6 +4161,40 @@
     function supportsFileSystemAccess() {
         return typeof global.showDirectoryPicker === 'function'
             && global.isSecureContext !== false;
+    }
+
+    function ensureResetCoordination() {
+        if (state.resetChannel || typeof global.BroadcastChannel !== 'function') return;
+        try {
+            var channel = new global.BroadcastChannel('ielts-atlas-external-backup-reset');
+            channel.onmessage = function (event) {
+                var data = event && event.data;
+                if (!data || data.type !== 'reset-start') return;
+                var announcedEpoch = normalizeResetEpoch(data.epoch);
+                state.resetEpoch = Math.max(
+                    state.resetEpoch,
+                    announcedEpoch || state.resetEpoch + 1
+                );
+                cancelSilentFlush();
+                refreshPanel();
+            };
+            state.resetChannel = channel;
+        } catch (_) {
+            state.resetChannel = null;
+        }
+    }
+
+    function announceResetStart(epoch) {
+        ensureResetCoordination();
+        state.resetEpoch = normalizeResetEpoch(epoch);
+        if (state.resetChannel) {
+            try {
+                state.resetChannel.postMessage({
+                    type: 'reset-start',
+                    epoch: state.resetEpoch
+                });
+            } catch (_) { /* ignore */ }
+        }
     }
 
     function openBindingDb() {
@@ -4008,8 +4274,47 @@
         }
     }
 
-    async function persistMeta(patch) {
-        if (state.suspended) return false;
+    function normalizeResetEpoch(value) {
+        var numeric = typeof value === 'number' ? value : Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0) return 0;
+        return Math.floor(numeric);
+    }
+
+    async function readResetEpochUnlocked(options) {
+        var stored = await readStoredValue(RESET_EPOCH_KEY);
+        var epoch = normalizeResetEpoch(stored);
+        if (typeof stored === 'undefined' && options && options.initialize === true) {
+            await writeStoredValues((function () {
+                var values = {};
+                values[RESET_EPOCH_KEY] = epoch;
+                return values;
+            })());
+        }
+        state.resetEpoch = epoch;
+        return epoch;
+    }
+
+    async function writeResetEpochUnlocked(epoch) {
+        var nextEpoch = normalizeResetEpoch(epoch);
+        await writeStoredValues((function () {
+            var values = {};
+            values[RESET_EPOCH_KEY] = nextEpoch;
+            return values;
+        })());
+        state.resetEpoch = nextEpoch;
+        return nextEpoch;
+    }
+
+    async function bumpResetEpochUnlocked() {
+        var currentEpoch = await readResetEpochUnlocked();
+        var nextEpoch = currentEpoch + 1;
+        await writeResetEpochUnlocked(nextEpoch);
+        announceResetStart(nextEpoch);
+        return nextEpoch;
+    }
+
+    async function persistMeta(patch, options) {
+        if (state.suspended && !(options && options.allowSuspended === true)) return false;
         state.meta = Object.assign({}, state.meta, cloneMeta(Object.assign({}, state.meta, patch || {})));
         try {
             await writeStoredValues((function () {
@@ -4084,12 +4389,89 @@
         } catch (error) {
             throw new Error('Backup verification failed: written file is not valid JSON');
         }
-        if (!stored || stored.format !== 'ielts-atlas-data-v2'
+        if (!stored || stored.format !== BACKUP_FORMAT
             || stored.schemaVersion !== snapshot.schemaVersion
-            || stored.checksum !== snapshot.checksum) {
+            || stored.checksum !== snapshot.checksum
+            || !isValidV2Snapshot(stored, snapshot.schemaVersion)) {
             throw new Error('Backup verification failed: snapshot metadata mismatch');
         }
         return storedText.length;
+    }
+
+    function isValidV2Snapshot(snapshot, schemaVersion) {
+        if (!snapshot
+            || snapshot.format !== BACKUP_FORMAT
+            || snapshot.schemaVersion !== schemaVersion
+            || typeof snapshot.checksum !== 'string'
+            || snapshot.checksum.length === 0) return false;
+
+        var backups = global.AppData && global.AppData.backups;
+        if (backups && typeof backups.validateSnapshot === 'function') {
+            try {
+                return backups.validateSnapshot(snapshot) === true;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        var internals = global.__AppDataV2Internals;
+        if (!internals || typeof internals.checksum !== 'function') return false;
+        if (!snapshot.envelopes || typeof snapshot.envelopes !== 'object' || Array.isArray(snapshot.envelopes)
+            || !snapshot.entities || typeof snapshot.entities !== 'object' || Array.isArray(snapshot.entities)) {
+            return false;
+        }
+        try {
+            return snapshot.checksum === internals.checksum({
+                envelopes: snapshot.envelopes,
+                entities: snapshot.entities
+            });
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async function readValidatedV2File(directoryHandle, filename, schemaVersion) {
+        try {
+            var fileHandle = await directoryHandle.getFileHandle(filename, { create: false });
+            var file = await fileHandle.getFile();
+            var text = await file.text();
+            var payload = JSON.parse(text);
+            return isValidV2Snapshot(payload, schemaVersion) ? payload : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    async function findLatestDatedGeneration(directoryHandle) {
+        if (!directoryHandle || typeof directoryHandle.values !== 'function') return null;
+
+        var filenames = [];
+        var iterator = directoryHandle.values();
+        if (!iterator || typeof iterator.next !== 'function') return null;
+        while (true) {
+            var next = await iterator.next();
+            if (next.done) break;
+            var entry = next.value;
+            if (entry && entry.kind === 'file' && DATED_GENERATION_PATTERN.test(String(entry.name || ''))) {
+                filenames.push(String(entry.name));
+            }
+        }
+
+        // The fixed date/time portions are zero-padded; the daily name is the
+        // same day's baseline generation and sorts before its unique follow-ups.
+        filenames.sort(function (left, right) {
+            var leftMatch = DATED_GENERATION_PATTERN.exec(left);
+            var rightMatch = DATED_GENERATION_PATTERN.exec(right);
+            var leftKey = leftMatch[1] + '-' + (leftMatch[2] || '000000000');
+            var rightKey = rightMatch[1] + '-' + (rightMatch[2] || '000000000');
+            if (leftKey === rightKey) return right.localeCompare(left);
+            return rightKey < leftKey ? -1 : 1;
+        });
+        for (var i = 0; i < filenames.length; i += 1) {
+            var payload = await readValidatedV2File(directoryHandle, filenames[i], V2_SCHEMA_VERSION);
+            if (payload) return payload;
+        }
+        return null;
     }
 
     async function fileExists(directoryHandle, filename) {
@@ -4134,10 +4516,28 @@
             if (locks && typeof locks.request === 'function') {
                 return await locks.request('ielts-atlas-external-backup-write', { mode: 'exclusive' }, callback);
             }
-            return await callback();
+            throw new Error('当前环境缺少跨标签页安全锁，已停止本地磁盘备份操作');
         } finally {
             releaseCurrent();
         }
+    }
+
+    async function withFullResetLock(callback) {
+        if (typeof callback !== 'function') {
+            throw new TypeError('withFullResetLock requires a callback');
+        }
+        return withDiskWriteLock(async function () {
+            state.fullResetLockDepth += 1;
+            try {
+                return await callback();
+            } finally {
+                state.fullResetLockDepth -= 1;
+            }
+        });
+    }
+
+    function isResetLockHeld(options) {
+        return state.fullResetLockDepth > 0 || (options && options.lockHeld === true);
     }
 
     async function refreshStoredBindingForWrite() {
@@ -4153,12 +4553,12 @@
         }
     }
 
-    async function writeToBoundDirectory(options) {
+    async function writeToBoundDirectoryUnlocked(options) {
         var opts = options || {};
-        await ensureReady();
-        if (state.suspended) return { success: false, reason: 'suspended' };
-        return withDiskWriteLock(async function () {
-            if (state.suspended) return { success: false, reason: 'suspended' };
+        if (state.suspended && opts.allowSuspended !== true) return { success: false, reason: 'suspended' };
+        if (state.resetPreparing && opts.allowResetPreparation !== true) {
+            return { success: false, reason: 'reset_pending' };
+        }
             if (state.writing) return { success: false, reason: 'busy' };
             try {
                 await refreshStoredBindingForWrite();
@@ -4172,32 +4572,43 @@
 
             var startedGeneration = state.dirtyGeneration;
             var followupNeeded = false;
+            var generationFilename = null;
             state.writing = true;
             refreshPanel();
             try {
                 if (!await ensurePermission(state.directoryHandle, opts.interactive === true)) {
-                    await persistMeta({ lastWriteError: 'permission_denied' });
+                    await persistMeta({ lastWriteError: 'permission_denied' }, opts);
                     return { success: false, reason: 'permission_denied' };
                 }
 
                 var backups = requireBackupApi();
                 var snapshot = await backups.export();
-                if (!snapshot || snapshot.format !== 'ielts-atlas-data-v2' || !snapshot.checksum) {
+                if (!isValidV2Snapshot(snapshot, V2_SCHEMA_VERSION)) {
                     throw new Error('AppData returned an invalid v2 backup snapshot');
                 }
                 if (!opts.force && snapshot.checksum === state.meta.lastChecksum) {
-                    state.dirty = state.dirtyGeneration !== startedGeneration;
-                    followupNeeded = state.dirty;
-                    return { success: true, reason: 'unchanged', skipped: true, checksum: snapshot.checksum };
+                    var latest = await readValidatedV2File(
+                        state.directoryHandle,
+                        LATEST_FILENAME,
+                        snapshot.schemaVersion
+                    );
+                    if (latest && latest.checksum === snapshot.checksum) {
+                        state.dirty = state.dirtyGeneration !== startedGeneration;
+                        state.freshnessUnknown = false;
+                        followupNeeded = state.dirty;
+                        return { success: true, reason: 'unchanged', skipped: true, checksum: snapshot.checksum };
+                    }
+                    // A matching in-memory checksum is not enough when latest was deleted or corrupted.
+                    state.dirty = true;
                 }
 
                 var text = JSON.stringify(snapshot, null, 2);
                 var writeDate = new Date();
-                var datedFilename = 'ielts-atlas-backup-' + dayKey(writeDate) + '.json';
-                if (await fileExists(state.directoryHandle, datedFilename)) {
-                    datedFilename = uniqueGenerationFilename(writeDate);
+                generationFilename = 'ielts-atlas-backup-' + dayKey(writeDate) + '.json';
+                if (await fileExists(state.directoryHandle, generationFilename)) {
+                    generationFilename = uniqueGenerationFilename(writeDate);
                 }
-                await writeAndVerify(state.directoryHandle, datedFilename, text, snapshot);
+                await writeAndVerify(state.directoryHandle, generationFilename, text, snapshot);
                 var bytes = await writeAndVerify(state.directoryHandle, LATEST_FILENAME, text, snapshot);
 
                 var latestSnapshot = await backups.export();
@@ -4207,37 +4618,59 @@
                     state.dirtyGeneration += 1;
                 }
                 state.dirty = changedDuringWrite;
+                state.freshnessUnknown = false;
                 followupNeeded = changedDuringWrite;
                 await persistMeta({
                     directoryName: state.directoryHandle.name || state.meta.directoryName || 'backup',
                     lastWriteAt: nowIso(),
                     lastChecksum: snapshot.checksum,
                     lastWriteError: null
-                });
+                }, opts);
                 return {
                     success: true,
                     reason: 'written',
                     filename: LATEST_FILENAME,
-                    generationFilename: datedFilename,
+                    generationFilename: generationFilename,
                     checksum: snapshot.checksum,
                     bytes: bytes,
                     followupPending: followupNeeded
                 };
             } catch (error) {
                 followupNeeded = state.dirtyGeneration !== startedGeneration;
-                await persistMeta({ lastWriteError: error && error.message ? error.message : String(error) });
+                await persistMeta({ lastWriteError: error && error.message ? error.message : String(error) }, opts);
                 if (global.console && console.error) console.error('[ExternalBackup v2] write failed:', error);
-                return { success: false, reason: 'write_error', error: error };
+                return {
+                    success: false,
+                    reason: 'write_error',
+                    error: error,
+                    generationFilename: generationFilename
+                };
             } finally {
                 state.writing = false;
                 if (followupNeeded && state.directoryHandle) scheduleSilentFlush();
                 refreshPanel();
             }
+    }
+
+    async function writeToBoundDirectory(options) {
+        var opts = options || {};
+        if (state.suspended) return { success: false, reason: 'suspended' };
+        if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
+        await ensureReady();
+        if (state.suspended) return { success: false, reason: 'suspended' };
+        return withDiskWriteLock(function () {
+            return writeToBoundDirectoryUnlocked(opts);
         });
     }
 
     async function bindDirectory(options) {
-        if (state.suspended) throw new Error('本地备份服务正在重置');
+        ensureResetCoordination();
+        await ensureReady();
+        var pickerEpoch = await withDiskWriteLock(async function () {
+            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+            return readResetEpochUnlocked({ initialize: true });
+        });
+        if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
         if (!supportsFileSystemAccess()) {
             throw new Error('当前浏览器不支持绑定本地文件夹（请使用 Chrome/Edge 并通过 http(s) 或 localhost 打开）');
         }
@@ -4247,24 +4680,42 @@
             startIn: 'documents'
         });
         if (!handle) throw new Error('未选择文件夹');
+        var afterPickerEpoch = await withDiskWriteLock(function () {
+            return readResetEpochUnlocked();
+        });
+        if (afterPickerEpoch !== pickerEpoch || state.resetEpoch !== pickerEpoch) {
+            throw new Error('本地备份服务刚刚开始重置，请重新选择文件夹');
+        }
+        if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
         if (!await ensurePermission(handle, true)) throw new Error('未获得文件夹读写权限');
 
-        var existingBackupFound = await fileExists(handle, LATEST_FILENAME);
-        var meta = cloneMeta({
-            directoryName: handle.name || 'backup',
-            lastWriteAt: null,
-            lastChecksum: null,
-            lastWriteError: null,
-            awaitingRestore: existingBackupFound
+        var existingBackupFound = false;
+        var meta = null;
+        await withDiskWriteLock(async function () {
+            var lockedEpoch = await readResetEpochUnlocked();
+            if (lockedEpoch !== pickerEpoch || state.resetEpoch !== pickerEpoch) {
+                throw new Error('本地备份服务刚刚开始重置，请重新选择文件夹');
+            }
+            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+            existingBackupFound = await fileExists(handle, LATEST_FILENAME);
+            meta = cloneMeta({
+                directoryName: handle.name || 'backup',
+                lastWriteAt: null,
+                lastChecksum: null,
+                lastWriteError: null,
+                awaitingRestore: existingBackupFound
+            });
+            var values = {};
+            values[HANDLE_KEY] = handle;
+            values[META_KEY] = meta;
+            await writeStoredValues(values);
+            state.directoryHandle = handle;
+            state.meta = meta;
+            state.dirty = !existingBackupFound;
+            state.freshnessUnknown = false;
+            state.dirtyGeneration += 1;
+            refreshPanel();
         });
-        var values = {};
-        values[HANDLE_KEY] = handle;
-        values[META_KEY] = meta;
-        await writeStoredValues(values);
-        state.directoryHandle = handle;
-        state.meta = meta;
-        state.dirty = !existingBackupFound;
-        state.dirtyGeneration += 1;
         await requestPersistentStorage();
 
         var writeResult = null;
@@ -4290,6 +4741,7 @@
         state.directoryHandle = null;
         state.permission = 'prompt';
         state.dirty = false;
+        state.freshnessUnknown = false;
         state.dirtyGeneration += 1;
         state.meta = cloneMeta({});
         refreshPanel();
@@ -4304,28 +4756,367 @@
         return true;
     }
 
-    async function prepareForFullReset() {
-        state.suspended = true;
-        cancelSilentFlush();
+    function resetFailure(reason, error, writeResult, recoveryError) {
+        var result = {
+            success: false,
+            reason: reason,
+            error: error || new Error('外部备份未能在清理前完成'),
+            writeResult: writeResult || null,
+            diskFilesPreserved: true,
+            bindingCleared: false,
+            retryable: true
+        };
+        if (recoveryError) result.recoveryError = recoveryError;
+        return result;
+    }
+
+    function detachCommittedListener() {
         if (typeof state.unsubscribeCommitted === 'function') {
             try { state.unsubscribeCommitted(); } catch (_) { /* ignore */ }
         }
         state.unsubscribeCommitted = null;
+    }
+
+    function detachVisibilityListener() {
         if (global.document && state.visibilityHandler) {
-            try { global.document.removeEventListener('visibilitychange', state.visibilityHandler); } catch (_) { /* ignore */ }
+            try {
+                global.document.removeEventListener('visibilitychange', state.visibilityHandler);
+            } catch (_) { /* ignore */ }
         }
         state.visibilityHandler = null;
-        state.initialized = false;
+    }
 
-        await withDiskWriteLock(async function () {
-            await clearStoredBinding();
-            clearBindingState();
-        });
+    function restorePreparationListeners(preparation) {
+        if (!preparation) return;
+        if (state.unsubscribeCommitted !== preparation.previousUnsubscribeCommitted) {
+            detachCommittedListener();
+            state.unsubscribeCommitted = preparation.previousUnsubscribeCommitted || null;
+        }
+        if (state.visibilityHandler !== preparation.previousVisibilityHandler) {
+            detachVisibilityListener();
+            state.visibilityHandler = preparation.previousVisibilityHandler || null;
+            if (global.document && state.visibilityHandler && preparation.previousInitialized) {
+                global.document.addEventListener('visibilitychange', state.visibilityHandler);
+            }
+        }
+    }
+
+    async function rollbackFullResetPreparationUnlocked() {
+        var preparation = state.resetPreparation;
+        if (!preparation) {
+            return {
+                success: true,
+                reason: 'no_reset_preparation',
+                rolledBack: false,
+                retryable: true
+            };
+        }
+
+        var recoveryError = null;
+        try {
+            if (preparation.previousHandle) {
+                var restoreValues = {};
+                restoreValues[HANDLE_KEY] = preparation.previousHandle;
+                restoreValues[META_KEY] = cloneMeta(
+                    preparation.recoveryMeta || preparation.previousMeta
+                );
+                restoreValues[RESET_EPOCH_KEY] = normalizeResetEpoch(
+                    preparation.resetEpoch === null
+                        ? state.resetEpoch
+                        : preparation.resetEpoch
+                );
+                await writeStoredValues(restoreValues);
+            } else {
+                await clearStoredBinding();
+                await writeResetEpochUnlocked(
+                    preparation.resetEpoch === null
+                        ? state.resetEpoch
+                        : preparation.resetEpoch
+                );
+            }
+        } catch (error) {
+            recoveryError = error;
+        }
+
+        if (!recoveryError) {
+            state.directoryHandle = preparation.previousHandle || null;
+            state.permission = preparation.previousPermission || 'prompt';
+            state.meta = cloneMeta(preparation.recoveryMeta || preparation.previousMeta);
+        } else {
+            state.directoryHandle = null;
+            state.permission = 'prompt';
+            state.meta = cloneMeta({
+                lastWriteError: recoveryError && recoveryError.message
+                    ? recoveryError.message
+                    : String(recoveryError)
+            });
+        }
+
+        var changedAfterPreparation = preparation.stateCleared
+            && (state.dirtyGeneration !== preparation.preparedGeneration
+                || state.dirty
+                || state.freshnessUnknown);
+        if (preparation.stateCleared) {
+            state.dirty = preparation.dirtyAtPreparation === true || changedAfterPreparation;
+            state.freshnessUnknown = preparation.freshnessAtPreparation === true
+                || (changedAfterPreparation && state.freshnessUnknown);
+        } else {
+            state.dirty = state.dirty || preparation.previousDirty === true;
+            state.freshnessUnknown = state.freshnessUnknown || preparation.previousFreshnessUnknown === true;
+        }
+
+        state.suspended = preparation.previousSuspended;
+        state.resetPreparing = false;
+        state.ready = preparation.previousReady;
+        state.readyPromise = preparation.previousReadyPromise;
+        state.initialized = preparation.previousInitialized;
+        restorePreparationListeners(preparation);
+        cancelSilentFlush();
+        if (!state.suspended && state.dirty && state.directoryHandle) scheduleSilentFlush();
+        refreshPanel();
+
+        if (recoveryError) {
+            return {
+                success: false,
+                reason: 'reset_rollback_failed',
+                error: recoveryError,
+                retryable: true
+            };
+        }
+
+        state.resetPreparation = null;
+        return {
+            success: true,
+            rolledBack: true,
+            bindingRestored: !!state.directoryHandle,
+            retryable: true
+        };
+    }
+
+    async function commitFullResetPreparationUnlocked() {
+        var preparation = state.resetPreparation;
+        if (!preparation) {
+            return {
+                success: false,
+                reason: 'no_reset_preparation',
+                error: new Error('当前没有可提交的清理准备状态'),
+                retryable: false
+            };
+        }
+
+        // The epoch is written again here because the site reset may have
+        // deleted and recreated the binding database between prepare and
+        // commit. The key is intentionally retained even after the binding
+        // itself is torn down so stale pickers cannot bind on the next turn.
+        try {
+            await writeResetEpochUnlocked(
+                preparation.resetEpoch === null ? state.resetEpoch : preparation.resetEpoch
+            );
+        } catch (error) {
+            return {
+                success: false,
+                reason: 'reset_commit_failed',
+                error: error,
+                retryable: true
+            };
+        }
+
+        clearBindingState();
+        state.suspended = true;
+        state.resetPreparing = false;
+        detachCommittedListener();
+        detachVisibilityListener();
+        state.initialized = false;
+        state.resetPreparation = null;
+        refreshPanel();
         return {
             success: true,
             diskFilesPreserved: true,
-            bindingCleared: true
+            bindingCleared: true,
+            retryable: false
         };
+    }
+
+    async function prepareForFullResetUnlocked() {
+        if (state.resetPreparing || state.resetPreparation) {
+            return resetFailure(
+                'reset_pending',
+                new Error('本地备份服务正在准备清理')
+            );
+        }
+
+        var preparation = {
+            previousHandle: null,
+            previousMeta: cloneMeta(state.meta),
+            recoveryMeta: null,
+            previousPermission: state.permission,
+            previousDirty: state.dirty,
+            previousFreshnessUnknown: state.freshnessUnknown,
+            previousDirtyGeneration: state.dirtyGeneration,
+            previousSuspended: state.suspended,
+            previousReady: state.ready,
+            previousReadyPromise: state.readyPromise,
+            previousInitialized: state.initialized,
+            previousUnsubscribeCommitted: state.unsubscribeCommitted,
+            previousVisibilityHandler: state.visibilityHandler,
+            resetEpoch: null,
+            bindingCleared: false,
+            stateCleared: false,
+            preparedGeneration: null,
+            dirtyAtPreparation: false,
+            freshnessAtPreparation: false,
+            resetSnapshotChecksum: null
+        };
+        state.resetPreparation = preparation;
+        state.resetPreparing = true;
+        cancelSilentFlush();
+        refreshPanel();
+
+        try {
+            preparation.resetEpoch = await bumpResetEpochUnlocked();
+            await refreshStoredBindingForWrite();
+            preparation.previousHandle = state.directoryHandle;
+            preparation.previousMeta = cloneMeta(state.meta);
+            preparation.previousPermission = state.permission;
+
+            // If the binding exists but startup has not completed, prove that
+            // AppData can still be exported before clearing the binding. An
+            // unbound, failed startup can still be reset.
+            if (!state.ready && preparation.previousHandle && !preparation.previousSuspended) {
+                try {
+                    await ensureReady();
+                } catch (error) {
+                    var unavailableRecovery = await rollbackFullResetPreparationUnlocked();
+                    return resetFailure(
+                        'external_backup_unavailable',
+                        error,
+                        null,
+                        unavailableRecovery.success ? null : unavailableRecovery.error
+                    );
+                }
+            }
+
+            if (!preparation.previousSuspended && state.directoryHandle) {
+                if (state.meta.awaitingRestore) {
+                    try {
+                        await readLatestPayload(true);
+                    } catch (error) {
+                        var readRecovery = await rollbackFullResetPreparationUnlocked();
+                        return resetFailure(
+                            'external_backup_read_failed',
+                            error,
+                            null,
+                            readRecovery.success ? null : readRecovery.error
+                        );
+                    }
+                } else {
+                    var writeResult = await writeToBoundDirectoryUnlocked({
+                        interactive: true,
+                        force: true,
+                        allowResetPreparation: true
+                    });
+                    if (!writeResult || writeResult.success !== true || state.dirty || state.freshnessUnknown) {
+                        var writeRecovery = await rollbackFullResetPreparationUnlocked();
+                        return resetFailure(
+                            'external_backup_write_failed',
+                            (writeResult && writeResult.error)
+                                || new Error('外部备份未能在清理前完成写盘'),
+                            writeResult,
+                            writeRecovery.success ? null : writeRecovery.error
+                        );
+                    }
+                    preparation.resetSnapshotChecksum = writeResult.checksum || state.meta.lastChecksum;
+                }
+            }
+
+            preparation.recoveryMeta = cloneMeta(state.meta);
+
+            // From this point on committed-data notifications are counted even
+            // though ordinary backup work is suspended. The lock prevents
+            // another service operation from interleaving with this section.
+            var resetGeneration = state.dirtyGeneration;
+            state.suspended = true;
+            await clearStoredBinding();
+            preparation.bindingCleared = true;
+            var changedDuringReset = state.dirtyGeneration !== resetGeneration
+                || state.dirty
+                || state.freshnessUnknown;
+            if (!changedDuringReset && preparation.resetSnapshotChecksum) {
+                var postResetSnapshot = null;
+                try {
+                    postResetSnapshot = await requireBackupApi().export();
+                } catch (_) {
+                    state.freshnessUnknown = true;
+                }
+                var postResetSnapshotValid = isValidV2Snapshot(postResetSnapshot, V2_SCHEMA_VERSION);
+                changedDuringReset = state.dirtyGeneration !== resetGeneration
+                    || state.dirty
+                    || state.freshnessUnknown
+                    || !postResetSnapshotValid
+                    || postResetSnapshot.checksum !== preparation.resetSnapshotChecksum;
+                if (changedDuringReset && !state.dirty) {
+                    state.dirty = true;
+                    state.dirtyGeneration += 1;
+                }
+            }
+            if (changedDuringReset) {
+                var changedRecovery = await rollbackFullResetPreparationUnlocked();
+                return resetFailure(
+                    'external_backup_changed_during_reset',
+                    new Error('清理过程中数据发生变化，请重试以先完成外部备份'),
+                    null,
+                    changedRecovery.success ? null : changedRecovery.error
+                );
+            }
+
+            preparation.dirtyAtPreparation = state.dirty;
+            preparation.freshnessAtPreparation = state.freshnessUnknown;
+            clearBindingState();
+            preparation.stateCleared = true;
+            preparation.preparedGeneration = state.dirtyGeneration;
+            return {
+                success: true,
+                diskFilesPreserved: true,
+                bindingCleared: true,
+                prepared: true,
+                resetEpoch: preparation.resetEpoch,
+                retryable: true
+            };
+        } catch (error) {
+            var recovery = await rollbackFullResetPreparationUnlocked();
+            if (!recovery.success) {
+                error = new Error(
+                    (error && error.message ? error.message : String(error))
+                        + '；且无法恢复本地备份绑定：'
+                        + (recovery.error && recovery.error.message
+                            ? recovery.error.message
+                            : String(recovery.error))
+                );
+            }
+            throw error;
+        }
+    }
+
+    async function prepareForFullReset(options) {
+        var opts = options || {};
+        if (isResetLockHeld(opts)) return prepareForFullResetUnlocked(opts);
+        return withFullResetLock(function () {
+            return prepareForFullResetUnlocked(opts);
+        });
+    }
+
+    async function commitFullResetPreparation(options) {
+        if (isResetLockHeld(options)) return commitFullResetPreparationUnlocked();
+        return withFullResetLock(function () {
+            return commitFullResetPreparationUnlocked();
+        });
+    }
+
+    async function rollbackFullResetPreparation(options) {
+        if (isResetLockHeld(options)) return rollbackFullResetPreparationUnlocked();
+        return withFullResetLock(function () {
+            return rollbackFullResetPreparationUnlocked();
+        });
     }
 
     async function readLatestPayload(interactive) {
@@ -4334,19 +5125,16 @@
         if (!await ensurePermission(state.directoryHandle, interactive === true)) {
             throw new Error('需要允许文件夹访问权限');
         }
-        var fileHandle;
-        try {
-            fileHandle = await state.directoryHandle.getFileHandle(LATEST_FILENAME, { create: false });
-        } catch (error) {
-            throw new Error('未找到 ' + LATEST_FILENAME);
-        }
-        var file = await fileHandle.getFile();
-        var text = await file.text();
-        try {
-            return JSON.parse(text);
-        } catch (_) {
-            throw new Error('本地备份文件不是有效的 JSON');
-        }
+        var latest = await readValidatedV2File(
+            state.directoryHandle,
+            LATEST_FILENAME,
+            V2_SCHEMA_VERSION
+        );
+        if (latest) return latest;
+
+        var generation = await findLatestDatedGeneration(state.directoryHandle);
+        if (generation) return generation;
+        throw new Error('未找到有效的 v2 本地备份文件');
     }
 
     function summarizePreview(preview) {
@@ -4390,7 +5178,7 @@
         return prefix + '-' + Date.now() + '-' + Math.random().toString(16).slice(2);
     }
 
-    async function restorePayload(payload, options) {
+    async function restorePayloadUnlocked(payload, options) {
         var opts = options || {};
         var backups = requireBackupApi();
         var preview = await backups.previewImport(payload, {
@@ -4433,22 +5221,68 @@
         return { success: true, preview: preview, result: result };
     }
 
+    async function restorePayload(payload, options) {
+        return withDiskWriteLock(function () {
+            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+            return restorePayloadUnlocked(payload, options);
+        });
+    }
+
     async function restoreFromLatest(options) {
-        var payload = await readLatestPayload(true);
-        var result = await restorePayload(payload, options);
-        if (result && result.success) {
-            state.dirty = false;
-            await persistMeta({
-                lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
-                lastWriteError: null,
-                awaitingRestore: false
-            });
-        }
-        return result;
+        if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+        await ensureReady();
+        return withDiskWriteLock(async function () {
+            if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
+            await refreshStoredBindingForWrite();
+            var payload = await readLatestPayload(true);
+            var result = await restorePayloadUnlocked(payload, options);
+            if (result && result.success) {
+                // The import itself may notify onDataCommitted. Start the
+                // freshness window after that commit so only a later
+                // concurrent change keeps the restored state dirty.
+                var restoreGeneration = state.dirtyGeneration;
+                var backups = requireBackupApi();
+                var currentSnapshot = null;
+                try {
+                    currentSnapshot = await backups.export();
+                } catch (_) {
+                    state.freshnessUnknown = true;
+                }
+                var currentSnapshotValid = isValidV2Snapshot(currentSnapshot, V2_SCHEMA_VERSION);
+                var currentMatchesRestore = currentSnapshotValid
+                    && currentSnapshot.checksum === payload.checksum;
+                var generationChangedDuringFreshnessCheck = state.dirtyGeneration !== restoreGeneration;
+                if (!currentMatchesRestore || generationChangedDuringFreshnessCheck) {
+                    if (!state.dirty) state.dirtyGeneration += 1;
+                    state.dirty = true;
+                    state.freshnessUnknown = !currentSnapshotValid;
+                } else {
+                    state.dirty = false;
+                    state.freshnessUnknown = false;
+                }
+                await persistMeta({
+                    lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
+                    lastWriteError: null,
+                    awaitingRestore: false
+                });
+
+                // `scheduleSilentFlush` deliberately refuses to schedule
+                // while awaitingRestore is true. Clear that durable guard
+                // first, then schedule based on the final state. Also retain
+                // a commit that lands while metadata persistence yields.
+                if (state.dirtyGeneration !== restoreGeneration
+                    && !state.dirty) {
+                    state.dirty = true;
+                    state.dirtyGeneration += 1;
+                }
+                if (state.dirty || state.freshnessUnknown) scheduleSilentFlush();
+            }
+            return result;
+        });
     }
 
     function scheduleSilentFlush() {
-        if (state.suspended || state.meta.awaitingRestore) return;
+        if (state.suspended || state.resetPreparing || state.meta.awaitingRestore) return;
         if (state.silentFlushTimer) global.clearTimeout(state.silentFlushTimer);
         state.silentFlushTimer = global.setTimeout(function () {
             state.silentFlushTimer = null;
@@ -4459,16 +5293,17 @@
     }
 
     function markDirty() {
-        if (state.suspended) return;
+        if (state.suspended && !state.resetPreparing) return;
         state.dirty = true;
         state.dirtyGeneration += 1;
         refreshPanel();
-        scheduleSilentFlush();
+        if (!state.resetPreparing) scheduleSilentFlush();
     }
 
     async function flushSilentlyIfPermitted() {
         await ensureReady();
         if (state.suspended) return { success: false, reason: 'suspended' };
+        if (state.resetPreparing) return { success: false, reason: 'reset_pending' };
         if (state.meta.awaitingRestore) return { success: false, reason: 'restore_required' };
         if (!state.directoryHandle || !state.dirty) {
             return { success: false, reason: 'skip' };
@@ -4492,8 +5327,10 @@
             permission: state.permission,
             permissionGranted: state.permission === 'granted',
             dirty: state.dirty,
+            freshnessUnknown: state.freshnessUnknown,
             writing: state.writing,
             suspended: state.suspended,
+            resetPreparing: state.resetPreparing,
             lastWriteAt: state.meta.lastWriteAt,
             lastChecksum: state.meta.lastChecksum,
             lastWriteError: state.meta.lastWriteError,
@@ -4643,12 +5480,16 @@
             refreshPanel();
         });
         writeButton.addEventListener('click', async function () {
-            var result = await writeToBoundDirectory({ interactive: true, force: true });
-            if (result.success) notify(result.skipped ? '备份内容无变化' : '已写入 ' + result.filename, 'success');
-            else if (result.reason === 'unbound') notify('请先绑定备份文件夹', 'warning');
-            else if (result.reason === 'restore_required') notify('检测到现有备份，请先从文件夹恢复，避免覆盖', 'warning');
-            else if (result.reason === 'permission_denied') notify('需要允许文件夹访问权限', 'warning');
-            else notify('写入失败：' + (result.error && result.error.message || result.reason), 'error');
+            try {
+                var result = await writeToBoundDirectory({ interactive: true, force: true });
+                if (result.success) notify(result.skipped ? '备份内容无变化' : '已写入 ' + result.filename, 'success');
+                else if (result.reason === 'unbound') notify('请先绑定备份文件夹', 'warning');
+                else if (result.reason === 'restore_required') notify('检测到现有备份，请先从文件夹恢复，避免覆盖', 'warning');
+                else if (result.reason === 'permission_denied') notify('需要允许文件夹访问权限', 'warning');
+                else notify('写入失败：' + (result.error && result.error.message || result.reason), 'error');
+            } catch (error) {
+                notify('写入失败：' + (error && error.message ? error.message : String(error)), 'error');
+            }
         });
         restoreButton.addEventListener('click', async function () {
             try {
@@ -4731,6 +5572,7 @@
         if (state.readyPromise) return state.readyPromise;
         state.readyPromise = (async function () {
             if (global.AppData && global.AppData.ready) await global.AppData.ready;
+            ensureResetCoordination();
             if (state.suspended) {
                 state.ready = true;
                 return false;
@@ -4760,11 +5602,15 @@
             if (state.directoryHandle && backups && typeof backups.export === 'function') {
                 try {
                     var currentSnapshot = await backups.export();
+                    state.freshnessUnknown = false;
                     if (!currentSnapshot || currentSnapshot.checksum !== state.meta.lastChecksum) {
                         state.dirty = true;
                         state.dirtyGeneration += 1;
                     }
                 } catch (error) {
+                    state.freshnessUnknown = true;
+                    state.dirty = true;
+                    state.dirtyGeneration += 1;
                     if (global.console && console.warn) console.warn('[ExternalBackup v2] freshness check failed:', error);
                 }
             }
@@ -4810,7 +5656,10 @@
         closeModal: closeModal,
         bindDirectory: bindDirectory,
         unbindDirectory: unbindDirectory,
+        withFullResetLock: withFullResetLock,
         prepareForFullReset: prepareForFullReset,
+        commitFullResetPreparation: commitFullResetPreparation,
+        rollbackFullResetPreparation: rollbackFullResetPreparation,
         writeNow: function (options) {
             return writeToBoundDirectory(Object.assign({ interactive: true, force: true }, options || {}));
         },
@@ -4882,14 +5731,76 @@
         });
     }
 
-    async function stopExternalBackup() {
-        const service = global.ExternalBackupService;
-        if (!service) return;
-        if (typeof service.prepareForFullReset === 'function') {
-            await service.prepareForFullReset();
-        } else if (typeof service.unbindDirectory === 'function') {
-            await service.unbindDirectory();
+    function getFullResetService() {
+        let service;
+        try { service = global.ExternalBackupService; }
+        catch (error) { return { service: null, error }; }
+
+        if (!service) {
+            return {
+                service: null,
+                error: new Error('外部备份服务不可用，无法建立跨标签安全锁')
+            };
         }
+
+        for (const method of [
+            'withFullResetLock',
+            'prepareForFullReset',
+            'commitFullResetPreparation',
+            'rollbackFullResetPreparation'
+        ]) {
+            let implementation;
+            try { implementation = service[method]; }
+            catch (error) { return { service: null, error }; }
+            if (typeof implementation !== 'function') {
+                return {
+                    service: null,
+                    error: new Error(`外部备份服务缺少全量清理接口：${method}`)
+                };
+            }
+        }
+
+        return { service };
+    }
+
+    function isSuccessfulPreparation(result) {
+        return result === true || !!(result && result.success === true);
+    }
+
+    function isExplicitFailure(result) {
+        return result === false || !!(result && result.success === false);
+    }
+
+    function resultError(result, fallbackMessage) {
+        return (result && result.error) || new Error(fallbackMessage);
+    }
+
+    function externalBackupFailure(error, message) {
+        notify(message, 'error');
+        return {
+            success: false,
+            reason: 'external_backup_busy',
+            terminal: false,
+            retryable: true,
+            error,
+            databases: DATABASE_NAMES.slice(),
+            externalBackupFilesPreserved: true
+        };
+    }
+
+    async function rollbackFullResetPreparation(service) {
+        try {
+            const result = await service.rollbackFullResetPreparation();
+            if (isExplicitFailure(result)) {
+                return [{
+                    stage: 'rollback-full-reset-preparation',
+                    error: resultError(result, '外部备份清理准备回滚失败')
+                }];
+            }
+        } catch (error) {
+            return [{ stage: 'rollback-full-reset-preparation', error }];
+        }
+        return [];
     }
 
     function clearWebStorage() {
@@ -4897,7 +5808,15 @@
         for (const name of ['localStorage', 'sessionStorage']) {
             try {
                 const storage = global[name];
-                if (storage && typeof storage.clear === 'function') storage.clear();
+                if (!storage || typeof storage.clear !== 'function') {
+                    errors.push({
+                        stage: 'clear-web-storage',
+                        storage: name,
+                        error: new Error(`无法清理 ${name}：Storage 接口不可用`)
+                    });
+                    continue;
+                }
+                storage.clear();
             } catch (error) {
                 errors.push({ stage: 'clear-web-storage', storage: name, error });
             }
@@ -4912,50 +5831,162 @@
         return true;
     }
 
-    async function perform(options = {}) {
-        if (resetPromise) return resetPromise;
-        resetPromise = (async () => {
-            try {
-                await stopExternalBackup();
-            } catch (error) {
-                notify('外部备份仍在写入，本次清理已取消。', 'error');
-                return {
-                    success: false,
-                    reason: 'external_backup_busy',
-                    terminal: false,
-                    error,
-                    databases: DATABASE_NAMES.slice(),
-                    externalBackupFilesPreserved: true
-                };
-            }
+    async function performLocked(service) {
+        let preparation;
+        try {
+            preparation = await service.prepareForFullReset({ lockHeld: true });
+        } catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            const result = externalBackupFailure(
+                error,
+                '外部备份未能安全落盘，本次清理已取消。'
+            );
+            if (rollbackErrors.length) result.errors = rollbackErrors;
+            return result;
+        }
 
-            const results = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));
-            const errors = results.flatMap((result, index) => result.status === 'rejected'
-                ? [{ stage: 'delete-database', database: DATABASE_NAMES[index], error: result.reason }]
-                : []);
-            errors.push(...clearWebStorage());
-            if (errors.length) {
-                notify('本地数据仅部分清除，请关闭其他标签页后重试。', 'error');
-                return {
-                    success: false,
-                    reason: 'partial_reset',
-                    terminal: false,
-                    errors,
-                    databases: DATABASE_NAMES.slice(),
-                    externalBackupFilesPreserved: true
-                };
-            }
+        if (!isSuccessfulPreparation(preparation)) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            const result = externalBackupFailure(
+                resultError(preparation, '外部备份未能在清理前完成写盘'),
+                '外部备份未能安全落盘，本次清理已取消。'
+            );
+            if (rollbackErrors.length) result.errors = rollbackErrors;
+            return result;
+        }
 
+        const errors = [];
+        let deletionResults;
+        try {
+            deletionResults = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));
+        } catch (error) {
+            errors.push({ stage: 'delete-database', error });
+        }
+
+        if (deletionResults) {
+            deletionResults.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                    errors.push({
+                        stage: 'delete-database',
+                        database: DATABASE_NAMES[index],
+                        error: result.reason
+                    });
+                    return;
+                }
+
+                const deletion = result.value;
+                if (deletion && deletion.skipped === true) {
+                    errors.push({
+                        stage: 'delete-database',
+                        database: DATABASE_NAMES[index],
+                        skipped: true,
+                        error: deletion.error || new Error(
+                            `IndexedDB 删除已跳过：${DATABASE_NAMES[index]}`
+                        )
+                    });
+                    return;
+                }
+                if (!deletion || deletion.deleted !== true) {
+                    errors.push({
+                        stage: 'delete-database',
+                        database: DATABASE_NAMES[index],
+                        error: new Error(`IndexedDB 未确认删除：${DATABASE_NAMES[index]}`)
+                    });
+                }
+            });
+        }
+
+        try { errors.push(...clearWebStorage()); }
+        catch (error) {
+            errors.push({ stage: 'clear-web-storage', error });
+        }
+
+        if (errors.length) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify(
+                '本地数据仅部分清除（数据库删除失败或被跳过，或 web storage 清理失败），'
+                + '请关闭其他标签页后重试。',
+                'error'
+            );
             return {
-                success: true,
-                terminal: reload(options),
+                success: false,
+                reason: 'partial_reset',
+                terminal: false,
+                retryable: true,
+                errors: errors.concat(rollbackErrors),
                 databases: DATABASE_NAMES.slice(),
                 externalBackupFilesPreserved: true
             };
-        })();
+        }
 
-        try { return await resetPromise; }
-        finally { resetPromise = null; }
+        try {
+            const commitResult = await service.commitFullResetPreparation();
+            if (isExplicitFailure(commitResult)) {
+                throw resultError(commitResult, '外部备份清理准备提交失败');
+            }
+        } catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify('外部备份清理提交失败，本次清理需要重试。', 'error');
+            return {
+                success: false,
+                reason: 'partial_reset',
+                terminal: false,
+                retryable: true,
+                errors: [{ stage: 'commit-full-reset-preparation', error }].concat(rollbackErrors),
+                databases: DATABASE_NAMES.slice(),
+                externalBackupFilesPreserved: true
+            };
+        }
+
+        return {
+            success: true,
+            terminal: false,
+            databases: DATABASE_NAMES.slice(),
+            externalBackupFilesPreserved: true
+        };
+    }
+
+    function perform(options = {}) {
+        if (resetPromise) return resetPromise;
+        const run = (async () => {
+            const serviceInfo = getFullResetService();
+            if (!serviceInfo.service) {
+                return externalBackupFailure(
+                    serviceInfo.error,
+                    '外部备份服务或跨标签安全锁不可用，本次清理已取消。'
+                );
+            }
+
+            let callbackEntered = false;
+            let result;
+            try {
+                result = await serviceInfo.service.withFullResetLock(async () => {
+                    callbackEntered = true;
+                    return performLocked(serviceInfo.service);
+                });
+            } catch (error) {
+                return externalBackupFailure(
+                    error,
+                    '外部备份跨标签安全锁不可用，本次清理已取消。'
+                );
+            }
+
+            if (!callbackEntered || typeof result === 'undefined') {
+                return externalBackupFailure(
+                    new Error('外部备份服务未能提供跨标签安全锁'),
+                    '外部备份跨标签安全锁不可用，本次清理已取消。'
+                );
+            }
+
+            if (result && result.success === true) result.terminal = reload(options);
+            return result;
+        })();
+        resetPromise = run;
+        const clearResetPromise = () => {
+            if (resetPromise === run) resetPromise = null;
+        };
+        run.then(clearResetPromise, clearResetPromise);
+        return run;
     }
 
     async function request(options = {}) {
@@ -10638,7 +11669,7 @@
     "examId": "p2-medium-243",
     "dataKey": "p2-medium-243",
     "script": "./p2-medium-243.js",
-    "title": "The internal body clock",
+    "title": "The internal body clock 生物钟",
     "category": "P2",
     "frequency": "次高频",
     "difficultyScore": 3.5,
@@ -10653,7 +11684,7 @@
     "examId": "p3-medium-244",
     "dataKey": "p3-medium-244",
     "script": "./p3-medium-244.js",
-    "title": "Look who was talking",
+    "title": "Look who was talking 语言的起源",
     "category": "P3",
     "frequency": "次高频",
     "difficultyScore": 4,

@@ -330,15 +330,20 @@
             }
         },
         async handleSuitePracticeComplete(examId, data, sourceWindow = null) {
-            const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => (
-                data && data.submissionId
+            const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => {
+                // teardownSession 只在套题已落库并交由子窗口自行收尾时出现，
+                // 此处解除关闭防护可保证早于 PRACTICE_SUBMIT_ACK 回执发出。
+                if (committed && extra && extra.teardownSession) {
+                    this._releaseSuiteCloseGuardAfterCommit(extra.teardownSession, sourceWindow);
+                }
+                return data && data.submissionId
                     ? Object.assign({
                         handled: Boolean(handled),
                         committed: Boolean(committed),
                         errorCode: errorCode || null
                     }, extra || {})
-                    : Boolean(handled)
-            );
+                    : Boolean(handled);
+            };
             // First check whether this is multi-suite mode (detected via suiteId).
             if (data && data.suiteId) {
                 const committed = await this.handleMultiSuitePracticeComplete(examId, data);
@@ -705,15 +710,19 @@
         },
 
         async _handleInlineSimulationSuiteSubmit(examId, data, sourceWindow = null) {
-            const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => (
-                data && data.submissionId
+            const withSubmitOutcome = (handled, committed = handled, errorCode = '', extra = null) => {
+                // 与 handleSuitePracticeComplete 同理：套题已终结时立刻放行子窗口自关闭。
+                if (committed && extra && extra.teardownSession) {
+                    this._releaseSuiteCloseGuardAfterCommit(extra.teardownSession, sourceWindow);
+                }
+                return data && data.submissionId
                     ? Object.assign({
                         handled: Boolean(handled),
                         committed: Boolean(committed),
                         errorCode: errorCode || null
                     }, extra || {})
-                    : Boolean(handled)
-            );
+                    : Boolean(handled);
+            };
             const session = this.currentSuiteSession;
             if (!session || session.flowMode !== 'simulation') {
                 return false;
@@ -4248,6 +4257,38 @@
                     targetWindow.__IELTS_SUITE_PARENT_GUARD__ = null;
                 } catch (_) {}
             }
+        },
+
+        // 套题已落库（committed）且交由子窗口自行收尾时调用：此刻防护已完成使命，
+        // 必须立即撤下，否则子窗口的合法自关闭会被 guardedClose 吞掉，
+        // 只能等 _scheduleSuiteSubmitTeardown 的 30s 兜底才真正关闭。
+        // 仅解除关闭防护，不做任何会话拆除，回执重放窗口保持有效。
+        _releaseSuiteCloseGuardAfterCommit(session, sourceWindow = null) {
+            if (!session) {
+                return false;
+            }
+
+            const targets = [];
+            const pushTarget = (candidate) => {
+                if (candidate && !targets.includes(candidate)) {
+                    targets.push(candidate);
+                }
+            };
+            pushTarget(session.windowRef);
+            pushTarget(sourceWindow);
+
+            let released = false;
+            targets.forEach((targetWindow) => {
+                try {
+                    // _releaseSuiteWindowGuard 读不到 guardInfo 时直接返回，可安全重复调用；
+                    // 稍后的 _teardownSuiteSessionInternal 会再调一次。
+                    this._releaseSuiteWindowGuard(targetWindow);
+                    released = true;
+                } catch (error) {
+                    console.warn('[SuitePractice] 套题结算后解除窗口关闭防护失败:', error);
+                }
+            });
+            return released;
         },
 
         _recordSuiteCloseAttempt(session, reason) {
