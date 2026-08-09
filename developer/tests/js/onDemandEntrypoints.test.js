@@ -22,8 +22,25 @@ function recordResult(name, passed, detail) {
 }
 
 function createDocumentStub(inputState, buttonState) {
+    const elementsById = new Map();
+    const body = {
+        appendChild(element) {
+            element.parentNode = body;
+            if (element.id) elementsById.set(element.id, element);
+            return element;
+        },
+        removeChild(element) {
+            if (element && element.id && elementsById.get(element.id) === element) {
+                elementsById.delete(element.id);
+            }
+            if (element) element.parentNode = null;
+            return element;
+        }
+    };
+
     return {
         readyState: 'complete',
+        body,
         addEventListener() {},
         querySelector(selector) {
             if (selector === '.main-nav [data-view="practice"]' || selector === '.main-nav [data-view="browse"]' || selector === '.main-nav [data-view="more"]') {
@@ -41,6 +58,9 @@ function createDocumentStub(inputState, buttonState) {
             return [];
         },
         getElementById(id) {
+            if (elementsById.has(id)) {
+                return elementsById.get(id);
+            }
             if (id === 'exam-search-input') {
                 return inputState;
             }
@@ -48,6 +68,44 @@ function createDocumentStub(inputState, buttonState) {
                 return buttonState;
             }
             return null;
+        },
+        createElement(tagName) {
+            const listeners = new Map();
+            return {
+                tagName: String(tagName || '').toUpperCase(),
+                id: '',
+                parentNode: null,
+                style: {},
+                innerHTML: '',
+                addEventListener(type, listener) {
+                    listeners.set(type, listener);
+                },
+                querySelector() {
+                    return null;
+                },
+                querySelectorAll() {
+                    return [];
+                },
+                __click(attribute, value) {
+                    const listener = listeners.get('click');
+                    assert(listener, `element ${this.id || tagName} should have a click listener`);
+                    const target = {
+                        closest(selector) {
+                            if (selector === 'button' || selector.includes(`[${attribute}]`)) {
+                                return this;
+                            }
+                            return null;
+                        },
+                        getAttribute(name) {
+                            return name === attribute ? value : null;
+                        },
+                        hasAttribute(name) {
+                            return name === attribute;
+                        }
+                    };
+                    listener({ target });
+                }
+            };
         }
     };
 }
@@ -156,10 +214,124 @@ async function testClearSearchProxyLoadsBrowseRuntime(harness) {
     });
 }
 
+async function waitForElement(document, id) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        const element = document.getElementById(id);
+        if (element) return element;
+        await Promise.resolve();
+    }
+    assert.fail(`timed out waiting for #${id}`);
+}
+
+function createSuiteRecoveryHarness(candidate, options = {}) {
+    const harness = createHarness();
+    const events = [];
+    harness.windowStub.app = {
+        async getSuiteRecoveryCandidate() {
+            events.push({ type: 'candidate' });
+            return candidate;
+        },
+        async abandonSuiteRecovery(sessionId) {
+            events.push({ type: 'abandon', sessionId });
+            return options.abandonResult !== false;
+        },
+        async startSuitePractice(startOptions) {
+            events.push({ type: 'start', options: { ...startOptions } });
+            return 'started';
+        }
+    };
+    loadScript('js/presentation/app-actions.js', harness.context);
+    return { ...harness, events };
+}
+
+async function testSuiteRecoveryRequiresExplicitContinueChoice() {
+    const candidate = {
+        id: 'suite-recovery-1',
+        title: '<img src=x onerror=alert(1)>',
+        completedCount: 1,
+        total: 3
+    };
+    const harness = createSuiteRecoveryHarness(candidate);
+
+    const firstLaunch = harness.windowStub.AppActions.startSuitePractice();
+    const duplicateLaunch = harness.windowStub.AppActions.startSuitePractice();
+    const modal = await waitForElement(harness.windowStub.document, 'suite-recovery-choice-modal');
+
+    assert(modal.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;'), '恢复标题应转义后再写入 modal');
+    assert(!modal.innerHTML.includes('<img src=x onerror=alert(1)>'), '恢复标题不得作为 HTML 注入');
+    assert.strictEqual(harness.events.filter((event) => event.type === 'candidate').length, 1, '重复点击只能读取一次恢复候选');
+    assert.strictEqual(harness.events.filter((event) => event.type === 'start').length, 0, '用户选择前不得隐式恢复');
+
+    modal.__click('data-suite-recovery-choice', 'continue');
+    await Promise.all([firstLaunch, duplicateLaunch]);
+
+    const starts = harness.events.filter((event) => event.type === 'start');
+    assert.strictEqual(starts.length, 1, 'Continue 只能启动一次恢复');
+    assert.strictEqual(starts[0].options.recoveryAction, 'continue');
+    assert.strictEqual(starts[0].options.recoverySessionId, candidate.id);
+    assert.strictEqual(harness.events.filter((event) => event.type === 'abandon').length, 0);
+    recordResult('套题恢复必须显式选择 Continue', true, { events: harness.events });
+}
+
+async function testSuiteRecoveryAbandonThenStartsFreshSuite() {
+    const candidate = {
+        id: 'suite-recovery-2',
+        title: 'Reading Passage 2',
+        completedCount: 2,
+        total: 3
+    };
+    const harness = createSuiteRecoveryHarness(candidate);
+
+    const launch = harness.windowStub.AppActions.startSuitePractice();
+    const recoveryModal = await waitForElement(harness.windowStub.document, 'suite-recovery-choice-modal');
+    recoveryModal.__click('data-suite-recovery-choice', 'discard');
+
+    const modeModal = await waitForElement(harness.windowStub.document, 'suite-mode-selector-modal');
+    assert.deepStrictEqual(
+        harness.events.filter((event) => event.type === 'abandon').map((event) => event.sessionId),
+        [candidate.id],
+        'Abandon 应先删除指定恢复候选'
+    );
+    assert.strictEqual(harness.events.filter((event) => event.type === 'start').length, 0, '放弃完成前不得启动新套题');
+
+    modeModal.__click('data-suite-flow-mode', 'classic');
+    await launch;
+
+    const starts = harness.events.filter((event) => event.type === 'start');
+    assert.strictEqual(starts.length, 1, '放弃后应仅启动一套新题');
+    assert.strictEqual(starts[0].options.flowMode, 'classic');
+    assert.strictEqual(starts[0].options.frequencyScope, 'all');
+    assert.strictEqual(starts[0].options.recoveryAction, undefined, '新套题不得携带恢复动作');
+    assert.strictEqual(harness.events[1].type, 'abandon');
+    assert.strictEqual(harness.events[2].type, 'start');
+    recordResult('套题恢复可显式 Abandon 后新建', true, { events: harness.events });
+}
+
+async function testSuiteRecoveryCancelDoesNotMutateSession() {
+    const harness = createSuiteRecoveryHarness({
+        id: 'suite-recovery-3',
+        title: 'Reading Passage 3',
+        completedCount: 0,
+        total: 3
+    });
+
+    const launch = harness.windowStub.AppActions.startSuitePractice();
+    const modal = await waitForElement(harness.windowStub.document, 'suite-recovery-choice-modal');
+    modal.__click('data-suite-recovery-choice', 'cancel');
+    await launch;
+
+    assert.strictEqual(harness.events.filter((event) => event.type === 'start').length, 0, 'Cancel 不得启动或恢复套题');
+    assert.strictEqual(harness.events.filter((event) => event.type === 'abandon').length, 0, 'Cancel 不得删除恢复候选');
+    recordResult('套题恢复取消不改变会话', true, { events: harness.events });
+}
+
 async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
+        await testSuiteRecoveryRequiresExplicitContinueChoice();
+        await testSuiteRecoveryAbandonThenStartsFreshSuite();
+        await testSuiteRecoveryCancelDoesNotMutateSession();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

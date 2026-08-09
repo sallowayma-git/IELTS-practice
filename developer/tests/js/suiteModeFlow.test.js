@@ -117,7 +117,8 @@ async function main() {
             },
             async listDrafts() { return []; },
             async listActiveSessions() { return []; },
-            async saveActiveSession() { return { committed: true }; }
+            async saveActiveSession() { return { committed: true }; },
+            async discardActiveSession() { return { committed: true }; }
         }
     };
     windowStub.CustomEvent = function CustomEvent(type, init = {}) {
@@ -332,13 +333,37 @@ async function main() {
     const failureMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('无法继续套题练习'));
     assert.strictEqual(failureMessage, undefined, '不应出现无法继续的警告');
 
-    const handledP3 = await app.handleSuitePracticeComplete(thirdExam.examId, practicePayload);
-    assert.strictEqual(handledP3, true, 'P3 完成后应顺利收尾');
-    assert.strictEqual(app.currentSuiteSession, null, '套题会话应在完成后被清理');
+    const finalWindow = app.currentSuiteSession.windowRef;
+    const finalPayload = {
+        ...practicePayload,
+        submissionId: 'submission-p3',
+        sessionId: 'session-reading-p3',
+        suiteSessionId: session.id
+    };
+    const handledP3 = await app.handleSuitePracticeComplete(thirdExam.examId, finalPayload, finalWindow);
+    assert.strictEqual(handledP3.handled, true, 'P3 完成后应进入提交收尾');
+    assert.strictEqual(handledP3.committed, true, 'P3 结果应在 ACK 前完成持久化');
+    assert.strictEqual(app.currentSuiteSession, session, 'ACK 前应保留套题会话以支持回执重放');
+    assert.strictEqual(finalWindow.closed, false, 'ACK 前不应关闭子窗口');
 
     const savedPracticeRecords = await windowStub.AppData.practice.list();
     assert.strictEqual(savedPracticeRecords.length, 1, '应只生成一条套题练习记录');
     assert.strictEqual(savedPracticeRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
+
+    assert.strictEqual(
+        app._announcePracticeSubmitOutcome(thirdExam.examId, finalPayload, finalWindow, true),
+        true,
+        '持久化完成后应向子窗口发送 ACK'
+    );
+    const submitAck = finalWindow._messages.find(msg => msg && msg.type === 'PRACTICE_SUBMIT_ACK');
+    assert(submitAck, '子窗口应收到最终提交 ACK');
+    assert.strictEqual(app.currentSuiteSession, session, 'ACK 后、延迟清理前仍应保留套题会话');
+    assert.strictEqual(finalWindow.closed, false, 'ACK 后由子页自行退出，宿主不应立即强制关闭');
+    assert.strictEqual(app._scheduleSuiteSubmitTeardown(handledP3.teardownSession), true, '应调度延迟清理兜底');
+    assert(session.submitReceiptTeardownTimer, '延迟清理计时器应已注册');
+    assert.strictEqual(await app._teardownSuiteSession(session), true, '执行延迟清理应成功');
+    assert.strictEqual(app.currentSuiteSession, null, '延迟清理后应释放套题会话');
+    assert.strictEqual(finalWindow.closed, true, '延迟清理兜底应关闭仍存活的子窗口');
 
     const completionMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('套题练习已完成'));
     assert(completionMessage, '应提示套题练习完成');
