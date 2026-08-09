@@ -4777,6 +4777,11 @@ class PracticeRecorder {
      * 处理会话完成
      */
     async handleSessionCompleted(rawData) {
+        const rawHasExplicitSuiteOwnership = Boolean(
+            rawData
+            && typeof rawData === 'object'
+            && Object.prototype.hasOwnProperty.call(rawData, 'suiteSessionId')
+        );
         const payload = this.ensureCompletionPayloadShape(rawData);
         if (!payload) {
             console.warn('[PracticeRecorder] 无法处理会话完成事件：缺少必要数据');
@@ -4784,28 +4789,40 @@ class PracticeRecorder {
         }
 
         const { results } = payload;
-        const examIndex = await window.resolveActiveLibraryIndex();
         const candidateExamIds = [
             payload.examId,
             payload.originalExamId,
             payload.derivedExamId,
             payload.rawExamId
         ].map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean);
+        const payloadSessionId = payload.sessionId != null
+            ? String(payload.sessionId).trim()
+            : '';
 
         let resolvedExamId = candidateExamIds[0] || null;
         let session = null;
 
         for (const candidateId of candidateExamIds) {
             if (candidateId && this.activeSessions.has(candidateId)) {
+                const candidateSession = this.activeSessions.get(candidateId);
+                const candidateSessionId = candidateSession && candidateSession.sessionId != null
+                    ? String(candidateSession.sessionId).trim()
+                    : '';
+                if (payloadSessionId && candidateSessionId !== payloadSessionId) {
+                    continue;
+                }
                 resolvedExamId = candidateId;
-                session = this.activeSessions.get(candidateId);
+                session = candidateSession;
                 break;
             }
         }
 
-        if (!session && payload.sessionId) {
+        if (!session && payloadSessionId) {
             for (const [storedExamId, storedSession] of this.activeSessions.entries()) {
-                if (storedSession && storedSession.sessionId === payload.sessionId) {
+                const storedSessionId = storedSession && storedSession.sessionId != null
+                    ? String(storedSession.sessionId).trim()
+                    : '';
+                if (storedSessionId === payloadSessionId) {
                     resolvedExamId = storedExamId;
                     session = storedSession;
                     break;
@@ -4813,12 +4830,37 @@ class PracticeRecorder {
             }
         }
 
+        // Freeze the exact active-session owner before the first await. Another launch
+        // may replace the same examId, or rebind this object in place, while the library
+        // index is resolving. Save the frozen data, and only end the unchanged owner.
+        const exactSession = session;
+        const exactSessionId = exactSession && exactSession.sessionId != null
+            ? String(exactSession.sessionId).trim()
+            : '';
+        let exactSessionEntityId = null;
+        if (exactSession) {
+            try {
+                exactSessionEntityId = this.activeSessionEntityId(exactSession);
+            } catch (_) {
+                exactSessionEntityId = null;
+            }
+            session = this.clonePlainObject(exactSession);
+        }
+        const stillOwnsExactSession = () => {
+            const current = this.activeSessions.get(resolvedExamId);
+            if (!exactSession || !exactSessionEntityId || current !== exactSession) return false;
+            const currentSessionId = current.sessionId != null ? String(current.sessionId).trim() : '';
+            if (currentSessionId !== exactSessionId) return false;
+            try {
+                return this.activeSessionEntityId(current) === exactSessionEntityId;
+            } catch (_) {
+                return false;
+            }
+        };
+        const examIndex = await window.resolveActiveLibraryIndex();
+
         if (!resolvedExamId) {
             resolvedExamId = payload.examId || payload.originalExamId || payload.derivedExamId || `unknown_${Date.now()}`;
-        }
-
-        if (session && payload.sessionId && session.sessionId !== payload.sessionId) {
-            session.sessionId = payload.sessionId;
         }
 
         let syntheticSession = false;
@@ -4869,11 +4911,30 @@ class PracticeRecorder {
             examEntry,
             type
         );
-        let suiteSessionId = payload.suiteSessionId
-            || metadata?.suiteSessionId
-            || session?.metadata?.suiteSessionId
-            || null;
-        if (!suiteSessionId) {
+        const payloadHasExplicitSuiteOwnership = Object.prototype.hasOwnProperty.call(
+            payload,
+            'suiteSessionId'
+        );
+        const hasManagedSuiteOwnership = rawHasExplicitSuiteOwnership
+            || payloadHasExplicitSuiteOwnership;
+        const explicitSuiteSessionId = payloadHasExplicitSuiteOwnership
+            ? payload.suiteSessionId
+            : (rawHasExplicitSuiteOwnership ? rawData.suiteSessionId : null);
+        const explicitPracticeMode = [
+            payload.practiceMode,
+            rawData && rawData.practiceMode,
+            payload.metadata?.practiceMode,
+            rawData && rawData.metadata?.practiceMode,
+            results?.practiceMode,
+            results?.metadata?.practiceMode,
+            session?.practiceMode,
+            metadata?.practiceMode
+        ].find((value) => typeof value === 'string' && value.trim());
+        const hasExplicitSingleOwnership = String(explicitPracticeMode || '').trim().toLowerCase() === 'single';
+        let suiteSessionId = hasManagedSuiteOwnership
+            ? (explicitSuiteSessionId || null)
+            : (metadata?.suiteSessionId || session?.metadata?.suiteSessionId || null);
+        if (!suiteSessionId && !hasManagedSuiteOwnership && !hasExplicitSingleOwnership) {
             suiteSessionId = this.resolveSuiteSessionFromApp(resolvedExamId);
         }
         if (suiteSessionId && !metadata.suiteSessionId) {
@@ -4991,7 +5052,7 @@ class PracticeRecorder {
 
         if (suiteSessionId && !allowSuiteStandaloneSave) {
             console.log(`[PracticeRecorder] 套题模式条目 ${resolvedExamId} 属于 ${suiteSessionId}，跳过单篇记录保存。`);
-            if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
+            if (!syntheticSession && stillOwnsExactSession()) {
                 this.endPracticeSession(resolvedExamId);
             }
             return practiceRecord;
@@ -5005,7 +5066,7 @@ class PracticeRecorder {
         try {
             const savedRecord = await this.savePracticeRecord(practiceRecord);
 
-            if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
+            if (!syntheticSession && stillOwnsExactSession()) {
                 this.endPracticeSession(resolvedExamId);
             }
 

@@ -421,6 +421,38 @@ async function run() {
     assert.strictEqual(acceptedDraft.committed, true);
     assert(await app.recovery.getDraft('reading-draft:guarded'));
     await app.recovery.discardDraft('reading-draft:guarded');
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence('active-never-persisted')) },
+        { id: 'active-never-persisted', exists: false, tombstoned: false, revision: 0 }
+    );
+    assert.strictEqual((await app.recovery.saveActiveSession({
+        id: 'active-discard-guard',
+        revision: 1,
+        marker: 'guarded-owner'
+    }, { expectedEntityRevision: 0 })).committed, true);
+    let rejectedDiscardGuardCalls = 0;
+    const rejectedDiscard = await app.recovery.discardActiveSession('active-discard-guard', {
+        expectedEntityRevision: 1,
+        commitGuard() {
+            rejectedDiscardGuardCalls += 1;
+            return false;
+        }
+    });
+    assert.strictEqual(rejectedDiscard.committed, false);
+    assert.strictEqual(rejectedDiscard.code, 'STALE_RECOVERY_WRITE');
+    assert.strictEqual(rejectedDiscard.reason, 'COMMIT_GUARD_REJECTED');
+    assert.strictEqual(rejectedDiscardGuardCalls, 1);
+    assert(await app.recovery.getActiveSession('active-discard-guard'), 'a rejected discard guard must not write a tombstone');
+    const acceptedDiscard = await app.recovery.discardActiveSession('active-discard-guard', {
+        expectedEntityRevision: 1,
+        commitGuard: () => true
+    });
+    assert.strictEqual(acceptedDiscard.committed, true);
+    assert.strictEqual(await app.recovery.getActiveSession('active-discard-guard'), null);
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence('active-discard-guard')) },
+        { id: 'active-discard-guard', exists: true, tombstoned: true, revision: 2 }
+    );
     const casFirst = await app.recovery.saveActiveSession({
         id: 'active-cas',
         revision: 1,
@@ -428,6 +460,11 @@ async function run() {
         marker: 'first'
     }, { expectedEntityRevision: 0 });
     assert.strictEqual(casFirst.committed, true);
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence('active-cas')) },
+        { id: 'active-cas', exists: true, tombstoned: false, revision: 1 },
+        'the public recovery fence must expose the live raw first owner revision'
+    );
     const casSecond = await app.recovery.saveActiveSession({
         id: 'active-cas',
         revision: 2,
@@ -492,6 +529,11 @@ async function run() {
     const currentDiscard = await app.recovery.discardActiveSession('active-cas', { expectedEntityRevision: 2 });
     assert.strictEqual(currentDiscard.committed, true);
     assert.strictEqual(await app.recovery.getActiveSession('active-cas'), null);
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence('active-cas')) },
+        { id: 'active-cas', exists: true, tombstoned: true, revision: 3 },
+        'active-session reads hide a CAS tombstone while the fence preserves its completion proof'
+    );
     const delayedFirstSave = await app.recovery.saveActiveSession({
         id: 'active-cas',
         revision: 1,
@@ -513,6 +555,21 @@ async function run() {
     }, { expectedEntityRevision: 0 });
     assert.strictEqual(delayedAfterCleanup.committed, false, 'cleanup must not reopen a discarded entity revision');
     const recoveryKey = 'recovery.activeSessions';
+    const mutateRawActiveSessions = (operationId, mutate) => {
+        const current = shared.docs.get(recoveryKey);
+        const items = clone(current && current.data || []);
+        mutate(items);
+        shared.docs.set(recoveryKey, envelope(
+            recoveryKey,
+            items,
+            'present',
+            Number(current && current.revision || 0) + 1,
+            operationId
+        ));
+        return items;
+    };
+    const rawActiveSessionsFor = (id) => clone(shared.docs.get(recoveryKey)?.data || [])
+        .filter((item) => String(item && (item.id || item.sessionId || item.recordId) || '') === String(id));
     const shadowedByTombstoneId = 'active-shadowed-by-tombstone';
     assert.strictEqual((await app.recovery.saveActiveSession({
         id: shadowedByTombstoneId,
@@ -543,6 +600,11 @@ async function run() {
         'a later duplicate must not become visible when the raw first owner is a tombstone'
     );
     assert.strictEqual(await app.recovery.getActiveSession(shadowedByTombstoneId), null);
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence(shadowedByTombstoneId)) },
+        { id: shadowedByTombstoneId, exists: true, tombstoned: true, revision: 2 },
+        'the fence must keep the raw first tombstone authoritative over a later duplicate'
+    );
     const shadowedDuplicateSave = await app.recovery.saveActiveSession({
         id: shadowedByTombstoneId,
         revision: 10,
@@ -603,6 +665,220 @@ async function run() {
         marker: 'recreated-after-ttl'
     }, { expectedEntityRevision: 0 });
     assert.strictEqual(recreatedAfterTtl.committed, true);
+
+    // A. Exclusive suite ownership is derived from the raw first owner only.
+    const saveSingleSuiteClaim = (id, revision = 1, expectedEntityRevision = 0, marker = '') => (
+        app.recovery.saveActiveSession({
+            id,
+            revision,
+            schema: 'suite-session-v2',
+            version: 2,
+            marker
+        }, { expectedEntityRevision, exclusiveGroup: 'suite-practice' })
+    );
+    const saveMultiSuiteRecovery = (id, marker = '') => app.recovery.saveActiveSession({
+        id,
+        revision: 1,
+        schema: 'multi-suite-sessions-v2',
+        version: 2,
+        sessions: [],
+        marker
+    }, { expectedEntityRevision: 0 });
+
+    const legacyUntaggedSuiteId = 'suite-legacy-untagged-first-owner';
+    mutateRawActiveSessions('append-legacy-untagged-suite-owner', (items) => {
+        items.push({
+            id: legacyUntaggedSuiteId,
+            revision: 1,
+            schema: 'suite-session-v2',
+            version: 2,
+            marker: 'legacy-untagged-first-owner',
+            updatedAt: new Date().toISOString()
+        });
+    });
+    const blockedByLegacyOwner = await saveSingleSuiteClaim('suite-blocked-by-legacy-owner');
+    assert.strictEqual(blockedByLegacyOwner.committed, false, 'legacy untagged suite-session-v2 must occupy the singleton suite group');
+    assert.strictEqual(blockedByLegacyOwner.code, 'RECOVERY_GROUP_CONFLICT');
+    assert.strictEqual(blockedByLegacyOwner.conflictingEntityId, legacyUntaggedSuiteId);
+    await app.recovery.discardActiveSession(legacyUntaggedSuiteId);
+
+    const multiBeforeSingleId = 'multi-suite-before-single';
+    const singleAfterMultiId = 'single-suite-after-multi';
+    assert.strictEqual((await saveMultiSuiteRecovery(multiBeforeSingleId, 'multi-first')).committed, true);
+    assert.strictEqual(
+        (await saveSingleSuiteClaim(singleAfterMultiId, 1, 0, 'single-second')).committed,
+        true,
+        'multi-suite schema must not occupy the singleton suite-practice group'
+    );
+    assert(await app.recovery.getActiveSession(multiBeforeSingleId));
+    assert(await app.recovery.getActiveSession(singleAfterMultiId));
+    await app.recovery.discardActiveSession(multiBeforeSingleId);
+    await app.recovery.discardActiveSession(singleAfterMultiId);
+
+    const singleBeforeMultiId = 'single-suite-before-multi';
+    const multiAfterSingleId = 'multi-suite-after-single';
+    assert.strictEqual((await saveSingleSuiteClaim(singleBeforeMultiId, 1, 0, 'single-first')).committed, true);
+    assert.strictEqual(
+        (await saveMultiSuiteRecovery(multiAfterSingleId, 'multi-second')).committed,
+        true,
+        'an active singleton suite must not block an independent multi-suite recovery'
+    );
+    assert(await app.recovery.getActiveSession(singleBeforeMultiId));
+    assert(await app.recovery.getActiveSession(multiAfterSingleId));
+    await app.recovery.discardActiveSession(singleBeforeMultiId);
+    await app.recovery.discardActiveSession(multiAfterSingleId);
+
+    const sameIdSuiteOwner = 'suite-same-id-raw-duplicate';
+    assert.strictEqual((await saveSingleSuiteClaim(sameIdSuiteOwner, 1, 0, 'raw-first')).committed, true);
+    mutateRawActiveSessions('append-same-id-suite-duplicate', (items) => {
+        items.push({
+            id: sameIdSuiteOwner,
+            revision: 9,
+            schema: 'suite-session-v2',
+            version: 2,
+            _recoveryExclusiveGroup: 'suite-practice',
+            marker: 'raw-shadow',
+            updatedAt: new Date().toISOString()
+        });
+    });
+    assert.strictEqual(
+        (await saveSingleSuiteClaim(sameIdSuiteOwner, 2, 1, 'updated-first-owner')).committed,
+        true,
+        'a raw duplicate of the same logical id must not conflict with its own suite update'
+    );
+
+    // B. The public fence must keep reporting the raw first owner, never its shadow.
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence(sameIdSuiteOwner)) },
+        { id: sameIdSuiteOwner, exists: true, tombstoned: false, revision: 2 },
+        'a later high-revision duplicate must not replace the live raw first-owner fence'
+    );
+    await app.recovery.discardActiveSession(sameIdSuiteOwner);
+
+    const tombstonedSuiteOwner = 'suite-tombstoned-first-owner-with-shadow';
+    assert.strictEqual((await saveSingleSuiteClaim(tombstonedSuiteOwner, 1, 0, 'tombstone-source')).committed, true);
+    assert.strictEqual((await app.recovery.discardActiveSession(tombstonedSuiteOwner, {
+        expectedEntityRevision: 1
+    })).committed, true);
+    mutateRawActiveSessions('append-suite-shadow-after-tombstone', (items) => {
+        items.push({
+            id: tombstonedSuiteOwner,
+            revision: 11,
+            schema: 'suite-session-v2',
+            version: 2,
+            _recoveryExclusiveGroup: 'suite-practice',
+            marker: 'must-remain-shadowed',
+            updatedAt: new Date().toISOString()
+        });
+    });
+    const claimAfterShadowedTombstone = await saveSingleSuiteClaim('suite-after-shadowed-tombstone');
+    assert.strictEqual(
+        claimAfterShadowedTombstone.committed,
+        true,
+        'a suite duplicate shadowed by its first tombstone must not block a different suite id'
+    );
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence(tombstonedSuiteOwner)) },
+        { id: tombstonedSuiteOwner, exists: true, tombstoned: true, revision: 2 },
+        'the tombstone must remain the fence owner when a later live suite duplicate exists'
+    );
+    await app.recovery.discardActiveSession(tombstonedSuiteOwner);
+    await app.recovery.discardActiveSession('suite-after-shadowed-tombstone');
+
+    // C. TTL and retry cleanup operate on whole first-owner logical-id groups.
+    const expiredFirstOwnerAt = new Date(Date.now() - (31 * 24 * 60 * 60 * 1000)).toISOString();
+    const seedExpiredTombstoneWithFreshShadow = async (id, operationId) => {
+        assert.strictEqual((await app.recovery.saveActiveSession({
+            id,
+            revision: 1,
+            marker: 'ttl-first-owner'
+        }, { expectedEntityRevision: 0 })).committed, true);
+        assert.strictEqual((await app.recovery.discardActiveSession(id, {
+            expectedEntityRevision: 1
+        })).committed, true);
+        mutateRawActiveSessions(operationId, (items) => {
+            const firstOwner = items.find((item) => item && item.id === id);
+            firstOwner.updatedAt = expiredFirstOwnerAt;
+            items.push({
+                id,
+                revision: 19,
+                marker: 'fresh-shadow-must-not-promote',
+                updatedAt: new Date().toISOString()
+            });
+        });
+    };
+
+    const ttlFirstOwnerGroupId = 'active-ttl-first-owner-group';
+    await seedExpiredTombstoneWithFreshShadow(ttlFirstOwnerGroupId, 'seed-ttl-first-owner-group');
+    assert.deepStrictEqual(
+        { ...(await app.recovery.getActiveSessionFence(ttlFirstOwnerGroupId)) },
+        { id: ttlFirstOwnerGroupId, exists: false, tombstoned: false, revision: 0 },
+        'TTL pruning must remove an expired first tombstone and every fresh shadow with the same logical id'
+    );
+    assert.deepStrictEqual(rawActiveSessionsFor(ttlFirstOwnerGroupId), [], 'TTL pruning must not promote a fresh shadow duplicate');
+
+    const cleanupExpiredGroupId = 'active-cleanup-expired-first-owner-group';
+    await seedExpiredTombstoneWithFreshShadow(cleanupExpiredGroupId, 'seed-cleanup-first-owner-group');
+    const expiredFirstOwnerGroupCleanup = await app.recovery.cleanupForRetry();
+    assert.deepStrictEqual(
+        Array.from(expiredFirstOwnerGroupCleanup.removedByKind.activeSession)
+            .filter((id) => id === cleanupExpiredGroupId),
+        [cleanupExpiredGroupId],
+        'retry cleanup must report an expired logical group exactly once'
+    );
+    assert.deepStrictEqual(rawActiveSessionsFor(cleanupExpiredGroupId), [], 'retry cleanup must remove every shadow of an expired first owner');
+
+    const preservedLogicalGroupId = 'active-cleanup-preserved-logical-group';
+    assert.strictEqual((await app.recovery.saveActiveSession({
+        id: preservedLogicalGroupId,
+        revision: 1,
+        marker: 'preserved-first-owner'
+    }, { expectedEntityRevision: 0 })).committed, true);
+    mutateRawActiveSessions('append-preserved-logical-shadow', (items) => {
+        items.push({
+            id: preservedLogicalGroupId,
+            revision: 7,
+            marker: 'preserved-shadow',
+            updatedAt: new Date().toISOString()
+        });
+    });
+    const preservedLogicalGroupCleanup = await app.recovery.cleanupForRetry({
+        preserve: { activeSession: [preservedLogicalGroupId] },
+        discardable: { activeSession: [preservedLogicalGroupId] }
+    });
+    assert.strictEqual(
+        Array.from(preservedLogicalGroupCleanup.removedByKind.activeSession).includes(preservedLogicalGroupId),
+        false,
+        'preserve must win for the complete logical-id group'
+    );
+    assert.strictEqual(rawActiveSessionsFor(preservedLogicalGroupId).length, 2, 'preserve must retain the first owner and every raw shadow');
+    await app.recovery.discardActiveSession(preservedLogicalGroupId);
+
+    const discardableLogicalGroupId = 'active-cleanup-discardable-logical-group';
+    assert.strictEqual((await app.recovery.saveActiveSession({
+        id: discardableLogicalGroupId,
+        revision: 1,
+        marker: 'discardable-first-owner'
+    }, { expectedEntityRevision: 0 })).committed, true);
+    mutateRawActiveSessions('append-discardable-logical-shadow', (items) => {
+        items.push({
+            id: discardableLogicalGroupId,
+            revision: 8,
+            marker: 'discardable-shadow',
+            updatedAt: new Date().toISOString()
+        });
+    });
+    const discardableLogicalGroupCleanup = await app.recovery.cleanupForRetry({
+        discardable: { activeSession: [discardableLogicalGroupId] }
+    });
+    assert.deepStrictEqual(
+        Array.from(discardableLogicalGroupCleanup.removedByKind.activeSession)
+            .filter((id) => id === discardableLogicalGroupId),
+        [discardableLogicalGroupId],
+        'discardable cleanup must report one removal per logical id instead of one per raw duplicate'
+    );
+    assert.deepStrictEqual(rawActiveSessionsFor(discardableLogicalGroupId), [], 'discardable cleanup must remove the entire logical-id group');
+
     const suiteClaimA = await app.recovery.saveActiveSession({
         id: 'suite-claim-a',
         revision: 1,

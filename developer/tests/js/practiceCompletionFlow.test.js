@@ -126,10 +126,23 @@ function createAppHarness(options = {}) {
     const context = vm.createContext(sandbox);
     loadScript('js/app/examSessionMixin.js', context);
 
+    const examWindow = {
+        closed: false,
+        postMessage() {}
+    };
     const app = {
         components: {},
         examWindows: new Map([
-            ['reading-p1', { expectedSessionId: 'session-p1', sessionId: 'session-p1' }]
+            ['reading-p1', {
+                window: examWindow,
+                expectedSessionId: 'session-p1',
+                sessionId: 'session-p1',
+                windowSessionToken: 'token-p1',
+                windowSessionTokenSessionId: 'session-p1',
+                sessionGeneration: 1,
+                suiteSessionId: null,
+                expectedOrigin: 'http://localhost'
+            }]
         ]),
         suiteExamMap: new Map(),
         currentSuiteSession: null,

@@ -64,6 +64,15 @@ async function main() {
         dispatchEvent() { return true; },
         createElement() { return { className: '', style: {} }; }
     };
+    const navigatorStub = {
+        locks: {
+            request(name, options = {}, callback) {
+                assert.strictEqual(options.mode, 'exclusive');
+                assert.strictEqual(options.ifAvailable, true);
+                return Promise.resolve(callback({ name: String(name || ''), mode: 'exclusive' }));
+            }
+        }
+    };
 
     const windowStub = {
         _messages: [],
@@ -73,6 +82,7 @@ async function main() {
         addEventListener() {},
         removeEventListener() {},
         location: { href: 'http://localhost/', origin: 'http://localhost' },
+        navigator: navigatorStub,
         crypto: webcrypto,
         screen: { availWidth: 1920, availHeight: 1080 },
         document: documentStub,
@@ -139,9 +149,11 @@ async function main() {
         document: documentStub,
         CustomEvent: windowStub.CustomEvent
     };
+    sandbox.navigator = navigatorStub;
     sandbox.globalThis = sandbox.window;
 
     const context = vm.createContext(sandbox);
+    const createVmMap = vm.runInContext('() => new Map()', context);
 
     loadScript('js/app/examSessionMixin.js', context);
     loadScript('js/app/suitePracticeMixin.js', context);
@@ -193,6 +205,7 @@ async function main() {
     };
 
     Object.assign(app, mixins.examSession, mixins.suitePractice);
+    app.examWindows = createVmMap();
 
     app.ensureExamWindowSession = function ensureExamWindowSession(examId, win) {
         if (!this.examWindows) {
@@ -210,6 +223,35 @@ async function main() {
         }
     };
     app.setupExamWindowManagement = function setupExamWindowManagement() {};
+
+    let registrationGeneration = 0;
+    const installManagedTestWindow = (targetApp, examId, targetWindow, options = {}) => {
+        registrationGeneration += 1;
+        const expectedSessionId = targetApp.generateSessionId(examId);
+        const windowInfo = {
+            examId,
+            window: targetWindow,
+            navigationOwnership: options.launchOwnership || null,
+            suiteSessionId: options.suiteSessionId || targetApp.currentSuiteSession && targetApp.currentSuiteSession.id || null,
+            expectedSessionId,
+            windowSessionToken: `flow-token-${registrationGeneration}`,
+            windowSessionTokenSessionId: expectedSessionId,
+            sessionGeneration: registrationGeneration,
+            status: 'active'
+        };
+        targetApp.examWindows.set(examId, windowInfo);
+        if (options.launchOwnership && typeof targetApp._recordExamLaunchRegistrationReceipt === 'function') {
+            targetApp._recordExamLaunchRegistrationReceipt(
+                examId,
+                options.launchOwnership,
+                targetApp._captureExamSessionRegistration(examId, windowInfo)
+            );
+        }
+        if (options.launchOwnership && typeof targetApp._commitExamLaunchOwnership === 'function') {
+            assert.strictEqual(targetApp._commitExamLaunchOwnership(options.launchOwnership), true);
+        }
+        return targetWindow;
+    };
 
     const windowsMap = new Map();
     const openCalls = [];
@@ -234,6 +276,10 @@ async function main() {
                 targetWindow = createStubWindow(name);
                 windowsMap.set(name, targetWindow);
             }
+            if (options.launchOwnership
+                && !this._claimExamLaunchWindowOwnership(options.launchOwnership, targetWindow)) {
+                return null;
+            }
             targetWindow.lastExamId = examId;
 
             if (typeof this.startPracticeSession === 'function') {
@@ -246,11 +292,15 @@ async function main() {
                 this.setupExamWindowManagement(targetWindow, examId);
             }
 
-            return targetWindow;
+            return installManagedTestWindow(this, examId, targetWindow, options);
         }
 
         if (openAttempt === 2) {
             assert(reuseWindow, '第二次调用应提供复用窗口');
+            if (options.launchOwnership
+                && !this._claimExamLaunchWindowOwnership(options.launchOwnership, reuseWindow)) {
+                return null;
+            }
             reuseWindow.lastExamId = examId;
 
             if (typeof this.startPracticeSession === 'function') {
@@ -263,7 +313,7 @@ async function main() {
                 this.setupExamWindowManagement(reuseWindow, examId);
             }
 
-            return reuseWindow;
+            return installManagedTestWindow(this, examId, reuseWindow, options);
         }
 
         if (openAttempt === 3) {
@@ -275,6 +325,10 @@ async function main() {
             const newWindow = createStubWindow(name);
             newWindow.lastExamId = examId;
             windowsMap.set(name, newWindow);
+            if (options.launchOwnership
+                && !this._claimExamLaunchWindowOwnership(options.launchOwnership, newWindow)) {
+                return null;
+            }
 
             if (typeof this.startPracticeSession === 'function') {
                 await this.startPracticeSession(examId);
@@ -286,7 +340,7 @@ async function main() {
                 this.setupExamWindowManagement(newWindow, examId);
             }
 
-            return newWindow;
+            return installManagedTestWindow(this, examId, newWindow, options);
         }
 
         return null;
@@ -357,6 +411,7 @@ async function main() {
         _updatePracticeRecordsState: async () => {}
     };
     Object.assign(appSim, mixins.examSession, mixins.suitePractice);
+    appSim.examWindows = createVmMap();
     appSim.ensureExamWindowSession = app.ensureExamWindowSession;
     appSim.injectDataCollectionScript = app.injectDataCollectionScript;
     appSim.setupExamWindowManagement = app.setupExamWindowManagement;
@@ -365,9 +420,15 @@ async function main() {
     appSim.openExam = async function(examId, options = {}) {
         simOpenCalls.push({ examId, options: { ...options } });
         const name = options.windowName && options.windowName.trim() ? options.windowName.trim() : '_blank';
-        const win = createStubWindow(name);
+        const win = options.reuseWindow && !options.reuseWindow.closed
+            ? options.reuseWindow
+            : createStubWindow(name);
+        if (options.launchOwnership
+            && !this._claimExamLaunchWindowOwnership(options.launchOwnership, win)) {
+            return null;
+        }
         win.lastExamId = examId;
-        return win;
+        return installManagedTestWindow(this, examId, win, options);
     };
 
     windowStub.AppData.recovery.windowSession.discard('simulation');

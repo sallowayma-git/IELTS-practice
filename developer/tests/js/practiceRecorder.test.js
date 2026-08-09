@@ -30,6 +30,7 @@ function createHarness() {
         }],
         commands: [],
         backupCalls: [],
+        discardedActiveSessions: [],
         failCompleteAttempts: 0
     };
     const quietConsole = { log() {}, warn() {}, error() {}, info() {}, debug() {} };
@@ -73,6 +74,10 @@ function createHarness() {
             },
             async discardDraft(id) {
                 state.drafts = state.drafts.filter((entry) => entry.id !== id);
+                return { committed: true };
+            },
+            async discardActiveSession(id) {
+                state.discardedActiveSessions.push(String(id));
                 return { committed: true };
             }
         },
@@ -158,7 +163,7 @@ function createHarness() {
     loadScript('js/core/practiceRecorder.js', context);
     const recorder = Object.create(windowStub.PracticeRecorder.prototype);
     recorder.wait = async () => {};
-    return { recorder, state };
+    return { recorder, state, windowStub };
 }
 
 function makeRecord(id = 'record-v2') {
@@ -236,6 +241,138 @@ async function main() {
                 }
             });
             assert.strictEqual(completionCalls, 0, 'host-owned completion must not be saved through the recorder global listener');
+        });
+
+        await record('completion keeps its exact session across same-exam ABA replacement', async () => {
+            const { recorder, state, windowStub } = createHarness();
+            let releaseExamIndex;
+            let markExamIndexEntered;
+            const examIndexEntered = new Promise((resolve) => { markExamIndexEntered = resolve; });
+            const examIndexGate = new Promise((resolve) => { releaseExamIndex = resolve; });
+            windowStub.resolveActiveLibraryIndex = async () => {
+                markExamIndexEntered();
+                await examIndexGate;
+                return [{ id: 'reading-p1', title: 'Passage 1', type: 'reading', category: 'P1', frequency: 'high' }];
+            };
+
+            const sessionA = {
+                id: 'active-session:session-a',
+                sessionId: 'session-a',
+                examId: 'reading-p1',
+                status: 'active',
+                startTime: '2026-08-09T00:00:00.000Z',
+                lastActivity: '2026-08-09T00:01:00.000Z',
+                progress: { totalQuestions: 1 },
+                answers: { q1: 'A' },
+                metadata: { examTitle: 'Passage 1', type: 'reading' }
+            };
+            recorder.activeSessions = new Map([['reading-p1', sessionA]]);
+            recorder.sessionListeners = new Map();
+            recorder.practiceTypeCache = new Map();
+            recorder.dispatchSessionEvent = () => {};
+
+            const completion = recorder.handleSessionCompleted({
+                examId: 'reading-p1',
+                sessionId: 'session-a',
+                results: {
+                    duration: 60,
+                    endTime: '2026-08-09T00:01:00.000Z',
+                    answers: { q1: 'A' },
+                    correctAnswerMap: { q1: 'A' },
+                    scoreInfo: { correct: 1, total: 1, accuracy: 1 }
+                }
+            });
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(
+                    () => reject(new Error('completion did not reach the gated library-index await')),
+                    1000
+                );
+                examIndexEntered.then(() => {
+                    clearTimeout(timeout);
+                    resolve();
+                }, reject);
+            });
+            Object.assign(sessionA, {
+                id: 'active-session:session-b',
+                sessionId: 'session-b',
+                startTime: '2026-08-09T00:02:00.000Z',
+                lastActivity: '2026-08-09T00:03:00.000Z',
+                answers: { q1: 'B' },
+                metadata: { examTitle: 'Passage 1 replacement', type: 'reading' }
+            });
+            releaseExamIndex();
+
+            const saved = await completion;
+            assert.strictEqual(saved.sessionId, 'session-a', 'completion must save the session captured before the await');
+            assert.strictEqual(state.commands.length, 1);
+            assert.strictEqual(state.commands[0].record.sessionId, 'session-a');
+            assert.strictEqual(recorder.activeSessions.get('reading-p1'), sessionA, 'completion must retain the in-place replacement session');
+            assert.strictEqual(sessionA.sessionId, 'session-b', 'completion payload must not rewrite the replacement identity');
+            assert.deepStrictEqual(state.discardedActiveSessions, [], 'completion must not discard either entity after losing exact map ownership');
+        });
+
+        await record('explicit ordinary ownership beats a same-exam active suite', async () => {
+            const completeWithOwnership = async (ownership = {}) => {
+                const { recorder, state, windowStub } = createHarness();
+                const sessionId = `ordinary-${Object.keys(ownership).join('-') || 'legacy'}`;
+                recorder.activeSessions = new Map([['reading-p1', {
+                    id: `active-session:${sessionId}`,
+                    sessionId,
+                    examId: 'reading-p1',
+                    status: 'active',
+                    startTime: '2026-08-09T01:00:00.000Z',
+                    lastActivity: '2026-08-09T01:01:00.000Z',
+                    progress: { totalQuestions: 1 },
+                    answers: { q1: 'A' },
+                    metadata: { examTitle: 'Passage 1', type: 'reading' }
+                }]]);
+                recorder.sessionListeners = new Map();
+                recorder.practiceTypeCache = new Map();
+                recorder.dispatchSessionEvent = () => {};
+                windowStub.app = {
+                    suiteExamMap: new Map([['reading-p1', 'active-suite']]),
+                    currentSuiteSession: {
+                        id: 'active-suite',
+                        status: 'active',
+                        sequence: [{ examId: 'reading-p1' }]
+                    }
+                };
+                let fallbackCalls = 0;
+                const resolveSuiteSessionFromApp = recorder.resolveSuiteSessionFromApp.bind(recorder);
+                recorder.resolveSuiteSessionFromApp = (...args) => {
+                    fallbackCalls += 1;
+                    return resolveSuiteSessionFromApp(...args);
+                };
+
+                const payload = Object.assign({
+                    examId: 'reading-p1',
+                    sessionId,
+                    results: {
+                        duration: 60,
+                        endTime: '2026-08-09T01:01:00.000Z',
+                        answers: { q1: 'A' },
+                        correctAnswerMap: { q1: 'A' },
+                        scoreInfo: { correct: 1, total: 1, accuracy: 1 }
+                    }
+                }, ownership);
+                const saved = await recorder.handleSessionCompleted(payload);
+                return { fallbackCalls, saved, state };
+            };
+
+            const managedOrdinary = await completeWithOwnership({ suiteSessionId: null });
+            assert.strictEqual(managedOrdinary.fallbackCalls, 0, 'managed ordinary ownership must not consult global suite state');
+            assert.strictEqual(managedOrdinary.state.commands.length, 1, 'managed ordinary completion must save a single record');
+            assert.strictEqual(managedOrdinary.saved.suiteSessionId, null);
+
+            const explicitSingle = await completeWithOwnership({ practiceMode: 'single' });
+            assert.strictEqual(explicitSingle.fallbackCalls, 0, 'explicit single mode must not consult global suite state');
+            assert.strictEqual(explicitSingle.state.commands.length, 1, 'explicit single completion must save a single record');
+            assert.strictEqual(explicitSingle.saved.suiteSessionId, null);
+
+            const legacy = await completeWithOwnership();
+            assert.strictEqual(legacy.fallbackCalls, 1, 'ownership-free legacy payloads must retain global suite inference');
+            assert.strictEqual(legacy.state.commands.length, 0, 'legacy inferred suite entries must still skip standalone persistence');
+            assert.strictEqual(legacy.saved.suiteSessionId, 'active-suite');
         });
 
         await record('temporary recovery draft does not overwrite reading drafts', async () => {

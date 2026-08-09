@@ -39,6 +39,18 @@ function createSandbox(options = {}) {
         cleanupQueue: [],
         events: []
     };
+    const navigatorStub = {
+        locks: {
+            async request(name, lockOptions = {}, callback) {
+                assert.strictEqual(lockOptions.mode, 'exclusive');
+                assert.strictEqual(lockOptions.ifAvailable, true);
+                const normalizedName = String(name || '');
+                // Each createApp fixture represents the sole realm under test. The callback's
+                // returned promise controls how long the exclusive lease remains held.
+                return await callback({ name: normalizedName, mode: 'exclusive' });
+            }
+        }
+    };
 
     const documentStub = {
         addEventListener() {},
@@ -167,6 +179,7 @@ function createSandbox(options = {}) {
             ? { protocol: 'file:', origin: 'null', href: 'file:///index.html' }
             : { protocol: 'http:', origin: 'http://localhost', href: 'http://localhost/' },
         crypto: webcrypto,
+        navigator: navigatorStub,
         practiceConfig: { suite: {} },
         __listenerCount(type) {
             if (!listenerRegistry.has(type)) return 0;
@@ -193,11 +206,12 @@ function createSandbox(options = {}) {
         URLSearchParams,
         Uint8Array
     };
+    sandbox.navigator = navigatorStub;
     sandbox.globalThis = sandbox.window;
     return { sandbox, windowStub, windowSessionStore, recoveryControl };
 }
 
-function createApp(windowStub) {
+function createApp(windowStub, options = {}) {
     const app = {
         components: {},
         setState() {},
@@ -209,7 +223,82 @@ function createApp(windowStub) {
         saveRealPracticeData: async () => {}
     };
     Object.assign(app, windowStub.ExamSystemAppMixins.examSession, windowStub.ExamSystemAppMixins.suitePractice);
+    app._createSuiteTestMap = typeof windowStub.__createSuiteTestMap === 'function'
+        ? windowStub.__createSuiteTestMap
+        : () => new Map();
+    if (options.suiteModeReady !== false) {
+        app._suiteModeReady = true;
+        app.currentSuiteSession = null;
+        app.suiteExamMap = app._createSuiteTestMap();
+        app.multiSuiteSessionsMap = app._createSuiteTestMap();
+        app._multiSuiteCompletionTails = app._createSuiteTestMap();
+        app._suiteSessionGeneration = 0;
+        app._suiteRecoveryReady = Promise.resolve(null);
+    }
     return app;
+}
+
+function installManagedTestWindow(app, examId, targetWindow, options = {}) {
+    if (!targetWindow || targetWindow.closed) return targetWindow;
+    const managedMap = typeof app._createSuiteTestMap === 'function'
+        ? app._createSuiteTestMap()
+        : new Map();
+    if (!app.examWindows || app.examWindows.constructor !== managedMap.constructor) {
+        if (app.examWindows && typeof app.examWindows.entries === 'function') {
+            for (const [key, value] of app.examWindows.entries()) managedMap.set(key, value);
+        }
+        app.examWindows = managedMap;
+    }
+    const previous = app.examWindows.get(examId);
+    const generation = Math.max(0, Number(previous && previous.sessionGeneration) || 0) + 1;
+    const expectedSessionId = `test-session:${String(examId)}:${generation}`;
+    const windowSessionToken = `test-token:${String(examId)}:${generation}`;
+    const info = {
+        window: targetWindow,
+        navigationOwnership: { examId: String(examId), generation },
+        suiteSessionId: options.suiteSessionId || (app.currentSuiteSession && app.currentSuiteSession.id) || null,
+        expectedSessionId,
+        windowSessionToken,
+        windowSessionTokenSessionId: expectedSessionId,
+        expectedUrl: 'http://localhost/exam.html',
+        expectedOrigin: 'http://localhost',
+        allowOpaqueOrigin: false,
+        sessionGeneration: generation,
+        status: 'active'
+    };
+    app.examWindows.set(examId, info);
+    if (options.launchOwnership && typeof app._recordExamLaunchRegistrationReceipt === 'function') {
+        app._recordExamLaunchRegistrationReceipt(
+            examId,
+            options.launchOwnership,
+            app._captureExamSessionRegistration(examId, info)
+        );
+    }
+    if (options.launchOwnership && typeof app._commitExamLaunchOwnership === 'function') {
+        assert.strictEqual(app._commitExamLaunchOwnership(options.launchOwnership), true);
+    }
+    return targetWindow;
+}
+
+function buildOwnedStartResult(app, examId, value = true, launchOwnership = null) {
+    const windowInfo = app.examWindows && app.examWindows.get(examId);
+    return app._buildPracticeSessionOwnedSuccess(
+        examId,
+        'test',
+        windowInfo && windowInfo.expectedSessionId,
+        value,
+        windowInfo,
+        launchOwnership
+    );
+}
+
+async function restoreOwnedMultiSuiteItems(app, windowSession, items) {
+    assert.strictEqual(
+        await app._acquireMultiSuiteRecoveryOwnership(windowSession),
+        true,
+        'multi-suite restore fixture must own the base and exact recovery leases'
+    );
+    return await app._restorePersistentMultiSuiteSessions(items, [windowSession]);
 }
 
 function plain(value) {
@@ -245,6 +334,7 @@ async function run() {
     const context = vm.createContext(sandbox);
     loadScript('js/app/examSessionMixin.js', context);
     loadScript('js/app/suitePracticeMixin.js', context);
+    windowStub.__createSuiteTestMap = vm.runInContext('() => new Map()', context);
 
     if (!windowStub.ExamSystemAppMixins || !windowStub.ExamSystemAppMixins.suitePractice) {
         throw new Error('mixin 加载失败');
@@ -258,14 +348,31 @@ async function run() {
         recoveryControl.saveQueue.push(quotaError, true);
         recoveryControl.events.length = 0;
         let openCount = 0;
-        app.openExam = async () => {
+        app.openExam = async (examId, openOptions = {}) => {
             openCount += 1;
             assert.deepStrictEqual(
                 recoveryControl.events.map((event) => event.type),
                 ['save', 'cleanup', 'save'],
                 '首题窗口只能在清理并确认 durable recovery 后打开'
             );
-            return createStubWindow('suite-window');
+            const targetWindow = installManagedTestWindow(app, examId, createStubWindow('suite-window'), openOptions);
+            const targetRegistration = app._captureSuiteNavigationRegistration(
+                examId,
+                targetWindow,
+                openOptions.suiteSessionId,
+                openOptions.launchOwnership
+            );
+            assert(targetRegistration, 'successful open fixture must install an exact managed registration');
+            assert.strictEqual(
+                app._isSuiteNavigationRegistrationCurrent(examId, targetRegistration, openOptions.suiteSessionId),
+                true
+            );
+            assert.strictEqual(
+                app._isSuiteExamLaunchOwnershipCurrent(examId, openOptions.launchOwnership, targetWindow),
+                false,
+                'open commit must release the reservation before returning to the suite caller'
+            );
+            return targetWindow;
         };
         assert.strictEqual(
             await app._launchSuiteSessionFromSequence(makeSession('suite_start_retry').sequence, { flowMode: 'simulation' }),
@@ -366,6 +473,39 @@ async function run() {
             observedOpenUrls.push({ url, name });
             return liveChild;
         };
+        const oldNavigationOwnership = app._recordExamWindowNavigation(liveChild, 'reading-p2');
+        const oldSameSuiteInfo = {
+            examId: 'reading-p2',
+            window: liveChild,
+            navigationOwnership: oldNavigationOwnership,
+            suiteSessionId: session.id,
+            expectedSessionId: 'reading-p1-session',
+            windowSessionToken: 'old-window-token',
+            windowSessionTokenSessionId: 'reading-p1-session',
+            sessionGeneration: 4,
+            expectedUrl: session.windowBinding.expectedUrl,
+            expectedOrigin: session.windowBinding.expectedOrigin,
+            allowOpaqueOrigin: false,
+            status: 'active'
+        };
+        app.examWindows = app._createSuiteTestMap();
+        app.examWindows.set('reading-p2', oldSameSuiteInfo);
+        assert.strictEqual(
+            app._buildSuiteWindowBinding(session).windowSessionToken,
+            'old-window-token',
+            'the fixture must expose the stale same-suite registration that used to overwrite nextBinding'
+        );
+        let durableBindingBeforeSetup = null;
+        let durableWindowNameBeforeSetup = null;
+        const originalSetup = app.setupExamWindowManagement.bind(app);
+        app.setupExamWindowManagement = (...args) => {
+            const saves = recoveryControl.events.filter((event) => event.type === 'save'
+                && event.value && String(event.value.id) === String(session.id));
+            const latestSave = saves[saves.length - 1];
+            durableBindingBeforeSetup = latestSave && plain(latestSave.value.windowBinding);
+            durableWindowNameBeforeSetup = latestSave && latestSave.value.windowName;
+            return originalSetup(...args);
+        };
         try {
             const rebound = await app._tryRebindSuiteWindow(session, session.sequence[1]);
             assert.strictEqual(rebound.window, liveChild, '应复用同一 WindowProxy');
@@ -376,6 +516,12 @@ async function run() {
             assert.strictEqual(info.sessionGeneration, 5, '重绑定 generation 必须严格递增');
             assert.notStrictEqual(info.windowSessionToken, 'old-window-token', '重绑定必须旋转 token');
             assert.strictEqual(session.windowBinding.examId, 'reading-p2', 'proof 成功后才能接管实际活动篇章');
+            assert.deepStrictEqual(durableBindingBeforeSetup, plain(session.windowBinding));
+            assert.strictEqual(durableBindingBeforeSetup.examId, 'reading-p2');
+            assert.strictEqual(durableBindingBeforeSetup.expectedSessionId, 'reading-p1-session');
+            assert.strictEqual(durableBindingBeforeSetup.sessionGeneration, 5);
+            assert.notStrictEqual(durableBindingBeforeSetup.windowSessionToken, 'old-window-token');
+            assert.strictEqual(durableWindowNameBeforeSetup, session.windowName);
         } finally {
             windowStub.open = originalOpen;
             const info = app.examWindows && app.examWindows.get('reading-p2');
@@ -415,7 +561,12 @@ async function run() {
         app.openExamWindow = () => child;
         app._guardExamWindowContent = (targetWindow) => targetWindow;
         app._captureLaunchLibraryConfigurationId = async () => null;
-        app.startPracticeSession = async () => 'reading-p1-session';
+        app.startPracticeSession = async (examId, startOptions = {}) => buildOwnedStartResult(
+            app,
+            examId,
+            'reading-p1-session',
+            startOptions.launchOwnership
+        );
         app.injectDataCollectionScript = () => {};
         const opened = await app.openExam('reading-p1', {
             examDefinition: session.sequence[0].exam,
@@ -644,6 +795,55 @@ async function run() {
     }
 
     // Case 0: 单题历史回顾必须从记录根层或 realData 回灌高亮
+    // A passage CAS receipt remains authoritative even if this continuation loses its
+    // recovery claim before saveActiveSession returns. Keep the receipt-aligned tuple,
+    // ACK the submission, and suppress every later window side effect.
+    for (const autoAdvance of [false, true]) {
+        const app = createApp(windowStub);
+        const session = makeSession(`suite_passage_post_receipt_${autoAdvance ? 'advance' : 'manual'}`);
+        if (!autoAdvance) {
+            session.flowMode = 'stationary';
+            session.autoAdvanceAfterSubmit = false;
+        }
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        let openCount = 0;
+        app.openExam = async () => {
+            openCount += 1;
+            return createStubWindow('must-not-open-after-post-receipt-loss');
+        };
+        let claimRelease = null;
+        recoveryControl.saveQueue.push((value) => {
+            claimRelease = app._releaseSuiteRecoveryClaim('single', session);
+            return { committed: true, item: plain(value) };
+        });
+        const outcome = await app.handleSuitePracticeComplete('reading-p1', {
+            suiteSessionId: session.id,
+            submissionId: `post-receipt-${autoAdvance ? 'advance' : 'manual'}`,
+            answers: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        }, session.windowRef);
+        if (claimRelease) await claimRelease;
+        assert.strictEqual(outcome.handled, true);
+        assert.strictEqual(outcome.committed, true, 'a confirmed per-call durable receipt must still ACK');
+        assert.strictEqual(outcome.errorCode, 'suite_advance_superseded');
+        assert.strictEqual(openCount, 0, 'post-receipt ownership loss must suppress window navigation');
+        assert.strictEqual(session.currentIndex, autoAdvance ? 1 : 0);
+        assert.strictEqual(session.activeExamId, autoAdvance ? 'reading-p2' : 'reading-p1');
+        if (autoAdvance) {
+            assert.strictEqual(session.pendingAdvance, null);
+        } else {
+            assert.strictEqual(session.pendingAdvance.completedExamId, 'reading-p1');
+        }
+        const durableEvent = recoveryControl.events.filter((event) => (
+            event.type === 'save' && event.value && event.value.id === session.id
+        )).at(-1);
+        assert(durableEvent, 'the post-owner-loss outcome must be backed by this invocation durable receipt');
+        assert.strictEqual(durableEvent.value.currentIndex, session.currentIndex);
+        assert.strictEqual(durableEvent.value.activeExamId, session.activeExamId);
+    }
+
     {
         const app = createApp(windowStub);
         const rootHighlights = [{ id: 'hl-root', scope: 'left', text: 'root highlight' }];
@@ -705,7 +905,7 @@ async function run() {
             openCalls.push({ examId, options });
             const win = createStubWindow('suite-window');
             win.lastExamId = examId;
-            return win;
+            return installManagedTestWindow(app, examId, win, options);
         };
 
         const originalWindow = session.windowRef;
@@ -776,7 +976,7 @@ async function run() {
             openCalls.push({ examId, options });
             const win = createStubWindow('suite-window');
             win.lastExamId = examId;
-            return win;
+            return installManagedTestWindow(app, examId, win, options);
         };
 
         // Navigate prev from P2 to P1
@@ -999,10 +1199,10 @@ async function run() {
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
 
-        app.openExam = async (examId) => {
+        app.openExam = async (examId, options = {}) => {
             const win = createStubWindow('suite-window');
             win.lastExamId = examId;
-            return win;
+            return installManagedTestWindow(app, examId, win, options);
         };
 
         const hops = [
@@ -1041,10 +1241,15 @@ async function run() {
 
         let resolveOpen = null;
         let openCallCount = 0;
-        app.openExam = async () => {
+        app.openExam = async (examId, options = {}) => {
             openCallCount += 1;
             return await new Promise((resolve) => {
-                resolveOpen = () => resolve(createStubWindow('suite-window'));
+                resolveOpen = () => resolve(installManagedTestWindow(
+                    app,
+                    examId,
+                    createStubWindow('suite-window'),
+                    options
+                ));
             });
         };
 
@@ -1083,12 +1288,12 @@ async function run() {
 
         let releaseFirstOpen;
         const opened = [];
-        app.openExam = async (examId) => {
+        app.openExam = async (examId, options = {}) => {
             opened.push(examId);
             if (opened.length === 1) {
                 await new Promise((resolve) => { releaseFirstOpen = resolve; });
             }
-            return createStubWindow('suite-window');
+            return installManagedTestWindow(app, examId, createStubWindow('suite-window'), options);
         };
 
         const firstNavigate = app._handleSimulationNavigate(
@@ -1096,9 +1301,10 @@ async function run() {
             { direction: 'next' },
             session.windowRef
         );
-        for (let attempt = 0; attempt < 10 && typeof releaseFirstOpen !== 'function'; attempt += 1) {
-            await Promise.resolve();
+        for (let attempt = 0; attempt < 50 && typeof releaseFirstOpen !== 'function'; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
         }
+        assert.strictEqual(typeof releaseFirstOpen, 'function', '第一跳必须在 claim 与 durable save 后进入 openExam');
         const queuedNavigate = app._handleSimulationNavigate(
             'reading-p2',
             { direction: 'next' },
@@ -1358,11 +1564,11 @@ async function run() {
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
 
         let openCount = 0;
-        app.openExam = async (examId) => {
+        app.openExam = async (examId, options = {}) => {
             openCount += 1;
             const win = createStubWindow('suite-window');
             win.lastExamId = examId;
-            return win;
+            return installManagedTestWindow(app, examId, win, options);
         };
 
         const healed = await app._handleSimulationNavigate('reading-p1', {
@@ -1727,7 +1933,7 @@ async function run() {
         assert(durableSession, '部分结果必须写入 AppData v2 activeSession');
         assert.strictEqual(durableSession.sessions[0].suiteResults.length, 1);
 
-        const restoredApp = createApp(windowStub);
+        const restoredApp = createApp(windowStub, { suiteModeReady: false });
         restoredApp.initializeSuiteMode();
         await restoredApp._ensureSuiteRecoveryReady();
         const restoredSession = restoredApp.multiSuiteSessionsMap.get('listening-100-p1');
@@ -1741,15 +1947,87 @@ async function run() {
             '恢复会话应保留结果比较数据'
         );
 
+        assert.strictEqual(
+            await restoredApp._releaseSuiteRecoveryClaim('multi', restoredSession),
+            true
+        );
+        const originalLocks = windowStub.navigator.locks;
+        const durableTakeoverLocks = {
+            held: new Map(),
+            calls: [],
+            async request(name, lockOptions = {}, callback) {
+                assert.strictEqual(lockOptions.mode, 'exclusive');
+                assert.strictEqual(lockOptions.ifAvailable, true);
+                const normalizedName = String(name || '');
+                this.calls.push(normalizedName);
+                if (this.held.has(normalizedName)) return callback(null);
+                const lock = { name: normalizedName, mode: 'exclusive' };
+                this.held.set(normalizedName, lock);
+                try {
+                    return await callback(lock);
+                } finally {
+                    if (this.held.get(normalizedName) === lock) this.held.delete(normalizedName);
+                }
+            }
+        };
+        windowStub.navigator.locks = durableTakeoverLocks;
+        const durableOwnerApp = createApp(windowStub);
+        const durableOwnerSession = plain(restoredSession);
+        assert.strictEqual(
+            await durableOwnerApp._acquireMultiSuiteRecoveryOwnership(durableOwnerSession),
+            true,
+            'active tab fixture must hold the base and exact durable recovery leases'
+        );
         windowSessionStore.delete('multi-suite-practice');
-        const foreignTabApp = createApp(windowStub);
+        const foreignTabApp = createApp(windowStub, { suiteModeReady: false });
         foreignTabApp.initializeSuiteMode();
         await foreignTabApp._ensureSuiteRecoveryReady();
         assert.strictEqual(
             foreignTabApp.multiSuiteSessionsMap.has('listening-100-p1'),
             false,
-            'HTTP 标签页没有匹配窗口 WAL 时不得接管其他标签页的 durable multi-suite 会话'
+            'fresh HTTP tab must not bypass an active durable owner lease'
         );
+        assert.strictEqual(
+            await durableOwnerApp._releaseSuiteRecoveryClaim('multi', durableOwnerSession),
+            true
+        );
+        const takeoverFallback = foreignTabApp.getOrCreateMultiSuiteSession(
+            'listening-100-p1_set1',
+            { install: false }
+        );
+        const takeover = await foreignTabApp._refreshPersistentMultiSuiteBase(
+            'listening-100-p1',
+            takeoverFallback
+        );
+        assert.strictEqual(takeover.blocked, false);
+        const takenOverSession = takeover.session;
+        assert(takenOverSession, 'the same fresh tab must recover durable state after owner release/crash');
+        assert.strictEqual(takenOverSession.id, durableSession.id);
+        assert.strictEqual(
+            await foreignTabApp._releaseSuiteRecoveryClaim('multi', takenOverSession),
+            true
+        );
+        for (const recoveredSession of Array.from(foreignTabApp.multiSuiteSessionsMap.values())) {
+            if (foreignTabApp._ownsMultiSuiteRecoveryOwnership(recoveredSession)) {
+                assert.strictEqual(
+                    await foreignTabApp._releaseSuiteRecoveryClaim('multi', recoveredSession),
+                    true
+                );
+            }
+        }
+        if (foreignTabApp.currentSuiteSession
+            && foreignTabApp._ownsSuiteRecoveryClaim('single', foreignTabApp.currentSuiteSession)) {
+            assert.strictEqual(
+                await foreignTabApp._releaseSuiteRecoveryClaim('single', foreignTabApp.currentSuiteSession),
+                true
+            );
+        }
+        assert.strictEqual(
+            durableTakeoverLocks.held.has(foreignTabApp._suiteRecoveryClaimName(durableSession.id)),
+            false,
+            'the exact durable takeover lease must be released by fixture cleanup'
+        );
+        windowStub.navigator.locks = originalLocks;
 
         const retryApp = createApp(windowStub);
         const retryPayload = {
@@ -1767,7 +2045,7 @@ async function run() {
             false,
             'durable receipt 未确认时部分结果必须 NACK'
         );
-        const refreshedAfterNack = createApp(windowStub);
+        const refreshedAfterNack = createApp(windowStub, { suiteModeReady: false });
         refreshedAfterNack.initializeSuiteMode();
         await refreshedAfterNack._ensureSuiteRecoveryReady();
         assert.strictEqual(
@@ -1972,7 +2250,7 @@ async function run() {
         assert.strictEqual(committed[0].suiteEntries[0].metadata.sessionId, payload.sessionId);
         assert.strictEqual(committed[0].suiteEntries[0].metadata.submissionId, payload.submissionId);
 
-        const refreshed = createApp(windowStub);
+        const refreshed = createApp(windowStub, { suiteModeReady: false });
         refreshed.initializeSuiteMode();
         await refreshed._ensureSuiteRecoveryReady();
         assert.strictEqual(await refreshed.handleMultiSuitePracticeComplete(examId, payload), true, '刷新后的精确重放必须由 canonical 记录 ACK');
@@ -2202,7 +2480,7 @@ async function run() {
         await windowStub.AppData.recovery.saveActiveSession(durableSnap);
         windowSessionStore.set('multi-suite-practice', durableSnap);
 
-        const restoredApp = createApp(windowStub);
+        const restoredApp = createApp(windowStub, { suiteModeReady: false });
         restoredApp.initializeSuiteMode();
         await restoredApp._ensureSuiteRecoveryReady();
         const restored = restoredApp.multiSuiteSessionsMap.get('listening-multi-active-complete');
@@ -2270,7 +2548,7 @@ async function run() {
             updatedAt: Date.now()
         });
 
-        const restoredApp = createApp(windowStub);
+        const restoredApp = createApp(windowStub, { suiteModeReady: false });
         restoredApp.initializeSuiteMode();
         await restoredApp._ensureSuiteRecoveryReady();
         assert(
@@ -2322,7 +2600,7 @@ async function run() {
             delete invalidRevisionDurable._restoredFromWindowSession;
             invalidRevisionDurable.finalizeOperationId = 'practice-multisuite:wrong:id:finalize';
             invalidRevisionDurable.finalizeRecord = { id: 'stale-record' };
-            restoredApp._restorePersistentMultiSuiteSessions([{
+            await restoreOwnedMultiSuiteItems(restoredApp, invalidRevisionWal, [{
                 schema: 'multi-suite-sessions-v2',
                 version: 2,
                 id: invalidRevisionWal.id,
@@ -2358,7 +2636,7 @@ async function run() {
         };
         delete duplicateIdWal._lastDurableRecoveryRevision;
         restoredApp.multiSuiteSessionsMap.set(duplicateIdWal.baseExamId, duplicateIdWal);
-        restoredApp._restorePersistentMultiSuiteSessions([3, 9].map((revision, index) => {
+        await restoreOwnedMultiSuiteItems(restoredApp, duplicateIdWal, [3, 9].map((revision, index) => {
             const candidateSession = {
                 ...plain(duplicateIdWal),
                 revision,
@@ -2402,7 +2680,7 @@ async function run() {
         };
         delete durableOwnedSession._restoredFromWindowSession;
         delete durableOwnedSession._lastDurableRecoveryRevision;
-        restoredApp._restorePersistentMultiSuiteSessions([{
+        await restoreOwnedMultiSuiteItems(restoredApp, conflictingWal, [{
             schema: 'multi-suite-sessions-v2',
             version: 2,
             id: durableOwnerId,
@@ -2449,7 +2727,7 @@ async function run() {
         };
         delete canonicalDurableSession._restoredFromWindowSession;
         delete canonicalDurableSession._lastDurableRecoveryRevision;
-        restoredApp._restorePersistentMultiSuiteSessions([{
+        await restoreOwnedMultiSuiteItems(restoredApp, nonCanonicalWal, [{
             schema: 'multi-suite-sessions-v2',
             version: 2,
             id: canonicalOwnerId,
@@ -2486,7 +2764,6 @@ async function run() {
             _restoredFromWindowSession: true
         };
         delete competingWal._lastDurableRecoveryRevision;
-        restoredApp.multiSuiteSessionsMap.set(competingWal.baseExamId, competingWal);
         const competingDurable = {
             ...plain(restoredDurableOwner),
             id: 'multi-durable-owner-competing-id',
@@ -2496,26 +2773,95 @@ async function run() {
         };
         delete competingDurable._restoredFromWindowSession;
         delete competingDurable._lastDurableRecoveryRevision;
-        restoredApp._restorePersistentMultiSuiteSessions([{
+        const competingDurableItem = {
             schema: 'multi-suite-sessions-v2',
             version: 2,
             id: competingDurable.id,
             revision: 8,
             sessions: [competingDurable],
             updatedAt: Date.now() + 300
-        }]);
+        };
+        const originalCompetingLocks = windowStub.navigator.locks;
+        const previousMultiWindowWal = plain(windowSessionStore.get('multi-suite-practice') || null);
+        const competingLocks = {
+            held: new Map(),
+            async request(name, lockOptions = {}, callback) {
+                assert.strictEqual(lockOptions.mode, 'exclusive');
+                assert.strictEqual(lockOptions.ifAvailable, true);
+                const normalizedName = String(name || '');
+                if (this.held.has(normalizedName)) return callback(null);
+                const lock = { name: normalizedName, mode: 'exclusive' };
+                this.held.set(normalizedName, lock);
+                try {
+                    return await callback(lock);
+                } finally {
+                    if (this.held.get(normalizedName) === lock) this.held.delete(normalizedName);
+                }
+            }
+        };
+        windowStub.navigator.locks = competingLocks;
+        const competingOwnerApp = createApp(windowStub);
+        const liveCompetingDurable = plain(competingDurable);
         assert.strictEqual(
-            restoredApp.multiSuiteSessionsMap.get(competingBaseExamId),
-            competingWal,
-            'a same-base foreign durable marker may preserve the WAL but must not replace its identity'
+            await competingOwnerApp._acquireSuiteRecoveryClaim('multi', liveCompetingDurable),
+            true,
+            'foreign authoritative durable fixture must hold its exact lease'
         );
+        await windowStub.AppData.recovery.saveActiveSession(plain(competingDurableItem));
+        windowSessionStore.set('multi-suite-practice', {
+            schema: 'multi-suite-sessions-v2',
+            version: 2,
+            sessions: [plain(competingWal)],
+            updatedAt: Date.now()
+        });
+        const contendedWalApp = createApp(windowStub, { suiteModeReady: false });
+        contendedWalApp.initializeSuiteMode();
+        await contendedWalApp._ensureSuiteRecoveryReady();
         assert.strictEqual(
-            Array.from(restoredApp.multiSuiteSessionsMap.values())
-                .some((item) => item && item.id === competingDurable.id),
+            contendedWalApp.multiSuiteSessionsMap.has(competingBaseExamId),
             false,
-            'a foreign durable identity must not become live through a canonical base match'
+            'a same-base WAL must remain quarantined while the authoritative durable lease is active'
         );
-        restoredApp.multiSuiteSessionsMap.delete(competingBaseExamId);
+        assert.strictEqual(
+            windowSessionStore.get('multi-suite-practice').sessions[0].id,
+            competingWal.id,
+            'contention must preserve the copied WAL bytes for a later crash takeover retry'
+        );
+        assert.strictEqual(
+            await competingOwnerApp._releaseSuiteRecoveryClaim('multi', liveCompetingDurable),
+            true
+        );
+
+        const takeoverApp = createApp(windowStub, { suiteModeReady: false });
+        takeoverApp.initializeSuiteMode();
+        await takeoverApp._ensureSuiteRecoveryReady();
+        const authoritativeTakeover = takeoverApp.multiSuiteSessionsMap.get(competingBaseExamId);
+        assert(authoritativeTakeover, 'released/crashed durable owner must be recoverable by a fresh app');
+        assert.strictEqual(
+            authoritativeTakeover.id,
+            competingDurable.id,
+            'the authoritative durable identity must replace the stale same-base WAL identity'
+        );
+        assert.strictEqual(
+            Array.from(takeoverApp.multiSuiteSessionsMap.values())
+                .some((item) => item && item.id === competingWal.id),
+            false
+        );
+        assert.strictEqual(await takeoverApp._releaseSuiteRecoveryClaim('multi', authoritativeTakeover), true);
+        for (const app of [contendedWalApp, takeoverApp]) {
+            for (const recoveredSession of Array.from(app.multiSuiteSessionsMap.values())) {
+                if (app._ownsSuiteRecoveryClaim('multi', recoveredSession)) {
+                    await app._releaseSuiteRecoveryClaim('multi', recoveredSession);
+                }
+            }
+            if (app.currentSuiteSession && app._ownsSuiteRecoveryClaim('single', app.currentSuiteSession)) {
+                await app._releaseSuiteRecoveryClaim('single', app.currentSuiteSession);
+            }
+        }
+        await windowStub.AppData.recovery.discardActiveSession(competingDurable.id);
+        if (previousMultiWindowWal) windowSessionStore.set('multi-suite-practice', previousMultiWindowWal);
+        else windowSessionStore.delete('multi-suite-practice');
+        windowStub.navigator.locks = originalCompetingLocks;
 
         const crossSchemaWal = {
             id: 'cross-schema-duplicate-id',
@@ -2530,7 +2876,7 @@ async function run() {
             baseExamId: crossSchemaWal.baseExamId,
             revision: 9
         };
-        restoredApp._restorePersistentMultiSuiteSessions([{
+        await restoreOwnedMultiSuiteItems(restoredApp, crossSchemaWal, [{
             schema: 'suite-session-v2',
             version: 2,
             id: crossSchemaWal.id,
@@ -2555,6 +2901,8 @@ async function run() {
             id: 'safe-fallback-wal-id',
             baseExamId: ` ${shadowedMarkerBase} `,
             revision: 2,
+            lastUpdate: Date.now(),
+            _suiteRecoveryTimestampKnown: true,
             _restoredFromWindowSession: true
         };
         delete safeFallbackWal._lastDurableRecoveryRevision;
@@ -2569,52 +2917,138 @@ async function run() {
         };
         delete corruptShadowedMarker._restoredFromWindowSession;
         delete corruptShadowedMarker._lastDurableRecoveryRevision;
-        restoredApp._restorePersistentMultiSuiteSessions([{
-            schema: 'suite-session-v2',
-            version: 2,
-            id: shadowedMarkerId,
-            revision: 4
-        }, {
-            schema: 'multi-suite-sessions-v2',
-            version: 2,
-            id: shadowedMarkerId,
-            revision: 9,
-            sessions: [corruptShadowedMarker]
-        }]);
-        assert.strictEqual(
-            restoredApp.multiSuiteSessionsMap.get(shadowedMarkerBase),
-            safeFallbackWal,
-            'a corrupt durable base marker must retain a different safe WAL id even when its own id is shadowed'
-        );
-        assert.strictEqual(safeFallbackWal.baseExamId, shadowedMarkerBase);
-        assert.strictEqual(safeFallbackWal._lastDurableRecoveryRevision, undefined);
+        const originalShadowedMarkerLocks = windowStub.navigator.locks;
+        const originalShadowedMarkerFence = windowStub.AppData.recovery.getActiveSessionFence;
+        const shadowedMarkerLocks = {
+            held: new Map(),
+            calls: [],
+            async request(name, lockOptions = {}, callback) {
+                assert.strictEqual(lockOptions.mode, 'exclusive');
+                assert.strictEqual(lockOptions.ifAvailable, true);
+                const normalizedName = String(name || '');
+                this.calls.push(normalizedName);
+                if (this.held.has(normalizedName)) return callback(null);
+                const lock = { name: normalizedName, mode: 'exclusive' };
+                this.held.set(normalizedName, lock);
+                try {
+                    return await callback(lock);
+                } finally {
+                    if (this.held.get(normalizedName) === lock) this.held.delete(normalizedName);
+                }
+            }
+        };
+        windowStub.navigator.locks = shadowedMarkerLocks;
+        windowStub.AppData.recovery.getActiveSessionFence = async (id) => ({
+            id: String(id),
+            exists: false,
+            tombstoned: false,
+            revision: 0
+        });
+        const shadowedMarkerSaveStart = recoveryControl.events.length;
+        try {
+            await restoreOwnedMultiSuiteItems(restoredApp, safeFallbackWal, [{
+                schema: 'suite-session-v2',
+                version: 2,
+                id: shadowedMarkerId,
+                revision: 4
+            }, {
+                schema: 'multi-suite-sessions-v2',
+                version: 2,
+                id: shadowedMarkerId,
+                revision: 9,
+                sessions: [corruptShadowedMarker]
+            }]);
+            assert.strictEqual(
+                restoredApp.multiSuiteSessionsMap.get(shadowedMarkerBase),
+                safeFallbackWal,
+                'a shadowed corrupt base marker must not delete a different exact-id WAL'
+            );
+            assert.strictEqual(safeFallbackWal.baseExamId, shadowedMarkerBase);
+            assert.notStrictEqual(
+                safeFallbackWal._lastDurableRecoveryRevision,
+                9,
+                'a later shadowed marker must not lend its revision to a different WAL identity'
+            );
+            const safeFallbackSaves = recoveryControl.events
+                .slice(shadowedMarkerSaveStart)
+                .filter((event) => event.type === 'save');
+            assert.strictEqual(safeFallbackSaves.length, 1);
+            assert.strictEqual(safeFallbackSaves[0].value.id, safeFallbackWal.id);
+            assert.strictEqual(safeFallbackSaves[0].options.expectedEntityRevision, 0);
+            assert.deepStrictEqual(
+                shadowedMarkerLocks.calls,
+                [
+                    restoredApp._multiSuiteBaseClaimName(safeFallbackWal.baseExamId),
+                    restoredApp._suiteRecoveryClaimName(safeFallbackWal.id)
+                ],
+                'only the WAL base and exact identity may be claimed; a shadowed corrupt marker is not authoritative'
+            );
+            assert.strictEqual(
+                await restoredApp._releaseSuiteRecoveryClaim('multi', safeFallbackWal),
+                true
+            );
+            assert.strictEqual(shadowedMarkerLocks.held.size, 0);
+        } finally {
+            await windowStub.AppData.recovery.discardActiveSession(safeFallbackWal.id);
+            if (originalShadowedMarkerFence) {
+                windowStub.AppData.recovery.getActiveSessionFence = originalShadowedMarkerFence;
+            } else {
+                delete windowStub.AppData.recovery.getActiveSessionFence;
+            }
+            windowStub.navigator.locks = originalShadowedMarkerLocks;
+        }
         restoredApp.multiSuiteSessionsMap.delete(shadowedMarkerBase);
 
         const exactIdWal = {
             id: 'multi-exact-id',
             baseExamId: 'listening-multi-exact-id',
             revision: 2,
+            lastUpdate: Date.now(),
+            _suiteRecoveryTimestampKnown: true,
             _restoredFromWindowSession: true
         };
         restoredApp.multiSuiteSessionsMap.set(exactIdWal.baseExamId, exactIdWal);
-        restoredApp._restorePersistentMultiSuiteSessions([{
-            schema: 'multi-suite-sessions-v2',
-            version: 2,
-            id: `${exactIdWal.id} `,
-            revision: 8,
-            sessions: [{ baseExamId: exactIdWal.baseExamId }]
-        }]);
-        assert.strictEqual(
-            exactIdWal._lastDurableRecoveryRevision,
-            undefined,
-            'active-session id 必须按 AppData 原始字符串精确匹配，不能 trim 后借用 revision'
-        );
-        assert.strictEqual(exactIdWal.revision, 2);
-        assert.strictEqual(
-            restoredApp.multiSuiteSessionsMap.get(exactIdWal.baseExamId),
-            exactIdWal,
-            'a same-base marker may retain the WAL without lending its whitespace-different id revision'
-        );
+        const originalExactIdFence = windowStub.AppData.recovery.getActiveSessionFence;
+        windowStub.AppData.recovery.getActiveSessionFence = async (id) => ({
+            id: String(id),
+            exists: false,
+            tombstoned: false,
+            revision: 0
+        });
+        const exactIdSaveStart = recoveryControl.events.length;
+        try {
+            await restoreOwnedMultiSuiteItems(restoredApp, exactIdWal, [{
+                schema: 'multi-suite-sessions-v2',
+                version: 2,
+                id: `${exactIdWal.id} `,
+                revision: 8,
+                sessions: [{ baseExamId: exactIdWal.baseExamId }]
+            }]);
+            assert.notStrictEqual(
+                exactIdWal._lastDurableRecoveryRevision,
+                8,
+                'active-session id 必须按 AppData 原始字符串精确匹配，不能 trim 后借用 revision'
+            );
+            assert.strictEqual(
+                restoredApp.multiSuiteSessionsMap.get(exactIdWal.baseExamId),
+                exactIdWal,
+                'the exact-id WAL may establish its own expected=0 entity without borrowing a whitespace alias'
+            );
+            const exactIdSaves = recoveryControl.events
+                .slice(exactIdSaveStart)
+                .filter((event) => event.type === 'save');
+            assert.strictEqual(exactIdSaves.length, 1);
+            assert.strictEqual(exactIdSaves[0].value.id, exactIdWal.id);
+            assert.strictEqual(exactIdSaves[0].options.expectedEntityRevision, 0);
+            assert.strictEqual(await restoredApp._releaseSuiteRecoveryClaim('multi', exactIdWal), true);
+        } finally {
+            await windowStub.AppData.recovery.discardActiveSession(exactIdWal.id);
+            if (originalExactIdFence) {
+                windowStub.AppData.recovery.getActiveSessionFence = originalExactIdFence;
+            } else {
+                delete windowStub.AppData.recovery.getActiveSessionFence;
+            }
+        }
         restoredApp.multiSuiteSessionsMap.delete(exactIdWal.baseExamId);
 
         const mismatchedOwnerWal = {
@@ -2633,7 +3067,7 @@ async function run() {
         delete mismatchedDurableSession._restoredFromWindowSession;
         const laterValidDuplicate = plain(mismatchedOwnerWal);
         delete laterValidDuplicate._restoredFromWindowSession;
-        restoredApp._restorePersistentMultiSuiteSessions([{
+        await restoreOwnedMultiSuiteItems(restoredApp, mismatchedOwnerWal, [{
             schema: 'multi-suite-sessions-v2',
             version: 2,
             id: mismatchedOwnerWal.id,
@@ -2752,6 +3186,7 @@ async function run() {
 
         app.currentSuiteSession = freshSession;
         app.suiteExamMap = new Map(freshSession.sequence.map(item => [item.examId, freshSession.id]));
+        assert.strictEqual(await app._ensureSuiteRecoveryClaim('single', freshSession), true);
         app._mirrorSessionToStorage(freshSession);
         const freshSnapshot = plain(windowSessionStore.get('simulation'));
         const freshWindow = freshSession.windowRef;
@@ -2969,7 +3404,9 @@ async function run() {
             '自动切题失败不得 discard recovery'
         );
         const retriedWindow = createStubWindow('open-next-retried');
-        app.openExam = async () => retriedWindow;
+        app.openExam = async (examId, options = {}) => (
+            installManagedTestWindow(app, examId, retriedWindow, options)
+        );
         assert.strictEqual(await app.continueSuitePractice(), true, '现有继续入口应能重试打开下一篇');
     }
 
@@ -3016,9 +3453,18 @@ async function run() {
             const secondApp = createApp(windowStub);
             firstApp._generateSuiteSessionId = () => 'suite-window-owner-a';
             secondApp._generateSuiteSessionId = () => 'suite-window-owner-b';
-            const openExam = async (_examId, options) => windowStub.open('', options.windowName);
-            firstApp.openExam = openExam;
-            secondApp.openExam = openExam;
+            firstApp.openExam = async (examId, options = {}) => installManagedTestWindow(
+                firstApp,
+                examId,
+                windowStub.open('', options.windowName),
+                options
+            );
+            secondApp.openExam = async (examId, options = {}) => installManagedTestWindow(
+                secondApp,
+                examId,
+                windowStub.open('', options.windowName),
+                options
+            );
             const sequence = makeSession().sequence;
             assert.strictEqual(await firstApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
             assert.strictEqual(await secondApp._launchSuiteSessionFromSequence(sequence, { flowMode: 'simulation' }), true);
@@ -3037,6 +3483,7 @@ async function run() {
         const session = makeSession('suite_storage_cleanup');
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        assert.strictEqual(await app._ensureSuiteRecoveryClaim('single', session), true);
         app._mirrorSessionToStorage(session);
         assert(windowSessionStore.has('simulation'), '镜像应存在');
         app._clearSessionStorage();
@@ -3134,7 +3581,11 @@ async function run() {
             suiteSessionId: session.id
         });
 
-        app.handleSessionReady('reading-p1', { sessionId: 'session-reading-p1', pageType: 'unified-reading' });
+        app.handleSessionReady('reading-p1', {
+            sessionId: 'session-reading-p1',
+            suiteSessionId: session.id,
+            pageType: 'unified-reading'
+        });
         const msg = readyWindow._messages.find(item => item && item.type === 'SIMULATION_CONTEXT');
         assert(msg, 'SESSION_READY 后应下发 SIMULATION_CONTEXT');
         assert.strictEqual(msg.data.examId, 'reading-p1', 'SESSION_READY 下发应匹配 examId');
@@ -3204,7 +3655,12 @@ async function run() {
         const reusedWindow = createStubWindow('suite-window');
         reusedWindow.location.href = 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1';
         session.windowRef = reusedWindow;
-        app.openExam = async (_examId, options = {}) => options.reuseWindow || reusedWindow;
+        app.openExam = async (examId, options = {}) => installManagedTestWindow(
+            app,
+            examId,
+            options.reuseWindow || reusedWindow,
+            options
+        );
         app._waitForSuiteWindowExamReady = async () => false;
 
         const ok = await app._handleSimulationNavigate('reading-p1', {
@@ -3253,7 +3709,12 @@ async function run() {
         app.examWindows = new Map([
             ['reading-p2', { window: reusedWindow }]
         ]);
-        app.openExam = async (_examId, options = {}) => options.reuseWindow || reusedWindow;
+        app.openExam = async (examId, options = {}) => installManagedTestWindow(
+            app,
+            examId,
+            options.reuseWindow || reusedWindow,
+            options
+        );
         app._waitForSuiteWindowExamReady = async () => false;
 
         const ok = await app._handleSimulationNavigate('reading-p1', {
@@ -3374,6 +3835,11 @@ async function run() {
         app.showRealCompletionNotification = () => {};
         app.cleanupExamSession = async () => {};
         app.setState = () => {};
+        const completionWindow = createStubWindow('custom-listening-completion-window');
+        const completionInfo = app.ensureExamWindowSession(examId, completionWindow);
+        completionInfo.expectedSessionId = `${examId}_session`;
+        app.examWindows.set(examId, completionInfo);
+        const completionRegistration = app._captureExamSessionRegistration(examId, completionInfo);
 
         const previousCollector = windowStub.spellingErrorCollector;
         windowStub.spellingErrorCollector = {
@@ -3405,7 +3871,7 @@ async function run() {
                 q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
             },
             scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
-        });
+        }, completionWindow, { expectedRegistration: completionRegistration });
 
         windowStub.spellingErrorCollector = previousCollector;
 
@@ -3437,6 +3903,11 @@ async function run() {
         app.showRealCompletionNotification = () => {};
         app.cleanupExamSession = async () => {};
         app.setState = () => {};
+        const completionWindow = createStubWindow('normalized-listening-completion-window');
+        const completionInfo = app.ensureExamWindowSession(examId, completionWindow);
+        completionInfo.expectedSessionId = `${examId}_session`;
+        app.examWindows.set(examId, completionInfo);
+        const completionRegistration = app._captureExamSessionRegistration(examId, completionInfo);
 
         const previousCollector = windowStub.spellingErrorCollector;
         windowStub.spellingErrorCollector = {
@@ -3469,7 +3940,7 @@ async function run() {
                 errorCount: 1,
                 source: 'other'
             }]
-        });
+        }, completionWindow, { expectedRegistration: completionRegistration });
 
         windowStub.spellingErrorCollector = previousCollector;
 
@@ -3730,7 +4201,7 @@ async function run() {
                 this.activeSessions.set(payload.examId, session);
             }
         };
-        app.startPracticeSession = async (handledExamId) => {
+        app.startPracticeSession = async (handledExamId, startOptions = {}) => {
             resetStarts.push(handledExamId);
             app.components.practiceRecorder.activeSessions.set(handledExamId, {
                 examId: handledExamId,
@@ -3739,6 +4210,12 @@ async function run() {
                 progress: {},
                 answers: {}
             });
+            return buildOwnedStartResult(
+                app,
+                handledExamId,
+                true,
+                startOptions.launchOwnership
+            );
         };
         app.cleanupExamSession = async () => {
             cleanupCount += 1;
@@ -4017,7 +4494,12 @@ async function run() {
             return [];
         };
         app._captureLaunchLibraryConfigurationId = async () => null;
-        app.startPracticeSession = async () => true;
+        app.startPracticeSession = async (handledExamId, startOptions = {}) => buildOwnedStartResult(
+            app,
+            handledExamId,
+            true,
+            startOptions.launchOwnership
+        );
         app.injectDataCollectionScript = () => {};
         app._guardExamWindowContent = (targetWindow) => targetWindow;
         app.resolveReadingLaunchDescriptor = () => ({
@@ -4236,6 +4718,7 @@ async function run() {
         };
         app._ensureSuiteWindowGuard(session, sharedWindow);
         assert.strictEqual(sharedWindow.__IELTS_SUITE_PARENT_GUARD__.sessionId, session.id);
+        assert.strictEqual(await app._ensureSuiteRecoveryClaim('single', session), true);
         app._mirrorSessionToStorage(session);
         await windowStub.AppData.recovery.saveActiveSession({ id: session.id, status: 'completed' });
         await windowStub.AppData.recovery.saveActiveSession({
@@ -4777,10 +5260,25 @@ async function run() {
         };
 
         try {
-            assert.strictEqual(await app.startPracticeSession(examId), managerSessionId);
+            const startResult = await app.startPracticeSession(examId);
+            assert.strictEqual(app._isPracticeSessionOwnedSuccess(startResult), true);
+            assert.strictEqual(startResult.sessionId, managerSessionId);
+            assert.strictEqual(startResult.value, managerSessionId);
             assert.strictEqual(windowInfo.expectedSessionId, managerSessionId);
             assert.strictEqual(windowInfo.windowSessionTokenSessionId, managerSessionId);
             assert.notStrictEqual(windowInfo.windowSessionToken, initialToken, 'manager id realignment must rotate the token');
+
+            windowStub.practicePageManager.startPracticeSession = async (handledExamId, examData) => {
+                assert.strictEqual(handledExamId, examId);
+                assert.strictEqual(examData.sessionId, managerSessionId);
+                return true;
+            };
+            const booleanResult = await app.startPracticeSession(examId, {
+                examDefinition: { id: examId, title: 'Manager Boolean Success', type: 'reading' }
+            });
+            assert.strictEqual(app._isPracticeSessionOwnedSuccess(booleanResult), true);
+            assert.strictEqual(booleanResult.sessionId, managerSessionId);
+            assert.notStrictEqual(windowInfo.expectedSessionId, 'true', 'boolean success must not become a session id');
 
             const expectedRegistration = app._captureExamSessionRegistration(examId, windowInfo);
             assert.strictEqual(await app.cleanupExamSession(examId, { expectedRegistration }), true);
@@ -4885,6 +5383,2398 @@ async function run() {
                 delete windowStub.practicePageManager;
             }
         }
+    }
+
+    // A registration replaced while findExamDefinition is pending must not be adopted by the old start.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-start-definition-owner-gate';
+        const ownerWindow = createStubWindow('definition-owner-window');
+        const replacementWindow = createStubWindow('definition-replacement-window');
+        const ownerInfo = {
+            window: ownerWindow,
+            expectedSessionId: 'definition-owner-session',
+            windowSessionToken: 'definition-owner-token',
+            windowSessionTokenSessionId: 'definition-owner-session',
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const replacementInfo = {
+            window: replacementWindow,
+            expectedSessionId: 'definition-replacement-session',
+            windowSessionToken: 'definition-replacement-token',
+            windowSessionTokenSessionId: 'definition-replacement-session',
+            sessionGeneration: 2,
+            suiteSessionId: null
+        };
+        const replacementHandler = () => {};
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        let markLookupEntered;
+        let releaseLookup;
+        const lookupEntered = new Promise((resolve) => { markLookupEntered = resolve; });
+        const lookupGate = new Promise((resolve) => { releaseLookup = resolve; });
+        windowStub.resolveActiveLibraryIndex = async () => {
+            markLookupEntered();
+            await lookupGate;
+            return [{ id: examId, title: 'Definition owner gate', type: 'reading' }];
+        };
+        app.examWindows = new Map([[examId, ownerInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+
+        try {
+            const starting = app.startPracticeSession(examId);
+            await lookupEntered;
+            app.examWindows.set(examId, replacementInfo);
+            app.messageHandlers.set(examId, replacementHandler);
+            releaseLookup();
+
+            assert.strictEqual(await starting, null);
+            assert.strictEqual(app.examWindows.get(examId), replacementInfo);
+            assert.strictEqual(app.messageHandlers.get(examId), replacementHandler);
+            assert.strictEqual(replacementInfo.expectedSessionId, 'definition-replacement-session');
+            assert.strictEqual(replacementInfo.windowSessionToken, 'definition-replacement-token');
+        } finally {
+            releaseLookup && releaseLookup();
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+        }
+    }
+
+    // A stale openExam index lookup must stop before it navigates or overwrites a replacement.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-open-index-owner-gate';
+        const ownerInfo = {
+            window: createStubWindow('open-index-owner-window'),
+            expectedSessionId: 'open-index-owner-session',
+            windowSessionToken: 'open-index-owner-token',
+            windowSessionTokenSessionId: 'open-index-owner-session',
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const replacementInfo = {
+            window: createStubWindow('open-index-replacement-window'),
+            expectedSessionId: 'open-index-replacement-session',
+            windowSessionToken: 'open-index-replacement-token',
+            windowSessionTokenSessionId: 'open-index-replacement-session',
+            sessionGeneration: 2,
+            suiteSessionId: null
+        };
+        const replacementHandler = () => {};
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        const originalOpenExamWindow = app.openExamWindow;
+        const originalInject = app.injectDataCollectionScript;
+        let markIndexEntered;
+        let releaseIndex;
+        const indexEntered = new Promise((resolve) => { markIndexEntered = resolve; });
+        const indexGate = new Promise((resolve) => { releaseIndex = resolve; });
+        let openCount = 0;
+        let injectCount = 0;
+        windowStub.resolveActiveLibraryIndex = async () => {
+            markIndexEntered();
+            await indexGate;
+            return [{ id: examId, title: 'Open index owner gate', type: 'reading', hasHtml: true }];
+        };
+        app.openExamWindow = () => {
+            openCount += 1;
+            return ownerInfo.window;
+        };
+        app.injectDataCollectionScript = () => {
+            injectCount += 1;
+        };
+        app.examWindows = new Map([[examId, ownerInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+
+        try {
+            const opening = app.openExam(examId, { target: 'tab' });
+            await indexEntered;
+            app.examWindows.set(examId, replacementInfo);
+            app.messageHandlers.set(examId, replacementHandler);
+            releaseIndex();
+
+            assert.strictEqual(await opening, null);
+            assert.strictEqual(openCount, 0, 'a stale index lookup must stop before navigation');
+            assert.strictEqual(injectCount, 0);
+            assert.strictEqual(app.examWindows.get(examId), replacementInfo);
+            assert.strictEqual(app.messageHandlers.get(examId), replacementHandler);
+        } finally {
+            releaseIndex && releaseIndex();
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+            app.openExamWindow = originalOpenExamWindow;
+            app.injectDataCollectionScript = originalInject;
+        }
+    }
+
+    // Removing the frozen predecessor during the index await is neutral; only a different tuple supersedes launch.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-open-index-predecessor-closed';
+        const oldWindow = createStubWindow('open-index-predecessor-window');
+        const newWindow = createStubWindow('_blank');
+        newWindow.addEventListener = () => {};
+        const oldInfo = {
+            window: oldWindow,
+            expectedSessionId: 'open-index-predecessor-session',
+            windowSessionToken: 'open-index-predecessor-token',
+            windowSessionTokenSessionId: 'open-index-predecessor-session',
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        const originalResolveActiveLibraryIndex = windowStub.resolveActiveLibraryIndex;
+        let markIndexEntered;
+        let releaseIndex;
+        const indexEntered = new Promise(resolve => { markIndexEntered = resolve; });
+        const indexGate = new Promise(resolve => { releaseIndex = resolve; });
+        windowStub.resolveActiveLibraryIndex = async () => {
+            markIndexEntered();
+            await indexGate;
+            return [{ id: examId, title: 'Closed predecessor launch', type: 'reading', hasHtml: true }];
+        };
+        app.examWindows = new Map([[examId, oldInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: `http://localhost/${examId}.html`
+        });
+        app.openExamWindow = () => newWindow;
+        app._guardExamWindowContent = targetWindow => targetWindow;
+        app._captureLaunchLibraryConfigurationId = async () => null;
+        app.startPracticeSession = async (handledExamId, startOptions = {}) => buildOwnedStartResult(
+            app,
+            handledExamId,
+            true,
+            startOptions.launchOwnership
+        );
+        app.injectDataCollectionScript = () => {};
+        try {
+            const opening = app.openExam(examId, { target: 'tab', windowName: '_blank' });
+            await indexEntered;
+            const predecessorRegistration = app._captureExamSessionRegistration(examId, oldInfo);
+            assert.strictEqual(await app.cleanupExamSession(examId, {
+                expectedRegistration: predecessorRegistration,
+                recoverySessionId: predecessorRegistration.expectedSessionId
+            }), true);
+            releaseIndex();
+            assert.strictEqual(await opening, newWindow);
+            assert.strictEqual(app.examWindows.get(examId).window, newWindow);
+            assert.notStrictEqual(app.examWindows.get(examId), oldInfo);
+        } finally {
+            releaseIndex && releaseIndex();
+            windowStub.resolveActiveLibraryIndex = originalResolveActiveLibraryIndex;
+            const current = app.examWindows && app.examWindows.get(examId);
+            if (current && current.closeMonitor) clearInterval(current.closeMonitor);
+            if (app._handshakeTimers) {
+                for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+                app._handshakeTimers.clear();
+            }
+        }
+    }
+
+    // An openExam manager await that loses its exact owner must not inject, INIT, checkpoint, or rebind.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-open-manager-owner-gate';
+        const exam = { id: examId, title: 'Open manager owner gate', type: 'reading', hasHtml: true };
+        const oldWindow = createStubWindow('open-manager-old-window');
+        const replacementWindow = createStubWindow('open-manager-replacement-window');
+        const oldLoadHandlers = [];
+        const replacementLoadHandlers = [];
+        oldWindow.addEventListener = (type, handler) => {
+            if (type === 'load' && typeof handler === 'function') oldLoadHandlers.push(handler);
+        };
+        replacementWindow.addEventListener = (type, handler) => {
+            if (type === 'load' && typeof handler === 'function') replacementLoadHandlers.push(handler);
+        };
+        const originalManager = windowStub.practicePageManager;
+        const hadManager = Object.prototype.hasOwnProperty.call(windowStub, 'practicePageManager');
+        const originalResolveReading = app.resolveReadingLaunchDescriptor;
+        const originalOpenExamWindow = app.openExamWindow;
+        const originalGuard = app._guardExamWindowContent;
+        const originalCaptureLibrary = app._captureLaunchLibraryConfigurationId;
+        const originalInject = app.injectDataCollectionScript;
+        let markManagerEntered;
+        let releaseManager;
+        const managerEntered = new Promise((resolve) => { markManagerEntered = resolve; });
+        const managerGate = new Promise((resolve) => { releaseManager = resolve; });
+        let injectCount = 0;
+        let checkpointCount = 0;
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: `http://localhost/${examId}.html`
+        });
+        app.openExamWindow = () => oldWindow;
+        app._guardExamWindowContent = (targetWindow) => targetWindow;
+        app._captureLaunchLibraryConfigurationId = async () => null;
+        app.injectDataCollectionScript = () => {
+            injectCount += 1;
+        };
+        windowStub.practicePageManager = {
+            async startPracticeSession(handledExamId, examData) {
+                assert.strictEqual(handledExamId, examId);
+                assert.strictEqual(typeof examData.sessionId, 'string');
+                assert(examData.sessionId.length > 0);
+                markManagerEntered();
+                await managerGate;
+                return examData.sessionId;
+            }
+        };
+
+        let replacementRegistration = null;
+        let replacementHandler = null;
+        try {
+            const opening = app.openExam(examId, {
+                examDefinition: exam,
+                target: 'tab',
+                windowName: 'open-manager-owner-gate-tab',
+                suiteSessionId: 'suite-open-manager-owner-gate',
+                beforeSuiteHandshake: async () => {
+                    checkpointCount += 1;
+                    return true;
+                }
+            });
+            await managerEntered;
+            const oldRegistration = app._captureExamSessionRegistration(examId);
+            assert(oldRegistration && oldRegistration.window === oldWindow);
+
+            replacementRegistration = app.setupExamWindowManagement(
+                replacementWindow,
+                examId,
+                exam,
+                {
+                    expectedUrl: `http://localhost/${examId}-replacement.html`,
+                    deferInitialHandshake: true
+                }
+            );
+            replacementHandler = app.messageHandlers.get(examId);
+            assert(replacementRegistration && replacementRegistration.window === replacementWindow);
+            releaseManager();
+
+            assert.strictEqual(await opening, null);
+            assert.strictEqual(injectCount, 0, 'a displaced launch must never inject into its old WindowProxy');
+            assert.strictEqual(checkpointCount, 0, 'a displaced launch must not mutate the suite binding');
+            assert.strictEqual(
+                oldWindow._messages.some(message => message && String(message.type || '').toUpperCase() === 'INIT_SESSION'),
+                false,
+                'the displaced WindowProxy must not receive INIT'
+            );
+
+            await Promise.all(oldLoadHandlers.map(handler => Promise.resolve(handler())));
+            assert.strictEqual(app.examWindows.get(examId), replacementRegistration.windowInfo);
+            assert.strictEqual(app.messageHandlers.get(examId), replacementHandler);
+            assert.strictEqual(replacementRegistration.windowInfo.window, replacementWindow);
+            assert.strictEqual(
+                oldWindow._messages.some(message => message && String(message.type || '').toUpperCase() === 'INIT_SESSION'),
+                false,
+                'stale load callbacks must remain owner-gated'
+            );
+        } finally {
+            releaseManager && releaseManager();
+            app.resolveReadingLaunchDescriptor = originalResolveReading;
+            app.openExamWindow = originalOpenExamWindow;
+            app._guardExamWindowContent = originalGuard;
+            app._captureLaunchLibraryConfigurationId = originalCaptureLibrary;
+            app.injectDataCollectionScript = originalInject;
+            if (hadManager) {
+                windowStub.practicePageManager = originalManager;
+            } else {
+                delete windowStub.practicePageManager;
+            }
+            const current = app.examWindows && app.examWindows.get(examId);
+            if (current && current.closeMonitor) clearInterval(current.closeMonitor);
+            if (app._handshakeTimers) {
+                for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+                app._handshakeTimers.clear();
+            }
+            replacementLoadHandlers.length = 0;
+        }
+    }
+
+    // Failed deferred starts must tear down only their exact owned popup registration.
+    for (const failureMode of [
+        'manager-false',
+        'recovery-uncommitted',
+        'checkpoint-false',
+        'config-window-close',
+        'manager-window-close'
+    ]) {
+        const app = createApp(windowStub);
+        const examId = `reading-open-start-failure-${failureMode}`;
+        const exam = { id: examId, title: failureMode, type: 'reading', hasHtml: true };
+        const examWindow = createStubWindow(`start-failure-${failureMode}`);
+        examWindow.addEventListener = () => {};
+        examWindow.close = function close() { this.closed = true; };
+        const hadManager = Object.prototype.hasOwnProperty.call(windowStub, 'practicePageManager');
+        const originalManager = windowStub.practicePageManager;
+        let injectCount = 0;
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: `http://localhost/${examId}.html`
+        });
+        app.openExamWindow = () => examWindow;
+        app._guardExamWindowContent = targetWindow => targetWindow;
+        app._captureLaunchLibraryConfigurationId = async () => {
+            if (failureMode === 'config-window-close') examWindow.close();
+            return null;
+        };
+        app.injectDataCollectionScript = () => { injectCount += 1; };
+        if (failureMode === 'manager-false' || failureMode === 'manager-window-close') {
+            windowStub.practicePageManager = {
+                async startPracticeSession() {
+                    if (failureMode === 'manager-window-close') {
+                        examWindow.close();
+                        return true;
+                    }
+                    return false;
+                }
+            };
+        } else {
+            delete windowStub.practicePageManager;
+        }
+        if (failureMode === 'recovery-uncommitted') {
+            recoveryControl.saveQueue.push(false);
+        }
+        if (failureMode === 'checkpoint-false') {
+            app.startPracticeSession = async (handledExamId, startOptions = {}) => buildOwnedStartResult(
+                app,
+                handledExamId,
+                true,
+                startOptions.launchOwnership
+            );
+        }
+        try {
+            const opened = await app.openExam(examId, {
+                examDefinition: exam,
+                target: 'tab',
+                windowName: examWindow.name,
+                ...(failureMode === 'checkpoint-false' ? {
+                    suiteSessionId: `suite-${examId}`,
+                    beforeSuiteHandshake: async () => false
+                } : {})
+            });
+            assert.strictEqual(opened, null);
+            assert.strictEqual(Boolean(app.examWindows && app.examWindows.has(examId)), false);
+            assert.strictEqual(Boolean(app.messageHandlers && app.messageHandlers.has(examId)), false);
+            assert.strictEqual(examWindow.closed, true);
+            assert.strictEqual(injectCount, 0);
+        } finally {
+            if (hadManager) {
+                windowStub.practicePageManager = originalManager;
+            } else {
+                delete windowStub.practicePageManager;
+            }
+            const current = app.examWindows && app.examWindows.get(examId);
+            if (current && current.closeMonitor) clearInterval(current.closeMonitor);
+            if (app._handshakeTimers) {
+                for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+                app._handshakeTimers.clear();
+            }
+        }
+    }
+
+    // A completed first navigation is owned by its exact provisional registration. A newer
+    // same-exam launch that fails before navigation must not strand the first launch mid-config.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-post-navigation-registration-owner';
+        const exam = { id: examId, title: 'Post-navigation owner', type: 'reading', hasHtml: true };
+        const examWindow = createStubWindow('_blank');
+        examWindow.addEventListener = () => {};
+        examWindow.close = function close() { this.closed = true; };
+        const hadOpen = Object.prototype.hasOwnProperty.call(windowStub, 'open');
+        const originalOpen = windowStub.open;
+        let markConfigurationEntered;
+        let releaseConfiguration;
+        const configurationEntered = new Promise(resolve => { markConfigurationEntered = resolve; });
+        const configurationGate = new Promise(resolve => { releaseConfiguration = resolve; });
+        let configurationCommitGuard = null;
+        let injectCount = 0;
+        let restartCount = 0;
+        windowStub.open = () => examWindow;
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: `http://localhost/${examId}.html`
+        });
+        app._guardExamWindowContent = targetWindow => targetWindow;
+        app._captureLaunchLibraryConfigurationId = async (_handledExamId, captureOptions = {}) => {
+            configurationCommitGuard = captureOptions.commitGuard;
+            assert.strictEqual(configurationCommitGuard(), true);
+            markConfigurationEntered();
+            await configurationGate;
+            assert.strictEqual(configurationCommitGuard(), true);
+            return null;
+        };
+        app.startPracticeSession = async (handledExamId, startOptions = {}) => {
+            assert.strictEqual(
+                app._isExamSessionRegistrationCurrent(handledExamId, startOptions.expectedRegistration),
+                true
+            );
+            return buildOwnedStartResult(app, handledExamId, true);
+        };
+        app.restartExamHandshake = () => { restartCount += 1; };
+        app.injectDataCollectionScript = () => { injectCount += 1; };
+        let provisionalRegistration = null;
+        try {
+            const opening = app.openExam(examId, {
+                examDefinition: exam,
+                target: 'tab',
+                windowName: '_blank'
+            });
+            await configurationEntered;
+            provisionalRegistration = app._captureExamSessionRegistration(examId);
+            assert(provisionalRegistration);
+            assert.strictEqual(provisionalRegistration.window, examWindow);
+            assert.strictEqual(provisionalRegistration.windowInfo.launchProvisional, true);
+            assert.strictEqual(
+                app._isOpenExamRegistrationCurrent(examId, provisionalRegistration, examWindow),
+                true
+            );
+
+            await assert.rejects(
+                app.openExam(examId, { requireRecordProvenance: true }),
+                /./
+            );
+            assert.strictEqual(configurationCommitGuard(), true);
+            assert.strictEqual(
+                app._isExamSessionRegistrationCurrent(examId, provisionalRegistration),
+                true,
+                'a failed pre-navigation reservation must not supersede the navigated provisional tuple'
+            );
+            releaseConfiguration();
+
+            assert.strictEqual(await opening, examWindow);
+            const finalRegistration = app._captureExamSessionRegistration(examId);
+            assert(finalRegistration);
+            assert.notStrictEqual(finalRegistration.windowInfo, provisionalRegistration.windowInfo);
+            assert.strictEqual(finalRegistration.windowInfo.launchProvisional, undefined);
+            assert.strictEqual(finalRegistration.windowInfo.handshakeDeferred, false);
+            assert.strictEqual(app.messageHandlers.has(examId), true);
+            assert.strictEqual(restartCount, 1);
+            assert.strictEqual(injectCount, 1);
+        } finally {
+            releaseConfiguration && releaseConfiguration();
+            if (hadOpen) windowStub.open = originalOpen;
+            else delete windowStub.open;
+            const current = app.examWindows && app.examWindows.get(examId);
+            if (current && current.closeMonitor) clearInterval(current.closeMonitor);
+            if (app._handshakeTimers) {
+                for (const timer of app._handshakeTimers.values()) clearInterval(timer);
+                app._handshakeTimers.clear();
+            }
+        }
+    }
+
+    // A supplied launch token publishes the exact final registration it created. A same-suite,
+    // same-WindowProxy successor installed after openExam resolves must not be re-captured as the
+    // older launch's result by reading the global examWindows map.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-launch-registration-receipt';
+        const suiteSessionId = 'suite-launch-registration-receipt';
+        const exam = { id: examId, title: 'Launch receipt', type: 'reading', hasHtml: true };
+        const examWindow = createStubWindow('launch-registration-receipt-window');
+        examWindow.addEventListener = () => {};
+        app.resolveReadingLaunchDescriptor = () => ({
+            mode: 'unified_html',
+            url: `http://localhost/${examId}.html`
+        });
+        app._guardExamWindowContent = targetWindow => targetWindow;
+        app._captureLaunchLibraryConfigurationId = async () => null;
+        app.restartExamHandshake = () => {};
+        app.injectDataCollectionScript = () => {};
+        app.startPracticeSession = async (handledExamId, startOptions = {}) => {
+            const expectedRegistration = startOptions.expectedRegistration;
+            assert.strictEqual(
+                app._isExamSessionRegistrationCurrent(handledExamId, expectedRegistration),
+                true
+            );
+            const previousInfo = expectedRegistration.windowInfo;
+            const realignedInfo = {
+                ...previousInfo,
+                expectedSessionId: 'launch-receipt-manager-session',
+                sessionId: null,
+                sessionGeneration: Number(previousInfo.sessionGeneration || 0) + 1,
+                windowSessionToken: 'launch-receipt-manager-token',
+                windowSessionTokenSessionId: 'launch-receipt-manager-session'
+            };
+            app.examWindows.set(handledExamId, realignedInfo);
+            const registration = app._captureExamSessionRegistration(handledExamId, realignedInfo);
+            return Object.freeze({
+                owned: true,
+                status: 'owned-success',
+                examId: handledExamId,
+                source: 'manager',
+                sessionId: realignedInfo.expectedSessionId,
+                value: null,
+                registration
+            });
+        };
+
+        const launchOwnership = app._beginExamLaunchOwnership(examId, {
+            reuseWindow: examWindow,
+            windowName: examWindow.name
+        });
+        const opened = await app.openExam(examId, {
+            examDefinition: exam,
+            target: 'tab',
+            reuseWindow: examWindow,
+            windowName: examWindow.name,
+            launchOwnership,
+            suiteSessionId,
+            beforeSuiteHandshake: async (context = {}) => {
+                assert.strictEqual(context.commitGuard(), true);
+                return true;
+            }
+        });
+        assert.strictEqual(opened, examWindow);
+        const launchReceipt = app._captureExamLaunchRegistrationReceipt(
+            examId,
+            launchOwnership,
+            examWindow
+        );
+        assert(launchReceipt, 'successful supplied launch must publish an exact receipt');
+        assert.strictEqual(launchReceipt.expectedSessionId, 'launch-receipt-manager-session');
+        assert.strictEqual(launchReceipt.suiteSessionId, suiteSessionId);
+        assert.strictEqual(
+            app._isExamSessionRegistrationCurrent(examId, launchReceipt),
+            true
+        );
+
+        const newerRegistration = app.setupExamWindowManagement(
+            examWindow,
+            examId,
+            exam,
+            {
+                expectedRegistration: launchReceipt,
+                expectedUrl: `http://localhost/${examId}.html`,
+                suiteSessionId,
+                skipContentGuard: true,
+                deferInitialHandshake: true
+            }
+        );
+        assert(newerRegistration);
+        assert.strictEqual(newerRegistration.window, examWindow);
+        assert.strictEqual(newerRegistration.suiteSessionId, suiteSessionId);
+        assert.notStrictEqual(newerRegistration.windowInfo, launchReceipt.windowInfo);
+        assert.notStrictEqual(newerRegistration.expectedSessionId, launchReceipt.expectedSessionId);
+        assert.strictEqual(
+            app._captureExamLaunchRegistrationReceipt(examId, launchOwnership, examWindow),
+            null,
+            'a newer same-suite tuple must invalidate, not replace, the older launch receipt'
+        );
+        assert.strictEqual(app.examWindows.get(examId), newerRegistration.windowInfo);
+
+        const current = app.examWindows.get(examId);
+        if (current && current.closeMonitor) clearInterval(current.closeMonitor);
+        if (app._handshakeTimers && app._handshakeTimers.has(examId)) {
+            clearInterval(app._handshakeTimers.get(examId));
+            app._handshakeTimers.delete(examId);
+        }
+        const currentHandler = app.messageHandlers && app.messageHandlers.get(examId);
+        if (currentHandler) {
+            windowStub.removeEventListener('message', currentHandler);
+            app.messageHandlers.delete(examId);
+        }
+    }
+
+    // Direct location assignment does not prove that options.windowName resolves to the reused
+    // WindowProxy. Only window.open(requestedName) may establish that named-context proof.
+    for (const launchKind of ['html', 'pdf']) {
+        const app = createApp(windowStub);
+        const examId = `reading-direct-reuse-name-proof-${launchKind}`;
+        const exam = { id: examId, title: `Direct reuse ${launchKind}`, type: 'reading' };
+        const actualName = `actual-direct-reuse-${launchKind}`;
+        const unrelatedName = `unrelated-direct-reuse-${launchKind}`;
+        const examWindow = createStubWindow(actualName);
+        const ownership = app._beginExamLaunchOwnership(examId, {
+            reuseWindow: examWindow,
+            windowName: unrelatedName
+        });
+        const launchOptions = {
+            examId,
+            reuseWindow: examWindow,
+            windowName: unrelatedName,
+            launchOwnership: ownership
+        };
+        const opened = launchKind === 'html'
+            ? app.openExamWindow(`http://localhost/${examId}.html`, exam, launchOptions)
+            : app._openPdfWindow(exam, `http://localhost/${examId}.pdf`, launchOptions);
+        assert.strictEqual(opened, examWindow);
+        assert.notStrictEqual(
+            app._resolveExamLaunchProvenWindow(`window-name:${unrelatedName}`),
+            examWindow,
+            `${launchKind} direct reuse must not treat options.windowName as resolved proof`
+        );
+        assert.strictEqual(
+            app._resolveExamLaunchProvenWindow(`window-name:${actualName}`),
+            examWindow,
+            `${launchKind} direct reuse may retain the safely read actual WindowProxy name`
+        );
+
+        const namedExamId = `reading-unrelated-named-continuation-${launchKind}`;
+        const namedContinuation = app._beginExamLaunchOwnership(namedExamId, {
+            windowName: unrelatedName
+        });
+        Object.defineProperty(examWindow, 'name', {
+            configurable: true,
+            get() { throw new Error('cross-origin name'); }
+        });
+        const opaqueOwnership = app._beginExamLaunchOwnership(
+            `reading-opaque-direct-reuse-${launchKind}`,
+            { reuseWindow: examWindow }
+        );
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent(namedExamId, namedContinuation),
+            true,
+            `${launchKind} opaque reuse must not steal an unrelated unproven named continuation`
+        );
+        assert.strictEqual(
+            app._examLaunchOwnershipTargetLeaseKeys.get(opaqueOwnership)
+                .has(`window-name:${unrelatedName}`),
+            false
+        );
+    }
+
+    // An abort may await durable recovery cleanup after removing its exact HTML tuple. A raw PDF
+    // navigation on the same WindowProxy has no managed map entry, but its committed navigation
+    // token must still prevent the older abort from closing the newly owned document.
+    {
+        const app = createApp(windowStub);
+        const htmlExamId = 'reading-html-abort-before-pdf-reuse';
+        const pdfExamId = 'reading-pdf-reuses-aborting-window';
+        const examWindow = createStubWindow('html-abort-pdf-reuse-window');
+        let closeCount = 0;
+        examWindow.close = function close() {
+            closeCount += 1;
+            this.closed = true;
+        };
+        const htmlOwnership = app._beginExamLaunchOwnership(htmlExamId, {
+            reuseWindow: examWindow
+        });
+        assert.strictEqual(app.openExamWindow(
+            `http://localhost/${htmlExamId}.html`,
+            { id: htmlExamId, title: 'HTML abort owner', type: 'reading' },
+            {
+                examId: htmlExamId,
+                reuseWindow: examWindow,
+                launchOwnership: htmlOwnership
+            }
+        ), examWindow);
+        const htmlRegistration = app._captureExamSessionRegistration(htmlExamId);
+        assert(htmlRegistration && htmlRegistration.navigationOwnership);
+
+        let markDiscardEntered;
+        let releaseDiscard;
+        const discardEntered = new Promise(resolve => { markDiscardEntered = resolve; });
+        const discardGate = new Promise(resolve => { releaseDiscard = resolve; });
+        app._discardActiveSessionsForExam = async () => {
+            markDiscardEntered();
+            await discardGate;
+            return 0;
+        };
+        const aborting = app._abortOwnedExamLaunch(
+            htmlExamId,
+            examWindow,
+            htmlOwnership,
+            htmlRegistration
+        );
+        await discardEntered;
+        assert.strictEqual(app.examWindows.has(htmlExamId), false);
+
+        const pdfOwnership = app._beginExamLaunchOwnership(pdfExamId, {
+            reuseWindow: examWindow
+        });
+        assert.strictEqual(app._openPdfWindow(
+            { id: pdfExamId, title: 'PDF replacement', type: 'reading' },
+            `http://localhost/${pdfExamId}.pdf`,
+            { reuseWindow: examWindow, launchOwnership: pdfOwnership }
+        ), examWindow);
+        assert.notStrictEqual(
+            app._examWindowCommittedNavigationOwners.get(examWindow),
+            htmlRegistration.navigationOwnership
+        );
+        assert.strictEqual(app.examWindows.has(pdfExamId), false, 'raw PDF must remain unmanaged');
+
+        releaseDiscard();
+        assert.strictEqual(await aborting, true);
+        assert.strictEqual(closeCount, 0, 'the stale HTML abort must not close the newer raw PDF');
+        assert.strictEqual(examWindow.closed, false);
+        assert.strictEqual(examWindow.location.href, `http://localhost/${pdfExamId}.pdf`);
+    }
+
+    // Popup fallback may register the host window, but startup abort must never close the app itself.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-host-window-start-abort';
+        const hadClose = Object.prototype.hasOwnProperty.call(windowStub, 'close');
+        const originalClose = windowStub.close;
+        let hostCloseCount = 0;
+        windowStub.close = () => { hostCloseCount += 1; };
+        const info = {
+            window: windowStub,
+            expectedSessionId: 'host-window-abort-session',
+            windowSessionToken: 'host-window-abort-token',
+            windowSessionTokenSessionId: 'host-window-abort-session',
+            sessionGeneration: 1,
+            suiteSessionId: null,
+            expectedOrigin: 'http://localhost'
+        };
+        app.examWindows = new Map([[examId, info]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        const launchOwnership = app._beginExamLaunchOwnership(examId, { reuseWindow: windowStub });
+        const registration = app._captureExamSessionRegistration(examId, info);
+        try {
+            assert.strictEqual(
+                await app._abortOwnedExamLaunch(examId, windowStub, launchOwnership, registration),
+                true
+            );
+            assert.strictEqual(hostCloseCount, 0);
+            assert.strictEqual(app.examWindows.has(examId), false);
+        } finally {
+            if (hadClose) windowStub.close = originalClose;
+            else delete windowStub.close;
+        }
+    }
+
+    // Launch ownership reserves implicit names, cannot be widened by a caller, and gates guard retries.
+    {
+        const app = createApp(windowStub);
+        const implicitExamId = 'reading-implicit-lease';
+        const implicitOwnership = app._beginExamLaunchOwnership(implicitExamId, {});
+        assert(implicitOwnership.targetLeaseKeys.includes(`window-name:exam_${implicitExamId}`));
+        assert(implicitOwnership.targetLeaseKeys.includes(`window-name:pdf_${implicitExamId}`));
+
+        let staleOpenCount = 0;
+        const originalOpenExamWindow = app.openExamWindow;
+        app.openExamWindow = () => {
+            staleOpenCount += 1;
+            return createStubWindow('unexpected-expanded-target');
+        };
+        assert.strictEqual(await app.openExam(implicitExamId, {
+            examDefinition: { id: implicitExamId, title: 'Implicit lease', type: 'reading', hasHtml: true },
+            launchOwnership: implicitOwnership,
+            windowName: 'caller-added-target'
+        }), null);
+        assert.strictEqual(staleOpenCount, 0, 'an adopted launch token must not gain a new named target');
+        app.openExamWindow = originalOpenExamWindow;
+
+        const sharedWindow = createStubWindow(`exam_${implicitExamId}`);
+        app._beginExamLaunchOwnership('reading-window-holder', { reuseWindow: sharedWindow });
+        const staleImplicit = app._beginExamLaunchOwnership(implicitExamId, {});
+        Object.defineProperty(sharedWindow, 'name', {
+            configurable: true,
+            get() { throw new Error('cross-origin name'); }
+        });
+        const opaqueWinner = app._beginExamLaunchOwnership('reading-window-winner', { reuseWindow: sharedWindow });
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent(implicitExamId, staleImplicit),
+            false,
+            'claiming an opaque WindowProxy must transfer its previously proven named lease'
+        );
+        const inheritedTargetKey = `window-name:exam_${implicitExamId}`;
+        const interveningNamedLaunch = app._beginExamLaunchOwnership('reading-window-name-intervening', {
+            windowName: `exam_${implicitExamId}`
+        });
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-window-winner', opaqueWinner),
+            false,
+            'an inherited effective target key must remain part of the opaque owner lease'
+        );
+        const secondOpaqueWinner = app._beginExamLaunchOwnership('reading-window-second-winner', {
+            reuseWindow: sharedWindow
+        });
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-window-name-intervening', interveningNamedLaunch),
+            false,
+            'a later opaque reuse must transfer the proven target key across multiple generations'
+        );
+        assert(
+            app._examLaunchOwnershipTargetLeaseKeys.get(secondOpaqueWinner).has(inheritedTargetKey),
+            'the multi-generation owner must retain the inherited effective target key'
+        );
+        const secondNamedWindow = createStubWindow(`exam_${implicitExamId}`);
+        const secondNamedOwner = app._beginExamLaunchOwnership('reading-window-second-context', {
+            windowName: `exam_${implicitExamId}`
+        });
+        assert.strictEqual(
+            app._claimExamLaunchWindowOwnership(
+                secondNamedOwner,
+                secondNamedWindow,
+                `exam_${implicitExamId}`
+            ),
+            true
+        );
+        const opaqueFirstContextReuse = app._beginExamLaunchOwnership('reading-window-first-context-reuse', {
+            reuseWindow: sharedWindow
+        });
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-window-second-context', secondNamedOwner),
+            true,
+            'an opaque reuse of P1 must not steal a target name now proven to resolve to P2'
+        );
+        assert.strictEqual(
+            app._examLaunchOwnershipTargetLeaseKeys.get(opaqueFirstContextReuse).has(inheritedTargetKey),
+            false
+        );
+
+        const renamedWindow = createStubWindow('proof-name-foo');
+        app._beginExamLaunchOwnership('reading-proof-name-holder', { reuseWindow: renamedWindow });
+        assert.strictEqual(
+            app._resolveExamLaunchProvenWindow('window-name:proof-name-foo'),
+            renamedWindow
+        );
+        renamedWindow.name = 'proof-name-bar';
+        const pendingFooOwner = app._beginExamLaunchOwnership('reading-proof-name-pending-foo', {
+            windowName: 'proof-name-foo'
+        });
+        app._beginExamLaunchOwnership('reading-proof-name-bar-reuse', {
+            reuseWindow: renamedWindow
+        });
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-proof-name-pending-foo', pendingFooOwner),
+            true,
+            'a readable rename must revoke the old proof instead of stealing the pending old name'
+        );
+        assert.strictEqual(app._resolveExamLaunchProvenWindow('window-name:proof-name-foo'), null);
+        assert.strictEqual(
+            app._resolveExamLaunchProvenWindow('window-name:proof-name-bar'),
+            renamedWindow
+        );
+
+        const closedProofWindow = createStubWindow('proof-name-closed');
+        app._beginExamLaunchOwnership('reading-proof-name-closed-holder', {
+            reuseWindow: closedProofWindow
+        });
+        const closedProofKey = 'window-name:proof-name-closed';
+        const storedClosedProof = app._examLaunchProvenWindowByTargetKey.get(closedProofKey);
+        if (typeof WeakRef === 'function') {
+            assert.notStrictEqual(storedClosedProof, closedProofWindow, 'proof map must not strongly retain WindowProxy');
+            assert.strictEqual(typeof storedClosedProof.deref, 'function');
+        }
+        closedProofWindow.closed = true;
+        assert.strictEqual(app._resolveExamLaunchProvenWindow(closedProofKey), null);
+        assert.strictEqual(app._examLaunchProvenWindowByTargetKey.has(closedProofKey), false);
+
+        const committedReservationApp = createApp(windowStub);
+        for (let index = 0; index < 4; index += 1) {
+            const committedExamId = `reading-committed-reservation-${index}`;
+            const committedWindow = createStubWindow(`committed-actual-name-${index}`);
+            const customWindowName = `committed-custom-name-${index}`;
+            const committedOwnership = committedReservationApp._beginExamLaunchOwnership(
+                committedExamId,
+                {
+                    reuseWindow: committedWindow,
+                    windowName: customWindowName
+                }
+            );
+            assert.strictEqual(
+                committedReservationApp._examLaunchOwnershipExplicitWindows.get(committedOwnership),
+                committedWindow
+            );
+            const launchOptions = {
+                examId: committedExamId,
+                reuseWindow: committedWindow,
+                windowName: customWindowName,
+                launchOwnership: committedOwnership
+            };
+            assert.strictEqual(
+                committedReservationApp.openExamWindow(
+                    `http://localhost/${committedExamId}.html`,
+                    { id: committedExamId, title: 'Committed reservation', type: 'reading' },
+                    launchOptions
+                ),
+                committedWindow
+            );
+            assert(
+                launchOptions.navigationRegistration
+                && committedReservationApp._isExamSessionRegistrationCurrent(
+                    committedExamId,
+                    launchOptions.navigationRegistration
+                ),
+                'navigation must install an exact registration before releasing its reservation'
+            );
+            assert.strictEqual(
+                committedReservationApp._commitExamLaunchOwnership(committedOwnership),
+                true
+            );
+            assert.strictEqual(committedReservationApp._examLaunchOwnerships.has(committedExamId), false);
+            assert.strictEqual(
+                committedReservationApp._examLaunchTargetOwnerships.size,
+                0,
+                'successful unique named launches must not accumulate target reservations'
+            );
+            assert.strictEqual(
+                committedReservationApp._examLaunchWindowOwnerships.get(committedWindow),
+                undefined
+            );
+            assert.strictEqual(
+                committedReservationApp._examLaunchOwnershipExplicitWindows.has(committedOwnership),
+                false,
+                'commit must release the token side table strong WindowProxy reference'
+            );
+            assert.strictEqual(
+                committedReservationApp._claimExamLaunchWindowOwnership(
+                    committedOwnership,
+                    committedWindow,
+                    customWindowName
+                ),
+                false,
+                'a committed continuation must never reacquire its released reservation'
+            );
+            assert.strictEqual(
+                committedReservationApp._isExamLaunchOwnershipCurrent(
+                    committedExamId,
+                    committedOwnership,
+                    null,
+                    committedWindow
+                ),
+                false
+            );
+            if (index === 0) {
+                const provenName = `committed-actual-name-${index}`;
+                const pendingNamedOwnership = committedReservationApp._beginExamLaunchOwnership(
+                    'reading-committed-proof-pending',
+                    { windowName: provenName }
+                );
+                Object.defineProperty(committedWindow, 'name', {
+                    configurable: true,
+                    get() { throw new Error('cross-origin name'); }
+                });
+                const opaqueReuseOwnership = committedReservationApp._beginExamLaunchOwnership(
+                    'reading-committed-proof-opaque-reuse',
+                    { reuseWindow: committedWindow }
+                );
+                assert.strictEqual(
+                    committedReservationApp._isExamLaunchOwnershipCurrent(
+                        'reading-committed-proof-pending',
+                        pendingNamedOwnership
+                    ),
+                    false,
+                    'weak name proof must survive reservation release and protect a later opaque reuse'
+                );
+                assert.strictEqual(
+                    committedReservationApp._rollbackExamLaunchOwnership(opaqueReuseOwnership),
+                    true
+                );
+                assert.strictEqual(
+                    committedReservationApp._rollbackExamLaunchOwnership(pendingNamedOwnership),
+                    true
+                );
+                assert.strictEqual(committedReservationApp._examLaunchTargetOwnerships.size, 0);
+            }
+            committedWindow.closed = true;
+            assert.strictEqual(
+                committedReservationApp._resolveExamLaunchProvenWindow(
+                    `window-name:committed-actual-name-${index}`
+                ),
+                null,
+                'closed committed windows must not retain a proven-name resolution'
+            );
+        }
+
+        const rollbackApp = createApp(windowStub);
+        const rollbackWindow = createStubWindow('rollback-nested-target');
+        const rollbackExamId = 'reading-rollback-nested';
+        rollbackApp.setupExamWindowCommunication(
+            rollbackWindow,
+            rollbackExamId,
+            { id: rollbackExamId, title: 'Installed launch owner', type: 'reading' },
+            { expectedUrl: 'http://localhost/exam.html' }
+        );
+        const installedInfo = rollbackApp.examWindows.get(rollbackExamId);
+        const installedHandler = rollbackApp.messageHandlers.get(rollbackExamId);
+        const installedRegistration = rollbackApp._captureExamSessionRegistration(
+            rollbackExamId,
+            installedInfo
+        );
+        const predecessor = rollbackApp._beginExamLaunchOwnership(rollbackExamId, {
+            reuseWindow: rollbackWindow,
+            windowName: rollbackWindow.name
+        });
+        const staleReservation = rollbackApp._beginExamLaunchOwnership(rollbackExamId, {
+            reuseWindow: rollbackWindow,
+            windowName: rollbackWindow.name
+        });
+        const newestReservation = rollbackApp._beginExamLaunchOwnership(rollbackExamId, {
+            reuseWindow: rollbackWindow,
+            windowName: rollbackWindow.name
+        });
+        assert.strictEqual(rollbackApp._rollbackExamLaunchOwnership(staleReservation), false);
+        assert.strictEqual(rollbackApp._rollbackExamLaunchOwnership(newestReservation), true);
+        assert.strictEqual(
+            rollbackApp._isExamLaunchOwnershipCurrent(
+                rollbackExamId,
+                predecessor,
+                null,
+                rollbackWindow
+            ),
+            false,
+            'a failed nested reservation must not resurrect an older open continuation'
+        );
+        assert.strictEqual(
+            rollbackApp._isExamSessionRegistrationCurrent(
+                rollbackExamId,
+                installedRegistration
+            ),
+            true,
+            'pre-navigation reservations must not invalidate the installed page registration'
+        );
+        assert.strictEqual(
+            rollbackApp.messageHandlers.get(rollbackExamId),
+            installedHandler
+        );
+        const messagesBeforeInstalledRequest = rollbackWindow._messages.length;
+        await installedHandler({
+            source: rollbackWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'REQUEST_INIT',
+                source: 'practice_page',
+                data: { examId: rollbackExamId }
+            }
+        });
+        assert(
+            rollbackWindow._messages.length > messagesBeforeInstalledRequest,
+            'a failed pre-navigation launch must not disable the installed page protocol'
+        );
+        const nextReservation = rollbackApp._beginExamLaunchOwnership(rollbackExamId, {
+            reuseWindow: rollbackWindow,
+            windowName: rollbackWindow.name
+        });
+        assert.strictEqual(
+            rollbackApp._isExamLaunchOwnershipCurrent(
+                rollbackExamId,
+                nextReservation,
+                null,
+                rollbackWindow
+            ),
+            true,
+            'a later launch must replace stale reservations without traversing predecessor chains'
+        );
+        const rollbackInfo = rollbackApp.examWindows.get(rollbackExamId);
+        if (rollbackInfo && rollbackInfo.closeMonitor) clearInterval(rollbackInfo.closeMonitor);
+
+        for (const takeoverMode of ['pre-navigation-failure', 'committed-navigation']) {
+            const guardApp = createApp(windowStub);
+            const guardExamId = `reading-guard-retry-owner-${takeoverMode}`;
+            const guardWindow = createStubWindow(`guard-retry-window-${takeoverMode}`);
+            let replaceCount = 0;
+            guardWindow.location = {
+                href: 'about:blank',
+                replace(url) {
+                    replaceCount += 1;
+                    this.href = url;
+                }
+            };
+            const originalSetTimeout = sandbox.setTimeout;
+            const originalShouldUsePlaceholder = guardApp._shouldUsePlaceholderPage;
+            let scheduledRetry = null;
+            sandbox.setTimeout = (callback) => {
+                scheduledRetry = callback;
+                return 1;
+            };
+            guardApp._shouldUsePlaceholderPage = () => true;
+            try {
+                const guardOwnership = guardApp._beginExamLaunchOwnership(guardExamId, {
+                    reuseWindow: guardWindow
+                });
+                const navigationOwnership = guardApp._recordExamWindowNavigation(
+                    guardWindow,
+                    guardExamId
+                );
+                const navigationRegistration = guardApp._installExamNavigationProvisionalRegistration(
+                    guardExamId,
+                    guardWindow,
+                    { expectedUrl: 'about:blank' }
+                );
+                guardApp._guardExamWindowContent(
+                    guardWindow,
+                    { id: guardExamId, title: 'Guard retry' },
+                    {
+                        examId: guardExamId,
+                        launchOwnership: guardOwnership,
+                        navigationOwnership,
+                        navigationRegistration,
+                        guardRetryCount: 3
+                    }
+                );
+                assert.strictEqual(typeof scheduledRetry, 'function');
+
+                const replacementOwnership = guardApp._beginExamLaunchOwnership(guardExamId, {
+                    reuseWindow: guardWindow
+                });
+                if (takeoverMode === 'pre-navigation-failure') {
+                    assert.strictEqual(guardApp._rollbackExamLaunchOwnership(replacementOwnership), true);
+                    scheduledRetry();
+                    assert.strictEqual(
+                        replaceCount,
+                        1,
+                        'a failed pre-navigation reservation must not suppress the installed page retry'
+                    );
+                    assert.notStrictEqual(guardWindow.location.href, 'about:blank');
+                } else {
+                    const replacementUrl = `http://localhost/${guardExamId}-replacement.html`;
+                    assert.strictEqual(guardApp.openExamWindow(
+                        replacementUrl,
+                        { id: guardExamId, title: 'Committed replacement', type: 'reading' },
+                        {
+                            examId: guardExamId,
+                            reuseWindow: guardWindow,
+                            launchOwnership: replacementOwnership
+                        }
+                    ), guardWindow);
+                    scheduledRetry();
+                    assert.strictEqual(
+                        replaceCount,
+                        0,
+                        'a real navigation must invalidate the older installed-page retry'
+                    );
+                    assert.strictEqual(guardWindow.location.href, replacementUrl);
+                }
+            } finally {
+                sandbox.setTimeout = originalSetTimeout;
+                guardApp._shouldUsePlaceholderPage = originalShouldUsePlaceholder;
+            }
+        }
+
+        for (const successorMode of ['same-navigation', 'new-navigation']) {
+            const guardApp = createApp(windowStub);
+            const guardExamId = `reading-guard-managed-successor-${successorMode}`;
+            const guardWindow = createStubWindow(`guard-managed-successor-${successorMode}`);
+            guardWindow.addEventListener = () => {};
+            let replaceCount = 0;
+            guardWindow.location = {
+                href: 'about:blank',
+                replace(url) {
+                    replaceCount += 1;
+                    this.href = url;
+                }
+            };
+            const originalSetTimeout = sandbox.setTimeout;
+            const originalShouldUsePlaceholder = guardApp._shouldUsePlaceholderPage;
+            let scheduledRetry = null;
+            sandbox.setTimeout = (callback) => {
+                scheduledRetry = callback;
+                return 1;
+            };
+            guardApp._shouldUsePlaceholderPage = () => true;
+            try {
+                const navigationOwnership = guardApp._recordExamWindowNavigation(
+                    guardWindow,
+                    guardExamId
+                );
+                const provisionalRegistration = guardApp._installExamNavigationProvisionalRegistration(
+                    guardExamId,
+                    guardWindow,
+                    { expectedUrl: 'about:blank' }
+                );
+                guardApp._guardExamWindowContent(
+                    guardWindow,
+                    { id: guardExamId, title: 'Guard managed successor' },
+                    {
+                        examId: guardExamId,
+                        navigationOwnership,
+                        navigationRegistration: provisionalRegistration,
+                        guardRetryCount: 3
+                    }
+                );
+                assert.strictEqual(typeof scheduledRetry, 'function');
+                const guardRetry = scheduledRetry;
+
+                const successorNavigationOwnership = successorMode === 'new-navigation'
+                    ? guardApp._recordExamWindowNavigation(guardWindow, guardExamId)
+                    : navigationOwnership;
+                const managedRegistration = guardApp.setupExamWindowManagement(
+                    guardWindow,
+                    guardExamId,
+                    { id: guardExamId, title: 'Managed successor', type: 'reading' },
+                    {
+                        expectedRegistration: provisionalRegistration,
+                        expectedUrl: 'about:blank',
+                        skipContentGuard: true,
+                        deferInitialHandshake: true
+                    }
+                );
+                assert(managedRegistration, 'setup must install the managed successor registration');
+                assert.notStrictEqual(managedRegistration.windowInfo, provisionalRegistration.windowInfo);
+                assert.strictEqual(
+                    managedRegistration.navigationOwnership,
+                    successorNavigationOwnership
+                );
+
+                guardRetry();
+                assert.strictEqual(
+                    replaceCount,
+                    successorMode === 'same-navigation' ? 1 : 0,
+                    successorMode === 'same-navigation'
+                        ? 'a managed successor on the same navigation must inherit the pending retry'
+                        : 'a managed successor after a new navigation must reject the stale retry'
+                );
+                const managedInfo = guardApp.examWindows.get(guardExamId);
+                if (managedInfo && managedInfo.closeMonitor) clearInterval(managedInfo.closeMonitor);
+                if (guardApp._handshakeTimers && guardApp._handshakeTimers.has(guardExamId)) {
+                    clearInterval(guardApp._handshakeTimers.get(guardExamId));
+                }
+                const managedHandler = guardApp.messageHandlers
+                    && guardApp.messageHandlers.get(guardExamId);
+                if (managedHandler) {
+                    windowStub.removeEventListener('message', managedHandler);
+                    guardApp.messageHandlers.delete(guardExamId);
+                }
+            } finally {
+                sandbox.setTimeout = originalSetTimeout;
+                guardApp._shouldUsePlaceholderPage = originalShouldUsePlaceholder;
+            }
+        }
+    }
+
+    // Managed suiteSessionId:null is an ordinary owner even while the same exam is active in a suite.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-managed-ordinary-owner';
+        const examWindow = createStubWindow('managed-ordinary-window');
+        const windowInfo = {
+            window: examWindow,
+            expectedSessionId: 'managed-ordinary-session',
+            windowSessionToken: 'managed-ordinary-token',
+            windowSessionTokenSessionId: 'managed-ordinary-session',
+            sessionGeneration: 1,
+            suiteSessionId: null,
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false,
+            status: 'active'
+        };
+        app.examWindows = new Map([[examId, windowInfo]]);
+        app.currentSuiteSession = {
+            id: 'suite-managed-ordinary',
+            status: 'active',
+            activeExamId: examId,
+            currentIndex: 0,
+            sequence: [{ examId }],
+            results: []
+        };
+        app.suiteExamMap.set(examId, app.currentSuiteSession.id);
+        let resolverCalls = 0;
+        app._resolveSuiteSessionId = () => {
+            resolverCalls += 1;
+            return app.currentSuiteSession.id;
+        };
+        const initPayload = app._buildExamInitPayload(examId, windowInfo);
+        assert.strictEqual(initPayload.suiteSessionId, null);
+        assert.strictEqual(resolverCalls, 0, 'explicit null must bypass global suite inference');
+
+        const registration = app._captureExamSessionRegistration(examId, windowInfo);
+        let suiteReadyCalls = 0;
+        let suiteReviewNavigateCalls = 0;
+        let ordinaryReviewNavigateCalls = 0;
+        let simulationNavigateCalls = 0;
+        app._handleSuiteSessionReady = () => { suiteReadyCalls += 1; };
+        app.handleSuiteReviewNavigate = async () => {
+            suiteReviewNavigateCalls += 1;
+            return true;
+        };
+        app.handleReviewReplayNavigate = async () => {
+            ordinaryReviewNavigateCalls += 1;
+            return true;
+        };
+        app._handleSimulationNavigate = async () => { simulationNavigateCalls += 1; };
+        assert.strictEqual(app.handleSessionReady(examId, {
+            examId,
+            sessionId: 'forged-ready-session',
+            windowSessionToken: windowInfo.windowSessionToken,
+            initialized: true
+        }, { expectedRegistration: registration }), false);
+        assert.strictEqual(windowInfo.expectedSessionId, registration.expectedSessionId);
+        assert.strictEqual(app.handleSessionReady(examId, {
+            examId,
+            sessionId: registration.expectedSessionId,
+            suiteSessionId: app.currentSuiteSession.id,
+            windowSessionToken: windowInfo.windowSessionToken,
+            initialized: true
+        }, { expectedRegistration: registration }), false);
+        assert.strictEqual(windowInfo.suiteSessionId, null);
+        assert.strictEqual(suiteReadyCalls, 0);
+
+        examWindow.addEventListener = () => {};
+        app.setupExamWindowCommunication(examWindow, examId, null, {
+            expectedRegistration: registration
+        });
+        const dispatchForgedSuiteMessage = async (type, extra = {}) => {
+            windowStub.__dispatchEvent('message', {
+                source: examWindow,
+                origin: 'http://localhost',
+                data: {
+                    type,
+                    source: 'practice_page',
+                    data: {
+                        examId,
+                        sessionId: registration.expectedSessionId,
+                        suiteSessionId: app.currentSuiteSession.id,
+                        windowSessionToken: registration.windowSessionToken,
+                        ...extra
+                    }
+                }
+            });
+            await Promise.resolve();
+        };
+        windowStub.__dispatchEvent('message', {
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'SESSION_READY',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    sessionId: registration.expectedSessionId
+                }
+            }
+        });
+        await Promise.resolve();
+        assert.strictEqual(windowInfo.dataCollectorReady, undefined, 'tokenless ordinary READY must stay bootstrap-ineligible');
+        await dispatchForgedSuiteMessage('SESSION_READY', { initialized: true });
+        await dispatchForgedSuiteMessage('REVIEW_NAVIGATE', {
+            direction: 'next',
+            suiteReviewMode: true
+        });
+        await dispatchForgedSuiteMessage('SIMULATION_NAVIGATE', { direction: 'next' });
+        await dispatchForgedSuiteMessage('SIMULATION_ACTIVE_EXAM_CHANGE');
+        assert.strictEqual(windowInfo.suiteSessionId, null);
+        assert.strictEqual(suiteReadyCalls, 0);
+        assert.strictEqual(suiteReviewNavigateCalls, 0);
+        assert.strictEqual(ordinaryReviewNavigateCalls, 0);
+        assert.strictEqual(simulationNavigateCalls, 0);
+        assert.strictEqual(app.currentSuiteSession.activeExamId, examId);
+
+        let suiteCompletionCalls = 0;
+        let recorderPayload = null;
+        app.handleSuitePracticeComplete = async () => {
+            suiteCompletionCalls += 1;
+            return true;
+        };
+        app.components.practiceRecorder = {
+            async handleSessionCompleted(payload) {
+                recorderPayload = { ...payload };
+                return {
+                    id: 'managed-ordinary-record',
+                    examId,
+                    sessionId: payload.sessionId,
+                    endTime: payload.endTime
+                };
+            }
+        };
+        app._isPracticeCompletionPersisted = async () => true;
+        app._announceSubmittedReadingRecord = () => false;
+        app._announcePracticeSubmitOutcome = () => false;
+        app.clearReadingDraftForExam = async () => false;
+        app.showRealCompletionNotification = async () => true;
+        app.cleanupExamSession = async () => true;
+        app.updateExamStatus = () => {};
+        assert.strictEqual(await app.handlePracticeComplete(examId, {
+            sessionId: windowInfo.expectedSessionId,
+            submissionId: 'managed-ordinary-submit',
+            endTime: '2026-08-09T00:00:00.000Z'
+        }, examWindow, { expectedRegistration: registration }), true);
+        assert.strictEqual(suiteCompletionCalls, 0);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(recorderPayload, 'suiteSessionId'), true);
+        assert.strictEqual(recorderPayload.suiteSessionId, null);
+        assert.strictEqual(recorderPayload.practiceMode, 'single');
+        assert.strictEqual(windowInfo.suiteSessionId, null);
+        assert.deepStrictEqual(plain(app.currentSuiteSession.results), []);
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            assert.strictEqual(await app.handlePracticeComplete(examId, {
+                sessionId: windowInfo.expectedSessionId,
+                submissionId: `forged-suite-submit-${attempt}`,
+                suiteSessionId: app.currentSuiteSession.id,
+                suiteId: 'forged-entry',
+                endTime: '2026-08-09T00:00:00.000Z'
+            }, examWindow, { expectedRegistration: registration }), false);
+        }
+        assert.strictEqual(suiteCompletionCalls, 0);
+        assert.strictEqual(windowInfo.suiteSessionId, null);
+        assert.deepStrictEqual(plain(app.currentSuiteSession.results), []);
+        const installedHandler = app.messageHandlers && app.messageHandlers.get(examId);
+        if (installedHandler) windowStub.removeEventListener('message', installedHandler);
+    }
+
+    // A durable suite completion still acknowledges the exact E1 registration after E2 reserves the shared target.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-suite-ack-owner';
+        const suiteSessionId = 'suite-ack-owner';
+        const examWindow = createStubWindow('suite-ack-shared-target');
+        const windowInfo = {
+            window: examWindow,
+            expectedSessionId: 'suite-ack-session',
+            windowSessionToken: 'suite-ack-token',
+            windowSessionTokenSessionId: 'suite-ack-session',
+            sessionGeneration: 1,
+            suiteSessionId,
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false,
+            status: 'active'
+        };
+        app.examWindows = new Map([[examId, windowInfo]]);
+        app.currentSuiteSession = {
+            id: suiteSessionId,
+            status: 'active',
+            activeExamId: examId,
+            currentIndex: 0,
+            sequence: [{ examId }],
+            results: []
+        };
+        const launchOwnership = app._beginExamLaunchOwnership(examId, {
+            reuseWindow: examWindow,
+            windowName: examWindow.name
+        });
+        const registration = app._captureExamSessionRegistration(examId, windowInfo);
+        app.handleSuitePracticeComplete = async () => {
+            app._beginExamLaunchOwnership('reading-suite-ack-next', {
+                windowName: examWindow.name
+            });
+            assert.strictEqual(app._isExamLaunchOwnershipCurrent(examId, launchOwnership), false);
+            return {
+                handled: true,
+                committed: true,
+                errorCode: 'suite_advance_superseded'
+            };
+        };
+        assert.strictEqual(await app.handlePracticeComplete(examId, {
+            examId,
+            sessionId: registration.expectedSessionId,
+            suiteSessionId,
+            submissionId: 'suite-ack-submission',
+            endTime: '2026-08-09T00:00:00.000Z'
+        }, examWindow, {
+            expectedRegistration: registration,
+            launchOwnership
+        }), true);
+        assert(
+            examWindow._messages.some(message => message && message.type === 'PRACTICE_SUBMIT_ACK'),
+            'durable suite outcome must ACK through the frozen exact registration after launch lease handoff'
+        );
+        assert.strictEqual(
+            examWindow._messages.some(message => message && message.type === 'PRACTICE_SUBMIT_FAILED'),
+            false
+        );
+        assert.strictEqual(app.examWindows.get(examId), windowInfo);
+    }
+
+    // A memorize reset must not mutate its old registration before the replacement open owns it.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-reset-launch-owner';
+        const examWindow = createStubWindow('reset-owner-window');
+        const windowInfo = {
+            window: examWindow,
+            expectedSessionId: 'reset-owner-session',
+            windowSessionToken: 'reset-owner-token',
+            windowSessionTokenSessionId: 'reset-owner-session',
+            sessionGeneration: 1,
+            suiteSessionId: null,
+            practiceMode: 'memorize',
+            reviewMode: true,
+            readOnly: true,
+            status: 'completed',
+            submittedRecordId: 'old-record'
+        };
+        app.examWindows = new Map([[examId, windowInfo]]);
+        const launchOwnership = app._beginExamLaunchOwnership(examId, { reuseWindow: examWindow });
+        const registration = app._captureExamSessionRegistration(examId, windowInfo);
+        let markOpenEntered;
+        let releaseOpen;
+        const openEntered = new Promise(resolve => { markOpenEntered = resolve; });
+        const openGate = new Promise(resolve => { releaseOpen = resolve; });
+        app.openExam = async () => {
+            markOpenEntered();
+            await openGate;
+            return null;
+        };
+        const resetting = app.handlePracticeResetRequest(examId, {
+            reason: 'memorize-start-test'
+        }, examWindow, { expectedRegistration: registration, launchOwnership });
+        await openEntered;
+        assert.strictEqual(windowInfo.practiceMode, 'memorize');
+        assert.strictEqual(windowInfo.reviewMode, true);
+        assert.strictEqual(windowInfo.readOnly, true);
+        assert.strictEqual(windowInfo.status, 'completed');
+        assert.strictEqual(windowInfo.submittedRecordId, 'old-record');
+        app._beginExamLaunchOwnership(examId, { reuseWindow: examWindow });
+        releaseOpen();
+        assert.strictEqual(await resetting, null);
+        assert.strictEqual(windowInfo.practiceMode, 'memorize');
+        assert.strictEqual(windowInfo.status, 'completed');
+    }
+
+    // A completion that loses ownership may finish A's durable write, but cannot rebind or delete B.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-completion-owner-overlap';
+        const oldWindow = createStubWindow('completion-old-window');
+        const newWindow = createStubWindow('completion-new-window');
+        const oldInfo = {
+            window: oldWindow,
+            expectedSessionId: 'completion-old-session',
+            windowSessionToken: 'completion-old-token',
+            windowSessionTokenSessionId: 'completion-old-session',
+            sessionGeneration: 1,
+            suiteSessionId: null,
+            expectedOrigin: 'http://localhost'
+        };
+        const newInfo = {
+            window: newWindow,
+            expectedSessionId: 'completion-new-session',
+            windowSessionToken: 'completion-new-token',
+            windowSessionTokenSessionId: 'completion-new-session',
+            sessionGeneration: 2,
+            suiteSessionId: null,
+            expectedOrigin: 'http://localhost'
+        };
+        app.examWindows = new Map([[examId, oldInfo]]);
+        const oldHandler = () => {};
+        const newHandler = () => {};
+        app.messageHandlers = new Map([[examId, oldHandler]]);
+        const launchOwnership = app._beginExamLaunchOwnership(examId, { reuseWindow: oldWindow });
+        const oldRegistration = app._captureExamSessionRegistration(examId, oldInfo);
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: 'active-session:completion-old-session', examId, sessionId: 'completion-old-session'
+        });
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: 'active-session:completion-new-session', examId, sessionId: 'completion-new-session'
+        });
+        let markRecorderEntered;
+        let releaseRecorder;
+        const recorderEntered = new Promise(resolve => { markRecorderEntered = resolve; });
+        const recorderGate = new Promise(resolve => { releaseRecorder = resolve; });
+        app.components.practiceRecorder = {
+            async handleSessionCompleted(payload) {
+                markRecorderEntered();
+                await recorderGate;
+                return {
+                    id: 'completion-old-record',
+                    examId,
+                    sessionId: payload.sessionId,
+                    endTime: payload.endTime
+                };
+            }
+        };
+        app._isPracticeCompletionPersisted = async () => true;
+        let staleAnnouncementCount = 0;
+        app._announceSubmittedReadingRecord = () => { staleAnnouncementCount += 1; return true; };
+        app._announcePracticeSubmitOutcome = () => { staleAnnouncementCount += 1; return true; };
+        const completing = app.handlePracticeComplete(examId, {
+            sessionId: oldInfo.expectedSessionId,
+            submissionId: 'completion-old-submit',
+            endTime: '2026-08-09T00:00:00.000Z'
+        }, oldWindow, { expectedRegistration: oldRegistration, launchOwnership });
+        await recorderEntered;
+        app._beginExamLaunchOwnership(examId, { reuseWindow: newWindow });
+        app.examWindows.set(examId, newInfo);
+        app.messageHandlers.set(examId, newHandler);
+        releaseRecorder();
+        assert.strictEqual(await completing, true);
+        assert.strictEqual(staleAnnouncementCount, 0);
+        assert.strictEqual(app.examWindows.get(examId), newInfo);
+        assert.strictEqual(app.messageHandlers.get(examId), newHandler);
+        const remaining = (await windowStub.AppData.recovery.listActiveSessions())
+            .filter(item => item && item.examId === examId);
+        assert.strictEqual(remaining.some(item => item.sessionId === 'completion-old-session'), false);
+        assert.strictEqual(remaining.some(item => item.sessionId === 'completion-new-session'), true);
+    }
+
+    // Stable implicit window names must drive reuse cleanup even without options.reuseWindow.
+    for (const reuseScope of ['same-exam', 'cross-exam']) {
+        const app = createApp(windowStub);
+        app.calculateWindowFeatures = () => '';
+        const oldExamId = `reading-implicit-reuse-old-${reuseScope}`;
+        const newExamId = reuseScope === 'same-exam'
+            ? oldExamId
+            : `reading-implicit-reuse-new-${reuseScope}`;
+        const sharedWindow = createStubWindow(`exam_${newExamId}`);
+        const registeredWindow = reuseScope === 'same-exam'
+            ? createStubWindow(`exam_${newExamId}`)
+            : sharedWindow;
+        const oldSessionId = `implicit-reuse-session-${reuseScope}`;
+        const oldInfo = {
+            window: registeredWindow,
+            expectedSessionId: oldSessionId,
+            windowSessionToken: `implicit-reuse-token-${reuseScope}`,
+            windowSessionTokenSessionId: oldSessionId,
+            sessionGeneration: 1,
+            suiteSessionId: null,
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false
+        };
+        app.examWindows = new Map([[oldExamId, oldInfo]]);
+        app.messageHandlers = new Map([[oldExamId, () => {}]]);
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: `active-session:${oldSessionId}`,
+            examId: oldExamId,
+            sessionId: oldSessionId,
+            status: 'started'
+        });
+        const hadOpen = Object.prototype.hasOwnProperty.call(windowStub, 'open');
+        const originalOpen = windowStub.open;
+        windowStub.open = () => sharedWindow;
+        try {
+            const launchOptions = {
+                examId: newExamId,
+                launchOwnership: app._beginExamLaunchOwnership(newExamId, {})
+            };
+            assert.strictEqual(
+                app.openExamWindow(
+                    `http://localhost/${newExamId}.html`,
+                    { id: newExamId, title: newExamId, type: 'reading' },
+                    launchOptions
+                ),
+                sharedWindow
+            );
+            assert.strictEqual(launchOptions.windowReuseDetected, true);
+            await app._cleanupReusedWindowSessions(sharedWindow, newExamId);
+            const active = await windowStub.AppData.recovery.listActiveSessions();
+            assert.strictEqual(active.some(item => item && item.sessionId === oldSessionId), false);
+            if (reuseScope === 'same-exam') {
+                assert.strictEqual(app.examWindows.has(oldExamId), true, 'same-exam provisional tuple must survive until setup');
+                assert.strictEqual(app.examWindows.get(oldExamId).window, sharedWindow);
+                assert.notStrictEqual(
+                    app.examWindows.get(oldExamId),
+                    oldInfo,
+                    'the first navigation of a replacement WindowProxy must invalidate the installed tuple synchronously'
+                );
+                assert.strictEqual(app.messageHandlers.has(oldExamId), false);
+            } else {
+                assert.strictEqual(app.examWindows.has(oldExamId), false, 'cross-exam provisional tuple must be removed');
+            }
+        } finally {
+            if (hadOpen) windowStub.open = originalOpen;
+            else delete windowStub.open;
+            await windowStub.AppData.recovery.discardActiveSession(`active-session:${oldSessionId}`);
+        }
+    }
+
+    // Managed same-exam reuse retains the pending map tuple while deleting the frozen old recovery id.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-managed-reuse-recovery';
+        const examWindow = createStubWindow('managed-reuse-window');
+        const oldInfo = {
+            window: examWindow,
+            expectedSessionId: 'managed-reuse-old-session',
+            windowSessionToken: 'managed-reuse-old-token',
+            windowSessionTokenSessionId: 'managed-reuse-old-session',
+            sessionGeneration: 1,
+            suiteSessionId: null
+        };
+        app.examWindows = new Map([[examId, oldInfo]]);
+        app.messageHandlers = new Map([[examId, () => {}]]);
+        await windowStub.AppData.recovery.saveActiveSession({
+            id: 'active-session:managed-reuse-old-session', examId, sessionId: 'managed-reuse-old-session'
+        });
+        assert.strictEqual(app._markExamWindowReusePending(examWindow), 1);
+        const pendingInfo = app.examWindows.get(examId);
+        assert.notStrictEqual(pendingInfo, oldInfo);
+        assert.strictEqual(pendingInfo.reassignedFromExpectedSessionId, 'managed-reuse-old-session');
+        const pendingRegistration = app._captureExamSessionRegistration(examId, pendingInfo);
+        await app._cleanupReusedWindowSessions(examWindow, examId);
+        assert.strictEqual(app._isExamSessionRegistrationCurrent(examId, pendingRegistration), true);
+        const remaining = (await windowStub.AppData.recovery.listActiveSessions())
+            .filter(item => item && item.examId === examId);
+        assert.strictEqual(remaining.some(item => item.sessionId === 'managed-reuse-old-session'), false);
+    }
+
+    // A replay resolver failure is pre-navigation: keep the installed source tuple and index usable.
+    {
+        const app = createApp(windowStub);
+        const examId = 'reading-review-resolver-source';
+        const nextExamId = 'reading-review-resolver-target';
+        const reviewSessionId = 'review-resolver-session';
+        const reviewWindow = createStubWindow('review-resolver-window');
+        app.setupExamWindowCommunication(
+            reviewWindow,
+            examId,
+            { id: examId, title: 'Review source', type: 'reading' },
+            { expectedUrl: 'http://localhost/exam.html' }
+        );
+        const sourceInfo = app.examWindows.get(examId);
+        sourceInfo.reviewMode = true;
+        sourceInfo.readOnly = true;
+        sourceInfo.reviewSessionId = reviewSessionId;
+        sourceInfo.reviewEntryIndex = 0;
+        app.examWindows.set(examId, sourceInfo);
+        const sourceRegistration = app._captureExamSessionRegistration(examId, sourceInfo);
+        const sourceHandler = app.messageHandlers.get(examId);
+        const reviewSession = {
+            sessionId: reviewSessionId,
+            recordId: 'review-resolver-record',
+            currentIndex: 0,
+            readOnly: true,
+            windowRef: reviewWindow,
+            entries: [
+                { examId, title: 'Review source' },
+                { examId: nextExamId, title: 'Review target' }
+            ]
+        };
+        app._ensureReviewReplayStore().set(reviewSessionId, reviewSession);
+        app._resolveReviewExamDefinition = async () => {
+            throw new Error('expected resolver failure');
+        };
+        assert.strictEqual(await app.handleReviewReplayNavigate(
+            examId,
+            { direction: 'next', reviewSessionId },
+            reviewWindow,
+            { expectedRegistration: sourceRegistration }
+        ), null);
+        assert.strictEqual(reviewSession.currentIndex, 0);
+        assert.strictEqual(app._isExamSessionRegistrationCurrent(examId, sourceRegistration), true);
+        assert.strictEqual(app.messageHandlers.get(examId), sourceHandler);
+        const messageCount = reviewWindow._messages.length;
+        await sourceHandler({
+            source: reviewWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'REQUEST_INIT',
+                source: 'practice_page',
+                data: { examId }
+            }
+        });
+        assert(reviewWindow._messages.length > messageCount);
+        if (sourceInfo.closeMonitor) clearInterval(sourceInfo.closeMonitor);
+    }
+
+    // Suite review handoff must not treat a failed/absent exact source cleanup as release,
+    // and must continue checking the exact target tuple after asynchronous context delivery.
+    for (const cleanupMode of ['false', 'throw', 'missing']) {
+        const app = createApp(windowStub);
+        const session = makeSession(`suite-review-cleanup-${cleanupMode}`);
+        session.flowMode = 'stationary';
+        session.autoAdvanceAfterSubmit = false;
+        session.results = [{ examId: 'reading-p1', title: 'Passage 1' }];
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        const sourceWindow = session.windowRef;
+        const sourceInfo = {
+            examId: 'reading-p1',
+            window: sourceWindow,
+            expectedSessionId: `review-cleanup-${cleanupMode}-source`,
+            windowSessionToken: `review-cleanup-${cleanupMode}-token`,
+            sessionGeneration: 1,
+            suiteSessionId: session.id
+        };
+        app.examWindows = new Map([['reading-p1', sourceInfo]]);
+        const sourceRegistration = app._captureExamSessionRegistration('reading-p1', sourceInfo);
+        app._commitSuiteRecovery = async (_targetSession, commitOptions = {}) => {
+            if (commitOptions.commitGuard && commitOptions.commitGuard() !== true) return false;
+            if (typeof commitOptions.onDurableReceipt === 'function') {
+                commitOptions.onDurableReceipt({ committed: true });
+            }
+            return true;
+        };
+        const cleanupCalls = [];
+        if (cleanupMode === 'false') {
+            app.cleanupExamSession = async (examId, cleanupOptions) => {
+                cleanupCalls.push({ examId, cleanupOptions });
+                return false;
+            };
+        } else if (cleanupMode === 'throw') {
+            app.cleanupExamSession = async (examId, cleanupOptions) => {
+                cleanupCalls.push({ examId, cleanupOptions });
+                throw new Error('expected exact cleanup failure');
+            };
+        } else {
+            app.cleanupExamSession = null;
+        }
+        let openCalls = 0;
+        app.openExam = async () => {
+            openCalls += 1;
+            return createStubWindow('unexpected-review-target');
+        };
+        assert.strictEqual(await app.handleSuiteReviewNavigate(
+            'reading-p1',
+            { direction: 'next', suiteSessionId: session.id },
+            sourceWindow,
+            {
+                expectedRegistration: sourceRegistration,
+                commitGuard: () => app._isExamSessionRegistrationCurrent('reading-p1', sourceRegistration)
+            }
+        ), false);
+        assert.strictEqual(openCalls, 0, `${cleanupMode} cleanup must stop before target navigation`);
+        assert.strictEqual(cleanupCalls.length, cleanupMode === 'missing' ? 0 : 1);
+        if (cleanupCalls.length) {
+            assert.strictEqual(cleanupCalls[0].examId, 'reading-p1');
+            assert.strictEqual(cleanupCalls[0].cleanupOptions.expectedRegistration, sourceRegistration);
+        }
+        assert.strictEqual(
+            app._isExamSessionRegistrationCurrent('reading-p1', sourceRegistration),
+            true,
+            `${cleanupMode} cleanup must keep the frozen source registration authoritative`
+        );
+    }
+
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite-review-target-tuple-guard');
+        session.flowMode = 'stationary';
+        session.autoAdvanceAfterSubmit = false;
+        session.results = [{ examId: 'reading-p1', title: 'Passage 1' }];
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+        const sourceWindow = session.windowRef;
+        const sourceInfo = {
+            examId: 'reading-p1',
+            window: sourceWindow,
+            expectedSessionId: 'review-target-guard-source',
+            windowSessionToken: 'review-target-guard-source-token',
+            sessionGeneration: 1,
+            suiteSessionId: session.id
+        };
+        app.examWindows = new Map([['reading-p1', sourceInfo]]);
+        const sourceRegistration = app._captureExamSessionRegistration('reading-p1', sourceInfo);
+        app._commitSuiteRecovery = async (_targetSession, commitOptions = {}) => {
+            if (commitOptions.commitGuard && commitOptions.commitGuard() !== true) return false;
+            if (typeof commitOptions.onDurableReceipt === 'function') {
+                commitOptions.onDurableReceipt({ committed: true });
+            }
+            return true;
+        };
+        app.cleanupExamSession = async (examId, cleanupOptions = {}) => {
+            assert.strictEqual(examId, 'reading-p1');
+            assert.strictEqual(cleanupOptions.expectedRegistration, sourceRegistration);
+            if (!app._isExamSessionRegistrationCurrent(examId, sourceRegistration)) return false;
+            app.examWindows.delete(examId);
+            return true;
+        };
+        const targetWindow = sourceWindow;
+        let targetOpenCalls = 0;
+        app.openExam = async (examId, openOptions = {}) => {
+            targetOpenCalls += 1;
+            return installManagedTestWindow(app, examId, targetWindow, openOptions);
+        };
+        app._waitForSuiteWindowExamReady = async () => true;
+        let targetSendCalls = 0;
+        let markTargetSendEntered;
+        let releaseTargetSend;
+        const targetSendEntered = new Promise((resolve) => { markTargetSendEntered = resolve; });
+        const targetSendGate = new Promise((resolve) => { releaseTargetSend = resolve; });
+        app._sendSuiteReviewState = async () => {
+            targetSendCalls += 1;
+            markTargetSendEntered();
+            await targetSendGate;
+            return true;
+        };
+        const targetNavigation = app.handleSuiteReviewNavigate(
+            'reading-p1',
+            { direction: 'next', suiteSessionId: session.id },
+            sourceWindow,
+            {
+                expectedRegistration: sourceRegistration,
+                commitGuard: () => app._isExamSessionRegistrationCurrent('reading-p1', sourceRegistration)
+            }
+        );
+        await targetSendEntered;
+        const targetInfoBeforeReplacement = app.examWindows.get('reading-p2');
+        const replacementInfo = {
+            ...targetInfoBeforeReplacement,
+            expectedSessionId: 'review-target-reassigned-session',
+            windowSessionToken: 'review-target-reassigned-token',
+            sessionGeneration: Number(targetInfoBeforeReplacement.sessionGeneration || 0) + 1
+        };
+        app.examWindows.set('reading-p2', replacementInfo);
+        releaseTargetSend();
+        assert.strictEqual(
+            await targetNavigation,
+            false,
+            'an async target tuple replacement must invalidate the review continuation'
+        );
+        assert.strictEqual(targetOpenCalls, 1, 'confirmed exact cleanup must proceed to target setup');
+        assert.strictEqual(targetSendCalls, 1, 'the target tuple must be checked again after async delivery');
+        assert.strictEqual(app.examWindows.get('reading-p2'), replacementInfo);
+        assert.strictEqual(session.windowRef, targetWindow);
+    }
+
+    // The suite continuation must consume openExam's exact receipt. Re-reading the
+    // global map would adopt either an ordinary tuple or a newer tuple with the same
+    // suite id on the same exam and WindowProxy.
+    for (const replacementMode of ['ordinary', 'same-suite']) {
+        const app = createApp(windowStub);
+        const suiteSessionId = `suite-post-open-${replacementMode}-replacement`;
+        app._generateSuiteSessionId = () => suiteSessionId;
+        const targetWindow = createStubWindow(`suite-post-open-${replacementMode}-window`);
+        let replacementInfo = null;
+        app.openExam = async (examId, options = {}) => {
+            installManagedTestWindow(app, examId, targetWindow, options);
+            const suiteInfo = app.examWindows.get(examId);
+            queueMicrotask(() => {
+                replacementInfo = {
+                    ...suiteInfo,
+                    suiteSessionId: replacementMode === 'ordinary' ? null : suiteSessionId,
+                    expectedSessionId: `${replacementMode}-post-open-session`,
+                    windowSessionToken: `${replacementMode}-post-open-token`,
+                    windowSessionTokenSessionId: `${replacementMode}-post-open-session`,
+                    sessionGeneration: Number(suiteInfo.sessionGeneration || 0) + 1
+                };
+                app.examWindows.set(examId, replacementInfo);
+            });
+            return targetWindow;
+        };
+
+        assert.strictEqual(
+            await app._launchSuiteSessionFromSequence(
+                makeSession(suiteSessionId).sequence,
+                { flowMode: 'simulation' }
+            ),
+            false,
+            `a suite launch must not adopt a queued ${replacementMode} replacement registration`
+        );
+        assert(app.currentSuiteSession && app.currentSuiteSession.id === suiteSessionId);
+        assert.strictEqual(app.currentSuiteSession.windowRef, null);
+        assert.strictEqual(app.examWindows.get('reading-p1'), replacementInfo);
+        assert.strictEqual(
+            String(replacementInfo.suiteSessionId || ''),
+            replacementMode === 'ordinary' ? '' : suiteSessionId
+        );
+    }
+
+    // Rebind reserves the target name before the proof await, while leaving the
+    // candidate's installed registration untouched. Every independently frozen
+    // identity and the reservation itself must survive before WindowProxy claim,
+    // durable mutation, or setup.
+    for (const replacementMode of [
+        'ordinary-tuple',
+        'committed-navigation',
+        'window-binding',
+        'launch-reservation',
+        'commit-throw',
+        'setup-throw'
+    ]) {
+        const app = createApp(windowStub);
+        const session = makeSession(`suite-rebind-proof-${replacementMode}`);
+        session.windowRef = null;
+        session.windowBinding = {
+            examId: 'reading-p1',
+            expectedSessionId: 'rebind-proof-old-session',
+            windowSessionToken: 'rebind-proof-old-token',
+            sessionGeneration: 3,
+            expectedUrl: 'http://localhost/exam.html?examId=reading-p1',
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false
+        };
+        const challengedBinding = session.windowBinding;
+        session.currentIndex = 1;
+        session.activeExamId = 'reading-p2';
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        app.examWindows = app._createSuiteTestMap();
+
+        const candidate = createStubWindow('ielts-suite-mode-tab');
+        candidate.location.href = challengedBinding.expectedUrl;
+        candidate.addEventListener = () => {};
+        let challengedInfo = null;
+        if (replacementMode === 'ordinary-tuple') {
+            const stableNavigation = app._recordExamWindowNavigation(candidate, 'reading-p2');
+            challengedInfo = {
+                examId: 'reading-p2',
+                window: candidate,
+                navigationOwnership: stableNavigation,
+                suiteSessionId: session.id,
+                expectedSessionId: 'challenged-rebind-session',
+                windowSessionToken: 'challenged-rebind-token',
+                windowSessionTokenSessionId: 'challenged-rebind-session',
+                sessionGeneration: 1,
+                status: 'active'
+            };
+            app.examWindows.set('reading-p2', challengedInfo);
+        }
+        const originalPostMessage = candidate.postMessage.bind(candidate);
+        let ordinaryInfo = null;
+        let replacementNavigation = null;
+        let replacementBinding = null;
+        let replacementOwnership = null;
+        candidate.postMessage = (payload, targetOrigin) => {
+            originalPostMessage(payload, targetOrigin);
+            if (!payload || payload.type !== 'SUITE_REBIND_CHALLENGE') return;
+            queueMicrotask(() => {
+                if (replacementMode === 'ordinary-tuple') {
+                    ordinaryInfo = {
+                        ...challengedInfo,
+                        suiteSessionId: null,
+                        expectedSessionId: 'ordinary-rebind-session',
+                        windowSessionToken: 'ordinary-rebind-token',
+                        windowSessionTokenSessionId: 'ordinary-rebind-session',
+                        sessionGeneration: challengedInfo.sessionGeneration + 1,
+                        status: 'active'
+                    };
+                    app.examWindows.set('reading-p2', ordinaryInfo);
+                } else if (replacementMode === 'committed-navigation') {
+                    replacementNavigation = app._recordExamWindowNavigation(candidate, 'reading-p2');
+                } else if (replacementMode === 'launch-reservation') {
+                    replacementOwnership = app._beginExamLaunchOwnership('reading-p2', {
+                        windowName: 'ielts-suite-mode-tab',
+                        reuseWindow: candidate
+                    });
+                } else if (replacementMode === 'window-binding') {
+                    replacementBinding = {
+                        ...challengedBinding,
+                        windowSessionToken: 'newer-rebind-binding-token',
+                        sessionGeneration: challengedBinding.sessionGeneration + 1
+                    };
+                    session.windowBinding = replacementBinding;
+                }
+                windowStub.__dispatchEvent('message', {
+                    source: candidate,
+                    origin: 'http://localhost',
+                    data: {
+                        type: 'SUITE_REBIND_PROOF',
+                        source: 'practice_page',
+                        data: {
+                            challenge: payload.data.challenge,
+                            suiteSessionId: session.id,
+                            examId: 'reading-p2',
+                            sessionId: challengedBinding.expectedSessionId,
+                            windowSessionToken: challengedBinding.windowSessionToken,
+                            windowSessionGeneration: challengedBinding.sessionGeneration
+                        }
+                    }
+                });
+            });
+        };
+        const originalOpen = windowStub.open;
+        windowStub.open = () => candidate;
+        let launchBeginCalls = 0;
+        let challengedOwnership = null;
+        const originalBegin = app._beginSuiteExamLaunchOwnership.bind(app);
+        app._beginSuiteExamLaunchOwnership = (...args) => {
+            launchBeginCalls += 1;
+            challengedOwnership = originalBegin(...args);
+            return challengedOwnership;
+        };
+        let launchRollbackCalls = 0;
+        const originalRollback = app._rollbackExamLaunchOwnership.bind(app);
+        app._rollbackExamLaunchOwnership = (ownership) => {
+            launchRollbackCalls += 1;
+            return originalRollback(ownership);
+        };
+        let launchClaimCalls = 0;
+        const originalClaim = app._claimSuiteExamLaunchWindow.bind(app);
+        app._claimSuiteExamLaunchWindow = (...args) => {
+            launchClaimCalls += 1;
+            return originalClaim(...args);
+        };
+        let setupCalls = 0;
+        const originalSetup = app.setupExamWindowManagement.bind(app);
+        app.setupExamWindowManagement = (...args) => {
+            setupCalls += 1;
+            if (replacementMode === 'setup-throw') {
+                throw new Error('expected rebind setup failure');
+            }
+            return originalSetup(...args);
+        };
+        if (replacementMode === 'commit-throw') {
+            app._commitSuiteRecovery = async () => {
+                throw new Error('expected rebind pre-receipt commit failure');
+            };
+        }
+        try {
+            if (replacementMode === 'commit-throw' || replacementMode === 'setup-throw') {
+                await assert.rejects(
+                    () => app._tryRebindSuiteWindow(session, session.sequence[1]),
+                    new RegExp(replacementMode === 'commit-throw'
+                        ? 'expected rebind pre-receipt commit failure'
+                        : 'expected rebind setup failure'),
+                    `${replacementMode} must propagate its injected failure after releasing the reservation`
+                );
+            } else {
+                assert.strictEqual(
+                    await app._tryRebindSuiteWindow(session, session.sequence[1]),
+                    null,
+                    `${replacementMode} replacement during proof await must invalidate rebind`
+                );
+            }
+            assert.strictEqual(launchBeginCalls, 1, 'rebind must reserve the target before awaiting proof');
+            assert.strictEqual(launchRollbackCalls, 1, 'stale proof must roll back only its exact reservation');
+            assert.strictEqual(
+                launchClaimCalls,
+                replacementMode === 'commit-throw' || replacementMode === 'setup-throw' ? 1 : 0,
+                'only a current successful proof may claim the WindowProxy'
+            );
+            assert.strictEqual(
+                setupCalls,
+                replacementMode === 'setup-throw' ? 1 : 0,
+                'managed setup must run only after proof and durable commit succeed'
+            );
+            assert(challengedOwnership, 'the challenged reservation must be observable');
+            assert.strictEqual(
+                app._isExamLaunchOwnershipCurrent('reading-p2', challengedOwnership),
+                false,
+                'the stale challenged reservation must no longer own the target'
+            );
+            if (replacementMode === 'ordinary-tuple') {
+                assert.strictEqual(session.windowBinding, challengedBinding);
+                assert.strictEqual(app.examWindows.get('reading-p2'), ordinaryInfo);
+                assert.strictEqual(String(ordinaryInfo.suiteSessionId || ''), '');
+            } else if (replacementMode === 'committed-navigation') {
+                assert.strictEqual(session.windowBinding, challengedBinding);
+                assert.strictEqual(app._isExamWindowNavigationCurrent(candidate, replacementNavigation), true);
+                assert.strictEqual(app.examWindows.has('reading-p2'), false);
+            } else if (replacementMode === 'launch-reservation') {
+                assert.strictEqual(session.windowBinding, challengedBinding);
+                assert.strictEqual(app.examWindows.has('reading-p2'), false);
+                assert(replacementOwnership, 'the newer ordinary reservation must be created during proof');
+                assert.strictEqual(
+                    app._isExamLaunchOwnershipCurrent('reading-p2', replacementOwnership, null, candidate),
+                    true,
+                    'rolling back the stale rebind must preserve the newer ordinary reservation'
+                );
+            } else if (replacementMode === 'commit-throw') {
+                assert.deepStrictEqual(
+                    plain(session.windowBinding),
+                    plain(challengedBinding),
+                    'a pre-receipt commit exception must restore only its tentative binding'
+                );
+                assert.strictEqual(app.examWindows.has('reading-p2'), false);
+            } else if (replacementMode === 'setup-throw') {
+                assert.notDeepStrictEqual(
+                    plain(session.windowBinding),
+                    plain(challengedBinding),
+                    'a post-receipt setup exception must keep the durable-aligned binding'
+                );
+                assert.strictEqual(session.windowBinding.sessionGeneration, challengedBinding.sessionGeneration + 1);
+            } else {
+                assert.strictEqual(session.windowBinding, replacementBinding);
+                assert.strictEqual(app.examWindows.has('reading-p2'), false);
+            }
+        } finally {
+            windowStub.open = originalOpen;
+        }
+    }
+
+    // Resume must own the target before either recovery-ready or claim awaits.
+    // A newer ordinary reservation during either gap remains authoritative and
+    // the stale resume must not reach proof, WindowProxy claim, setup, or fallback open.
+    for (const gateMode of ['recovery-ready', 'ensure-claim']) {
+        const app = createApp(windowStub);
+        const session = makeSession(`suite-resume-preawait-${gateMode}`);
+        const candidate = createStubWindow('ielts-suite-mode-tab');
+        candidate.location.href = 'http://localhost/exam.html?examId=reading-p1';
+        session.windowRef = candidate;
+        session.windowBinding = {
+            examId: 'reading-p1',
+            expectedSessionId: `resume-${gateMode}-session`,
+            windowSessionToken: `resume-${gateMode}-token`,
+            sessionGeneration: 2,
+            expectedUrl: candidate.location.href,
+            expectedOrigin: 'http://localhost',
+            allowOpaqueOrigin: false
+        };
+        app._suiteModeReady = true;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((entry) => [entry.examId, session.id]));
+
+        let releaseGate;
+        let markGateEntered;
+        const gateEntered = new Promise((resolve) => { markGateEntered = resolve; });
+        const gate = new Promise((resolve) => { releaseGate = resolve; });
+        if (gateMode === 'recovery-ready') {
+            app._suiteRecoveryReady = gate;
+        } else {
+            app._suiteRecoveryReady = Promise.resolve();
+            app._ensureSuiteRecoveryClaim = async () => {
+                markGateEntered();
+                return gate;
+            };
+        }
+        app._commitSuiteRecovery = async (_owner, options = {}) => (
+            typeof options.commitGuard !== 'function' || options.commitGuard() !== false
+        );
+        let challengedOwnership = null;
+        const originalBegin = app._beginSuiteExamLaunchOwnership.bind(app);
+        app._beginSuiteExamLaunchOwnership = (...args) => {
+            challengedOwnership = originalBegin(...args);
+            return challengedOwnership;
+        };
+        let rebindCalls = 0;
+        const originalRebind = app._tryRebindSuiteWindow.bind(app);
+        app._tryRebindSuiteWindow = (...args) => {
+            rebindCalls += 1;
+            return originalRebind(...args);
+        };
+        let reacquireCalls = 0;
+        app._reacquireSuiteWindow = () => {
+            reacquireCalls += 1;
+            return candidate;
+        };
+        let setupCalls = 0;
+        app.setupExamWindowManagement = () => {
+            setupCalls += 1;
+            return null;
+        };
+        let openCalls = 0;
+        app.openExam = async () => {
+            openCalls += 1;
+            return candidate;
+        };
+
+        const resume = app.resumeSuitePractice(session.id);
+        if (gateMode === 'ensure-claim') await gateEntered;
+        else await Promise.resolve();
+        assert(challengedOwnership, `${gateMode} must begin the resume reservation synchronously`);
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-p1', challengedOwnership, null, candidate),
+            true
+        );
+        const ordinaryOwnership = app._beginExamLaunchOwnership('reading-p1', {
+            windowName: session.windowName,
+            reuseWindow: candidate
+        });
+        releaseGate(true);
+        assert.strictEqual(await resume, false, `${gateMode} stale resume must fail closed`);
+        assert.strictEqual(rebindCalls, gateMode === 'ensure-claim' ? 1 : 0);
+        assert.strictEqual(reacquireCalls, 0, 'stale resume must stop before named-window proof');
+        assert.strictEqual(setupCalls, 0, 'stale resume must stop before managed setup');
+        assert.strictEqual(openCalls, 0, 'stale resume must never create a later fallback launch');
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-p1', ordinaryOwnership, null, candidate),
+            true,
+            'stale resume cleanup must preserve the newer ordinary owner'
+        );
+        assert.strictEqual(app._isExamLaunchOwnershipCurrent('reading-p1', challengedOwnership), false);
+        app._rollbackExamLaunchOwnership(ordinaryOwnership);
+    }
+
+    // Concurrent resume clicks before recovery-ready must coalesce before either
+    // call can create a launch reservation. Otherwise the second token supersedes
+    // the first and the stale first continuation can publish a failed promise that
+    // also causes the second call to roll back its only valid owner.
+    {
+        const app = createApp(windowStub);
+        const sessionId = 'suite-resume-entry-coalesced';
+        const storedSession = makeSession(sessionId);
+        const session = makeSession(sessionId);
+        storedSession.windowRef = null;
+        storedSession.windowBinding = null;
+        session.windowRef = null;
+        session.windowBinding = null;
+        app._suiteModeReady = true;
+        app.currentSuiteSession = null;
+        app._restoreSessionFromStorage = () => storedSession;
+        let releaseRecovery;
+        app._suiteRecoveryReady = new Promise((resolve) => { releaseRecovery = resolve; });
+        app._commitSuiteRecovery = async (_owner, options = {}) => (
+            typeof options.commitGuard !== 'function' || options.commitGuard() !== false
+        );
+        let beginCalls = 0;
+        const originalBegin = app._beginSuiteExamLaunchOwnership.bind(app);
+        app._beginSuiteExamLaunchOwnership = (...args) => {
+            beginCalls += 1;
+            return originalBegin(...args);
+        };
+        const targetWindow = createStubWindow('suite-resume-entry-target');
+        let openCalls = 0;
+        app.openExam = async (examId, options = {}) => {
+            openCalls += 1;
+            return installManagedTestWindow(app, examId, targetWindow, options);
+        };
+
+        const firstResume = app.resumeSuitePractice(session.id);
+        const secondResume = app.resumeSuitePractice(session.id);
+        assert.strictEqual(beginCalls, 1, 'the second entry must join before creating another reservation');
+        assert.strictEqual(app._suiteResumeEntryPromises.has(session.id), true);
+        // Recovery promotes a different authoritative object with the same durable
+        // identity; the app-level gate and frozen launch token must survive the swap.
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((entry) => [entry.examId, session.id]));
+        releaseRecovery();
+        assert.deepStrictEqual(await Promise.all([firstResume, secondResume]), [true, true]);
+        assert.strictEqual(beginCalls, 1);
+        assert.strictEqual(openCalls, 1, 'coalesced resume callers must share one navigation');
+        assert.strictEqual(session.windowRef, targetWindow);
+        assert.strictEqual(app._suiteResumeEntryPromises.has(session.id), false);
+    }
+
+    // A preflight begin can synchronously lose its reservation before resume
+    // records the token.  That rejected token must be rolled back immediately;
+    // the outer finally cannot clean up a token that was never installed in
+    // resumeLaunch, and it must not disturb the newer owner that superseded it.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite-resume-preflight-rejected-token');
+        const candidate = createStubWindow('ielts-suite-mode-tab');
+        session.windowRef = candidate;
+        app._suiteModeReady = true;
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((entry) => [entry.examId, session.id]));
+        let releaseRecovery;
+        app._suiteRecoveryReady = new Promise((resolve) => { releaseRecovery = resolve; });
+        let rejectedOwnership = null;
+        let newerOwnership = null;
+        const originalBegin = app._beginSuiteExamLaunchOwnership.bind(app);
+        app._beginSuiteExamLaunchOwnership = (...args) => {
+            rejectedOwnership = originalBegin(...args);
+            newerOwnership = app._beginExamLaunchOwnership('reading-p1', {
+                windowName: session.windowName,
+                reuseWindow: candidate
+            });
+            return rejectedOwnership;
+        };
+
+        const resume = app.resumeSuitePractice(session.id);
+        assert(rejectedOwnership, 'resume preflight must create the rejected reservation');
+        assert(newerOwnership, 'fixture must synchronously supersede the preflight reservation');
+        assert.strictEqual(app._examLaunchOwnershipRollbackStates.has(rejectedOwnership), false);
+        assert.strictEqual(app._examLaunchOwnershipExplicitWindows.has(rejectedOwnership), false);
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-p1', newerOwnership, null, candidate),
+            true,
+            'rejected-token cleanup must preserve the synchronous replacement owner'
+        );
+
+        session.status = 'completed';
+        releaseRecovery();
+        assert.strictEqual(await resume, false);
+        assert.strictEqual(app._suiteResumeEntryPromises.has(session.id), false);
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-p1', newerOwnership, null, candidate),
+            true
+        );
+        app._rollbackExamLaunchOwnership(newerOwnership);
+    }
+
+    // When recovery has not exposed the target yet, freeze the entry ownership
+    // epoch. A launch begun while recovery-ready is pending must prevent a later
+    // resume from manufacturing a higher-sequence reservation after the await.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite-resume-unknown-target-epoch');
+        app._suiteModeReady = true;
+        app.currentSuiteSession = null;
+        app._restoreSessionFromStorage = () => null;
+        let releaseRecovery;
+        app._suiteRecoveryReady = new Promise((resolve) => { releaseRecovery = resolve; });
+        let suiteBeginCalls = 0;
+        const originalBegin = app._beginSuiteExamLaunchOwnership.bind(app);
+        app._beginSuiteExamLaunchOwnership = (...args) => {
+            suiteBeginCalls += 1;
+            return originalBegin(...args);
+        };
+        let openCalls = 0;
+        app.openExam = async () => {
+            openCalls += 1;
+            return createStubWindow('must-not-open-after-epoch-change');
+        };
+        const resume = app.resumeSuitePractice(session.id);
+        await Promise.resolve();
+        assert.strictEqual(suiteBeginCalls, 0, 'unknown target must not reserve before it can be identified');
+        const ordinaryOwnership = app._beginExamLaunchOwnership('reading-p1', {
+            windowName: session.windowName
+        });
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((entry) => [entry.examId, session.id]));
+        releaseRecovery();
+        assert.strictEqual(await resume, false);
+        assert.strictEqual(suiteBeginCalls, 0, 'changed entry epoch must block any post-await reservation');
+        assert.strictEqual(openCalls, 0);
+        assert.strictEqual(
+            app._isExamLaunchOwnershipCurrent('reading-p1', ordinaryOwnership),
+            true
+        );
+        app._rollbackExamLaunchOwnership(ordinaryOwnership);
     }
 
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));

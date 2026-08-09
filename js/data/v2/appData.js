@@ -895,7 +895,21 @@
             const current = await kernel.read(logicalKey, { withMeta: true });
             const items = asArray(current.data);
             const cutoff = Date.now() - RECOVERY_TTL_MS;
+            const firstOwnersById = new Map();
+            items.forEach((item) => {
+                const entityId = idOf(item, ['id', 'sessionId', 'recordId']);
+                if (entityId && !firstOwnersById.has(String(entityId))) {
+                    firstOwnersById.set(String(entityId), item);
+                }
+            });
+            const retainedEntityIds = new Set();
+            firstOwnersById.forEach((owner, entityId) => {
+                const timestamp = recoveryTimestamp(owner);
+                if (timestamp === null || timestamp > cutoff) retainedEntityIds.add(entityId);
+            });
             const retained = items.filter((item) => {
+                const entityId = idOf(item, ['id', 'sessionId', 'recordId']);
+                if (entityId) return retainedEntityIds.has(String(entityId));
                 const timestamp = recoveryTimestamp(item);
                 return timestamp === null || timestamp > cutoff;
             });
@@ -969,6 +983,26 @@
         });
         return id == null ? items : items.find((item) => idOf(item, ['id', 'sessionId', 'recordId']) === String(id)) || null;
     }
+    async function readRecoveryFence(kind, id) {
+        await ready;
+        const normalizedId = String(id ?? '');
+        if (!normalizedId) {
+            return { id: normalizedId, exists: false, tombstoned: false, revision: 0 };
+        }
+        const items = await pruneRecoveryKey(recoveryKey(kind));
+        const owner = items.find((item) => (
+            idOf(item, ['id', 'sessionId', 'recordId']) === normalizedId
+        ));
+        if (!owner) {
+            return { id: normalizedId, exists: false, tombstoned: false, revision: 0 };
+        }
+        return {
+            id: normalizedId,
+            exists: true,
+            tombstoned: owner._recoveryTombstone === true,
+            revision: recoveryEntityRevision(owner)
+        };
+    }
     function expectedRecoveryEntityRevision(options = {}) {
         if (!Object.prototype.hasOwnProperty.call(options, 'expectedEntityRevision')) return null;
         const revision = Number(options.expectedEntityRevision);
@@ -987,6 +1021,18 @@
             throw new AppDataError('VALIDATION', 'recovery exclusiveGroup must not exceed 128 characters');
         }
         return group;
+    }
+    function recoveryEntityExclusiveGroup(item) {
+        const explicit = String(item && item._recoveryExclusiveGroup || '').trim();
+        if (explicit) return explicit;
+        const schema = String(item && item.schema || '').trim();
+        const version = Number(item && item.version);
+        if (version === 2 && schema === 'suite-session-v2') {
+            // Upgrade compatibility: suite recoveries written before group metadata was
+            // introduced still occupy the same logical singleton group.
+            return 'suite-practice';
+        }
+        return '';
     }
     function staleRecoveryReceipt(mutation, expectedRevision, actualRevision) {
         return {
@@ -1034,12 +1080,19 @@
                     }
                 }
                 if (exclusiveGroup) {
-                    const conflicting = current.items.find((entry, entryIndex) => (
-                        entryIndex !== index
-                        && entry
-                        && entry._recoveryTombstone !== true
-                        && String(entry._recoveryExclusiveGroup || '') === exclusiveGroup
-                    ));
+                    const seenEntityIds = new Set();
+                    const conflicting = current.items.find((entry) => {
+                        const entryId = idOf(entry, ['id', 'sessionId', 'recordId']);
+                        if (!entryId || seenEntityIds.has(entryId)) return false;
+                        seenEntityIds.add(entryId);
+                        // AppData CAS always updates the raw first owner for an id. Shadow
+                        // duplicates neither conflict with that owner nor become a second
+                        // logical group member; a first-owner tombstone hides the whole id.
+                        return entryId !== id
+                            && entry
+                            && entry._recoveryTombstone !== true
+                            && recoveryEntityExclusiveGroup(entry) === exclusiveGroup;
+                    });
                     if (conflicting) {
                         return {
                             committed: false,
@@ -1069,31 +1122,44 @@
     }
     async function discardRecovery(kind, id, options = {}) {
         await ready;
+        if (options.commitGuard !== undefined && typeof options.commitGuard !== 'function') {
+            throw new AppDataError('VALIDATION', 'recovery commitGuard must be a synchronous function');
+        }
         const key = recoveryKey(kind);
         const mutation = optionsMutationOptions(options, `recovery-${kind}-discard`, { id: String(id) });
         const expectedEntityRevision = expectedRecoveryEntityRevision(options);
-        return enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
-            const current = await readCollectionMeta(key);
-            const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === String(id));
-            if (expectedEntityRevision !== null) {
-                const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
-                if (actualEntityRevision !== expectedEntityRevision) {
-                    return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+        try {
+            return await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
+                const current = await readCollectionMeta(key);
+                const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === String(id));
+                const kernelOptions = typeof options.commitGuard === 'function'
+                    ? Object.assign({}, mutation, { commitGuard: options.commitGuard })
+                    : mutation;
+                if (expectedEntityRevision !== null) {
+                    const actualEntityRevision = index >= 0 ? recoveryEntityRevision(current.items[index]) : 0;
+                    if (actualEntityRevision !== expectedEntityRevision) {
+                        return staleRecoveryReceipt(mutation, expectedEntityRevision, actualEntityRevision);
+                    }
+                    const tombstone = {
+                        id: String(id),
+                        revision: Math.min(Number.MAX_SAFE_INTEGER, actualEntityRevision + 1),
+                        _recoveryTombstone: true,
+                        discardedAt: Date.now(),
+                        updatedAt: nowIso()
+                    };
+                    if (index >= 0) current.items[index] = tombstone;
+                    else current.items.push(tombstone);
+                    return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], kernelOptions);
                 }
-                const tombstone = {
-                    id: String(id),
-                    revision: Math.min(Number.MAX_SAFE_INTEGER, actualEntityRevision + 1),
-                    _recoveryTombstone: true,
-                    discardedAt: Date.now(),
-                    updatedAt: nowIso()
-                };
-                if (index >= 0) current.items[index] = tombstone;
-                else current.items.push(tombstone);
-                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+                const next = current.items.filter((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) !== String(id));
+                return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], kernelOptions);
+            }));
+        } catch (error) {
+            if (error && error.code === 'PRECONDITION_FAILED') {
+                return guardedRecoveryReceipt(mutation);
             }
-            const next = current.items.filter((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) !== String(id));
-            return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], mutation);
-        }));
+            throw error;
+        }
     }
     async function clearRecovery(kind, options = {}) {
         await ready;
@@ -1134,19 +1200,37 @@
                 const current = await readCollectionMeta(key);
                 const cutoff = Date.now() - RECOVERY_TTL_MS;
                 const removedIds = [];
+                const firstOwnersById = new Map();
+                current.items.forEach((item) => {
+                    const entityId = idOf(item, ['id', 'sessionId', 'recordId']);
+                    if (entityId && !firstOwnersById.has(String(entityId))) {
+                        firstOwnersById.set(String(entityId), item);
+                    }
+                });
+                const retainedEntityIds = new Set();
+                firstOwnersById.forEach((owner, entityId) => {
+                    if (preservedIds.has(entityId)) {
+                        retainedEntityIds.add(entityId);
+                        return;
+                    }
+                    const timestamp = recoveryTimestamp(owner);
+                    const expired = timestamp !== null && timestamp <= cutoff;
+                    const tombstone = owner && owner._recoveryTombstone === true;
+                    const explicitlyDiscardable = !tombstone && discardableIds.has(entityId);
+                    if (expired || explicitlyDiscardable) {
+                        removedIds.push(entityId);
+                    } else {
+                        retainedEntityIds.add(entityId);
+                    }
+                });
                 const retained = current.items.filter((item) => {
                     const id = idOf(item, ['id', 'sessionId', 'recordId']);
-                    if (id && preservedIds.has(String(id))) return true;
+                    if (id) return retainedEntityIds.has(String(id));
                     const timestamp = recoveryTimestamp(item);
                     const expired = timestamp !== null && timestamp <= cutoff;
                     const tombstone = item && item._recoveryTombstone === true;
                     if (tombstone && !expired) return true;
-                    const explicitlyDiscardable = !tombstone && Boolean(id && discardableIds.has(String(id)));
-                    if (expired || explicitlyDiscardable) {
-                        if (id) removedIds.push(String(id));
-                        return false;
-                    }
-                    return true;
+                    return !expired;
                 });
                 if (retained.length === current.items.length) {
                     return { receipt: null, removedIds: [] };
@@ -1178,6 +1262,7 @@
         async cleanupForRetry(options = {}) { return cleanupRecoveryForRetry(options); },
         async listActiveSessions() { return readRecovery('activeSession'); },
         async getActiveSession(id) { return readRecovery('activeSession', id); },
+        async getActiveSessionFence(id) { return readRecoveryFence('activeSession', id); },
         async saveActiveSession(value, options) { return saveRecovery('activeSession', value, options); },
         async completeActiveSession(id, options) { return discardRecovery('activeSession', id, options); },
         async discardActiveSession(id, options) { return discardRecovery('activeSession', id, options); },
