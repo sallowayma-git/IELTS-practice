@@ -3021,14 +3021,46 @@
                 || ''
             ).trim();
             const allowUnprefixed = config.allowUnprefixed !== false;
+            // Suite entries persist answerComparison but historically dropped
+            // correctAnswerMap, so derive from the comparison as a last resort.
             return this._mergeReplayAnswerMapsFirstWins({},
                 targetExamId,
                 allowUnprefixed,
                 entry.correctAnswerMap,
                 realData.correctAnswerMap,
                 rawData.correctAnswerMap,
-                rawRealData.correctAnswerMap
+                rawRealData.correctAnswerMap,
+                this._deriveCorrectAnswerMapFromComparison(entry.answerComparison),
+                this._deriveCorrectAnswerMapFromComparison(realData.answerComparison),
+                this._deriveCorrectAnswerMapFromComparison(rawData.answerComparison),
+                this._deriveCorrectAnswerMapFromComparison(rawRealData.answerComparison)
             );
+        },
+
+        _deriveCorrectAnswerMapFromComparison(comparison) {
+            if (!this._isReplayObject(comparison)) {
+                return null;
+            }
+            const derived = {};
+            Object.entries(comparison).forEach(([questionId, detail]) => {
+                if (!this._isReplayObject(detail)) {
+                    return;
+                }
+                const correctAnswer = detail.correctAnswer;
+                // Only real answers: a blank or empty value must stay unknown so
+                // the comparison degrades to isCorrect: null instead of guessing.
+                if (correctAnswer == null) {
+                    return;
+                }
+                if (typeof correctAnswer === 'string' && !correctAnswer.trim()) {
+                    return;
+                }
+                if (Array.isArray(correctAnswer) && !correctAnswer.length) {
+                    return;
+                }
+                derived[questionId] = correctAnswer;
+            });
+            return Object.keys(derived).length ? derived : null;
         },
 
         _finalizeReplayComparison(answers, correctAnswers, comparison) {
