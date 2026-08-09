@@ -542,6 +542,93 @@ async function main() {
     ), true, 'a matching HTTP WAL must commit after coordinated legacy-id cleanup');
     assert.equal(await matchingGroupHttpApp._releaseSuiteRecoveryClaim('single', matchingGroupHttpApp.currentSuiteSession), true);
 
+    const splitWalGroupLocks = createExclusiveLockManager();
+    const splitWalGroupStore = new Map([
+        [olderDurableSingle.id, structuredClone(olderDurableSingle)],
+        [newestDurableSingle.id, structuredClone(newestDurableSingle)]
+    ]);
+    const splitWalGroupTabA = createHarness({
+        locks: splitWalGroupLocks,
+        activeSessionStore: splitWalGroupStore,
+        realisticRecoveryStore: true
+    });
+    const splitWalGroupTabB = createHarness({
+        locks: splitWalGroupLocks,
+        activeSessionStore: splitWalGroupStore,
+        realisticRecoveryStore: true
+    });
+    splitWalGroupTabA.sessionStore.save('simulation', structuredClone(olderDurableSingle));
+    splitWalGroupTabB.sessionStore.save('simulation', structuredClone(newestDurableSingle));
+    const splitWalGroupAppA = splitWalGroupTabA.makeApp();
+    const splitWalGroupAppB = splitWalGroupTabB.makeApp();
+    splitWalGroupAppA.initializeSuiteMode();
+    splitWalGroupAppB.initializeSuiteMode();
+    await Promise.all([
+        splitWalGroupAppA._ensureSuiteRecoveryReady(),
+        splitWalGroupAppB._ensureSuiteRecoveryReady()
+    ]);
+    const splitWalOwners = [splitWalGroupAppA, splitWalGroupAppB]
+        .filter((app) => app.currentSuiteSession);
+    assert.equal(splitWalOwners.length, 1, 'different-id WAL tabs must elect one singleton owner');
+    assert.equal(splitWalOwners[0].currentSuiteSession.id, newestDurableSingle.id);
+    assert.equal(
+        splitWalGroupTabA.recoveryCalls.discard + splitWalGroupTabB.recoveryCalls.discard,
+        1,
+        'the group winner must tombstone exactly the older durable identity'
+    );
+    assert.equal(splitWalGroupStore.get(olderDurableSingle.id)._recoveryTombstone, true);
+    assert.equal(splitWalGroupStore.get(newestDurableSingle.id)._recoveryTombstone, undefined);
+    const splitWalGroupName = splitWalGroupAppA._singleSuiteRecoveryGroupClaimName();
+    assert.equal(
+        splitWalGroupLocks.calls.filter((call) => call.name === splitWalGroupName).length,
+        2,
+        'both tabs must contend on the origin-wide singleton group lock first'
+    );
+    assert.deepEqual(
+        splitWalGroupLocks.calls
+            .map((call) => call.name)
+            .filter((name) => name.startsWith('ielts-atlas:suite-recovery:'))
+            .sort(),
+        [
+            splitWalGroupAppA._suiteRecoveryClaimName(olderDurableSingle.id),
+            splitWalGroupAppA._suiteRecoveryClaimName(newestDurableSingle.id)
+        ].sort(),
+        'only the group winner may request the two coordinated exact identities'
+    );
+    assert.equal(splitWalGroupLocks.held.has(splitWalGroupName), false, 'the short-lived group lock must be released after install');
+    assert.deepEqual(
+        Array.from(splitWalGroupLocks.held.keys()),
+        [splitWalGroupAppA._suiteRecoveryClaimName(newestDurableSingle.id)],
+        'only the authoritative exact lease may survive recovery'
+    );
+    const splitWalLoserHarness = splitWalOwners[0] === splitWalGroupAppA
+        ? splitWalGroupTabB
+        : splitWalGroupTabA;
+    assert.equal(
+        splitWalLoserHarness.sessionStore.peek('simulation').recoveryLeaseContended,
+        true,
+        'group contention must preserve and mark the losing tab WAL for retry'
+    );
+    assert.equal(await splitWalOwners[0]._releaseSuiteRecoveryClaim(
+        'single',
+        splitWalOwners[0].currentSuiteSession
+    ), true);
+    assert.equal(splitWalGroupLocks.held.size, 0);
+    const splitWalLoserApp = splitWalOwners[0] === splitWalGroupAppA
+        ? splitWalGroupAppB
+        : splitWalGroupAppA;
+    assert.equal(
+        await splitWalLoserApp._refreshSuiteRecoveryCandidates(),
+        splitWalLoserApp.currentSuiteSession,
+        'the marked group-contention WAL must remain retryable after owner release'
+    );
+    assert.equal(splitWalLoserApp.currentSuiteSession.id, newestDurableSingle.id);
+    assert.equal(await splitWalLoserApp._releaseSuiteRecoveryClaim(
+        'single',
+        splitWalLoserApp.currentSuiteSession
+    ), true);
+    assert.equal(splitWalGroupLocks.held.size, 0);
+
     const matchingGroupFileStore = new Map([
         [olderDurableSingle.id, structuredClone(olderDurableSingle)],
         [newestDurableSingle.id, structuredClone(newestDurableSingle)]
@@ -658,6 +745,13 @@ async function main() {
         assert.equal(unavailableSingleHarness.recoveryCalls.save, 0);
         assert.equal(unavailableSingleHarness.sessionStore.peek('simulation').id, tabOwnedWal.id);
         assert.equal(unavailableSingleLocks.held.size, 0);
+        assert.equal(
+            unavailableSingleLocks.calls.filter((call) => (
+                call.name === unavailableSingleApp._singleSuiteRecoveryGroupClaimName()
+            )).length,
+            1,
+            `HTTP ${enumerationFailure} enumeration must release its acquired group coordination lock`
+        );
     }
 
     const mismatchedWalLocks = createExclusiveLockManager();
@@ -1803,7 +1897,13 @@ async function main() {
     assert.equal(noLocksApp.currentSuiteSession, null, 'HTTP recovery must fail closed without navigator.locks');
     assert.equal(noLocksHarness.recoveryCalls.save, 0);
     assert.equal(noLocksHarness.recoveryCalls.discard, 0);
-    assert.equal(noLocksHarness.sessionStore.peek('simulation').recoveryLeaseContended, undefined, 'unsupported Locks is not active contention');
+    assert.equal(
+        noLocksHarness.sessionStore.peek('simulation').recoveryLeaseContended,
+        true,
+        'an unavailable group lock must preserve and mark the WAL for a later retry'
+    );
+    assert.equal(noLocksHarness.sessionStore.peek('simulation').id, matchedLocalWal.id);
+    assert.equal(noLocksHarness.sessionStore.peek('simulation').revision, matchedLocalWal.revision);
 
     const throwingLocks = createExclusiveLockManager();
     throwingLocks.failNext(new Error('locks backend unavailable'));
@@ -1814,7 +1914,28 @@ async function main() {
     throwingLocksApp.initializeSuiteMode();
     await throwingLocksApp._ensureSuiteRecoveryReady();
     assert.equal(throwingLocksApp.currentSuiteSession, null, 'request failure must fail closed without hanging');
-    assert.equal(throwingLocksHarness.sessionStore.peek('simulation').recoveryLeaseContended, undefined);
+    assert.equal(throwingLocksHarness.sessionStore.peek('simulation').recoveryLeaseContended, true);
+    assert.equal(throwingLocksHarness.sessionStore.peek('simulation').id, matchedLocalWal.id);
+    assert.equal(throwingLocksHarness.sessionStore.peek('simulation').revision, matchedLocalWal.revision);
+    assert.equal(throwingLocksHarness.recoveryCalls.save, 0);
+    assert.equal(throwingLocksHarness.recoveryCalls.discard, 0);
+    assert.equal(throwingLocks.held.size, 0, 'a failed group request must not leak a hold');
+    assert.deepEqual(
+        throwingLocks.calls.map((call) => call.name),
+        [throwingLocksApp._singleSuiteRecoveryGroupClaimName()],
+        'a failed group request must stop before the WAL exact-id request'
+    );
+    assert.equal(
+        await throwingLocksApp._refreshSuiteRecoveryCandidates(),
+        throwingLocksApp.currentSuiteSession,
+        'group request failure must not terminalize the serialized WAL retry'
+    );
+    assert.equal(throwingLocksApp.currentSuiteSession.id, matchedDurable.id);
+    assert.equal(await throwingLocksApp._releaseSuiteRecoveryClaim(
+        'single',
+        throwingLocksApp.currentSuiteSession
+    ), true);
+    assert.equal(throwingLocks.held.size, 0);
 
     // Drafts may arrive after the child Window exists but before openExam() resolves.
     // The initializing snapshot must bind that exact source and persist the draft.

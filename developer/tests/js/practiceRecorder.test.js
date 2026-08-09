@@ -243,6 +243,106 @@ async function main() {
             assert.strictEqual(completionCalls, 0, 'host-owned completion must not be saved through the recorder global listener');
         });
 
+        await record('restore and autosave isolate ordinary sessions from suite recovery snapshots', async () => {
+            const { recorder, windowStub } = createHarness();
+            const savedSessions = [];
+            const restoreLogs = [];
+            windowStub.console.log = (...args) => restoreLogs.push(args.join(' '));
+            windowStub.AppData.recovery.listActiveSessions = async () => clone([
+                null,
+                ['not-an-active-session'],
+                { id: 'missing-exam', sessionId: 'missing-exam' },
+                { examId: 'reading-missing-identity' },
+                {
+                    id: 'active-session:mismatched-owner-a',
+                    sessionId: 'mismatched-owner-b',
+                    examId: 'reading-mismatched-identity'
+                },
+                {
+                    schema: 'suite-session-v2',
+                    version: 2,
+                    id: 'suite-owner-restore',
+                    sessionId: 'suite-owner-restore',
+                    examId: 'reading-suite-host',
+                    revision: 4,
+                    status: 'active',
+                    sequence: [{ examId: 'reading-suite-p1' }],
+                    _recoveryExclusiveGroup: 'suite-practice',
+                    updatedAt: '2026-08-09T00:02:00.000Z'
+                },
+                {
+                    schema: 'multi-suite-sessions-v2',
+                    version: 2,
+                    id: 'multi-owner-restore',
+                    sessionId: 'multi-owner-restore',
+                    examId: 'listening-suite-host',
+                    revision: 2,
+                    sessions: [{ id: 'multi-owner-restore', baseExamId: 'listening-base' }],
+                    updatedAt: '2026-08-09T00:03:00.000Z'
+                },
+                {
+                    id: 'active-session:ordinary-session',
+                    sessionId: 'ordinary-session',
+                    examId: '  reading-p1  ',
+                    status: 'active',
+                    updatedAt: '2026-08-09T00:01:00.000Z'
+                },
+                {
+                    // Legacy ordinary recovery entries may have a sessionId but no
+                    // AppData-prefixed entity id yet.
+                    sessionId: 'legacy-ordinary-session',
+                    examId: '  listening-p1  ',
+                    status: 'paused',
+                    lastActivity: '2026-08-09T00:00:00.000Z'
+                }
+            ]);
+            windowStub.AppData.recovery.saveActiveSession = async (value) => {
+                savedSessions.push(clone(value));
+                return { committed: true };
+            };
+            recorder.activeSessions = new Map();
+
+            await recorder.restoreActiveSessions();
+
+            assert.deepStrictEqual(
+                Array.from(recorder.activeSessions.keys()).sort(),
+                ['listening-p1', 'reading-p1'],
+                'only normalized ordinary exam ids should enter the recorder map'
+            );
+            assert.strictEqual(
+                recorder.activeSessions.get('reading-p1').id,
+                'active-session:ordinary-session'
+            );
+            assert.strictEqual(
+                recorder.activeSessions.get('listening-p1').id,
+                'active-session:legacy-ordinary-session',
+                'legacy ordinary sessions must retain compatibility via sessionId'
+            );
+            assert(
+                restoreLogs.includes('Restored 2 active sessions'),
+                'restore diagnostics must count only accepted ordinary sessions'
+            );
+
+            await recorder.saveActiveSessions();
+
+            assert.deepStrictEqual(
+                savedSessions.map((session) => session.id).sort(),
+                ['active-session:legacy-ordinary-session', 'active-session:ordinary-session']
+            );
+            assert(savedSessions.every((session) => (
+                session.schema !== 'suite-session-v2'
+                && session.schema !== 'multi-suite-sessions-v2'
+            )), 'autosave must never rewrite suite recovery snapshots as recorder sessions');
+            assert.strictEqual(
+                savedSessions.some((session) => (
+                    session.id === 'active-session:suite-owner-restore'
+                    || session.id === 'active-session:multi-owner-restore'
+                )),
+                false,
+                'autosave must never generate active-session:<suite-id> clones'
+            );
+        });
+
         await record('completion keeps its exact session across same-exam ABA replacement', async () => {
             const { recorder, state, windowStub } = createHarness();
             let releaseExamIndex;

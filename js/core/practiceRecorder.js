@@ -363,19 +363,67 @@ class PracticeRecorder {
      */
     async restoreActiveSessions() {
         const raw = await window.AppData.recovery.listActiveSessions();
-        const storedSessions = Array.isArray(raw) ? raw : [];
+        const suiteRecoverySchemas = new Set([
+            'suite-session-v2',
+            'multi-suite-sessions-v2'
+        ]);
+        const storedSessions = (Array.isArray(raw) ? raw : [])
+            .map((sessionData) => {
+                if (!sessionData || typeof sessionData !== 'object' || Array.isArray(sessionData)) {
+                    return null;
+                }
+                const schema = String(sessionData.schema || '').trim();
+                if (suiteRecoverySchemas.has(schema)) {
+                    return null;
+                }
+                const examId = String(sessionData.examId || '').trim();
+                const sessionId = String(sessionData.sessionId || '').trim();
+                const rawEntityId = String(sessionData.id || '').trim();
+                if (!examId || (!sessionId && !rawEntityId)) {
+                    return null;
+                }
+
+                let entityId;
+                try {
+                    const entityIdFromSession = sessionId
+                        ? this.activeSessionEntityId(sessionId)
+                        : null;
+                    const entityIdFromStoredId = rawEntityId
+                        ? this.activeSessionEntityId(rawEntityId)
+                        : null;
+                    if (entityIdFromSession && entityIdFromStoredId
+                        && entityIdFromSession !== entityIdFromStoredId) {
+                        return null;
+                    }
+                    entityId = entityIdFromStoredId || entityIdFromSession;
+                } catch (_) {
+                    return null;
+                }
+                const derivedSessionId = entityId.startsWith('active-session:')
+                    ? entityId.slice('active-session:'.length).trim()
+                    : '';
+                if (!derivedSessionId) {
+                    return null;
+                }
+                return {
+                    ...sessionData,
+                    id: entityId,
+                    sessionId: sessionId || derivedSessionId,
+                    examId
+                };
+            })
+            .filter(Boolean);
 
         storedSessions
             .slice()
             .sort((left, right) => Date.parse(left.updatedAt || left.lastActivity || 0) - Date.parse(right.updatedAt || right.lastActivity || 0))
-            .forEach(sessionData => {
-            this.activeSessions.set(sessionData.examId, {
-                ...sessionData,
-                id: this.activeSessionEntityId(sessionData),
-                status: 'restored',
-                lastActivity: new Date().toISOString()
+            .forEach((sessionData) => {
+                this.activeSessions.set(sessionData.examId, {
+                    ...sessionData,
+                    status: 'restored',
+                    lastActivity: new Date().toISOString()
+                });
             });
-        });
 
         console.log(`Restored ${storedSessions.length} active sessions`);
     }

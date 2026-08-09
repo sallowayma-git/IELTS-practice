@@ -100,6 +100,82 @@
             return normalizedId ? `ielts-atlas:suite-recovery:${normalizedId}` : '';
         },
 
+        _singleSuiteRecoveryGroupClaimName() {
+            return 'ielts-atlas:suite-recovery-group:suite-practice';
+        },
+
+        async _acquireSingleSuiteRecoveryGroupClaim() {
+            if (isFileProtocol) {
+                return { state: 'held', fileProtocol: true };
+            }
+            const locks = global.navigator && global.navigator.locks;
+            if (!locks || typeof locks.request !== 'function') return null;
+
+            const lockName = this._singleSuiteRecoveryGroupClaimName();
+            let settleAcquisition;
+            let acquisitionSettled = false;
+            const acquiredPromise = new Promise((resolve) => {
+                settleAcquisition = (claim) => {
+                    if (acquisitionSettled) return;
+                    acquisitionSettled = true;
+                    resolve(claim || null);
+                };
+            });
+            let releaseHold;
+            const holdPromise = new Promise((resolve) => { releaseHold = resolve; });
+            const claim = {
+                lockName,
+                state: 'pending',
+                releaseRequested: false,
+                releaseHold,
+                requestPromise: null
+            };
+
+            claim.requestPromise = Promise.resolve().then(() => locks.request(lockName, {
+                mode: 'exclusive',
+                ifAvailable: true
+            }, async (lock) => {
+                if (!lock) {
+                    settleAcquisition(null);
+                    return false;
+                }
+                claim.state = 'held';
+                settleAcquisition(claim);
+                await holdPromise;
+                return true;
+            })).catch(() => {
+                settleAcquisition(null);
+                return false;
+            }).finally(() => {
+                claim.state = 'released';
+                settleAcquisition(null);
+            });
+
+            const acquiredClaim = await acquiredPromise;
+            if (!acquiredClaim) {
+                try {
+                    await claim.requestPromise;
+                } catch (_) {}
+                return null;
+            }
+            return acquiredClaim;
+        },
+
+        async _releaseSingleSuiteRecoveryGroupClaim(claim) {
+            if (!claim || claim.state !== 'held') return false;
+            if (claim.fileProtocol === true) {
+                claim.state = 'released';
+                return true;
+            }
+            claim.releaseRequested = true;
+            claim.state = 'releasing';
+            claim.releaseHold();
+            try {
+                await claim.requestPromise;
+            } catch (_) {}
+            return true;
+        },
+
         _getSuiteRecoveryClaimState() {
             if (!(this._suiteRecoveryClaimsById instanceof Map)) {
                 this._suiteRecoveryClaimsById = new Map();
@@ -877,10 +953,31 @@
             const pendingMultiWindowSessions = Array.isArray(multiWindowSessions)
                 ? multiWindowSessions
                 : [];
+            let singleGroupClaim = null;
+            const ensureSingleGroupClaim = async (windowWalSession = null) => {
+                if (isFileProtocol) return true;
+                if (singleGroupClaim && singleGroupClaim.state === 'held') return true;
+                singleGroupClaim = await this._acquireSingleSuiteRecoveryGroupClaim();
+                if (singleGroupClaim) return true;
+                if (windowWalSession) {
+                    // Group contention is retryable. Preserve the serialized WAL and mark
+                    // it without binding/terminalizing this runtime object to an exact id.
+                    this._markSuiteRecoveryLeaseContended('single', windowWalSession);
+                }
+                return false;
+            };
+            try {
             const claimedMultiWindowSessions = [];
             let singleWindowClaimUnavailable = false;
             if (fastSnapshotSession) {
-                if (!await this._acquireSuiteRecoveryClaim('single', fastSnapshotSession)) {
+                // Every HTTP singleton recovery contender must enter through the same
+                // short-lived group lock before it may hold a WAL-specific exact lock.
+                // Otherwise two tabs carrying different legacy ids can each pre-hold one
+                // exact lock and make the authoritative-first group repair abandon both.
+                if (!await ensureSingleGroupClaim(fastSnapshotSession)) {
+                    singleWindowClaimUnavailable = true;
+                    fastSnapshotSession = null;
+                } else if (!await this._acquireSuiteRecoveryClaim('single', fastSnapshotSession)) {
                     singleWindowClaimUnavailable = true;
                     fastSnapshotSession = null;
                 }
@@ -962,6 +1059,19 @@
                             fastSnapshotSession = null;
                             singleWindowClaimUnavailable = true;
                         }
+                    }
+                }
+                if (!fastSnapshotSession && !singleWindowClaimUnavailable) {
+                    const firstRawItemsById = new Map();
+                    (Array.isArray(items) ? items : []).forEach((item) => {
+                        const id = durableEntityId(item);
+                        if (id && !firstRawItemsById.has(id)) firstRawItemsById.set(id, item);
+                    });
+                    const hasDurableSingleCandidate = Array.from(firstRawItemsById.values()).some((item) => (
+                        item && item.schema === 'suite-session-v2' && Number(item.version) === 2
+                    ));
+                    if (hasDurableSingleCandidate && !await ensureSingleGroupClaim()) {
+                        singleWindowClaimUnavailable = true;
                     }
                 }
                 if (!fastSnapshotSession && !singleWindowClaimUnavailable) {
@@ -1350,6 +1460,11 @@
                     }
                 }
                 return fastSnapshotSession;
+            }
+            } finally {
+                if (singleGroupClaim) {
+                    await this._releaseSingleSuiteRecoveryGroupClaim(singleGroupClaim);
+                }
             }
         },
 
