@@ -2111,6 +2111,7 @@
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
                         answerComparison: entry.answerComparison,
+                        correctAnswerMap: entry.correctAnswerMap,
                         markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                         highlights: this._resolveSuiteEntryHighlights(entry, draft),
                         noteText: this._resolveSuiteEntryNoteText(entry, draft),
