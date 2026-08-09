@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/145. P1 - Caral an ancient South American city 卡拉尔古城.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
+    "pdf": "ReadingPractice/PDF/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
     "ieltsHtml": null
   },
   "audit": {

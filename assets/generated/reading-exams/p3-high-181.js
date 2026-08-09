@@ -93,7 +93,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/89. P3 - The Fruit Book 果实之书【高】/89. P3 - The Fruit Book 果实之书【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/89. P3 - The Fruit Book 果实之书【高】/89. P3 - The Fruit Book 果实之书【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/89. P3 - The Fruit Book 果实之书【高】/89. P3 - The Fruit Book 果实之书【高】.pdf",
     "ieltsHtml": "IELTS/P3/The Fruit Book.html"
   },
   "audit": {

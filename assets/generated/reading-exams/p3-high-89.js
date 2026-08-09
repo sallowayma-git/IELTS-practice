@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
+    "pdf": "ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
     "ieltsHtml": "IELTS/P3/Looking at daily life in ancient Rome.html"
   },
   "audit": {

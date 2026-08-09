@@ -72,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/168. P2 - Mammoth Kill 猛犸象的灭绝/168. P2 - Mammoth Kill 猛犸象的灭绝.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/168. P2 - Mammoth Kill 猛犸象的灭绝/168. P2 - Mammoth Kill 猛犸象的灭绝.pdf",
+    "pdf": "ReadingPractice/PDF/168. P2 - Mammoth Kill 猛犸象的灭绝.pdf",
     "ieltsHtml": "IELTS/P2/Mammoth Kill.html"
   },
   "audit": {

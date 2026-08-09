@@ -7,7 +7,7 @@
   "schemaVersion": "ReadingExamSourceV1",
   "examId": "p2-low-240",
   "meta": {
-    "title": "Coins - the first form of money",
+    "title": "Coins - the first form of money 硬币起源",
     "category": "P2",
     "frequency": "low",
     "pdfFilename": "",

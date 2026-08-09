@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/69. P3 - Grimm’s Fairy Tales 格林童话【高】/69. P3 - Grimm’s Fairy Tales 格林童话【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/69. P3 - Grimm’s Fairy Tales 格林童话【高】/69. P3 - Grimm’s Fairy Tales 格林童话【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/69. P3 - Grimm’s Fairy Tales 格林童话【高】/69. P3 - Grimm’s Fairy Tales 格林童话【高】.pdf",
     "ieltsHtml": null
   },
   "audit": {

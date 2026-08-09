@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/35. P2 - Biophilic Design 亲自然设计.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/35. P2 - Biophilic Design 亲自然设计.pdf",
+    "pdf": "ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf",
     "ieltsHtml": null
   },
   "audit": {

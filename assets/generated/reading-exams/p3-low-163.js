@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf",
+    "pdf": "ReadingPractice/PDF/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf",
     "ieltsHtml": null
   },
   "audit": {

@@ -88,7 +88,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/99. P3 - Voynich Manuscript 伏尼契手稿【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/99. P3 - Voynich Manuscript 伏尼契手稿【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/99. P3 - Voynich Manuscript 伏尼契手稿【高】.pdf",
     "ieltsHtml": "IELTS/P3/Voynich Manuscript.html"
   },
   "audit": {

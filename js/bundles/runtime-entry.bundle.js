@@ -536,11 +536,7 @@
 
     function start(themeName = null) {
         if (!themeName) {
-            try {
-                themeName = localStorage.getItem('three_bg_theme') || 'floral-bloom';
-            } catch(e) {
-                themeName = 'floral-bloom';
-            }
+            themeName = 'floral-bloom';
         }
 
         try {
@@ -583,14 +579,20 @@
     }
 
     global.switchBgTheme = function(themeName) {
-        try {
-            localStorage.setItem('three_bg_theme', themeName);
-        } catch(e){}
+        if (global.AppData && global.AppData.preferences) {
+            global.AppData.preferences.setThreeBackground(themeName).catch((error) => console.warn('[SHUI Three Background] preference save failed:', error));
+        }
         start(themeName);
     };
 
-    function init() {
-        start();
+    async function init() {
+        try {
+            await global.AppData.ready;
+            const saved = await global.AppData.preferences.getThreeBackground();
+            start(saved || 'floral-bloom');
+        } catch (_) {
+            start('floral-bloom');
+        }
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
@@ -720,6 +722,32 @@
     var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
+    var assetVersion = resolveAssetVersion();
+
+    function resolveAssetVersion() {
+        try {
+            var params = new URLSearchParams(global.location && global.location.search ? global.location.search : '');
+            return String(params.get('v') || '').trim();
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function versionScriptUrl(url) {
+        if (!url || !assetVersion) {
+            return url;
+        }
+        try {
+            var resolved = new URL(url, document.baseURI);
+            if (resolved.origin !== global.location.origin) {
+                return url;
+            }
+            resolved.searchParams.set('v', assetVersion);
+            return resolved.href;
+        } catch (_) {
+            return url;
+        }
+    }
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
@@ -753,9 +781,7 @@
             'js/bundles/theme.bundle.js'
         ];
 
-        manifest['settings-tools'] = [
-            'js/bundles/settings.bundle.js'
-        ];
+        manifest['settings-tools'] = [];
 
         manifest['diagnostics-tools'] = [
             'js/bundles/diagnostics.bundle.js'
@@ -764,13 +790,16 @@
         dependencies['state-core'] = [];
         dependencies['exam-data'] = [];
         dependencies['practice-suite'] = ['state-core'];
-        dependencies['browse-runtime'] = ['state-core'];
-        dependencies['browse-view'] = ['state-core'];
+        // Browsing is also the entry point for starting a practice session.
+        // Keep the real recorder ready before a user can open an exam; the
+        // bootstrap fallback cannot own the full submit/persist round trip.
+        dependencies['browse-runtime'] = ['state-core', 'practice-suite'];
+        dependencies['browse-view'] = ['state-core', 'practice-suite'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
         dependencies['settings-tools'] = ['state-core'];
-        dependencies['more-tools'] = ['state-core', 'settings-tools'];
+        dependencies['more-tools'] = ['state-core'];
         dependencies['theme-tools'] = [];
-        dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];
+        dependencies['diagnostics-tools'] = ['state-core'];
     }
 
     function setBuiltInListeningAvailability(available, reason) {
@@ -785,7 +814,7 @@
             return '';
         }
         try {
-            return new URL(url, document.baseURI).href;
+            return new URL(versionScriptUrl(url), document.baseURI).href;
         } catch (_) {
             return String(url);
         }
@@ -850,7 +879,8 @@
             return scriptStatus[url];
         }
 
-        var existing = findExistingScriptTag(url);
+        var requestUrl = versionScriptUrl(url);
+        var existing = findExistingScriptTag(requestUrl);
         if (existing) {
             scriptStatus[url] = 'loaded';
             return Promise.resolve();
@@ -858,7 +888,7 @@
 
         scriptStatus[url] = new Promise(function inject(resolve, reject) {
             var script = document.createElement('script');
-            script.src = url;
+            script.src = requestUrl;
             script.async = true;
             script.onload = function handleLoad() {
                 scriptStatus[url] = 'loaded';
@@ -1072,10 +1102,6 @@
 (function initSuitePreferenceUtils(global) {
     'use strict';
 
-    const FLOW_MODE_STORAGE_KEY = 'suite_flow_mode';
-    const FREQUENCY_SCOPE_STORAGE_KEY = 'suite_frequency_scope';
-    const AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit';
-
     const FLOW_MODES = ['classic', 'simulation', 'stationary'];
     const FREQUENCY_SCOPES = ['high', 'high_medium', 'all', 'custom'];
 
@@ -1190,50 +1216,54 @@
         return null;
     }
 
-    function readStorageValue(key) {
-        try {
-            if (global.localStorage && typeof global.localStorage.getItem === 'function') {
-                return global.localStorage.getItem(key);
-            }
-        } catch (_) {
-            // ignore read failures
+    let hydrationPromise = null;
+    function hydrateSuitePreference() {
+        if (hydrationPromise) return hydrationPromise;
+        // runtime-entry.bundle.js is intentionally loaded before the data
+        // foundation.  Do not memoize that early miss: a cached `false` would
+        // make every later resolver skip the persisted AppData preference.
+        if (!global.AppData || !global.AppData.preferences) {
+            return Promise.resolve(false);
         }
-        return null;
+        hydrationPromise = Promise.resolve().then(async () => {
+            await global.AppData.ready;
+            const stored = await global.AppData.preferences.getSuite();
+            if (stored && typeof stored === 'object') Object.assign(ensurePracticeConfig().suite, stored);
+            return true;
+        }).catch((error) => {
+            console.warn('[SuitePreference] 加载失败:', error);
+            return false;
+        });
+        // A transient AppData initialization failure should be retryable on the
+        // next read, just like the pre-foundation early miss above.
+        hydrationPromise = hydrationPromise.then((hydrated) => {
+            if (!hydrated) hydrationPromise = null;
+            return hydrated;
+        });
+        return hydrationPromise;
     }
 
-    function writeStorageValue(key, value) {
-        try {
-            if (global.localStorage && typeof global.localStorage.setItem === 'function') {
-                global.localStorage.setItem(key, String(value));
-            }
-        } catch (_) {
-            // ignore write failures
-        }
-    }
-
-    function resolveSuitePreference(overrides = {}) {
+    async function resolveSuitePreference(overrides = {}) {
+        await hydrateSuitePreference();
         const config = ensurePracticeConfig();
         const suiteConfig = config.suite || {};
 
         const flowMode = normalizeFlowMode(overrides.flowMode)
             || normalizeFlowMode(suiteConfig.flowMode)
-            || normalizeFlowMode(readStorageValue(FLOW_MODE_STORAGE_KEY))
             || 'classic';
 
         const frequencyScope = normalizeFrequencyScope(overrides.frequencyScope)
             || normalizeFrequencyScope(suiteConfig.frequencyScope)
-            || normalizeFrequencyScope(readStorageValue(FREQUENCY_SCOPE_STORAGE_KEY))
             || 'all';
 
         const overrideAutoAdvance = parseBoolean(overrides.autoAdvanceAfterSubmit);
         const configAutoAdvance = parseBoolean(suiteConfig.autoAdvanceAfterSubmit);
-        const storedAutoAdvance = parseBoolean(readStorageValue(AUTO_ADVANCE_STORAGE_KEY));
         const fallbackAutoAdvance = flowMode !== 'stationary';
         const autoAdvanceAfterSubmit = overrideAutoAdvance != null
             ? overrideAutoAdvance
             : (configAutoAdvance != null
                 ? configAutoAdvance
-                : (storedAutoAdvance != null ? storedAutoAdvance : fallbackAutoAdvance));
+                : fallbackAutoAdvance);
 
         config.suite.flowMode = flowMode;
         config.suite.frequencyScope = frequencyScope;
@@ -1247,24 +1277,34 @@
     }
 
     function persistSuitePreference(partial = {}) {
-        const current = resolveSuitePreference();
+        const config = ensurePracticeConfig();
+        const suiteConfig = config.suite || {};
+        const fallbackCurrent = {
+            flowMode: normalizeFlowMode(suiteConfig.flowMode) || 'classic',
+            frequencyScope: normalizeFrequencyScope(suiteConfig.frequencyScope) || 'all',
+            autoAdvanceAfterSubmit: parseBoolean(suiteConfig.autoAdvanceAfterSubmit)
+        };
 
-        const flowMode = normalizeFlowMode(partial.flowMode) || current.flowMode;
-        const frequencyScope = normalizeFrequencyScope(partial.frequencyScope) || current.frequencyScope;
+        const flowMode = normalizeFlowMode(partial.flowMode) || fallbackCurrent.flowMode;
+        const frequencyScope = normalizeFrequencyScope(partial.frequencyScope) || fallbackCurrent.frequencyScope;
 
         const partialAutoAdvance = parseBoolean(partial.autoAdvanceAfterSubmit);
         const autoAdvanceAfterSubmit = partialAutoAdvance != null
             ? partialAutoAdvance
             : (flowMode === 'stationary' ? false : true);
 
-        const config = ensurePracticeConfig();
         config.suite.flowMode = flowMode;
         config.suite.frequencyScope = frequencyScope;
         config.suite.autoAdvanceAfterSubmit = autoAdvanceAfterSubmit;
 
-        writeStorageValue(FLOW_MODE_STORAGE_KEY, flowMode);
-        writeStorageValue(FREQUENCY_SCOPE_STORAGE_KEY, frequencyScope);
-        writeStorageValue(AUTO_ADVANCE_STORAGE_KEY, autoAdvanceAfterSubmit ? 'true' : 'false');
+        hydrateSuitePreference().then((hydrated) => {
+            if (!hydrated || !global.AppData || !global.AppData.preferences) return;
+            return global.AppData.preferences.patchSuite({
+                flowMode,
+                frequencyScope,
+                autoAdvanceAfterSubmit
+            });
+        }).catch((error) => console.warn('[SuitePreference] 保存失败:', error));
 
         return {
             flowMode,
@@ -1281,11 +1321,18 @@
         normalizeFrequencyScope,
         normalizeFrequency,
         isFrequencyIncluded,
+        ready: hydrateSuitePreference,
         resolveSuitePreference,
         persistSuitePreference
     };
 
     global.SuitePreferenceUtils = api;
+
+    // Kick hydration off eagerly so any later resolver (including the
+    // synchronous readers inside suitePracticeMixin) does not race the very
+    // first AppData.preferences.getSuite() lookup.  If the data foundation is
+    // not installed yet, hydrateSuitePreference deliberately retries later.
+    hydrateSuitePreference();
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
@@ -1412,7 +1459,10 @@
     // Phase 3: 套题/随机练习/导出功能
     // ============================================================================
 
+    var suitePracticeLaunchPromise = null;
+
     function startSuitePractice() {
+        if (suitePracticeLaunchPromise) return suitePracticeLaunchPromise;
         function getSuitePreferenceUtils() {
             return global.SuitePreferenceUtils || null;
         }
@@ -1430,11 +1480,11 @@
             if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all' && frequencyScope !== 'custom') {
                 frequencyScope = 'all';
             }
-            return {
+            return Promise.resolve({
                 flowMode: flowMode,
                 frequencyScope: frequencyScope,
                 autoAdvanceAfterSubmit: flowMode !== 'stationary'
-            };
+            });
         }
 
         function persistSuitePreference(partial) {
@@ -1442,7 +1492,22 @@
             if (suitePreferenceUtils && typeof suitePreferenceUtils.persistSuitePreference === 'function') {
                 return suitePreferenceUtils.persistSuitePreference(partial || {});
             }
-            return resolveSuitePreference(partial || {});
+            // Fallback persists locally; resolveSuitePreference() above is async,
+            // but persistSuitePreference itself must remain synchronous so callers
+            // can read .flowMode/.frequencyScope immediately. Compute inline.
+            var flowMode = String(partial && partial.flowMode || '').trim().toLowerCase();
+            if (flowMode !== 'classic' && flowMode !== 'simulation' && flowMode !== 'stationary') {
+                flowMode = 'classic';
+            }
+            var frequencyScope = String(partial && partial.frequencyScope || '').trim().toLowerCase();
+            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all' && frequencyScope !== 'custom') {
+                frequencyScope = 'all';
+            }
+            return {
+                flowMode: flowMode,
+                frequencyScope: frequencyScope,
+                autoAdvanceAfterSubmit: flowMode !== 'stationary'
+            };
         }
 
         function persistSuiteFlowMode(mode) {
@@ -1457,9 +1522,9 @@
 
         function promptSuiteModeSelection() {
             return new Promise(function resolveSelection(resolve) {
-                var preselectedPreference = resolveSuitePreference();
-                var preselected = preselectedPreference.flowMode || 'classic';
-                var preselectedScope = preselectedPreference.frequencyScope || 'all';
+                resolveSuitePreference().then(function applyPreselection(preselectedPreference) {
+                    var preselected = (preselectedPreference && preselectedPreference.flowMode) || 'classic';
+                    var preselectedScope = (preselectedPreference && preselectedPreference.frequencyScope) || 'all';
                 var search = '';
                 try {
                     search = String(global.location && global.location.search || '').toLowerCase();
@@ -1570,6 +1635,53 @@
                     }
                 });
                 global.document.body.appendChild(host);
+                });
+            });
+        }
+
+        function promptSuiteRecoveryChoice(candidate) {
+            return new Promise(function resolveRecoveryChoice(resolve) {
+                if (!global.document || !global.document.body) {
+                    resolve(null);
+                    return;
+                }
+                var existing = global.document.getElementById('suite-recovery-choice-modal');
+                if (existing && existing.parentNode) {
+                    existing.parentNode.removeChild(existing);
+                }
+                var completedCount = Math.max(0, Number(candidate && candidate.completedCount) || 0);
+                var total = Math.max(0, Number(candidate && candidate.total) || 0);
+                var escapedTitle = String(candidate && candidate.title || '当前篇章')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+                var host = global.document.createElement('div');
+                host.id = 'suite-recovery-choice-modal';
+                host.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;';
+                host.innerHTML = [
+                    '<div role="dialog" aria-modal="true" aria-labelledby="suite-recovery-title" style="width:min(440px,100%);background:var(--color-white, #fff);border:1px solid var(--color-gray-200, #e2e8f0);border-radius:8px;padding:24px;box-shadow:var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1));font-family:var(--font-family-primary, sans-serif);">',
+                    '<h3 id="suite-recovery-title" style="margin:0 0 8px;font-size:20px;font-weight:700;color:var(--color-gray-900, #0f172a);letter-spacing:0;">发现未完成套题</h3>',
+                    '<p style="margin:0 0 6px;font-size:14px;line-height:1.6;color:var(--color-gray-700, #334155);">' + escapedTitle + '</p>',
+                    '<p style="margin:0 0 20px;font-size:13px;line-height:1.6;color:var(--color-gray-500, #64748b);">已完成 ' + completedCount + ' / ' + total + ' 篇。放弃后将删除这套未完成进度，但不会生成单篇记录。</p>',
+                    '<div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;">',
+                    '<button type="button" data-suite-recovery-choice="cancel" style="padding:10px 14px;border:1px solid var(--color-gray-300, #cbd5e1);border-radius:8px;background:var(--color-white, #fff);color:var(--color-gray-700, #334155);font-weight:600;cursor:pointer;">取消</button>',
+                    '<button type="button" data-suite-recovery-choice="discard" style="padding:10px 14px;border:1px solid #dc2626;border-radius:8px;background:var(--color-white, #fff);color:#b91c1c;font-weight:600;cursor:pointer;">放弃并新建</button>',
+                    '<button type="button" data-suite-recovery-choice="continue" style="padding:10px 14px;border:1px solid var(--color-brand-primary, #4f46e5);border-radius:8px;background:var(--color-brand-primary, #4f46e5);color:#fff;font-weight:600;cursor:pointer;">继续上次套题</button>',
+                    '</div>',
+                    '</div>'
+                ].join('');
+                host.addEventListener('click', function onRecoveryChoice(event) {
+                    var target = event.target && event.target.closest
+                        ? event.target.closest('button[data-suite-recovery-choice]')
+                        : null;
+                    if (!target) return;
+                    var choice = target.getAttribute('data-suite-recovery-choice');
+                    if (host.parentNode) host.parentNode.removeChild(host);
+                    resolve(choice === 'continue' || choice === 'discard' ? choice : null);
+                });
+                global.document.body.appendChild(host);
             });
         }
 
@@ -1577,34 +1689,59 @@
             ? global.AppEntry.ensureSessionSuiteReady()
             : ensurePracticeSuite();
 
-        return Promise.resolve(ensureSuiteReady).then(function afterReady() {
-            return promptSuiteModeSelection().then(function handleMode(selection) {
-                if (!selection || !selection.flowMode) {
-                    return undefined;
-                }
-                var appInstance = global.app;
-                if (appInstance && typeof appInstance.startSuitePractice === 'function') {
-                    try {
-                        return appInstance.startSuitePractice({
-                            flowMode: selection.flowMode,
-                            frequencyScope: selection.frequencyScope
-                        });
-                    } catch (error) {
-                        console.error('[AppActions] 套题模式启动失败', error);
-                        if (typeof global.showMessage === 'function') {
-                            global.showMessage('套题模式启动失败，请稍后重试', 'error');
-                        }
+        var launchPromise = Promise.resolve(ensureSuiteReady).then(function afterReady() {
+            var appInstance = global.app;
+            var launchNewSuite = function launchNewSuite() {
+                return promptSuiteModeSelection().then(function handleMode(selection) {
+                    if (!selection || !selection.flowMode) {
                         return undefined;
                     }
-                }
+                    if (appInstance && typeof appInstance.startSuitePractice === 'function') {
+                        try {
+                            return appInstance.startSuitePractice({
+                                flowMode: selection.flowMode,
+                                frequencyScope: selection.frequencyScope
+                            });
+                        } catch (error) {
+                            console.error('[AppActions] 套题模式启动失败', error);
+                            if (typeof global.showMessage === 'function') {
+                                global.showMessage('套题模式启动失败，请稍后重试', 'error');
+                            }
+                            return undefined;
+                        }
+                    }
 
-                var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
-                if (typeof global.showMessage === 'function') {
-                    global.showMessage(fallbackNotice, 'warning');
-                } else if (typeof alert === 'function') {
-                    alert(fallbackNotice);
-                }
-                return undefined;
+                    var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage(fallbackNotice, 'warning');
+                    } else if (typeof alert === 'function') {
+                        alert(fallbackNotice);
+                    }
+                    return undefined;
+                });
+            };
+
+            if (!appInstance || typeof appInstance.getSuiteRecoveryCandidate !== 'function') {
+                return launchNewSuite();
+            }
+            return Promise.resolve(appInstance.getSuiteRecoveryCandidate()).then(function handleRecoveryCandidate(candidate) {
+                if (!candidate) return launchNewSuite();
+                return promptSuiteRecoveryChoice(candidate).then(function handleRecoveryChoice(choice) {
+                    if (choice === 'continue') {
+                        return appInstance.startSuitePractice({
+                            recoveryAction: 'continue',
+                            recoverySessionId: candidate.id
+                        });
+                    }
+                    if (choice === 'discard') {
+                        if (typeof appInstance.abandonSuiteRecovery !== 'function') return undefined;
+                        return Promise.resolve(appInstance.abandonSuiteRecovery(candidate.id)).then(function afterAbandon(abandoned) {
+                            if (!abandoned) return undefined;
+                            return launchNewSuite();
+                        });
+                    }
+                    return undefined;
+                });
             });
         }).catch(function handleSuiteError(error) {
             console.error('[AppActions] 套题模块加载失败:', error);
@@ -1612,6 +1749,12 @@
                 global.showMessage('套题模块加载失败，请稍后重试', 'error');
             }
             return undefined;
+        });
+        suitePracticeLaunchPromise = launchPromise;
+        return launchPromise.finally(function clearSuitePracticeLaunchPromise() {
+            if (suitePracticeLaunchPromise === launchPromise) {
+                suitePracticeLaunchPromise = null;
+            }
         });
     }
 
@@ -1673,34 +1816,6 @@
         } else {
             launch();
         }
-    }
-
-    function getExamIndexSnapshot() {
-        if (typeof global.getExamIndexState === 'function') {
-            try {
-                var snapshot = global.getExamIndexState();
-                if (Array.isArray(snapshot) && snapshot.length) {
-                    return snapshot.slice();
-                }
-            } catch (_) { }
-        }
-        if (Array.isArray(global.examIndex) && global.examIndex.length) {
-            return global.examIndex.slice();
-        }
-        if (typeof global.getReadingExamIndex === 'function') {
-            var readingIndex = global.getReadingExamIndex();
-            if (Array.isArray(readingIndex) && readingIndex.length) {
-                return readingIndex.map(function (exam) {
-                    return Object.assign({}, exam, { type: exam.type || 'reading' });
-                });
-            }
-        }
-        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
-            return global.__READING_EXAM_INDEX__.map(function (exam) {
-                return Object.assign({}, exam, { type: exam.type || 'reading' });
-            });
-        }
-        return [];
     }
 
     function isReadingMemorizeCandidate(exam) {
@@ -1892,12 +2007,8 @@
         });
     }
 
-    function startRandomPractice(category, type, filterMode, path) {
-        var getExamIndexState = global.getExamIndexState || function () {
-            return Array.isArray(global.examIndex) ? global.examIndex : [];
-        };
-
-        var list = getExamIndexState();
+    async function startRandomPractice(category, type, filterMode, path) {
+        var list = await global.resolveActiveLibraryIndex();
         var normalizedType = (!type || type === 'all') ? null : type;
         var normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
 
@@ -1998,11 +2109,8 @@
         }, 1000);
     }
 
-    function pickRandomExam() {
-        var getExamIndexState = global.getExamIndexState || function () {
-            return Array.isArray(global.examIndex) ? global.examIndex : [];
-        };
-        var list = getExamIndexState().filter(function (e) {
+    function pickRandomExam(examIndex) {
+        var list = (Array.isArray(examIndex) ? examIndex : []).filter(function (e) {
             return e && e.hasHtml && e.type === 'reading';
         });
         if (!list.length) return null;
@@ -2024,6 +2132,9 @@
             }
             // resolve to absolute
             url = new URL(url, window.location.href).href;
+            var parsedUrl = new URL(url);
+            parsedUrl.searchParams.set('endless', '1');
+            url = parsedUrl.href;
         } catch (_) { }
         if (!url) return null;
 
@@ -2048,14 +2159,21 @@
         if (!endlessState || !endlessState.active) return;
 
         var countdown = ENDLESS_COUNTDOWN_SEC;
+        var postEndlessControl = function (type, data) {
+            if (!endlessState || !endlessState.currentExamId || !global.app
+                || typeof global.app._postExamMessage !== 'function') return false;
+            return global.app._postExamMessage(
+                endlessState.currentExamId,
+                sourceWindow,
+                type,
+                data || {}
+            );
+        };
 
         // 通知练习页开始倒计时
         try {
             if (sourceWindow && !sourceWindow.closed) {
-                sourceWindow.postMessage({
-                    type: 'ENDLESS_COUNTDOWN',
-                    data: { seconds: countdown }
-                }, '*');
+                postEndlessControl('ENDLESS_COUNTDOWN', { seconds: countdown });
             }
         } catch (_) { }
 
@@ -2076,10 +2194,7 @@
             // 持续更新倒计时
             try {
                 if (sourceWindow && !sourceWindow.closed) {
-                    sourceWindow.postMessage({
-                        type: 'ENDLESS_COUNTDOWN_TICK',
-                        data: { seconds: countdown }
-                    }, '*');
+                    postEndlessControl('ENDLESS_COUNTDOWN_TICK', { seconds: countdown });
                 }
             } catch (_) { }
 
@@ -2089,16 +2204,13 @@
 
                 try {
                     if (sourceWindow && !sourceWindow.closed) {
-                        sourceWindow.postMessage({
-                            type: 'ENDLESS_COUNTDOWN_END',
-                            data: {}
-                        }, '*');
+                        postEndlessControl('ENDLESS_COUNTDOWN_END', {});
                     }
                 } catch (_) { }
 
                 if (!endlessState || !endlessState.active) return;
 
-                var nextExam = pickRandomExam();
+                var nextExam = pickRandomExam(endlessState.examIndex);
                 if (!nextExam) {
                     if (typeof global.showMessage === 'function') {
                         global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u9898\u5e93\u4e3a\u7a7a', 'warning');
@@ -2112,21 +2224,32 @@
                 }
 
                 var reuseWin = (sourceWindow && !sourceWindow.closed) ? sourceWindow : null;
-                var newWin = openEndlessExam(nextExam, reuseWin);
-                if (newWin) {
+                var openNext = global.app && typeof global.app.openExam === 'function'
+                    ? global.app.openExam(nextExam.id, {
+                        target: 'tab',
+                        windowName: ENDLESS_WINDOW_NAME,
+                        reuseWindow: reuseWin,
+                        endlessMode: true
+                    })
+                    : openEndlessExam(nextExam, reuseWin);
+                Promise.resolve(openNext).then(function (newWin) {
+                    if (!newWin || !endlessState || !endlessState.active) {
+                        throw new Error('无法打开下一题');
+                    }
                     endlessState.currentWindow = newWin;
-                    if (global.app && typeof global.app.setupExamWindowManagement === 'function') {
-                        global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
+                    endlessState.currentExamId = nextExam.id;
+                }).catch(function (error) {
+                    if (global.console && console.error) console.error('[EndlessMode] 打开下一题失败:', error);
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u65e0\u6cd5\u6253\u5f00\u4e0b\u4e00\u9898', 'error');
                     }
-                    if (global.app && typeof global.app.startPracticeSession === 'function') {
-                        try { global.app.startPracticeSession(nextExam.id); } catch (_) { }
-                    }
-                }
+                    stopEndlessPractice({ silent: true });
+                });
             }
         }, 1000);
     }
 
-    function startEndlessPractice() {
+    async function startEndlessPractice() {
         // 如果已激活，不再走“父页按钮二次点击退出”的伪交互
         if (endlessState && endlessState.active) {
             if (typeof global.showMessage === 'function') {
@@ -2135,7 +2258,8 @@
             return;
         }
 
-        var firstExam = pickRandomExam();
+        var examIndex = await global.resolveActiveLibraryIndex();
+        var firstExam = pickRandomExam(examIndex);
         if (!firstExam) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u9898\u5e93\u4e3a\u7a7a\uff0c\u8bf7\u5148\u52a0\u8f7d\u9898\u5e93', 'error');
@@ -2146,8 +2270,10 @@
         // 标记状态
         endlessState = {
             active: true,
+            examIndex: examIndex,
             countdownTimer: null,
             currentWindow: null,
+            currentExamId: firstExam.id,
             messageHandler: null,
             windowMonitor: null
         };
@@ -2157,6 +2283,25 @@
             if (!endlessState || !endlessState.active) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;
+            var currentWindow = endlessState.currentWindow;
+            if (!currentWindow || event.source !== currentWindow) return;
+            var info = global.app && global.app.examWindows && endlessState.currentExamId
+                ? global.app.examWindows.get(endlessState.currentExamId)
+                : null;
+            if (info && info.expectedOrigin && info.expectedOrigin !== 'null') {
+                if (event.origin !== info.expectedOrigin) return;
+            } else if (info && info.allowOpaqueOrigin) {
+                if (event.origin !== 'null') return;
+            } else {
+                return;
+            }
+            var messageData = msg.data || {};
+            var permitsPreInit = msg.type === 'REQUEST_INIT';
+            if (!permitsPreInit && (
+                msg.source !== 'practice_page'
+                || !info.windowSessionToken
+                || messageData.windowSessionToken !== info.windowSessionToken
+            )) return;
             if (msg.type === 'ENDLESS_USER_EXIT') {
                 stopEndlessPractice();
                 return;
@@ -2190,19 +2335,27 @@
         // 优先用 app.openExam 保证注入
         if (global.app && typeof global.app.openExam === 'function') {
             try {
-                Promise.resolve(global.app.openExam(firstExam.id, {
+                win = await global.app.openExam(firstExam.id, {
                     target: 'tab',
-                    windowName: ENDLESS_WINDOW_NAME
-                })).then(function (w) {
-                    if (w && endlessState) endlessState.currentWindow = w;
-                    startEndlessWindowMonitor();
-                }).catch(function () { });
-            } catch (_) { }
+                    windowName: ENDLESS_WINDOW_NAME,
+                    endlessMode: true
+                });
+            } catch (error) {
+                if (global.console && console.error) console.error('[EndlessMode] 打开首题失败:', error);
+            }
         } else {
             win = openEndlessExam(firstExam, null);
-            if (win && endlessState) endlessState.currentWindow = win;
-            startEndlessWindowMonitor();
         }
+        if (!win || !endlessState) {
+            stopEndlessPractice({ silent: true });
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u65e0\u6cd5\u6253\u5f00\u7ec3\u4e60\u7a97\u53e3', 'error');
+            }
+            return;
+        }
+        endlessState.currentWindow = win;
+        endlessState.currentExamId = firstExam.id;
+        startEndlessWindowMonitor();
     }
 
     global.AppActions = Object.assign({}, global.AppActions, {

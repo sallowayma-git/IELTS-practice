@@ -74,7 +74,7 @@
     },
     "sourceRefs": {
       "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/65. P3 - Does class size matter_ 课堂规模【次】/65. P3 - Does class size matter_ 课堂规模【次】.html",
-      "shuiPdf": "ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf",
+      "pdf": "ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf",
       "ieltsHtml": null
     },
     "audit": {

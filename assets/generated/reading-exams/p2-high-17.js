@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/113. P2 - Herbal Medicines 新西兰草药【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/113. P2 - Herbal Medicines 新西兰草药【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/113. P2 - Herbal Medicines 新西兰草药【高】.pdf",
     "ieltsHtml": "IELTS/P2/Herbal Medicines.html"
   },
   "audit": {

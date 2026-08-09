@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/9. P1 - Listening to the Ocean 海洋探测【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/9. P1 - Listening to the Ocean 海洋探测【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/9. P1 - Listening to the Ocean 海洋探测【次】.pdf",
     "ieltsHtml": "IELTS/P1/Listening to the Ocean.html"
   },
   "audit": {

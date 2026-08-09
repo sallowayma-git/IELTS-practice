@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/19. P1 - The Impact of the Potato 土豆的影响【高】/19. P1 - The Impact of the Potato 土豆的影响【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/19. P1 - The Impact of the Potato 土豆的影响【高】/19. P1 - The Impact of the Potato 土豆的影响【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/19. P1 - The Impact of the Potato 土豆的影响【高】/19. P1 - The Impact of the Potato 土豆的影响【高】.pdf",
     "ieltsHtml": "IELTS/P1/The Impact of the Potato.html"
   },
   "audit": {

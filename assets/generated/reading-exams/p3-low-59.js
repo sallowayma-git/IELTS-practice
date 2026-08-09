@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/151. P3 - Inside the mind of a fan 观赛心境.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/151. P3 - Inside the mind of a fan 观赛心境.pdf",
+    "pdf": "ReadingPractice/PDF/151. P3 - Inside the mind of a fan 观赛心境.pdf",
     "ieltsHtml": "IELTS/P3/Inside the mind of a fan.html"
   },
   "audit": {

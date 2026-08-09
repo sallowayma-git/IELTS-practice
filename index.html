@@ -718,13 +718,13 @@
                         </div>
                         <div class="hero-panel__actions">
                             <button
-                                class="btn btn-secondary hero-btn hero-btn--ghost"
+                                class="btn btn-secondary"
                                 data-index-action="export-practice-markdown"
                             >
                                 📄 导出Markdown
                             </button>
                             <button
-                                class="btn btn-info hero-btn"
+                                class="btn btn-info"
                                 data-index-action="toggle-bulk-delete"
                                 id="bulk-delete-btn"
                             >
@@ -750,7 +750,7 @@
                                 批量删除
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 data-index-action="clear-practice-data"
                             >
                                 🗑️ 清除记录
@@ -784,32 +784,29 @@
                         <p class="hero-panel__muted">系统工具和设置选项</p>
                         <div class="hero-settings-actions">
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                type="button"
+                                class="btn btn-warning"
                                 id="clear-cache-btn"
                             >
-                                🗑️ 清除缓存
+                                🗑️ 清理数据
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="load-library-btn"
-                            >
-                                📂 加载题库
-                            </button>
-                            <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
+                                class="btn btn-warning"
                                 id="theme-switcher-btn-entry"
                             >
                                 🎨 主题切换
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="show-onboarding-btn"
+                                class="btn btn-warning"
+                                id="practice-settings-entry-btn"
+                                type="button"
                             >
-                                🎯 显示引导
+                                ⚙️ 练习设置
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="library-config-btn"
+                                class="btn btn-warning"
+                                id="library-manager-btn"
+                                type="button"
                             >
                                 <svg
                                     viewBox="0 0 24 24"
@@ -848,13 +845,13 @@
                                         y2="16"
                                     ></line>
                                 </svg>
-                                题库配置切换
+                                题库管理
                             </button>
                             <button
-                                class="btn btn-warning hero-btn hero-btn--warn"
-                                id="force-refresh-btn"
+                                class="btn btn-warning"
+                                id="show-onboarding-btn"
                             >
-                                🔄 强制刷新题库
+                                🎯 显示引导
                             </button>
                         </div>
                     </div>
@@ -862,29 +859,36 @@
                     <div class="hero-panel hero-section data-management-panel">
                         <h3>💾 数据管理</h3>
                         <p class="hero-panel__muted">
-                            数据备份、导入导出和完整性检查
+                            本地磁盘备份（推荐）、应用内快照、导入与导出。清理浏览器站点数据不会删除已写入磁盘的备份文件。
                         </p>
                         <div class="hero-settings-actions">
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
+                                id="external-backup-entry-btn"
+                                type="button"
+                            >
+                                📁 本地磁盘备份
+                            </button>
+                            <button
+                                class="btn data-mgmt-btn"
                                 id="create-backup-btn"
                             >
-                                💾 创建备份
+                                💾 创建应用内备份
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="backup-list-btn"
                             >
-                                📋 备份列表
+                                📋 应用内备份列表
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="export-data-btn"
                             >
-                                📤 导出数据
+                                📤 导出到下载
                             </button>
                             <button
-                                class="btn hero-btn data-mgmt-btn"
+                                class="btn data-mgmt-btn"
                                 id="import-data-btn"
                             >
                                 📥 导入数据
@@ -899,16 +903,16 @@
                                 题库状态: 已加载完整索引
                             </div>
                             <div>
-                                题目总数: <span id="total-exams">192</span>
+                                题目总数: <span id="total-exams">234</span>
                             </div>
                             <div>
-                                HTML题目: <span id="html-exams">191</span>
+                                HTML题目: <span id="html-exams">232</span>
                             </div>
-                            <div>PDF题目: <span id="pdf-exams">190</span></div>
+                            <div>PDF题目: <span id="pdf-exams">207</span></div>
                             <div>
                                 最后更新:
                                 <span id="last-update"
-                                    >2025/05/06 21:56:46</span
+                                    >2026/08/07 21:12:40</span
                                 >
                             </div>
                         </div>
@@ -945,14 +949,6 @@
                     探索额外的学习辅助功能，助你高效备考。
                 </p>
                 <div class="more-tools-grid">
-                    <!-- <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
-                    <div class="tool-card-icon">✍️</div>
-                    <div class="tool-card-content">
-                        <h3>写作评分</h3>
-                        <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
-                    </div>
-                    <div class="tool-card-arrow">进入</div>
-                </button> -->
                     <button
                         class="tool-card"
                         type="button"
@@ -1171,10 +1167,21 @@
                             aria-label="向左滚动主题列表"
                             aria-controls="theme-options-scroller"
                         >
-                            <span
+                            <svg
                                 class="theme-scroll-btn__glyph"
+                                viewBox="0 0 24 24"
                                 aria-hidden="true"
-                            ></span>
+                                focusable="false"
+                            >
+                                <path
+                                    d="M15 6 L9 12 L15 18"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
                         </button>
                         <div
                             class="theme-options-glass"
@@ -1278,18 +1285,39 @@
                             <div class="theme-card">
                                 <div class="theme-card-bg theme-bg-ascii"></div>
                                 <div class="theme-preview-ascii" aria-hidden="true">
-                                    <div class="tulip-silhouette">
-                                        <div class="tulip-petal-left"></div>
-                                        <div class="tulip-petal-center"></div>
-                                        <div class="tulip-petal-right"></div>
-                                        <div class="tulip-stem"></div>
-                                    </div>
+                                    <svg class="ink-flower" viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                                        <defs>
+                                            <linearGradient id="inkGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stop-color="#fafafa" stop-opacity="0.95" />
+                                                <stop offset="55%" stop-color="#d4d4d8" stop-opacity="0.75" />
+                                                <stop offset="100%" stop-color="#52525b" stop-opacity="0.55" />
+                                            </linearGradient>
+                                            <linearGradient id="stemGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stop-color="#a1a1aa" stop-opacity="0.9" />
+                                                <stop offset="100%" stop-color="#3f3f46" stop-opacity="0.7" />
+                                            </linearGradient>
+                                            <filter id="inkGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                                <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#e4e4e7" flood-opacity="0.55" />
+                                            </filter>
+                                            <filter id="inkBleed" x="-60%" y="-60%" width="220%" height="220%">
+                                                <feGaussianBlur stdDeviation="4" />
+                                            </filter>
+                                        </defs>
+                                        <path filter="url(#inkBleed)" fill="url(#inkGrad)" opacity="0.22" d="M 40 36 C 33 54, 36 74, 47 81 C 54 86, 66 86, 73 81 C 84 74, 87 54, 80 36 C 72 30, 64 34, 60 38 C 56 34, 48 30, 40 36 Z" />
+                                        <path d="M 60 80 C 60 100, 58 118, 60 138" fill="none" stroke="url(#stemGrad)" stroke-width="2.4" stroke-linecap="round" />
+                                        <path d="M 60 112 C 44 108, 34 120, 38 134 C 52 130, 58 122, 60 114 Z" fill="url(#stemGrad)" opacity="0.7" stroke="#a1a1aa" stroke-width="1" stroke-opacity="0.5" />
+                                        <path d="M 60 122 C 76 118, 86 130, 82 144 C 68 140, 62 132, 60 124 Z" fill="url(#stemGrad)" opacity="0.7" stroke="#a1a1aa" stroke-width="1" stroke-opacity="0.5" />
+                                        <path filter="url(#inkGlow)" fill="url(#inkGrad)" stroke="#f4f4f5" stroke-width="1.5" stroke-opacity="0.85" d="M 40 36 C 33 54, 36 74, 47 81 C 54 86, 66 86, 73 81 C 84 74, 87 54, 80 36 C 72 30, 64 34, 60 38 C 56 34, 48 30, 40 36 Z" />
+                                        <path d="M 60 38 C 56 52, 54 68, 56 80" fill="none" stroke="#f4f4f5" stroke-width="1.2" stroke-opacity="0.6" stroke-linecap="round" />
+                                        <path d="M 60 38 C 64 52, 66 68, 64 80" fill="none" stroke="#f4f4f5" stroke-width="1.2" stroke-opacity="0.6" stroke-linecap="round" />
+                                        <path d="M 60 38 C 60 55, 60 68, 60 80" fill="none" stroke="#f4f4f5" stroke-width="1.2" stroke-opacity="0.45" stroke-linecap="round" />
+                                    </svg>
                                 </div>
                                 <div class="theme-card-glass-layer">
                                     <div class="theme-card-header">
                                         <h4 class="theme-card-title">墨染字花</h4>
                                         <div class="theme-card-subtitle">
-                                            <span>🌷 ASCII Tulip</span>
+                                            <span>🌷 Ink Bloom</span>
                                         </div>
                                     </div>
                                     <div class="theme-card-footer">
@@ -1306,10 +1334,21 @@
                             aria-label="向右滚动主题列表"
                             aria-controls="theme-options-scroller"
                         >
-                            <span
+                            <svg
                                 class="theme-scroll-btn__glyph"
+                                viewBox="0 0 24 24"
                                 aria-hidden="true"
-                            ></span>
+                                focusable="false"
+                            >
+                                <path
+                                    d="M15 6 L9 12 L15 18"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2.2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
                         </button>
                     </div>
                 </div>

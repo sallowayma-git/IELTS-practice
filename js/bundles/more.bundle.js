@@ -24,6 +24,10 @@
 
     const DEFAULT_EXPORT_VERSION = '0.6.2-fix';
 
+    function isPlainObject(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function normalizeFrequency(value) {
         if (value == null || value === '') {
             return null;
@@ -96,26 +100,21 @@
     }
 
     function cloneProgressEntry(raw) {
-        if (!raw || typeof raw !== 'object') {
+        if (!isPlainObject(raw)) {
             return null;
         }
-        if (!raw.word || !raw.meaning) {
+        const word = typeof raw.word === 'string' ? raw.word.trim() : '';
+        const meaning = typeof raw.meaning === 'string' ? raw.meaning.trim() : '';
+        if (!word || !meaning) {
             return null;
         }
-        const clone = {};
-        Object.keys(raw).forEach((key) => {
-            clone[key] = raw[key];
-        });
-        return clone;
+        return { ...raw, word, meaning };
     }
 
     function buildImportResult(type, entries, meta = {}) {
         const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
         const normalizedMeta = { ...meta };
         normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
-        if (Array.isArray(normalizedMeta.reviewQueue)) {
-            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
-        }
         return {
             type,
             entries: safeEntries,
@@ -239,19 +238,39 @@
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
             const metaCategory = extractCategory(payload.meta, null);
-            const category = extractCategory(payload, metaCategory || 'external');
-            const looksProgress = typeof payload.version === 'string'
-                || Array.isArray(payload.reviewQueue)
-                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+            const declaredType = typeof payload.type === 'string' ? payload.type.trim().toLowerCase() : '';
+            const explicitProgress = declaredType === 'progress' || declaredType === 'progress-backup';
+            const hasListId = typeof payload.listId === 'string' && payload.listId.trim();
+            const hasV2ProgressEnvelope = typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && hasListId;
+            const legacyProgressEnvelope = !declaredType
+                && typeof payload.version === 'string'
+                && isPlainObject(payload.config)
+                && Array.isArray(payload.reviewQueue)
+                && !hasListId;
+            if (legacyProgressEnvelope) {
+                throw new Error('不支持 v1 进度备份，请使用 v2 格式重新导出');
+            }
+            if (explicitProgress && !hasV2ProgressEnvelope) {
+                throw new Error('进度备份缺少 v2 词表或配置数据');
+            }
+            const looksProgress = (explicitProgress || !declaredType) && hasV2ProgressEnvelope;
+            const category = extractCategory(payload, metaCategory || (looksProgress ? 'user' : 'external'));
             if (looksProgress) {
-                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                const entries = payload.words.map(cloneProgressEntry);
+                if (entries.some((entry) => !entry)) {
+                    throw new Error('进度备份包含无效词汇数据');
+                }
                 return buildImportResult('progress', entries, {
                     format: 'json',
                     originalLength: payload.words.length,
+                    listId: typeof payload.listId === 'string' && payload.listId.trim()
+                        ? payload.listId.trim()
+                        : undefined,
                     category: category || 'user',
                     version: typeof payload.version === 'string' ? payload.version : undefined,
-                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
-                    reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
+                    config: isPlainObject(payload.config) ? { ...payload.config } : undefined,
                     name: typeof payload.name === 'string' ? payload.name : undefined,
                     source: typeof payload.source === 'string' ? payload.source : undefined,
                     exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
@@ -321,18 +340,23 @@
         return normalizedResult;
     }
 
-    async function exportProgress() {
-        const store = window.VocabStore;
-        if (!store || typeof store.init !== 'function') {
-            throw new Error('VocabStore 未加载');
+    async function exportProgress(words) {
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
+        if (!Array.isArray(words)) throw new Error('当前词表尚未加载');
+        await window.AppData.ready;
+        const config = await window.AppData.vocab.getConfig();
+        const listId = config.activeListId || 'default';
+        const entries = words.map(cloneProgressEntry);
+        if (entries.some((entry) => !entry)) {
+            throw new Error('当前词表包含无效词汇数据');
         }
-        await store.init();
         const payload = {
+            type: 'progress',
             version: DEFAULT_EXPORT_VERSION,
             exportedAt: new Date().toISOString(),
-            config: store.getConfig(),
-            words: store.getWords(),
-            reviewQueue: store.getReviewQueue()
+            listId,
+            config,
+            words: entries
         };
         return new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     }
@@ -723,51 +747,38 @@
             id: 'default',
             name: 'IELTS 核心词表',
             icon: '📚',
-            source: 'builtin',
-            storageKey: 'vocab_words'
+            source: 'builtin'
         },
         'spelling-errors-p1': {
             id: 'spelling-errors-p1',
             name: 'P1 拼写错误',
             icon: '📝',
-            source: 'p1',
-            storageKey: 'vocab_list_p1_errors'
+            source: 'p1'
         },
         'spelling-errors-p4': {
             id: 'spelling-errors-p4',
             name: 'P4 拼写错误',
             icon: '📝',
-            source: 'p4',
-            storageKey: 'vocab_list_p4_errors'
+            source: 'p4'
         },
         'spelling-errors-master': {
             id: 'spelling-errors-master',
             name: '综合错误词表',
             icon: '📚',
-            source: 'all',
-            storageKey: 'vocab_list_master_errors'
+            source: 'all'
         },
         'custom': {
             id: 'custom',
             name: '自定义词表',
             icon: '✏️',
-            source: 'user',
-            storageKey: 'vocab_list_custom'
+            source: 'user'
         },
         'reading-highlights': {
             id: 'reading-highlights',
             name: '阅读高亮生词',
             icon: '📖',
-            source: 'reading-highlight',
-            storageKey: 'vocab_list_reading_highlights'
+            source: 'reading-highlight'
         }
-    });
-
-    const STORAGE_KEYS = Object.freeze({
-        WORDS: 'vocab_words',
-        CONFIG: 'vocab_user_config',
-        REVIEW_QUEUE: 'vocab_review_queue',
-        ACTIVE_LIST: 'vocab_active_list_id'
     });
 
     const DEFAULT_CONFIG = Object.freeze({
@@ -778,28 +789,36 @@
         notify: true
     });
 
-    const DEFAULT_REVIEW_QUEUE = Object.freeze([]);
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
+    const CONFIG_LIMITS = Object.freeze({
+        dailyNew: { min: 0, max: 200 },
+        reviewLimit: { min: 1, max: 300 },
+        masteryCount: { min: 1, max: 10 }
+    });
+    const VALID_THEMES = new Set(['auto', 'light', 'dark']);
 
     const state = {
-        repositories: null,
-        metaRepo: null,
-        storageManager: null,
         words: [],
         wordIndex: new Map(),
         config: { ...DEFAULT_CONFIG },
-        reviewQueue: DEFAULT_REVIEW_QUEUE.slice(),
         ready: false,
         readyPromise: null,
         readyResolvers: [],
         loadingPromise: null,
-        registryUnsubscribe: null,
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
         listCache: new Map()
     };
+
+    function cloneValue(value) {
+        if (value === undefined) return undefined;
+        if (typeof structuredClone === 'function') {
+            try { return structuredClone(value); } catch (_) { /* fall through */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
 
     function emitReady(value) {
         if (state.ready) {
@@ -999,69 +1018,50 @@
         });
     }
 
-    async function persist(key, value) {
-        try {
-            if (state.metaRepo && typeof state.metaRepo.set === 'function') {
-                await state.metaRepo.set(key, value, { clone: true });
-                return true;
-            }
-            if (state.storageManager && typeof state.storageManager.set === 'function') {
-                await state.storageManager.set(key, value);
-                return true;
-            }
-            if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(key, JSON.stringify(value));
-                return true;
-            }
-        } catch (error) {
-            console.error('[VocabStore] persist error:', error);
-        }
-        return false;
+    async function requireVocabData() {
+        if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab is unavailable');
+        await window.AppData.ready;
+        return window.AppData.vocab;
     }
 
-    async function read(key, defaultValue) {
-        if (state.metaRepo && typeof state.metaRepo.get === 'function') {
-            try {
-                const value = await state.metaRepo.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] metaRepo读取失败:', error);
-            }
-        }
-        if (state.storageManager && typeof state.storageManager.get === 'function') {
-            try {
-                const value = await state.storageManager.get(key, defaultValue);
-                if (value !== undefined) {
-                    return value;
-                }
-            } catch (error) {
-                console.warn('[VocabStore] storageManager读取失败:', error);
-            }
-        }
-        if (typeof localStorage !== 'undefined') {
-            try {
-                const raw = localStorage.getItem(key);
-                if (!raw) {
-                    return defaultValue;
-                }
-                return JSON.parse(raw);
-            } catch (error) {
-                console.warn('[VocabStore] localStorage解析失败:', error);
-            }
-        }
-        return defaultValue;
+    async function readListData(listId) {
+        const vocab = await requireVocabData();
+        if (listId === DEFAULT_LIST_ID) return vocab.listWords();
+        const collections = await vocab.listCollections();
+        return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
+    }
+
+    async function saveListData(listId, value) {
+        const vocab = await requireVocabData();
+        const words = value && typeof value === 'object' && Array.isArray(value.words) ? value.words : value;
+        await vocab.replaceListWords({ listId, words: Array.isArray(words) ? words : [] });
+        return true;
+    }
+
+    async function saveConfigData(configPatch = state.config) {
+        const vocab = await requireVocabData();
+        await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
+        return true;
     }
 
     function mergeConfig(config) {
         const base = { ...DEFAULT_CONFIG };
-        if (config && typeof config === 'object') {
-            Object.keys(DEFAULT_CONFIG).forEach((key) => {
-                if (typeof config[key] !== 'undefined') {
-                    base[key] = config[key];
-                }
-            });
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            return base;
+        }
+        Object.keys(CONFIG_LIMITS).forEach((key) => {
+            const value = config[key];
+            const limits = CONFIG_LIMITS[key];
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return;
+            }
+            base[key] = Math.min(limits.max, Math.max(limits.min, Math.floor(value)));
+        });
+        if (typeof config.theme === 'string' && VALID_THEMES.has(config.theme)) {
+            base.theme = config.theme;
+        }
+        if (typeof config.notify === 'boolean') {
+            base.notify = config.notify;
         }
         return base;
     }
@@ -1069,15 +1069,6 @@
     function setWordsInternal(words) {
         state.words = words;
         rebuildIndex();
-    }
-
-    function getStorageKeyForListId(listId) {
-        const targetId = typeof listId === 'string' && VOCAB_LISTS[listId] ? listId : DEFAULT_LIST_ID;
-        return VOCAB_LISTS[targetId].storageKey;
-    }
-
-    function getActiveStorageKey() {
-        return getStorageKeyForListId(state.activeListId);
     }
 
     function isSpellingErrorList(listId) {
@@ -1193,29 +1184,26 @@
             return state.loadingPromise;
         }
         state.loadingPromise = (async () => {
-            const [storedConfig, storedQueue, storedActiveList] = await Promise.all([
-                read(STORAGE_KEYS.CONFIG, { ...DEFAULT_CONFIG }),
-                read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice()),
-                read(STORAGE_KEYS.ACTIVE_LIST, DEFAULT_LIST_ID)
-            ]);
+            const vocab = await requireVocabData();
+            const storedConfig = await vocab.getConfig();
+            const storedActiveList = storedConfig && storedConfig.activeListId;
 
             state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
                 ? storedActiveList
                 : DEFAULT_LIST_ID;
 
-            const activeStorageKey = getStorageKeyForListId(state.activeListId);
-            const storedWords = await read(activeStorageKey, []);
+            const storedWords = await readListData(state.activeListId);
             const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
-                state.lastLoadSource = state.metaRepo ? 'meta' : (state.storageManager ? 'storage' : 'localStorage');
+                state.lastLoadSource = 'appData-v2';
             }
 
             state.config = mergeConfig(storedConfig);
-            state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
+                throw error;
             })
             .finally(() => {
                 state.loadingPromise = null;
@@ -1225,8 +1213,7 @@
 
     async function ensureDefaultLexicon() {
         try {
-            const defaultStorageKey = getStorageKeyForListId(DEFAULT_LIST_ID);
-            const storedDefault = await read(defaultStorageKey, []);
+            const storedDefault = await readListData(DEFAULT_LIST_ID);
             const normalizedStored = normalizeStoredListWords(storedDefault, DEFAULT_LIST_ID);
             const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
             if (normalizedStored.length && !pollutedBySpellingList) {
@@ -1244,7 +1231,7 @@
                 console.warn('[VocabStore] 默认词库为空');
                 return [];
             }
-            await persist(defaultStorageKey, normalized);
+            await saveListData(DEFAULT_LIST_ID, normalized);
             if (state.activeListId === DEFAULT_LIST_ID) {
                 setWordsInternal(normalized);
                 state.lastLoadSource = 'default';
@@ -1266,8 +1253,8 @@
             });
             return normalized;
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
-            return [];
+            console.error('[VocabStore] 默认词库加载失败:', error);
+            throw error;
         }
     }
 
@@ -1277,87 +1264,39 @@
         emitReady(true);
     }
 
-    function connectToProviders() {
-        if (state.registryUnsubscribe || state.repositories || state.storageManager) {
-            return;
-        }
-        const registry = window.StorageProviderRegistry;
-        if (registry && typeof registry.onProvidersReady === 'function') {
-            state.registryUnsubscribe = registry.onProvidersReady((payload) => {
-                if (payload && payload.repositories) {
-                    attachRepositories(payload.repositories);
-                }
-                if (payload && payload.storageManager) {
-                    state.storageManager = payload.storageManager;
-                }
-            });
-            const current = typeof registry.getCurrentProviders === 'function' ? registry.getCurrentProviders() : null;
-            if (current) {
-                if (current.repositories) {
-                    attachRepositories(current.repositories);
-                }
-                if (current.storageManager) {
-                    state.storageManager = current.storageManager;
-                }
-            }
-            return;
-        }
-        if (window.dataRepositories) {
-            attachRepositories(window.dataRepositories);
-        }
-        if (window.storage) {
-            state.storageManager = window.storage;
-        }
-    }
-
-    async function attachRepositories(repositories) {
-        if (!repositories || state.repositories === repositories) {
-            return;
-        }
-        state.repositories = repositories;
-        state.metaRepo = repositories.meta || null;
-        await loadState();
-        if (!state.words.length) {
-            await ensureDefaultLexicon();
-        }
-        await persist(getActiveStorageKey(), state.words);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        emitReady(true);
-    }
-
     function getWords() {
-        return state.words.map((word) => ({ ...word }));
+        return cloneValue(state.words);
     }
 
-    async function setWords(words) {
+    async function mergeWords(words) {
         const normalized = Array.isArray(words)
             ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
-        setWordsInternal(normalized);
-        await persist(getActiveStorageKey(), normalized);
+        const vocab = await requireVocabData();
+        const receipt = await vocab.mergeListWords({ listId: state.activeListId, words: normalized });
+        const committedWords = Array.isArray(receipt.words) ? receipt.words : [];
+        setWordsInternal(committedWords.map((word) => normalizeWordRecord(word)).filter(Boolean));
         state.listCache.delete(state.activeListId);
-        return getWords();
+        return {
+            words: getWords(),
+            addedCount: Number(receipt.addedCount) || 0,
+            updatedCount: Number(receipt.updatedCount) || 0
+        };
     }
 
     async function updateWord(id, patch = {}) {
         if (!id || !state.wordIndex.has(id)) {
             return null;
         }
-        const original = state.wordIndex.get(id);
-        const updated = normalizeWordRecord({
-            ...original,
-            ...patch,
-            id,
-            updatedAt: getNow()
-        });
+        const vocab = await requireVocabData();
+        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch });
+        const updated = normalizeWordRecord(receipt.word);
         const index = state.words.findIndex((word) => word.id === id);
         if (index >= 0 && updated) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            await persist(getActiveStorageKey(), state.words);
             state.listCache.delete(state.activeListId);
-            return { ...updated };
+            return cloneValue(updated);
         }
         return null;
     }
@@ -1367,19 +1306,31 @@
     }
 
     async function setConfig(config) {
-        state.config = mergeConfig(config);
-        await persist(STORAGE_KEYS.CONFIG, state.config);
+        const next = mergeConfig(config);
+        await saveConfigData(next);
+        state.config = next;
         return getConfig();
     }
 
-    function getReviewQueue() {
-        return state.reviewQueue.slice();
-    }
-
-    async function setReviewQueue(queue) {
-        state.reviewQueue = Array.isArray(queue) ? queue.map((id) => String(id)) : [];
-        await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
-        return getReviewQueue();
+    async function replaceProgress(words, config, listId) {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) {
+            throw new Error('进度备份缺少有效配置');
+        }
+        const requestedListId = typeof listId === 'string' ? listId.trim() : '';
+        if (!requestedListId || !VOCAB_LISTS[requestedListId]) {
+            throw new Error('进度备份包含未知词表');
+        }
+        const normalized = Array.isArray(words)
+            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            : [];
+        const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
+        const vocab = await requireVocabData();
+        await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
+        state.config = nextConfig;
+        state.activeListId = requestedListId;
+        setWordsInternal(normalized);
+        state.listCache.delete(requestedListId);
+        return { words: getWords(), config: getConfig() };
     }
 
     function getDueWords(referenceTime = new Date()) {
@@ -1518,8 +1469,7 @@
         }
 
         try {
-            const storageKey = listConfig.storageKey;
-            let storedData = await read(storageKey, null);
+            let storedData = await readListData(listId);
             if (listId === DEFAULT_LIST_ID && (!storedData || (Array.isArray(storedData) && storedData.length === 0))) {
                 const ensured = await ensureDefaultLexicon();
                 storedData = ensured;
@@ -1554,7 +1504,7 @@
             return listData;
         } catch (error) {
             console.error('[VocabStore] loadList 失败:', error);
-            return null;
+            throw error;
         }
     }
 
@@ -1579,25 +1529,11 @@
         }
 
         try {
-            // 保存当前词表到存储（如果有修改）
-            if (state.activeListId && state.words.length > 0) {
-                const currentConfig = VOCAB_LISTS[state.activeListId];
-                if (currentConfig) {
-                    await persist(currentConfig.storageKey, state.words);
-                }
-            }
-
-            // 切换到新词表
+            const vocab = await requireVocabData();
+            await vocab.activateList(listId);
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
             state.listCache.delete(listId);
-
-            // 保存激活的词表 ID
-            await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
-
-            // 清空复习队列（新词表需要重新生成队列）
-            state.reviewQueue = [];
-            await persist(STORAGE_KEYS.REVIEW_QUEUE, []);
 
             return true;
         } catch (error) {
@@ -1625,8 +1561,7 @@
 
         // 从存储读取
         try {
-            const listConfig = VOCAB_LISTS[listId];
-            const storedData = await read(listConfig.storageKey, null);
+            const storedData = await readListData(listId);
 
             // 检查是否为拼写错误词表格式
             if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
@@ -1638,7 +1573,7 @@
             return 0;
         } catch (error) {
             console.error('[VocabStore] getListWordCount 失败:', error);
-            return 0;
+            throw error;
         }
     }
 
@@ -1706,8 +1641,7 @@
         }
         await init();
         const listId = 'reading-highlights';
-        const listConfig = VOCAB_LISTS[listId];
-        const storedData = await read(listConfig.storageKey, []);
+        const storedData = await readListData(listId);
         const words = normalizeStoredListWords(storedData, listId);
         const key = normalized.word.toLowerCase();
         const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
@@ -1723,7 +1657,7 @@
         } else {
             words.push(normalized);
         }
-        await persist(listConfig.storageKey, words.filter(Boolean));
+        await saveListData(listId, words.filter(Boolean));
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
             setWordsInternal(words.filter(Boolean));
@@ -1733,7 +1667,6 @@
 
     async function init() {
         ensureReadyPromise();
-        connectToProviders();
         if (!state.ready) {
             await bootstrap();
         }
@@ -1743,12 +1676,11 @@
     const api = {
         init,
         getWords,
-        setWords,
+        mergeWords,
         updateWord,
         getConfig,
         setConfig,
-        getReviewQueue,
-        setReviewQueue,
+        replaceProgress,
         getDueWords,
         getNewWords,
         loadList,
@@ -2389,6 +2321,9 @@
         reviewLimit: { min: 1, max: 300 },
         masteryCount: { min: 1, max: 10 }
     });
+    const LIST_PAGE_SIZE = 200;
+    const LIST_SEARCH_DEBOUNCE_MS = 180;
+    const MODAL_FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
     const state = {
         container: null,
@@ -2403,9 +2338,18 @@
         menuOpen: false,
         ui: {
             sidePanelManual: null,
-            lastFocus: null,
             importing: false,
             exporting: false,
+            listBrowserQuery: '',
+            listBrowserLearnedOnly: false,
+            listBrowserPage: 1,
+            listSearchTimer: null,
+            modalEpoch: 0,
+            modalOwner: null,
+            settingsRestoreFocus: null,
+            listRestoreFocus: null,
+            settingsSaveToken: 0,
+            settingsSaveTail: Promise.resolve(),
             listSwitcher: null,
             listSwitcherListenerAttached: false
         },
@@ -2462,6 +2406,52 @@
 
     function isSettingsModalOpen() {
         return state.elements.settingsModal?.dataset.open === 'true';
+    }
+
+    function isListModalOpen() {
+        return state.elements.listModal?.dataset.open === 'true';
+    }
+
+    function isListModalPending() {
+        return state.ui.modalOwner === 'list-pending';
+    }
+
+    function focusElement(target) {
+        const fallback = state.elements.menuButton;
+        const focusTarget = target && typeof target.focus === 'function' ? target : fallback;
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            focusTarget.focus();
+        }
+    }
+
+    function trapModalFocus(event, dialog) {
+        if (!dialog) {
+            return;
+        }
+        const focusable = Array.from(dialog.querySelectorAll(MODAL_FOCUSABLE_SELECTOR))
+            .filter((element) => !element.hidden && !element.disabled);
+        if (!focusable.length) {
+            event.preventDefault();
+            focusElement(dialog);
+            return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (event.shiftKey && (active === first || !dialog.contains(active))) {
+            event.preventDefault();
+            focusElement(last);
+        } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+            event.preventDefault();
+            focusElement(first);
+        }
+    }
+
+    function clearListSearchTimer() {
+        if (state.ui.listSearchTimer) {
+            clearTimeout(state.ui.listSearchTimer);
+            state.ui.listSearchTimer = null;
+        }
     }
 
     function clampNumber(value, min, max) {
@@ -2571,6 +2561,7 @@
                             <div class="vocab-menu" data-vocab-role="menu" hidden>
                                 <div class="vocab-menu__panel" data-vocab-role="menu-panel-main">
                                     <button type="button" data-action="menu-lists">切换词表</button>
+                                    <button type="button" data-action="menu-view-list">查看词表</button>
                                     <button type="button" data-action="menu-import">导入词表</button>
                                     <button type="button" data-action="menu-export">导出进度</button>
                                     <button type="button" data-action="menu-settings">学习设置</button>
@@ -2628,9 +2619,31 @@
             </main>
             <div class="visually-hidden" aria-live="polite" data-vocab-role="live-region"></div>
             <input type="file" accept=".json,.csv" data-vocab-role="import-input" hidden>
+            <div class="vocab-list-modal" data-vocab-role="list-modal" hidden>
+                <div class="vocab-list-modal__backdrop" data-action="close-list-modal" tabindex="-1"></div>
+                <div class="vocab-list-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vocab-list-title" data-vocab-role="list-dialog" tabindex="-1">
+                    <header class="vocab-list-modal__header">
+                        <div>
+                            <h3 id="vocab-list-title">词表</h3>
+                            <p class="vocab-list-modal__subtitle" data-vocab-role="list-subtitle">当前词表 0 个词</p>
+                        </div>
+                        <button class="btn btn-icon" type="button" data-action="close-list-modal" aria-label="关闭词表">×</button>
+                    </header>
+                    <div class="vocab-list-modal__toolbar">
+                        <input type="search" data-vocab-role="list-search" placeholder="搜索单词、释义、笔记">
+                        <label class="vocab-list-modal__filter">
+                            <input type="checkbox" data-vocab-role="list-learned-only">
+                            <span>只看已学</span>
+                        </label>
+                        <button class="btn btn-sm btn-outline" type="button" data-action="export-current-list">导出可分享词表</button>
+                    </div>
+                    <div class="vocab-list-modal__stats" data-vocab-role="list-stats"></div>
+                    <div class="vocab-list-modal__body" data-vocab-role="list-body"></div>
+                </div>
+            </div>
             <div class="vocab-settings-modal" data-vocab-role="settings-modal" hidden>
                 <div class="vocab-settings-modal__backdrop" data-action="close-settings" tabindex="-1"></div>
-                <div class="vocab-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vocab-settings-title" data-vocab-role="settings-dialog">
+                <div class="vocab-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="vocab-settings-title" data-vocab-role="settings-dialog" tabindex="-1">
                     <header class="vocab-settings-modal__header">
                         <div>
                             <h3 id="vocab-settings-title">学习设置</h3>
@@ -2690,6 +2703,13 @@
             noteStatus: layout.querySelector('[data-field=\"note-status\"]'),
             liveRegion: layout.querySelector('[data-vocab-role=\"live-region\"]'),
             importInput: layout.querySelector('[data-vocab-role=\"import-input\"]'),
+            listModal: layout.querySelector('[data-vocab-role=\"list-modal\"]'),
+            listDialog: layout.querySelector('[data-vocab-role=\"list-dialog\"]'),
+            listSubtitle: layout.querySelector('[data-vocab-role=\"list-subtitle\"]'),
+            listSearch: layout.querySelector('[data-vocab-role=\"list-search\"]'),
+            listLearnedOnly: layout.querySelector('[data-vocab-role=\"list-learned-only\"]'),
+            listStats: layout.querySelector('[data-vocab-role=\"list-stats\"]'),
+            listBody: layout.querySelector('[data-vocab-role=\"list-body\"]'),
             settingsModal: layout.querySelector('[data-vocab-role=\"settings-modal\"]'),
             settingsForm: layout.querySelector('[data-vocab-role=\"settings-form\"]'),
             settingsError: layout.querySelector('[data-vocab-role=\"settings-error\"]'),
@@ -2883,7 +2903,14 @@
                     switchMenuPanel('main');
                     return;
                 }
+                const restoreFocus = action === 'menu-view-list' || action === 'menu-settings'
+                    ? state.elements.menuButton
+                    : null;
                 closeMenu();
+                if (action === 'menu-view-list') {
+                    openListModal(restoreFocus);
+                    return;
+                }
                 if (action === 'menu-import') {
                     handleImportRequest();
                     return;
@@ -2893,7 +2920,7 @@
                     return;
                 }
                 if (action === 'menu-settings') {
-                    openSettingsModal();
+                    openSettingsModal(restoreFocus);
                 }
             });
             state.elements.menu.dataset.bound = 'true';
@@ -2925,8 +2952,30 @@
         }
         if (!state.keyboardHandler) {
             state.keyboardHandler = (event) => {
+                if (event.code === 'Tab' || event.key === 'Tab') {
+                    if (isListModalOpen()) {
+                        trapModalFocus(event, state.elements.listDialog);
+                        return;
+                    }
+                    if (isSettingsModalOpen()) {
+                        trapModalFocus(event, state.elements.settingsDialog);
+                        return;
+                    }
+                }
                 const command = KEY_BINDINGS[event.code];
                 if (!command) {
+                    return;
+                }
+                if (command === 'escape' && isListModalPending()) {
+                    event.preventDefault();
+                    closeListModal();
+                    return;
+                }
+                if (isListModalOpen()) {
+                    if (command === 'escape') {
+                        event.preventDefault();
+                        closeListModal();
+                    }
                     return;
                 }
                 if (isSettingsModalOpen()) {
@@ -2976,6 +3025,58 @@
         if (state.elements.sessionCard && !state.elements.sessionCard.dataset.bound) {
             state.elements.sessionCard.addEventListener('click', handleCardAction);
             state.elements.sessionCard.dataset.bound = 'true';
+        }
+        if (state.elements.listModal && !state.elements.listModal.dataset.bound) {
+            state.elements.listModal.addEventListener('click', (event) => {
+                const trigger = event.target.closest('[data-action]');
+                const action = trigger?.dataset?.action;
+                if (!action) {
+                    return;
+                }
+                if (action === 'close-list-modal') {
+                    event.preventDefault();
+                    closeListModal();
+                    return;
+                }
+                if (action === 'export-current-list') {
+                    event.preventDefault();
+                    exportCurrentList();
+                    return;
+                }
+                if (action === 'list-page-prev' && state.ui.listBrowserPage > 1) {
+                    event.preventDefault();
+                    state.ui.listBrowserPage -= 1;
+                    renderListBrowser();
+                    return;
+                }
+                if (action === 'list-page-next') {
+                    event.preventDefault();
+                    state.ui.listBrowserPage += 1;
+                    renderListBrowser();
+                }
+            });
+            state.elements.listModal.dataset.bound = 'true';
+        }
+        if (state.elements.listSearch && !state.elements.listSearch.dataset.bound) {
+            state.elements.listSearch.addEventListener('input', (event) => {
+                state.ui.listBrowserQuery = event.target.value || '';
+                state.ui.listBrowserPage = 1;
+                clearListSearchTimer();
+                state.ui.listSearchTimer = setTimeout(() => {
+                    state.ui.listSearchTimer = null;
+                    renderListBrowser();
+                }, LIST_SEARCH_DEBOUNCE_MS);
+            });
+            state.elements.listSearch.dataset.bound = 'true';
+        }
+        if (state.elements.listLearnedOnly && !state.elements.listLearnedOnly.dataset.bound) {
+            state.elements.listLearnedOnly.addEventListener('change', (event) => {
+                state.ui.listBrowserLearnedOnly = !!event.target.checked;
+                state.ui.listBrowserPage = 1;
+                clearListSearchTimer();
+                renderListBrowser();
+            });
+            state.elements.listLearnedOnly.dataset.bound = 'true';
         }
         if (state.elements.importInput && !state.elements.importInput.dataset.bound) {
             state.elements.importInput.addEventListener('change', handleImportInputChange);
@@ -3043,13 +3144,24 @@
         }
     }
 
-    function openSettingsModal() {
+    function openSettingsModal(restoreFocus = document.activeElement) {
         if (!state.elements.settingsModal) {
             showFeedbackMessage('设置面板未加载', 'warning');
             return;
         }
+        let restoreTarget = restoreFocus;
+        if ((isListModalOpen() || isListModalPending()) && state.elements.listDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.listRestoreFocus;
+        } else if (isSettingsModalOpen() && state.elements.settingsDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.settingsRestoreFocus;
+        }
+        closeListModal(false);
+        closeSettingsModal(false);
         populateSettingsForm();
-        state.ui.lastFocus = document.activeElement;
+        state.ui.modalEpoch += 1;
+        state.ui.modalOwner = 'settings';
+        state.ui.settingsRestoreFocus = restoreTarget || state.elements.menuButton;
+        state.ui.settingsSaveToken += 1;
         state.elements.settingsModal.removeAttribute('hidden');
         state.elements.settingsModal.dataset.open = 'true';
         const focusTarget = state.elements.settingsDialog?.querySelector('input, button, select, textarea');
@@ -3058,7 +3170,14 @@
         }
     }
 
-    function closeSettingsModal() {
+    function closeSettingsModal(restoreFocus = true) {
+        const ownsModal = state.ui.modalOwner === 'settings';
+        const previousFocus = state.ui.settingsRestoreFocus;
+        state.ui.settingsSaveToken += 1;
+        state.ui.modalEpoch += 1;
+        if (ownsModal) {
+            state.ui.modalOwner = null;
+        }
         if (!state.elements.settingsModal) {
             return;
         }
@@ -3067,11 +3186,10 @@
         if (state.elements.settingsError) {
             state.elements.settingsError.textContent = '';
         }
-        const previousFocus = state.ui.lastFocus;
-        if (previousFocus && typeof previousFocus.focus === 'function') {
-            previousFocus.focus();
+        if (ownsModal && restoreFocus) {
+            focusElement(previousFocus);
         }
-        state.ui.lastFocus = null;
+        state.ui.settingsRestoreFocus = null;
     }
 
     async function handleSettingsSubmit(event) {
@@ -3099,14 +3217,31 @@
             return;
         }
 
+        const saveToken = ++state.ui.settingsSaveToken;
+        const modalToken = state.ui.modalEpoch;
         try {
-            await state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify });
+            const commit = state.ui.settingsSaveTail.then(
+                () => state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify }),
+                () => state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify })
+            );
+            state.ui.settingsSaveTail = commit.catch(() => undefined);
+            await commit;
+            if (saveToken !== state.ui.settingsSaveToken
+                || modalToken !== state.ui.modalEpoch
+                || state.ui.modalOwner !== 'settings') {
+                return;
+            }
             state.session.batchSize = Math.max(1, Math.min(reviewLimit, DEFAULT_BATCH_SIZE));
             closeSettingsModal();
             refreshDashboard();
             render();
             showFeedbackMessage('学习设置已更新', 'success');
         } catch (error) {
+            if (saveToken !== state.ui.settingsSaveToken
+                || modalToken !== state.ui.modalEpoch
+                || state.ui.modalOwner !== 'settings') {
+                return;
+            }
             console.error('[VocabSessionView] 设置保存失败:', error);
             if (state.elements.settingsError) {
                 state.elements.settingsError.textContent = error.message || '保存失败，请稍后再试。';
@@ -3141,17 +3276,15 @@
                 ? meta.name.trim()
                 : (typeof meta.source === 'string' && meta.source.trim() ? meta.source.trim() : '');
             if (result.type === 'progress') {
-                await state.store.setWords(entries);
-                if (meta.config && typeof meta.config === 'object') {
-                    await state.store.setConfig(meta.config);
-                    const latestConfig = state.store.getConfig();
-                    const limit = Number(latestConfig?.reviewLimit);
-                    if (Number.isFinite(limit) && limit > 0) {
-                        state.session.batchSize = Math.max(1, Math.min(limit, DEFAULT_BATCH_SIZE));
-                    }
-                }
-                if (Array.isArray(meta.reviewQueue)) {
-                    await state.store.setReviewQueue(meta.reviewQueue);
+                await state.store.replaceProgress(
+                    entries,
+                    meta.config && typeof meta.config === 'object' ? meta.config : {},
+                    typeof meta.listId === 'string' ? meta.listId : null
+                );
+                const latestConfig = state.store.getConfig();
+                const limit = Number(latestConfig?.reviewLimit);
+                if (Number.isFinite(limit) && limit > 0) {
+                    state.session.batchSize = Math.max(1, Math.min(limit, DEFAULT_BATCH_SIZE));
                 }
                 resetSessionState();
                 prepareSessionQueue();
@@ -3166,47 +3299,13 @@
                 showFeedbackMessage(`${categoryLabel}${suffix}导入完成，已同步 ${entries.length} 条词汇`, 'success');
                 return;
             }
-            const existing = state.store.getWords();
-            const merged = existing.slice();
-            const indexByWord = new Map();
-            existing.forEach((word, index) => {
-                if (word && typeof word.word === 'string') {
-                    indexByWord.set(word.word.trim().toLowerCase(), index);
-                }
-            });
-            let updatedCount = 0;
-            let insertedCount = 0;
-            entries.forEach((entry) => {
-                const key = String(entry.word || '').trim().toLowerCase();
-                if (!key) {
-                    return;
-                }
-                if (indexByWord.has(key)) {
-                    const idx = indexByWord.get(key);
-                    const base = merged[idx];
-                    merged[idx] = {
-                        ...base,
-                        meaning: entry.meaning || base.meaning,
-                        example: entry.example || base.example,
-                        freq: typeof entry.freq === 'number' ? entry.freq : base.freq
-                    };
-                    updatedCount += 1;
-                    return;
-                }
-                merged.push({
-                    word: entry.word,
-                    meaning: entry.meaning,
-                    example: entry.example || '',
-                    freq: typeof entry.freq === 'number' ? entry.freq : undefined
-                });
-                indexByWord.set(key, merged.length - 1);
-                insertedCount += 1;
-            });
+            const mergeResult = await state.store.mergeWords(entries);
+            const insertedCount = Number(mergeResult && mergeResult.addedCount) || 0;
+            const updatedCount = Number(mergeResult && mergeResult.updatedCount) || 0;
             if (!insertedCount && !updatedCount) {
                 showFeedbackMessage('所有词条均已存在，无需更新', 'info');
                 return;
             }
-            await state.store.setWords(merged);
             const categoryLabel = meta.category === 'user' ? '自设词表' : '外部词表';
             const suffix = sourceLabel ? `「${sourceLabel}」` : '';
             showFeedbackMessage(`${categoryLabel}${suffix}导入完成：新增 ${insertedCount} 条，更新 ${updatedCount} 条`, 'success');
@@ -3254,7 +3353,7 @@
         try {
             state.ui.exporting = true;
             await state.store.init();
-            const blob = await io.exportProgress();
+            const blob = await io.exportProgress(state.store.getWords());
             const filename = `vocab-progress-${formatTimestamp()}.json`;
             triggerDownload(blob, filename);
             showFeedbackMessage('词汇进度已导出', 'success');
@@ -3513,6 +3612,263 @@
             .replace(/'/g, '&#039;');
     }
 
+    function formatDateTime(value) {
+        if (!value) {
+            return '-';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return '-';
+        }
+        return date.toLocaleString();
+    }
+
+    function getActiveListLabel() {
+        if (!state.store || typeof state.store.getActiveListId !== 'function') {
+            return '当前词表';
+        }
+        const listId = state.store.getActiveListId();
+        const lists = state.store.VOCAB_LISTS || {};
+        return lists[listId]?.name || '当前词表';
+    }
+
+    function getWordStatus(word, config) {
+        const masteredTarget = Number(config?.masteryCount || 4);
+        const correctCount = Number(word?.correctCount || 0);
+        if (word?.nextReview) {
+            const next = new Date(word.nextReview);
+            if (!Number.isNaN(next.getTime()) && next <= new Date()) {
+                return { label: '待复习', tone: 'due' };
+            }
+        }
+        if (correctCount >= masteredTarget) {
+            return { label: '已掌握', tone: 'mastered' };
+        }
+        if (word?.nextReview) {
+            return { label: '学习中', tone: 'reviewing' };
+        }
+        if (word?.lastReviewed || correctCount > 0) {
+            return { label: '学习中', tone: 'reviewing' };
+        }
+        return { label: '未学习', tone: 'new' };
+    }
+
+    function isLearnedWord(word) {
+        return Boolean(word?.lastReviewed || word?.nextReview || Number(word?.correctCount || 0) > 0);
+    }
+
+    function analyzeListWords() {
+        const words = state.store && typeof state.store.getWords === 'function'
+            ? state.store.getWords()
+            : [];
+        const config = state.store && typeof state.store.getConfig === 'function'
+            ? state.store.getConfig()
+            : {};
+        const query = state.ui.listBrowserQuery.trim().toLowerCase();
+        const learnedOnly = state.ui.listBrowserLearnedOnly;
+        const visible = [];
+        let learnedCount = 0;
+        let masteredCount = 0;
+        let dueCount = 0;
+        const masteryTarget = Number(config.masteryCount || 4);
+        words.forEach((word) => {
+            if (!word || typeof word.word !== 'string') {
+                return;
+            }
+            const learned = isLearnedWord(word);
+            const status = getWordStatus(word, config);
+            if (learned) {
+                learnedCount += 1;
+            }
+            if (Number(word.correctCount || 0) >= masteryTarget) {
+                masteredCount += 1;
+            }
+            if (status.tone === 'due') {
+                dueCount += 1;
+            }
+            if (learnedOnly && !learned) {
+                return;
+            }
+            const haystack = [
+                word.word,
+                word.meaning,
+                word.example,
+                word.note,
+                word.source
+            ].map((value) => String(value || '').toLowerCase()).join('\n');
+            if (!query || haystack.includes(query)) {
+                visible.push({ word, status });
+            }
+        });
+        return { words, visible, learnedCount, masteredCount, dueCount };
+    }
+
+    function renderListBrowser() {
+        if (!state.elements.listBody || !state.store) {
+            return;
+        }
+        const analysis = analyzeListWords();
+        const totalPages = Math.max(1, Math.ceil(analysis.visible.length / LIST_PAGE_SIZE));
+        state.ui.listBrowserPage = Math.min(totalPages, Math.max(1, state.ui.listBrowserPage));
+        const pageStart = (state.ui.listBrowserPage - 1) * LIST_PAGE_SIZE;
+        const pageWords = analysis.visible.slice(pageStart, pageStart + LIST_PAGE_SIZE);
+
+        if (state.elements.listSubtitle) {
+            state.elements.listSubtitle.textContent = `${getActiveListLabel()} · 共 ${analysis.words.length} 个词`;
+        }
+        if (state.elements.listStats) {
+            state.elements.listStats.innerHTML = `
+                <span>已学 ${analysis.learnedCount}</span>
+                <span>待复习 ${analysis.dueCount}</span>
+                <span>已掌握 ${analysis.masteredCount}</span>
+                <span>当前显示 ${analysis.visible.length}</span>
+            `;
+        }
+
+        if (!analysis.visible.length) {
+            state.elements.listBody.innerHTML = '<div class="vocab-list-empty">没有匹配的词条</div>';
+            return;
+        }
+
+        const rows = pageWords.map(({ word, status }, index) => `
+                <tr>
+                    <td>${pageStart + index + 1}</td>
+                    <td><strong>${escapeHtml(word.word)}</strong></td>
+                    <td>${escapeHtml(word.meaning || '-')}</td>
+                    <td><span class="vocab-list-status vocab-list-status--${status.tone}">${status.label}</span></td>
+                    <td>${Number(word.correctCount || 0)}</td>
+                    <td>${formatDateTime(word.lastReviewed)}</td>
+                    <td>${formatDateTime(word.nextReview)}</td>
+                    <td>${escapeHtml(word.note || word.source || '-')}</td>
+                </tr>
+            `).join('');
+        state.elements.listBody.innerHTML = `
+            <div class="vocab-list-table-wrap">
+                <table class="vocab-list-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>单词</th>
+                            <th>释义</th>
+                            <th>状态</th>
+                            <th>正确</th>
+                            <th>上次复习</th>
+                            <th>下次复习</th>
+                            <th>笔记/来源</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${totalPages > 1 ? `
+                <div class="vocab-list-pagination" aria-label="词表分页">
+                    <button class="btn btn-icon" type="button" data-action="list-page-prev" aria-label="上一页" ${state.ui.listBrowserPage === 1 ? 'disabled' : ''}>‹</button>
+                    <span>第 ${state.ui.listBrowserPage} / ${totalPages} 页</span>
+                    <button class="btn btn-icon" type="button" data-action="list-page-next" aria-label="下一页" ${state.ui.listBrowserPage === totalPages ? 'disabled' : ''}>›</button>
+                </div>
+            ` : ''}
+        `;
+    }
+
+    async function openListModal(restoreFocus = document.activeElement) {
+        if (!state.store || typeof state.store.init !== 'function') {
+            showFeedbackMessage('词汇数据尚未准备就绪', 'warning');
+            return;
+        }
+        let restoreTarget = restoreFocus;
+        if (isSettingsModalOpen() && state.elements.settingsDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.settingsRestoreFocus;
+        } else if ((isListModalOpen() || isListModalPending()) && state.elements.listDialog?.contains(restoreFocus)) {
+            restoreTarget = state.ui.listRestoreFocus;
+        }
+        closeSettingsModal(false);
+        closeListModal(false);
+        const openToken = ++state.ui.modalEpoch;
+        state.ui.modalOwner = 'list-pending';
+        state.ui.listRestoreFocus = restoreTarget || state.elements.menuButton;
+        try {
+            await state.store.init();
+        } catch (error) {
+            if (openToken !== state.ui.modalEpoch || state.ui.modalOwner !== 'list-pending') {
+                return;
+            }
+            console.error('[VocabSessionView] 词表加载失败:', error);
+            showFeedbackMessage('词表加载失败，请刷新后重试', 'error');
+            closeListModal();
+            return;
+        }
+        if (openToken !== state.ui.modalEpoch || state.ui.modalOwner !== 'list-pending') {
+            return;
+        }
+        if (!state.elements.listModal) {
+            showFeedbackMessage('词表面板未加载', 'warning');
+            closeListModal();
+            return;
+        }
+        state.ui.modalOwner = 'list';
+        state.ui.listBrowserPage = 1;
+        state.elements.listModal.removeAttribute('hidden');
+        state.elements.listModal.dataset.open = 'true';
+        if (state.elements.listSearch) {
+            state.elements.listSearch.value = state.ui.listBrowserQuery;
+        }
+        if (state.elements.listLearnedOnly) {
+            state.elements.listLearnedOnly.checked = state.ui.listBrowserLearnedOnly;
+        }
+        renderListBrowser();
+        if (state.elements.listSearch && typeof state.elements.listSearch.focus === 'function') {
+            state.elements.listSearch.focus();
+        }
+    }
+
+    function closeListModal(restoreFocus = true) {
+        const ownsModal = state.ui.modalOwner === 'list' || state.ui.modalOwner === 'list-pending';
+        const previousFocus = state.ui.listRestoreFocus;
+        clearListSearchTimer();
+        state.ui.modalEpoch += 1;
+        if (ownsModal) {
+            state.ui.modalOwner = null;
+        }
+        if (!state.elements.listModal) {
+            return;
+        }
+        state.elements.listModal.setAttribute('hidden', 'hidden');
+        state.elements.listModal.dataset.open = 'false';
+        if (ownsModal && restoreFocus) {
+            focusElement(previousFocus);
+        }
+        state.ui.listRestoreFocus = null;
+    }
+
+    function exportCurrentList() {
+        if (!state.store || typeof state.store.getWords !== 'function') {
+            showFeedbackMessage('词汇数据尚未加载', 'warning');
+            return;
+        }
+        const entries = state.store.getWords().map((word) => {
+            const entry = {
+                word: String(word?.word || '').trim(),
+                meaning: String(word?.meaning || '').trim(),
+                example: String(word?.example || '').trim()
+            };
+            if (typeof word?.freq === 'number' && Number.isFinite(word.freq)) {
+                entry.freq = word.freq;
+            }
+            return entry;
+        });
+        const payload = {
+            type: 'wordlist',
+            exportedAt: new Date().toISOString(),
+            listId: state.store.getActiveListId ? state.store.getActiveListId() : null,
+            name: getActiveListLabel(),
+            category: 'external',
+            entries
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        triggerDownload(blob, `vocab-list-${formatTimestamp()}.json`);
+        showFeedbackMessage('可分享词表已导出', 'success');
+    }
+
     function buildFeedbackSummary(status, word) {
         const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '稍后安排';
         if (status === 'correct') {
@@ -3534,7 +3890,7 @@
     }
 
     function handleCardAction(event) {
-        if (isSettingsModalOpen()) {
+        if (isSettingsModalOpen() || isListModalOpen()) {
             return;
         }
         const trigger = event.target.closest('[data-action]');
@@ -3903,7 +4259,7 @@
         state.session.activeQueue.push(clone);
     }
 
-    function rateAndContinue(quality) {
+    async function rateAndContinue(quality) {
         const session = state.session;
         const word = session.currentWord;
         if (!word || session.stage !== 'feedback') {
@@ -3914,9 +4270,17 @@
         if (session.lastAnswer && session.lastAnswer.quality !== quality) {
             const now = new Date();
             const patch = state.scheduler.scheduleAfterResult(word, quality, now);
-            state.store.updateWord(word.id, patch);
-            session.currentWord = { ...word, ...patch };
-            session.lastAnswer.quality = quality;
+            try {
+                const committedWord = await state.store.updateWord(word.id, patch);
+                if (!committedWord) {
+                    throw new Error('词汇记录不存在');
+                }
+                session.currentWord = committedWord;
+                session.lastAnswer.quality = quality;
+            } catch (error) {
+                showFeedbackMessage(`评分保存失败：${error.message || error}`, 'error');
+                return;
+            }
         }
 
         moveToNextWord();
@@ -3948,17 +4312,26 @@
         render();
     }
 
-    function saveCurrentNote() {
+    async function saveCurrentNote() {
         const word = state.session.currentWord;
         if (!word || !state.store || !state.elements.noteInput) {
             return;
         }
         const note = state.elements.noteInput.value.trim();
-        state.store.updateWord(word.id, { note });
-        state.session.currentWord = {
-            ...state.session.currentWord,
-            note
-        };
+        let committedWord;
+        try {
+            committedWord = await state.store.updateWord(word.id, { note });
+            if (!committedWord) {
+                throw new Error('词汇记录不存在');
+            }
+        } catch (error) {
+            if (state.elements.noteStatus) {
+                state.elements.noteStatus.textContent = '保存失败';
+            }
+            showFeedbackMessage(`笔记保存失败：${error.message || error}`, 'error');
+            return false;
+        }
+        state.session.currentWord = committedWord;
         if (state.elements.noteStatus) {
             state.elements.noteStatus.textContent = '已保存';
             setTimeout(() => {
@@ -3967,6 +4340,7 @@
                 }
             }, 1500);
         }
+        return true;
     }
 
     function startBatch(force) {
@@ -6011,33 +6385,99 @@
 (function (window) {
     'use strict';
 
+    /**
+     * Presentation catalog + notifier for achievements.
+     *
+     * Unlock rules and persistence belong entirely to the `achievements.progress`
+     * projector (js/data/v2/appData.js -> computeAchievementProgress). That projector
+     * is declared `derived` in the data catalog, is listed in `derivedPending` for every
+     * practice mutation, and records the historically accurate unlock timestamp for each
+     * achievement id.
+     *
+     * This class therefore owns only display metadata (title / description / icon / tier)
+     * and diffs successive projector reads so that newly unlocked achievements can be
+     * surfaced as notifications. It deliberately does NOT re-derive unlock conditions:
+     * a second rule engine here would drift from the projector (it previously did, which
+     * left every streak achievement permanently locked) and would stamp "unlocked now"
+     * instead of the real unlock time.
+     */
     class AchievementManager {
         constructor() {
-            this.storageKey = 'user_achievements';
             this.achievements = this._defineAchievements();
+            this.achievementIds = new Set(this.achievements.map((item) => item.id));
             this.listeners = [];
             this.initialized = false;
+            // Newest read — what the achievements modal renders.
             this.unlocked = {};
+            // Last read whose projector provenance was proven — what the unlock diff measures
+            // against. Deliberately separate from `unlocked`: see syncFromAppData.
+            this.baseline = {};
+            this.baselineFresh = false;
+            this._deliveryInitialized = false;
+            this._pendingDelivery = {};
+            this._initPromise = null;
+            this._syncTail = Promise.resolve();
         }
 
         /**
-         * Initialize the manager, loading state from storage
+         * Initialize the manager, loading persisted progress from storage.
+         *
+         * The first run seeds a durable delivery baseline so existing users are not greeted with
+         * every historical unlock. Later runs diff against that persisted acknowledgement instead
+         * of the first projector read, which lets a pending unlock survive a page restart.
          */
         async init() {
             if (this.initialized) return;
+            if (this._initPromise) return this._initPromise;
 
+            this._initPromise = this._enqueueSync(() => this._initialize()).finally(() => {
+                this._initPromise = null;
+            });
+            return this._initPromise;
+        }
+
+        async _initialize() {
             try {
-                this.unlocked = await this._loadUnlockedState();
+                let [state, delivery] = await Promise.all([
+                    this._loadUnlockedState(),
+                    this._loadDeliveryState()
+                ]);
+                state = await this._retryUntilFresh(state);
+                this.unlocked = state.unlocked;
+                if (delivery) {
+                    this.baseline = delivery.acknowledged;
+                    this.baselineFresh = true;
+                    this._deliveryInitialized = true;
+                } else {
+                    this.baseline = state.unlocked;
+                    this.baselineFresh = state.fresh;
+                    // A brand-new store has no projector provenance yet, but its empty snapshot is
+                    // still a safe delivery baseline: there is no historical unlock to suppress.
+                    if (state.fresh || Object.keys(state.unlocked).length === 0) {
+                        await this._persistDeliveryBaseline(state.unlocked);
+                        this._deliveryInitialized = true;
+                    }
+                }
                 console.log('[AchievementManager] Initialized. Unlocked:', Object.keys(this.unlocked).length);
                 this.initialized = true;
+
+                if (delivery) {
+                    await this._syncFromAppDataNow({ notify: true, initialState: state });
+                }
             } catch (e) {
                 console.error('[AchievementManager] Init failed', e);
                 this.unlocked = {};
+                this.baseline = {};
+                this.baselineFresh = false;
+                this._deliveryInitialized = false;
+                this.initialized = false;
+                throw e;
             }
         }
 
         /**
-         * Define the list of available achievements
+         * Display metadata for every achievement the projector can unlock.
+         * Ids must stay in sync with computeAchievementProgress in js/data/v2/appData.js.
          */
         _defineAchievements() {
             return [
@@ -6047,32 +6487,28 @@
                     title: '初出茅庐',
                     description: '累计完成 10 次练习',
                     icon: '🥉',
-                    tier: 1,
-                    condition: (stats) => stats.totalPracticed >= 10
+                    tier: 1
                 },
                 {
                     id: 'practice_silver',
                     title: '渐入佳境',
                     description: '累计完成 50 次练习',
                     icon: '🥈',
-                    tier: 2,
-                    condition: (stats) => stats.totalPracticed >= 50
+                    tier: 2
                 },
                 {
                     id: 'practice_gold',
                     title: '百炼成钢',
                     description: '累计完成 100 次练习',
                     icon: '🥇',
-                    tier: 3,
-                    condition: (stats) => stats.totalPracticed >= 100
+                    tier: 3
                 },
                 {
                     id: 'practice_platinum',
                     title: '千锤百炼',
                     description: '累计完成 200 次练习',
                     icon: '🏅',
-                    tier: 3,
-                    condition: (stats) => stats.totalPracticed >= 200
+                    tier: 3
                 },
 
                 // --- Streak Milestones ---
@@ -6081,32 +6517,28 @@
                     title: '持之以恒',
                     description: '连续学习 3 天',
                     icon: '🔥',
-                    tier: 1,
-                    condition: (stats) => stats.streakDays >= 3
+                    tier: 1
                 },
                 {
                     id: 'streak_silver',
                     title: '习惯养成',
                     description: '连续学习 7 天',
                     icon: '🔥',
-                    tier: 2,
-                    condition: (stats) => stats.streakDays >= 7
+                    tier: 2
                 },
                 {
                     id: 'streak_gold',
                     title: '意志如铁',
                     description: '连续学习 30 天',
                     icon: '🔥',
-                    tier: 3,
-                    condition: (stats) => stats.streakDays >= 30
+                    tier: 3
                 },
                 {
                     id: 'streak_platinum',
                     title: '长期主义',
                     description: '连续学习 60 天',
                     icon: '🗓️',
-                    tier: 3,
-                    condition: (stats) => stats.streakDays >= 60
+                    tier: 3
                 },
 
                 // --- Category Mastery: Listening ---
@@ -6115,32 +6547,28 @@
                     title: '开耳第一篇',
                     description: '完成 1 篇听力练习',
                     icon: '🎧',
-                    tier: 1,
-                    condition: (stats) => stats.listeningCount >= 1
+                    tier: 1
                 },
                 {
                     id: 'listening_bronze',
                     title: '顺风耳 (铜)',
                     description: '累计完成 10 篇听力练习',
                     icon: '👂',
-                    tier: 1,
-                    condition: (stats) => stats.listeningCount >= 10
+                    tier: 1
                 },
                 {
                     id: 'listening_silver',
                     title: '顺风耳 (银)',
                     description: '累计完成 50 篇听力练习',
                     icon: '👂',
-                    tier: 2,
-                    condition: (stats) => stats.listeningCount >= 50
+                    tier: 2
                 },
                 {
                     id: 'listening_gold',
                     title: '顺风耳 (金)',
                     description: '累计完成 100 篇听力练习',
                     icon: '👂',
-                    tier: 3,
-                    condition: (stats) => stats.listeningCount >= 100
+                    tier: 3
                 },
 
                 // --- Category Mastery: Reading ---
@@ -6149,32 +6577,28 @@
                     title: '开卷第一篇',
                     description: '完成 1 篇阅读练习',
                     icon: '📖',
-                    tier: 1,
-                    condition: (stats) => stats.readingCount >= 1
+                    tier: 1
                 },
                 {
                     id: 'reading_bronze',
                     title: '火眼金睛 (铜)',
                     description: '累计完成 10 篇阅读练习',
                     icon: '👁️',
-                    tier: 1,
-                    condition: (stats) => stats.readingCount >= 10
+                    tier: 1
                 },
                 {
                     id: 'reading_silver',
                     title: '火眼金睛 (银)',
                     description: '累计完成 50 篇阅读练习',
                     icon: '👁️',
-                    tier: 2,
-                    condition: (stats) => stats.readingCount >= 50
+                    tier: 2
                 },
                 {
                     id: 'reading_gold',
                     title: '火眼金睛 (金)',
                     description: '累计完成 100 篇阅读练习',
                     icon: '👁️',
-                    tier: 3,
-                    condition: (stats) => stats.readingCount >= 100
+                    tier: 3
                 },
 
                 // --- Balanced Practice ---
@@ -6183,16 +6607,14 @@
                     title: '双线推进',
                     description: '阅读与听力各完成 10 篇',
                     icon: '⚖️',
-                    tier: 2,
-                    condition: (stats) => stats.readingCount >= 10 && stats.listeningCount >= 10
+                    tier: 2
                 },
                 {
                     id: 'balanced_advanced',
                     title: '均衡进阶',
                     description: '阅读与听力各完成 30 篇',
                     icon: '🧭',
-                    tier: 3,
-                    condition: (stats) => stats.readingCount >= 30 && stats.listeningCount >= 30
+                    tier: 3
                 },
 
                 // --- Focus Time ---
@@ -6201,24 +6623,21 @@
                     title: '专注一小时',
                     description: '累计学习 60 分钟',
                     icon: '⏱️',
-                    tier: 1,
-                    condition: (stats) => stats.totalStudyMinutes >= 60
+                    tier: 1
                 },
                 {
                     id: 'time_focus_300',
                     title: '沉浸五小时',
                     description: '累计学习 300 分钟',
                     icon: '⏳',
-                    tier: 2,
-                    condition: (stats) => stats.totalStudyMinutes >= 300
+                    tier: 2
                 },
                 {
                     id: 'time_focus_1000',
                     title: '深度备考',
                     description: '累计学习 1000 分钟',
                     icon: '⌛',
-                    tier: 3,
-                    condition: (stats) => stats.totalStudyMinutes >= 1000
+                    tier: 3
                 },
 
                 // --- Accuracy Milestones ---
@@ -6227,48 +6646,42 @@
                     title: '稳中有进',
                     description: '10 次练习后平均正确率 70%+',
                     icon: '📈',
-                    tier: 2,
-                    condition: (stats) => stats.totalPracticed >= 10 && stats.averageAccuracy >= 0.7
+                    tier: 2
                 },
                 {
                     id: 'accuracy_elite',
                     title: '高分稳定',
                     description: '20 次练习后平均正确率 85%+',
                     icon: '💎',
-                    tier: 3,
-                    condition: (stats) => stats.totalPracticed >= 20 && stats.averageAccuracy >= 0.85
+                    tier: 3
                 },
                 {
                     id: 'perfect_three',
                     title: '三次满分',
                     description: '累计 3 次练习获得满分',
                     icon: '🎯',
-                    tier: 2,
-                    condition: (stats) => stats.perfectCount >= 3
+                    tier: 2
                 },
                 {
                     id: 'perfect_ten',
                     title: '十全十美',
                     description: '累计 10 次练习获得满分',
                     icon: '🏆',
-                    tier: 3,
-                    condition: (stats) => stats.perfectCount >= 10
+                    tier: 3
                 },
                 {
                     id: 'speed_three',
                     title: '快速稳定',
                     description: '3 次 5 分钟内完成高分练习',
                     icon: '⚡',
-                    tier: 2,
-                    condition: (stats) => stats.speedHighScoreCount >= 3
+                    tier: 2
                 },
                 {
                     id: 'speed_ten',
                     title: '闪电节奏',
                     description: '10 次 5 分钟内完成高分练习',
                     icon: '🌩️',
-                    tier: 3,
-                    condition: (stats) => stats.speedHighScoreCount >= 10
+                    tier: 3
                 },
 
                 // --- Special Achievements ---
@@ -6277,368 +6690,208 @@
                     title: '迈出第一步',
                     description: '完成第一次练习',
                     icon: '🌱',
-                    tier: 1,
-                    condition: (stats) => stats.totalPracticed >= 1
+                    tier: 1
                 },
                 {
                     id: 'accuracy_perfect',
                     title: '神射手',
                     description: '单次练习获得 100% 正确率',
                     icon: '🎯',
-                    tier: 3,
-                    condition: (stats) => stats.hasPerfectAccuracy
+                    tier: 3
                 },
                 {
                     id: 'speed_demon',
                     title: '唯快不破',
                     description: '5分钟内完成高分练习',
                     icon: '⚡',
-                    tier: 3,
-                    condition: (stats) => stats.hasSpeedDemon
+                    tier: 3
                 }
             ];
         }
 
         /**
-         * Load unlocked state from storage
+         * Read projector-owned unlock progress from storage.
+         *
+         * `AppData.achievements.getAll()` attaches a non-enumerable `fresh` flag: false means the
+         * projector was still pending and the payload is an inline recompute rather than the proven
+         * cache. That distinction is load-bearing for the unlock diff and delivery retry.
          */
         async _loadUnlockedState() {
-            if (window.storage) {
-                return await window.storage.get(this.storageKey, {});
+            const progress = await window.AppData.achievements.getAll();
+            return {
+                unlocked: this._normalizeProgress(progress),
+                fresh: !progress || progress.fresh !== false
+            };
+        }
+
+        async _loadDeliveryState() {
+            const settings = await window.AppData.settings.getAll();
+            const delivery = settings && settings.achievementDelivery;
+            if (!delivery || delivery.version !== 1 || !delivery.acknowledged
+                || typeof delivery.acknowledged !== 'object' || Array.isArray(delivery.acknowledged)) {
+                return null;
             }
-            const raw = localStorage.getItem(this.storageKey);
-            return raw ? JSON.parse(raw) : {};
+            return {
+                acknowledged: Object.fromEntries(Object.entries(delivery.acknowledged)
+                    .filter(([id]) => this.achievementIds.has(id))
+                    .map(([id, unlockedAt]) => [id, { unlockedAt: unlockedAt || null }]))
+            };
+        }
+
+        async _persistDeliveryBaseline(unlocked) {
+            if (!window.AppData.achievements
+                || typeof window.AppData.achievements.acknowledgeDelivery !== 'function') {
+                throw new Error('AppData.achievements.acknowledgeDelivery is required');
+            }
+            await window.AppData.achievements.acknowledgeDelivery(unlocked);
+        }
+
+        _unionBaseline(...sources) {
+            const merged = {};
+            sources.forEach((source) => {
+                Object.entries(source && typeof source === 'object' ? source : {}).forEach(([id, value]) => {
+                    if (!this.achievementIds.has(id)) return;
+                    const candidate = value && typeof value === 'object' ? value.unlockedAt : value;
+                    const candidateTime = typeof candidate === 'string' ? Date.parse(candidate) : NaN;
+                    const prior = merged[id] && merged[id].unlockedAt;
+                    const priorTime = typeof prior === 'string' ? Date.parse(prior) : NaN;
+                    if (!merged[id] || (Number.isFinite(candidateTime)
+                        && (!Number.isFinite(priorTime) || candidateTime < priorTime))) {
+                        merged[id] = { unlockedAt: Number.isFinite(candidateTime)
+                            ? new Date(candidateTime).toISOString()
+                            : null };
+                    }
+                });
+            });
+            return merged;
+        }
+
+        async _retryUntilFresh(initialState) {
+            let state = initialState;
+            if (state.fresh || !window.AppData.achievements
+                || typeof window.AppData.achievements.retryPending !== 'function') {
+                return state;
+            }
+            for (let attempt = 0; attempt < 3 && !state.fresh; attempt += 1) {
+                try {
+                    await window.AppData.achievements.retryPending();
+                    state = await this._loadUnlockedState();
+                } catch (err) {
+                    console.warn('[AchievementManager] Failed to retry pending achievement projection', err);
+                }
+                if (!state.fresh && attempt < 2) {
+                    await new Promise((resolve) => {
+                        const schedule = window.setTimeout || ((callback) => callback());
+                        schedule(resolve, 10 * (2 ** attempt));
+                    });
+                }
+            }
+            return state;
         }
 
         /**
-         * Save unlocked state to storage
+         * Reduce the projector payload to `{ [id]: { unlockedAt } }` for ids this
+         * catalog can render. Unknown ids (e.g. manual entries for retired achievements)
+         * are dropped because there is no card to show them on.
          */
-        async _saveUnlockedState() {
-            if (window.storage) {
-                await window.storage.set(this.storageKey, this.unlocked);
-                return;
-            }
-            localStorage.setItem(this.storageKey, JSON.stringify(this.unlocked));
-        }
-
-        _getDefaultUserStats() {
-            return {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                practiceDays: [],
-                lastPracticeDate: null,
-                achievements: []
-            };
-        }
-
-        _getPracticeRecorder() {
-            const app = window.app;
-            if (app && app.components && app.components.practiceRecorder) {
-                return app.components.practiceRecorder;
-            }
-            return null;
-        }
-
-        async _getUserStatsFromScoreStorage() {
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
-                return await window.PracticeRecordAPI.readStats();
-            }
-            const recorder = this._getPracticeRecorder();
-            if (recorder && typeof recorder.getUserStats === 'function') {
-                return await recorder.getUserStats();
-            }
-            return this._getDefaultUserStats();
-        }
-
-        async _getPracticeRecordsFromScoreStorage() {
-            // 使用轻量 listSummary：achievementManager 只需 type/accuracy/duration 等元数据，
-            // 不需要 answers/correctAnswerMap/suiteEntries 等重字段。listSummary 已从 scoreInfo 投影了
-            // accuracy/duration/score 等字段，无需依赖 realData.scoreInfo 后备路径。
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.listSummary === 'function') {
-                return await window.PracticeRecordAPI.listSummary();
-            }
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                return await window.PracticeRecordAPI.list();
-            }
-            const recorder = this._getPracticeRecorder();
-            if (recorder && typeof recorder.getPracticeRecords === 'function') {
-                return await recorder.getPracticeRecords();
-            }
-            return [];
-        }
-
-        _getCategoryPracticeCount(stats, targetKey) {
-            if (!stats || !stats.categoryStats || typeof stats.categoryStats !== 'object') {
-                return 0;
-            }
-
-            const normalizedTarget = String(targetKey || '').toLowerCase();
-            let count = 0;
-
-            Object.entries(stats.categoryStats).forEach(([key, value]) => {
-                const normalizedKey = String(key || '').toLowerCase();
-                if (normalizedKey !== normalizedTarget) {
-                    return;
-                }
-                const practices = value && Number(value.practices);
-                if (Number.isFinite(practices)) {
-                    count += practices;
-                }
-            });
-
-            return count;
-        }
-
-        _normalizePracticeType(rawType) {
-            if (!rawType) {
-                return null;
-            }
-
-            const normalized = String(rawType).toLowerCase();
-            if (normalized.includes('listen') || normalized.includes('audio') || normalized.includes('hearing')) {
-                return 'listening';
-            }
-            if (normalized.includes('read')) {
-                return 'reading';
-            }
-            return null;
-        }
-
-        _inferRecordPracticeType(record) {
-            if (!record || typeof record !== 'object') {
-                return null;
-            }
-
-            const metadata = record.metadata && typeof record.metadata === 'object'
-                ? record.metadata
+        _normalizeProgress(progress) {
+            const source = progress && typeof progress === 'object' && !Array.isArray(progress)
+                ? progress
                 : {};
-            const candidates = [
-                record.type,
-                record.practiceType,
-                metadata.type,
-                metadata.examType,
-                metadata.practiceType
-            ];
+            const normalized = {};
 
-            for (const candidate of candidates) {
-                const normalized = this._normalizePracticeType(candidate);
-                if (normalized) {
-                    return normalized;
-                }
-            }
-
-            const contextHints = [
-                record.examId,
-                record.url,
-                record.title,
-                metadata.url,
-                metadata.examId,
-                metadata.examTitle,
-                metadata.title
-            ]
-                .filter(Boolean)
-                .map((item) => String(item).toLowerCase())
-                .join(' ');
-
-            if (/listeningpractice|\/listening\/|listen|audio/.test(contextHints)) {
-                return 'listening';
-            }
-            if (/reading|睡着过项目组/.test(contextHints)) {
-                return 'reading';
-            }
-
-            return null;
-        }
-
-        _normalizeAccuracy(record) {
-            if (!record || typeof record !== 'object') {
-                return 0;
-            }
-
-            const scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
-                ? record.scoreInfo
-                : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo === 'object'
-                    ? record.realData.scoreInfo
-                    : {});
-
-            const candidates = [
-                record.accuracy,
-                scoreInfo.accuracy
-            ];
-
-            for (const candidate of candidates) {
-                const value = Number(candidate);
-                if (!Number.isFinite(value)) {
-                    continue;
-                }
-                if (value > 1 && value <= 100) {
-                    return value / 100;
-                }
-                return Math.max(0, Math.min(1, value));
-            }
-
-            return 0;
-        }
-
-        _getRecordDuration(record) {
-            if (!record || typeof record !== 'object') {
-                return 0;
-            }
-
-            const scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
-                ? record.scoreInfo
-                : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo === 'object'
-                    ? record.realData.scoreInfo
-                    : {});
-
-            const candidates = [
-                record.duration,
-                record.realData && record.realData.duration,
-                scoreInfo.duration,
-                scoreInfo.timeSpent
-            ];
-
-            for (const candidate of candidates) {
-                const value = Number(candidate);
-                if (Number.isFinite(value) && value >= 0) {
-                    return value;
-                }
-            }
-
-            return 0;
-        }
-
-        _applyRecordsToDerivedStats(derived, records) {
-            if (!derived || !Array.isArray(records) || records.length === 0) {
-                return;
-            }
-
-            let listeningFromRecords = 0;
-            let readingFromRecords = 0;
-            let totalFromRecords = 0;
-            let totalAccuracyFromRecords = 0;
-            let accuracyRecordCount = 0;
-            let totalDurationFromRecords = 0;
-
-            records.forEach((record) => {
-                if (!record || typeof record !== 'object') {
+            Object.entries(source).forEach(([id, value]) => {
+                if (!value || id === 'updatedAt' || !this.achievementIds.has(id)) {
                     return;
                 }
-
-                totalFromRecords += 1;
-
-                const practiceType = this._inferRecordPracticeType(record);
-                if (practiceType === 'listening') {
-                    listeningFromRecords += 1;
-                } else if (practiceType === 'reading') {
-                    readingFromRecords += 1;
-                }
-
-                const accuracy = this._normalizeAccuracy(record);
-                const duration = this._getRecordDuration(record);
-                totalAccuracyFromRecords += accuracy;
-                accuracyRecordCount += 1;
-                totalDurationFromRecords += duration;
-                this._applyRecordToDerivedStats(derived, { accuracy, duration });
+                const unlockedAt = value && typeof value === 'object' ? value.unlockedAt : null;
+                normalized[id] = { unlockedAt: unlockedAt || null };
             });
 
-            derived.totalPracticed = Math.max(Number(derived.totalPracticed) || 0, totalFromRecords);
-            derived.listeningCount = Math.max(Number(derived.listeningCount) || 0, listeningFromRecords);
-            derived.readingCount = Math.max(Number(derived.readingCount) || 0, readingFromRecords);
-            derived.totalStudyMinutes = Math.max(
-                Number(derived.totalStudyMinutes) || 0,
-                totalDurationFromRecords / 60
-            );
-            if (accuracyRecordCount > 0) {
-                derived.averageAccuracy = Math.max(
-                    Number(derived.averageAccuracy) || 0,
-                    totalAccuracyFromRecords / accuracyRecordCount
-                );
-            }
+            return normalized;
         }
 
-        _buildDerivedStats(rawStats) {
-            const stats = rawStats && typeof rawStats === 'object' ? rawStats : {};
-            const averageScore = Number(stats.averageScore) || 0;
-            return {
-                totalPracticed: Number(stats.totalPractices) || 0,
-                streakDays: Number(stats.streakDays) || 0,
-                totalStudyMinutes: (Number(stats.totalTimeSpent) || 0) / 60,
-                averageAccuracy: averageScore > 1 && averageScore <= 100 ? averageScore / 100 : averageScore,
-                listeningCount: this._getCategoryPracticeCount(stats, 'listening'),
-                readingCount: this._getCategoryPracticeCount(stats, 'reading'),
-                hasPerfectAccuracy: false,
-                hasSpeedDemon: false,
-                perfectCount: 0,
-                speedHighScoreCount: 0
-            };
+        /**
+         * Re-read projector progress and report achievements unlocked since the last proven read.
+         *
+         * Freshness gates the baseline, not the display. `this.unlocked` always tracks the newest
+         * read so the achievements modal never renders yesterday's state, while `this.baseline` —
+         * the set the unlock diff is measured against — only advances on a read whose provenance the
+         * projector proved. An unproven read that quietly became the baseline would make the next
+         * read see the unlock as "already known" and drop its notification for good, which is the
+         * one failure mode with no recovery path: there is no later event that re-raises it.
+         *
+         * Consequences of that split: an unproven read never notifies (announcing an unlock the
+         * proven projection has not confirmed risks a toast for something that never happened, e.g.
+         * a source snapshot read mid-import), and it never consumes one either — the very next
+         * proven read still sees the unlock as new and raises it exactly once.
+         *
+         * @param {Object} options
+         * @param {boolean} [options.notify] - surface a toast for each new unlock
+         */
+        syncFromAppData(options = {}) {
+            return this._enqueueSync(() => this._syncFromAppDataNow(options));
         }
 
-        _applyRecordToDerivedStats(derived, record) {
-            if (!derived || !record) {
-                return;
-            }
-
-            const accuracy = Number(record.accuracy) || 0;
-            const duration = Number(record.duration) || 0;
-
-            if (accuracy >= 1) {
-                derived.hasPerfectAccuracy = true;
-                derived.perfectCount = (Number(derived.perfectCount) || 0) + 1;
-            }
-            if (duration > 0 && duration <= 300 && accuracy > 0.8) {
-                derived.hasSpeedDemon = true;
-                derived.speedHighScoreCount = (Number(derived.speedHighScoreCount) || 0) + 1;
-            }
+        _enqueueSync(run) {
+            const result = this._syncTail.then(run, run);
+            this._syncTail = result.catch(() => {});
+            return result;
         }
 
-        async syncFromScoreStorage(options = {}) {
-            const {
-                includeRecords = false,
-                latestRecord = null,
-                notify = false
-            } = options;
-
-            const rawStats = await this._getUserStatsFromScoreStorage();
-            const derivedStats = this._buildDerivedStats(rawStats);
-
-            const records = await this._getPracticeRecordsFromScoreStorage();
-            this._applyRecordsToDerivedStats(derivedStats, records);
-
-            if (!includeRecords) {
-                this._applyRecordToDerivedStats(derivedStats, latestRecord);
-            }
-
-            return this._unlockByStats(derivedStats, { notify });
-        }
-
-        async _unlockByStats(stats, options = {}) {
+        async _syncFromAppDataNow(options = {}) {
             const { notify = false } = options;
-            const newUnlocks = [];
+            const baseline = this.baseline && typeof this.baseline === 'object' ? this.baseline : {};
 
-            for (const achievement of this.achievements) {
-                if (this.unlocked[achievement.id]) continue;
-
-                try {
-                    if (achievement.condition(stats, null)) {
-                        this.unlocked[achievement.id] = {
-                            unlockedAt: new Date().toISOString()
-                        };
-                        newUnlocks.push(achievement);
-                    }
-                } catch (err) {
-                    console.error(`[AchievementManager] Error checking ${achievement.id}`, err);
-                }
+            let state = options.initialState || null;
+            try {
+                if (!state) state = await this._loadUnlockedState();
+            } catch (err) {
+                console.warn('[AchievementManager] Failed to read achievement progress', err);
+                return [];
             }
 
-            if (newUnlocks.length > 0) {
-                await this._saveUnlockedState();
-                if (notify) {
-                    this._notify(newUnlocks);
+            state = await this._retryUntilFresh(state);
+
+            const current = state.unlocked;
+            this.unlocked = current;
+            if (!state.fresh) {
+                // Derived cache was unproven (projector pending): display refreshed, baseline held.
+                this.baselineFresh = false;
+                return [];
+            }
+
+            if (!this._deliveryInitialized) {
+                await this._persistDeliveryBaseline(current);
+                this.baseline = this._unionBaseline(baseline, current);
+                this.baselineFresh = true;
+                this._deliveryInitialized = true;
+                return [];
+            }
+
+            const newUnlocks = this.achievements.filter((achievement) => (
+                current[achievement.id] && !baseline[achievement.id]
+            ));
+
+            this.baselineFresh = true;
+
+            if (newUnlocks.length > 0 && notify) {
+                this._notify(newUnlocks);
+                // Notification delivery is at-least-once across crashes. Within this session,
+                // advance first so a failed persistence retry cannot repeatedly toast the user.
+                this.baseline = this._unionBaseline(baseline, current);
+                this._pendingDelivery = this._unionBaseline(this._pendingDelivery, current);
+            } else if (newUnlocks.length === 0) {
+                this.baseline = this._unionBaseline(baseline, current);
+            }
+
+            if (Object.keys(this._pendingDelivery).length > 0) {
+                const pending = this._pendingDelivery;
+                try {
+                    await this._persistDeliveryBaseline(pending);
+                    this._pendingDelivery = {};
+                } catch (err) {
+                    console.warn('[AchievementManager] Failed to persist delivery acknowledgement', err);
                 }
             }
 
@@ -6646,12 +6899,12 @@
         }
 
         /**
-         * Check for new achievements based on latest activity
-         * @param {Object} latestRecord - The practice record just completed
+         * Check for newly unlocked achievements after a practice completes.
+         * The projector has already recomputed progress by this point; we only diff it.
          */
-        async check(latestRecord) {
+        async check() {
             if (!this.initialized) await this.init();
-            return this.syncFromScoreStorage({ includeRecords: true, latestRecord, notify: true });
+            return this.syncFromAppData({ notify: true });
         }
 
         /**
@@ -6708,7 +6961,7 @@
             }
         }
 
-        await window.AchievementManager.syncFromScoreStorage({ includeRecords: true, notify: false });
+        await window.AchievementManager.syncFromAppData({ notify: false });
         const all = window.AchievementManager.getAll();
         list.innerHTML = all.map(a => `
             <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''} ${a.tier ? 'tier-' + a.tier : ''}">

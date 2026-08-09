@@ -7,12 +7,12 @@
   "schemaVersion": "ReadingExamSourceV1",
   "examId": "p3-low-240",
   "meta": {
-    "title": "How a prehistoric predator took to the skies",
+    "title": "How a prehistoric predator took to the skies 翼龙飞行",
     "category": "P3",
     "frequency": "low",
-    "pdfFilename": "",
-    "legacyPath": "/Users/hissin/工程/lelts-new/",
-    "legacyFilename": "P3 - How a prehistoric predator took to the skies(1).docx",
+    "pdfFilename": "P3 - How a prehistoric predator took to the skies.pdf",
+    "legacyPath": "ReadingPractice/PDF/",
+    "legacyFilename": "P3 - How a prehistoric predator took to the skies.pdf",
     "questionIntroHtml": "<h3>Questions</h3>"
   },
   "passage": {
@@ -79,7 +79,7 @@
     "q14": "C"
   },
   "sourceRefs": {
-    "docx": "/Users/hissin/工程/lelts-new/P3 - How a prehistoric predator took to the skies(1).docx"
+    "pdf": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf"
   },
   "audit": {
     "matchStatus": "extracted",

@@ -89,7 +89,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.pdf",
     "ieltsHtml": "IELTS/P3/Neanderthal Technology.html"
   },
   "audit": {

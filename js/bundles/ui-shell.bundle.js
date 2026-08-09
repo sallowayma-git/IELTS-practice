@@ -1048,6 +1048,412 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 })(typeof window !== 'undefined' ? window : this);
 
 
+/* ===== js/utils/practiceTimerPreferences.js ===== */
+(function initPracticeTimerPreferences(global) {
+    'use strict';
+
+    var VERSION = 1;
+    var DEFAULTS = {
+        version: VERSION,
+        mode: 'elapsed',
+        countdownMinutes: 60,
+        limitEnabled: false,
+        limitMinutes: 60,
+        expiryAction: 'warn'
+    };
+    var VALID_MODES = { elapsed: true, countdown: true };
+    var VALID_ACTIONS = { warn: true, 'auto-submit': true, lock: true };
+    var MAX_MINUTES = 240;
+    var MIN_MINUTES = 1;
+
+    function clampMinutes(value, fallback) {
+        var number = Number(value);
+        if (!Number.isFinite(number)) {
+            number = fallback;
+        }
+        return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Math.round(number)));
+    }
+
+    function normalize(raw) {
+        var source = raw && typeof raw === 'object' ? raw : {};
+        var mode = VALID_MODES[source.mode] ? source.mode : DEFAULTS.mode;
+        var expiryAction = VALID_ACTIONS[source.expiryAction] ? source.expiryAction : DEFAULTS.expiryAction;
+        return {
+            version: VERSION,
+            mode: mode,
+            countdownMinutes: clampMinutes(source.countdownMinutes, DEFAULTS.countdownMinutes),
+            limitEnabled: Boolean(source.limitEnabled),
+            limitMinutes: clampMinutes(source.limitMinutes, DEFAULTS.limitMinutes),
+            expiryAction: expiryAction
+        };
+    }
+
+    var cache = Object.create(null);
+    var hydrationPromise = null;
+    function normalizeScope(scope) { return String(scope || '').toLowerCase() === 'listening' ? 'listening' : 'reading'; }
+    function hydrateTimerPreferences() {
+        if (cache.reading && cache.listening) return Promise.resolve(true);
+        if (hydrationPromise) return hydrationPromise;
+        if (!global.AppData || !global.AppData.preferences) return Promise.resolve(false);
+        hydrationPromise = Promise.resolve().then(async function loadTimerPreferences() {
+            await global.AppData.ready;
+            var stored = await global.AppData.preferences.getTimer();
+            cache.reading = normalize(stored && stored.reading);
+            cache.listening = normalize(stored && stored.listening);
+            return true;
+        }).catch(function onTimerPreferenceLoadError(error) {
+            hydrationPromise = null;
+            console.warn('[PracticeTimerPreferences] 加载失败:', error);
+            return false;
+        });
+        return hydrationPromise;
+    }
+
+    function read(scope) {
+        return normalize(cache[normalizeScope(scope)]);
+    }
+
+    async function save(scope, preferences) {
+        await hydrateTimerPreferences();
+        if (!global.AppData || !global.AppData.preferences) throw new Error('AppData.preferences is unavailable');
+        var normalizedScope = normalizeScope(scope);
+        var next = normalize(preferences);
+        await global.AppData.preferences.setTimer(normalizedScope, next);
+        cache[normalizedScope] = next;
+        return next;
+    }
+
+    function minutesToSeconds(value) {
+        return clampMinutes(value, DEFAULTS.countdownMinutes) * 60;
+    }
+
+    var api = {
+        VERSION: VERSION,
+        DEFAULTS: Object.freeze(Object.assign({}, DEFAULTS)),
+        normalize: normalize,
+        read: read,
+        save: save,
+        minutesToSeconds: minutesToSeconds
+    };
+    Object.defineProperty(api, 'ready', { enumerable: true, get: hydrateTimerPreferences });
+    global.PracticeTimerPreferences = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/components/practiceSettingsPanel.js ===== */
+/**
+ * Practice settings panel component.
+ *
+ * Stacks the practice header-code card and the reading/listening timer cards
+ * as expanded siblings (no nested sub-card grouping). Opened from an entry
+ * button on the settings page.
+ *
+ * All element ids / classes / data-attributes on the form controls are preserved
+ * so setup logic in js/app/main-entry.js keeps working once the modal is in the DOM.
+ */
+(function (global) {
+    'use strict';
+
+    var MODAL_ID = 'practice-settings-modal';
+    var ENTRY_ID = 'practice-settings-entry-btn';
+    var modal = null;
+
+    function buildTimerCard(scope, title, statusId, saveLabel) {
+        return [
+            '                <section class="practice-timer-card" data-timer-scope="' + scope + '">',
+            '                    <div class="practice-timer-card__header">',
+            '                        <h4>' + title + '</h4>',
+            '                        <span id="' + statusId + '" class="practice-timer-status" role="status" aria-live="polite"></span>',
+            '                    </div>',
+            '                    <div class="practice-timer-grid">',
+            '                        <label class="practice-timer-field"><span>计时模式</span><select data-timer-field="mode"><option value="elapsed">正计时</option><option value="countdown">倒计时</option></select></label>',
+            '                        <label class="practice-timer-field"><span>倒计时分钟</span><input type="number" min="1" max="240" step="1" data-timer-field="countdownMinutes" /></label>',
+            '                        <label class="practice-timer-field practice-timer-check"><input type="checkbox" data-timer-field="limitEnabled" /><span>最长用时限制</span></label>',
+            '                        <label class="practice-timer-field"><span>最长用时分钟</span><input type="number" min="1" max="240" step="1" data-timer-field="limitMinutes" /></label>',
+            '                        <label class="practice-timer-field"><span>到时处理</span><select data-timer-field="expiryAction"><option value="warn">仅提醒</option><option value="auto-submit">自动提交</option><option value="lock">锁定答案</option></select></label>',
+            '                    </div>',
+            '                    <button class="btn data-mgmt-btn practice-timer-save" type="button" data-timer-save>' + saveLabel + '</button>',
+            '                </section>'
+        ].join('\n');
+    }
+
+    function buildModalMarkup() {
+        return [
+            '<div id="' + MODAL_ID + '" class="theme-modal shui-secondary-modal shui-secondary-modal--lg" role="dialog" aria-modal="true" aria-labelledby="practice-settings-title">',
+            '    <div class="theme-modal-content shui-secondary-modal__content">',
+            '        <div class="theme-modal-header shui-secondary-modal__header">',
+            '            <div class="shui-secondary-modal__title-group">',
+            '                <div class="shui-secondary-modal__eyebrow">PRACTICE</div>',
+            '                <h3 id="practice-settings-title">练习设置</h3>',
+            '            </div>',
+            '            <button class="theme-modal-close" type="button" aria-label="关闭">&times;</button>',
+            '        </div>',
+            '        <div class="theme-modal-body shui-secondary-modal__body">',
+            '            <div class="practice-settings-cards">',
+
+            '                <section class="practice-settings-block practice-settings-block--code">',
+            '                    <div class="practice-settings-block__head">',
+            '                        <h4>练习头部编码</h4>',
+            '                        <p class="hero-panel__muted">控制练习页顶部栏显示的 6 位编码。</p>',
+            '                    </div>',
+            '                    <div class="reading-candidate-code-settings">',
+            '                        <label class="reading-candidate-code-option">',
+            '                            <input type="radio" name="reading-candidate-code-mode" value="auto" checked />',
+            '                            <span><strong>自动</strong><small>根据当前练习会话自动生成。</small></span>',
+            '                        </label>',
+            '                        <label class="reading-candidate-code-option">',
+            '                            <input type="radio" name="reading-candidate-code-mode" value="custom" />',
+            '                            <span><strong>自定义</strong><small>始终显示你指定的编码。</small></span>',
+            '                        </label>',
+            '                        <div class="reading-candidate-code-controls">',
+            '                            <input id="reading-candidate-code-input" class="reading-candidate-code-input" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="797618" aria-label="练习页顶部栏 6 位编码" disabled />',
+            '                            <button class="btn data-mgmt-btn" id="reading-candidate-code-random-btn" type="button">随机</button>',
+            '                            <button class="btn data-mgmt-btn" id="reading-candidate-code-save-btn" type="button">保存</button>',
+            '                        </div>',
+            '                        <div class="reading-candidate-code-status" id="reading-candidate-code-status" role="status" aria-live="polite"></div>',
+            '                    </div>',
+            '                </section>',
+
+            buildTimerCard('reading', '阅读计时', 'reading-timer-status', '保存阅读设置'),
+            buildTimerCard('listening', '听力计时', 'listening-timer-status', '保存听力设置'),
+
+            '            </div>',
+            '        </div>',
+            '    </div>',
+            '</div>'
+        ].join('\n');
+    }
+
+    function openModal() {
+        if (modal) {
+            modal.classList.add('show');
+        }
+    }
+
+    function closeModal() {
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    function bindEvents() {
+        var entry = document.getElementById(ENTRY_ID);
+        if (entry) {
+            entry.addEventListener('click', openModal);
+        }
+        if (!modal) {
+            return;
+        }
+        var closeBtn = modal.querySelector('.theme-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+    }
+
+    function init() {
+        if (global.__practiceSettingsPanelInitialized) {
+            return;
+        }
+        global.__practiceSettingsPanelInitialized = true;
+
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = buildModalMarkup();
+        modal = wrapper.firstElementChild;
+        if (modal && document.body) {
+            document.body.appendChild(modal);
+        }
+        bindEvents();
+    }
+
+    // Render synchronously at module load so the cards exist in the DOM before
+    // main-entry.js runs its setup logic (which queries them by id / class).
+    init();
+
+    global.PracticeSettingsPanel = {
+        open: openModal,
+        close: closeModal
+    };
+})(window);
+
+
+/* ===== js/components/libraryManagerPanel.js ===== */
+/**
+ * Library manager panel component.
+ *
+ * Unifies the three legacy settings buttons (#load-library-btn,
+ * #library-config-btn, #force-refresh-btn) into a single "题库管理" entry.
+ * Clicking the entry opens a theme-style modal that hosts:
+ *   - the library configuration list (previously rendered inline into
+ *     #settings-view, now mounted into the modal body),
+ *   - the "加载题库" action (delegates to showLibraryLoaderModal / loadLibrary),
+ *   - the "强制刷新题库" action (delegates to loadLibrary(true)).
+ *
+ * Follows the same modal pattern as practiceSettingsPanel.js: the component
+ * owns its markup, appends the modal to document.body at load time, and
+ * exposes open()/close() on a global. indexInteractions.js binds the entry
+ * button to open(). The existing renderLibraryConfigList() in main.js mounts
+ * the .library-config-list host into this modal's body container, so switching
+ * / deleting a config still refreshes the list in place.
+ *
+ * Element ids / classes inside the modal are preserved where they predate
+ * this component (the config list rendering depends on them). The two action
+ * buttons keep their original ids (#load-library-btn, #force-refresh-btn) so
+ * the existing indexInteractions.js bindings continue to resolve them after
+ * they move into the modal — only the dedicated #library-config-btn is removed
+ * (its handler is now the modal's own open() call).
+ */
+(function (global) {
+    'use strict';
+
+    var MODAL_ID = 'library-manager-modal';
+    var ENTRY_ID = 'library-manager-btn';
+    var BODY_ID = 'library-manager-modal-body';
+    var modal = null;
+
+    function buildModalMarkup() {
+        return [
+            '<div id="' + MODAL_ID + '" class="theme-modal library-manager-modal shui-secondary-modal shui-secondary-modal--lg" role="dialog" aria-modal="true" aria-labelledby="library-manager-title">',
+            '    <div class="theme-modal-content shui-secondary-modal__content">',
+            '        <div class="theme-modal-header shui-secondary-modal__header">',
+            '            <div class="shui-secondary-modal__title-group">',
+            '                <div class="shui-secondary-modal__eyebrow">LIBRARY</div>',
+            '                <h3 id="library-manager-title">题库管理</h3>',
+            '            </div>',
+            '            <button class="theme-modal-close" type="button" aria-label="关闭">&times;</button>',
+            '        </div>',
+            '        <div class="theme-modal-body library-manager-modal__body shui-secondary-modal__body">',
+            '            <div class="library-manager-modal__section">',
+            '                <div class="library-manager-modal__section-head">',
+            '                    <h4>题库配置列表</h4>',
+            '                    <p class="library-manager-modal__hint">在下方切换或删除已导入的题库配置。</p>',
+            '                </div>',
+            '                <div id="' + BODY_ID + '" class="library-manager-modal__config-host"></div>',
+            '            </div>',
+            '            <div class="library-manager-modal__section library-manager-modal__actions">',
+            '                <div class="library-manager-modal__section-head">',
+            '                    <h4>题库操作</h4>',
+            '                    <p class="library-manager-modal__hint">加载新题库或强制刷新当前题库索引。</p>',
+            '                </div>',
+            '                <div class="library-manager-modal__action-row">',
+            '                    <button class="btn data-mgmt-btn" id="load-library-btn" type="button">📂 加载题库</button>',
+            '                    <button class="btn data-mgmt-btn" id="force-refresh-btn" type="button">🔄 强制刷新题库</button>',
+            '                </div>',
+            '            </div>',
+            '        </div>',
+            '    </div>',
+            '</div>'
+        ].join('\n');
+    }
+
+    function openModal() {
+        if (!modal) {
+            return;
+        }
+        modal.classList.add('show');
+        // Lazily render the config list once the modal is open, then refresh on
+        // every subsequent open so it reflects the latest storage state.
+        renderConfigListIntoModal();
+    }
+
+    function closeModal() {
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    function renderConfigListIntoModal() {
+        var body = modal && modal.querySelector('#' + BODY_ID);
+        if (!body) {
+            return;
+        }
+        // showLibraryConfigListV2 (boot-fallback, always available once
+        // legacy-app loads) accepts a containerId option and delegates to
+        // renderLibraryConfigList when main.js has loaded, falling back to its
+        // own inline renderer otherwise. Both paths mount the .library-config-list
+        // host into the container we pass here.
+        try {
+            if (typeof global.showLibraryConfigListV2 === 'function') {
+                global.showLibraryConfigListV2({ containerId: BODY_ID });
+                return;
+            }
+        } catch (error) {
+            console.warn('[LibraryManagerPanel] showLibraryConfigListV2 调用失败:', error);
+        }
+
+        // Direct fallback if the boot-fallback shim is somehow absent.
+        try {
+            if (typeof global.renderLibraryConfigList === 'function') {
+                global.renderLibraryConfigList({ containerId: BODY_ID, allowDelete: true });
+            }
+        } catch (error) {
+            console.warn('[LibraryManagerPanel] renderLibraryConfigList 调用失败:', error);
+        }
+    }
+
+    function bindEvents() {
+        var entry = document.getElementById(ENTRY_ID);
+        if (entry) {
+            entry.addEventListener('click', openModal);
+        }
+        if (!modal) {
+            return;
+        }
+        var closeBtn = modal.querySelector('.theme-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
+        // Click on the backdrop (but not the content) closes the modal.
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+    }
+
+    function init() {
+        if (global.__libraryManagerPanelInitialized) {
+            return;
+        }
+        global.__libraryManagerPanelInitialized = true;
+
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = buildModalMarkup();
+        modal = wrapper.firstElementChild;
+        if (modal && document.body) {
+            document.body.appendChild(modal);
+        }
+        bindEvents();
+    }
+
+    // Render synchronously at module load so the modal exists in the DOM before
+    // indexInteractions.js binds the entry button and before the lazy-loaded
+    // main.js renderLibraryConfigList resolves the container.
+    init();
+
+    global.LibraryManagerPanel = {
+        open: openModal,
+        close: closeModal,
+        getBodyId: function () { return BODY_ID; },
+        renderConfigList: renderConfigListIntoModal
+    };
+})(window);
+
+
 /* ===== js/app/main-entry.js ===== */
 (function bootstrapApp(global) {
     'use strict';
@@ -1058,12 +1464,256 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var SESSION_GROUP = 'session-suite';
     var STATE_CORE_GROUP = 'state-core';
     var SETTINGS_GROUP = 'settings-tools';
+    var READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
+    var readingCandidateCodeCache = { mode: 'auto', customCode: '' };
+    var readingCandidateCodeReady = null;
 
     function ensureLazyGroup(name) {
         if (!name || !global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
         }
         return global.AppLazyLoader.ensureGroup(name);
+    }
+
+    function hashReadingCandidateCode(sourceId) {
+        var source = String(sourceId || '');
+        if (!source) {
+            return '';
+        }
+        var hash = 0;
+        for (var index = 0; index < source.length; index += 1) {
+            hash = ((hash << 5) - hash) + source.charCodeAt(index);
+            hash |= 0;
+        }
+        return String(Math.abs(hash) % 900000 + 100000);
+    }
+
+    function createReadingCandidateCodeSeed() {
+        var parts = [String(Date.now()), String(Math.random())];
+        try {
+            if (global.crypto && typeof global.crypto.getRandomValues === 'function') {
+                var values = new Uint32Array(4);
+                global.crypto.getRandomValues(values);
+                parts.push(Array.prototype.join.call(values, ':'));
+            }
+        } catch (_) { }
+        try {
+            parts.push(String(global.navigator && global.navigator.userAgent || ''));
+        } catch (_) { }
+        return parts.join(':');
+    }
+
+    function readReadingCandidateCodePreferences() {
+        return Object.assign({}, readingCandidateCodeCache);
+    }
+
+    function loadReadingCandidateCodePreferences() {
+        if (readingCandidateCodeReady) return readingCandidateCodeReady;
+        readingCandidateCodeReady = Promise.resolve().then(async function loadCandidateCode() {
+            await global.AppData.ready;
+            var stored = await global.AppData.preferences.getCandidateCode();
+            var mode = stored && stored.mode === 'custom' ? 'custom' : 'auto';
+            var customCode = stored && typeof stored.customCode === 'string' ? stored.customCode.replace(/\D/g, '').slice(0, 6) : '';
+            readingCandidateCodeCache = { mode: mode, customCode: READING_CANDIDATE_CODE_PATTERN.test(customCode) ? customCode : '' };
+            return readingCandidateCodeCache;
+        });
+        return readingCandidateCodeReady;
+    }
+
+    async function saveReadingCandidateCodePreferences(preferences) {
+        await loadReadingCandidateCodePreferences();
+        var next = {
+            mode: preferences && preferences.mode === 'custom' ? 'custom' : 'auto',
+            customCode: preferences && typeof preferences.customCode === 'string'
+                ? preferences.customCode.replace(/\D/g, '').slice(0, 6)
+                : ''
+        };
+        await global.AppData.preferences.setCandidateCode(next);
+        readingCandidateCodeCache = next;
+        return next;
+    }
+
+    function setReadingCandidateCodeStatus(element, message, state) {
+        if (!element) {
+            return;
+        }
+        element.textContent = message || '';
+        if (state) {
+            element.dataset.state = state;
+        } else {
+            delete element.dataset.state;
+        }
+    }
+
+    async function setupReadingCandidateCodeSettings() {
+        await loadReadingCandidateCodePreferences();
+        var input = document.getElementById('reading-candidate-code-input');
+        var saveButton = document.getElementById('reading-candidate-code-save-btn');
+        var randomButton = document.getElementById('reading-candidate-code-random-btn');
+        var status = document.getElementById('reading-candidate-code-status');
+        var modeInputs = Array.prototype.slice.call(
+            document.querySelectorAll('input[name="reading-candidate-code-mode"]')
+        );
+        if (!input || !saveButton || !randomButton || !modeInputs.length) {
+            return;
+        }
+
+        function getSelectedMode() {
+            var selected = modeInputs.find(function findChecked(item) { return item.checked; });
+            return selected && selected.value === 'custom' ? 'custom' : 'auto';
+        }
+
+        function setSelectedMode(mode) {
+            modeInputs.forEach(function syncMode(item) {
+                item.checked = item.value === mode;
+            });
+            input.disabled = mode !== 'custom';
+        }
+
+        function syncFromStorage() {
+            var preferences = readReadingCandidateCodePreferences();
+            setSelectedMode(preferences.mode);
+            input.value = preferences.customCode || '';
+            setReadingCandidateCodeStatus(
+                status,
+                preferences.mode === 'custom' && preferences.customCode
+                    ? '当前使用自定义编码：' + preferences.customCode
+                    : '当前使用自动生成：按练习会话生成 6 位编码。',
+                ''
+            );
+        }
+
+        modeInputs.forEach(function bindMode(item) {
+            item.addEventListener('change', function onModeChange() {
+                var mode = getSelectedMode();
+                input.disabled = mode !== 'custom';
+                if (mode === 'custom') {
+                    input.focus();
+                }
+            });
+        });
+
+        input.addEventListener('input', function sanitizeCandidateCodeInput() {
+            var cleaned = input.value.replace(/\D/g, '').slice(0, 6);
+            if (input.value !== cleaned) {
+                input.value = cleaned;
+            }
+            setReadingCandidateCodeStatus(status, '', '');
+        });
+
+        saveButton.addEventListener('click', async function saveCandidateCodeSettings() {
+            var mode = getSelectedMode();
+            var code = input.value.replace(/\D/g, '').slice(0, 6);
+            if (mode === 'custom' && !READING_CANDIDATE_CODE_PATTERN.test(code)) {
+                setReadingCandidateCodeStatus(status, '请输入 6 位数字编码。', 'error');
+                input.focus();
+                return;
+            }
+            await saveReadingCandidateCodePreferences({ mode: mode, customCode: code });
+            setReadingCandidateCodeStatus(
+                status,
+                mode === 'custom' ? '已保存自定义编码：' + code : '已保存：自动生成。',
+                'success'
+            );
+        });
+
+        randomButton.addEventListener('click', async function generateCandidateCode() {
+            var code = hashReadingCandidateCode(createReadingCandidateCodeSeed());
+            setSelectedMode('custom');
+            input.value = code;
+            await saveReadingCandidateCodePreferences({ mode: 'custom', customCode: code });
+            setReadingCandidateCodeStatus(status, '已随机生成并保存：' + code, 'success');
+        });
+
+        syncFromStorage();
+    }
+
+    function setPracticeTimerStatus(element, message, state) {
+        if (!element) {
+            return;
+        }
+        element.textContent = message || '';
+        if (state) {
+            element.dataset.state = state;
+        } else {
+            delete element.dataset.state;
+        }
+    }
+
+    async function setupPracticeTimerSettings() {
+        var manager = global.PracticeTimerPreferences;
+        if (!manager || typeof manager.read !== 'function' || typeof manager.save !== 'function') {
+            return;
+        }
+
+        if (manager.ready) await manager.ready;
+        Array.prototype.slice.call(document.querySelectorAll('.practice-timer-card[data-timer-scope]'))
+            .forEach(function bindTimerCard(card) {
+                var scope = String(card.dataset.timerScope || '').toLowerCase() === 'listening'
+                    ? 'listening'
+                    : 'reading';
+                var status = card.querySelector('.practice-timer-status');
+                var saveButton = card.querySelector('[data-timer-save]');
+                var fields = {
+                    mode: card.querySelector('[data-timer-field="mode"]'),
+                    countdownMinutes: card.querySelector('[data-timer-field="countdownMinutes"]'),
+                    limitEnabled: card.querySelector('[data-timer-field="limitEnabled"]'),
+                    limitMinutes: card.querySelector('[data-timer-field="limitMinutes"]'),
+                    expiryAction: card.querySelector('[data-timer-field="expiryAction"]')
+                };
+                if (!saveButton || !fields.mode || !fields.countdownMinutes || !fields.limitEnabled || !fields.limitMinutes || !fields.expiryAction) {
+                    return;
+                }
+
+                function syncLimitState() {
+                    fields.limitMinutes.disabled = !fields.limitEnabled.checked;
+                }
+
+                function apply(preferences) {
+                    var normalized = manager.normalize(preferences);
+                    fields.mode.value = normalized.mode;
+                    fields.countdownMinutes.value = String(normalized.countdownMinutes);
+                    fields.limitEnabled.checked = Boolean(normalized.limitEnabled);
+                    fields.limitMinutes.value = String(normalized.limitMinutes);
+                    fields.expiryAction.value = normalized.expiryAction;
+                    syncLimitState();
+                    setPracticeTimerStatus(status, '已保存', '');
+                }
+
+                function collect() {
+                    return manager.normalize({
+                        mode: fields.mode.value,
+                        countdownMinutes: fields.countdownMinutes.value,
+                        limitEnabled: fields.limitEnabled.checked,
+                        limitMinutes: fields.limitMinutes.value,
+                        expiryAction: fields.expiryAction.value
+                    });
+                }
+
+                fields.limitEnabled.addEventListener('change', function onLimitToggle() {
+                    syncLimitState();
+                    setPracticeTimerStatus(status, '', '');
+                });
+                [fields.mode, fields.countdownMinutes, fields.limitMinutes, fields.expiryAction].forEach(function bindField(field) {
+                    field.addEventListener('input', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                    field.addEventListener('change', function clearTimerStatus() {
+                        setPracticeTimerStatus(status, '', '');
+                    });
+                });
+                saveButton.addEventListener('click', async function saveTimerPreferences() {
+                    try {
+                        var saved = await manager.save(scope, collect());
+                        apply(saved);
+                        setPracticeTimerStatus(status, '已保存', 'success');
+                    } catch (error) {
+                        setPracticeTimerStatus(status, '保存失败', 'error');
+                    }
+                });
+
+                apply(manager.read(scope));
+            });
     }
 
     var browseGroupPromise = null;
@@ -1153,20 +1803,6 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
     function ensureSettingsToolsGroup() {
         return ensureLazyGroup(SETTINGS_GROUP);
-    }
-
-    function setStorageNamespace() {
-        if (!global.storage || !global.storage.ready || typeof global.storage.setNamespace !== 'function') {
-            return;
-        }
-        global.storage.ready.then(function applyNamespace() {
-            global.storage.setNamespace('exam_system');
-            try {
-                console.log('[MainEntry] 已设置存储命名空间: exam_system');
-            } catch (_) { }
-        }).catch(function handleNamespaceError(error) {
-            console.error('[MainEntry] 设置命名空间失败', error);
-        });
     }
 
     function initializeNavigationShell() {
@@ -1406,35 +2042,29 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return active.id.replace(/-view$/, '');
     }
 
-    function syncOverviewAfterIndexLoad() {
-        if (!global.app || typeof global.app.setState !== 'function') {
-            return;
-        }
-        if (typeof global.getExamIndexState !== 'function') {
-            return;
-        }
-        var list = global.getExamIndexState();
+    function syncOverviewAfterIndexLoad(index) {
+        var list = Array.isArray(index) ? index : [];
         if (!Array.isArray(list)) {
             return;
         }
         try {
-            global.app.setState('exam.index', list.slice());
-            if (typeof global.app.refreshOverviewData === 'function') {
-                global.app.refreshOverviewData();
+            if (typeof global.updateOverview === 'function') {
+                global.updateOverview(list);
             }
         } catch (error) {
             console.warn('[MainEntry] 同步总览数据失败:', error);
         }
     }
 
-    function handleExamIndexLoaded() {
-        syncOverviewAfterIndexLoad();
+    function handleExamIndexLoaded(index) {
+        var snapshot = Array.isArray(index) ? index : [];
+        syncOverviewAfterIndexLoad(snapshot);
         var activeView = getActiveViewName();
 
         if (activeView === 'browse') {
             ensureBrowseGroup().then(function afterBrowseReady() {
                 if (typeof global.loadExamList === 'function') {
-                    try { global.loadExamList(); } catch (_) { }
+                    try { global.loadExamList(snapshot); } catch (_) { }
                 }
                 var loading = document.querySelector('#browse-view .loading');
                 if (loading) {
@@ -1448,8 +2078,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
         if (activeView === 'practice') {
             Promise.all([ensureBrowseGroup(), ensurePracticeSuiteGroup()]).then(function onPracticeReady() {
-                if (typeof global.updatePracticeView === 'function') {
-                    try { global.updatePracticeView(); } catch (_) { }
+                if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                    global.startPracticeRecordsSyncInBackground('exam-index-loaded', { forceRender: true });
                 }
             }).catch(function handlePracticeLoadError(error) {
                 console.error('[MainEntry] practice 视图模块加载失败:', error);
@@ -1457,8 +2087,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    global.addEventListener('examIndexLoaded', function onExamIndexLoaded() {
-        handleExamIndexLoaded();
+    global.addEventListener('examIndexLoaded', function onExamIndexLoaded(event) {
+        handleExamIndexLoaded(event && event.detail ? event.detail.index : []);
     });
 
     global.addEventListener('appCoreReady', function onAppCoreReady() {
@@ -1489,8 +2119,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function init() {
-        setStorageNamespace();
         initializeNavigationShell();
+        setupReadingCandidateCodeSettings();
+        setupPracticeTimerSettings();
 
         if (STRICT_ON_DEMAND) {
             setTimeout(function () {
@@ -1553,7 +2184,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var settingsPrefetchPromise = null;
     var indexInteractionsInitialized = false;
     var licenseModalInitialized = false;
-    var LICENSE_STORAGE_KEY = 'hasSeenGplLicense';
+    var licenseModalInitializationPromise = null;
+    var licenseModalRenderToken = 0;
 
     function ensureBrowse() {
         if (browsePrefetched) {
@@ -1587,9 +2219,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return morePrefetchPromise;
     }
 
-    function ensureSettings() {
-        if (settingsPrefetched) {
-            return settingsPrefetchPromise || Promise.resolve();
+function ensureSettings() {
+    if (settingsPrefetched) {
+        return settingsPrefetchPromise || Promise.resolve();
         }
         settingsPrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureSettingsToolsGroup === 'function'
@@ -1598,13 +2230,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         settingsPrefetchPromise = loader().catch(function swallow(error) {
             settingsPrefetched = false;
             settingsPrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 settings-tools 失败:', error);
+            console.warn('[IndexInteractions] 预加载 settings 失败:', error);
         });
         return settingsPrefetchPromise;
     }
 
-    function startListeningSprint() {
-        var list = typeof global.getExamIndexState === 'function' ? global.getExamIndexState() : [];
+    async function startListeningSprint() {
+        var list = await global.resolveActiveLibraryIndex();
         var listeningExams = Array.isArray(list) ? list.filter(function (exam) { return exam && exam.type === 'listening'; }) : [];
         if (!listeningExams.length) {
             if (typeof global.showMessage === 'function') {
@@ -1623,8 +2255,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    function startInstantLaunch() {
-        var list = typeof global.getExamIndexState === 'function' ? global.getExamIndexState() : [];
+    async function startInstantLaunch() {
+        var list = await global.resolveActiveLibraryIndex();
         if (!Array.isArray(list) || !list.length) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('题库尚未加载', 'error');
@@ -1724,6 +2356,21 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     function setupIndexSettingsButtons() {
         var bindings = [
             ['clear-cache-btn', function () { return typeof global.clearCache === 'function' && global.clearCache(); }],
+            // The three library buttons now live inside the library manager
+            // modal (#library-manager-modal). The entry button opens the modal;
+            // #load-library-btn and #force-refresh-btn keep their ids so the
+            // bindings below continue to resolve them after they moved. The
+            // legacy #library-config-btn is removed entirely (its open-modal
+            // job is now done by #library-manager-btn below).
+            ['library-manager-btn', function () {
+                if (global.LibraryManagerPanel && typeof global.LibraryManagerPanel.open === 'function') {
+                    return global.LibraryManagerPanel.open();
+                }
+                if (typeof global.showLibraryConfigListV2 === 'function') {
+                    return global.showLibraryConfigListV2();
+                }
+                return undefined;
+            }],
             ['load-library-btn', function () {
                 if (typeof global.showLibraryLoaderModal === 'function') {
                     global.showLibraryLoaderModal();
@@ -1731,7 +2378,6 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     global.loadLibrary(false);
                 }
             }],
-            ['library-config-btn', function () { return typeof global.showLibraryConfigListV2 === 'function' && global.showLibraryConfigListV2(); }],
             ['force-refresh-btn', function () {
                 var notify = function (type, msg) {
                     if (typeof global.showMessage === 'function') {
@@ -1774,6 +2420,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return global.OnboardingTour && typeof global.OnboardingTour.start === 'function'
                     ? global.OnboardingTour.start(true)
                     : undefined;
+            }],
+            ['external-backup-entry-btn', function () {
+                return ensureSettings().then(function () {
+                    return global.ExternalBackupService && typeof global.ExternalBackupService.openModal === 'function'
+                        ? global.ExternalBackupService.openModal()
+                        : undefined;
+                });
             }],
             ['create-backup-btn', function () {
                 return ensureSettings().then(function () {
@@ -2194,12 +2847,20 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return global.document ? global.document.getElementById('license-modal') : null;
     }
 
-    function hasAcceptedLicense() {
-        try {
-            return global.localStorage && global.localStorage.getItem(LICENSE_STORAGE_KEY) === 'true';
-        } catch (_) {
-            return true;
+    function getConsentPreferences() {
+        var preferences = global.AppData && global.AppData.preferences;
+        if (!preferences || typeof preferences.getConsent !== 'function' || typeof preferences.setConsent !== 'function') {
+            throw new Error('AppData preferences consent API is unavailable');
         }
+        return preferences;
+    }
+
+    function hasAcceptedLicense() {
+        return Promise.resolve().then(function () {
+            return getConsentPreferences().getConsent();
+        }).then(function (consent) {
+            return !!(consent && consent.hasSeenGplLicense === true);
+        });
     }
 
     function showLicenseModal() {
@@ -2207,14 +2868,19 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         if (!modal) {
             return;
         }
+        var renderToken = ++licenseModalRenderToken;
         global.requestAnimationFrame(function () {
             global.requestAnimationFrame(function () {
+                if (renderToken !== licenseModalRenderToken) {
+                    return;
+                }
                 modal.classList.add('show');
             });
         });
     }
 
     function hideLicenseModal() {
+        licenseModalRenderToken += 1;
         var modal = getLicenseModal();
         if (modal) {
             modal.classList.remove('show');
@@ -2222,24 +2888,37 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function acceptGplLicense() {
-        try {
-            if (global.localStorage) {
-                global.localStorage.setItem(LICENSE_STORAGE_KEY, 'true');
-            }
-        } catch (error) {
-            console.warn('LocalStorage error:', error);
-        }
-        hideLicenseModal();
+        var preferences;
+        return Promise.resolve().then(function () {
+            preferences = getConsentPreferences();
+            return preferences.getConsent();
+        }).then(function (consent) {
+            return preferences.setConsent(Object.assign({}, consent || {}, {
+                hasSeenGplLicense: true
+            }));
+        }).then(function () {
+            hideLicenseModal();
+            return true;
+        }).catch(function (error) {
+            console.error('[LicenseModal] Failed to save GPL license consent:', error);
+            return false;
+        });
     }
 
     function initLicenseModal() {
         if (licenseModalInitialized) {
-            return;
+            return licenseModalInitializationPromise || Promise.resolve();
         }
         licenseModalInitialized = true;
-        if (!hasAcceptedLicense()) {
+        licenseModalInitializationPromise = hasAcceptedLicense().then(function (accepted) {
+            if (!accepted) {
+                showLicenseModal();
+            }
+        }).catch(function (error) {
+            console.error('[LicenseModal] Failed to load GPL license consent:', error);
             showLicenseModal();
-        }
+        });
+        return licenseModalInitializationPromise;
     }
 
     global.LicenseModal = Object.assign({}, global.LicenseModal || {}, {
@@ -2592,6 +3271,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     "js/views/overviewView.js",
     "js/presentation/navigation-controller.js",
     "js/presentation/message-center.js",
+    "js/utils/practiceTimerPreferences.js",
+    "js/components/practiceSettingsPanel.js",
+    "js/components/libraryManagerPanel.js",
     "js/app/main-entry.js",
     "js/presentation/indexInteractions.js",
     "js/presentation/emojiIconizer.js"

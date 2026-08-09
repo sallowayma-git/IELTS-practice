@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/76. P3 - Living dunes 流动沙丘【高】/76. P3 - Living dunes 流动沙丘【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/76. P3 - Living dunes 流动沙丘【高】/76. P3 - Living dunes 流动沙丘【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/76. P3 - Living dunes 流动沙丘【高】/76. P3 - Living dunes 流动沙丘【高】.pdf",
     "ieltsHtml": "IELTS/P3/Living dunes.html"
   },
   "audit": {

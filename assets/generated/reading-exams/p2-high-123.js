@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/36. P2 - Bird Migration 鸟类迁徙【高】.html",
-    "shuiPdf": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
+    "pdf": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
     "ieltsHtml": "IELTS/P2/Bird Migration.html"
   },
   "audit": {

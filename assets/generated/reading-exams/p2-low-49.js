@@ -75,12 +75,12 @@
     "q9": "I",
     "q10": "F",
     "q11": "A",
-    "q12": "D",
+    "q12": "J",
     "q13": "H"
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/142. P2 - Born to Trade 交易的本能.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/",
     "ieltsHtml": null
   },
   "audit": {

@@ -40,7 +40,6 @@
     });
   }
 
-  var storage = window.storage;
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
@@ -101,7 +100,6 @@
       if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
         window.ensurePracticeRecordsSync('practice-view').catch(function () { });
       }
-      if (normalized === 'practice' && typeof window.updatePracticeView === 'function') window.updatePracticeView();
     };
   }
 
@@ -145,53 +143,24 @@
     return fn.name === 'lazyProxy' || src.indexOf('ensureLazyGroup') !== -1 || src.indexOf('AppLazyLoader') !== -1;
   };
 
-  function _ensureFallbackDataIntegrityManager() {
-    if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-      try {
-        window.dataIntegrityManager = new window.DataIntegrityManager();
-      } catch (error) {
-        console.warn('[Fallback] 初始化 DataIntegrityManager 失败:', error);
-      }
-    }
-    return window.dataIntegrityManager || null;
+  function _fallbackDownloadJson(data, filename) {
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json; charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   }
 
-  var _fallbackDataIntegrityLoadPromise = null;
-
-  function _ensureFallbackDataIntegrityManagerAsync() {
-    var manager = _ensureFallbackDataIntegrityManager();
-    if (manager) {
-      return Promise.resolve(manager);
-    }
-
-    if (!_fallbackDataIntegrityLoadPromise) {
-      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('settings-tools');
-      } else if (typeof document !== 'undefined' && !window.DataIntegrityManager) {
-        _fallbackDataIntegrityLoadPromise = new Promise(function (resolve, reject) {
-          var script = document.createElement('script');
-          script.src = 'js/components/DataIntegrityManager.js';
-          script.onload = resolve;
-          script.onerror = function (error) {
-            reject(error || new Error('failed to load DataIntegrityManager'));
-          };
-          document.head.appendChild(script);
-        });
-      } else {
-        _fallbackDataIntegrityLoadPromise = Promise.resolve();
-      }
-    }
-
-    return _fallbackDataIntegrityLoadPromise.then(function () {
-      var readyManager = _ensureFallbackDataIntegrityManager();
-      if (!readyManager) {
-        throw new Error('数据管理模块未初始化');
-      }
-      return readyManager;
-    }).catch(function (error) {
-      _fallbackDataIntegrityLoadPromise = null;
-      throw error;
-    });
+  async function _fallbackExportAllData() {
+    await window.AppData.ready;
+    var snapshot = await window.AppData.backups.export();
+    _fallbackDownloadJson(snapshot, 'ielts-atlas-backup-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json');
+    try { await window.AppData.backups.recordExport({ type: 'full-v2', checksum: snapshot.checksum }); } catch (error) { console.warn('[Fallback] 导出历史记录失败:', error); }
+    return snapshot;
   }
 
   function _fallbackCreateElement(tag, attributes, children) {
@@ -273,21 +242,15 @@
         return;
       }
 
-      if (action === 'close-modal') {
+      if (action === 'close-modal' || action === 'dismiss-inline') {
         event.preventDefault();
-        var overlay = document.querySelector('.backup-modal-overlay');
+        var overlay = document.getElementById('backup-list-modal')
+          || document.querySelector('.backup-modal-overlay')
+          || document.querySelector('.backup-list-container');
         if (overlay) {
           overlay.remove();
         }
         return;
-      }
-
-      if (action === 'dismiss-inline') {
-        event.preventDefault();
-        var inline = document.querySelector('.backup-list-container');
-        if (inline) {
-          inline.remove();
-        }
       }
     });
 
@@ -300,21 +263,13 @@
       return;
     }
 
-    var manager = null;
-    try {
-      manager = await _ensureFallbackDataIntegrityManagerAsync();
-    } catch (error) {
-      window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-      return;
-    }
-
     if (!confirm('确定要恢复备份 ' + backupId + ' 吗？当前数据将被覆盖。')) {
       return;
     }
 
     try {
       window.showMessage && window.showMessage('正在恢复备份...', 'info');
-      await manager.restoreBackup(backupId);
+      await window.AppData.backups.restore(backupId);
       window.showMessage && window.showMessage('备份恢复成功', 'success');
       setTimeout(function () {
         try {
@@ -393,30 +348,6 @@
     };
   }
 
-  var ensureDataBackupManager = (function () {
-    let loading = null;
-    return function ensureDataBackupManager() {
-      if (window.DataBackupManager) {
-        return Promise.resolve(new window.DataBackupManager());
-      }
-      if (loading) {
-        return loading.then(() => new window.DataBackupManager());
-      }
-      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        loading = window.AppLazyLoader.ensureGroup('settings-tools');
-        return loading.then(() => new window.DataBackupManager());
-      }
-      loading = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'js/utils/dataBackupManager.js';
-        script.onload = () => resolve();
-        script.onerror = (err) => reject(err || new Error('failed to load dataBackupManager'));
-        document.head.appendChild(script);
-      });
-      return loading.then(() => new window.DataBackupManager());
-    };
-  })();
-
   function showImportModeModal(onSelect) {
     const overlay = document.createElement('div');
     overlay.className = 'import-mode-overlay-lite';
@@ -440,7 +371,7 @@
 
     const defs = [
       { mode: 'merge', icon: '📥', title: '增量导入', text: '合并新数据，保留现有记录。适合日常更新。' },
-      { mode: 'replace', icon: '⚠️', title: '覆盖导入', text: '清空并替换所有记录。慎用，数据不可恢复。' }
+      { mode: 'replace', icon: '⚠️', title: '覆盖练习记录', text: '仅用文件中的练习记录替换现有记录；提交前会显示删除数量。' }
     ];
 
     defs.forEach((def) => {
@@ -603,12 +534,29 @@
         return;
       }
       try {
-        const manager = await ensureDataBackupManager();
-        const result = await manager.importPracticeData(data, {
-          mergeMode: mode === 'replace' ? 'replace' : 'merge',
-          createBackup: true,
-          validateData: true
+        const payload = Array.isArray(data) ? { records: data } : data;
+        const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mode === 'replace' ? 'replace' : 'merge' });
+        if (preview.destructive) {
+          const practice = preview.practice || {};
+          const summary = [
+            '这次导入会删除现有数据。',
+            `练习记录：现有 ${Number(practice.existingCount) || 0} 条 → 导入后 ${Number(practice.finalCount) || 0} 条`,
+            `将删除 ${Number(practice.removedCount) || 0} 条。`
+          ];
+          if (Array.isArray(preview.clearedKeys) && preview.clearedKeys.length) {
+            summary.push(`将清空数据域：${preview.clearedKeys.join('、')}`);
+          }
+          summary.push('', '是否确认继续？');
+          if (!window.confirm(summary.join('\n'))) {
+            window.showMessage && window.showMessage('已取消导入，现有数据未改变', 'info');
+            return;
+          }
+        }
+        const backup = await window.AppData.backups.create({ type: 'pre-import' });
+        const result = await window.AppData.backups.commitImport(preview.id, {
+          confirmDestructive: preview.destructive === true
         });
+        try { await window.AppData.backups.recordImport({ type: preview.format, keys: preview.keys, backupId: backup.id, practice: preview.practice }); } catch (historyError) { console.warn('[Fallback] 导入历史记录失败:', historyError); }
         window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
       } catch (error) {
         console.error('[importData] failed', error);
@@ -620,17 +568,8 @@
 
   if (typeof window.exportAllData !== 'function') {
     window.exportAllData = async function () {
-      var manager = null;
       try {
-        manager = await _ensureFallbackDataIntegrityManagerAsync();
-      } catch (error) {
-        console.error('[Fallback] 数据导出模块加载失败:', error);
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-        return;
-      }
-
-      try {
-        await manager.exportData();
+        await _fallbackExportAllData();
         window.showMessage && window.showMessage('数据导出成功', 'success');
       } catch (error) {
         console.error('[Fallback] 数据导出失败:', error);
@@ -665,25 +604,14 @@
   // Fallbacks for backup operations used by Settings
   if (typeof window.createManualBackup !== 'function') {
     window.createManualBackup = async function () {
-      var manager = null;
       try {
-        manager = await _ensureFallbackDataIntegrityManagerAsync();
-      } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-        return;
-      }
-      try {
-        var backup = await manager.createBackup(null, 'manual');
-        if (backup && backup.external) {
-          window.showMessage && window.showMessage('本地存储不足，已将备份下载为文件', 'warning');
-        } else {
-          window.showMessage && window.showMessage('备份创建成功: ' + (backup && backup.id ? backup.id : ''), 'success');
-        }
+        var backup = await window.AppData.backups.create({ type: 'manual' });
+        window.showMessage && window.showMessage('备份创建成功: ' + (backup && backup.id ? backup.id : ''), 'success');
         try { if (typeof window.showBackupList === 'function') { window.showBackupList(); } } catch (_) { }
       } catch (error) {
         if (_fallbackIsQuotaExceeded(error)) {
           try {
-            await manager.exportData();
+            await _fallbackExportAllData();
             window.showMessage && window.showMessage('存储不足：已将数据导出为文件', 'warning');
           } catch (exportErr) {
             window.showMessage && window.showMessage('备份失败且导出失败: ' + (exportErr && exportErr.message ? exportErr.message : exportErr), 'error');
@@ -697,35 +625,25 @@
 
   if (typeof window.showBackupList !== 'function') {
     window.showBackupList = async function () {
-      var manager = null;
-      try {
-        manager = await _ensureFallbackDataIntegrityManagerAsync();
-      } catch (error) {
-        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
-        return;
-      }
-
       _ensureFallbackBackupDelegates();
       var backups = [];
       try {
-        backups = await manager.getBackupList();
+        backups = await window.AppData.backups.list();
       } catch (error) {
         console.warn('[Fallback] 获取备份列表失败:', error);
         window.showMessage && window.showMessage('无法获取备份列表', 'error');
         return;
       }
 
-      var container = document.getElementById('settings-view');
       var create = _fallbackCreateElement;
+      var MODAL_ID = 'backup-list-modal';
 
-      // 防止重复渲染多个列表/遮罩
-      var existingInline = (container && container.querySelector('.backup-list-container')) || document.querySelector('.backup-list-container');
-      if (existingInline) {
-        existingInline.remove();
-      }
-      var existingOverlay = document.querySelector('.backup-modal-overlay');
-      if (existingOverlay) {
-        existingOverlay.remove();
+      // Single glass modal — drop legacy inline/list dual path
+      var existing = document.getElementById(MODAL_ID)
+        || document.querySelector('.backup-modal-overlay')
+        || document.querySelector('.backup-list-container');
+      if (existing && existing.remove) {
+        existing.remove();
       }
 
       var buildEntries = function () {
@@ -740,19 +658,21 @@
         }
 
         return backups.map(function (backup) {
+          var metaParts = [];
+          try { metaParts.push(new Date(backup.timestamp).toLocaleString()); } catch (_) {}
+          if (backup.type) { metaParts.push(String(backup.type)); }
           return create('div', {
             className: 'backup-entry',
             dataset: { backupId: backup.id }
           }, [
             create('div', { className: 'backup-entry-info' }, [
               create('strong', { className: 'backup-entry-id' }, backup.id),
-              create('div', { className: 'backup-entry-meta' }, new Date(backup.timestamp).toLocaleString()),
-              create('div', { className: 'backup-entry-meta' }, '类型: ' + backup.type + ' | 版本: ' + backup.version)
+              create('div', { className: 'backup-entry-meta' }, metaParts.join(' · '))
             ]),
             create('div', { className: 'backup-entry-actions' }, [
               create('button', {
                 type: 'button',
-                className: 'btn btn-success backup-entry-restore',
+                className: 'btn data-mgmt-btn backup-entry-restore',
                 dataset: { backupAction: 'restore', backupId: backup.id }
               }, '恢复')
             ])
@@ -760,64 +680,39 @@
         });
       };
 
-      var existing = document.querySelector('.backup-modal-overlay');
-      if (existing) existing.remove();
+      var overlay = create('div', {
+        className: 'theme-modal show backup-list-modal shui-secondary-modal shui-secondary-modal--md backup-modal-overlay',
+        id: MODAL_ID,
+        role: 'dialog',
+        ariaModal: 'true',
+        ariaLabelledby: 'backup-list-title'
+      });
 
-      var card = create('div', { className: 'backup-list-card' }, [
-        create('div', { className: 'backup-list-header' }, [
-          create('h3', { className: 'backup-list-title' }, [
-            create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
-            create('span', { className: 'backup-list-title-text' }, '备份列表')
+      var content = create('div', { className: 'theme-modal-content shui-secondary-modal__content' }, [
+        create('div', { className: 'theme-modal-header shui-secondary-modal__header' }, [
+          create('div', { className: 'shui-secondary-modal__title-group' }, [
+            create('div', { className: 'shui-secondary-modal__eyebrow' }, 'BACKUP'),
+            create('h3', { id: 'backup-list-title' }, '备份列表')
           ]),
           create('button', {
             type: 'button',
-            className: 'btn btn-secondary backup-list-dismiss',
-            dataset: { backupAction: 'dismiss-inline' }
-          }, '收起')
+            className: 'theme-modal-close backup-modal-close',
+            dataset: { backupAction: 'close-modal' },
+            ariaLabel: '关闭备份列表'
+          }, '\u00d7')
         ]),
-        create('div', { className: 'backup-list-scroll' }, buildEntries())
+        create('div', { className: 'theme-modal-body shui-secondary-modal__body backup-list-body' }, buildEntries())
       ]);
 
-      if (container) {
-        var holder = create('div', { className: 'backup-list-container' }, card);
-        var settingsGroup = container.querySelector('.hero-settings-group');
-        if (settingsGroup && settingsGroup.parentElement === container) {
-          settingsGroup.insertAdjacentElement('afterend', holder);
-        } else {
-          container.appendChild(holder);
+      overlay.appendChild(content);
+      overlay.addEventListener('click', function (event) {
+        if (event.target === overlay) {
+          overlay.remove();
         }
-        if (!Array.isArray(backups) || backups.length === 0) {
-          window.showMessage && window.showMessage('暂无备份记录', 'info');
-        }
-        return;
+      });
+      if (document.body) {
+        document.body.appendChild(overlay);
       }
-
-      var overlay = create('div', { className: 'backup-modal-overlay' }, [
-        create('div', { className: 'backup-modal' }, [
-          create('div', { className: 'backup-modal-header' }, [
-            create('h3', { className: 'backup-modal-title' }, [
-              create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
-              create('span', { className: 'backup-list-title-text' }, '备份列表')
-            ]),
-            create('button', {
-              type: 'button',
-              className: 'btn btn-secondary backup-modal-close',
-              dataset: { backupAction: 'close-modal' },
-              ariaLabel: '关闭备份列表'
-            }, '关闭')
-          ]),
-          create('div', { className: 'backup-modal-body' }, buildEntries()),
-          create('div', { className: 'backup-modal-footer' }, [
-            create('button', {
-              type: 'button',
-              className: 'btn btn-secondary backup-modal-close',
-              dataset: { backupAction: 'close-modal' }
-            }, '关闭')
-          ])
-        ])
-      ]);
-
-      document.body.appendChild(overlay);
       if (!Array.isArray(backups) || backups.length === 0) {
         window.showMessage && window.showMessage('暂无备份记录', 'info');
       }
@@ -832,74 +727,63 @@
 
   async function ensureDefaultConfig() {
     try {
-      var configs = [];
-      if (window.storage && storage.get) {
-        var maybeConfigs = storage.get('exam_index_configurations', []);
-        configs = (maybeConfigs && typeof maybeConfigs.then === 'function') ? await maybeConfigs : maybeConfigs;
-      }
+      var configs = await window.AppData.library.listConfigurations();
       if (!Array.isArray(configs)) configs = [];
-      var hasDefault = configs.some(function (c) { return c && c.key === 'exam_index'; });
-      if (!hasDefault) {
-        var count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
-        configs.push({ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() });
-        if (window.storage && storage.set) {
-          try {
-            var maybeSetConfigs = storage.set('exam_index_configurations', configs);
-            if (maybeSetConfigs && typeof maybeSetConfigs.then === 'function') await maybeSetConfigs;
-          } catch (err) {
-            console.warn('[Fallback] 无法保存 exam_index_configurations:', err);
-          }
-        }
-        if (window.storage && storage.get) {
-          try {
-            var currentActive = storage.get('active_exam_index_key');
-            currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
-            if (!currentActive && window.storage && storage.set) {
-              var maybeSetActive = storage.set('active_exam_index_key', 'exam_index');
-              if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
-            }
-          } catch (activeErr) {
-            console.warn('[Fallback] 无法校正 active_exam_index_key:', activeErr);
-          }
-        }
-      }
-      return configs;
+      var activeIndex = await window.resolveActiveLibraryIndex();
+      var count = Array.isArray(activeIndex) ? activeIndex.length : 0;
+      return [{ name: '默认题库', key: '', id: null, builtIn: true, sourceType: 'built-in-manifest', examCount: count }].concat(configs);
     } catch (e) {
       console.warn('[Fallback] ensureDefaultConfig 失败:', e);
       return [];
     }
   }
 
+  // Resolve the container for the library config list. The config list now
+  // lives inside the library manager modal (#library-manager-modal-body); when
+  // the modal is open we mount there, otherwise we fall back to the legacy
+  // #settings-view host so the boot-fallback still renders somewhere visible.
+  function _resolveLibraryConfigContainer(options) {
+    var requestedId = options && typeof options.containerId === 'string' ? options.containerId : null;
+    if (requestedId) {
+      var requested = document.getElementById(requestedId);
+      if (requested) { return requested; }
+    }
+    var modalHost = document.getElementById('library-manager-modal-body');
+    if (modalHost) { return modalHost; }
+    return document.getElementById('settings-view');
+  }
+
   // Fallback for library config list
   if (typeof window.showLibraryConfigListV2 !== 'function') {
-    window.showLibraryConfigListV2 = async function () {
+    window.showLibraryConfigListV2 = async function (options) {
       var configs = [];
       try {
-        configs = (window.storage && storage.get) ? await storage.get('exam_index_configurations', []) : [];
+        configs = await ensureDefaultConfig();
       } catch (e) {
         configs = [];
-      }
-      if (!Array.isArray(configs) || configs.length === 0) {
-        configs = await ensureDefaultConfig();
       }
       if (!Array.isArray(configs) || configs.length === 0) {
         if (window.showMessage) showMessage('暂无题库配置记录', 'info');
         return;
       }
 
-      var activeKey = 'exam_index';
+      var activeKey = null;
       try {
-        if (window.storage && storage.get) {
-          activeKey = await storage.get('active_exam_index_key', 'exam_index');
-        }
+        activeKey = await window.AppData.library.getActive();
       } catch (e) { }
 
+      var containerId = options && typeof options.containerId === 'string' ? options.containerId : null;
       if (typeof window.renderLibraryConfigList === 'function') {
-        window.renderLibraryConfigList({ configs: configs, activeKey: activeKey, allowDelete: true });
+        window.renderLibraryConfigList({
+          configs: configs,
+          activeKey: activeKey,
+          allowDelete: true,
+          containerId: containerId
+        });
         return;
       }
 
-      var container = document.getElementById('settings-view');
+      var container = _resolveLibraryConfigContainer(options);
       if (!container) { return; }
 
       if (typeof window.renderLibraryConfigFallback === 'function') {
@@ -928,12 +812,14 @@
       configs.forEach(function (cfg) {
         if (!cfg) return;
         var item = document.createElement('div');
-        item.className = 'library-config-panel__item' + (cfg.key === activeKey ? ' library-config-panel__item--active' : '');
+        var isDefault = cfg.builtIn === true;
+        var isActive = isDefault ? activeKey == null : cfg.key === activeKey;
+        item.className = 'library-config-panel__item' + (isActive ? ' library-config-panel__item--active' : '');
 
         var info = document.createElement('div');
         info.className = 'library-config-panel__info';
         var titleLine = document.createElement('div');
-        titleLine.textContent = (cfg.key === 'exam_index' ? '默认题库' : (cfg.name || cfg.key));
+        titleLine.textContent = (isDefault ? '默认题库' : (cfg.name || cfg.key));
         info.appendChild(titleLine);
 
         var meta = document.createElement('div');
@@ -951,18 +837,18 @@
         switchBtn.className = 'btn btn-secondary';
         switchBtn.type = 'button';
         switchBtn.dataset.configAction = 'switch';
-        switchBtn.dataset.configKey = cfg.key;
-        if (cfg.key === activeKey) switchBtn.disabled = true;
+        switchBtn.dataset.configKey = cfg.key || '';
+        if (isActive) switchBtn.disabled = true;
         switchBtn.textContent = '切换';
         actions.appendChild(switchBtn);
 
-        if (cfg.key !== 'exam_index') {
+        if (!isDefault) {
           var deleteBtn = document.createElement('button');
           deleteBtn.className = 'btn btn-warning';
           deleteBtn.type = 'button';
           deleteBtn.dataset.configAction = 'delete';
-          deleteBtn.dataset.configKey = cfg.key;
-          if (cfg.key === activeKey) deleteBtn.disabled = true;
+          deleteBtn.dataset.configKey = cfg.key || '';
+          if (isActive) deleteBtn.disabled = true;
           deleteBtn.textContent = '删除';
           actions.appendChild(deleteBtn);
         }
@@ -1122,7 +1008,7 @@
           create('div', { className: 'library-loader-actions' }, [
             create('button', {
               type: 'button',
-              className: 'btn library-loader-primary',
+              className: 'btn data-mgmt-btn library-loader-primary',
               id: prefix + '-full-btn',
               dataset: {
                 libraryAction: 'trigger-input',
@@ -1131,7 +1017,7 @@
             }, '创建全量配置'),
             create('button', {
               type: 'button',
-              className: 'btn btn-secondary library-loader-secondary',
+              className: 'btn data-mgmt-btn library-loader-secondary',
               id: prefix + '-inc-btn',
               dataset: {
                 libraryAction: 'trigger-input',
@@ -1166,7 +1052,7 @@
       };
 
       var overlay = create('div', {
-        className: 'modal-overlay show library-loader-overlay',
+        className: 'theme-modal show library-loader-overlay shui-secondary-modal shui-secondary-modal--lg',
         id: 'library-loader-overlay',
         role: 'dialog',
         ariaModal: 'true',
@@ -1174,24 +1060,24 @@
       });
 
       var modal = create('div', {
-        className: 'modal library-loader-modal',
+        className: 'theme-modal-content library-loader-modal shui-secondary-modal__content',
         role: 'document'
       });
 
-      var header = create('div', { className: 'modal-header library-loader-header' }, [
-        create('div', { className: 'library-loader-title-group' }, [
-          create('div', { className: 'library-loader-eyebrow' }, 'LIBRARY IMPORT'),
-          create('h2', { className: 'modal-title', id: 'library-loader-title' }, '加载题库')
+      var header = create('div', { className: 'theme-modal-header library-loader-header shui-secondary-modal__header' }, [
+        create('div', { className: 'library-loader-title-group shui-secondary-modal__title-group' }, [
+          create('div', { className: 'library-loader-eyebrow shui-secondary-modal__eyebrow' }, 'LIBRARY IMPORT'),
+          create('h3', { className: 'modal-title', id: 'library-loader-title' }, '加载题库')
         ]),
         create('button', {
           type: 'button',
-          className: 'modal-close library-loader-close',
+          className: 'theme-modal-close library-loader-close',
           ariaLabel: '关闭',
           dataset: { libraryAction: 'close' }
-        }, '×')
+        }, '\u00d7')
       ]);
 
-      var body = create('div', { className: 'modal-body library-loader-body' }, [
+      var body = create('div', { className: 'theme-modal-body library-loader-body shui-secondary-modal__body' }, [
         create('div', { className: 'library-loader-grid' }, [
           createLoaderCard('reading', '阅读题库', '从所选文件夹递归识别 HTML/PDF 题源。', '全量只替换阅读索引；增量只追加或更新新阅读题。'),
           createLoaderCard('listening', '听力题库', '从任意层级识别带答案链路的听力 HTML 和音频。', '全量只替换听力索引；增量只追加或更新新听力题。')
@@ -1210,16 +1096,7 @@
         })
       ]);
 
-      var footer = create('div', { className: 'modal-footer library-loader-footer' }, [
-        create('button', {
-          type: 'button',
-          className: 'btn btn-secondary library-loader-close-btn',
-          id: 'close-loader',
-          dataset: { libraryAction: 'close' }
-        }, '关闭')
-      ]);
-
-      ensureArray([header, body, footer]).forEach(function (section) {
+      ensureArray([header, body]).forEach(function (section) {
         if (section) {
           modal.appendChild(section);
         }
@@ -1322,8 +1199,21 @@
         }
       }
 
+      var backdropHandler = function (event) {
+        if (event.target === overlay) {
+          cleanup();
+        }
+      };
+
       overlay.addEventListener('click', clickHandler);
+      overlay.addEventListener('click', backdropHandler);
       overlay.addEventListener('change', changeHandler);
+
+      var prevCleanup = cleanup;
+      cleanup = function () {
+        overlay.removeEventListener('click', backdropHandler);
+        prevCleanup();
+      };
     };
   }
 
@@ -1335,29 +1225,14 @@
       if (typeof window.getActiveLibraryConfigurationKey === 'function') {
         try { return await window.getActiveLibraryConfigurationKey(); } catch (_) { }
       }
-      if (storage && storage.get) {
-        try {
-          var maybeKey = storage.get('active_exam_index_key', 'exam_index');
-          var key = (maybeKey && typeof maybeKey.then === 'function') ? await maybeKey : maybeKey;
-          return key || 'exam_index';
-        } catch (_) { }
-      }
-      return 'exam_index';
+      return window.AppData.library.getActive();
     }
 
     async function _fallbackSetActiveLibraryKey(key) {
-      if (!key) return;
       if (typeof window.setActiveLibraryConfiguration === 'function') {
         try { await window.setActiveLibraryConfiguration(key); return; } catch (_) { }
       }
-      if (storage && storage.set) {
-        try {
-          var maybe = storage.set('active_exam_index_key', key);
-          if (maybe && typeof maybe.then === 'function') await maybe;
-        } catch (err) {
-          console.warn('[Fallback] 无法写入 active_exam_index_key:', err);
-        }
-      }
+      await window.AppData.library.activate(typeof key === 'string' && key.trim() ? key.trim() : null);
     }
 
     async function _fallbackSaveLibraryConfiguration(name, key, count) {
@@ -1365,51 +1240,28 @@
       if (typeof window.saveLibraryConfiguration === 'function') {
         try { await window.saveLibraryConfiguration(name, key, count); return; } catch (_) { }
       }
-      if (storage && storage.get && storage.set) {
-        try {
-          var existing = storage.get('exam_index_configurations', []);
-          existing = (existing && typeof existing.then === 'function') ? await existing : existing;
-          if (!Array.isArray(existing)) existing = [];
-          var idx = existing.findIndex(function (c) { return c && c.key === key; });
-          if (idx >= 0) { existing[idx] = entry; } else { existing.push(entry); }
-          var maybeSave = storage.set('exam_index_configurations', existing);
-          if (maybeSave && typeof maybeSave.then === 'function') await maybeSave;
-        } catch (err) {
-          console.warn('[Fallback] 保存题库配置失败:', err);
-        }
-      }
+      if (key) await window.AppData.library.updateConfiguration(entry);
     }
 
     async function _fallbackSaveIndexForKey(key, list) {
-      if (storage && storage.set) {
-        var maybe = storage.set(key, list);
-        if (maybe && typeof maybe.then === 'function') {
-          await maybe;
-        }
-      } else {
-        try { window[key] = list; } catch (_) { }
-      }
+      if (key) await window.AppData.library.import({ id: key, configuration: { id: key, key: key, name: key }, index: list });
     }
 
     async function _fallbackApplyLibraryConfig(key, dataset, options) {
       if (typeof window.applyLibraryConfiguration === 'function') {
         try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
       }
-      // fallback:直接刷新内存状态与UI
-      if (typeof window.setExamIndexState === 'function') {
-        try { window.setExamIndexState(dataset); } catch (_) { }
-      } else {
-        try { window.examIndex = Array.isArray(dataset) ? dataset.slice() : []; } catch (_) { }
-      }
+      var snapshot = Array.isArray(dataset) ? dataset.slice() : [];
       if (options && options.setActive) {
         await _fallbackSetActiveLibraryKey(key);
       }
-      try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
+      try { if (typeof window.updateOverview === 'function') window.updateOverview(snapshot); } catch (_) { }
       try {
         if (typeof window.loadExamList === 'function') {
-          window.loadExamList();
+          window.loadExamList(snapshot);
         }
       } catch (_) { }
+      try { window.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: key, index: snapshot } })); } catch (_) { }
       return true;
     }
 
@@ -1620,15 +1472,7 @@
       }
 
       var activeKey = await _fallbackGetActiveLibraryKey();
-      var currentIndex = (typeof window.getExamIndexState === 'function')
-        ? window.getExamIndexState()
-        : (Array.isArray(window.examIndex) ? window.examIndex : []);
-      if (storage && storage.get) {
-        try {
-          var maybeCurrent = storage.get(activeKey, currentIndex);
-          currentIndex = (maybeCurrent && typeof maybeCurrent.then === 'function') ? await maybeCurrent : maybeCurrent;
-        } catch (_) { }
-      }
+      var currentIndex = await window.resolveActiveLibraryIndex();
       if (!Array.isArray(currentIndex)) currentIndex = [];
       currentIndex = _fallbackNormalizeIndexForCustomConfig(currentIndex);
 
@@ -1671,7 +1515,7 @@
       };
 
       if (mode === 'full') {
-        var targetKey = 'exam_index_' + Date.now();
+        var targetKey = 'library_import_' + Date.now();
         var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
         try {
           await saveAndApply(targetKey, configName, true);
@@ -1699,7 +1543,7 @@
         }
       }
 
-      var targetKeyInc = 'exam_index_' + Date.now();
+      var targetKeyInc = 'library_import_' + Date.now();
       var configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
       await saveAndApply(targetKeyInc, configNameInc, false);
       await _fallbackApplyLibraryConfig(targetKeyInc, newIndex, { setActive: true, skipConfigRefresh: false });
@@ -1764,118 +1608,6 @@
 })();
 
 
-/* ===== js/patches/runtime-fixes.js ===== */
-// Runtime fixes to smooth async storage + recovery under file://
-(function () {
-  'use strict';
-
-  function ensureCompatPatch(global) {
-    if (!global || (global.CompatPatch && typeof global.CompatPatch.register === 'function')) {
-      return global && global.CompatPatch ? global.CompatPatch : null;
-    }
-    var patches = [];
-    var register = function register(name, metadata) {
-      if (!name) {
-        return null;
-      }
-      var patch = Object.assign({
-        name: String(name),
-        owner: 'legacy',
-        reason: '',
-        removeAfter: ''
-      }, metadata || {});
-      patches.push(patch);
-      return patch;
-    };
-    var list = function list() {
-      return patches.slice();
-    };
-    global.CompatPatch = Object.assign({}, global.CompatPatch || {}, {
-      register: register,
-      list: list
-    });
-    return global.CompatPatch;
-  }
-
-  ensureCompatPatch(window);
-
-  if (window.CompatPatch && typeof window.CompatPatch.register === 'function') {
-    window.CompatPatch.register('practice-recorder-temp-recovery-async', {
-      owner: 'practice',
-      reason: 'file protocol compatible recovery for legacy temporary practice records',
-      removeAfter: 'after PracticeRecorder recovery is canonical'
-    });
-  }
-
-  try {
-    // Patch PracticeRecorder.recoverTemporaryRecords to a robust async version
-    const patchPracticeRecorder = () => {
-      const PR = window.PracticeRecorder;
-      if (!PR || !PR.prototype) return false;
-
-      const original = PR.prototype.recoverTemporaryRecords;
-      PR.prototype.recoverTemporaryRecords = async function () {
-        try {
-          const raw = (window.storage && storage.get)
-            ? await storage.get('temp_practice_records', [])
-            : [];
-          const tempRecords = Array.isArray(raw) ? raw : [];
-
-          if (tempRecords.length === 0) {
-            console.log('[PracticeRecorder] 没有需要恢复的临时记录');
-            return;
-          }
-
-          console.log(`[PracticeRecorder] 发现 ${tempRecords.length} 条临时记录，开始恢复...`);
-
-          let recoveredCount = 0;
-          const failed = [];
-
-          for (const tempRecord of tempRecords) {
-            try {
-              const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord || {};
-              const sanitized = (this && typeof this.sanitizeRecoveredRecord === 'function')
-                ? this.sanitizeRecoveredRecord(cleanRecord)
-                : cleanRecord;
-              if (!sanitized || !sanitized.examId) {
-                console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord && cleanRecord.id);
-                continue;
-              }
-              if (this && typeof this.savePracticeRecord === 'function') {
-                await this.savePracticeRecord(sanitized);
-              }
-              recoveredCount++;
-              console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized && sanitized.id}`);
-            } catch (e) {
-              console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord && tempRecord.id}`, e);
-              failed.push(tempRecord);
-            }
-          }
-
-          if (failed.length === 0) {
-            if (window.storage && storage.remove) await storage.remove('temp_practice_records');
-            console.log(`[PracticeRecorder] 所有 ${recoveredCount} 条临时记录恢复成功`);
-          } else {
-            if (window.storage && storage.set) await storage.set('temp_practice_records', failed);
-            console.log(`[PracticeRecorder] 恢复了 ${recoveredCount} 条记录，${failed.length} 条失败`);
-          }
-        } catch (error) {
-          console.error('[PracticeRecorder] 恢复临时记录时出错:', error);
-        }
-      };
-
-      console.log('[RuntimeFixes] PracticeRecorder.recoverTemporaryRecords 已替换为异步实现');
-      return true;
-    };
-
-    const tryPatch = () => {
-      if (!patchPracticeRecorder()) setTimeout(tryPatch, 100);
-    };
-    tryPatch();
-  } catch (_) {}
-})();
-
-
 /* ===== js/app.js ===== */
 /**
  * 主应用程序
@@ -1892,17 +1624,14 @@ class ExamSystemApp {
         this.state = {
             // 考试相关状态
             exam: {
-                index: [],
                 currentCategory: 'all',
                 currentExamType: 'all',
                 filteredExams: [],
-                configurations: {},
-                activeConfigKey: 'exam_index'
+                configurations: {}
             },
 
             // 练习相关状态
             practice: {
-                records: [],
                 selectedRecords: new Set(),
                 bulkDeleteMode: false,
                 dataCollector: null
@@ -1921,7 +1650,6 @@ class ExamSystemApp {
 
             // 组件实例
             components: {
-                dataIntegrityManager: null,
                 pdfHandler: null,
                 browseStateManager: null,
                 practiceListScroller: null
@@ -1957,62 +1685,6 @@ class ExamSystemApp {
         updateState(path, updates) {
             const current = this.getState(path);
             this.setState(path, { ...current, ...updates });
-        },
-        async persistState(path, storageKey = null) {
-            const value = this.getState(path);
-            const key = storageKey || path.replace('.', '_');
-            try {
-                const serializedValue = StateSerializer.serialize(value);
-                await storage.set(key, serializedValue);
-            } catch (error) {
-                console.error(`[App] 持久化状态失败 ${path}:`, error);
-            }
-        },
-        async persistMultipleState(mapping) {
-            const promises = Object.entries(mapping).map(([path, storageKey]) =>
-                this.persistState(path, storageKey)
-            );
-            try {
-                await Promise.all(promises);
-            } catch (error) {
-                console.error('[App] 批量持久化状态失败:', error);
-            }
-        },
-        async loadState(path, storageKey = null) {
-            const key = storageKey || path.replace('.', '_');
-            try {
-                const value = await storage.get(key, null);
-                if (value !== null) {
-                    const deserializedValue = StateSerializer.deserialize(value);
-                    this.setState(path, deserializedValue);
-                    return deserializedValue;
-                }
-            } catch (error) {
-                console.error(`[App] 加载状态失败 ${path}:`, error);
-            }
-            return null;
-        },
-        async loadPersistedState() {
-            const stateMappings = {
-                exam: 'app_exam_state',
-                practice: 'app_practice_state',
-                ui: 'app_ui_state',
-                system: 'app_system_state'
-            };
-            for (const [path, storageKey] of Object.entries(stateMappings)) {
-                await this.loadState(path, storageKey);
-            }
-            console.log('[App] 持久化状态加载完成');
-        },
-        async saveAllState() {
-            const stateMappings = {
-                exam: 'app_exam_state',
-                practice: 'app_practice_state',
-                ui: 'app_ui_state',
-                system: 'app_system_state'
-            };
-            await this.persistMultipleState(stateMappings);
-            console.log('[App] 所有状态已保存');
         },
         async checkComponents() {
             console.log('=== 组件加载检查 ===');
@@ -2052,12 +1724,9 @@ class ExamSystemApp {
                 console.log(`${name}: ${status}`);
             });
             console.log('\n=== 数据检查 ===');
-            const practiceRecordsCount = this.getState('practice.records')?.length || 0;
-            console.log(`practiceRecords: ${practiceRecordsCount} 条记录`);
             try {
-                const records = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                    ? await window.PracticeRecordAPI.list()
-                    : [];
+                // 只统计条数，light 投影即可，避免为诊断日志拉取全量答题详情。
+                const records = await window.AppData.practice.list({ projection: 'light' });
                 const count = Array.isArray(records) ? records.length : 0;
                 console.log(`canonical practice records: ${count} 条记录`);
             } catch (_) {
@@ -2084,11 +1753,6 @@ class ExamSystemApp {
                     console.warn('[App] AppStateService connect failed:', error);
                 }
             }
-            Object.defineProperty(window, 'dataIntegrityManager', {
-                get: () => this.state.components.dataIntegrityManager,
-                set: (value) => this.setState('components.dataIntegrityManager', value),
-                configurable: true
-            });
             Object.defineProperty(window, 'pdfHandler', {
                 get: () => this.state.components.pdfHandler,
                 set: (value) => this.setState('components.pdfHandler', value),
@@ -2105,33 +1769,22 @@ class ExamSystemApp {
 
     const integratedBootstrapMixin = {
         checkDependencies() {
-            const requiredGlobals = ['storage'];
+            const requiredGlobals = ['AppData'];
             const missing = requiredGlobals.filter((name) => !window[name]);
             if (missing.length > 0) {
                 throw new Error(`Missing required dependencies: ${missing.join(', ')}`);
             }
         },
         async initializeComponents() {
-            const optionalComponents = [];
-            try {
-                await this.initializeCoreComponents();
-                if (optionalComponents.length > 0) {
-                    try {
-                        await this.waitForComponents(optionalComponents, 5000);
-                        await this.initializeOptionalComponents();
-                    } catch (_) {
-                        await this.initializeAvailableOptionalComponents();
-                    }
-                } else {
-                    await this.initializeOptionalComponents();
-                }
-            } catch (error) {
-                console.error('[App] 核心组件加载失败:', error);
-                throw error;
-            }
+            await this.initializeCoreComponents();
         },
         async initializeCoreComponents() {
             if (this.instantiatePracticeRecorder()) {
+                // PracticeRecorder restores durable sessions asynchronously.  The
+                // hot-upgrade rebind must run after that restore has completed;
+                // otherwise the recovery snapshot can overwrite the host session
+                // that we are about to seed.
+                await this._practiceRecorderRebindPromise;
                 return;
             }
             console.warn('[App] PracticeRecorder类不可用，使用降级记录器');
@@ -2144,12 +1797,117 @@ class ExamSystemApp {
                 return false;
             }
             try {
-                this.components.practiceRecorder = new PracticeRecorder();
+                const previous = this.components && this.components.practiceRecorder
+                    ? this.components.practiceRecorder
+                    : null;
+                if (previous && previous.constructor === window.PracticeRecorder && previous.isFallback !== true) {
+                    return true;
+                }
+                const recorder = new PracticeRecorder();
+                this.components.practiceRecorder = recorder;
                 this.ensurePracticeRecorderEvents();
+                // Hot-upgrade from the bootstrap fallback must re-seed live host sessions;
+                // otherwise PRACTICE_COMPLETE finds no activeSessions and production rejects
+                // synthetic saves, so the child never receives PRACTICE_SUBMIT_ACK / results.
+                const recorderReady = recorder.ready && typeof recorder.ready.then === 'function'
+                    ? recorder.ready
+                    : Promise.resolve();
+                this._practiceRecorderRebindPromise = Promise.resolve(recorderReady)
+                    .then(() => this._rebindPracticeRecorderSessions(recorder, previous))
+                    .catch((rebindError) => {
+                        console.warn('[App] PracticeRecorder ready 后重建活动会话失败:', rebindError);
+                    });
                 return true;
             } catch (error) {
                 console.error('[App] PracticeRecorder初始化失败:', error);
                 return false;
+            }
+        },
+        _rebindPracticeRecorderSessions(recorder, previousRecorder = null) {
+            if (!recorder || typeof recorder.startPracticeSession !== 'function') {
+                return;
+            }
+            const seeded = new Set();
+            try {
+                if (this.examWindows && typeof this.examWindows.forEach === 'function') {
+                    this.examWindows.forEach((info, examId) => {
+                        if (!info || !examId) {
+                            return;
+                        }
+                        if (info.reviewMode || String(info.practiceMode || '').toLowerCase() === 'memorize') {
+                            return;
+                        }
+                        if (info.status === 'completed' || info.status === 'closed') {
+                            return;
+                        }
+                        const sessionId = info.expectedSessionId || info.sessionId || null;
+                        if (!sessionId) {
+                            return;
+                        }
+                        try {
+                            recorder.startPracticeSession(examId, {
+                                sessionId: String(sessionId),
+                                title: info.title || info.examTitle || '',
+                                category: info.category || info.pageType || '',
+                                frequency: info.frequency || '',
+                                libraryConfigurationId: Object.prototype.hasOwnProperty.call(info, 'libraryConfigurationId')
+                                    ? info.libraryConfigurationId
+                                    : (typeof this._readLaunchLibraryConfigurationId === 'function'
+                                        ? this._readLaunchLibraryConfigurationId(examId, null, info)
+                                        : null)
+                            });
+                            if (typeof recorder.handleSessionStarted === 'function') {
+                                recorder.handleSessionStarted({
+                                    examId,
+                                    sessionId: String(sessionId),
+                                    metadata: {
+                                        pageType: info.pageType || null,
+                                        suiteSessionId: info.suiteSessionId || null,
+                                        source: 'recorder-hot-upgrade',
+                                        libraryConfigurationId: Object.prototype.hasOwnProperty.call(info, 'libraryConfigurationId')
+                                            ? info.libraryConfigurationId
+                                            : null
+                                    }
+                                });
+                            }
+                            seeded.add(String(examId));
+                        } catch (seedError) {
+                            console.warn('[App] 升级 PracticeRecorder 时重建活动会话失败:', examId, seedError);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('[App] 升级 PracticeRecorder 时扫描 examWindows 失败:', error);
+            }
+
+            // Carry over any sessions the fallback stub tracked in-memory before the class loaded.
+            try {
+                const priorSessions = previousRecorder && previousRecorder.activeSessions;
+                if (priorSessions && typeof priorSessions.forEach === 'function') {
+                    priorSessions.forEach((session, examId) => {
+                        if (!examId || seeded.has(String(examId)) || !session) {
+                            return;
+                        }
+                        const sessionId = session.sessionId || session.id || null;
+                        if (!sessionId) {
+                            return;
+                        }
+                        try {
+                            recorder.startPracticeSession(examId, Object.assign({}, session.metadata || {}, {
+                                sessionId: String(sessionId),
+                                title: session.metadata && (session.metadata.examTitle || session.metadata.title) || '',
+                                totalQuestions: session.progress && session.progress.totalQuestions || 0,
+                                libraryConfigurationId: session.metadata && session.metadata.libraryConfigurationId != null
+                                    ? session.metadata.libraryConfigurationId
+                                    : null
+                            }));
+                        } catch (seedError) {
+                            console.warn('[App] 升级 PracticeRecorder 时迁移降级会话失败:', examId, seedError);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('[App] 升级 PracticeRecorder 时读取降级会话失败:', error);
             }
         },
         ensurePracticeRecorderEvents() {
@@ -2161,36 +1919,61 @@ class ExamSystemApp {
             }
         },
         createFallbackRecorder() {
-            function normalizeRecords(records) {
-                return Array.isArray(records) ? records : [];
-            }
-            return {
-                startPracticeSession: (examId) => ({ examId: examId || '', startTime: Date.now(), sessionId: `fallback_${Date.now()}`, status: 'started' }),
-                startSession: (examId) => ({ examId: examId || '', startTime: Date.now(), sessionId: `fallback_${Date.now()}`, status: 'started' }),
-                handleRealPracticeData: async () => null,
-                savePracticeRecord: async (record) => {
-                    try {
-                        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.saveRecord === 'function') {
-                            await window.PracticeRecordAPI.saveRecord(record);
-                        } else {
-                            throw new Error('统一练习记录存储未就绪');
-                        }
-                    } catch (error) {
-                        console.warn('[App] 降级记录器保存失败:', error);
+            const activeSessions = new Map();
+            const start = (examId, examData = {}) => {
+                const sessionId = (examData && examData.sessionId)
+                    || `fallback_${examId || 'exam'}_${Date.now()}`;
+                const session = {
+                    examId: examId || '',
+                    startTime: new Date().toISOString(),
+                    sessionId,
+                    status: 'started',
+                    progress: {
+                        totalQuestions: examData && examData.totalQuestions || 0
+                    },
+                    metadata: {
+                        examTitle: examData && examData.title || '',
+                        category: examData && examData.category || '',
+                        frequency: examData && examData.frequency || '',
+                        libraryConfigurationId: examData && examData.libraryConfigurationId != null
+                            ? examData.libraryConfigurationId
+                            : null
                     }
-                    return record || null;
-                },
-                getPracticeRecords: async () => {
-                    try {
-                        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                            return normalizeRecords(await window.PracticeRecordAPI.list());
-                        }
-                        return [];
-                    } catch (error) {
-                        console.warn('[App] 降级记录器读取失败:', error);
-                        return [];
-                    }
+                };
+                if (examId) {
+                    activeSessions.set(examId, session);
                 }
+                return session;
+            };
+            return {
+                activeSessions,
+                isFallback: true,
+                startPracticeSession: start,
+                startSession: start,
+                handleSessionStarted: (data) => {
+                    if (!data || !data.examId || !data.sessionId) {
+                        return;
+                    }
+                    const existing = activeSessions.get(data.examId) || {
+                        examId: data.examId,
+                        startTime: new Date().toISOString(),
+                        status: 'started',
+                        metadata: {}
+                    };
+                    existing.sessionId = data.sessionId;
+                    existing.status = 'active';
+                    if (data.metadata) {
+                        existing.metadata = Object.assign({}, existing.metadata || {}, data.metadata);
+                    }
+                    activeSessions.set(data.examId, existing);
+                },
+                savePracticeRecord: async (record) => {
+                    const receipt = await window.AppData.practice.completeAttempt({ record });
+                    return receipt && receipt.record ? receipt.record : null;
+                },
+                // 兼容用的记录列表读取：调用方只做列表/统计展示，light 投影已覆盖，
+                // 不需要拉取答题详情、笔记与高亮等重负载字段。
+                getPracticeRecords: async () => window.AppData.practice.list({ projection: 'light' })
             };
         },
         schedulePracticeRecorderUpgrade(maxAttempts = 20, interval = 500) {
@@ -2215,43 +1998,6 @@ class ExamSystemApp {
             this._practiceRecorderUpgradeTimer = setInterval(tryUpgrade, interval);
             tryUpgrade();
         },
-        async initializeOptionalComponents() {},
-        async initializeAvailableOptionalComponents() {
-            const availableComponents = [].filter((name) => window[name]);
-            if (availableComponents.length > 0) {
-                await this.initializeOptionalComponents();
-            } else {
-                console.warn('[App] 没有发现可用的可选组件');
-            }
-        },
-        async waitForComponents(requiredClasses = ['ExamBrowser'], timeout = 3000) {
-            const startTime = Date.now();
-            const checkInterval = 100;
-            while (Date.now() - startTime < timeout) {
-                const loadingStatus = requiredClasses.map((className) => {
-                    const isLoaded = window[className] && typeof window[className] === 'function';
-                    if (!isLoaded) {
-                        console.debug(`[App] 等待组件: ${className}`);
-                    }
-                    return { className, isLoaded };
-                });
-                const allLoaded = loadingStatus.every((status) => status.isLoaded);
-                if (allLoaded) {
-                    return true;
-                }
-                await new Promise((resolve) => setTimeout(resolve, checkInterval));
-            }
-            const missingClasses = requiredClasses.filter((className) => !window[className] || typeof window[className] !== 'function');
-            const loadedClasses = requiredClasses.filter((className) => window[className] && typeof window[className] === 'function');
-            const errorMessage = [
-                `组件加载超时 (${timeout}ms)`,
-                `已加载: ${loadedClasses.join(', ') || '无'}`,
-                `缺失: ${missingClasses.join(', ')}`,
-                '请检查组件文件是否正确加载'
-            ].join('\n');
-            console.error('[App] 组件加载失败:', errorMessage);
-            throw new Error(errorMessage);
-        }
     };
 
     const integratedFallbackMixin = {
@@ -2516,11 +2262,17 @@ class ExamSystemApp {
                 case 'browse':
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
                         const { category, type, filterMode, path } = window.__pendingBrowseFilter;
-                        try {
-                            window.applyBrowseFilter(category, type, filterMode, path);
-                        } finally {
-                            delete window.__pendingBrowseFilter;
-                        }
+                        Promise.resolve(
+                            typeof window.initializeBrowseView === 'function'
+                                ? window.initializeBrowseView({ skipLoad: true })
+                                : null
+                        ).then(() => window.applyBrowseFilter(category, type, filterMode, path))
+                            .catch((error) => {
+                                console.warn('[App] 应用待处理题库筛选失败:', error);
+                            })
+                            .finally(() => {
+                                delete window.__pendingBrowseFilter;
+                            });
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();
                     }
@@ -2531,6 +2283,9 @@ class ExamSystemApp {
                         .then(() => (typeof window.ensureBrowseGroup === 'function' ? window.ensureBrowseGroup() : null))
                         .then(() => (typeof window.ensurePracticeSuiteReady === 'function' ? window.ensurePracticeSuiteReady() : null))
                         .then(() => {
+                            if (typeof window.ensurePracticeRecordsSync === 'function') {
+                                return window.ensurePracticeRecordsSync('practice-view');
+                            }
                             if (typeof window.syncPracticeRecords === 'function') {
                                 return window.syncPracticeRecords();
                             }
@@ -2560,6 +2315,7 @@ class ExamSystemApp {
             }
         },
         browseCategory(category, type = null, filterMode = null, path = null) {
+            const wasAlreadyInBrowse = this.currentView === 'browse';
             try {
                 window.__pendingBrowseFilter = { category, type, filterMode, path };
                 const descriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
@@ -2574,14 +2330,16 @@ class ExamSystemApp {
             } catch (_) {}
             this.navigateToView('browse');
             try {
-                if (typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
+                // 非 browse → browse 时，onViewActivated 已经消费 pending filter；
+                // 只有原本就在 browse 页时才需要补一次应用，避免双重加载。
+                if (wasAlreadyInBrowse && typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
                     window.applyBrowseFilter(category, type, filterMode, path);
                     delete window.__pendingBrowseFilter;
                 }
             } catch (_) {}
         },
         async startCategoryPractice(category) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await window.resolveActiveLibraryIndex();
             const categoryExams = examIndex.filter((exam) => exam.category === category);
             if (categoryExams.length === 0) {
                 window.showMessage(`${category} 分类暂无可用题目`, 'warning');
@@ -2605,8 +2363,6 @@ class ExamSystemApp {
                 this.checkDependencies();
                 this.updateLoadingMessage('正在初始化状态管理...');
                 this.initializeGlobalCompatibility();
-                this.updateLoadingMessage('正在加载持久化状态...');
-                await this.loadPersistedState();
                 this.updateLoadingMessage('正在初始化响应式功能...');
                 this.initializeResponsiveFeatures();
                 this.updateLoadingMessage('正在加载系统组件...');
@@ -2807,20 +2563,13 @@ class ExamSystemApp {
         },
         async loadInitialData() {
             try {
-                const examIndex = await storage.get('exam_index', []);
-                if (Array.isArray(examIndex)) {
-                    this.setState('exam.index', examIndex);
-                }
-                const practiceRecords = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                    ? await window.PracticeRecordAPI.list()
-                    : [];
-                if (Array.isArray(practiceRecords)) {
-                    this.setState('practice.records', practiceRecords);
-                }
-                const browseFilter = await storage.get('browse_filter', { category: 'all', type: 'all' });
+                const browsePreference = await window.AppData.preferences.getBrowse();
+                const browseFilter = browsePreference && browsePreference.filter
+                    ? browsePreference.filter
+                    : { category: 'all', type: 'all' };
                 this.setState('ui.browseFilter', browseFilter);
                 await this.loadUserStats();
-                this.updateOverviewStats();
+                await this.updateOverviewStats();
             } catch (error) {
                 console.error('Failed to load initial data:', error);
             }
@@ -2836,15 +2585,15 @@ class ExamSystemApp {
                 lastPracticeDate: null,
                 achievements: []
             };
-            const stats = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function'
-                ? await window.PracticeRecordAPI.readStats({ fallback })
-                : fallback;
+            const stats = Object.assign({}, fallback, await window.AppData.practice.getStats());
             this.userStats = stats;
             return stats;
         },
         async updateOverviewStats() {
-            const examIndex = this.getState('exam.index') || [];
-            const practiceRecords = this.getState('practice.records') || [];
+            const [examIndex, practiceRecords] = await Promise.all([
+                window.resolveActiveLibraryIndex(),
+                window.AppData.practice.list({ projection: 'light' })
+            ]);
             if (!Array.isArray(examIndex) || !Array.isArray(practiceRecords)) {
                 console.warn('[App] 状态管理中的数据格式异常');
                 return;
@@ -2882,7 +2631,7 @@ class ExamSystemApp {
         },
         updateCategoryStats(examIndex, practiceRecords) {
             const categories = ['P1', 'P2', 'P3'];
-            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const list = Array.isArray(examIndex) ? examIndex : [];
             categories.forEach((category) => {
                 const categoryExams = list.filter((exam) => exam.category === category);
                 const categoryRecords = practiceRecords.filter((record) => {
@@ -2970,7 +2719,12 @@ class ExamSystemApp {
                     },
                     onStartEndless() {
                         if (window.AppActions && typeof window.AppActions.startEndlessPractice === 'function') {
-                            window.AppActions.startEndlessPractice();
+                            Promise.resolve(window.AppActions.startEndlessPractice()).catch((error) => {
+                                console.error('[App] 无尽模式启动失败:', error);
+                                if (typeof window.showMessage === 'function') {
+                                    window.showMessage('无尽模式启动失败，请稍后重试', 'error');
+                                }
+                            });
                             return;
                         }
                         if (typeof window.showMessage === 'function') {
@@ -3006,12 +2760,6 @@ class ExamSystemApp {
             }
         },
         destroy() {
-            this.persistMultipleState({
-                'exam.index': 'exam_index',
-                'ui.browseFilter': 'browse_filter',
-                'exam.currentCategory': 'current_category',
-                'exam.currentExamType': 'current_exam_type'
-            });
             window.removeEventListener('resize', this.handleResize);
             if (this.sessionMonitorInterval) {
                 clearInterval(this.sessionMonitorInterval);
@@ -3156,24 +2904,57 @@ window.addEventListener('beforeunload', () => {
  * Onboarding Tour - 首次引导流程组件
  * 用于引导新用户了解系统各项功能
  * 兼容 file:// 协议
+ *
+ * 数据层约定（0.6.2-fix 之后）：
+ * - 示例记录必须经 AppData.practice.completeAttempt，且具备 canonical examId
+ * - 回放依赖 realData.answers（object map）+ correctAnswerMap
+ * - 引导状态键使用 exam_system_ 前缀，并兼容迁移旧键
  */
 (function (global) {
   'use strict';
 
-  // 存储键名
-  const STORAGE_KEYS = {
-    COMPLETED: 'onboardingCompleted',
-    CURRENT_STEP: 'onboardingStep',
-    LAST_SHOWN: 'onboardingLastShown'
-  };
+  const DEMO_RECORD_ID = 'demo-onboarding-record';
+  const PREFERRED_DEMO_EXAM_ID = 'p1-high-01';
+
+  // 与 p1-high-01.js answerKey 保持一致，供完整回放 demo 使用
+  const P1_HIGH_01_ANSWER_KEY = Object.freeze({
+    q1: 'viii',
+    q2: 'iv',
+    q3: 'ix',
+    q4: 'vi',
+    q5: 'v',
+    q6: 'vii',
+    q7: 'iii',
+    q8: 'x',
+    q9: 'D',
+    q10: 'E',
+    q11: 'B',
+    q12: 'G',
+    q13: 'A'
+  });
+
+  const P1_HIGH_01_META = Object.freeze({
+    examId: PREFERRED_DEMO_EXAM_ID,
+    examTitle: 'A Brief History of Tea 茶叶简史',
+    category: 'P1',
+    frequency: '高频',
+    type: 'reading'
+  });
+
+  const HISTORY_ITEM_SELECTOR =
+    `#history-list .history-item.history-record-item[data-record-id="${DEMO_RECORD_ID}"]`;
+  const HISTORY_TITLE_SELECTOR =
+    `#history-list .history-record-item[data-record-id="${DEMO_RECORD_ID}"] .practice-record-title`;
+  const REPLAY_TRIGGER_SELECTOR =
+    '#practice-record-modal .record-summary-replay-trigger';
 
   // 默认步骤配置
   const DEFAULT_STEPS = [
     {
       id: 'welcome',
       target: null,
-      title: '👋 欢迎使用考试总览系统',
-      content: '这是一个专为雅思备考设计的练习系统，提供阅读、听力练习和词汇背诵等功能。让我们快速了解一下各项功能吧！',
+      title: '👋 欢迎使用 IELTS Atlas',
+      content: '这是一个专为雅思备考设计的练习系统，提供阅读练习、练习回顾、词汇背诵和数据备份等功能。让我们快速了解一下各项功能吧！',
       position: 'center',
       showSkip: false,
       showPrev: false,
@@ -3227,66 +3008,66 @@ window.addEventListener('beforeunload', () => {
     {
       id: 'review-mode',
       title: '📖 回顾模式',
-      content: '接下来我们将学习如何使用回顾模式查看练习解析。',
+      content: '接下来我们将用一条示例练习记录，演示如何打开详情并进入回顾回放。',
       position: 'right',
       showSkip: true,
       showPrev: true,
       nextText: '下一步',
       activateView: 'practice',
-      // 子步骤流程
       subSteps: [
         {
           id: 'inject-demo-record',
           action: 'injectDemoRecord',
           title: '📝 示例记录已添加',
-          content: '我们已为您添加了一条示例练习记录，请点击“我知道了”继续。',
-          target: '.history-item[data-record-id="demo-onboarding-record"]',
+          content: '我们已为您添加了一条可回放的示例练习记录，请点击“我知道了”继续。',
+          target: HISTORY_ITEM_SELECTOR,
           position: 'right',
           nextText: '我知道了',
-          lockScroll: true,     // 禁止用户滚动页面
-          lockPointer: true     // 禁止用户点击非引导元素
+          lockScroll: true,
+          lockPointer: true
         },
         {
           id: 'click-history-item',
           title: '👆 点击记录标题进入详情',
           content: '点击下方这条示例记录的标题，可以打开练习记录详情页。',
-          target: '#history-list .history-record-item[data-record-id="demo-onboarding-record"] .practice-record-title',
+          target: HISTORY_TITLE_SELECTOR,
           position: 'right',
           nextText: '下一步',
           lockScroll: true,
           waitForClick: true,
-          hideNext: true        // 隐藏下一步按钮，强制点击目标
+          hideNext: true
         },
         {
           id: 'modal-opened',
           title: '📋 练习记录详情',
-          content: '这里是练习记录详情弹窗，您可以看到本次练习的详细信息和成绩。',
+          content: '这里是练习记录详情弹窗，您可以看到本次练习的成绩与元数据。',
           target: '#practice-record-modal .modal-container',
           position: 'right',
           nextText: '下一步',
           waitForElement: '#practice-record-modal',
           lockScroll: true,
-          lockPointer: true     // 禁止点击详情内的入口
+          lockPointer: true
         },
         {
           id: 'click-review-mode',
           title: '📖 进入回顾模式',
-          content: '点击上方标题（回顾模式触发器），可以进入该记录的回放/回顾模式。',
-          target: '#practice-record-modal .record-summary-replay-trigger',
+          content: '点击标题上的回顾触发器，将打开该记录的回放窗口（需允许浏览器弹窗）。',
+          target: REPLAY_TRIGGER_SELECTOR,
           position: 'bottom',
           nextText: '下一步',
           waitForClick: true,
-          hideNext: true,       // 隐藏下一步按钮，强制点击触发器
+          hideNext: true,
           lockScroll: true
         },
         {
           id: 'review-mode-active',
-          title: '👋 小贴士',
-          content: '该练习记录缺少数据哦，等待您的数据后即可使用回顾模式。',
+          title: '✅ 回顾模式已打开',
+          content: '示例回放窗口应已打开。您可在回放中查看答案对错；关闭练习窗口后点“继续”完成引导。',
           target: null,
           position: 'center',
-          nextText: '我知道了',
-          lockScroll: true
+          nextText: '继续',
+          lockScroll: true,
+          lockPointer: false
         }
       ]
     },
@@ -3294,7 +3075,7 @@ window.addEventListener('beforeunload', () => {
       id: 'more',
       target: '#more-view',
       title: '🛠️ 更多工具',
-      content: '访问写作评分、全屏时钟、单词背诵和成就系统等辅助工具，全方位提升备考效率。',
+      content: '访问全屏时钟、单词背诵和成就系统等辅助工具，全方位提升备考效率。',
       position: 'right',
       showSkip: true,
       showPrev: true,
@@ -3315,7 +3096,7 @@ window.addEventListener('beforeunload', () => {
     {
       id: 'data-management',
       title: '💾 数据迁移与管理',
-      content: '这里是数据安全的核心。当系统发布新版本时，您可以通过导出和导入功能轻松搬家。',
+      content: '这里是数据安全的核心。可通过导出/导入 JSON，或使用本地磁盘备份在版本升级时搬家。',
       position: 'right',
       showSkip: true,
       showPrev: true,
@@ -3326,7 +3107,7 @@ window.addEventListener('beforeunload', () => {
           id: 'data-mgmt-intro',
           target: '.data-management-panel',
           title: '📂 数据管理面板',
-          content: '集中管理您的练习资产。在转移到新版本前，请务必先备份或导出。',
+          content: '集中管理您的练习资产。升级或更换设备前，请务必先备份或导出。',
           position: 'right',
           nextText: '下一步',
           lockScroll: true
@@ -3335,7 +3116,7 @@ window.addEventListener('beforeunload', () => {
           id: 'export-data',
           target: '#export-data-btn',
           title: '📤 导出数据',
-          content: '点击“导出数据”，系统会生成包含所有练习历史的 JSON 文件。请妥善保存此文件，它是您迁移到新版本的通行证。',
+          content: '点击“导出数据”，系统会生成包含练习历史的 JSON 文件。请妥善保存，它是迁移到新版本的通行证。',
           position: 'top',
           nextText: '下一步',
           lockScroll: true,
@@ -3346,7 +3127,7 @@ window.addEventListener('beforeunload', () => {
           id: 'import-data',
           target: '#import-data-btn',
           title: '📥 导入数据',
-          content: '在下载并运行新版本后，点击“导入数据”并选择之前导出的 JSON 文件，即可一键找回所有练习历史。',
+          content: '在新版本中点击“导入数据”并选择之前导出的 JSON 文件，即可找回练习历史。',
           position: 'top',
           nextText: '下一步',
           lockScroll: true,
@@ -3358,7 +3139,7 @@ window.addEventListener('beforeunload', () => {
       id: 'theme-switcher-guide',
       target: '#theme-switcher-btn-entry',
       title: '🎨 主题切换',
-      content: '当您使用动态背景遇到卡顿时可切换为静态主题',
+      content: '动态背景卡顿时可切换为静态主题，减轻设备负担。',
       position: 'top',
       showSkip: true,
       showPrev: true,
@@ -3370,7 +3151,7 @@ window.addEventListener('beforeunload', () => {
       id: 'completion',
       target: null,
       title: '🎉 恭喜完成！',
-      content: '您已了解系统的所有核心功能。现在开始您的雅思备考之旅吧！祝您取得理想的成绩。',
+      content: '您已了解系统的核心功能。现在开始您的雅思备考之旅吧！祝您取得理想的成绩。',
       position: 'center',
       showSkip: false,
       showPrev: true,
@@ -3379,51 +3160,72 @@ window.addEventListener('beforeunload', () => {
     }
   ];
 
+  function cloneMap(source) {
+    return Object.assign({}, source || {});
+  }
+
+  function cloneArray(list) {
+    return Array.isArray(list) ? list.slice() : [];
+  }
+
+  function cloneSteps(steps) {
+    return (Array.isArray(steps) ? steps : []).map((step) => {
+      const next = Object.assign({}, step);
+      if (Array.isArray(step.subSteps)) {
+        next.subSteps = step.subSteps.map((sub) => Object.assign({}, sub));
+      }
+      return next;
+    });
+  }
+
   // 状态管理器
   class TourStateManager {
     constructor() {
-      this._storage = this._getStorage();
+      this._state = { completed: false, currentStep: 0, lastShown: null };
+      this.ready = this._load();
     }
 
-    _getStorage() {
-      try {
-        localStorage.setItem('__test__', '1');
-        localStorage.removeItem('__test__');
-        return localStorage;
-      } catch (e) {
-        // 降级到内存存储
-        const mem = {};
-        return {
-          getItem: (k) => mem[k] || null,
-          setItem: (k, v) => { mem[k] = String(v); },
-          removeItem: (k) => { delete mem[k]; }
-        };
-      }
+    async _load() {
+      if (!global.AppData || !global.AppData.preferences) return;
+      await global.AppData.ready;
+      const stored = await global.AppData.preferences.getOnboarding();
+      this._state = {
+        completed: stored.completed === true || stored.completed === 'true',
+        currentStep: Number.isFinite(Number(stored.currentStep)) ? Number(stored.currentStep) : 0,
+        lastShown: stored.lastShown || null
+      };
+    }
+
+    _persist() {
+      if (!global.AppData || !global.AppData.preferences) return;
+      global.AppData.preferences.setOnboarding(this._state).catch((error) => {
+        console.warn('[Onboarding] 保存引导状态失败:', error);
+      });
     }
 
     isCompleted() {
-      return this._storage.getItem(STORAGE_KEYS.COMPLETED) === 'true';
+      return this._state.completed === true;
     }
 
     getCurrentStep() {
-      const step = this._storage.getItem(STORAGE_KEYS.CURRENT_STEP);
-      return step ? parseInt(step, 10) : 0;
+      return this._state.currentStep || 0;
     }
 
     setStep(step) {
-      this._storage.setItem(STORAGE_KEYS.CURRENT_STEP, step);
-      this._storage.setItem(STORAGE_KEYS.LAST_SHOWN, Date.now());
+      this._state.currentStep = Number(step) || 0;
+      this._state.lastShown = Date.now();
+      this._persist();
     }
 
     markCompleted() {
-      this._storage.setItem(STORAGE_KEYS.COMPLETED, 'true');
-      this._storage.removeItem(STORAGE_KEYS.CURRENT_STEP);
+      this._state.completed = true;
+      this._state.currentStep = 0;
+      this._persist();
     }
 
     reset() {
-      this._storage.removeItem(STORAGE_KEYS.COMPLETED);
-      this._storage.removeItem(STORAGE_KEYS.CURRENT_STEP);
-      this._storage.removeItem(STORAGE_KEYS.LAST_SHOWN);
+      this._state = { completed: false, currentStep: 0, lastShown: null };
+      this._persist();
     }
   }
 
@@ -3433,7 +3235,7 @@ window.addEventListener('beforeunload', () => {
       this._overlay = null;
       this._tooltip = null;
       this._highlightEl = null;
-      this._holeEl = null;  // 新增：洞元素
+      this._holeEl = null;
     }
 
     createOverlay() {
@@ -3441,11 +3243,9 @@ window.addEventListener('beforeunload', () => {
 
       this._overlay = document.createElement('div');
       this._overlay.className = 'onboarding-overlay';
-      // 关键：遮罩层不阻止点击事件，允许点击穿透
       this._overlay.style.pointerEvents = 'none';
       document.body.appendChild(this._overlay);
 
-      // 创建洞元素
       this._holeEl = document.createElement('div');
       this._holeEl.className = 'onboarding-hole';
       document.body.appendChild(this._holeEl);
@@ -3473,10 +3273,13 @@ window.addEventListener('beforeunload', () => {
 
       this._highlightEl = el;
 
-      // 获取目标元素的位置和大小
+      // 由 OnboardingTour 在锁滚前完成 scrollIntoView；此处仅测量与高亮
+      if (!options.skipScroll) {
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      }
+
       const rect = el.getBoundingClientRect();
 
-      // 设置洞元素的位置和大小
       if (this._holeEl) {
         this._holeEl.style.display = 'block';
         this._holeEl.style.top = rect.top + 'px';
@@ -3485,7 +3288,6 @@ window.addEventListener('beforeunload', () => {
         this._holeEl.style.height = rect.height + 'px';
       }
 
-      // 保存原始样式以便恢复
       const originalStyles = {
         position: el.style.position,
         zIndex: el.style.zIndex,
@@ -3501,13 +3303,11 @@ window.addEventListener('beforeunload', () => {
         modalContainer.style.position = 'relative';
       }
 
-      // 强制设置目标元素样式使其在遮罩层之上
       el.style.position = 'relative';
       el.style.zIndex = '100006';
       el.style.pointerEvents = options.disablePointer ? 'none' : 'auto';
 
       el.classList.add('onboarding-highlight');
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     clearHighlight() {
@@ -3515,7 +3315,6 @@ window.addEventListener('beforeunload', () => {
         const el = this._highlightEl;
         el.classList.remove('onboarding-highlight');
 
-        // 恢复原始样式
         if (el._originalOnboardingStyles) {
           el.style.position = el._originalOnboardingStyles.position;
           el.style.zIndex = el._originalOnboardingStyles.zIndex;
@@ -3534,7 +3333,6 @@ window.addEventListener('beforeunload', () => {
         this._highlightEl = null;
       }
 
-      // 隐藏洞元素
       if (this._holeEl) {
         this._holeEl.style.display = 'none';
       }
@@ -3543,12 +3341,10 @@ window.addEventListener('beforeunload', () => {
     positionTooltip(target, position, offsetY = 0) {
       if (!this._tooltip) return;
 
-      // 清除旧箭头
       const oldArrow = this._tooltip.querySelector('.onboarding-tooltip__arrow');
       if (oldArrow) oldArrow.remove();
 
       if (!target || position === 'center') {
-        // 居中显示
         this._tooltip.style.position = 'fixed';
         this._tooltip.style.top = '50%';
         this._tooltip.style.left = '50%';
@@ -3559,7 +3355,8 @@ window.addEventListener('beforeunload', () => {
       const rect = target.getBoundingClientRect();
       const tooltipRect = this._tooltip.getBoundingClientRect();
 
-      let top, left;
+      let top;
+      let left;
       const gap = 12;
 
       switch (position) {
@@ -3586,7 +3383,6 @@ window.addEventListener('beforeunload', () => {
           break;
       }
 
-      // 边界检查
       left = Math.max(10, Math.min(left, window.innerWidth - tooltipRect.width - 10));
       top = Math.max(10, Math.min(top, window.innerHeight - tooltipRect.height - 10));
 
@@ -3620,7 +3416,7 @@ window.addEventListener('beforeunload', () => {
           ${step.showPrev ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--secondary" data-action="prev">上一步</button>' : '<div></div>'}
           <div>
             ${step.showSkip ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--skip" data-action="skip">跳过</button>' : ''}
-            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText}</button>`}
+            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText || '下一步'}</button>`}
           </div>
         </div>
       `;
@@ -3650,8 +3446,9 @@ window.addEventListener('beforeunload', () => {
     destroy() {
       this.clearHighlight();
       if (this._overlay) {
-        this._overlay.classList.remove('is-active');
-        setTimeout(() => this._overlay?.remove(), 300);
+        const overlay = this._overlay;
+        overlay.classList.remove('is-active');
+        setTimeout(() => overlay.remove(), 300);
         this._overlay = null;
       }
       if (this._holeEl) {
@@ -3659,8 +3456,9 @@ window.addEventListener('beforeunload', () => {
         this._holeEl = null;
       }
       if (this._tooltip) {
-        this._tooltip.classList.remove('is-visible');
-        setTimeout(() => this._tooltip?.remove(), 300);
+        const tooltip = this._tooltip;
+        tooltip.classList.remove('is-visible');
+        setTimeout(() => tooltip.remove(), 300);
         this._tooltip = null;
       }
     }
@@ -3671,22 +3469,35 @@ window.addEventListener('beforeunload', () => {
     constructor(config = {}) {
       this._stateManager = new TourStateManager();
       this._renderer = new TourRenderer();
-      this._steps = config.steps || DEFAULT_STEPS;
+      this._baseSteps = config.steps || DEFAULT_STEPS;
+      this._steps = cloneSteps(this._baseSteps);
       this._currentStep = 0;
       this._isActive = false;
       this._boundKeyHandler = null;
-      // 子步骤状态
       this._currentSubStep = 0;
       this._inSubSteps = false;
+      this._demoInjectTask = null;
+      this._demoCleanupPromise = null;
+      this._lifecycleToken = 0;
+      this._startTimer = null;
+      this._selectorWaiters = new Set();
+      this._lastDemoInjectResult = null;
+      this._clickWaitCleanup = null;
+      this._scrollBlocked = false;
+      this._boundWheelBlock = null;
+      this._boundTouchBlock = null;
+      this._boundKeyScrollBlock = null;
+      this._savedScrollTop = 0;
     }
 
-    init() {
+    async init() {
+      await this._stateManager.ready;
       if (this._stateManager.isCompleted()) {
         return;
       }
 
-      // 延迟触发，等待页面渲染
-      setTimeout(() => {
+      this._startTimer = setTimeout(() => {
+        this._startTimer = null;
         this.start();
       }, 1500);
     }
@@ -3694,19 +3505,25 @@ window.addEventListener('beforeunload', () => {
     start(fromBeginning = false) {
       if (this._isActive) return;
 
+      // 每次启动使用步骤副本，避免限级回放补丁污染默认配置
+      this._steps = cloneSteps(this._baseSteps);
       this._currentStep = fromBeginning ? 0 : this._stateManager.getCurrentStep();
+      this._lifecycleToken += 1;
       this._isActive = true;
+      this._inSubSteps = false;
+      this._currentSubStep = 0;
+      this._lastDemoInjectResult = null;
 
       this._renderer.createOverlay();
       this._renderer.createTooltip();
 
-      // 绑定键盘事件
+      // 全程滚动锁：启动即锁，仅在 stop 时解除，避免用户滚动导致高亮错位
+      this._lockScroll();
+
       this._boundKeyHandler = this._handleKeydown.bind(this);
       document.addEventListener('keydown', this._boundKeyHandler);
 
-      // 绑定点击事件
       this._renderer._overlay.addEventListener('click', (e) => {
-        // 阻止点击遮罩层关闭
         e.stopPropagation();
       });
 
@@ -3715,6 +3532,15 @@ window.addEventListener('beforeunload', () => {
 
     stop() {
       this._isActive = false;
+      this._lifecycleToken += 1;
+      if (this._startTimer !== null) {
+        clearTimeout(this._startTimer);
+        this._startTimer = null;
+      }
+      this._cancelSelectorWaits();
+      this._clearDemoRecordPreview();
+      void this._cleanupDemoRecord();
+      this._clearClickWait();
       this._unlockScroll();
       this._unlockPointer();
       this._renderer.destroy();
@@ -3730,28 +3556,129 @@ window.addEventListener('beforeunload', () => {
       this._stateManager.reset();
     }
 
-    // ===== 滚动与指针锁定 =====
     _lockScroll() {
       if (!document.body.classList.contains('onboarding-scroll-locked')) {
-        this._savedScrollTop = window.scrollY || document.documentElement.scrollTop;
+        this._savedScrollTop = window.scrollY || document.documentElement.scrollTop || 0;
         document.body.classList.add('onboarding-scroll-locked');
+        document.documentElement.classList.add('onboarding-scroll-locked');
         document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
         document.body.style.top = `-${this._savedScrollTop}px`;
+        document.body.style.left = '0';
+        document.body.style.right = '0';
         document.body.style.width = '100%';
       }
+      this._attachScrollBlockers();
     }
 
     _unlockScroll() {
+      this._detachScrollBlockers();
       if (document.body.classList.contains('onboarding-scroll-locked')) {
         document.body.classList.remove('onboarding-scroll-locked');
+        document.documentElement.classList.remove('onboarding-scroll-locked');
         document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
         document.body.style.position = '';
         document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
         document.body.style.width = '';
         const savedTop = this._savedScrollTop || 0;
         window.scrollTo(0, savedTop);
         this._savedScrollTop = 0;
+      }
+    }
+
+    /**
+     * 短暂解除 body fixed，以便 scrollIntoView 能把目标滚入视口，
+     * 随即按新滚动位置重新上锁。引导期间用户滚动仍被拦截。
+     */
+    _scrollTargetIntoView(el) {
+      if (!el || typeof el.scrollIntoView !== 'function') return;
+
+      const wasLocked = document.body.classList.contains('onboarding-scroll-locked');
+      if (wasLocked) {
+        this._detachScrollBlockers();
+        document.body.classList.remove('onboarding-scroll-locked');
+        document.documentElement.classList.remove('onboarding-scroll-locked');
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.width = '';
+        window.scrollTo(0, this._savedScrollTop || 0);
+      }
+
+      try {
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      } catch (_) {
+        try {
+          el.scrollIntoView(true);
+        } catch (__) {}
+      }
+
+      // 无论是否曾锁定，引导激活期间都重新上锁到当前视口
+      if (this._isActive) {
+        this._lockScroll();
+      }
+    }
+
+    _highlightTarget(el, options = {}) {
+      if (el) {
+        this._scrollTargetIntoView(el);
+      } else if (this._isActive) {
+        this._lockScroll();
+      }
+      this._renderer.highlightElement(el, Object.assign({}, options, { skipScroll: true }));
+    }
+
+    _attachScrollBlockers() {
+      if (this._scrollBlocked) return;
+      this._scrollBlocked = true;
+
+      this._boundWheelBlock = (e) => {
+        if (!this._isActive) return;
+        // 提示框内部也不允许带动页面/列表滚动
+        e.preventDefault();
+      };
+      this._boundTouchBlock = (e) => {
+        if (!this._isActive) return;
+        e.preventDefault();
+      };
+      this._boundKeyScrollBlock = (e) => {
+        if (!this._isActive) return;
+        const key = e.key;
+        const scrollKeys = new Set([
+          'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar',
+          'ArrowUp', 'ArrowDown'
+        ]);
+        if (!scrollKeys.has(key)) return;
+        // 左右方向键留给引导翻步；上下/空格/Pg 禁止滚动
+        e.preventDefault();
+      };
+
+      document.addEventListener('wheel', this._boundWheelBlock, { passive: false, capture: true });
+      document.addEventListener('touchmove', this._boundTouchBlock, { passive: false, capture: true });
+      document.addEventListener('keydown', this._boundKeyScrollBlock, { capture: true });
+    }
+
+    _detachScrollBlockers() {
+      if (!this._scrollBlocked) return;
+      this._scrollBlocked = false;
+      if (this._boundWheelBlock) {
+        document.removeEventListener('wheel', this._boundWheelBlock, { capture: true });
+        this._boundWheelBlock = null;
+      }
+      if (this._boundTouchBlock) {
+        document.removeEventListener('touchmove', this._boundTouchBlock, { capture: true });
+        this._boundTouchBlock = null;
+      }
+      if (this._boundKeyScrollBlock) {
+        document.removeEventListener('keydown', this._boundKeyScrollBlock, { capture: true });
+        this._boundKeyScrollBlock = null;
       }
     }
 
@@ -3762,12 +3689,11 @@ window.addEventListener('beforeunload', () => {
         intercept.style.cssText = [
           'position: fixed',
           'inset: 0',
-          'z-index: 99998',   // 在遮罩层之下，在普通元素之上',
+          'z-index: 99998',
           'background: transparent',
           'pointer-events: all',
           'cursor: not-allowed'
         ].join(';');
-        // 防止有意的引导点击被拦截
         intercept.addEventListener('click', e => e.stopPropagation());
         document.body.appendChild(intercept);
       }
@@ -3782,31 +3708,34 @@ window.addEventListener('beforeunload', () => {
       return {
         completed: this._stateManager.isCompleted(),
         currentStep: this._currentStep,
-        totalSteps: this._steps.length
+        totalSteps: this._steps.length,
+        demoInject: this._lastDemoInjectResult
       };
     }
 
     goToStep(step) {
       if (step < 0 || step >= this._steps.length) return;
       this._currentStep = step;
+      this._inSubSteps = false;
+      this._currentSubStep = 0;
       this._stateManager.setStep(step);
       this._showCurrentStep();
     }
 
     registerSteps(steps) {
-      this._steps = steps;
+      this._baseSteps = steps;
+      this._steps = cloneSteps(steps);
     }
 
     _activateView(viewId) {
       if (!viewId) return;
 
-      // 方法 1: 尝试点击对应的导航按钮
       const navMap = {
-        'overview': '[data-view="overview"]',
-        'browse': '[data-view="browse"]',
-        'practice': '[data-view="practice"]',
-        'more': '[data-view="more"]',
-        'settings': '[data-view="settings"]'
+        overview: '[data-view="overview"]',
+        browse: '[data-view="browse"]',
+        practice: '[data-view="practice"]',
+        more: '[data-view="more"]',
+        settings: '[data-view="settings"]'
       };
 
       const selector = navMap[viewId];
@@ -3818,30 +3747,29 @@ window.addEventListener('beforeunload', () => {
         }
       }
 
-      // 方法 2: 直接显示目标视图（如果导航按钮不存在）
       const viewMap = {
-        'overview': '#overview-view',
-        'browse': '#browse-view',
-        'practice': '#practice-view',
-        'more': '#more-view',
-        'settings': '#settings-view'
+        overview: '#overview-view',
+        browse: '#browse-view',
+        practice: '#practice-view',
+        more: '#more-view',
+        settings: '#settings-view'
       };
 
       const viewSelector = viewMap[viewId];
       if (viewSelector) {
         const targetView = document.querySelector(viewSelector);
         if (targetView) {
-          // 隐藏所有视图
           document.querySelectorAll('.view-container, [id$="-view"]').forEach(v => {
             v.style.display = 'none';
           });
-          // 显示目标视图
           targetView.style.display = 'block';
         }
       }
     }
 
     _showCurrentStep() {
+      if (!this._isActive) return;
+
       const step = this._steps[this._currentStep];
       if (!step) {
         this._complete();
@@ -3849,25 +3777,20 @@ window.addEventListener('beforeunload', () => {
       }
 
       this._stateManager.setStep(this._currentStep);
-
-      // 先激活对应视图
+      this._clearClickWait();
       this._activateView(step.activateView);
 
-      // 检查是否有子步骤
       if (step.subSteps && !this._inSubSteps) {
         this._inSubSteps = true;
         this._currentSubStep = 0;
       }
 
-      // 如果当前在子步骤中
       if (this._inSubSteps && step.subSteps) {
         this._showSubStep(step);
         return;
       }
 
-      // 如果需要等待元素出现
       if (step.waitForElement && step.target) {
-        // 先触发按钮打开模态框
         if (step.triggerElement) {
           const triggerEl = document.querySelector(step.triggerElement);
           if (triggerEl) {
@@ -3880,12 +3803,8 @@ window.addEventListener('beforeunload', () => {
         return;
       }
 
-      // 应用滚动锁与指针锁
-      if (step.lockScroll) {
-        this._lockScroll();
-      } else {
-        this._unlockScroll();
-      }
+      // 全程保持滚动锁；仅按步骤控制指针锁
+      this._lockScroll();
 
       if (step.lockPointer && !step.waitForClick) {
         this._lockPointer();
@@ -3897,6 +3816,8 @@ window.addEventListener('beforeunload', () => {
     }
 
     _showSubStep(parentStep) {
+      if (!this._isActive) return;
+
       const subStep = parentStep.subSteps[this._currentSubStep];
       if (!subStep) {
         this._inSubSteps = false;
@@ -3905,36 +3826,131 @@ window.addEventListener('beforeunload', () => {
         return;
       }
 
-      // 执行子步骤动作
-      if (subStep.action === 'injectDemoRecord') {
-        this._injectDemoRecord();
-      }
+      this._clearClickWait();
 
-      // 等待元素出现
-      if (subStep.waitForElement) {
-        this._waitForElement(subStep.waitForElement, () => {
-          this._showSubStepContent(subStep, parentStep);
-        });
+      const proceed = () => {
+        if (!this._isActive) return;
+
+        if (subStep.waitForElement) {
+          this._waitForElement(subStep.waitForElement, () => {
+            this._showSubStepContent(subStep, parentStep);
+          });
+          return;
+        }
+
+        this._showSubStepContent(subStep, parentStep);
+      };
+
+      if (subStep.action === 'injectDemoRecord') {
+        const lifecycleToken = this._lifecycleToken;
+        Promise.resolve(this._injectDemoRecord())
+          .then((result) => {
+            if (!this._isDemoLifecycleCurrent(lifecycleToken)) return;
+            this._lastDemoInjectResult = result;
+            if (!result || !result.ok) {
+              this._showInjectFailureSubStep(parentStep, result);
+              return;
+            }
+            if (!result.replayable) {
+              // 已写入历史，但 exam 不在题库中：保留点击详情，跳过强制回放
+              this._patchReviewSubStepsForLimitedDemo(parentStep);
+            }
+            proceed();
+          })
+          .catch((err) => {
+            if (!this._isDemoLifecycleCurrent(lifecycleToken)) return;
+            console.error('[Onboarding] 注入示例记录失败:', err);
+            this._lastDemoInjectResult = { ok: false, reason: 'exception', error: err };
+            this._showInjectFailureSubStep(parentStep, this._lastDemoInjectResult);
+          });
         return;
       }
 
-      this._showSubStepContent(subStep, parentStep);
+      proceed();
+    }
+
+    _patchReviewSubStepsForLimitedDemo(parentStep) {
+      if (!parentStep || !Array.isArray(parentStep.subSteps)) return;
+      parentStep.subSteps = parentStep.subSteps.map((step) => {
+        if (step.id === 'inject-demo-record') {
+          return Object.assign({}, step, {
+            content: '示例记录已写入练习历史。当前题库中未找到对应题目，详情可打开，完整回放需先加载阅读题库。'
+          });
+        }
+        if (step.id === 'click-review-mode') {
+          return Object.assign({}, step, {
+            content: '可尝试点击回顾触发器。若提示题目不存在，请先在题库浏览中加载阅读题库后再体验完整回放。',
+            waitForClick: false,
+            hideNext: false,
+            nextText: '跳过回放',
+            lockPointer: true
+          });
+        }
+        if (step.id === 'review-mode-active') {
+          return Object.assign({}, step, {
+            title: 'ℹ️ 回放需完整题库',
+            content: '示例记录已保存。加载阅读题库后，可从练习记录详情再次进入回顾模式。',
+            nextText: '继续'
+          });
+        }
+        return step;
+      });
+    }
+
+    _showInjectFailureSubStep(parentStep, result) {
+      // 失败提示仍保持滚动锁，避免页面漂移
+      this._lockScroll();
+      this._unlockPointer();
+      this._renderer.clearHighlight();
+      this._renderer.positionTooltip(null, 'center');
+
+      const reason = result && result.reason ? String(result.reason) : 'unknown';
+      const failureStep = {
+        id: 'inject-demo-failed',
+        title: '示例记录未能写入',
+        content: `练习数据层暂不可用（${reason}）。您可跳过回顾演示，继续了解其他功能。`,
+        showSkip: true,
+        showPrev: false,
+        nextText: '跳过回顾',
+        hideNext: false
+      };
+
+      this._renderer.renderTooltipContent(failureStep, this._currentSubStep, parentStep.subSteps.length);
+      const tooltip = this._renderer._tooltip;
+      if (!tooltip) {
+        this._skipReviewMode(parentStep);
+        return;
+      }
+
+      tooltip.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const action = e.target.dataset.action;
+          if (action === 'skip' || action === 'next') {
+            this._skipReviewMode(parentStep);
+          }
+        });
+      });
+    }
+
+    _skipReviewMode(parentStep) {
+      this._inSubSteps = false;
+      this._currentSubStep = 0;
+      this._currentStep++;
+      this._cleanupDemoRecord();
+      this._showCurrentStep();
     }
 
     _showSubStepContent(subStep, parentStep) {
-      // inject-demo-record 需要等待 DOM 刷新后再定位
-      const delay = (subStep.action === 'injectDemoRecord') ? 800 : 100;
+      const delay = (subStep.action === 'injectDemoRecord') ? 120 : 100;
       setTimeout(() => {
+        if (!this._isActive) return;
+
         this._renderer._tooltip?.classList.remove('is-visible');
 
-        // 应用滚动锁
-        if (subStep.lockScroll) {
-          this._lockScroll();
-        } else {
-          this._unlockScroll();
-        }
+        // 全程滚动锁；步骤切换时重新确认锁定
+        this._lockScroll();
 
-        // 应用指针锁（不是 waitForClick 步骤才锁，防止误操作）
         if (subStep.lockPointer) {
           this._lockPointer();
         } else {
@@ -3942,19 +3958,20 @@ window.addEventListener('beforeunload', () => {
         }
 
         const targetEl = subStep.target ? document.querySelector(subStep.target) : null;
-        this._renderer.highlightElement(targetEl, { disablePointer: subStep.disableHighlightPointer });
+        this._highlightTarget(targetEl, { disablePointer: subStep.disableHighlightPointer });
         this._renderer.positionTooltip(targetEl, subStep.position, subStep.offsetY);
 
         const totalSteps = parentStep.subSteps.length;
         this._renderer.renderTooltipContent(subStep, this._currentSubStep, totalSteps);
-
-        // 绑定子步骤按钮事件
         this._bindSubStepButtonActions(parentStep);
 
-        // 如果需要等待点击
-        if (subStep.waitForClick && targetEl) {
+        if (subStep.waitForClick) {
+          if (!targetEl) {
+            // 目标丢失时不卡死：显示下一步
+            return;
+          }
           this._waitForElementClick(targetEl, () => {
-            this._unlockScroll();
+            // 点击后不解锁滚动，保持高亮坐标系稳定
             this._unlockPointer();
             this._currentSubStep++;
             this._showSubStep(parentStep);
@@ -3997,97 +4014,411 @@ window.addEventListener('beforeunload', () => {
       });
     }
 
+    _clearClickWait() {
+      if (typeof this._clickWaitCleanup === 'function') {
+        try {
+          this._clickWaitCleanup();
+        } catch (_) {}
+      }
+      this._clickWaitCleanup = null;
+    }
+
     _waitForElementClick(element, callback) {
+      this._clearClickWait();
       if (!element) {
         callback();
         return;
       }
 
-      const handler = (e) => {
-        element.removeEventListener('click', handler);
+      const handler = () => {
+        this._clearClickWait();
         callback();
       };
 
       element.addEventListener('click', handler);
+      this._clickWaitCleanup = () => {
+        element.removeEventListener('click', handler);
+      };
     }
 
-    _injectDemoRecord() {
-      const demoRecordObj = {
-        id: 'demo-onboarding-record',
+    async _resolveDemoExamContext() {
+      const preferredId = PREFERRED_DEMO_EXAM_ID;
+      let list = [];
+
+      try {
+        list = await global.resolveActiveLibraryIndex();
+      } catch (_) { }
+
+      if (!Array.isArray(list)) list = [];
+
+      const preferred = list.find((exam) => exam && String(exam.id) === preferredId);
+      if (preferred) {
+        return {
+          examId: preferredId,
+          title: preferred.title || P1_HIGH_01_META.examTitle,
+          category: preferred.category || P1_HIGH_01_META.category,
+          frequency: preferred.frequency || P1_HIGH_01_META.frequency,
+          type: preferred.type || 'reading',
+          inIndex: true,
+          useFullAnswerKey: true
+        };
+      }
+
+      const reading = list.find((exam) => {
+        if (!exam || !exam.id) return false;
+        const type = String(exam.type || exam.examType || '').toLowerCase();
+        const category = String(exam.category || '').toUpperCase();
+        return type === 'reading' || category === 'P1' || category === 'P2' || category === 'P3';
+      });
+
+      if (reading) {
+        return {
+          examId: String(reading.id),
+          title: reading.title || String(reading.id),
+          category: reading.category || 'P1',
+          frequency: reading.frequency || 'unknown',
+          type: reading.type || 'reading',
+          inIndex: true,
+          useFullAnswerKey: String(reading.id) === preferredId
+        };
+      }
+
+      // 题库未加载：仍写入 preferred examId，便于用户稍后加载题库后回放
+      return {
+        examId: preferredId,
+        title: P1_HIGH_01_META.examTitle,
+        category: P1_HIGH_01_META.category,
+        frequency: P1_HIGH_01_META.frequency,
         type: 'reading',
-        title: '示例练习 - 阅读 Passage 1',
-        metadata: {
-          examTitle: '示例练习 - 阅读 Passage 1',
-          category: '官方真题'
-        },
-        score: 25,
-        totalQuestions: 40,
-        accuracy: 0.625,
-        percentage: 62.5,
-        correctAnswers: 25,
-        duration: 1200,
-        date: new Date().toISOString(),
-        questions: []
+        inIndex: false,
+        useFullAnswerKey: true
+      };
+    }
+
+    _buildDemoUserAnswers(correctMap) {
+      const userAnswers = cloneMap(correctMap);
+      // 故意答错若干题，便于回放中看到对错对比
+      if (userAnswers.q3) userAnswers.q3 = 'ii';
+      if (userAnswers.q7) userAnswers.q7 = 'i';
+      if (userAnswers.q9) userAnswers.q9 = 'A';
+      if (userAnswers.q12) userAnswers.q12 = 'C';
+      if (userAnswers.q13) userAnswers.q13 = 'B';
+      return userAnswers;
+    }
+
+    _countCorrect(userAnswers, correctMap) {
+      const keys = Object.keys(correctMap || {});
+      let correct = 0;
+      keys.forEach((key) => {
+        const user = String(userAnswers[key] == null ? '' : userAnswers[key]).trim().toLowerCase();
+        const expected = String(correctMap[key] == null ? '' : correctMap[key]).trim().toLowerCase();
+        if (user && expected && user === expected) {
+          correct += 1;
+        }
+      });
+      return correct;
+    }
+
+    _buildDemoRecord(examContext) {
+      const end = new Date();
+      const start = new Date(end.getTime() - 20 * 60 * 1000);
+      const correctMap = examContext.useFullAnswerKey
+        ? cloneMap(P1_HIGH_01_ANSWER_KEY)
+        : {
+            q1: 'A',
+            q2: 'B',
+            q3: 'C'
+          };
+      const userAnswers = this._buildDemoUserAnswers(correctMap);
+      const totalQuestions = Object.keys(correctMap).length;
+      const correctAnswers = this._countCorrect(userAnswers, correctMap);
+      const accuracy = totalQuestions > 0 ? correctAnswers / totalQuestions : 0;
+      const percentage = Math.round(accuracy * 100);
+      const markedQuestions = ['q3', 'q9'].filter((key) => Object.prototype.hasOwnProperty.call(correctMap, key));
+      const examId = examContext.examId;
+      const title = `示例练习 - ${examContext.title || examId}`;
+      const scoreInfo = {
+        correct: correctAnswers,
+        total: totalQuestions,
+        accuracy,
+        percentage,
+        source: 'onboarding-demo'
       };
 
-      const api = window.PracticeRecordAPI;
-      if (api && typeof api.saveRecord === 'function') {
-        api.saveRecord(demoRecordObj, { updateStats: true }).then(() => {
-          // 尝试触发界面刷新
-          if (typeof window.syncPracticeRecords === 'function') {
-            window.syncPracticeRecords({ forceRender: true });
-          } else if (window.app && typeof window.app.renderPracticeHistory === 'function') {
-            window.app.renderPracticeHistory();
-          } else {
-            // 广播事件，主应用处监听并重载
-            window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding' } }));
+      const answerComparison = {};
+      Object.keys(correctMap).forEach((key) => {
+        const userAnswer = userAnswers[key] || '';
+        const correctAnswer = correctMap[key] || '';
+        answerComparison[key] = {
+          userAnswer,
+          correctAnswer,
+          isCorrect: String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase()
+        };
+      });
+
+      return {
+        id: DEMO_RECORD_ID,
+        examId,
+        type: examContext.type || 'reading',
+        title,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        date: end.toISOString(),
+        duration: 1200,
+        status: 'completed',
+        score: correctAnswers,
+        totalQuestions,
+        correctAnswers,
+        accuracy,
+        metadata: {
+          examId,
+          examTitle: examContext.title || title,
+          category: examContext.category || 'P1',
+          frequency: examContext.frequency || '高频',
+          type: examContext.type || 'reading',
+          markedQuestions: cloneArray(markedQuestions),
+          source: 'onboarding-demo'
+        },
+        frequency: examContext.frequency || '高频',
+        // 顶层 map 会被 standardize 转为 answers[]；回放仍依赖 realData.answers
+        answers: cloneMap(userAnswers),
+        correctAnswerMap: cloneMap(correctMap),
+        answerComparison,
+        markedQuestions: cloneArray(markedQuestions),
+        scoreInfo: Object.assign({}, scoreInfo),
+        realData: {
+          examId,
+          answers: cloneMap(userAnswers),
+          correctAnswerMap: cloneMap(correctMap),
+          answerComparison,
+          highlights: [],
+          markedQuestions: cloneArray(markedQuestions),
+          scrollY: 0,
+          scoreInfo: Object.assign({}, scoreInfo),
+          isRealData: true,
+          source: 'onboarding-demo'
+        },
+        version: '0.6.2-fix'
+      };
+    }
+
+    async _refreshPracticeHistory() {
+      if (typeof global.syncPracticeRecords === 'function') {
+        await Promise.resolve(global.syncPracticeRecords({ forceRender: true }));
+        return;
+      }
+      if (global.app && typeof global.app.renderPracticeHistory === 'function') {
+        await Promise.resolve(global.app.renderPracticeHistory());
+        return;
+      }
+      global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
+        detail: { source: 'onboarding' }
+      }));
+    }
+
+    _waitForSelector(selector, maxWait = 4000, lifecycleToken = this._lifecycleToken) {
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+        const waiter = { timer: null, settle: null };
+        const settle = (value) => {
+          if (!this._selectorWaiters.has(waiter)) return;
+          if (waiter.timer !== null) clearTimeout(waiter.timer);
+          this._selectorWaiters.delete(waiter);
+          resolve(value);
+        };
+        const check = () => {
+          waiter.timer = null;
+          if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+            settle(null);
+            return;
           }
-        }).catch(err => {
-          console.error('[Onboarding] 注入示例记录失败:', err);
-        });
-      } else {
-        console.warn('[Onboarding] PracticeRecordAPI 不可用，无法注入示例记录');
+          const el = document.querySelector(selector);
+          if (el) {
+            settle(el);
+            return;
+          }
+          if (Date.now() - startTime > maxWait) {
+            settle(null);
+            return;
+          }
+          waiter.timer = setTimeout(check, 120);
+        };
+        waiter.settle = settle;
+        this._selectorWaiters.add(waiter);
+        check();
+      });
+    }
+
+    _cancelSelectorWaits() {
+      for (const waiter of Array.from(this._selectorWaiters)) {
+        waiter.settle(null);
       }
     }
 
-    _cleanupDemoRecord() {
-      const api = window.PracticeRecordAPI;
-      if (api && typeof api.deleteById === 'function') {
-        api.deleteById('demo-onboarding-record', { updateStats: true }).then(() => {
-          if (typeof window.syncPracticeRecords === 'function') {
-            window.syncPracticeRecords({ forceRender: true });
-          } else if (window.app && typeof window.app.renderPracticeHistory === 'function') {
-            window.app.renderPracticeHistory();
+    _isDemoLifecycleCurrent(token) {
+      return this._isActive && token === this._lifecycleToken;
+    }
+
+    async _injectDemoRecord() {
+      const lifecycleToken = this._lifecycleToken;
+      if (this._demoInjectTask && this._demoInjectTask.token === lifecycleToken) {
+        return this._demoInjectTask.promise;
+      }
+
+      const injectPromise = (async () => {
+        const api = global.AppData && global.AppData.practice;
+        if (!api || typeof api.completeAttempt !== 'function') {
+          return { ok: false, reason: 'AppData.practice unavailable' };
+        }
+
+        const examContext = await this._resolveDemoExamContext();
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          return { ok: false, reason: 'cancelled' };
+        }
+        if (this._demoCleanupPromise) await this._demoCleanupPromise;
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          return { ok: false, reason: 'cancelled' };
+        }
+        const demoRecordObj = this._buildDemoRecord(examContext);
+
+        // 演示记录带 metadata.source = 'onboarding-demo'，会被统一的来源判定
+        // （js/data/practiceRecordSource.js）排除在练习记录列表、成绩统计与成就之外。
+        // 引导需要用户看见这一行，所以显式为这一个 id 申请"视图层预览"许可：
+        // 只放行渲染，投影器读不到该白名单，统计与成就仍然不会被演示数据污染。
+        this._allowDemoRecordPreview();
+
+        try {
+          await api.completeAttempt({ record: demoRecordObj });
+        } catch (err) {
+          console.error('[Onboarding] 注入示例记录失败:', err);
+          this._clearDemoRecordPreview();
+          return {
+            ok: false,
+            reason: err && err.message ? err.message : 'saveRecord failed',
+            error: err
+          };
+        }
+
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          if (this._demoCleanupPromise) await this._demoCleanupPromise;
+          await this._cleanupDemoRecord({ refresh: false });
+          return { ok: false, reason: 'cancelled' };
+        }
+
+        await this._refreshPracticeHistory();
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          if (this._demoCleanupPromise) await this._demoCleanupPromise;
+          await this._cleanupDemoRecord({ refresh: false });
+          return { ok: false, reason: 'cancelled' };
+        }
+        const row = await this._waitForSelector(HISTORY_ITEM_SELECTOR, 5000, lifecycleToken);
+        if (!this._isDemoLifecycleCurrent(lifecycleToken)) {
+          if (this._demoCleanupPromise) await this._demoCleanupPromise;
+          await this._cleanupDemoRecord({ refresh: false });
+          return { ok: false, reason: 'cancelled' };
+        }
+        if (!row) {
+          return {
+            ok: false,
+            reason: 'history row not rendered',
+            examId: examContext.examId,
+            replayable: false
+          };
+        }
+
+        return {
+          ok: true,
+          examId: examContext.examId,
+          inIndex: Boolean(examContext.inIndex),
+          replayable: Boolean(examContext.inIndex && examContext.useFullAnswerKey)
+            || Boolean(examContext.inIndex),
+          recordId: DEMO_RECORD_ID
+        };
+      })();
+      this._demoInjectTask = { token: lifecycleToken, promise: injectPromise };
+
+      try {
+        return await injectPromise;
+      } finally {
+        if (this._demoInjectTask && this._demoInjectTask.promise === injectPromise) {
+          this._demoInjectTask = null;
+        }
+      }
+    }
+
+    /**
+     * 申请/撤销演示记录的"视图层预览"许可。
+     * 见 js/data/practiceRecordSource.js 的引导预览白名单说明：许可只影响练习记录列表渲染，
+     * practice.stats 与 achievements.progress 投影器永远按"演示数据"排除这条记录。
+     */
+    _allowDemoRecordPreview() {
+      const classifier = global.PracticeRecordSource;
+      if (classifier && typeof classifier.allowPreviewRecordId === 'function') {
+        classifier.allowPreviewRecordId(DEMO_RECORD_ID);
+      }
+    }
+
+    _clearDemoRecordPreview() {
+      const classifier = global.PracticeRecordSource;
+      if (classifier && typeof classifier.clearPreviewRecordId === 'function') {
+        classifier.clearPreviewRecordId(DEMO_RECORD_ID);
+      }
+    }
+
+    async _cleanupDemoRecord(options = {}) {
+      // 先撤销预览许可再删除并重渲染：即使删除失败，这条演示记录也不会继续留在列表里。
+      this._clearDemoRecordPreview();
+
+      if (this._demoCleanupPromise) return this._demoCleanupPromise;
+
+      const api = global.AppData && global.AppData.practice;
+      if (!api || typeof api.delete !== 'function') {
+        return;
+      }
+
+      const refresh = options.refresh !== false;
+      const cleanupPromise = (async () => {
+        try {
+          await api.delete({ recordId: DEMO_RECORD_ID });
+          if (!refresh) return;
+          if (typeof global.syncPracticeRecords === 'function') {
+            await Promise.resolve(global.syncPracticeRecords({ forceRender: true }));
+          } else if (global.app && typeof global.app.renderPracticeHistory === 'function') {
+            await Promise.resolve(global.app.renderPracticeHistory());
           } else {
-            window.dispatchEvent(new CustomEvent('practiceRecordsUpdated', { detail: { source: 'onboarding-cleanup' } }));
+            global.dispatchEvent(new CustomEvent('practiceRecordsUpdated', {
+              detail: { source: 'onboarding-cleanup' }
+            }));
           }
-        }).catch(err => {
+        } catch (err) {
           console.warn('[Onboarding] 清理示例记录失败:', err);
-        });
+        }
+      })();
+      this._demoCleanupPromise = cleanupPromise;
+      try {
+        await cleanupPromise;
+      } finally {
+        if (this._demoCleanupPromise === cleanupPromise) this._demoCleanupPromise = null;
       }
     }
 
     _showStepContent(step) {
-      // 等待视图切换完成后再显示提示
       setTimeout(() => {
-        // 隐藏提示框以重新定位
+        if (!this._isActive) return;
+
         this._renderer._tooltip?.classList.remove('is-visible');
+        this._lockScroll();
 
-        // 高亮目标元素
         const targetEl = step.target ? document.querySelector(step.target) : null;
-        this._renderer.highlightElement(targetEl, { disablePointer: step.disableHighlightPointer });
-
-        // 定位提示框
+        this._highlightTarget(targetEl, { disablePointer: step.disableHighlightPointer });
         this._renderer.positionTooltip(targetEl, step.position, step.offsetY);
 
-        // 渲染内容
         if (step.id === 'welcome') {
           this._renderer.showWelcome(step);
         } else {
           this._renderer.renderTooltipContent(step, this._currentStep, this._steps.length);
         }
 
-        // 绑定按钮事件
         this._bindButtonActions();
       }, 100);
     }
@@ -4096,6 +4427,8 @@ window.addEventListener('beforeunload', () => {
       const startTime = Date.now();
 
       const check = () => {
+        if (!this._isActive) return;
+
         const el = document.querySelector(selector);
         if (el) {
           callback();
@@ -4103,7 +4436,6 @@ window.addEventListener('beforeunload', () => {
         }
 
         if (Date.now() - startTime > maxWait) {
-          // 超时后跳过该步骤
           console.warn(`[Onboarding] 等待元素超时: ${selector}`);
           if (this._inSubSteps) {
             this._currentSubStep++;
@@ -4152,7 +4484,6 @@ window.addEventListener('beforeunload', () => {
     }
 
     _next() {
-      // 如果当前在子步骤中
       if (this._inSubSteps) {
         const parentStep = this._steps[this._currentStep];
         if (parentStep && parentStep.subSteps) {
@@ -4175,7 +4506,6 @@ window.addEventListener('beforeunload', () => {
     }
 
     _prev() {
-      // 如果当前在子步骤中
       if (this._inSubSteps) {
         if (this._currentSubStep > 0) {
           this._currentSubStep--;
@@ -4185,7 +4515,6 @@ window.addEventListener('beforeunload', () => {
           }
           return;
         }
-        // 如果已经在第一个子步骤，返回到上一个主步骤
         this._inSubSteps = false;
       }
 
@@ -4195,12 +4524,10 @@ window.addEventListener('beforeunload', () => {
     }
 
     _skip() {
-      this._cleanupDemoRecord();
       this._complete();
     }
 
     _complete() {
-      this._cleanupDemoRecord();
       this._stateManager.markCompleted();
       this.stop();
     }
@@ -4220,7 +4547,6 @@ window.addEventListener('beforeunload', () => {
     }
   }
 
-  // 全局暴露
   const tour = new OnboardingTour();
 
   global.OnboardingTour = {
@@ -4241,7 +4567,6 @@ window.addEventListener('beforeunload', () => {
     if (global.AppLazyLoader && typeof global.AppLazyLoader.markProvided === "function") {
         global.AppLazyLoader.markProvided([
     "js/boot-fallbacks.js",
-    "js/patches/runtime-fixes.js",
     "js/app.js",
     "js/components/onboardingTour.js"
 ]);
