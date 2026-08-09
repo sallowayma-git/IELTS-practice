@@ -7855,8 +7855,8 @@
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/141. P1 - The history of the guitar 吉他的历史/",
     "filename": "141. P1 - The history of the guitar 吉他的历史.html",
     "hasHtml": true,
-    "hasPdf": false,
-    "pdfFilename": "",
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/141. P1 - The history of the guitar 吉他的历史.pdf",
     "sourceKind": "generated-reading"
   },
   "p2-low-49": {
@@ -10030,7 +10030,7 @@
     "path": "三月/1.P1 高频/",
     "filename": "200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10045,7 +10045,7 @@
     "path": "三月/1.P1 高频/",
     "filename": "211. P1 - Ahead of its time 新西兰头骨【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/211. P1 - Ahead of its time 新西兰头骨.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10060,7 +10060,7 @@
     "path": "三月/1.P1 高频/",
     "filename": "216. P1 - Australia’s cane toad problem 澳洲蟾蜍【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/216. P1 - Australia’s cane toad problem 澳洲蟾蜍.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10075,7 +10075,7 @@
     "path": "三月/2.P1 次高频/",
     "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10090,7 +10090,7 @@
     "path": "三月/",
     "filename": "222. P2 - Ideal Homes 理想居所.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/222. P2 - Ideal Homes 理想居所.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10105,7 +10105,7 @@
     "path": "三月/",
     "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10120,7 +10120,7 @@
     "path": "三月/3.P2 高频/",
     "filename": "201. P2 - Multi-tasking and the brain 大脑与多任务处理【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/201. P2 - Multi-tasking and the brain 大脑与多任务处理.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10135,7 +10135,7 @@
     "path": "三月/3.P2 高频/",
     "filename": "217. P2 - A mechanical friend for children 孩子的机器人朋友【次】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/217. P2 - A mechanical friend for children 孩子的机器人朋友.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10150,7 +10150,7 @@
     "path": "三月/4.P2 次高频/",
     "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10165,7 +10165,7 @@
     "path": "三月/4.P2 次高频/",
     "filename": "209. P2 - Decision Fatigue 决策疲劳【次】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/209. P2 - Decision Fatigue 决策疲劳.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10180,7 +10180,7 @@
     "path": "三月/4.P2 次高频/",
     "filename": "213. P2 - Growing more for less 卫星农业【次】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/213. P2 - Growing more for less 卫星农业.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10195,7 +10195,7 @@
     "path": "三月/4.P2 次高频/",
     "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10210,7 +10210,7 @@
     "path": "三月/4.P2 次高频/",
     "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10225,7 +10225,7 @@
     "path": "三月/5.P3 高频/",
     "filename": "204. P3 - When people are ‘deaf’ to music 失乐症【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/204. P3 - When people are ‘deaf’ to music 失乐症.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10240,7 +10240,7 @@
     "path": "三月/5.P3 高频/",
     "filename": "206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10255,7 +10255,7 @@
     "path": "三月/5.P3 高频/",
     "filename": "212. P3 - Children’s literature studies today 儿童文学【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/212. P3 - Children’s literature studies today 儿童文学.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10270,7 +10270,7 @@
     "path": "三月/5.P3 高频/",
     "filename": "218. P3 - The Causes of Linguistic Change 语音的演变【高】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/218. P3 - The Causes of Linguistic Change 语音的演变.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10285,7 +10285,7 @@
     "path": "三月/5.P3 高频/",
     "filename": "219. P3 - The origin of language 语言的起源.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/219. P3 - The origin of language 语言的起源.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10300,8 +10300,8 @@
     "path": "三月/5.P3 高频/",
     "filename": "P3 - Risk taking.html",
     "hasHtml": true,
-    "hasPdf": false,
-    "pdfFilename": "",
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P3 - Risk taking.pdf",
     "sourceKind": "generated-reading"
   },
   "p3-medium-197": {
@@ -10315,7 +10315,7 @@
     "path": "三月/6.P3 次高频/",
     "filename": "197. P3 - Australia’s Megafauna Controversy 巨兽灭绝【次】.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/197. P3 - Australia’s Megafauna Controversy 巨兽灭绝.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10330,7 +10330,7 @@
     "path": "三月/6.P3 次高频/",
     "filename": "198. P3 - Child’s Play in Medieval England 中世纪的游戏.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/198. P3 - Child’s Play in Medieval England 中世纪的游戏.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10345,7 +10345,7 @@
     "path": "三月/6.P3 次高频/",
     "filename": "78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.html",
     "hasHtml": true,
-    "hasPdf": false,
+    "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
     "sourceKind": "generated-reading"
   },
@@ -10525,8 +10525,8 @@
     "path": "",
     "filename": "",
     "hasHtml": true,
-    "hasPdf": false,
-    "pdfFilename": "",
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P2 - War of the Plants.pdf",
     "sourceKind": "generated-reading"
   },
   "p3-high-229": {
@@ -10570,8 +10570,8 @@
     "path": "assets/generated/reading-exams/",
     "filename": "reading-practice-unified.html",
     "hasHtml": true,
-    "hasPdf": false,
-    "pdfFilename": "",
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P2 - Coins – the first form of money.pdf",
     "sourceKind": "generated-reading"
   },
   "p1-high-240": {
@@ -10644,9 +10644,9 @@
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
-    "hasHtml": false,
-    "hasPdf": false,
-    "pdfFilename": "",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P2 - The internal body clock 生物钟.pdf",
     "sourceKind": "generated-reading"
   },
   "p3-medium-244": {
@@ -10659,9 +10659,9 @@
     "difficultyScore": 4,
     "path": "",
     "filename": "",
-    "hasHtml": false,
-    "hasPdf": false,
-    "pdfFilename": "",
+    "hasHtml": true,
+    "hasPdf": true,
+    "pdfFilename": "ReadingPractice/PDF/P3 - Look who was talking.pdf",
     "sourceKind": "generated-reading"
   }
 
