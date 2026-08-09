@@ -42,14 +42,76 @@
         });
     }
 
-    async function stopExternalBackup() {
-        const service = global.ExternalBackupService;
-        if (!service) return;
-        if (typeof service.prepareForFullReset === 'function') {
-            await service.prepareForFullReset();
-        } else if (typeof service.unbindDirectory === 'function') {
-            await service.unbindDirectory();
+    function getFullResetService() {
+        let service;
+        try { service = global.ExternalBackupService; }
+        catch (error) { return { service: null, error }; }
+
+        if (!service) {
+            return {
+                service: null,
+                error: new Error('外部备份服务不可用，无法建立跨标签安全锁')
+            };
         }
+
+        for (const method of [
+            'withFullResetLock',
+            'prepareForFullReset',
+            'commitFullResetPreparation',
+            'rollbackFullResetPreparation'
+        ]) {
+            let implementation;
+            try { implementation = service[method]; }
+            catch (error) { return { service: null, error }; }
+            if (typeof implementation !== 'function') {
+                return {
+                    service: null,
+                    error: new Error(`外部备份服务缺少全量清理接口：${method}`)
+                };
+            }
+        }
+
+        return { service };
+    }
+
+    function isSuccessfulPreparation(result) {
+        return result === true || !!(result && result.success === true);
+    }
+
+    function isExplicitFailure(result) {
+        return result === false || !!(result && result.success === false);
+    }
+
+    function resultError(result, fallbackMessage) {
+        return (result && result.error) || new Error(fallbackMessage);
+    }
+
+    function externalBackupFailure(error, message) {
+        notify(message, 'error');
+        return {
+            success: false,
+            reason: 'external_backup_busy',
+            terminal: false,
+            retryable: true,
+            error,
+            databases: DATABASE_NAMES.slice(),
+            externalBackupFilesPreserved: true
+        };
+    }
+
+    async function rollbackFullResetPreparation(service) {
+        try {
+            const result = await service.rollbackFullResetPreparation();
+            if (isExplicitFailure(result)) {
+                return [{
+                    stage: 'rollback-full-reset-preparation',
+                    error: resultError(result, '外部备份清理准备回滚失败')
+                }];
+            }
+        } catch (error) {
+            return [{ stage: 'rollback-full-reset-preparation', error }];
+        }
+        return [];
     }
 
     function clearWebStorage() {
@@ -57,7 +119,15 @@
         for (const name of ['localStorage', 'sessionStorage']) {
             try {
                 const storage = global[name];
-                if (storage && typeof storage.clear === 'function') storage.clear();
+                if (!storage || typeof storage.clear !== 'function') {
+                    errors.push({
+                        stage: 'clear-web-storage',
+                        storage: name,
+                        error: new Error(`无法清理 ${name}：Storage 接口不可用`)
+                    });
+                    continue;
+                }
+                storage.clear();
             } catch (error) {
                 errors.push({ stage: 'clear-web-storage', storage: name, error });
             }
@@ -72,50 +142,162 @@
         return true;
     }
 
-    async function perform(options = {}) {
-        if (resetPromise) return resetPromise;
-        resetPromise = (async () => {
-            try {
-                await stopExternalBackup();
-            } catch (error) {
-                notify('外部备份仍在写入，本次清理已取消。', 'error');
-                return {
-                    success: false,
-                    reason: 'external_backup_busy',
-                    terminal: false,
-                    error,
-                    databases: DATABASE_NAMES.slice(),
-                    externalBackupFilesPreserved: true
-                };
-            }
+    async function performLocked(service) {
+        let preparation;
+        try {
+            preparation = await service.prepareForFullReset({ lockHeld: true });
+        } catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            const result = externalBackupFailure(
+                error,
+                '外部备份未能安全落盘，本次清理已取消。'
+            );
+            if (rollbackErrors.length) result.errors = rollbackErrors;
+            return result;
+        }
 
-            const results = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));
-            const errors = results.flatMap((result, index) => result.status === 'rejected'
-                ? [{ stage: 'delete-database', database: DATABASE_NAMES[index], error: result.reason }]
-                : []);
-            errors.push(...clearWebStorage());
-            if (errors.length) {
-                notify('本地数据仅部分清除，请关闭其他标签页后重试。', 'error');
-                return {
-                    success: false,
-                    reason: 'partial_reset',
-                    terminal: false,
-                    errors,
-                    databases: DATABASE_NAMES.slice(),
-                    externalBackupFilesPreserved: true
-                };
-            }
+        if (!isSuccessfulPreparation(preparation)) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            const result = externalBackupFailure(
+                resultError(preparation, '外部备份未能在清理前完成写盘'),
+                '外部备份未能安全落盘，本次清理已取消。'
+            );
+            if (rollbackErrors.length) result.errors = rollbackErrors;
+            return result;
+        }
 
+        const errors = [];
+        let deletionResults;
+        try {
+            deletionResults = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));
+        } catch (error) {
+            errors.push({ stage: 'delete-database', error });
+        }
+
+        if (deletionResults) {
+            deletionResults.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                    errors.push({
+                        stage: 'delete-database',
+                        database: DATABASE_NAMES[index],
+                        error: result.reason
+                    });
+                    return;
+                }
+
+                const deletion = result.value;
+                if (deletion && deletion.skipped === true) {
+                    errors.push({
+                        stage: 'delete-database',
+                        database: DATABASE_NAMES[index],
+                        skipped: true,
+                        error: deletion.error || new Error(
+                            `IndexedDB 删除已跳过：${DATABASE_NAMES[index]}`
+                        )
+                    });
+                    return;
+                }
+                if (!deletion || deletion.deleted !== true) {
+                    errors.push({
+                        stage: 'delete-database',
+                        database: DATABASE_NAMES[index],
+                        error: new Error(`IndexedDB 未确认删除：${DATABASE_NAMES[index]}`)
+                    });
+                }
+            });
+        }
+
+        try { errors.push(...clearWebStorage()); }
+        catch (error) {
+            errors.push({ stage: 'clear-web-storage', error });
+        }
+
+        if (errors.length) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify(
+                '本地数据仅部分清除（数据库删除失败或被跳过，或 web storage 清理失败），'
+                + '请关闭其他标签页后重试。',
+                'error'
+            );
             return {
-                success: true,
-                terminal: reload(options),
+                success: false,
+                reason: 'partial_reset',
+                terminal: false,
+                retryable: true,
+                errors: errors.concat(rollbackErrors),
                 databases: DATABASE_NAMES.slice(),
                 externalBackupFilesPreserved: true
             };
-        })();
+        }
 
-        try { return await resetPromise; }
-        finally { resetPromise = null; }
+        try {
+            const commitResult = await service.commitFullResetPreparation();
+            if (isExplicitFailure(commitResult)) {
+                throw resultError(commitResult, '外部备份清理准备提交失败');
+            }
+        } catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify('外部备份清理提交失败，本次清理需要重试。', 'error');
+            return {
+                success: false,
+                reason: 'partial_reset',
+                terminal: false,
+                retryable: true,
+                errors: [{ stage: 'commit-full-reset-preparation', error }].concat(rollbackErrors),
+                databases: DATABASE_NAMES.slice(),
+                externalBackupFilesPreserved: true
+            };
+        }
+
+        return {
+            success: true,
+            terminal: false,
+            databases: DATABASE_NAMES.slice(),
+            externalBackupFilesPreserved: true
+        };
+    }
+
+    function perform(options = {}) {
+        if (resetPromise) return resetPromise;
+        const run = (async () => {
+            const serviceInfo = getFullResetService();
+            if (!serviceInfo.service) {
+                return externalBackupFailure(
+                    serviceInfo.error,
+                    '外部备份服务或跨标签安全锁不可用，本次清理已取消。'
+                );
+            }
+
+            let callbackEntered = false;
+            let result;
+            try {
+                result = await serviceInfo.service.withFullResetLock(async () => {
+                    callbackEntered = true;
+                    return performLocked(serviceInfo.service);
+                });
+            } catch (error) {
+                return externalBackupFailure(
+                    error,
+                    '外部备份跨标签安全锁不可用，本次清理已取消。'
+                );
+            }
+
+            if (!callbackEntered || typeof result === 'undefined') {
+                return externalBackupFailure(
+                    new Error('外部备份服务未能提供跨标签安全锁'),
+                    '外部备份跨标签安全锁不可用，本次清理已取消。'
+                );
+            }
+
+            if (result && result.success === true) result.terminal = reload(options);
+            return result;
+        })();
+        resetPromise = run;
+        const clearResetPromise = () => {
+            if (resetPromise === run) resetPromise = null;
+        };
+        run.then(clearResetPromise, clearResetPromise);
+        return run;
     }
 
     async function request(options = {}) {

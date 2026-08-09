@@ -299,16 +299,30 @@
     }
     function validateEnvelope(entry, envelope) {
         try {
-            if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
-                || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
-                || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
-                || typeof envelope.operationId !== 'string' || !envelope.operationId
-                || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt
-                || (envelope.state !== 'present' && envelope.state !== 'cleared')) return false;
-            const data = canonicalizeJson(envelope.data, `$.${entry.logicalKey}`);
-            return (envelope.state !== 'cleared' || data === null)
-                && (envelope.state !== 'present' || entry.validate(data)) && envelope.checksum === checksum(data);
+            assertValidEnvelope(entry, envelope);
+            return true;
         } catch (_) { return false; }
+    }
+    function assertValidEnvelope(entry, envelope) {
+        if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
+            || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
+            || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+            || typeof envelope.operationId !== 'string' || !envelope.operationId.trim()
+            || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt.trim()
+            || (envelope.state !== 'present' && envelope.state !== 'cleared')) {
+            throw corruption(`Invalid envelope: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        const data = canonicalizeJson(envelope.data, `$.${entry.logicalKey}`);
+        if (envelope.state === 'cleared' && data !== null) {
+            throw corruption(`Cleared envelope contains data: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        if (envelope.state === 'present' && !entry.validate(data)) {
+            throw corruption(`Invalid envelope data: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        if (typeof envelope.checksum !== 'string' || envelope.checksum !== checksum(data)) {
+            throw corruption(`Envelope checksum mismatch: ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
+        }
+        return envelope;
     }
     function operationId(value) {
         if (value === undefined || value === null || value === '') return randomId('mutation');
@@ -495,17 +509,45 @@
     }
     function validateEntityRow(store, row) {
         if (!row || typeof row !== 'object' || Array.isArray(row)
-            || typeof row.recordId !== 'string' || !row.recordId
+            || typeof row.recordId !== 'string' || !row.recordId.trim()
             || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
-            || typeof row.operationId !== 'string' || !row.operationId
-            || typeof row.updatedAt !== 'string' || !row.updatedAt) {
+            || typeof row.operationId !== 'string' || !row.operationId.trim()
+            || typeof row.updatedAt !== 'string' || !row.updatedAt.trim()) {
             throw corruption(`Invalid entity row: ${store}`, { store, recordId: row && row.recordId || null });
         }
         const data = canonicalizeJson(row.data, `$.${store}.${row.recordId}`);
-        if (row.checksum !== checksum(data)) {
+        if (typeof row.checksum !== 'string' || row.checksum !== checksum(data)) {
             throw corruption(`Entity checksum mismatch: ${store}/${row.recordId}`, { store, recordId: row.recordId });
         }
         return row;
+    }
+    function validateExportedRecords(data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)
+            || !data.envelopes || typeof data.envelopes !== 'object' || Array.isArray(data.envelopes)
+            || !data.entities || typeof data.entities !== 'object' || Array.isArray(data.entities)) {
+            throw corruption('Snapshot export result is invalid');
+        }
+        // Verify the container itself before walking individual records so that
+        // accessors, cycles, sparse arrays, and other non-JSON values cannot be
+        // smuggled into the returned payload.
+        canonicalizeJson(data.envelopes, '$.envelopes');
+        canonicalizeJson(data.entities, '$.entities');
+        for (const [logicalKey, envelope] of Object.entries(data.envelopes)) {
+            if (!catalog.has(logicalKey)) throw corruption(`Unknown exported envelope: ${logicalKey}`, { logicalKey });
+            assertValidEnvelope(lookupEntry(logicalKey), envelope);
+        }
+        for (const [store, rows] of Object.entries(data.entities)) {
+            entityStore(store);
+            if (!Array.isArray(rows)) throw corruption(`Invalid exported entity store: ${store}`, { store });
+            const ids = new Set();
+            for (const row of rows) {
+                validateEntityRow(store, row);
+                const recordId = row.recordId;
+                if (ids.has(recordId)) throw corruption(`Duplicate exported entity: ${store}/${recordId}`, { store, recordId });
+                ids.add(recordId);
+            }
+        }
+        return data;
     }
     function normalizeEntityOperation(operation, index) {
         if (!operation || typeof operation !== 'object' || Array.isArray(operation)) throw validation(`Invalid entity operation at index ${index}`);
@@ -785,6 +827,7 @@
                     const selectedStores = new Set(options.entityStores.map(entityStore));
                     for (const store of ENTITY_STORES) if (!selectedStores.has(store)) delete data.entities[store];
                 }
+                validateExportedRecords(data);
                 const payload = { envelopes: data.envelopes, entities: data.entities };
                 return { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: selected ? 'partial' : 'full', createdAt: nowIso(), backend: this.backend, envelopes: data.envelopes, entities: data.entities, checksum: checksum(payload) };
             } catch (error) { if (error instanceof AppDataError) throw error; throw this._latch(error); }
@@ -884,5 +927,5 @@
         status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
     }
 
-    Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
+    Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, validateEntityRow, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
 })(typeof window !== 'undefined' ? window : globalThis);

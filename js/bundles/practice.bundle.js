@@ -4277,7 +4277,8 @@ class PracticeRecorder {
      */
     async restoreActiveSessions() {
         const raw = await window.AppData.recovery.listActiveSessions();
-        const storedSessions = Array.isArray(raw) ? raw : [];
+        const storedSessions = (Array.isArray(raw) ? raw : [])
+            .filter((sessionData) => sessionData.schema !== 'suite-session-v2');
 
         storedSessions
             .slice()

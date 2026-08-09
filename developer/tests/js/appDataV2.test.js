@@ -15,6 +15,38 @@ function stable(value) { if (Array.isArray(value)) return `[${value.map(stable).
 function checksum(value) { let hash = 0x811c9dc5; for (const char of stable(value)) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 0x01000193); } return `fnv1a-${(hash >>> 0).toString(16)}`; }
 function parseLegacyValue(value) { let parsed = clone(value); for (let depth = 0; depth < 3; depth += 1) { if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { break; } } else if (parsed && typeof parsed === 'object' && Object.prototype.hasOwnProperty.call(parsed, 'data') && (Object.prototype.hasOwnProperty.call(parsed, 'version') || Object.prototype.hasOwnProperty.call(parsed, 'compressed'))) parsed = parsed.data; else break; } return clone(parsed); }
 class AppDataError extends Error { constructor(code, message) { super(message); this.code = code; } }
+function sealSnapshot(snapshot) { snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities }); return snapshot; }
+async function expectFailure(task, message) {
+    let rejected = false;
+    let error = null;
+    try { await task(); } catch (caught) { rejected = true; error = caught; }
+    assert.strictEqual(rejected, true, message);
+    return error;
+}
+async function backupFixture(id) {
+    const fixture = harness();
+    await fixture.app.ready;
+    await fixture.app.practice.completeAttempt({
+        operationId: `${id}-seed`,
+        record: { id: `${id}-record`, examId: 'reading-backup', type: 'reading', totalQuestions: 1, correctAnswers: 1, answers: { 1: 'A' } }
+    });
+    fixture.backup = await fixture.app.backups.create({ id });
+    return fixture;
+}
+function storedBackup(shared, id) {
+    const entries = shared.docs.get('backups.entries');
+    const stored = entries && entries.data.find((item) => String(item && item.id) === String(id));
+    assert(stored, `expected stored backup ${id}`);
+    return stored;
+}
+function synchronizeStoredBackup(stored, mutate) {
+    const data = clone(stored.data);
+    mutate(data);
+    sealSnapshot(data);
+    stored.data = data;
+    stored.size = JSON.stringify(data).length;
+    stored.checksum = data.checksum;
+}
 
 function harness() {
     const catalogSandbox = { structuredClone }; catalogSandbox.globalThis = catalogSandbox;
@@ -83,11 +115,11 @@ function harness() {
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, parseLegacyValue, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)) };
     const sandbox = { console, Date, JSON, Math, Map, Set, Promise, structuredClone, __AppDataV2Internals: internals, sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} } }; sandbox.window = sandbox; sandbox.globalThis = sandbox;
-    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope };
+    const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox };
 }
 
 async function run() {
-    const { app, shared, envelope } = harness(); await app.ready;
+    const { app, shared, envelope, sandbox } = harness(); await app.ready;
     const huge = 'x'.repeat(20000);
     const completed = await app.practice.completeAttempt({ operationId: 'complete', record: { id: 'r1', examId: 'reading-1', type: 'reading', title: 'Test', totalQuestions: 2, correctAnswers: 1, answers: { 1: 'A' }, answerMap: { 2: 'B' }, answerList: [{ questionId: '3', answer: 'C' }], correctAnswerMap: { 1: 'B' }, answerDetails: huge, scoreInfo: { band: 7 }, markedQuestions: ['q1'], highlights: [{ text: huge }], notes: { q1: huge }, interactions: [{ type: 'click' }], metadata: { examId: 'reading-1', examTitle: 'Reading 1', category: 'academic', frequency: 4, libraryConfigurationId: 'library-1', privatePayload: huge }, realData: { rawData: { token: huge }, answers: { 1: 'wrong', 4: 'D' }, answerMap: { 5: 'E' } }, rawData: { shouldNotPersist: huge, answers: { 6: 'F' }, answerMap: { 7: 'G' }, realData: { answers: { 8: 'H' } } } } });
     assert.strictEqual(completed.record.answers[1], 'A');
@@ -286,6 +318,77 @@ async function run() {
     assert(durableAchievements.shared.docs.has('achievements.progress'), 'achievement progress must be durable');
     const backup = await app.backups.create({ id: 'b1' }); assert.deepStrictEqual(Object.keys(backup.data.entities).sort(), ['practiceAnnotations', 'practiceDetails', 'practiceSummaries']);
     const exported = await app.backups.export(); assert.deepStrictEqual(Object.keys(exported.entities).sort(), ['practiceAnnotations', 'practiceDetails', 'practiceSummaries']);
+    assert.strictEqual(app.backups.validateSnapshot(exported), true, 'AppData must expose the canonical v2 snapshot validator');
+    const corruptedExport = clone(exported);
+    corruptedExport.entities.practiceSummaries.push({ recordId: 'corrupt', data: {} });
+    assert.strictEqual(app.backups.validateSnapshot(corruptedExport), false, 'the canonical validator must reject a checksum mismatch');
+
+    // Recompute the snapshot checksum after each mutation so these cases exercise
+    // deep validation instead of only the outer checksum.
+    const envelopeKey = Object.keys(exported.envelopes).find((key) => key === 'settings.values') || Object.keys(exported.envelopes)[0];
+    const deepValidationCases = [
+        ['invalid envelope field', (snapshot) => { snapshot.envelopes[envelopeKey].revision = 0; }],
+        ['invalid envelope checksum', (snapshot) => { snapshot.envelopes[envelopeKey].checksum = 'fnv1a-forged-envelope'; }],
+        ['invalid entity row checksum', (snapshot) => { snapshot.entities.practiceSummaries[0].checksum = 'fnv1a-forged-row'; }],
+        ['invalid entity row field', (snapshot) => { delete snapshot.entities.practiceSummaries[0].operationId; }],
+        ['duplicate entity recordId', (snapshot) => { snapshot.entities.practiceSummaries.push(clone(snapshot.entities.practiceSummaries[0])); }],
+        ['practice layer recordId mismatch', (snapshot) => { snapshot.entities.practiceDetails[0].recordId = 'different-practice-id'; }]
+    ];
+    for (const [label, mutate] of deepValidationCases) {
+        const malformed = sealSnapshot(clone(exported));
+        mutate(malformed);
+        sealSnapshot(malformed);
+        assert.strictEqual(app.backups.validateSnapshot(malformed), false, `${label} must fail validateSnapshot`);
+    }
+    assert.strictEqual(
+        Object.prototype.hasOwnProperty.call(sandbox, '__AppDataV2Internals'),
+        false,
+        'production AppData must remove the bootstrap internals channel'
+    );
+    Reflect.deleteProperty(sandbox, '__AppDataV2Internals');
+    const postBootstrapCorruption = sealSnapshot(clone(exported));
+    postBootstrapCorruption.entities.practiceAnnotations[0].data = { forged: true };
+    sealSnapshot(postBootstrapCorruption);
+    assert.strictEqual(
+        app.backups.validateSnapshot(postBootstrapCorruption),
+        false,
+        'validateSnapshot must retain deep validation after bootstrap internals are deleted'
+    );
+
+    const exportIntegrity = await backupFixture('export-integrity');
+    const liveRow = exportIntegrity.shared.entities.get('practiceSummaries').get('export-integrity-record');
+    liveRow.data = Object.assign({}, liveRow.data, { title: 'tampered after persistence' });
+    await expectFailure(
+        () => exportIntegrity.app.backups.export(),
+        'backups.export must reject a persisted entity row whose data no longer matches its checksum'
+    );
+
+    const backupEnvelopeForgery = await backupFixture('backup-envelope-forgery');
+    const backupEnvelope = storedBackup(backupEnvelopeForgery.shared, 'backup-envelope-forgery');
+    const validById = await backupEnvelopeForgery.app.backups.export({ backupId: 'backup-envelope-forgery' });
+    assert.strictEqual(validById.id, 'backup-envelope-forgery', 'backupId export must succeed for an intact stored backup');
+    synchronizeStoredBackup(backupEnvelope, (snapshot) => { snapshot.schemaVersion = 999; });
+    await expectFailure(
+        () => backupEnvelopeForgery.app.backups.export({ backupId: 'backup-envelope-forgery' }),
+        'backupId export must reject a forged stored snapshot outer field even when checksums are synchronized'
+    );
+
+    const backupNestedForgery = await backupFixture('backup-nested-forgery');
+    const nestedStored = storedBackup(backupNestedForgery.shared, 'backup-nested-forgery');
+    synchronizeStoredBackup(nestedStored, (snapshot) => {
+        snapshot.entities.practiceSummaries[0].data = Object.assign({}, snapshot.entities.practiceSummaries[0].data, { title: 'nested forgery' });
+    });
+    await expectFailure(
+        () => backupNestedForgery.app.backups.export({ backupId: 'backup-nested-forgery' }),
+        'backupId export must reject nested entity corruption despite synchronized outer checksums'
+    );
+
+    await expectFailure(() => app.backups.export({ domains: [] }), 'empty backup domains must be rejected');
+    await expectFailure(() => app.backups.export({ domains: ['unknown-domain'] }), 'unknown backup domains must be rejected');
+    await expectFailure(() => app.backups.export({ domains: ['system'] }), 'a known domain with no selectable export data must be rejected');
+    const practiceDomainExport = await app.backups.export({ domains: ['practice', 'settings'] });
+    assert.strictEqual(practiceDomainExport.scope, 'partial', 'a legal domain selection must still export successfully');
+    assert.strictEqual(app.backups.validateSnapshot(practiceDomainExport), true, 'a legal domain export must remain a valid snapshot');
     await app.practice.clear(); assert.strictEqual(shared.mutations.at(-1).length, 3);
     const importPlan = await app.backups.previewImport(exported, { replace: true });
     await app.backups.commitImport(importPlan.id, { confirmDestructive: true });

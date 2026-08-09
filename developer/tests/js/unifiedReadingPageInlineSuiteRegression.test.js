@@ -36,7 +36,23 @@ function createWindowSessionStub() {
 function createDocumentStub() {
     const radio = { checked: true, value: 'A' };
     const notes = { value: 'fresh note' };
+    const timerClasses = new Set();
+    const timer = {
+        textContent: '',
+        dataset: {},
+        style: {},
+        classList: {
+            add(...names) { names.forEach((name) => timerClasses.add(name)); },
+            remove(...names) { names.forEach((name) => timerClasses.delete(name)); },
+            toggle(name, enabled) {
+                if (enabled) timerClasses.add(name);
+                else timerClasses.delete(name);
+            },
+            contains(name) { return timerClasses.has(name); }
+        }
+    };
     return {
+        __timer: timer,
         body: {
             dataset: {},
             classList: {
@@ -58,8 +74,8 @@ function createDocumentStub() {
             }
             return [];
         },
-        getElementById() {
-            return null;
+        getElementById(id) {
+            return id === 'timer' ? timer : null;
         },
         addEventListener() {},
         removeEventListener() {}
@@ -77,6 +93,7 @@ function hostEvent(sourceWindow, type, data, overrides = {}) {
 function createContext() {
     const windowSession = createWindowSessionStub();
     const document = createDocumentStub();
+    let closeCount = 0;
     const window = {
         location: {
             href: 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1',
@@ -95,7 +112,7 @@ function createContext() {
         removeEventListener() {},
         scrollTo() {},
         scrollY: 0,
-        close() {},
+        close() { closeCount += 1; },
         console,
         setTimeout,
         clearTimeout,
@@ -149,18 +166,24 @@ function createContext() {
         location: window.location
     };
     sandbox.globalThis = window;
-    return { context: vm.createContext(sandbox), window, document, windowSession };
+    return {
+        context: vm.createContext(sandbox),
+        window,
+        document,
+        windowSession,
+        getCloseCount: () => closeCount
+    };
 }
 
 function loadHooks() {
-    const { context, window, windowSession } = createContext();
+    const { context, window, document, windowSession, getCloseCount } = createContext();
     window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
     window.__READING_EXAM_MANIFEST__ = {};
     window.__READING_EXAM_DATA__ = new Map();
     loadScript('js/runtime/unifiedReadingPage.js', context);
     const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
     assert(hooks, 'should expose unified reading page test hooks');
-    return { hooks, window, windowSession };
+    return { hooks, window, document, windowSession, getCloseCount };
 }
 
 function plain(value) {
@@ -189,6 +212,31 @@ async function testDraftArbitration() {
     assert.deepStrictEqual(plain(fresh.highlights), [{ id: 'new' }], 'newer draft must win highlights');
     assert.strictEqual(fresh.scrollY, 9, 'newer draft must win scrollY');
     assert.strictEqual(fresh.updatedAt, 3000, 'newer draft must win updatedAt');
+}
+
+async function testSuiteTimerModePrecedence() {
+    const { hooks, document } = loadHooks();
+    const pausedAtMs = Date.now();
+    hooks.setTestState({
+        suiteSessionId: 'suite-timer',
+        suiteTimerMode: 'elapsed',
+        suiteTimerLimitSeconds: 60,
+        suiteTimerAnchorMs: pausedAtMs - 120000,
+        pagePausedAtMs: pausedAtMs,
+        pagePausedOffsetMs: 0
+    });
+    hooks.renderTimer();
+    assert.strictEqual(document.__timer.textContent, '02:00', 'elapsed 套题必须显示正计时');
+    assert.strictEqual(document.__timer.dataset.timerMode, 'elapsed');
+    assert.strictEqual(document.__timer.classList.contains('timer-expired'), false, 'elapsed 套题不得按 limit 触发倒计时过期');
+
+    hooks.setTestState({
+        suiteTimerMode: 'countdown',
+        suiteTimerLimitSeconds: 3600
+    });
+    hooks.renderTimer();
+    assert.strictEqual(document.__timer.textContent, '58 minutes remaining');
+    assert.strictEqual(document.__timer.dataset.timerMode, 'countdown');
 }
 
 async function testInlineEnvelopeGuard() {
@@ -316,6 +364,7 @@ async function testWindowSessionMessageGuard() {
         parentOriginIsOpaque: false,
         windowSessionToken: 'token-new',
         windowSessionIssuedAtMs: 5000,
+        windowSessionGeneration: 2,
         lastInitSignature: '',
         simulationCtx: { examId: 'reading-p2', flowMode: 'simulation', currentIndex: 1 },
         suite: {
@@ -336,6 +385,7 @@ async function testWindowSessionMessageGuard() {
                 sessionId: 'session-new',
                 suiteSessionId: 'suite-new',
                 windowSessionToken: 'token-old',
+                windowSessionGeneration: 1,
                 messageIssuedAtMs: 4000,
                 parentOrigin: 'http://localhost'
     }));
@@ -352,6 +402,7 @@ async function testWindowSessionMessageGuard() {
                 currentIndex: 0,
                 total: 3,
                 windowSessionToken: 'token-old',
+                windowSessionGeneration: 1,
                 messageIssuedAtMs: 4000,
                 suiteSequence: [
                     { examId: 'reading-p1' },
@@ -368,6 +419,7 @@ async function testWindowSessionMessageGuard() {
                 sessionId: 'session-newer',
                 suiteSessionId: 'suite-new',
                 windowSessionToken: 'token-newer',
+                windowSessionGeneration: 3,
                 messageIssuedAtMs: 6000,
                 parentOrigin: 'http://localhost'
     }));
@@ -375,6 +427,38 @@ async function testWindowSessionMessageGuard() {
     state = hooks.getTestState();
     assert.strictEqual(state.sessionId, 'session-newer', 'newer INIT_SESSION must still be accepted');
     assert.strictEqual(state.windowSessionToken, 'token-newer', 'newer INIT_SESSION must adopt the latest window token');
+
+    assert.strictEqual(
+        hooks.shouldAcceptWindowSessionMessage({
+            windowSessionToken: 'token-same-ms-old',
+            windowSessionGeneration: 3,
+            messageIssuedAtMs: 6000
+        }, sourceWindow),
+        false,
+        '同一注册代际的旧 token 即使时间戳相同也必须拒绝'
+    );
+    assert.strictEqual(
+        hooks.shouldAcceptWindowSessionMessage({
+            windowSessionToken: 'token-next-generation',
+            windowSessionGeneration: 4,
+            messageIssuedAtMs: 6000
+        }, sourceWindow),
+        true,
+        '更高注册代际必须覆盖旧 token'
+    );
+    hooks.setTestState({
+        windowSessionToken: 'token-current-no-generation',
+        windowSessionIssuedAtMs: 6000,
+        windowSessionGeneration: 0
+    });
+    assert.strictEqual(
+        hooks.shouldAcceptWindowSessionMessage({
+            windowSessionToken: 'token-equal-ms-no-generation',
+            messageIssuedAtMs: 6000
+        }, sourceWindow),
+        false,
+        '缺少注册代际且时间戳相等的不同 token 必须拒绝'
+    );
     hooks.stopReadingDraftSync();
     hooks.stopSimulationDraftSync();
 }
@@ -579,7 +663,7 @@ async function testSubmitAcknowledgementStateMachine() {
             delivered.push(message);
         }
     };
-    const { hooks } = loadHooks();
+    const { hooks, getCloseCount } = loadHooks();
     hooks.setTestState({
         examId: 'reading-p1',
         sessionId: 'session-submit-current',
@@ -647,6 +731,115 @@ async function testSubmitAcknowledgementStateMachine() {
     assert.strictEqual(state.submissionStatus, 'submitted');
     assert.strictEqual(state.submitted, true);
     assert.strictEqual(state.readOnly, true, 'only a valid ACK may lock the page');
+    assert.strictEqual(getCloseCount(), 0, 'a single-passage ACK must keep its result page open');
+
+    const suiteHarness = loadHooks();
+    const suiteParent = { postMessage() {} };
+    const finalPresentation = {
+        results: {
+            answerComparison: {},
+            scoreInfo: { correct: 0, totalQuestions: 0, percentage: 0 }
+        },
+        highlights: []
+    };
+    suiteHarness.hooks.setTestOverride('renderExplanations', () => Promise.resolve());
+    suiteHarness.hooks.setTestState({
+        examId: 'reading-p3',
+        sessionId: 'session-suite-final',
+        suiteSessionId: 'suite-final',
+        parentWindow: suiteParent,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-suite-final',
+        windowSessionGeneration: 1,
+        simulationMode: true,
+        simulationCtx: { isLast: true },
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+    assert.strictEqual(suiteHarness.hooks.beginSubmission('SIMULATION_SUBMIT', {
+        suiteSessionId: 'suite-final'
+    }, finalPresentation), true);
+    const suiteSubmissionId = suiteHarness.hooks.getTestState().submissionId;
+    assert.strictEqual(suiteHarness.getCloseCount(), 0, 'sending the final result must not close before an ACK');
+    await suiteHarness.hooks.handleIncoming(hostEvent(suiteParent, 'PRACTICE_SUBMIT_FAILED', {
+        examId: 'reading-p3',
+        sessionId: 'session-suite-final',
+        suiteSessionId: 'suite-final',
+        submissionId: suiteSubmissionId,
+        windowSessionToken: 'token-suite-final'
+    }));
+    assert.strictEqual(suiteHarness.getCloseCount(), 0, 'a persistence NACK must keep the final child open for retry');
+    assert.strictEqual(suiteHarness.hooks.getTestState().submissionStatus, 'draft');
+    assert.strictEqual(suiteHarness.hooks.beginSubmission('SIMULATION_SUBMIT', {
+        suiteSessionId: 'suite-final'
+    }, finalPresentation), true);
+    assert.strictEqual(
+        suiteHarness.hooks.getTestState().submissionId,
+        suiteSubmissionId,
+        'the persistence retry must retain its idempotency key'
+    );
+    await suiteHarness.hooks.handleIncoming(hostEvent(suiteParent, 'PRACTICE_SUBMIT_ACK', {
+        examId: 'reading-p3',
+        sessionId: 'session-suite-final',
+        suiteSessionId: 'suite-final',
+        submissionId: suiteSubmissionId,
+        windowSessionToken: 'token-suite-final'
+    }));
+    assert.strictEqual(suiteHarness.getCloseCount(), 1, 'the final suite child must close after its valid ACK');
+
+    const lateHarness = loadHooks();
+    const lateParent = { postMessage() {} };
+    const nextDraftName = 'simulation-draft:suite-next:reading-p3';
+    lateHarness.hooks.setTestState({
+        examId: 'reading-p3',
+        sessionId: 'session-suite-old',
+        suiteSessionId: 'suite-old',
+        parentWindow: lateParent,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost',
+        parentOriginIsOpaque: false,
+        windowSessionToken: 'token-suite-old',
+        windowSessionGeneration: 1,
+        windowSessionIssuedAtMs: 1000,
+        simulationMode: true,
+        simulationCtx: { isLast: true },
+        submissionStatus: 'draft',
+        submissionId: ''
+    });
+    lateHarness.hooks.setTestOverride('renderExplanations', () => Promise.resolve().then(async () => {
+        await lateHarness.hooks.handleIncoming(hostEvent(lateParent, 'INIT_SESSION', {
+            examId: 'reading-p3',
+            sessionId: 'session-suite-next',
+            suiteSessionId: 'suite-next',
+            parentOrigin: 'http://localhost',
+            windowSessionToken: 'token-suite-next',
+            windowSessionGeneration: 2,
+            messageIssuedAtMs: 2000
+        }));
+        lateHarness.windowSession.save(nextDraftName, {
+            draft: { answers: { q1: 'new-session-answer' } },
+            updatedAt: 2000
+        });
+    }));
+    assert.strictEqual(lateHarness.hooks.beginSubmission('SIMULATION_SUBMIT', {
+        suiteSessionId: 'suite-old'
+    }, finalPresentation), true);
+    const lateSubmissionId = lateHarness.hooks.getTestState().submissionId;
+    await lateHarness.hooks.handleIncoming(hostEvent(lateParent, 'PRACTICE_SUBMIT_ACK', {
+        examId: 'reading-p3',
+        sessionId: 'session-suite-old',
+        suiteSessionId: 'suite-old',
+        submissionId: lateSubmissionId,
+        windowSessionToken: 'token-suite-old'
+    }));
+    const lateState = lateHarness.hooks.getTestState();
+    assert.strictEqual(lateState.sessionId, 'session-suite-next', 'the queued INIT must install the new session');
+    assert.strictEqual(lateState.suiteSessionId, 'suite-next', 'the queued INIT must install the new suite binding');
+    assert.strictEqual(lateState.windowSessionToken, 'token-suite-next', 'the queued INIT must install the new registration');
+    assert(lateHarness.windowSession.get(nextDraftName), 'the stale ACK continuation must not clear the new session draft');
+    assert.strictEqual(lateHarness.getCloseCount(), 0, 'the stale ACK continuation must not close the new registration');
 
     const timeoutHarness = loadHooks();
     const timeoutParent = { postMessage() {} };
@@ -678,6 +871,7 @@ async function testSubmitAcknowledgementStateMachine() {
 
 async function main() {
     await testDraftArbitration();
+    await testSuiteTimerModePrecedence();
     await testInlineEnvelopeGuard();
     await testInlineReinitSnapshot();
     await testWindowSessionMessageGuard();

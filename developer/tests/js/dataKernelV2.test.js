@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import { chromium } from 'playwright';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,6 +67,163 @@ async function persistedBusinessState(page) {
             };
         };
     }));
+}
+
+class FakeObjectStoreNames {
+    constructor(state) { this.state = state; }
+    contains(name) { return this.state.stores.has(String(name)); }
+    item(index) { return Array.from(this.state.stores.keys())[index] || null; }
+    get length() { return this.state.stores.size; }
+    [Symbol.iterator]() { return this.state.stores.keys(); }
+}
+
+class FakeTransaction {
+    constructor(db, names, mode) {
+        this.db = db;
+        this.names = names.map(String);
+        this.mode = mode;
+        this.pending = 0;
+        this.aborted = false;
+        this.completed = false;
+        this.error = null;
+        this.oncomplete = null;
+        this.onerror = null;
+        this.onabort = null;
+    }
+    objectStore(name) {
+        const storeName = String(name);
+        if (!this.names.includes(storeName)) throw new Error(`Store not in transaction: ${storeName}`);
+        const state = this.db.state.stores.get(storeName);
+        if (!state) throw new Error(`Unknown fake object store: ${storeName}`);
+        return new FakeObjectStore(this, storeName, state);
+    }
+    request(operation) {
+        const request = { result: undefined, error: null, onsuccess: null, onerror: null };
+        this.pending += 1;
+        queueMicrotask(() => {
+            if (this.aborted) { this.pending -= 1; return; }
+            try {
+                request.result = operation();
+                if (typeof request.onsuccess === 'function') request.onsuccess({ target: request });
+            } catch (error) {
+                request.error = error;
+                if (typeof request.onerror === 'function') request.onerror({ target: request });
+                this.abort(error);
+            } finally {
+                this.pending -= 1;
+                this.finishIfIdle();
+            }
+        });
+        return request;
+    }
+    finishIfIdle() {
+        if (this.pending || this.aborted || this.completed) return;
+        this.completed = true;
+        queueMicrotask(() => { if (!this.aborted && typeof this.oncomplete === 'function') this.oncomplete({ target: this }); });
+    }
+    abort(error = null) {
+        if (this.aborted || this.completed) return;
+        this.aborted = true;
+        this.error = error || this.error || new Error('fake transaction aborted');
+        queueMicrotask(() => { if (typeof this.onabort === 'function') this.onabort({ target: this }); });
+    }
+}
+
+class FakeObjectStore {
+    constructor(transaction, name, state) { this.transaction = transaction; this.name = name; this.state = state; }
+    get(key) { return this.transaction.request(() => cloneFake(this.state.rows.get(String(key)))); }
+    getAll() { return this.transaction.request(() => Array.from(this.state.rows.values(), cloneFake)); }
+    put(value) {
+        return this.transaction.request(() => {
+            const key = value && value[this.state.keyPath];
+            if (key === undefined || key === null) throw new Error(`Missing fake keyPath: ${this.state.keyPath}`);
+            this.state.rows.set(String(key), cloneFake(value));
+            return value;
+        });
+    }
+    delete(key) { return this.transaction.request(() => { this.state.rows.delete(String(key)); return undefined; }); }
+    clear() { return this.transaction.request(() => { this.state.rows.clear(); return undefined; }); }
+}
+
+class FakeDatabase {
+    constructor(state) { this.state = state; this.objectStoreNames = new FakeObjectStoreNames(state); this.onversionchange = null; }
+    createObjectStore(name, options = {}) {
+        const storeName = String(name);
+        if (!this.state.stores.has(storeName)) this.state.stores.set(storeName, { keyPath: options.keyPath || 'id', rows: new Map() });
+        return { name: storeName };
+    }
+    deleteObjectStore(name) { this.state.stores.delete(String(name)); }
+    transaction(names, mode) { return new FakeTransaction(this, Array.isArray(names) ? names : [names], mode); }
+    close() {}
+}
+
+class FakeIndexedDB {
+    constructor() { this.databases = new Map(); }
+    open(name, requestedVersion = 1) {
+        const request = { result: null, error: null, onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null };
+        queueMicrotask(() => {
+            try {
+                const databaseName = String(name);
+                const version = Number(requestedVersion) || 1;
+                let state = this.databases.get(databaseName);
+                const oldVersion = state ? state.version : 0;
+                if (!state) {
+                    state = { version, stores: new Map() };
+                    this.databases.set(databaseName, state);
+                }
+                request.result = new FakeDatabase(state);
+                if (version > oldVersion) {
+                    state.version = version;
+                    if (typeof request.onupgradeneeded === 'function') request.onupgradeneeded({ oldVersion, newVersion: version, target: request });
+                }
+                request.result = new FakeDatabase(state);
+                if (typeof request.onsuccess === 'function') request.onsuccess({ target: request });
+            } catch (error) {
+                request.error = error;
+                if (typeof request.onerror === 'function') request.onerror({ target: request });
+            }
+        });
+        return request;
+    }
+    seed(storeName, row) {
+        const state = this.databases.get('IELTSAtlasDataV2');
+        if (!state || !state.stores.has(storeName)) throw new Error(`Cannot seed fake store: ${storeName}`);
+        state.stores.get(storeName).rows.set(String(row.recordId || row.logicalKey), cloneFake(row));
+    }
+}
+
+function cloneFake(value) { return value === undefined ? undefined : structuredClone(value); }
+
+async function runSnapshotIntegrityUnitTest() {
+    const indexedDB = new FakeIndexedDB();
+    // Leave structuredClone unavailable in this VM so DataCatalog's JSON fallback
+    // returns objects owned by the VM realm, just like a browser's same-realm IDB.
+    const sandbox = { console, Date, Math, Map, Set, Promise, setTimeout, clearTimeout, queueMicrotask, indexedDB };
+    sandbox.window = sandbox;
+    sandbox.globalThis = sandbox;
+    const context = vm.createContext(sandbox);
+    vm.runInContext(catalogSource, context, { filename: 'dataCatalog.js' });
+    vm.runInContext(kernelSource, context, { filename: 'dataKernel.js' });
+    const { DataKernel } = sandbox.__AppDataV2Internals;
+    const kernel = new DataKernel({ indexedDB });
+    await kernel.initialize();
+    indexedDB.seed('practiceSummaries', {
+        recordId: 'corrupt-export-row',
+        revision: 1,
+        operationId: 'corrupt-export-seed',
+        updatedAt: '2026-08-09T00:00:00.000Z',
+        data: { id: 'corrupt-export-row', type: 'reading' },
+        checksum: 'fnv1a-forged-row'
+    });
+
+    let snapshot = null;
+    let error = null;
+    try { snapshot = await kernel.exportSnapshot(); } catch (caught) { error = caught; }
+    assert.strictEqual(snapshot, null, 'a corrupt IndexedDB row must not produce a successful snapshot');
+    assert(error, 'DataKernel.exportSnapshot must reject a corrupt IndexedDB row');
+    assert.strictEqual(error.code, 'CORRUPT_RECORD', `${error.code}: ${error.message}`);
+    kernel.close();
+    console.log('DataKernel export corruption regression test passed');
 }
 
 async function main() {
@@ -449,4 +607,5 @@ async function main() {
     }
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+const entrypoint = process.argv.includes('--snapshot-integrity-only') ? runSnapshotIntegrityUnitTest : main;
+entrypoint().catch((error) => { console.error(error); process.exitCode = 1; });

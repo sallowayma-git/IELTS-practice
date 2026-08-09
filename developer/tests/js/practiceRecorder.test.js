@@ -158,7 +158,7 @@ function createHarness() {
     loadScript('js/core/practiceRecorder.js', context);
     const recorder = Object.create(windowStub.PracticeRecorder.prototype);
     recorder.wait = async () => {};
-    return { recorder, state };
+    return { recorder, state, windowStub };
 }
 
 function makeRecord(id = 'record-v2') {
@@ -236,6 +236,47 @@ async function main() {
                 }
             });
             assert.strictEqual(completionCalls, 0, 'host-owned completion must not be saved through the recorder global listener');
+        });
+
+        await record('restore and autosave isolate recorder sessions from suite recovery', async () => {
+            const { recorder, windowStub } = createHarness();
+            const savedSessions = [];
+            windowStub.AppData.recovery.listActiveSessions = async () => clone([
+                {
+                    schema: 'suite-session-v2',
+                    id: 'suite-owner',
+                    sessionId: 'suite-owner',
+                    examId: 'reading-suite-host'
+                },
+                {
+                    id: 'active-session:ordinary-session',
+                    sessionId: 'ordinary-session',
+                    examId: 'reading-p1',
+                    updatedAt: '2026-08-09T00:01:00.000Z'
+                }
+            ]);
+            windowStub.AppData.recovery.saveActiveSession = async (session) => {
+                savedSessions.push(clone(session));
+                return { committed: true };
+            };
+            recorder.activeSessions = new Map();
+
+            await recorder.restoreActiveSessions();
+
+            assert.deepStrictEqual(
+                Array.from(recorder.activeSessions.keys()),
+                ['reading-p1']
+            );
+            assert.strictEqual(recorder.activeSessions.get('reading-p1').status, 'restored');
+
+            await recorder.saveActiveSessions();
+
+            assert.deepStrictEqual(
+                savedSessions.map((session) => session.id),
+                ['active-session:ordinary-session']
+            );
+            assert(savedSessions.every((session) => session.schema !== 'suite-session-v2'),
+                'autosave must not clone suite recovery entities');
         });
 
         await record('temporary recovery draft does not overwrite reading drafts', async () => {

@@ -75,6 +75,27 @@ function createSandbox() {
                 async listActiveSessions() {
                     return cloneValue(activeSessions);
                 },
+                async saveActiveSession(value, options = {}) {
+                    if (typeof options.commitGuard === 'function' && options.commitGuard() !== true) {
+                        return { committed: false };
+                    }
+                    const entity = cloneValue(value);
+                    const entityId = String(entity && (entity.id || entity.sessionId) || '');
+                    if (!entityId) return { committed: false };
+                    const index = activeSessions.findIndex(item => String(item && (item.id || item.sessionId) || '') === entityId);
+                    if (index >= 0) activeSessions[index] = entity;
+                    else activeSessions.push(entity);
+                    return { committed: true, value: cloneValue(entity) };
+                },
+                async discardActiveSession(entityId, options = {}) {
+                    if (typeof options.commitGuard === 'function' && options.commitGuard() !== true) {
+                        return { committed: false };
+                    }
+                    const normalized = String(entityId || '');
+                    const before = activeSessions.length;
+                    activeSessions = activeSessions.filter(item => String(item && (item.id || item.sessionId) || '') !== normalized);
+                    return { committed: true, removed: before !== activeSessions.length };
+                },
                 windowSession: {
                     save(kind, value) {
                         windowSessionStore.set(String(kind), cloneValue(value));
@@ -175,6 +196,9 @@ function createApp(windowStub) {
         saveRealPracticeData: async () => {}
     };
     Object.assign(app, windowStub.ExamSystemAppMixins.examSession, windowStub.ExamSystemAppMixins.suitePractice);
+    app._suiteModeReady = true;
+    app.suiteExamMap = new Map();
+    app.multiSuiteSessionsMap = new Map();
     return app;
 }
 
@@ -407,14 +431,25 @@ async function run() {
         session.autoAdvanceAfterSubmit = false;
         session.results = [
             {
+                examId: 'reading-p1', title: 'Passage 1', duration: 10,
+                answers: { q1: 'A' }, answerComparison: {},
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {}
+            },
+            {
                 examId: 'reading-p2',
                 title: 'Passage 2',
+                duration: 10,
                 answers: { q1: 'B' },
                 answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
                 scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
                 highlights: [],
                 scrollY: 0,
                 rawData: {}
+            },
+            {
+                examId: 'reading-p3', title: 'Passage 3', duration: 10,
+                answers: { q1: 'C' }, answerComparison: {},
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {}
             }
         ];
         session.draftsByExam['reading-p2'] = {
@@ -436,6 +471,7 @@ async function run() {
         };
         app._updatePracticeRecordsState = async () => {};
         app._teardownSuiteSession = async () => {};
+        app.currentSuiteSession = session;
         await app.finalizeSuiteRecord(session);
         const p2Entry = savedRecord.suiteEntries.find(entry => entry.examId === 'reading-p2');
         assert.deepStrictEqual(p2Entry.highlights, p2Highlights, '最终记录也必须保留 draft 中的 P2 高亮');
@@ -452,9 +488,9 @@ async function run() {
         const session = makeSession('suite_final_highlight');
         const p2Highlights = [{ scope: 'groups', text: 'P2 answer evidence', color: 'green' }];
         session.results = [
-            { examId: 'reading-p1', title: 'Passage 1', answers: { q1: 'A' }, answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} },
-            { examId: 'reading-p2', title: 'Passage 2', answers: { q1: 'B' }, answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, highlights: p2Highlights, scrollY: 240, rawData: { highlights: p2Highlights, scrollY: 240 } },
-            { examId: 'reading-p3', title: 'Passage 3', answers: { q1: 'C' }, answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} }
+            { examId: 'reading-p1', title: 'Passage 1', duration: 10, answers: { q1: 'A' }, answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} },
+            { examId: 'reading-p2', title: 'Passage 2', duration: 10, answers: { q1: 'B' }, answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, highlights: p2Highlights, scrollY: 240, rawData: { highlights: p2Highlights, scrollY: 240 } },
+            { examId: 'reading-p3', title: 'Passage 3', duration: 10, answers: { q1: 'C' }, answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} }
         ];
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
@@ -466,6 +502,7 @@ async function run() {
         app._updatePracticeRecordsState = async () => {};
         app._teardownSuiteSession = async () => {};
 
+        app.currentSuiteSession = session;
         await app.finalizeSuiteRecord(session);
         const p2Entry = savedRecord.suiteEntries.find(entry => entry.examId === 'reading-p2');
         assert(p2Entry, '最终套题记录必须包含 P2 entry');
@@ -609,6 +646,7 @@ async function run() {
             }
         }, session.windowRef);
         const secondNavigate = app._handleSimulationNavigate('reading-p1', { direction: 'next' }, session.windowRef);
+        await new Promise(resolve => setTimeout(resolve, 0));
         assert.strictEqual(openCallCount, 1, '并发切题期间只允许一次窗口切换');
 
         if (typeof resolveOpen === 'function') {
@@ -646,7 +684,7 @@ async function run() {
             { direction: 'next' },
             session.windowRef
         );
-        await Promise.resolve();
+        await new Promise(resolve => setTimeout(resolve, 0));
         const queuedNavigate = app._handleSimulationNavigate(
             'reading-p2',
             { direction: 'next' },
@@ -795,6 +833,50 @@ async function run() {
         assert.strictEqual(session.draftsByExam['reading-p1'], undefined, 'P2 草稿不能误写到 P1');
         assert.deepStrictEqual(session.draftsByExam['reading-p2'].answers, { q1: 'P2 answer' }, 'P2 草稿应按 payload.examId 保存');
         assert.strictEqual(session.draftsByExam['reading-p2'].noteText, 'P2 note', 'P2 noteText 应保存');
+    }
+
+    // Case 2.4.1a: a queued classic draft cannot write through a replaced registration.
+    {
+        const app = createApp(windowStub);
+        const oldWindow = createStubWindow('old-reading-window');
+        const newWindow = createStubWindow('new-reading-window');
+        const oldInfo = {
+            window: oldWindow,
+            expectedSessionId: 'reading-session',
+            sessionGeneration: 1,
+            practiceMode: 'classic',
+            suiteSessionId: null,
+            reviewMode: false
+        };
+        const newInfo = { ...oldInfo, window: newWindow, sessionGeneration: 2 };
+        app.examWindows = new Map([['reading-p1', oldInfo]]);
+        let releaseQueue;
+        app._readingDraftStoreQueue = new Promise((resolve) => { releaseQueue = resolve; });
+        const pending = app._queueReadingDraftSync('reading-p1', {
+            sessionId: 'reading-session',
+            draft: { answers: { q1: 'stale' }, updatedAt: 100 },
+            draftUpdatedAt: 100
+        }, oldInfo);
+        app.examWindows.set('reading-p1', newInfo);
+        releaseQueue();
+        assert.strictEqual(await pending, false, '窗口重注册后排队中的旧草稿必须被拒绝');
+    }
+
+    // Case 2.4.1b: suite handler failure must not fall back to a standalone v2 attempt.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_no_standalone_fallback');
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        app.handleSuitePracticeComplete = async () => { throw new Error('suite handler failure'); };
+        let standaloneWrites = 0;
+        app.saveRealPracticeData = async () => { standaloneWrites += 1; return { id: 'unexpected' }; };
+        assert.strictEqual(await app.handlePracticeComplete('reading-p1', {
+            suiteSessionId: session.id,
+            answers: { q1: 'A' },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
+        }, session.windowRef), false);
+        assert.strictEqual(standaloneWrites, 0, '套题处理失败不得写入单篇 fallback');
     }
 
     // Case 2.4.2: inline simulation 草稿同步必须按篇拆分 elapsed，并镜像回窗口会话域
@@ -1321,7 +1403,7 @@ async function run() {
         assert.deepStrictEqual(p3.answers, { q1: 'C' }, '最终提交应覆盖旧快照答案');
     }
 
-    // Case 4: 套题意外关闭后，已作答篇应按单篇普通流程保存
+    // Case 4: 显式中断只清理 v2 套题会话，不拆分写入 v1 单篇记录
     {
         const app = createApp(windowStub);
         const session = makeSession('suite_abort');
@@ -1353,7 +1435,7 @@ async function run() {
         };
 
         await app._abortSuiteSession(session, {});
-        assert.deepStrictEqual(savedExamIds.sort(), ['reading-p1', 'reading-p2'], '中断后应保存所有已作答篇章');
+        assert.deepStrictEqual(savedExamIds, [], '中断后不得通过 v1 单篇路径写入记录');
     }
 
     // Case 5: AppData window-session mirror must be cleared after teardown
@@ -2007,6 +2089,67 @@ async function run() {
         assert.deepStrictEqual(status, { examId, status: 'completed' }, '完成后应更新题源状态');
     }
 
+    // Case 12.1: delayed injector callbacks cannot mutate a replaced registration.
+    {
+        const app = createApp(windowStub);
+        const examId = 'stale-injection-registration';
+        const appendedScripts = [];
+        let initialized = 0;
+        const injectionDocument = {
+            readyState: 'complete',
+            documentElement: { dataset: {} },
+            head: {
+                appendChild(script) {
+                    appendedScripts.push(script);
+                }
+            },
+            body: null,
+            getElementById() { return null; },
+            querySelector() { return null; },
+            createElement() {
+                return {
+                    dataset: {},
+                    remove() {}
+                };
+            }
+        };
+        const examWindow = {
+            ...createStubWindow('stale-injection-window'),
+            document: injectionDocument
+        };
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        const firstRegistration = app._captureExamSessionRegistration(examId, info);
+        const scheduled = [];
+        const originalSetTimeout = sandbox.setTimeout;
+        sandbox.setTimeout = (callback) => {
+            scheduled.push(callback);
+            return scheduled.length;
+        };
+        app.initializePracticeSession = () => { initialized += 1; };
+        try {
+            app.injectDataCollectionScript(examWindow, examId, null, {
+                expectedRegistration: firstRegistration
+            });
+            assert.strictEqual(scheduled.length, 1, 'injector must queue its document-ready check');
+            info.sessionGeneration += 1;
+            scheduled.shift()();
+            assert.strictEqual(appendedScripts.length, 0, 'a stale document-ready callback must not append a script');
+
+            const secondRegistration = app._captureExamSessionRegistration(examId, info);
+            app.injectDataCollectionScript(examWindow, examId, null, {
+                expectedRegistration: secondRegistration
+            });
+            scheduled.shift()();
+            assert.strictEqual(appendedScripts.length, 1, 'the current registration may append its enhancer script');
+            info.sessionGeneration += 1;
+            appendedScripts[0].onload();
+            assert.strictEqual(scheduled.length, 0, 'a stale script onload must not queue session initialization');
+            assert.strictEqual(initialized, 0, 'a stale injector callback must not initialize the replacement session');
+        } finally {
+            sandbox.setTimeout = originalSetTimeout;
+        }
+    }
+
     // Case 13: 统一阅读提交后 reset 必须复用父页通信链路并重建 recorder session
     {
         const app = createApp(windowStub);
@@ -2020,6 +2163,7 @@ async function run() {
         const statuses = [];
         let cleanupCount = 0;
         let restartCount = 0;
+        let restartRegistration = null;
 
         app.generateSessionId = () => resetSessionId;
         app.components.practiceRecorder = {
@@ -2048,7 +2192,7 @@ async function run() {
                 this.activeSessions.set(payload.examId, session);
             }
         };
-        app.startPracticeSession = async (handledExamId) => {
+        app.startPracticeSession = async (handledExamId, options = {}) => {
             resetStarts.push(handledExamId);
             app.components.practiceRecorder.activeSessions.set(handledExamId, {
                 examId: handledExamId,
@@ -2057,12 +2201,18 @@ async function run() {
                 progress: {},
                 answers: {}
             });
+            return {
+                owned: true,
+                sessionId: resetSessionId,
+                registration: options.expectedRegistration
+            };
         };
         app.cleanupExamSession = async () => {
             cleanupCount += 1;
         };
-        app.restartExamHandshake = (targetWindow, handledExamId) => {
+        app.restartExamHandshake = (targetWindow, handledExamId, registration) => {
             restartCount += 1;
+            restartRegistration = registration;
             assert.strictEqual(targetWindow, examWindow, 'reset 应复用当前统一阅读窗口');
             assert.strictEqual(handledExamId, examId, 'reset 握手应使用当前题源');
         };
@@ -2082,6 +2232,8 @@ async function run() {
         info.expectedSessionId = firstSessionId;
         app._refreshExamWindowToken(examId, info);
         app.examWindows.set(examId, info);
+        const firstGeneration = info.sessionGeneration;
+        const firstWindowSessionToken = info.windowSessionToken;
 
         const handler = app.messageHandlers.get(examId);
         assert.strictEqual(typeof handler, 'function', '统一阅读题源应注册 message handler');
@@ -2139,6 +2291,8 @@ async function run() {
 
         const resetInfo = app.examWindows.get(examId);
         assert.strictEqual(resetInfo.expectedSessionId, resetSessionId, 'reset 必须生成新的 expectedSessionId');
+        assert.strictEqual(resetInfo.sessionGeneration, firstGeneration + 1, 'reset must advance the window session generation exactly once');
+        assert.notStrictEqual(resetInfo.windowSessionToken, firstWindowSessionToken, 'reset must rotate the window session token');
         assert.strictEqual(resetInfo.status, 'active', 'reset 后窗口应回到 active');
         assert.deepStrictEqual(resetStarts, [examId], 'reset 后必须补建练习会话');
         assert.strictEqual(recorderStarts.length, 1, 'reset 后必须同步 recorder sessionId');
@@ -2148,12 +2302,38 @@ async function run() {
             resetSessionId,
             'reset 后 active recorder session 必须可被下一次提交使用'
         );
-        assert(
-            examWindow._messages.some(message => message && message.type === 'INIT_SESSION' && message.data && message.data.sessionId === resetSessionId),
-            'reset 后必须向子页发送新的 INIT_SESSION'
-        );
+        const resetInit = examWindow._messages.find(message => message && message.type === 'INIT_SESSION'
+            && message.data && message.data.sessionId === resetSessionId);
+        assert(resetInit, 'reset 后必须向子页发送新的 INIT_SESSION');
+        assert.strictEqual(resetInit.data.windowSessionGeneration, firstGeneration + 1, 'reset INIT must carry the advanced generation');
+        assert.strictEqual(resetInit.data.windowSessionToken, resetInfo.windowSessionToken, 'reset INIT must carry the rotated token');
         assert.strictEqual(restartCount, 1, 'reset 后必须重启握手');
+        assert.strictEqual(app._isExamSessionRegistrationCurrent(examId, restartRegistration), true, 'reset handshake must use the new exact registration');
         assert(statuses.some(item => item.examId === examId && item.status === 'in-progress'), 'reset 后题源状态应回到 in-progress');
+
+        const resetHandler = app.messageHandlers.get(examId);
+        assert.notStrictEqual(resetHandler, handler, 'reset must bind a new exact-registration message handler');
+        let acceptedReady = 0;
+        app.handleSessionReady = () => { acceptedReady += 1; };
+        const readyEvent = {
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'SESSION_READY',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    sessionId: resetSessionId,
+                    windowSessionToken: resetInfo.windowSessionToken,
+                    pageType: 'reading',
+                    source: 'practice_page'
+                }
+            }
+        };
+        await handler(readyEvent);
+        assert.strictEqual(acceptedReady, 0, 'the stale registration handler must ignore reset-era messages');
+        await resetHandler(readyEvent);
+        assert.strictEqual(acceptedReady, 1, 'the new exact registration handler must accept reset READY');
     }
 
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));
