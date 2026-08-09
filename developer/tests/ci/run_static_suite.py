@@ -2221,6 +2221,25 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("套题模式状态机回归测试", False, "测试脚本缺失"))
         all_passed = False
 
+    suite_recovery_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteSessionRecoveryV2.test.js"
+    if suite_recovery_test.exists():
+        suite_recovery_ok, suite_recovery_payload = _run_json_subprocess(
+            ["node", str(suite_recovery_test)],
+            timeout=60,
+            parse_mode="last-line",
+        )
+        if not suite_recovery_ok:
+            suite_recovery_passed = False
+            suite_recovery_detail = suite_recovery_payload
+        else:
+            suite_recovery_passed = suite_recovery_payload.get("status") == "pass"
+            suite_recovery_detail = suite_recovery_payload.get("detail", suite_recovery_payload)
+        results.append(_format_result("Suite recovery regression", suite_recovery_passed, suite_recovery_detail))
+        all_passed &= suite_recovery_passed
+    else:
+        results.append(_format_result("Suite recovery regression", False, "Test script missing"))
+        all_passed = False
+
     simulation_nb_drag_test = REPO_ROOT / "developer" / "tests" / "e2e" / "simulation_nb_drag_regression.py"
     if simulation_nb_drag_test.exists():
         try:
