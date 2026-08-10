@@ -5129,11 +5129,18 @@ class PracticeRecorder {
     /**
      * 结束练习会话
      */
-    endPracticeSession(examId, reason = 'completed') {
-        if (!this.activeSessions.has(examId)) return;
+    async endPracticeSession(examId, reason = 'completed') {
+        if (!this.activeSessions.has(examId)) return false;
 
         let session = this.activeSessions.get(examId);
-        const sessionEntityId = this.activeSessionEntityId(session);
+        let sessionEntityId;
+        try {
+            sessionEntityId = this.activeSessionEntityId(session);
+        } catch (error) {
+            console.error('[PracticeRecorder] 活动会话缺少稳定标识，已保留原检查点:', error);
+            this.dispatchSessionEvent('sessionError', { examId, error });
+            return false;
+        }
 
         // 如果会话未完成，创建中断记录
         if (reason !== 'completed' && session.status !== 'completed') {
@@ -5155,22 +5162,32 @@ class PracticeRecorder {
                 createdAt: endTime
             };
 
-            this.saveInterruptedRecord(interruptedRecord).catch(error => {
+            try {
+                // The active checkpoint is the only durable copy until the
+                // interrupted record commits. Never discard it on a failed
+                // conversion (quota, backend loss, validation, etc.).
+                await this.saveInterruptedRecord(interruptedRecord);
+            } catch (error) {
                 console.error('[PracticeRecorder] 保存中断记录失败:', error);
-            });
+                this.dispatchSessionEvent('sessionError', { examId, error });
+                return false;
+            }
         }
 
         // 清理会话
         this.activeSessions.delete(examId);
         this.cleanupSessionListener(examId);
-        window.AppData.recovery.discardActiveSession(sessionEntityId).catch(error => {
+        try {
+            await window.AppData.recovery.discardActiveSession(sessionEntityId);
+        } catch (error) {
             console.error('[PracticeRecorder] 清理活动会话失败:', error);
-        });
+        }
 
         console.log(`Practice session ended: ${examId} (${reason})`);
 
         // 触发结束事件
         this.dispatchSessionEvent('sessionEnded', { examId, reason });
+        return true;
     }
 
     /**
@@ -5788,11 +5805,11 @@ class PracticeRecorder {
         const mergeMode = options.merge === false || options.mergeMode === 'replace'
             ? 'replace'
             : (options.mergeMode || 'merge');
+        const payload = Array.isArray(data) ? { records: data } : data;
+        const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mergeMode });
         const backup = options.createBackup === false
             ? null
             : await window.AppData.backups.create({ type: 'pre-import' });
-        const payload = Array.isArray(data) ? { records: data } : data;
-        const preview = await window.AppData.backups.previewImport(payload, { practiceMode: mergeMode });
         const receipt = await window.AppData.backups.commitImport(preview.id, {
             operationId: options.operationId,
             confirmDestructive: mergeMode === 'replace'

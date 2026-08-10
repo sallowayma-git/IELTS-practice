@@ -134,7 +134,7 @@ async function run() {
   ok(/displayAnswerValue\(entry\.correctAnswer,\s*''\)/.test(unifiedPage), 'review_results_correct_answer_not_normalized', failed);
   ok(/setDropzoneAnswer\(dropzone,\s*value,\s*label\)/.test(unifiedPage), 'dropzone_replay_label_not_preserved', failed);
   ok(/value:\s*item\.dataset\.heading\s*\|\|\s*item\.dataset\.option\s*\|\|\s*item\.dataset\.key/.test(unifiedPage), 'drag_payload_ignores_data_key', failed);
-  ok(/const valueList = splitAnswerTokens\(rawValue\);/.test(unifiedPage), 'replay_field_value_list_not_normalized', failed);
+  ok(/splitAnswerTokens\(rawValue\)\s*\.map\(\(entry\) => canonicalizeAnswerToken\(entry\)\)/.test(unifiedPage), 'replay_field_value_list_not_normalized', failed);
   ok(!/String\(rawValue == null \? '' : rawValue\)\.split/.test(unifiedPage), 'replay_raw_object_string_split_regressed', failed);
   ok(/--reading-left-pane-width/.test(unifiedHtml), 'missing_resizable_reading_pane_width_var', failed);
   ok(/grid-template-columns:[\s\S]*var\(--reading-left-pane-width\)/.test(unifiedHtml), 'reading_shell_not_css_grid_resizable', failed);

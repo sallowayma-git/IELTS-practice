@@ -46,7 +46,10 @@ def extract_registered_payload(path: Path) -> Dict[str, Any] | None:
     match = re.search(r'register\("[^"]+",\s*(\{[\s\S]*\})\s*\)\s*;?\s*\}', text)
     if not match:
         return None
-    return json.loads(match.group(1))
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
 
 
 def normalize_whitespace(value: str) -> str:
@@ -164,6 +167,10 @@ def main(argv: List[str]) -> int:
     report: Dict[str, Any] = {
         "scannedFiles": len(explanation_files),
         "blockingFiles": [],
+        "coverage": {
+            "missingExplanationFiles": [],
+            "filesWithIncompleteQuestionCoverage": [],
+        },
         "summary": {
             "answerKeyMismatches": 0,
             "placeholderHits": 0,
@@ -171,8 +178,24 @@ def main(argv: List[str]) -> int:
             "nonPdfSourceDocs": 0,
             "missingExamFiles": 0,
             "parseFailures": 0,
+            "missingExplanationFiles": 0,
+            "filesWithIncompleteQuestionCoverage": 0,
+            "missingExplanationItems": 0,
+            "duplicateExplanationItems": 0,
+            "unknownExplanationItems": 0,
         },
     }
+
+    if scope == "all":
+        exam_ids = {
+            path.stem
+            for path in EXAM_DIR.glob("p*-*.js")
+            if path.name != "manifest.js"
+        }
+        explanation_ids = {path.stem for path in explanation_files}
+        missing_explanation_files = sorted(exam_ids - explanation_ids)
+        report["coverage"]["missingExplanationFiles"] = missing_explanation_files
+        report["summary"]["missingExplanationFiles"] = len(missing_explanation_files)
 
     blocking_files: List[Dict[str, Any]] = []
 
@@ -206,6 +229,7 @@ def main(argv: List[str]) -> int:
             file_issues.append(f"sourceDoc 不是 PDF: {source_doc}")
 
         answer_key = exam_payload.get("answerKey") if isinstance(exam_payload.get("answerKey"), dict) else {}
+        seen_question_ids: List[str] = []
         for section in explanation_payload.get("questionExplanations") or []:
             section_text = section.get("text", "") or ""
             for placeholder in PLACEHOLDER_PATTERNS:
@@ -215,6 +239,8 @@ def main(argv: List[str]) -> int:
 
             for item in section.get("items") or []:
                 question_id = str(item.get("questionId") or "")
+                if question_id:
+                    seen_question_ids.append(question_id)
                 question_number = item.get("questionNumber")
                 item_text = item.get("text", "") or ""
 
@@ -244,6 +270,32 @@ def main(argv: List[str]) -> int:
                     file_issues.append(
                         f"Q{question_number}: 解析结论与答案字段矛盾 (declared={declared_answer!r}, conclusion={conclusion_answer!r})"
                     )
+
+        # Coverage debt predates this checker and is intentionally reported as
+        # a non-blocking diagnostic.  New/changed explanation generation is
+        # already expected to preserve every answerKey question; surfacing the
+        # baseline here lets callers ratchet it down without making the current
+        # all-files run unusable overnight.
+        seen_counts: Dict[str, int] = {}
+        for question_id in seen_question_ids:
+            seen_counts[question_id] = seen_counts.get(question_id, 0) + 1
+        expected_ids = set(answer_key)
+        seen_ids = set(seen_question_ids)
+        missing_ids = sorted(expected_ids - seen_ids)
+        duplicate_ids = sorted(question_id for question_id, count in seen_counts.items() if count > 1)
+        unknown_ids = sorted(seen_ids - expected_ids)
+        if missing_ids or duplicate_ids or unknown_ids:
+            report["coverage"]["filesWithIncompleteQuestionCoverage"].append({
+                "examId": exam_id,
+                "file": str(explanation_path.relative_to(ROOT)),
+                "missingQuestionIds": missing_ids,
+                "duplicateQuestionIds": duplicate_ids,
+                "unknownQuestionIds": unknown_ids,
+            })
+            report["summary"]["filesWithIncompleteQuestionCoverage"] += 1
+            report["summary"]["missingExplanationItems"] += len(missing_ids)
+            report["summary"]["duplicateExplanationItems"] += len(duplicate_ids)
+            report["summary"]["unknownExplanationItems"] += len(unknown_ids)
 
         if file_issues:
             blocking_files.append({

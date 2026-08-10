@@ -156,52 +156,96 @@
     }
 
     function selectDelimiter(headerLine) {
-        if (headerLine.includes(',')) {
-            return ',';
+        let inQuotes = false;
+        const found = new Set();
+        for (let i = 0; i < headerLine.length; i += 1) {
+            const char = headerLine[i];
+            if (char === '"') {
+                if (inQuotes && headerLine[i + 1] === '"') {
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (!inQuotes && (char === ',' || char === ';' || char === '\t')) {
+                found.add(char);
+            }
         }
-        if (headerLine.includes(';')) {
-            return ';';
-        }
-        if (headerLine.includes('\t')) {
-            return '\t';
-        }
+        if (found.has(',')) return ',';
+        if (found.has(';')) return ';';
+        if (found.has('\t')) return '\t';
         return ',';
     }
 
-    function splitCsvLine(line, delimiter) {
-        const result = [];
+    function parseCsvRows(text, delimiter) {
+        const rows = [];
+        let row = [];
         let current = '';
         let inQuotes = false;
-        for (let i = 0; i < line.length; i += 1) {
-            const char = line[i];
+        let rowTouched = false;
+        const source = String(text || '');
+
+        const pushRow = () => {
+            row.push(current.trim());
+            if (rowTouched && row.some((cell) => cell !== '')) {
+                rows.push(row);
+            }
+            row = [];
+            current = '';
+            rowTouched = false;
+        };
+
+        for (let i = 0; i < source.length; i += 1) {
+            const char = source[i];
             if (char === '"') {
-                if (inQuotes && line[i + 1] === '"') {
+                rowTouched = true;
+                if (inQuotes && source[i + 1] === '"') {
                     current += '"';
                     i += 1;
                 } else {
                     inQuotes = !inQuotes;
                 }
             } else if (!inQuotes && char === delimiter) {
-                result.push(current.trim());
+                rowTouched = true;
+                row.push(current.trim());
                 current = '';
+            } else if (char === '\r' || char === '\n') {
+                if (char === '\r' && source[i + 1] === '\n') {
+                    i += 1;
+                }
+                if (inQuotes) {
+                    current += '\n';
+                    rowTouched = true;
+                } else {
+                    pushRow();
+                }
             } else {
                 current += char;
+                if (!/\s/.test(char)) {
+                    rowTouched = true;
+                }
             }
         }
-        result.push(current.trim());
-        return result;
+
+        if (inQuotes) {
+            throw new Error('CSV 包含未闭合的引号字段');
+        }
+        if (rowTouched || row.length || current.trim()) {
+            pushRow();
+        }
+        return rows;
     }
 
     function parseCsv(text) {
-        const lines = String(text || '')
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length);
-        if (!lines.length) {
+        const source = String(text || '');
+        const firstContentLine = source
+            .split(/\r\n|\r|\n/)
+            .find((line) => line.replace(/^\uFEFF/, '').trim()) || '';
+        const delimiter = selectDelimiter(firstContentLine.replace(/^\uFEFF/, ''));
+        const rows = parseCsvRows(source, delimiter);
+        if (!rows.length) {
             return buildImportResult('wordlist', [], { format: 'csv' });
         }
-        const delimiter = selectDelimiter(lines[0]);
-        const headerCells = splitCsvLine(lines[0], delimiter).map((cell) => cell.toLowerCase());
+        const headerCells = rows[0].map((cell) => cell.replace(/^\uFEFF/, '').toLowerCase());
         const columnIndex = {
             word: headerCells.indexOf('word'),
             meaning: headerCells.indexOf('meaning'),
@@ -209,8 +253,8 @@
             freq: headerCells.indexOf('freq')
         };
         const entries = [];
-        for (let i = 1; i < lines.length; i += 1) {
-            const cells = splitCsvLine(lines[i], delimiter);
+        for (let i = 1; i < rows.length; i += 1) {
+            const cells = rows[i];
             const candidate = {
                 word: columnIndex.word >= 0 ? cells[columnIndex.word] : cells[0],
                 meaning: columnIndex.meaning >= 0 ? cells[columnIndex.meaning] : cells[1],
@@ -224,7 +268,7 @@
         }
         return buildImportResult('wordlist', entries, {
             format: 'csv',
-            originalLength: Math.max(lines.length - 1, 0)
+            originalLength: Math.max(rows.length - 1, 0)
         });
     }
 
@@ -791,6 +835,7 @@
 
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
+    const LIST_CACHE_TTL_MS = 5 * 60 * 1000;
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
     const CONFIG_LIMITS = Object.freeze({
         dailyNew: { min: 0, max: 200 },
@@ -809,7 +854,9 @@
         loadingPromise: null,
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
-        listCache: new Map()
+        listCache: new Map(),
+        commitSubscriptionAttached: false,
+        activeRefreshToken: 0
     };
 
     function cloneValue(value) {
@@ -989,9 +1036,9 @@
         const embeddedCore = embedded && Array.isArray(embedded.ielts_core)
             ? embedded.ielts_core
             : [];
-        const cacheDefault = state.listCache.get(DEFAULT_LIST_ID);
-        const cachedWords = cacheDefault && cacheDefault.data && Array.isArray(cacheDefault.data.words)
-            ? cacheDefault.data.words
+        const cacheDefault = getFreshCachedList(DEFAULT_LIST_ID);
+        const cachedWords = cacheDefault && Array.isArray(cacheDefault.words)
+            ? cacheDefault.words
             : [];
         const sources = [embeddedCore, cachedWords, state.words];
 
@@ -1069,6 +1116,71 @@
     function setWordsInternal(words) {
         state.words = words;
         rebuildIndex();
+    }
+
+    function getFreshCachedList(listId) {
+        const cached = state.listCache.get(listId);
+        if (!cached) {
+            return null;
+        }
+        if (!cached.timestamp || (Date.now() - cached.timestamp) >= LIST_CACHE_TTL_MS) {
+            state.listCache.delete(listId);
+            return null;
+        }
+        return cached.data || cached;
+    }
+
+    function refreshActiveListFromStorage() {
+        const refreshToken = ++state.activeRefreshToken;
+        const listId = state.activeListId;
+        Promise.resolve()
+            .then(() => readListData(listId))
+            .then((storedData) => {
+                if (refreshToken !== state.activeRefreshToken || listId !== state.activeListId) {
+                    return;
+                }
+                setWordsInternal(normalizeStoredListWords(storedData, listId));
+                state.lastLoadSource = 'appData-v2-commit';
+            })
+            .catch((error) => {
+                console.error('[VocabStore] 提交后刷新激活词表失败:', error);
+            });
+    }
+
+    function handleDataCommitted(event) {
+        const logicalKeys = new Set((event && Array.isArray(event.targets) ? event.targets : [])
+            .map((target) => (typeof target === 'string' ? target : target && target.logicalKey))
+            .filter(Boolean));
+        let shouldRefreshActiveList = false;
+
+        if (logicalKeys.has('vocab.words')) {
+            state.listCache.delete(DEFAULT_LIST_ID);
+            shouldRefreshActiveList = state.activeListId === DEFAULT_LIST_ID;
+        }
+        if (logicalKeys.has('vocab.lists')) {
+            Array.from(state.listCache.keys()).forEach((listId) => {
+                if (listId !== DEFAULT_LIST_ID) {
+                    state.listCache.delete(listId);
+                }
+            });
+            shouldRefreshActiveList = shouldRefreshActiveList || state.activeListId !== DEFAULT_LIST_ID;
+        }
+
+        if (shouldRefreshActiveList) {
+            refreshActiveListFromStorage();
+        }
+    }
+
+    function ensureCommitSubscription() {
+        if (state.commitSubscriptionAttached) {
+            return;
+        }
+        const backups = window.AppData && window.AppData.backups;
+        if (!backups || typeof backups.onDataCommitted !== 'function') {
+            return;
+        }
+        backups.onDataCommitted(handleDataCommitted);
+        state.commitSubscriptionAttached = true;
     }
 
     function isSpellingErrorList(listId) {
@@ -1462,10 +1574,10 @@
         }
 
         // 检查缓存（带TTL）
-        const cached = state.listCache.get(listId);
-        if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
+        const cached = getFreshCachedList(listId);
+        if (cached) {
             console.log(`[VocabStore] 从缓存加载词表: ${listId}`);
-            return cached.data;
+            return cached;
         }
 
         try {
@@ -1553,10 +1665,9 @@
         }
 
         // 尝试从缓存获取
-        if (state.listCache.has(listId)) {
-            const cached = state.listCache.get(listId);
-            const data = cached.data || cached;
-            return data.words ? data.words.length : 0;
+        const cached = getFreshCachedList(listId);
+        if (cached) {
+            return cached.words ? cached.words.length : 0;
         }
 
         // 从存储读取
@@ -1645,15 +1756,25 @@
         const words = normalizeStoredListWords(storedData, listId);
         const key = normalized.word.toLowerCase();
         const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
+        let committedWord = normalized;
         if (existingIndex >= 0) {
             const existing = words[existingIndex];
-            words.splice(existingIndex, 1, normalizeWordRecord({
+            committedWord = normalizeWordRecord({
                 ...existing,
                 ...normalized,
                 id: existing.id || normalized.id,
                 createdAt: existing.createdAt || normalized.createdAt,
+                note: existing.note || normalized.note,
+                easeFactor: existing.easeFactor,
+                interval: existing.interval,
+                repetitions: existing.repetitions,
+                intraCycles: existing.intraCycles,
+                correctCount: existing.correctCount,
+                lastReviewed: existing.lastReviewed,
+                nextReview: existing.nextReview,
                 updatedAt: getNow()
-            }));
+            });
+            words.splice(existingIndex, 1, committedWord);
         } else {
             words.push(normalized);
         }
@@ -1662,11 +1783,13 @@
         if (state.activeListId === listId) {
             setWordsInternal(words.filter(Boolean));
         }
-        return normalized;
+        return cloneValue(committedWord);
     }
 
     async function init() {
         ensureReadyPromise();
+        // 先订阅再读取，避免初始化读取与外部提交之间出现丢失更新窗口。
+        ensureCommitSubscription();
         if (!state.ready) {
             await bootstrap();
         }
@@ -1733,6 +1856,8 @@
             this.dropdownVisible = false;
             this.currentListId = null;
             this.previousListId = null; // 用于错误回退
+            this.switchRequestId = 0;
+            this.switchTail = Promise.resolve();
 
             // 绑定事件处理器
             this.handleMenuButtonClick = this.handleMenuButtonClick.bind(this);
@@ -1840,6 +1965,22 @@
             if (nameEl) {
                 nameEl.textContent = currentList.name;
             }
+        }
+
+        /**
+         * 当词表由导入/恢复等外部流程切换时，同步组件内部状态与显示。
+         * @returns {boolean} 是否完成同步
+         */
+        syncFromStore() {
+            const activeListId = this.vocabStore.getActiveListId();
+            if (!activeListId || !this.vocabStore.VOCAB_LISTS[activeListId]) {
+                return false;
+            }
+            this.currentListId = activeListId;
+            this.previousListId = activeListId;
+            this.updateCurrentListDisplay();
+            this.refreshListOptions();
+            return true;
         }
 
         /**
@@ -1974,20 +2115,32 @@
          * 切换词表
          * @param {string} listId - 词表 ID
          */
-        async switchList(listId) {
+        switchList(listId) {
             if (!listId || typeof listId !== 'string') {
                 console.error('[VocabListSwitcher] Invalid list ID:', listId);
-                return;
+                return Promise.resolve(false);
             }
 
             const lists = this.vocabStore.VOCAB_LISTS;
             if (!lists[listId]) {
                 console.error('[VocabListSwitcher] Unknown list ID:', listId);
-                return;
+                return Promise.resolve(false);
             }
 
-            // 保存当前词表 ID（用于错误回退）
-            this.previousListId = this.currentListId;
+            const requestId = ++this.switchRequestId;
+            const run = () => this.performSwitch(listId, requestId);
+            const pending = this.switchTail.then(run, run);
+            this.switchTail = pending.catch(() => false);
+            return pending;
+        }
+
+        async performSwitch(listId, requestId) {
+            if (requestId !== this.switchRequestId) {
+                return false;
+            }
+
+            const previousListId = this.currentListId;
+            this.previousListId = previousListId;
 
             try {
                 // 显示加载状态
@@ -1996,10 +2149,15 @@
                 // 加载新词表
                 const list = await this.vocabStore.loadList(listId);
 
+                if (requestId !== this.switchRequestId) {
+                    return false;
+                }
+
                 if (!list) {
                     // 词表为空或加载失败
                     this.showEmptyListMessage(listId);
-                    return;
+                    await this.rollbackToPreviousList(previousListId, requestId);
+                    return false;
                 }
 
                 // 切换到新词表
@@ -2007,6 +2165,11 @@
 
                 if (!success) {
                     throw new Error('Failed to set active list');
+                }
+
+                // 若激活过程中出现了更新的选择，让排队中的最新请求负责最终状态。
+                if (requestId !== this.switchRequestId) {
+                    return false;
                 }
 
                 // 更新当前词表 ID
@@ -2023,15 +2186,22 @@
                 this.dispatchSwitchEvent(listId, list);
 
                 console.log('[VocabListSwitcher] 切换词表成功:', listId);
+                return true;
 
             } catch (error) {
+                if (requestId !== this.switchRequestId) {
+                    return false;
+                }
                 console.error('[VocabListSwitcher] 切换词表失败:', error);
 
                 // 回退到上一个词表
-                await this.rollbackToPreviousList();
+                await this.rollbackToPreviousList(previousListId, requestId);
 
                 // 显示错误提示
-                this.showErrorMessage('词表加载失败，请重试');
+                if (requestId === this.switchRequestId) {
+                    this.showErrorMessage('词表加载失败，请重试');
+                }
+                return false;
             }
         }
 
@@ -2066,20 +2236,25 @@
         /**
          * 回退到上一个词表
          */
-        async rollbackToPreviousList() {
-            if (!this.previousListId) return;
+        async rollbackToPreviousList(previousListId = this.previousListId, requestId = this.switchRequestId) {
+            if (!previousListId || requestId !== this.switchRequestId) return false;
 
             try {
-                const previousList = await this.vocabStore.loadList(this.previousListId);
-                if (previousList) {
+                const previousList = await this.vocabStore.loadList(previousListId);
+                if (previousList && requestId === this.switchRequestId) {
                     await this.vocabStore.setActiveList(previousList);
-                    this.currentListId = this.previousListId;
+                    if (requestId !== this.switchRequestId) {
+                        return false;
+                    }
+                    this.currentListId = previousListId;
                     this.updateCurrentListDisplay();
                     this.refreshListOptions();
+                    return true;
                 }
             } catch (error) {
                 console.error('[VocabListSwitcher] 回退失败:', error);
             }
+            return false;
         }
 
         /**
@@ -2150,8 +2325,6 @@
             // 显示提示消息
             this.showToast(message, 'info');
 
-            // 回退到上一个词表
-            this.rollbackToPreviousList();
         }
 
         /**
@@ -2763,6 +2936,14 @@
         }
     }
 
+    function syncListSwitcherFromStore() {
+        const switcher = state.ui.listSwitcher;
+        if (!switcher || typeof switcher.syncFromStore !== 'function') {
+            return false;
+        }
+        return switcher.syncFromStore();
+    }
+
     function navigateToMoreView() {
         const moreView = document.getElementById('more-view');
         const vocabView = document.getElementById('vocab-view');
@@ -3281,6 +3462,7 @@
                     meta.config && typeof meta.config === 'object' ? meta.config : {},
                     typeof meta.listId === 'string' ? meta.listId : null
                 );
+                syncListSwitcherFromStore();
                 const latestConfig = state.store.getConfig();
                 const limit = Number(latestConfig?.reviewLimit);
                 if (Number.isFinite(limit) && limit > 0) {
@@ -4113,8 +4295,9 @@
 
         // 确定最终质量（考虑拼写错误）
         let finalQuality = recognitionQuality;
-        if (skipped) {
-            finalQuality = 'hard'; // 跳过视为困难
+        if (qualityOrStatus === 'wrong' || options.attemptsExhausted || skipped) {
+            // 拼写失败和跳过都必须按遗忘处理，不能增加正确次数或拉长复习间隔。
+            finalQuality = 'wrong';
         } else if (spellingAttempts >= 2) {
             finalQuality = 'hard'; // 多次拼写错误视为困难
         } else if (spellingAttempts === 1 && recognitionQuality === 'easy') {
@@ -4124,11 +4307,18 @@
         // 处理新词或轮内循环
         let patch;
         if (!word.easeFactor) {
-            // 新词：设置起始难度因子
-            patch = state.scheduler.setInitialEaseFactor(word, finalQuality);
+            // 新词先建立 EF；遗忘结果还要继续走失败调度，避免只初始化却未记录复习。
+            const initialQuality = finalQuality === 'wrong' ? 'hard' : finalQuality;
+            patch = state.scheduler.setInitialEaseFactor(word, initialQuality);
+            if (finalQuality === 'wrong') {
+                patch = state.scheduler.scheduleAfterResult(patch, 'wrong', now);
+            }
         } else if (isIntraReview) {
             // 轮内循环：调整难度因子
-            patch = state.scheduler.adjustIntraCycleEF(word, finalQuality);
+            patch = state.scheduler.adjustIntraCycleEF(
+                word,
+                finalQuality === 'wrong' ? 'hard' : finalQuality
+            );
         } else {
             // 正常复习：使用标准SM-2算法
             patch = state.scheduler.scheduleAfterResult(word, finalQuality, now);
@@ -4212,7 +4402,7 @@
 
         // 更新统计（只有正式完成的才计入）
         if (shouldSave) {
-            if (finalQuality === 'hard' && spellingAttempts >= 2) {
+            if (finalQuality === 'wrong') {
                 session.progress.wrong += 1;
             } else if (finalQuality === 'hard' || spellingAttempts > 0) {
                 session.progress.near += 1;
@@ -4448,8 +4638,10 @@
             return;
         }
         if (session.stage === 'recognition') {
+            const safeWord = escapeHtml(word.word);
+            const safeMeaning = escapeHtml(word.meaning || '暂无释义');
             const meaningBlock = session.meaningVisible
-                ? `<div class="vocab-card__meaning" data-visible="true">${word.meaning || '暂无释义'}</div>`
+                ? `<div class="vocab-card__meaning" data-visible="true">${safeMeaning}</div>`
                 : '';
             const revealControl = session.meaningVisible
                 ? ''
@@ -4457,7 +4649,7 @@
             card.innerHTML = `
                 <div class="vocab-card vocab-card--recognition">
                     <div class="vocab-card__wordline">
-                        <div class="vocab-card__word">${word.word}</div>
+                        <div class="vocab-card__word">${safeWord}</div>
                     </div>
                     ${meaningBlock}
                     ${revealControl}
@@ -4484,10 +4676,11 @@
                 ? '根据释义，拼写出这个单词'
                 : '再试一次，注意拼写细节';
 
+            const safeMeaning = escapeHtml(word.meaning || '暂无释义');
             card.innerHTML = `
                 <div class="vocab-card vocab-card--spelling">
                     <div class="vocab-card__meaning" data-visible="true" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">
-                        ${word.meaning || '暂无释义'}
+                        ${safeMeaning}
                     </div>
                     <p class="vocab-card__instruction">${instructionText}</p>
                     ${attemptsHint}
@@ -4518,9 +4711,15 @@
             const baseEF = session.lastAnswer?.baseEF || word.easeFactor;
             const finalEF = session.lastAnswer?.finalEF || word.easeFactor;
             const penalty = session.lastAnswer?.penalty || 0;
+            const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
+            const feedbackKind = finalQuality === 'wrong'
+                ? 'wrong'
+                : (spellingAttempts > 0 ? 'near' : 'correct');
 
-            const icon = spellingAttempts >= 3 ? '❌' : (spellingAttempts > 0 || skipped ? '🟡' : '✅');
-            const title = spellingAttempts >= 3 ? '需要加强' : (spellingAttempts > 0 || skipped ? '接近了' : '太棒了！');
+            const icon = feedbackKind === 'wrong' ? '❌' : (feedbackKind === 'near' ? '🟡' : '✅');
+            const title = skipped
+                ? '已跳过，需要加强'
+                : (feedbackKind === 'wrong' ? '需要加强' : (feedbackKind === 'near' ? '接近了' : '太棒了！'));
 
             const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '待安排';
             const typedAnswer = session.lastAnswer?.typed ? escapeHtml(session.lastAnswer.typed) : '';
@@ -4552,7 +4751,6 @@
             const intraCycles = session.lastAnswer?.intraCycles || 0;
             const needsContinueIntra = session.lastAnswer?.needsContinueIntra || false;
             const needsEasyVerification = session.lastAnswer?.needsEasyVerification || false;
-            const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
             const saved = session.lastAnswer?.saved || false;
 
             let qualityBreakdown = '';
@@ -4634,8 +4832,10 @@
                 }
             }
 
+            const safeWord = escapeHtml(word.word);
+            const safeMeaning = escapeHtml(word.meaning || '暂无释义');
             card.innerHTML = `
-                <div class="vocab-card vocab-card--feedback vocab-card--${spellingAttempts >= 3 ? 'wrong' : spellingAttempts > 0 ? 'near' : 'correct'}">
+                <div class="vocab-card vocab-card--feedback vocab-card--${feedbackKind}">
                     <div class="vocab-feedback__head">
                         <span class="vocab-feedback__icon">${icon}</span>
                         <div>
@@ -4644,8 +4844,8 @@
                         </div>
                     </div>
                     <dl class="vocab-feedback__details">
-                        <div><dt>正确拼写</dt><dd>${word.word}</dd></div>
-                        <div><dt>释义</dt><dd>${word.meaning || '暂无释义'}</dd></div>
+                        <div><dt>正确拼写</dt><dd>${safeWord}</dd></div>
+                        <div><dt>释义</dt><dd>${safeMeaning}</dd></div>
                         <div><dt>间隔天数</dt><dd>${intervalDays} 天</dd></div>
                         <div><dt>难度因子</dt><dd>${easeFactor}</dd></div>
                         <div><dt>连续正确</dt><dd>${repetitions} 次</dd></div>

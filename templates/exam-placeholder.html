@@ -426,10 +426,10 @@
         bar.dataset.viewMode = state.reviewViewMode || 'answering';
         bar.dataset.finalizeOnNext = 'false';
         if (prevBtn) {
-            prevBtn.disabled = currentIndex <= 0;
+            prevBtn.disabled = true;
         }
         if (nextBtn) {
-            nextBtn.disabled = currentIndex >= (total - 1);
+            nextBtn.disabled = true;
         }
         state.suiteReviewMode = true;
         state.reviewEntryIndex = currentIndex;
@@ -606,7 +606,7 @@
 
     function setReadOnlyMode(readOnly) {
         state.reviewMode = Boolean(readOnly);
-        const disabled = state.reviewMode || state.submitted;
+        const disabled = !state.handshakeReady || state.reviewMode || state.submitted;
         dom.completeBtn.disabled = disabled;
         dom.completeBtn.textContent = state.reviewMode ? '回顾模式' : '提交本篇成绩';
     }
@@ -1118,16 +1118,6 @@
     }
 
     function sendSessionReady() {
-        state.handshakeReady = true;
-        if (state.reviewViewMode === 'review') {
-            state.submitted = true;
-            setReadOnlyMode(true);
-            markState('已与父页面建立会话', '当前为回看态，可使用顶部按钮切换篇章。');
-        } else {
-            setReadOnlyMode(state.submitted);
-            markState('已与父页面建立会话', '等待当前篇章作答完成。');
-            applyFallbackManualNavContext();
-        }
         postMessage('SESSION_READY', {
             url: window.location.href,
             pageType: 'suite-placeholder',
@@ -1141,6 +1131,10 @@
     }
 
     function submitResults() {
+        if (!state.handshakeReady || !state.sessionId || !state.windowSessionToken) {
+            log('会话尚未完成可信握手，暂不能提交本篇成绩。', 'warn');
+            return;
+        }
         if (state.submitted) {
             log('当前篇章已提交，忽略重复点击。', 'warn');
             return;
@@ -1238,19 +1232,19 @@
             const total = Number.isFinite(totalFromNav) && totalFromNav > 0
                 ? totalFromNav
                 : (Number.isFinite(totalFromContext) && totalFromContext > 0 ? totalFromContext : 3);
-            state.finalizeOnNext = currentIndex >= (total - 1);
+            state.finalizeOnNext = false;
             bar.dataset.reviewIndex = String(currentIndex);
             bar.dataset.reviewTotal = String(total);
             bar.dataset.viewMode = 'review';
-            bar.dataset.finalizeOnNext = state.finalizeOnNext ? 'true' : 'false';
+            bar.dataset.finalizeOnNext = 'false';
             if (prevBtn) {
-                prevBtn.disabled = currentIndex <= 0;
+                prevBtn.disabled = true;
             }
             if (nextBtn) {
-                nextBtn.disabled = false;
+                nextBtn.disabled = true;
             }
             setReviewNavVisibility(true);
-            markState('已上报成绩，进入回看态', '可使用顶部“下一题”进入下一篇。');
+            markState('成绩已上报，正在等待保存确认...', '保存成功后将启用顶部“下一题”进入下一篇。');
         } else {
             markState('已上报成绩，等待下一篇...', '请稍候，系统将自动跳转至下一篇套题。');
         }
@@ -1300,7 +1294,6 @@
                 state.parentOrigin = incomingOrigin;
                 state.parentOriginIsOpaque = false;
             }
-            state.windowSessionToken = incomingToken;
             const previousExamId = state.examId;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
@@ -1308,6 +1301,7 @@
                 log(`忽略错篇 INIT_SESSION: incoming=${incomingExamId}, current=${currentExamId}`, 'warn');
                 return;
             }
+            state.windowSessionToken = incomingToken;
             if (data.sessionId) {
                 if (state.sessionId && String(state.sessionId) !== String(data.sessionId)) {
                     state.submissionId = '';
@@ -1375,6 +1369,20 @@
 
         if (type === 'REPLAY_PRACTICE_RECORD') {
             applyReplayRecord(data || {});
+            return;
+        }
+
+        if (type === 'PRACTICE_SUBMIT_FAILED') {
+            const failedSubmissionId = normalizeId(data && data.submissionId);
+            if (failedSubmissionId && state.submissionId && failedSubmissionId !== state.submissionId) {
+                return;
+            }
+            state.submitted = false;
+            state.reviewViewMode = 'answering';
+            state.finalizeOnNext = false;
+            setReadOnlyMode(false);
+            applyFallbackManualNavContext();
+            markState('成绩保存失败，可重新提交', '本篇答案仍保留，请再次点击“提交本篇成绩”。');
             return;
         }
 

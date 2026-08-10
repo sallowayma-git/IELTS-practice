@@ -4004,6 +4004,53 @@
             }
         },
 
+        _captureSuiteTeardownRegistrations(session) {
+            if (!session || !session.id || !Array.isArray(session.sequence)) {
+                return null;
+            }
+
+            const suiteSessionId = String(session.id);
+            const sequenceExamIds = new Set(session.sequence.map((entry) => (
+                entry && entry.examId != null ? String(entry.examId) : ''
+            )).filter(Boolean));
+            const captured = session._teardownRegistrationsByExam
+                && typeof session._teardownRegistrationsByExam.get === 'function'
+                && typeof session._teardownRegistrationsByExam.set === 'function'
+                ? session._teardownRegistrationsByExam
+                : new Map();
+
+            const capture = (examId, windowInfo, registration = null) => {
+                const normalizedExamId = examId != null ? String(examId) : '';
+                if (!normalizedExamId || !sequenceExamIds.has(normalizedExamId) || !windowInfo) {
+                    return;
+                }
+                const registrationSuiteSessionId = windowInfo.suiteSessionId != null
+                    ? String(windowInfo.suiteSessionId)
+                    : '';
+                if (registrationSuiteSessionId !== suiteSessionId) {
+                    return;
+                }
+                const capturedRegistration = registration
+                    || (typeof this._captureExamSessionRegistration === 'function'
+                        ? this._captureExamSessionRegistration(normalizedExamId, windowInfo)
+                        : null);
+                if (capturedRegistration) {
+                    captured.set(normalizedExamId, capturedRegistration);
+                }
+            };
+
+            const activeRegistration = session._activeLaunchRegistration || null;
+            if (activeRegistration && activeRegistration.windowInfo) {
+                capture(activeRegistration.examId, activeRegistration.windowInfo, activeRegistration);
+            }
+            if (this.examWindows && typeof this.examWindows.forEach === 'function') {
+                this.examWindows.forEach((windowInfo, examId) => capture(examId, windowInfo));
+            }
+
+            session._teardownRegistrationsByExam = captured;
+            return captured;
+        },
+
         async _teardownSuiteSession(session) {
             if (!session) {
                 return false;
@@ -4022,6 +4069,11 @@
 
         async _teardownSuiteSessionInternal(session) {
             if (this.currentSuiteSession !== session) return false;
+
+            // Snapshot before the first await for immediate abort/teardown callers.  The
+            // delayed-submit path snapshots when scheduling, so later registrations are
+            // deliberately excluded even if they reuse an exam id from this sequence.
+            const teardownRegistrations = this._captureSuiteTeardownRegistrations(session);
 
             if (session.submitReceiptTeardownTimer) {
                 clearTimeout(session.submitReceiptTeardownTimer);
@@ -4050,7 +4102,19 @@
             this._safelyCloseWindow(session.windowRef);
 
             if (session.sequence && session.sequence.length) {
-                const cleanupTasks = session.sequence.map(item => this.cleanupExamSession ? this.cleanupExamSession(item.examId) : Promise.resolve());
+                const cleanupTasks = session.sequence.map((item) => {
+                    const examId = item && item.examId != null ? String(item.examId) : '';
+                    const expectedRegistration = examId && teardownRegistrations
+                        && typeof teardownRegistrations.get === 'function'
+                        ? teardownRegistrations.get(examId)
+                        : null;
+                    // cleanupExamSession without an ownership token is intentionally
+                    // destructive.  If this suite never captured a registration for an
+                    // entry, there is nothing safe for teardown to remove.
+                    return expectedRegistration && this.cleanupExamSession
+                        ? this.cleanupExamSession(examId, { expectedRegistration })
+                        : Promise.resolve(false);
+                });
                 await Promise.allSettled(cleanupTasks);
             }
 
@@ -4067,6 +4131,10 @@
             }
 
             session.windowRef = null;
+            if (teardownRegistrations && typeof teardownRegistrations.clear === 'function') {
+                teardownRegistrations.clear();
+            }
+            delete session._teardownRegistrationsByExam;
             if (typeof this._clearSuiteHandshakes === 'function') {
                 this._clearSuiteHandshakes();
             }

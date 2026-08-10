@@ -74,7 +74,7 @@
       "mode": "group",
       "items": [
         {
-          "questionNumber": 13,
+          "questionNumber": 6,
           "text": "题目：Pitcher plants increase in size after they have digested a lot of insects.\n题目翻译：猪笼草在消化大量昆虫后会变大。\n答案：TRUE\n解析：文中提到当科学家给猪笼草额外投喂昆虫时，植株会长得更大。",
           "questionId": "q6"
         },

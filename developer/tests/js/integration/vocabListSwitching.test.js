@@ -93,6 +93,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../../..');
 eval(fs.readFileSync(path.join(repoRoot, 'js/app/spellingErrorCollector.js'), 'utf8'));
 eval(fs.readFileSync(path.join(repoRoot, 'js/core/vocabStore.js'), 'utf8'));
+eval(fs.readFileSync(path.join(repoRoot, 'js/app/vocabListSwitcher.js'), 'utf8'));
 
 const testData = {
     p1: [
@@ -182,6 +183,79 @@ async function runTests() {
             }
             assert.strictEqual(window.VocabStore.getActiveListId(), 'spelling-errors-master');
             assert.strictEqual(window.VocabStore.getWords().length, 5);
+        });
+
+        await record('latest rapid switch wins even when older activation is pending', async () => {
+            let resolveP1Activation;
+            const switchState = { activeListId: 'default', activations: [] };
+            const switchStore = {
+                VOCAB_LISTS: {
+                    default: { id: 'default', name: 'Default' },
+                    p1: { id: 'p1', name: 'P1' },
+                    p4: { id: 'p4', name: 'P4' }
+                },
+                getActiveListId() {
+                    return switchState.activeListId;
+                },
+                getAvailableLists() {
+                    return Object.values(this.VOCAB_LISTS);
+                },
+                async getListWordCount() {
+                    return 0;
+                },
+                async loadList(listId) {
+                    return { id: listId, words: [] };
+                },
+                async setActiveList(list) {
+                    switchState.activations.push(list.id);
+                    if (list.id === 'p1') {
+                        await new Promise((resolve) => {
+                            resolveP1Activation = resolve;
+                        });
+                    }
+                    switchState.activeListId = list.id;
+                    return true;
+                }
+            };
+            const switcher = new window.VocabListSwitcher(switchStore);
+            switcher.currentListId = 'default';
+
+            const first = switcher.switchList('p1');
+            while (!resolveP1Activation) {
+                await Promise.resolve();
+            }
+            const latest = switcher.switchList('p4');
+            resolveP1Activation();
+            await Promise.all([first, latest]);
+
+            assert.deepStrictEqual(switchState.activations, ['p1', 'p4']);
+            assert.strictEqual(switchState.activeListId, 'p4');
+            assert.strictEqual(switcher.currentListId, 'p4');
+        });
+
+        await record('switcher sync follows progress restore active list', async () => {
+            const syncStore = {
+                activeListId: 'custom',
+                VOCAB_LISTS: {
+                    default: { id: 'default', name: 'Default' },
+                    custom: { id: 'custom', name: 'Custom' }
+                },
+                getActiveListId() {
+                    return this.activeListId;
+                },
+                getAvailableLists() {
+                    return Object.values(this.VOCAB_LISTS);
+                },
+                async getListWordCount() {
+                    return 0;
+                }
+            };
+            const switcher = new window.VocabListSwitcher(syncStore);
+            switcher.currentListId = 'default';
+
+            assert.strictEqual(switcher.syncFromStore(), true);
+            assert.strictEqual(switcher.currentListId, 'custom');
+            assert.strictEqual(switcher.previousListId, 'custom');
         });
     } catch (error) {
         results.push({ name: 'test execution', status: 'fail', error: error.message, stack: error.stack });

@@ -72,7 +72,7 @@ function extractInlineRuntime(html) {
     return runtime;
 }
 
-function createHarness() {
+function createHarness(options = {}) {
     const elements = new Map();
     const ensureElement = (id) => {
         if (!elements.has(id)) {
@@ -119,7 +119,7 @@ function createHarness() {
     const openerMessages = [];
     const windowStub = {
         location: {
-            search: '?test_env=1&examId=reading-p1&title=Passage%201&category=P1&suiteSessionId=suite-1',
+            search: options.search || '?test_env=1&examId=reading-p1&title=Passage%201&category=P1&suiteSessionId=suite-1',
             href: 'https://child.example/templates/exam-placeholder.html',
             protocol: 'https:'
         },
@@ -173,8 +173,11 @@ function createHarness() {
     const dispatchHostMessage = (message) => {
         const handler = listeners.get('message');
         if (!handler) throw new Error('message handler was not registered');
-        const data = Object.assign({}, message.data || {}, {
-            windowSessionToken: 'placeholder-test-token'
+        const messageData = message.data || {};
+        const data = Object.assign({}, messageData, {
+            windowSessionToken: typeof messageData.windowSessionToken === 'string'
+                ? messageData.windowSessionToken
+                : 'placeholder-test-token'
         });
         handler({
             data: Object.assign({}, message, { source: 'exam_host', data }),
@@ -182,22 +185,28 @@ function createHarness() {
             origin: 'https://host.example'
         });
     };
-    dispatchHostMessage({
-        type: 'INIT_SESSION',
-        data: {
-            examId: 'reading-p1',
-            sessionId: 'placeholder-session',
-            suiteSessionId: 'suite-1',
-            parentOrigin: 'https://host.example'
-        }
-    });
-    openerMessages.length = 0;
+    const initializeSession = () => {
+        dispatchHostMessage({
+            type: 'INIT_SESSION',
+            data: {
+                examId: 'reading-p1',
+                sessionId: 'placeholder-session',
+                suiteSessionId: 'suite-1',
+                parentOrigin: 'https://host.example'
+            }
+        });
+        openerMessages.length = 0;
+    };
+    if (options.initialize !== false) {
+        initializeSession();
+    }
 
     return {
         document: documentStub,
         body: documentStub.body,
         elements,
         openerMessages,
+        initializeSession,
         sendMessage(message) {
             dispatchHostMessage(message);
         }
@@ -330,12 +339,139 @@ function testPracticeCompleteCarriesSubmissionContract() {
     assert.match(message.data.submissionId, /^placeholder-submit-/);
 }
 
+function testManualNavigationWaitsForTrustedHostState() {
+    const uninitialized = createHarness({ initialize: false });
+    const uninitializedSubmit = uninitialized.elements.get('complete-exam-btn');
+    assert.strictEqual(uninitializedSubmit.disabled, true, '可信 INIT 握手前必须保持提交按钮禁用');
+    uninitializedSubmit.click();
+    assert.strictEqual(
+        uninitialized.openerMessages.some((item) => item && item.type === 'PRACTICE_COMPLETE'),
+        false,
+        '即使脚本触发点击，未握手的占位页也不得发送无令牌提交'
+    );
+    uninitialized.elements.get('force-ready-btn').click();
+    assert.strictEqual(uninitializedSubmit.disabled, true, '主动 Ready 不得冒充可信 INIT 握手并启用提交');
+    uninitializedSubmit.click();
+    assert.strictEqual(
+        uninitialized.openerMessages.some((item) => item && item.type === 'PRACTICE_COMPLETE'),
+        false,
+        '主动 Ready 后仍不得绕过可信握手发送提交'
+    );
+    uninitialized.initializeSession();
+    assert.strictEqual(uninitializedSubmit.disabled, false, '可信 INIT 握手后才可开始作答提交');
+
+    const harness = createHarness({
+        search: '?test_env=1&examId=reading-p1&title=Passage%201&category=P1&suiteSessionId=suite-1&suiteFlowMode=stationary&index=1'
+    });
+    harness.sendMessage({
+        type: 'REVIEW_CONTEXT',
+        data: {
+            examId: 'reading-p1',
+            suiteSessionId: 'suite-1',
+            suiteReviewMode: true,
+            showNav: true,
+            viewMode: 'answering',
+            currentIndex: 1,
+            total: 3,
+            canPrev: true,
+            canNext: false,
+            readOnly: false
+        }
+    });
+    const nav = harness.elements.get('practice-review-nav');
+    const next = nav.querySelector('button[data-review-nav="next"]');
+    assert.strictEqual(next.disabled, true, '作答态不得由占位页本地乐观启用下一篇');
+
+    harness.elements.get('complete-exam-btn').click();
+    const firstSubmission = harness.openerMessages.find((item) => item && item.type === 'PRACTICE_COMPLETE');
+    assert(
+        firstSubmission,
+        '手动模式提交必须先请求父页持久化结果'
+    );
+    assert.strictEqual(next.disabled, true, '父页确认持久化前下一篇必须保持禁用');
+
+    harness.sendMessage({
+        type: 'PRACTICE_SUBMIT_FAILED',
+        data: {
+            examId: 'reading-p1',
+            suiteSessionId: 'suite-1',
+            submissionId: firstSubmission.data.submissionId,
+            errorCode: 'suite_recovery_save_failed'
+        }
+    });
+    const submit = harness.elements.get('complete-exam-btn');
+    assert.strictEqual(submit.disabled, false, '父页保存失败后应恢复提交按钮以允许重试');
+    submit.click();
+    const submissions = harness.openerMessages.filter((item) => item && item.type === 'PRACTICE_COMPLETE');
+    assert.strictEqual(submissions.length, 2, '保存失败后必须允许重新发送提交');
+    assert.strictEqual(
+        submissions[1].data.submissionId,
+        firstSubmission.data.submissionId,
+        '重试必须复用 submissionId，维持父页幂等提交契约'
+    );
+    assert.strictEqual(next.disabled, true, '重试提交仍须等待父页确认后才能导航');
+
+    harness.sendMessage({
+        type: 'REVIEW_CONTEXT',
+        data: {
+            examId: 'reading-p1',
+            suiteSessionId: 'suite-1',
+            suiteReviewMode: true,
+            showNav: true,
+            viewMode: 'review',
+            currentIndex: 1,
+            total: 3,
+            canPrev: true,
+            canNext: true,
+            readOnly: true
+        }
+    });
+    assert.strictEqual(next.disabled, false, '仅父页提交成功后的 REVIEW_CONTEXT 可解锁下一篇');
+}
+
+function testWrongExamInitDoesNotPoisonActiveToken() {
+    const harness = createHarness();
+    harness.sendMessage({
+        type: 'INIT_SESSION',
+        data: {
+            examId: 'reading-p2',
+            sessionId: 'stale-placeholder-session',
+            suiteSessionId: 'suite-1',
+            parentOrigin: 'https://host.example',
+            windowSessionToken: 'stale-placeholder-token'
+        }
+    });
+
+    harness.sendMessage({
+        type: 'REVIEW_CONTEXT',
+        data: {
+            examId: 'reading-p1',
+            suiteSessionId: 'suite-1',
+            viewMode: 'review',
+            showNav: true,
+            currentIndex: 0,
+            total: 3,
+            canNext: true,
+            readOnly: true,
+            windowSessionToken: 'placeholder-test-token'
+        }
+    });
+
+    assert.strictEqual(
+        harness.elements.get('status-title').textContent,
+        '当前为回看态',
+        '延迟错篇 INIT 不得污染当前会话令牌或阻断后续合法消息'
+    );
+}
+
 function run() {
     testReplayUsesCanonicalCorrectAnswerMap();
     testReplayRefusesLegacyCorrectAnswerFallbacks();
     testReplayKeepsSuitePrefixedQuestionNumbers();
     testNonLastSimulationSubmitNavigatesInsteadOfFinalSubmit();
     testPracticeCompleteCarriesSubmissionContract();
+    testManualNavigationWaitsForTrustedHostState();
+    testWrongExamInitDoesNotPoisonActiveToken();
 
     process.stdout.write(JSON.stringify({
         status: 'pass',

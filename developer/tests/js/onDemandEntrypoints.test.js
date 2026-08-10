@@ -214,6 +214,60 @@ async function testClearSearchProxyLoadsBrowseRuntime(harness) {
     });
 }
 
+async function testColdBrowseProxyRestoresPreferences(harness) {
+    const initializationCalls = [];
+    let realLoadCalls = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') {
+            return { id: 'browse-view' };
+        }
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.initializeBrowseView = async function initializeBrowseView(options) {
+                initializationCalls.push(options || {});
+            };
+            harness.windowStub.loadExamList = function loadExamList() {
+                realLoadCalls += 1;
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.loadExamList();
+
+    assert.strictEqual(initializationCalls.length, 1, '冷加载 browse-runtime 后应初始化当前 browse 视图以恢复持久化偏好');
+    assert.strictEqual(initializationCalls[0].skipLoad, false, '没有待处理分类时应让 initializeBrowseView 恢复并加载偏好筛选');
+    assert.strictEqual(realLoadCalls, 1, '懒加载代理最终仍应调用真实 loadExamList');
+    recordResult('browse 冷加载后恢复持久化偏好', true, {
+        initializationCalls: initializationCalls.length,
+        realLoadCalls
+    });
+}
+
+async function testMoreViewActivationLoadsTools(harness) {
+    let moreToolsLoads = 0;
+    harness.windowStub.AppEntry = {
+        ensureMoreToolsGroup() {
+            moreToolsLoads += 1;
+            return Promise.resolve(true);
+        }
+    };
+
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.onViewActivated('more');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.strictEqual(moreToolsLoads, 1, 'more 深链接激活视图时应主动加载 more-tools');
+    recordResult('more 深链接激活按需加载工具', true, { moreToolsLoads });
+}
+
 async function waitForElement(document, id) {
     for (let attempt = 0; attempt < 20; attempt += 1) {
         const element = document.getElementById(id);
@@ -329,6 +383,8 @@ async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
+        await testColdBrowseProxyRestoresPreferences(createHarness());
+        await testMoreViewActivationLoadsTools(createHarness());
         await testSuiteRecoveryRequiresExplicitContinueChoice();
         await testSuiteRecoveryAbandonThenStartsFreshSuite();
         await testSuiteRecoveryCancelDoesNotMutateSession();

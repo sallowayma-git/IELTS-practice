@@ -73,6 +73,8 @@ function patchVocabSessionView(source) {
         closeListModal,
         exportCurrentList,
         renderListBrowser,
+        renderCard,
+        syncListSwitcherFromStore,
         setElements: (elements) => { state.elements = elements || {}; },
         setStore: (store) => { state.store = store; },
         setScheduler: (scheduler) => { state.scheduler = scheduler; },
@@ -912,6 +914,11 @@ async function run() {
 
         assert.strictEqual(hooks.state.session.stage, 'feedback');
         assert.strictEqual(hooks.state.session.lastAnswer.spellingAttempts, 3);
+        assert.strictEqual(hooks.state.session.lastAnswer.finalQuality, 'wrong');
+        assert.strictEqual(store.words[0].correctCount, 0);
+        assert.strictEqual(store.words[0].repetitions, 0);
+        assert.strictEqual(store.words[0].interval, 1);
+        assert.strictEqual(hooks.state.session.progress.wrong, 1);
     });
 
     await record('skip spelling triggers feedback', async () => {
@@ -944,6 +951,57 @@ async function run() {
 
         assert.strictEqual(hooks.state.session.stage, 'feedback');
         assert.strictEqual(hooks.state.session.lastAnswer.skipped, true);
+        assert.strictEqual(hooks.state.session.lastAnswer.finalQuality, 'wrong');
+        assert.strictEqual(store.words[0].correctCount, 0);
+        assert.strictEqual(store.words[0].repetitions, 0);
+        assert.strictEqual(hooks.state.session.progress.wrong, 1);
+        hooks.renderCard();
+        assert.ok(elements.sessionCard.innerHTML.includes('vocab-card--wrong'));
+        assert.ok(elements.sessionCard.innerHTML.includes('已跳过，需要加强'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('vocab-card--correct'));
+    });
+
+    await record('session card escapes imported word fields', () => {
+        hooks.resetSessionState();
+        hooks.state.session.stage = 'recognition';
+        hooks.state.session.meaningVisible = true;
+        hooks.state.session.currentWord = {
+            id: 'unsafe-1',
+            word: '<img src=x onerror="window.__wordXss=1">',
+            meaning: '<svg onload="window.__meaningXss=1"></svg>'
+        };
+
+        hooks.renderCard();
+
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;svg'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
+
+        hooks.state.session.stage = 'spelling';
+        hooks.renderCard();
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;svg'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
+
+        hooks.state.session.currentWord = {
+            ...hooks.state.session.currentWord,
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 0,
+            nextReview: '2026-08-11T00:00:00.000Z'
+        };
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'good',
+            spellingAttempts: 0,
+            spellingCorrect: true,
+            saved: true
+        };
+        hooks.state.session.stage = 'feedback';
+        hooks.renderCard();
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;svg'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
     });
 
     await record('move to next word handles completion', () => {
@@ -1387,6 +1445,13 @@ async function run() {
         const store = createMockStore();
         hooks.setStore(store);
         hooks.state.ui.importing = false;
+        let switcherSyncCalls = 0;
+        hooks.state.ui.listSwitcher = {
+            syncFromStore() {
+                switcherSyncCalls += 1;
+                return true;
+            }
+        };
         windowStub.VocabDataIO = {
             importWordList: async () => ({
                 type: 'progress',
@@ -1405,6 +1470,8 @@ async function run() {
         assert.strictEqual(store.config.activeListId, 'spelling-errors-p1');
         assert.strictEqual(store.replaceProgressCalls[0].listId, 'spelling-errors-p1');
         assert.strictEqual(store.replaceProgressCalls[0].words[0].nextReview, '2026-07-25T00:00:00.000Z');
+        assert.strictEqual(switcherSyncCalls, 1);
+        hooks.state.ui.listSwitcher = null;
     });
 
     await record('export progress triggers download', async () => {

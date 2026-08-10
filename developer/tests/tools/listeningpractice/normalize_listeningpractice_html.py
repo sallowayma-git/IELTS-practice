@@ -3,7 +3,15 @@ import argparse
 import html
 import json
 import re
+import sys
 from pathlib import Path
+
+
+TOOL_DIR = Path(__file__).resolve().parent
+if str(TOOL_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOL_DIR))
+
+from listening_bridge_contract import ensure_static_bridge
 
 TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 H1_RE = re.compile(r"<h1[^>]*>(.*?)</h1>", re.IGNORECASE | re.DOTALL)
@@ -214,6 +222,12 @@ def normalize_file(path: Path, options: dict) -> dict:
     if options["inject_from_tags"]:
         updated, injected_changed, injected_answers = inject_correct_answers_from_tags(updated, existing_global)
 
+    updated, bridge_changed, bridge_src = ensure_static_bridge(
+        updated,
+        path,
+        Path(options["bridge_target"]),
+    )
+
     changed = updated != original
 
     return {
@@ -228,6 +242,8 @@ def normalize_file(path: Path, options: dict) -> dict:
         "promote_changed": promote_changed,
         "injected_changed": injected_changed,
         "injected_answers": injected_answers,
+        "bridge_changed": bridge_changed,
+        "bridge_src": bridge_src,
         "changed": changed,
         "updated": updated,
         "original": original,
@@ -240,6 +256,11 @@ def main():
     parser.add_argument("--write", action="store_true", help="Apply changes to files")
     parser.add_argument("--backup-dir", default="", help="Backup directory (optional, only when --write)")
     parser.add_argument("--report", default="developer/tests/reports/listeningpractice-normalize.json")
+    parser.add_argument(
+        "--bridge-target",
+        default="",
+        help="Bridge bundle path (defaults to <root parent>/js/bundles/listening-record-bridge.bundle.js)",
+    )
     parser.add_argument("--title-mode", choices=["topic", "prefixed", "keep"], default="topic")
     parser.add_argument("--h1-mode", choices=["keep", "topic", "part-topic"], default="keep")
     parser.add_argument("--promote-correct-answers", action="store_true", default=True)
@@ -249,24 +270,31 @@ def main():
     parser.add_argument("--no-inject-from-tags", action="store_false", dest="inject_from_tags")
     args = parser.parse_args()
 
+    root = Path(args.root)
+    bridge_target = Path(args.bridge_target) if args.bridge_target else (
+        root.resolve().parent / "js" / "bundles" / "listening-record-bridge.bundle.js"
+    )
     options = {
         "title_mode": args.title_mode,
         "h1_mode": args.h1_mode,
         "promote_correct_answers": args.promote_correct_answers,
         "promote_var_names": [x.strip() for x in args.promote_var_names.split(",") if x.strip()],
         "inject_from_tags": args.inject_from_tags,
+        "bridge_target": str(bridge_target),
     }
 
-    root = Path(args.root)
     html_files = sorted(root.rglob("*.html"))
+    root_resolved = root.resolve()
+    backup_root = Path(args.backup_dir).resolve() if args.backup_dir else None
 
     results = []
     for path in html_files:
         result = normalize_file(path, options)
         results.append({k: v for k, v in result.items() if k not in {"updated", "original"}})
         if args.write and result["changed"]:
-            if args.backup_dir:
-                backup_path = Path(args.backup_dir) / path
+            if backup_root:
+                relative_path = path.resolve().relative_to(root_resolved)
+                backup_path = backup_root / relative_path
                 backup_path.parent.mkdir(parents=True, exist_ok=True)
                 backup_path.write_text(result["original"], encoding="utf-8")
             path.write_text(result["updated"], encoding="utf-8")

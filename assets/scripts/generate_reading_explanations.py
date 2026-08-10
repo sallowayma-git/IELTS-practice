@@ -77,16 +77,37 @@ def normalize_title(value: str) -> str:
 
 
 def parse_js_manifest_object(js_text: str) -> Dict:
-    marker = "global.__READING_EXAM_MANIFEST__ ="
-    marker_index = js_text.find(marker)
-    if marker_index < 0:
-        raise RuntimeError("Manifest assignment marker missing")
-    start = js_text.find("{", marker_index)
-    end = js_text.rfind("};")
-    if start < 0 or end < 0 or end <= start:
-        raise RuntimeError("Invalid manifest.js object range")
-    payload = js_text[start:end + 1]
-    return json.loads(payload)
+    # The generated manifest currently declares the JSON payload as
+    # `const manifest = {...}` and assigns that variable to the global near the
+    # end of the wrapper.  Older manifests assigned the object to the global
+    # directly, so accept both shapes without treating the wrapper's final
+    # braces as part of the JSON payload.
+    markers = (
+        "const manifest =",
+        "global.__READING_EXAM_MANIFEST__ =",
+    )
+    decoder = json.JSONDecoder()
+    parse_errors: List[str] = []
+
+    for marker in markers:
+        marker_index = js_text.find(marker)
+        if marker_index < 0:
+            continue
+        start = js_text.find("{", marker_index + len(marker))
+        if start < 0:
+            continue
+        try:
+            payload, _ = decoder.raw_decode(js_text[start:])
+        except json.JSONDecodeError as exc:
+            parse_errors.append(f"{marker}: {exc}")
+            continue
+        if isinstance(payload, dict):
+            return payload
+        parse_errors.append(f"{marker}: payload is not an object")
+
+    if parse_errors:
+        raise RuntimeError(f"Invalid manifest.js object: {'; '.join(parse_errors)}")
+    raise RuntimeError("Manifest assignment marker missing")
 
 
 def extract_pdf_title(script_path: Path) -> Optional[str]:

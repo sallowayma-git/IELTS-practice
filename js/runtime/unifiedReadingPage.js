@@ -122,7 +122,8 @@
             currentIndex: 0,
             activeStartedAtMs: null,
             slotsByExamId: new Map(),
-            activating: false
+            activating: false,
+            activationGeneration: 0
         },
         simulationDraftSyncTimer: null,
         simulationDraftFingerprint: '',
@@ -1562,6 +1563,54 @@
         initDragPools();
     }
 
+    function isCurrentSuiteActivation(examId, activationGeneration) {
+        return Boolean(
+            state.suite?.inline
+            && state.suite.activationGeneration === activationGeneration
+            && state.suite.activeExamId === examId
+            && state.examId === examId
+        );
+    }
+
+    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration) {
+        const targetExamId = String(slot?.examId || '').trim();
+        const isCurrentActivation = () => isCurrentSuiteActivation(targetExamId, activationGeneration);
+        if (!isCurrentActivation()) {
+            return false;
+        }
+        const shouldShowResults = Boolean(
+            slot?.lastResults
+            && (state.readOnly || state.reviewMode || state.submitted)
+        );
+        if (shouldShowResults) {
+            renderResults(slot.lastResults);
+            await renderExplanations({
+                dataKey: slot.dataKey || targetExamId,
+                examId: targetExamId,
+                isCurrent: isCurrentActivation
+            });
+            if (!isCurrentActivation()) {
+                return false;
+            }
+            applyHighlights(Array.isArray(slot.draft?.highlights) ? slot.draft.highlights : []);
+            refreshNoteHighlightAttributes();
+            restoreMissingNoteAnchors();
+            applyMemorizeLocatorHighlights();
+            enhanceReviewHighlights();
+        }
+        updateNavStatuses(shouldShowResults ? slot.lastResults : null);
+        if (state.readOnly) {
+            setReadOnlyMode(true, state.readOnlyReason);
+        }
+        if (state.timerLocked) {
+            setTimerLockMode(true);
+        } else {
+            disableDragInteractions();
+        }
+        syncPrimaryActionButtons();
+        return true;
+    }
+
     async function activateSuiteSlot(examId, options = {}) {
         if (!state.suite?.inline) {
             return false;
@@ -1571,6 +1620,8 @@
         if (!slot || !slot.dataset) {
             return false;
         }
+        const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
+        state.suite.activationGeneration = activationGeneration;
         if (!options.skipSave) {
             updateActiveSlotFromCurrentDom('deactivate');
         }
@@ -1594,9 +1645,16 @@
         syncInlineSuiteIdentity();
         state.simulationMode = true;
         state.simulationContextReady = true;
-        updateNavStatuses(slot.lastResults || null);
-        syncPrimaryActionButtons();
-        state.suite.activating = false;
+        try {
+            await restoreActiveSuiteSlotPresentation(slot, activationGeneration);
+        } finally {
+            if (isCurrentSuiteActivation(targetExamId, activationGeneration)) {
+                state.suite.activating = false;
+            }
+        }
+        if (!isCurrentSuiteActivation(targetExamId, activationGeneration)) {
+            return false;
+        }
         if (Number.isFinite(Number(slot.draft?.scrollY))) {
             global.scrollTo(0, Number(slot.draft.scrollY) || 0);
         }
@@ -2482,7 +2540,10 @@
         }
     }
 
-    async function ensureExplanationDataset() {
+    async function ensureExplanationDataset(options = {}) {
+        const targetDataKey = String(options.dataKey || state.dataKey || '').trim();
+        const targetExamId = String(options.examId || state.examId || '').trim();
+        const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : null;
         const registry = global.__READING_EXPLANATION_DATA__;
         if (!registry || typeof registry.get !== 'function') {
             return null;
@@ -2493,7 +2554,10 @@
         } catch (_) {
             return null;
         }
-        const entry = manifest[state.dataKey] || manifest[state.examId];
+        if (isCurrent && !isCurrent()) {
+            return null;
+        }
+        const entry = manifest[targetDataKey] || manifest[targetExamId];
         if (!entry || !entry.dataKey || !entry.script) {
             return null;
         }
@@ -2503,6 +2567,9 @@
             } catch (_) {
                 return null;
             }
+        }
+        if (isCurrent && !isCurrent()) {
+            return null;
         }
         const payload = registry.get(entry.dataKey);
         state.explanation = payload || null;
@@ -2874,6 +2941,19 @@
         return index >= 0 ? (state.suite.sequence[index] || null) : null;
     }
 
+    function resolveComparisonNavStatus(comparison, answered = false) {
+        if (!comparison || typeof comparison !== 'object') {
+            return answered ? 'answered' : '';
+        }
+        if (comparison.isCorrect === true) {
+            return 'correct';
+        }
+        if (comparison.isCorrect === false) {
+            return 'incorrect';
+        }
+        return answered ? 'answered' : '';
+    }
+
     function getPassageQuestionStates() {
         if (state.suite?.inline && state.suite.sequence.length) {
             const info = {
@@ -2907,7 +2987,7 @@
                     }
                     const comparison = slot?.lastResults?.answerComparison?.[qId];
                     if (comparison) {
-                        status = comparison.isCorrect ? 'correct' : 'incorrect';
+                        status = resolveComparisonNavStatus(comparison, answered);
                     }
                     return { qId, label, status, examId: entry.examId };
                 });
@@ -2969,7 +3049,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -3001,7 +3081,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -3033,7 +3113,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -3501,7 +3581,7 @@
                 navStatus.set(questionId, hasAnswer(questionId) ? 'answered' : '');
                 return;
             }
-            navStatus.set(questionId, entry.isCorrect ? 'correct' : 'incorrect');
+            navStatus.set(questionId, resolveComparisonNavStatus(entry, hasAnswer(questionId)));
         });
         buildQuestionNav();
         syncPrimaryActionButtons();
@@ -3803,18 +3883,32 @@
         });
     }
 
-    async function renderExplanations() {
+    async function renderExplanations(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : null;
+        if (isCurrent && !isCurrent()) {
+            return false;
+        }
         if (typeof testOverrides.renderExplanations === 'function') {
-            await testOverrides.renderExplanations();
-            return;
+            const commitOverride = await testOverrides.renderExplanations(options);
+            if (isCurrent && !isCurrent()) {
+                return false;
+            }
+            if (typeof commitOverride === 'function') {
+                commitOverride();
+            }
+            return true;
         }
         clearExplanations();
-        const explanation = await ensureExplanationDataset();
+        const explanation = await ensureExplanationDataset(options);
+        if (isCurrent && !isCurrent()) {
+            return false;
+        }
         if (!explanation) {
-            return;
+            return false;
         }
         renderPassageExplanations();
         renderQuestionExplanations();
+        return true;
     }
 
     function createAnswerKeyCard(questionId, answerValue) {
@@ -5076,9 +5170,14 @@
             const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
             const partial = Number(entry.partialCorrectCount) || 0;
             const weight = Number(entry.weight) || 1;
-            const isPartial = !entry.isCorrect && partial > 0 && weight > 1;
-            const status = entry.isCorrect ? '✓' : (isPartial ? `${partial}/${weight}` : '✗');
-            const statusClass = entry.isCorrect ? 'result-correct' : (isPartial ? 'result-partial' : 'result-incorrect');
+            const correctnessKnown = entry.isCorrect === true || entry.isCorrect === false;
+            const isPartial = entry.isCorrect === false && partial > 0 && weight > 1;
+            const status = entry.isCorrect === true
+                ? '✓'
+                : (isPartial ? `${partial}/${weight}` : (correctnessKnown ? '✗' : '—'));
+            const statusClass = entry.isCorrect === true
+                ? 'result-correct'
+                : (isPartial ? 'result-partial' : (correctnessKnown ? 'result-incorrect' : 'result-unknown'));
             return `
                 <tr>
                     <td><button type="button" class="question-jump-btn" data-result-question-id="${escapeHtml(entry.questionId)}" aria-label="跳转到题号 ${label} 的原文证据">${label}</button></td>
@@ -5315,19 +5414,46 @@
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
         });
 
-        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
-        if (hasCanonicalCorrectAnswers) {
+        const hasUsableCorrectAnswer = (questionId) => (
+            Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId)
+            && splitAnswerTokens(normalizedCorrectAnswers[questionId]).length > 0
+        );
+        const replayGroupLookup = buildQuestionGroupLookup(state.dataset);
+        const knownQuestionIds = Array.from(questionIds).filter((questionId) => {
+            if (!hasUsableCorrectAnswer(questionId)) {
+                return false;
+            }
+            const questionGroup = replayGroupLookup.get(questionId);
+            const isSplitMultiChoiceGroup = Boolean(
+                questionGroup
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length > 1
+            );
+            return !isSplitMultiChoiceGroup
+                || questionGroup.questionIds.every((groupQuestionId) => hasUsableCorrectAnswer(groupQuestionId));
+        });
+        if (knownQuestionIds.length > 0) {
             const replayResults = buildResultsFromAnswers(
                 Object.assign({}, state.dataset || {}, {
                     answerKey: normalizedCorrectAnswers,
-                    questionOrder: Array.from(questionIds)
+                    questionOrder: knownQuestionIds
                 }),
                 replayAnswers
             );
+            const answerComparison = {};
+            questionIds.forEach((questionId) => {
+                answerComparison[questionId] = replayResults.answerComparison[questionId] || {
+                    questionId,
+                    userAnswer: replayAnswers[questionId],
+                    correctAnswer: '',
+                    isCorrect: null
+                };
+            });
             return {
-                answers: normalizedAnswers,
+                answers: replayAnswers,
                 correctAnswers: normalizedCorrectAnswers,
-                answerComparison: replayResults.answerComparison,
+                answerComparison,
                 scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
             };
         }
@@ -5353,7 +5479,7 @@
             : Math.round(scoreInfo.accuracy * 100);
 
         return {
-            answers: normalizedAnswers,
+            answers: replayAnswers,
             correctAnswers: normalizedCorrectAnswers,
             answerComparison: normalizedComparison,
             scoreInfo
@@ -5374,55 +5500,118 @@
         );
     }
 
-    function applyReplayAnswersToDom(answers = {}) {
+    function applyAnswersToDom(answers = {}) {
+        if (!answers || typeof answers !== 'object') {
+            return;
+        }
+
+        const groupedHandledQuestionIds = new Set();
+        const groupedChoiceInputs = new Map();
+        document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
+            const groupName = String(input.getAttribute('name') || '').trim();
+            if (!groupName) return;
+            const expandedQuestionIds = expandQuestionSequence(groupName);
+            if (expandedQuestionIds.length <= 1) return;
+            const questionIds = resolveCheckboxQuestionIds(groupName);
+            if (!questionIds.length) return;
+            const existing = groupedChoiceInputs.get(groupName) || {
+                groupName,
+                questionIds,
+                inputs: []
+            };
+            existing.inputs.push(input);
+            groupedChoiceInputs.set(groupName, existing);
+        });
+
+        groupedChoiceInputs.forEach((group) => {
+            const mergedValues = [];
+            const appendValues = (rawValue) => {
+                splitAnswerTokens(rawValue).forEach((entry) => {
+                    const normalized = canonicalizeAnswerToken(entry);
+                    if (normalized) {
+                        mergedValues.push(normalized);
+                    }
+                });
+            };
+            group.questionIds.forEach((questionId) => {
+                groupedHandledQuestionIds.add(questionId);
+                if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
+                    appendValues(answers[questionId]);
+                }
+            });
+            if (Object.prototype.hasOwnProperty.call(answers, group.groupName)) {
+                appendValues(answers[group.groupName]);
+            }
+            const normalizedValues = Array.from(new Set(mergedValues));
+            group.inputs.forEach((input) => {
+                const candidate = canonicalizeAnswerToken(
+                    input.value || input.dataset?.option || input.dataset?.value || input.id || ''
+                );
+                input.checked = normalizedValues.some((value) => areAnswerTokensEquivalent(candidate, value));
+            });
+        });
+
         Object.entries(answers).forEach(([questionId, rawValue]) => {
             const normalizedId = normalizeReplayQuestionId(questionId);
-            if (!normalizedId) return;
+            if (!normalizedId || groupedHandledQuestionIds.has(normalizedId)) return;
             if (applyDropzoneAnswer(normalizedId, rawValue)) {
                 return;
             }
-            const aliases = Array.from(new Set([
-                normalizedId,
-                normalizedId.replace(/^q/i, ''),
-                `question${normalizedId.replace(/^q/i, '')}`
-            ])).filter(Boolean);
-
-            const valueList = splitAnswerTokens(rawValue);
-            const firstValue = valueList[0] || '';
-
+            const aliases = resolveAnswerAliases(normalizedId);
+            const choiceFields = new Set();
+            const textFields = new Set();
+            const selectFields = new Set();
             aliases.forEach((alias) => {
                 const escapedAlias = escapeSelector(alias);
-                const selector = [
+                document.querySelectorAll(
+                    `input[type="radio"][name="${escapedAlias}"], input[type="checkbox"][name="${escapedAlias}"]`
+                ).forEach((field) => choiceFields.add(field));
+                document.querySelectorAll([
                     `input[name="${escapedAlias}"]`,
                     `textarea[name="${escapedAlias}"]`,
-                    `select[name="${escapedAlias}"]`,
                     `input[id="${escapedAlias}"]`,
                     `textarea[id="${escapedAlias}"]`,
-                    `select[id="${escapedAlias}"]`
-                ].join(', ');
-                const fields = Array.from(document.querySelectorAll(selector));
-                fields.forEach((field) => {
-                    if (!(field instanceof HTMLElement)) return;
-                    if (field instanceof HTMLInputElement) {
-                        if (field.type === 'radio') {
-                            const candidate = String(field.value || field.dataset?.option || '').trim();
-                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
-                            return;
-                        }
-                        if (field.type === 'checkbox') {
-                            const candidate = String(field.value || field.dataset?.option || '').trim();
-                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
-                            return;
-                        }
-                        field.value = firstValue;
-                        return;
-                    }
-                    if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
-                        field.value = firstValue;
+                    `input[data-question-id="${escapedAlias}"]`,
+                    `textarea[data-question-id="${escapedAlias}"]`
+                ].join(', ')).forEach((field) => {
+                    if (field.type !== 'radio' && field.type !== 'checkbox') {
+                        textFields.add(field);
                     }
                 });
+                document.querySelectorAll([
+                    `select[name="${escapedAlias}"]`,
+                    `select[id="${escapedAlias}"]`,
+                    `select[data-question-id="${escapedAlias}"]`
+                ].join(', ')).forEach((field) => selectFields.add(field));
+            });
+
+            const normalizedValues = splitAnswerTokens(rawValue)
+                .map((entry) => canonicalizeAnswerToken(entry))
+                .filter(Boolean);
+            choiceFields.forEach((input) => {
+                const candidate = canonicalizeAnswerToken(
+                    input.value || input.dataset?.option || input.dataset?.value || input.id || ''
+                );
+                input.checked = normalizedValues.some((value) => areAnswerTokensEquivalent(candidate, value));
+            });
+
+            const textValue = displayAnswerValue(rawValue, '');
+            textFields.forEach((field) => {
+                field.value = textValue;
+            });
+            selectFields.forEach((select) => {
+                for (let index = 0; index < select.options.length; index += 1) {
+                    if (compareAnswers(select.options[index].value, rawValue)) {
+                        select.selectedIndex = index;
+                        break;
+                    }
+                }
             });
         });
+    }
+
+    function applyReplayAnswersToDom(answers = {}) {
+        applyAnswersToDom(answers);
     }
 
     function setReadOnlyMode(enabled, reason = '') {
@@ -5670,7 +5859,13 @@
                 buildInitSignature,
                 handleIncoming,
                 initializeInlineSimulationSuite,
+                activateSuiteSlot,
                 buildResultsFromAnswers,
+                applyAnswersToDom,
+                applyReplayAnswersToDom,
+                captureDom,
+                renderResults,
+                updateNavStatuses,
                 renderTimer,
                 handleSubmit,
                 beginSubmission,
@@ -5697,11 +5892,15 @@
                         activeExamId: state.suite?.activeExamId || null,
                         currentIndex: state.suite?.currentIndex || 0,
                         suiteInline: Boolean(state.suite?.inline),
+                        suiteActivating: Boolean(state.suite?.activating),
+                        activationGeneration: Number(state.suite?.activationGeneration) || 0,
                         suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                         reviewRecordId: state.reviewRecordId,
                         submittedRecordId: state.submittedRecordId,
                         submitted: state.submitted,
                         readOnly: state.readOnly,
+                        reviewMode: state.reviewMode,
+                        timerLocked: state.timerLocked,
                         submissionStatus: state.submissionStatus,
                         submissionId: state.submissionId,
                         parentOrigin: state.parentOrigin,
@@ -5711,6 +5910,7 @@
                         notes: collectNotes(),
                         noteOutlines: collectNoteOutlines(),
                         markedQuestions: normalizeMarkedQuestions(state.markedQuestions),
+                        navStatus: Array.from(navStatus.entries()),
                         suiteSequence: Array.isArray(state.suite?.sequence)
                             ? state.suite.sequence.map((entry) => ({ ...entry }))
                             : [],
@@ -6635,109 +6835,7 @@
             return;
         }
         if (draft.answers && typeof draft.answers === 'object') {
-            const answers = draft.answers;
-            const groupedHandledQuestionIds = new Set();
-            const groupedChoiceInputs = new Map();
-
-            document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
-                const groupName = String(input.getAttribute('name') || '').trim();
-                if (!groupName) return;
-                const questionIds = expandQuestionSequence(groupName);
-                if (questionIds.length <= 1) return;
-                const existing = groupedChoiceInputs.get(groupName) || {
-                    questionIds,
-                    inputs: []
-                };
-                existing.inputs.push(input);
-                groupedChoiceInputs.set(groupName, existing);
-            });
-
-            groupedChoiceInputs.forEach((group) => {
-                const mergedValues = [];
-                group.questionIds.forEach((questionId) => {
-                    groupedHandledQuestionIds.add(questionId);
-                    if (!Object.prototype.hasOwnProperty.call(answers, questionId)) {
-                        return;
-                    }
-                    splitAnswerTokens(answers[questionId]).forEach((entry) => {
-                        const normalized = canonicalizeAnswerToken(entry);
-                        if (normalized) {
-                            mergedValues.push(normalized);
-                        }
-                    });
-                });
-                const normalizedValues = Array.from(new Set(mergedValues));
-                group.inputs.forEach((input) => {
-                    const candidate = canonicalizeAnswerToken(
-                        input.value || input.dataset?.option || input.dataset?.value || input.id || ''
-                    );
-                    input.checked = normalizedValues.includes(candidate)
-                        || normalizedValues.some((value) => compareAnswers(input.value, value));
-                });
-            });
-
-            Object.entries(answers).forEach(([qid, value]) => {
-                const normalized = normalizeQuestionId(qid);
-                if (!normalized) return;
-                if (groupedHandledQuestionIds.has(normalized)) {
-                    return;
-                }
-                if (applyDropzoneAnswer(normalized, value)) {
-                    return;
-                }
-                const escapedId = escapeSelector(normalized);
-                // Radio / checkbox
-                const choices = document.querySelectorAll(
-                    `input[type="radio"][name="${escapedId}"], input[type="checkbox"][name="${escapedId}"]`
-                );
-                if (choices.length) {
-                    const normalizedValues = splitAnswerTokens(value)
-                        .map((entry) => canonicalizeAnswerToken(entry))
-                        .filter(Boolean);
-                    choices.forEach((input) => {
-                        const candidate = canonicalizeAnswerToken(
-                            input.value || input.dataset?.option || input.dataset?.value || input.id || ''
-                        );
-                        input.checked = normalizedValues.includes(candidate) || compareAnswers(input.value, value);
-                    });
-                    return;
-                }
-                // Text input
-                const textInput = document.querySelector(`input[data-question-id="${escapedId}"], input#${escapedId}`);
-                if (textInput && textInput.type !== 'radio' && textInput.type !== 'checkbox') {
-                    textInput.value = displayAnswerValue(value, '');
-                    return;
-                }
-                const namedTextFields = Array.from(
-                    document.querySelectorAll(`input[name="${escapedId}"], textarea[name="${escapedId}"]`)
-                ).filter((field) => field.type !== 'radio' && field.type !== 'checkbox');
-                if (namedTextFields.length) {
-                    const normalizedTextValue = displayAnswerValue(value, '');
-                    namedTextFields.forEach((field) => {
-                        field.value = normalizedTextValue;
-                    });
-                    return;
-                }
-                // Select
-                const select = document.querySelector(`select[data-question-id="${escapedId}"], select#${escapedId}`);
-                if (select) {
-                    for (let i = 0; i < select.options.length; i++) {
-                        if (compareAnswers(select.options[i].value, value)) {
-                            select.selectedIndex = i;
-                            break;
-                        }
-                    }
-                }
-                const namedSelects = document.querySelectorAll(`select[name="${escapedId}"]`);
-                namedSelects.forEach((namedSelect) => {
-                    for (let i = 0; i < namedSelect.options.length; i++) {
-                        if (compareAnswers(namedSelect.options[i].value, value)) {
-                            namedSelect.selectedIndex = i;
-                            break;
-                        }
-                    }
-                });
-            });
+            applyAnswersToDom(draft.answers);
         }
         if (Array.isArray(draft.highlights)) {
             applyHighlights(draft.highlights);
@@ -6856,7 +6954,13 @@
             slot.lastResults = results;
             slot.navStatus = new Map();
             Object.entries(results.answerComparison || {}).forEach(([questionId, comparison]) => {
-                slot.navStatus.set(questionId, comparison && comparison.isCorrect ? 'correct' : 'incorrect');
+                slot.navStatus.set(
+                    questionId,
+                    resolveComparisonNavStatus(
+                        comparison,
+                        hasAnswerInDataset(questionId, draft.answers || {}, slot.dataset)
+                    )
+                );
             });
             const scoreInfo = results.scoreInfo || {};
             totalCorrect += Number(scoreInfo.correct) || 0;

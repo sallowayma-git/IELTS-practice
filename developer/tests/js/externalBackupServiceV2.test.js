@@ -1004,6 +1004,20 @@ async function testFullResetWorksWhenAppDataReadyRejects() {
     assert.ok(Number(harness.indexedDB.values.get('reset-epoch')) >= 1);
 }
 
+async function testFullResetAllowsDirtyStateWhenNoDirectoryIsBound() {
+    const harness = createHarness();
+    await harness.ready();
+    harness.service.markDirty();
+    assert.equal(harness.service.getStatus().bound, false);
+    assert.equal(harness.service.getStatus().dirty, true);
+
+    const result = await harness.service.prepareForFullReset();
+    assert.equal(result.success, true,
+        'unbound data has no external destination to flush and must remain resettable');
+    assert.equal(harness.service.getStatus().suspended, true);
+    assert.equal(harness.service.getStatus().bound, false);
+}
+
 async function testFullResetWriteFailurePreservesBindingState() {
     const harness = createHarness();
     await harness.ready();
@@ -1238,6 +1252,50 @@ async function testRestoreFallsBackToNewestValidDatedGeneration() {
     }
 }
 
+async function testBindingDatedGenerationBlocksInitialOverwrite() {
+    for (const latestText of [null, '{broken-latest']) {
+        const directory = createDirectory();
+        directory.files.set(
+            'ielts-atlas-backup-2026-07-26.json',
+            JSON.stringify(makeSnapshot('fnv1a-dated-only', 'dated-only'))
+        );
+        if (latestText !== null) directory.files.set('ielts-atlas-backup-latest.json', latestText);
+        const harness = createHarness({ directory });
+        await harness.ready();
+        const bound = await harness.service.bindDirectory({ writeNow: true });
+        assert.equal(bound.existingBackupFound, true);
+        assert.equal(bound.writeResult, null);
+        assert.equal(directory.files.get('ielts-atlas-backup-latest.json'), latestText === null ? undefined : latestText,
+            'binding must not hide a valid dated generation behind a newly written latest file');
+        assert.equal(harness.service.getStatus().awaitingRestore, true);
+    }
+}
+
+async function testRestoreMetadataFailureRemainsDurablyGuarded() {
+    const indexedDB = createIndexedDb();
+    const directory = createDirectory();
+    directory.files.set(
+        'ielts-atlas-backup-latest.json',
+        JSON.stringify(makeSnapshot('fnv1a-restore-meta', 'restore-meta'))
+    );
+    const harness = createHarness({ indexedDB, directory });
+    await harness.ready();
+    await harness.service.bindDirectory({ writeNow: true });
+    indexedDB.state.failNextReadWriteTransaction = true;
+    const restored = await harness.service.restoreFromLatest({ confirmed: true });
+    assert.equal(restored.success, false);
+    assert.equal(restored.restored, true, 'the business data commit is reported separately from metadata persistence');
+    assert.equal(restored.reason, 'metadata_persistence_failed');
+    assert.equal(restored.metadataPersisted, false);
+    assert.equal(harness.service.getStatus().awaitingRestore, true,
+        'a failed durable metadata write must keep the overwrite guard enabled in memory');
+
+    const reloaded = createHarness({ indexedDB, directory });
+    await reloaded.ready();
+    assert.equal(reloaded.service.getStatus().awaitingRestore, true,
+        'reload must observe the same guarded state after metadata persistence failure');
+}
+
 async function main() {
     await testBindingWritesVerifiedV2Snapshots();
     await testMissingCrossTabLockFailsClosed();
@@ -1262,6 +1320,7 @@ async function main() {
     await testFullResetPublicLockAndRollbackContract();
     await testBindingExistingBackupRequiresRestoreBeforeAnyWrite();
     await testFullResetWorksWhenAppDataReadyRejects();
+    await testFullResetAllowsDirtyStateWhenNoDirectoryIsBound();
     await testFullResetWriteFailurePreservesBindingState();
     await testFullResetBindingDbFailureCanBeRetriedWithoutPermanentSuspension();
     await testFullResetFailsClosedWhenCommitArrivesDuringBindingCleanup();
@@ -1271,6 +1330,8 @@ async function main() {
     await testUnchangedChecksumDoesNotTrustMissingOrCorruptLatest();
     await testLatestFailureLeavesGenerationForFallbackRestore();
     await testRestoreFallsBackToNewestValidDatedGeneration();
+    await testBindingDatedGenerationBlocksInitialOverwrite();
+    await testRestoreMetadataFailureRemainsDurablyGuarded();
     await testRestoreConcurrentCommitSchedulesFlushAfterAwaitingRestoreClears();
     console.log('ExternalBackupService v2 tests passed');
 }

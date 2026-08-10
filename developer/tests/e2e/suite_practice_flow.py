@@ -571,6 +571,18 @@ async def _review_nav_state(page: Page):
     )
 
 
+async def _wait_for_enabled_review_next(page: Page, timeout_ms: int = 20000) -> None:
+    await page.wait_for_function(
+        "() => {\n"
+        "  const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');\n"
+        "  if (!bar || (bar.style && bar.style.display === 'none')) return false;\n"
+        "  const next = bar.querySelector('button[data-review-dir=\"next\"], button[data-review-nav=\"next\"]');\n"
+        "  return !!(next && !next.disabled);\n"
+        "}",
+        timeout=timeout_ms,
+    )
+
+
 async def _launch_chromium(p) -> Browser:
     """以 file:// 友好的参数启动 Chromium，并在崩溃时回退默认参数。"""
     try:
@@ -851,6 +863,21 @@ async def run() -> bool:
             )
             log_step("回放页已进入结算态并显示切题栏", "SUCCESS")
 
+            # Explanation scripts are loaded on demand. Results and review
+            # navigation can become visible before that asynchronous script
+            # finishes, so wait for the documented manifest-backed content
+            # instead of sampling the DOM at a racy intermediate state.
+            await replay_page.wait_for_function(
+                "() => {\n"
+                "  const params = new URLSearchParams(window.location.search || '');\n"
+                "  const examId = params.get('dataKey') || params.get('examId') || '';\n"
+                "  const manifest = window.__READING_EXPLANATION_MANIFEST__ || {};\n"
+                "  if (!examId || !manifest[examId]) return true;\n"
+                "  return document.querySelectorAll('.reading-explanation-card, .reading-question-explanation-list').length > 0;\n"
+                "}",
+                timeout=30000,
+            )
+
             explanation_state = await replay_page.evaluate(
                 "() => {\n"
                 "  const params = new URLSearchParams(window.location.search || '');\n"
@@ -969,6 +996,7 @@ async def run() -> bool:
                 arg=manual_exam1,
                 timeout=15000,
             )
+            await _wait_for_enabled_review_next(manual_suite_page)
             nav_after_p1_submit = await _review_nav_state(manual_suite_page)
             if not nav_after_p1_submit or nav_after_p1_submit.get("hidden") or nav_after_p1_submit.get("nextDisabled"):
                 raise AssertionError("manual mode P1 submit should show enabled next nav button")
@@ -982,6 +1010,10 @@ async def run() -> bool:
             manual_exam2 = await manual_suite_page.evaluate("() => document.body.dataset.examId || ''")
             if not manual_exam2 or manual_exam2 == manual_exam1:
                 raise AssertionError("manual mode next from P1 did not enter P2")
+            await manual_suite_page.wait_for_function(
+                "() => { const btn = document.getElementById('submit-btn') || document.getElementById('complete-exam-btn'); return !!(btn && !btn.disabled); }",
+                timeout=20000,
+            )
             p2_answering_state = await manual_suite_page.evaluate(
                 "() => {\n"
                 "  const submit = document.getElementById('submit-btn') || document.getElementById('complete-exam-btn');\n"
@@ -1013,6 +1045,7 @@ async def run() -> bool:
                 arg=manual_exam2,
                 timeout=15000,
             )
+            await _wait_for_enabled_review_next(manual_suite_page)
             nav_after_p2_submit = await _review_nav_state(manual_suite_page)
             if not nav_after_p2_submit or nav_after_p2_submit.get("hidden") or nav_after_p2_submit.get("nextDisabled"):
                 raise AssertionError("manual mode P2 submit should keep next nav enabled")
@@ -1026,6 +1059,10 @@ async def run() -> bool:
             manual_exam3 = await manual_suite_page.evaluate("() => document.body.dataset.examId || ''")
             if not manual_exam3 or manual_exam3 == manual_exam2:
                 raise AssertionError("manual mode next from P2 did not enter P3")
+            await manual_suite_page.wait_for_function(
+                "() => { const btn = document.getElementById('submit-btn') || document.getElementById('complete-exam-btn'); return !!(btn && !btn.disabled); }",
+                timeout=20000,
+            )
             p3_answering_state = await manual_suite_page.evaluate(
                 "() => {\n"
                 "  const submit = document.getElementById('submit-btn') || document.getElementById('complete-exam-btn');\n"
@@ -1046,6 +1083,7 @@ async def run() -> bool:
                 arg=manual_exam3,
                 timeout=15000,
             )
+            await _wait_for_enabled_review_next(manual_suite_page)
             nav_after_p3_submit = await _review_nav_state(manual_suite_page)
             if not nav_after_p3_submit or nav_after_p3_submit.get("nextDisabled"):
                 raise AssertionError("manual mode last review should allow next for finalize")

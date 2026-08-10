@@ -28,12 +28,52 @@ function makeJsonFile(payload, name = 'data.json') {
     return blob;
 }
 
+function makeCsvFile(payload, name = 'data.csv') {
+    const blob = new Blob([payload], { type: 'text/csv' });
+    Object.defineProperty(blob, 'name', { value: name });
+    return blob;
+}
+
 const vendorWords = await window.VocabDataIO.importWordList(makeJsonFile({
     version: 'vendor-1',
     words: [{ id: 'vendor-1', word: 'alpha', meaning: 'A', correctCount: 2 }]
 }, 'vendor.json'));
 assert.strictEqual(vendorWords.type, 'wordlist');
 assert.strictEqual(vendorWords.entries.length, 1);
+
+const multilineCsv = await window.VocabDataIO.importWordList(makeCsvFile(
+    '\uFEFFword,meaning,example,freq\r\n'
+    + 'alpha,"第一行释义\r\n第二行释义","He said ""hello"", today",0.8\r\n'
+    + 'beta,B,"plain example",0.5\r\n'
+));
+assert.strictEqual(multilineCsv.entries.length, 2);
+assert.strictEqual(multilineCsv.meta.originalLength, 2);
+assert.strictEqual(multilineCsv.entries[0].meaning, '第一行释义\n第二行释义');
+assert.strictEqual(multilineCsv.entries[0].example, 'He said "hello", today');
+assert.strictEqual(multilineCsv.entries[0].freq, 0.8);
+
+const leadingBlankSemicolonCsv = await window.VocabDataIO.importWordList(makeCsvFile(
+    '\r\n\n\uFEFFword;meaning;example;freq\r\nalpha;A;example;0.7\r\n',
+    'leading-blank-semicolon.csv'
+));
+assert.strictEqual(leadingBlankSemicolonCsv.entries.length, 1);
+assert.strictEqual(leadingBlankSemicolonCsv.entries[0].word, 'alpha');
+assert.strictEqual(leadingBlankSemicolonCsv.entries[0].meaning, 'A');
+assert.strictEqual(leadingBlankSemicolonCsv.entries[0].freq, 0.7);
+
+const leadingBlankTabCsv = await window.VocabDataIO.importWordList(makeCsvFile(
+    '\n\t\nword\tmeaning\texample\tfreq\nalpha\tA\texample\t0.6\n',
+    'leading-blank-tab.csv'
+));
+assert.strictEqual(leadingBlankTabCsv.entries.length, 1);
+assert.strictEqual(leadingBlankTabCsv.entries[0].word, 'alpha');
+assert.strictEqual(leadingBlankTabCsv.entries[0].meaning, 'A');
+assert.strictEqual(leadingBlankTabCsv.entries[0].freq, 0.6);
+
+await assert.rejects(
+    window.VocabDataIO.importWordList(makeCsvFile('word,meaning\nalpha,"未闭合释义\n')),
+    /未闭合|引号/
+);
 
 const importBlob = new Blob([JSON.stringify({
     version: '2.0',
@@ -91,5 +131,5 @@ assert.strictEqual(roundTrip.entries[0].meaning, '花园');
 
 console.log(JSON.stringify({
     status: 'pass',
-    detail: 'vocab progress import/export preserves canonical list identity and excludes derived queue'
+    detail: 'CSV multiline parsing and canonical vocab progress import/export checks passed'
 }, null, 2));
