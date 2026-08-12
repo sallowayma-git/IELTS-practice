@@ -687,6 +687,21 @@ class ExamSystemApp {
                             console.error('[App] 激活练习视图失败:', error);
                         });
                     break;
+                case 'more':
+                    Promise.resolve()
+                        .then(() => {
+                            if (window.AppEntry && typeof window.AppEntry.ensureMoreToolsGroup === 'function') {
+                                return window.AppEntry.ensureMoreToolsGroup();
+                            }
+                            if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+                                return window.AppLazyLoader.ensureGroup('more-tools');
+                            }
+                            return null;
+                        })
+                        .catch((error) => {
+                            console.warn('[App] 激活更多视图时加载工具模块失败:', error);
+                        });
+                    break;
                 default:
                     break;
             }

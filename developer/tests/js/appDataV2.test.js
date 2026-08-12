@@ -52,7 +52,7 @@ function harness() {
     const catalogSandbox = { structuredClone }; catalogSandbox.globalThis = catalogSandbox;
     vm.runInContext(catalogSource, vm.createContext(catalogSandbox), { filename: 'dataCatalog.js' });
     const catalog = catalogSandbox.__AppDataV2Catalog;
-    const shared = { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), reads: [], lists: [], mutations: [], counter: 0, failEntityStore: null, lastInstallOptions: null };
+    const shared = { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), reads: [], lists: [], mutations: [], counter: 0, failEntityStore: null, lastInstallOptions: null, beforeInstall: null };
     const envelope = (key, data, state = 'present', revision = 1, operationId = 'seed') => ({ schemaVersion: 2, revision, operationId, updatedAt: new Date().toISOString(), state, data: state === 'cleared' ? null : clone(data), checksum: checksum(state === 'cleared' ? null : data) });
     class Kernel {
         async initialize() { this.state = 'ready'; this.backend = 'memory'; return this; }
@@ -85,6 +85,11 @@ function harness() {
         }
         async installSnapshot(snapshot, options = {}) {
             if (snapshot.checksum !== checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities })) throw new AppDataError('VALIDATION', 'snapshot checksum');
+            if (typeof shared.beforeInstall === 'function') {
+                const hook = shared.beforeInstall;
+                shared.beforeInstall = null;
+                await hook();
+            }
             const token = options.expectedRevisionToken || {};
             for (const [key, expected] of Object.entries(token.documents || {})) {
                 const actual = shared.docs.get(key) || null;
@@ -332,7 +337,23 @@ async function run() {
         ['invalid entity row checksum', (snapshot) => { snapshot.entities.practiceSummaries[0].checksum = 'fnv1a-forged-row'; }],
         ['invalid entity row field', (snapshot) => { delete snapshot.entities.practiceSummaries[0].operationId; }],
         ['duplicate entity recordId', (snapshot) => { snapshot.entities.practiceSummaries.push(clone(snapshot.entities.practiceSummaries[0])); }],
-        ['practice layer recordId mismatch', (snapshot) => { snapshot.entities.practiceDetails[0].recordId = 'different-practice-id'; }]
+        ['sparse entity array', (snapshot) => { snapshot.entities.practiceSummaries = new Array(1); }],
+        ['practice layer recordId mismatch', (snapshot) => { snapshot.entities.practiceDetails[0].recordId = 'different-practice-id'; }],
+        ['summary payload id mismatch', (snapshot) => {
+            const row = snapshot.entities.practiceSummaries[0];
+            row.data.id = 'payload-id-does-not-match';
+            row.checksum = checksum(row.data);
+        }],
+        ['detail payload id mismatch', (snapshot) => {
+            const row = snapshot.entities.practiceDetails[0];
+            row.data.recordId = 'payload-id-does-not-match';
+            row.checksum = checksum(row.data);
+        }],
+        ['annotation payload id mismatch', (snapshot) => {
+            const row = snapshot.entities.practiceAnnotations[0];
+            row.data.recordId = 'payload-id-does-not-match';
+            row.checksum = checksum(row.data);
+        }]
     ];
     for (const [label, mutate] of deepValidationCases) {
         const malformed = sealSnapshot(clone(exported));
@@ -436,6 +457,8 @@ async function run() {
     assert.deepStrictEqual(await app.goals.list(), []);
     assert.deepStrictEqual(await app.preferences.getAll(), {});
     assert.strictEqual(shared.lastInstallOptions.resetJournal, true);
+    assert(shared.lastInstallOptions.expectedRevisionToken,
+        'local backup restore must pass the plan revision token into the atomic snapshot install');
     assert.deepStrictEqual(
         new Set(Array.from(shared.entities, ([store, rows]) => `${store}:${Array.from(rows.keys()).sort().join(',')}`)),
         new Set([
@@ -444,6 +467,24 @@ async function run() {
             'practiceAnnotations:r-overloaded-score,r-zero-score,r1'
         ])
     );
+    const restoreRace = await backupFixture('restore-race');
+    await restoreRace.app.settings.patch({ beforeRace: true });
+    restoreRace.shared.beforeInstall = async () => {
+        const current = restoreRace.shared.docs.get('settings.values');
+        restoreRace.shared.docs.set('settings.values', restoreRace.envelope(
+            'settings.values',
+            { concurrentDuringRestore: true },
+            'present',
+            Number(current && current.revision || 0) + 1,
+            'concurrent-during-restore'
+        ));
+    };
+    await assert.rejects(
+        () => restoreRace.app.backups.restore('restore-race'),
+        { code: 'CONFLICT' },
+        'a concurrent write after the pre-restore safety backup must abort restore'
+    );
+    assert.strictEqual((await restoreRace.app.settings.getAll()).concurrentDuringRestore, true);
     await Promise.all([
         app.vocab.upsertCollectionWord('highlights', { word: 'alpha' }),
         app.vocab.upsertCollectionWord('highlights', { word: 'beta' })

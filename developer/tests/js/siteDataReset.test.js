@@ -215,10 +215,11 @@ async function testSuccessfulReset() {
     assert.deepEqual(JSON.parse(JSON.stringify(result.databases)), [
         'IELTSAtlasDataV2',
         'ExamSystemDB',
+        'ExamSystemExternalBackup',
         'IELTSAtlasExternalBackupV2'
     ]);
-    assert.equal(result.databases.includes('ExamSystemExternalBackup'), false,
-        'legacy external handle database stays untouched for this release');
+    assert.equal(result.databases.includes('ExamSystemExternalBackup'), true,
+        'full reset must remove the legacy directory handle so old data cannot auto-migrate on reload');
     assert.equal(harness.events[0], 'full-reset-lock:acquired');
     assert.ok(harness.events.indexOf('external:prepare') > 0);
     assert.equal(harness.localStorage.values.size, 0);
@@ -437,7 +438,7 @@ async function testConcurrentCallsShareOneRun() {
     const second = harness.windowStub.SiteDataReset.perform({ reload: false });
     assert.equal(first, second);
     await flush();
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 3);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 4);
     assert.equal(harness.externalBackup.calls, 1);
     harness.complete('IELTSAtlasDataV2');
     const [left, right] = await Promise.all([first, second]);
@@ -448,7 +449,7 @@ async function testFinishedNonTerminalRunCanRepeat() {
     const harness = createHarness();
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 6);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 8);
     assert.equal(harness.localStorage.clearCalls, 2);
 }
 

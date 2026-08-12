@@ -1256,6 +1256,13 @@
             && global.DOM
             && typeof global.DOM.delegate === 'function';
 
+        var invokeCustomSuiteSelectionFromKeyboard = function (target, event) {
+            if (!event || event.repeat || (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar')) {
+                return;
+            }
+            invoke(target, event);
+        };
+
         if (hasDomDelegate) {
             global.DOM.delegate('click', '[data-action="start"]', function (event) {
                 invoke(this, event);
@@ -1268,6 +1275,9 @@
             });
             global.DOM.delegate('click', '[data-action="suite-custom-select"]', function (event) {
                 invoke(this, event);
+            });
+            global.DOM.delegate('keydown', '[data-action="suite-custom-select"]', function (event) {
+                invokeCustomSuiteSelectionFromKeyboard(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-delete"]', function (event) {
                 invoke(this, event);
@@ -1294,6 +1304,21 @@
                 }
 
                 invoke(target, event);
+            });
+            document.addEventListener('keydown', function (event) {
+                var target = event.target && event.target.closest
+                    ? event.target.closest('[data-action="suite-custom-select"]')
+                    : null;
+                if (!target) {
+                    return;
+                }
+
+                var container = document.getElementById('exam-list-container');
+                if (container && !container.contains(target)) {
+                    return;
+                }
+
+                invokeCustomSuiteSelectionFromKeyboard(target, event);
             });
         }
 

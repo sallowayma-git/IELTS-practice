@@ -110,11 +110,27 @@ async function run() {
     assert.strictEqual(ackButton.disabled, true);
 
     const directWrites = [];
+    const existingDirectWord = {
+        id: 'reading-highlight-durable',
+        word: 'durable',
+        meaning: '旧释义',
+        note: '用户笔记',
+        easeFactor: 2.2,
+        interval: 10,
+        repetitions: 5,
+        intraCycles: 0,
+        correctCount: 5,
+        lastReviewed: '2026-08-01T00:00:00.000Z',
+        nextReview: '2026-08-11T00:00:00.000Z'
+    };
     harness.AppData = {
         ready: Promise.resolve(),
         vocab: {
-            async upsertCollectionWord(collectionId, word) {
-                directWrites.push({ collectionId, word });
+            async mergeListWords(command) {
+                directWrites.push(command);
+                const incoming = command.words[0];
+                existingDirectWord.meaning = incoming.meaning;
+                if (incoming.example) existingDirectWord.example = incoming.example;
             }
         }
     };
@@ -127,7 +143,18 @@ async function run() {
     const directButton = new HTMLButtonElement();
     await hooks.saveActiveLookup(directButton);
     assert.strictEqual(directWrites.length, 1, 'unavailable host route must commit through direct AppData');
-    assert.strictEqual(directWrites[0].collectionId, 'reading-highlights');
+    assert.strictEqual(directWrites[0].listId, 'reading-highlights');
+    const incomingDirectWord = directWrites[0].words[0];
+    ['easeFactor', 'interval', 'repetitions', 'intraCycles', 'correctCount', 'lastReviewed', 'nextReview'].forEach((field) => {
+        assert.ok(
+            !Object.prototype.hasOwnProperty.call(incomingDirectWord, field),
+            `direct merge must not overwrite existing ${field}`
+        );
+    });
+    assert.strictEqual(existingDirectWord.meaning, '持久的');
+    assert.strictEqual(existingDirectWord.note, '用户笔记');
+    assert.strictEqual(existingDirectWord.correctCount, 5);
+    assert.strictEqual(existingDirectWord.interval, 10);
     assert.strictEqual(directButton.textContent, '已加入');
     assert.strictEqual(directButton.disabled, true);
 

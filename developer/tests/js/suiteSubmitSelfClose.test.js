@@ -497,6 +497,55 @@ async function verifyGuardReleaseOrdering(windowStub) {
         session.submitReceiptTeardownTimer = null;
     }
 
+    // The delayed teardown must remain bound to the exact suite registration that
+    // existed when the receipt window was scheduled.  A fresh standalone launch for
+    // the same exam id is a different owner and must survive teardown intact.
+    const capturedRegistrations = session._teardownRegistrationsByExam;
+    assert(
+        capturedRegistrations && capturedRegistrations.get('reading-p3'),
+        '末篇 ACK 调度延迟清理时必须先捕获套题自身的精确注册'
+    );
+    const oldP3Info = app.examWindows.get('reading-p3');
+    const standaloneWindow = createChildWindow('standalone-reading-p3', events);
+    const standaloneInfo = {
+        ...oldP3Info,
+        window: standaloneWindow,
+        expectedSessionId: 'standalone-reading-p3-session',
+        sessionId: 'standalone-reading-p3-session',
+        windowSessionToken: 'standalone-reading-p3-token',
+        windowSessionTokenSessionId: 'standalone-reading-p3-session',
+        suiteSessionId: null,
+        sessionGeneration: Math.max(1, Number(oldP3Info?.sessionGeneration) || 1) + 1,
+        registrationId: Math.max(1, Number(oldP3Info?.registrationId) || 1) + 1
+    };
+    const standaloneHandler = () => {};
+    app.examWindows.set('reading-p3', standaloneInfo);
+    if (!app.messageHandlers) app.messageHandlers = new Map();
+    app.messageHandlers.set('reading-p3', standaloneHandler);
+    await windowStub.AppData.recovery.saveActiveSession({
+        id: 'standalone-reading-p3-recovery',
+        examId: 'reading-p3',
+        sessionId: standaloneInfo.expectedSessionId,
+        status: 'active'
+    });
+
+    assert.strictEqual(await app._teardownSuiteSession(session), true, '延迟窗口结束后套题本身应正常清理');
+    assert.strictEqual(
+        app.examWindows.get('reading-p3'),
+        standaloneInfo,
+        '旧套题 teardown 不得删除同 examId 的新 standalone 注册'
+    );
+    assert.strictEqual(
+        app.messageHandlers.get('reading-p3'),
+        standaloneHandler,
+        '旧套题 teardown 不得删除新 standalone 消息处理器'
+    );
+    const remainingRecovery = await windowStub.AppData.recovery.listActiveSessions();
+    assert(
+        remainingRecovery.some((entry) => entry && entry.id === 'standalone-reading-p3-recovery'),
+        '旧套题 teardown 不得删除新 standalone 恢复实体'
+    );
+
     return { finalEvents };
 }
 

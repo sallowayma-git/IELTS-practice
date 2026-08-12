@@ -104,6 +104,7 @@
             this.currentMode = 'default';
             this.activeFilter = 'all';
             this.buttonContainer = null;
+            this.filterInteractionId = 0;
         }
 
         /**
@@ -130,7 +131,7 @@
          * 设置浏览模式
          * @param {string} mode - 模式ID (default | frequency-p1 | frequency-p4)
          */
-        setMode(mode, examIndex = []) {
+        setMode(mode, examIndex = [], renderRequestId = null) {
             if (isReadingMemorizeBrowseMode()) {
                 mode = 'default';
             }
@@ -152,7 +153,7 @@
             this.renderFilterButtons(examIndex);
 
             // 应用筛选
-            this.applyFilter(this.activeFilter, examIndex);
+            this.applyFilter(this.activeFilter, examIndex, renderRequestId);
         }
 
         /**
@@ -205,9 +206,21 @@
 
                 // 绑定点击事件
                 button.addEventListener('click', async () => {
+                    const interactionId = ++this.filterInteractionId;
+                    const renderRequestId = typeof global.__beginBrowseResultsRequest === 'function'
+                        ? global.__beginBrowseResultsRequest()
+                        : null;
                     try {
                         const index = await global.resolveActiveLibraryIndex();
-                        this.handleFilterClick(filter.id, index);
+                        if (interactionId !== this.filterInteractionId) {
+                            return;
+                        }
+                        if (renderRequestId != null
+                            && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                            && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                            return;
+                        }
+                        this.handleFilterClick(filter.id, index, renderRequestId);
                     } catch (error) {
                         console.error('[BrowseController] 读取活动题库失败:', error);
                     }
@@ -241,14 +254,14 @@
          * 处理筛选按钮点击
          * @param {string} filterId - 筛选器ID
          */
-        handleFilterClick(filterId, examIndex = []) {
+        handleFilterClick(filterId, examIndex = [], renderRequestId = null) {
             this.activeFilter = filterId;
 
             // 更新按钮激活状态
             this.updateButtonStates();
 
             // 应用筛选
-            this.applyFilter(filterId, examIndex);
+            this.applyFilter(filterId, examIndex, renderRequestId);
         }
 
         /**
@@ -276,15 +289,15 @@
          * 应用筛选
          * @param {string} filterId - 筛选器ID
          */
-        applyFilter(filterId, examIndex = []) {
+        applyFilter(filterId, examIndex = [], renderRequestId = null) {
             const config = this.getCurrentModeConfig();
 
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
-                this.filterByType(filterId, examIndex);
+                this.filterByType(filterId, examIndex, renderRequestId);
             } else if (config.filterLogic === 'folder-based') {
                 // 频率模式：按文件夹筛选
-                this.filterByFolder(filterId, examIndex);
+                this.filterByFolder(filterId, examIndex, renderRequestId);
             }
         }
 
@@ -292,10 +305,10 @@
          * 按类型筛选（默认模式）
          * @param {string} type - 类型 (all | reading | listening)
          */
-        filterByType(type, examIndex = []) {
+        filterByType(type, examIndex = [], renderRequestId = null) {
             // 调用全局的 filterByType 函数
             if (typeof global.filterByType === 'function') {
-                global.filterByType(type, examIndex);
+                global.filterByType(type, examIndex, renderRequestId);
             } else {
                 console.warn('[BrowseController] filterByType 函数未定义');
             }
@@ -305,7 +318,12 @@
          * 按文件夹筛选（频率模式）
          * @param {string} filterId - 筛选器ID
          */
-        filterByFolder(filterId, examIndex = []) {
+        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
+            if (renderRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                return;
+            }
             const config = this.getCurrentModeConfig();
             const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
@@ -394,8 +412,8 @@
         /**
          * 重置为默认模式
          */
-        resetToDefault(examIndex = []) {
-            this.setMode('default', examIndex);
+        resetToDefault(examIndex = [], renderRequestId = null) {
+            this.setMode('default', examIndex, renderRequestId);
         }
 
         // ============================================================================

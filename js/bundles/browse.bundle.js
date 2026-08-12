@@ -5404,6 +5404,13 @@
             && global.DOM
             && typeof global.DOM.delegate === 'function';
 
+        var invokeCustomSuiteSelectionFromKeyboard = function (target, event) {
+            if (!event || event.repeat || (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar')) {
+                return;
+            }
+            invoke(target, event);
+        };
+
         if (hasDomDelegate) {
             global.DOM.delegate('click', '[data-action="start"]', function (event) {
                 invoke(this, event);
@@ -5416,6 +5423,9 @@
             });
             global.DOM.delegate('click', '[data-action="suite-custom-select"]', function (event) {
                 invoke(this, event);
+            });
+            global.DOM.delegate('keydown', '[data-action="suite-custom-select"]', function (event) {
+                invokeCustomSuiteSelectionFromKeyboard(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-delete"]', function (event) {
                 invoke(this, event);
@@ -5442,6 +5452,21 @@
                 }
 
                 invoke(target, event);
+            });
+            document.addEventListener('keydown', function (event) {
+                var target = event.target && event.target.closest
+                    ? event.target.closest('[data-action="suite-custom-select"]')
+                    : null;
+                if (!target) {
+                    return;
+                }
+
+                var container = document.getElementById('exam-list-container');
+                if (container && !container.contains(target)) {
+                    return;
+                }
+
+                invokeCustomSuiteSelectionFromKeyboard(target, event);
             });
         }
 
@@ -11188,6 +11213,13 @@
             if (!session || typeof this._teardownSuiteSession !== 'function') {
                 return false;
             }
+            // The receipt replay window intentionally keeps the completed suite alive for
+            // 30 seconds.  Capture the registrations owned by that suite now: a user may
+            // start a fresh standalone attempt for the same exam before the timer fires,
+            // and teardown must never delete that replacement registration/handler.
+            if (typeof this._captureSuiteTeardownRegistrations === 'function') {
+                this._captureSuiteTeardownRegistrations(session);
+            }
             if (session.submitReceiptTeardownTimer) {
                 clearTimeout(session.submitReceiptTeardownTimer);
             }
@@ -12415,18 +12447,35 @@
                 && typeof data === 'object'
                 && typeof data.suiteSessionId === 'string'
             ) ? data.suiteSessionId.trim() : '';
-            const hasMappedSuiteExam = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
-            const hasActiveSuiteSession = Boolean(
-                this.currentSuiteSession
-                && this.currentSuiteSession.status === 'active'
-                && (!payloadSuiteSessionId || this.currentSuiteSession.id === payloadSuiteSessionId)
-            );
-            const shouldDelegateToSuiteHandler = Boolean(
+            const payloadSuiteId = (
                 data
                 && typeof data === 'object'
                 && typeof data.suiteId === 'string'
-                && data.suiteId.trim()
-            ) || hasMappedSuiteExam || Boolean(payloadSuiteSessionId) || hasActiveSuiteSession;
+            ) ? data.suiteId.trim() : '';
+            const registeredWindowInfo = expectedRegistration && expectedRegistration.windowInfo
+                ? expectedRegistration.windowInfo
+                : (this.examWindows && this.examWindows.get(examId));
+            const registrationOwnsSource = Boolean(
+                registeredWindowInfo
+                // A current expectedRegistration already passed the message handler's
+                // source/token checks.  Direct callers without that proof still need an
+                // exact source-window match before registration metadata can route them.
+                && (expectedRegistration || !sourceWindow || registeredWindowInfo.window === sourceWindow)
+            );
+            const registeredSuiteSessionId = registrationOwnsSource
+                && typeof registeredWindowInfo.suiteSessionId === 'string'
+                ? registeredWindowInfo.suiteSessionId.trim()
+                : '';
+            const declaredPracticeMode = String(
+                data?.practiceMode || data?.metadata?.practiceMode || ''
+            ).trim().toLowerCase();
+            const shouldDelegateToSuiteHandler = Boolean(
+                payloadSuiteId
+                || payloadSuiteSessionId
+                || registeredSuiteSessionId
+                || data?.suiteSubmission === true
+                || declaredPracticeMode === 'suite'
+            );
 
             if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
@@ -13455,6 +13504,7 @@
             this.currentMode = 'default';
             this.activeFilter = 'all';
             this.buttonContainer = null;
+            this.filterInteractionId = 0;
         }
 
         /**
@@ -13481,7 +13531,7 @@
          * 设置浏览模式
          * @param {string} mode - 模式ID (default | frequency-p1 | frequency-p4)
          */
-        setMode(mode, examIndex = []) {
+        setMode(mode, examIndex = [], renderRequestId = null) {
             if (isReadingMemorizeBrowseMode()) {
                 mode = 'default';
             }
@@ -13503,7 +13553,7 @@
             this.renderFilterButtons(examIndex);
 
             // 应用筛选
-            this.applyFilter(this.activeFilter, examIndex);
+            this.applyFilter(this.activeFilter, examIndex, renderRequestId);
         }
 
         /**
@@ -13556,9 +13606,21 @@
 
                 // 绑定点击事件
                 button.addEventListener('click', async () => {
+                    const interactionId = ++this.filterInteractionId;
+                    const renderRequestId = typeof global.__beginBrowseResultsRequest === 'function'
+                        ? global.__beginBrowseResultsRequest()
+                        : null;
                     try {
                         const index = await global.resolveActiveLibraryIndex();
-                        this.handleFilterClick(filter.id, index);
+                        if (interactionId !== this.filterInteractionId) {
+                            return;
+                        }
+                        if (renderRequestId != null
+                            && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                            && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                            return;
+                        }
+                        this.handleFilterClick(filter.id, index, renderRequestId);
                     } catch (error) {
                         console.error('[BrowseController] 读取活动题库失败:', error);
                     }
@@ -13592,14 +13654,14 @@
          * 处理筛选按钮点击
          * @param {string} filterId - 筛选器ID
          */
-        handleFilterClick(filterId, examIndex = []) {
+        handleFilterClick(filterId, examIndex = [], renderRequestId = null) {
             this.activeFilter = filterId;
 
             // 更新按钮激活状态
             this.updateButtonStates();
 
             // 应用筛选
-            this.applyFilter(filterId, examIndex);
+            this.applyFilter(filterId, examIndex, renderRequestId);
         }
 
         /**
@@ -13627,15 +13689,15 @@
          * 应用筛选
          * @param {string} filterId - 筛选器ID
          */
-        applyFilter(filterId, examIndex = []) {
+        applyFilter(filterId, examIndex = [], renderRequestId = null) {
             const config = this.getCurrentModeConfig();
 
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
-                this.filterByType(filterId, examIndex);
+                this.filterByType(filterId, examIndex, renderRequestId);
             } else if (config.filterLogic === 'folder-based') {
                 // 频率模式：按文件夹筛选
-                this.filterByFolder(filterId, examIndex);
+                this.filterByFolder(filterId, examIndex, renderRequestId);
             }
         }
 
@@ -13643,10 +13705,10 @@
          * 按类型筛选（默认模式）
          * @param {string} type - 类型 (all | reading | listening)
          */
-        filterByType(type, examIndex = []) {
+        filterByType(type, examIndex = [], renderRequestId = null) {
             // 调用全局的 filterByType 函数
             if (typeof global.filterByType === 'function') {
-                global.filterByType(type, examIndex);
+                global.filterByType(type, examIndex, renderRequestId);
             } else {
                 console.warn('[BrowseController] filterByType 函数未定义');
             }
@@ -13656,7 +13718,12 @@
          * 按文件夹筛选（频率模式）
          * @param {string} filterId - 筛选器ID
          */
-        filterByFolder(filterId, examIndex = []) {
+        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
+            if (renderRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                return;
+            }
             const config = this.getCurrentModeConfig();
             const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
@@ -13745,8 +13812,8 @@
         /**
          * 重置为默认模式
          */
-        resetToDefault(examIndex = []) {
-            this.setMode('default', examIndex);
+        resetToDefault(examIndex = [], renderRequestId = null) {
+            this.setMode('default', examIndex, renderRequestId);
         }
 
         // ============================================================================
@@ -15301,20 +15368,20 @@ window.BrowseStateManager = BrowseStateManager;
         'volume-slider',
         'volumeslider',
         'audio-volume',
-        'audioCurrentTime',
+        'audiocurrenttime',
         'audio-duration',
-        'audioDuration',
+        'audioduration',
         'settings',
-        'lastFocusElement',
+        'lastfocuselement',
         'sessionid',
         'examid',
-        'nextExamId',
-        'previousExamId',
+        'nextexamid',
+        'previousexamid',
         'folder',
         'source',
         'result',
         'metadata',
-        'practiceSettings'
+        'practicesettings'
     ]);
     const NOISE_PATTERNS = [
         /playback/i,
@@ -15520,7 +15587,7 @@ window.BrowseStateManager = BrowseStateManager;
         }
 
         if (correctInfo.normalized == null) {
-            return false;
+            return null;
         }
 
         const core = getAnswerMatchCore();
@@ -15834,13 +15901,15 @@ window.BrowseStateManager = BrowseStateManager;
                 total: 0,
                 correct: 0,
                 incorrect: 0,
-                unanswered: 0
+                unanswered: 0,
+                unknown: 0
             };
         }
 
         let correct = 0;
         let incorrect = 0;
         let unanswered = 0;
+        let unknown = 0;
 
         entries.forEach(entry => {
             if (!entry) {
@@ -15852,8 +15921,10 @@ window.BrowseStateManager = BrowseStateManager;
             }
             if (entry.isCorrect === true) {
                 correct += 1;
-            } else {
+            } else if (entry.isCorrect === false) {
                 incorrect += 1;
+            } else {
+                unknown += 1;
             }
         });
 
@@ -15861,7 +15932,8 @@ window.BrowseStateManager = BrowseStateManager;
             total: entries.length,
             correct,
             incorrect,
-            unanswered
+            unanswered,
+            unknown
         };
     }
 
@@ -18858,7 +18930,24 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
     }
 }
 
-async function filterByType(type, examIndexOverride = null) {
+let browseResultsRequestId = 0;
+
+function beginBrowseResultsRequest() {
+    browseResultsRequestId += 1;
+    return browseResultsRequestId;
+}
+
+function isBrowseResultsRequestCurrent(requestId) {
+    return requestId == null || requestId === browseResultsRequestId;
+}
+
+window.__beginBrowseResultsRequest = beginBrowseResultsRequest;
+window.__isBrowseResultsRequestCurrent = isBrowseResultsRequestCurrent;
+
+async function filterByType(type, examIndexOverride = null, renderRequestId = null) {
+    const activeRequestId = renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : renderRequestId;
     const requestedType = type;
     let examIndex = Array.isArray(examIndexOverride) ? examIndexOverride : [];
     try {
@@ -18880,6 +18969,10 @@ async function filterByType(type, examIndexOverride = null) {
         }
     }
 
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return;
+    }
+
     // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
@@ -18894,7 +18987,7 @@ async function filterByType(type, examIndexOverride = null) {
     if (window.browseController &&
         window.browseController.currentMode !== 'default' &&
         typeof window.browseController.resetToDefault === 'function') {
-        window.browseController.resetToDefault(examIndex);
+        window.browseController.resetToDefault(examIndex, activeRequestId);
     }
 
     // 更新题库浏览筛选按钮的 active 状态
@@ -18919,13 +19012,17 @@ async function filterByType(type, examIndexOverride = null) {
     }
 
     // 刷新题库列表
-    await loadExamList(examIndex);
+    await loadExamList(examIndex, activeRequestId);
 }
 
 // 应用分类筛选（供 App/总览调用）
 async function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null) {
+    const activeRequestId = beginBrowseResultsRequest();
     try {
         const indexSnapshot = await resolveActiveExamIndex();
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return;
+        }
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
         if (memorizeSelectionActive) {
             category = 'all';
@@ -18974,7 +19071,7 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
                     if (!window.browseController.buttonContainer) {
                         window.browseController.initialize('type-filter-buttons', indexSnapshot);
                     }
-                    window.browseController.setMode(effectiveFilterMode, indexSnapshot);
+                    window.browseController.setMode(effectiveFilterMode, indexSnapshot, activeRequestId);
                 } catch (error) {
                     console.warn('[Browse] 切换浏览模式失败:', error);
                 }
@@ -18986,8 +19083,12 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
             if (window.browseController &&
                 window.browseController.currentMode !== 'default' &&
                 typeof window.browseController.resetToDefault === 'function') {
-                window.browseController.resetToDefault(indexSnapshot);
+                window.browseController.resetToDefault(indexSnapshot, activeRequestId);
             }
+        }
+
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return;
         }
 
         // 2. 再应用具体的分类和类型筛选（确保不被重置覆盖）
@@ -19000,7 +19101,11 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
         // 如果是频率模式，setMode 已经处理了刷新，不需要再次调用 loadExamList
         // 只有在默认模式下才显式调用
         if (!effectiveFilterMode) {
-            await loadExamList(indexSnapshot);
+            await loadExamList(indexSnapshot, activeRequestId);
+        }
+
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return;
         }
 
         // 若未在浏览视图，则尽力切换
@@ -19008,20 +19113,29 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
             window.showView('browse', false);
         }
     } catch (e) {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return;
+        }
         console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
         setBrowseFilterState('all', 'all');
         if (window.browseController && typeof window.browseController.resetToDefault === 'function') {
-            window.browseController.resetToDefault();
+            window.browseController.resetToDefault(null, activeRequestId);
         }
         // 避免在错误处理中再次同步调用可能导致错误的 loadExamList，使用 setTimeout 打断调用栈
         setTimeout(() => {
-            try { loadExamList(); } catch (_) { }
+            if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+                return;
+            }
+            try { loadExamList(null, activeRequestId); } catch (_) { }
         }, 0);
     }
 }
 
 // Initialize browse view when it's activated
 async function initializeBrowseView(options = {}) {
+    const activeRequestId = options.renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : options.renderRequestId;
     console.log('[System] Initializing browse view...');
     const [examIndex] = await Promise.all([
         resolveActiveExamIndex(),
@@ -19029,6 +19143,10 @@ async function initializeBrowseView(options = {}) {
             ? window.whenBrowseViewPreferencesReady()
             : Promise.resolve()
     ]);
+
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return;
+    }
 
     // 初始化 browseController
     if (window.browseController && !window.browseController.buttonContainer) {
@@ -19050,7 +19168,7 @@ async function initializeBrowseView(options = {}) {
     setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
     if (!options.skipLoad) {
-        await loadExamList(examIndex);
+        await loadExamList(examIndex, activeRequestId);
     }
 }
 
@@ -19065,12 +19183,13 @@ function getBrowseSearchQuery() {
 }
 
 function refreshBrowseResults() {
+    const activeRequestId = beginBrowseResultsRequest();
     const query = getBrowseSearchQuery();
     if (query) {
-        performSearch(query);
+        performSearch(query, activeRequestId);
         return;
     }
-    loadExamList();
+    loadExamList(null, activeRequestId);
 }
 
 let browseControlsSeeded = false;
@@ -19192,18 +19311,31 @@ function filterRecordsByType(type) {
 }
 
 
-async function loadExamList(examIndexOverride = null) {
+async function loadExamList(examIndexOverride = null, renderRequestId = null) {
+    const activeRequestId = renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : renderRequestId;
     await setupBrowseControls();
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return;
+    }
     const examIndex = Array.isArray(examIndexOverride)
         ? examIndexOverride
         : await resolveActiveExamIndex();
+
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return;
+    }
 
     if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
         return window.ExamActions.loadExamList(examIndex);
     }
     console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
     if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        window.AppLazyLoader.ensureGroup('browse-view').then(function () {
+        return window.AppLazyLoader.ensureGroup('browse-view').then(function () {
+            if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+                return;
+            }
             setupBrowseControls();
             if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
                 window.ExamActions.loadExamList(examIndex);
@@ -19212,6 +19344,9 @@ async function loadExamList(examIndexOverride = null) {
                 loadExamListFallback(examIndex);
             }
         }).catch(function (err) {
+            if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+                return;
+            }
             console.error('[main.js] browse-view 组加载失败:', err);
             loadExamListFallback(examIndex);
         });
@@ -19781,16 +19916,17 @@ async function setActiveLibraryConfiguration(key) {
 let debouncedExamSearch = null;
 
 function searchExams(query) {
+    const activeRequestId = beginBrowseResultsRequest();
     toggleSearchClearButton(query);
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         // 跨 input 事件复用同一个 debounce 闭包，避免每个字符都排队一次搜索。
         if (!debouncedExamSearch) {
             debouncedExamSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');
         }
-        debouncedExamSearch(query);
+        debouncedExamSearch(query, activeRequestId);
     } else {
         // Fallback: direct call if optimizer not available
-        performSearch(query);
+        performSearch(query, activeRequestId);
     }
 }
 
@@ -19855,16 +19991,22 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
     return list;
 }
 
-async function performSearch(query) {
-    const normalizedQuery = query.toLowerCase().trim();
+async function performSearch(query, renderRequestId = null) {
+    const activeRequestId = renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : renderRequestId;
+    const normalizedQuery = String(query || '').toLowerCase().trim();
     if (!normalizedQuery) {
-        loadExamList();
-        return;
+        return loadExamList(null, activeRequestId);
     }
 
     // 调试日志
     console.log('[Search] 执行搜索，查询词:', normalizedQuery);
-    const searchBase = getBrowseFilteredExamBase(await resolveActiveExamIndex());
+    const examIndexSnapshot = await resolveActiveExamIndex();
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return;
+    }
+    const searchBase = getBrowseFilteredExamBase(examIndexSnapshot);
     console.log('[Search] 当前筛选后索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {
         if (exam.searchText) {
@@ -19876,6 +20018,9 @@ async function performSearch(query) {
     });
 
     console.log('[Search] 搜索结果数量:', searchResults.length);
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return;
+    }
     if (window.ExamActions && typeof window.ExamActions.displayExams === 'function') {
         window.ExamActions.displayExams(searchResults);
     } else if (typeof window.displayExams === 'function') {

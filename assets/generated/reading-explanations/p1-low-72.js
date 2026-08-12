@@ -34,91 +34,91 @@
   ],
   "questionExplanations": [
     {
-      "sectionTitle": "1. 判断正误（Questions 1–7）",
+      "sectionTitle": "1. 笔记填空（Questions 1–6）",
       "mode": "group",
       "items": [
         {
           "questionNumber": 1,
-          "text": "（1）题目 1：A survey has been carried out of over 200 food stores in Crown Heights.\n题目翻译：在皇冠高地社区对 200 多家食品商店进行了一项调查。\n答案：location\n解析：定位 Paragraph A 中 \"a survey has been carried out of over 200 greengrocers and convenience stores in Crown Heights\"。与题干一致，因此答案为 TRUE。",
+          "text": "题目：The online map provides users with a store's name, ______ and details of its produce.\n题目翻译：在线地图向用户提供商店名称、______ 以及商品详情。\n答案：location\n解析：原文说明彩色圆点显示每家食品商店的具体位置（the specific location），点击后还能查看商店名称和所售商品，因此答案为 location。",
           "questionId": "q1"
         },
         {
           "questionNumber": 2,
-          "text": "（2）题目 2：The researchers plan to survey the entire borough of Brooklyn.\n题目翻译：研究人员计划调查整个布鲁克林区。\n答案：policies\n解析：定位 Paragraph A 中 \"The researchers plan eventually to survey the entire borough of Brooklyn.\"。与题干一致，因此答案为 TRUE。",
+          "text": "题目：One goal of the mapping project is to help develop new ______ on food.\n题目翻译：该地图项目的一个目标是帮助制定新的食品 ______。\n答案：policies\n解析：原文说该项目将协助政府官员制定关于食品种类和销售地点的未来政策（forming future policies），因此答案为 policies。",
           "questionId": "q2"
         },
         {
           "questionNumber": 3,
-          "text": "（3）题目 3：Food deserts are areas where stores sell mostly healthy options.\n题目翻译：食物荒漠是商店主要销售健康选择的地区。\n答案：government\n解析：定位 Paragraph B 中 \"areas where the stores sell mostly packaged snacks or fast food, areas otherwise known as food deserts.\"。食物荒漠是商店主要销售包装零食或快餐的地区，与题干矛盾，因此答案为 FALSE。",
+          "text": "题目：Citizen maps are sometimes made when ______ maps are unsatisfactory.\n题目翻译：当 ______ 地图不够理想时，公民有时会自行制作地图。\n答案：government\n解析：原文指出公民制图者可能因为没有好的政府地图（there is no good government map）而制作地图，因此答案为 government。",
           "questionId": "q3"
         },
         {
           "questionNumber": 4,
-          "text": "（4）题目 4：Citizen map makers may create maps to record problems like burned-out traffic lights.\n题目翻译：公民地图制作者可能会创建地图来记录烧毁的交通信号灯等问题。\n答案：incomes\n解析：定位 Paragraph C 中 \"citizen map makers may make maps because there is no good government map, or to record problems such as burned-out traffic lights.\"。与题干一致，因此答案为 TRUE。",
+          "text": "题目：New research suggests that people living in food deserts often have low ______.\n题目翻译：新研究表明，生活在食物荒漠中的人往往 ______ 较低。\n答案：incomes\n解析：原文提到这些居民从工作中获得的收入很低（receive minimal incomes），因此答案为 incomes。",
           "questionId": "q4"
         },
         {
           "questionNumber": 5,
-          "text": "（5）题目 5：Supermarkets can easily afford the amount of land required for their stores in cities.\n题目翻译：超市可以轻松负担城市商店所需的土地量。\n答案：land\n解析：定位 Paragraph C 中 \"supermarkets often can't afford the amount of land required for their stores in cities.\"。超市通常无法负担城市商店所需的土地量，与题干矛盾，因此答案为 FALSE。",
+          "text": "题目：Some supermarkets are unable to buy enough ______ inside cities for their stores.\n题目翻译：一些超市无法在城市中为门店购买足够的 ______。\n答案：land\n解析：原文说超市往往负担不起城市门店所需的土地（the amount of land required），因此答案为 land。",
           "questionId": "q5"
         },
         {
           "questionNumber": 6,
-          "text": "（6）题目 6：Smaller urban groceries tend to close due to competition from suburban supermarkets.\n题目翻译：较小的城市杂货店往往因来自郊区超市的竞争而关闭。\n答案：competition\n解析：定位 Paragraph D 中 \"smaller urban groceries tend to close due to competition from suburban supermarkets.\"。与题干一致，因此答案为 TRUE。",
+          "text": "题目：Small grocery stores in cities often cannot cope with supermarket ______.\n题目翻译：城市中的小型杂货店往往无法应对超市的 ______。\n答案：competition\n解析：原文明确说小型城市杂货店会因郊区超市的竞争（competition from suburban supermarkets）而关闭，因此答案为 competition。",
           "questionId": "q6"
-        },
-        {
-          "questionNumber": 7,
-          "text": "（7）题目 7：Food deserts are linked with better local health outcomes.\n题目翻译：食物荒漠与当地更好的健康结果相关。\n答案：FALSE\n解析：定位 Paragraph D 中 \"Food deserts are linked with lower local health outcomes.\"。食物荒漠与当地较低的健康结果相关，与题干矛盾，因此答案为 FALSE。",
-          "questionId": "q7"
         }
       ],
       "questionRange": {
         "start": 1,
-        "end": 7
+        "end": 6
       },
-      "text": "（1）题目 1：A survey has been carried out of over 200 food stores in Crown Heights.\n题目翻译：在皇冠高地社区对 200 多家食品商店进行了一项调查。\n答案：location\n解析：定位 Paragraph A 中 \"a survey has been carried out of over 200 greengrocers and convenience stores in Crown Heights\"。与题干一致，因此答案为 TRUE。\n（2）题目 2：The researchers plan to survey the entire borough of Brooklyn.\n题目翻译：研究人员计划调查整个布鲁克林区。\n答案：policies\n解析：定位 Paragraph A 中 \"The researchers plan eventually to survey the entire borough of Brooklyn.\"。与题干一致，因此答案为 TRUE。\n（3）题目 3：Food deserts are areas where stores sell mostly healthy options.\n题目翻译：食物荒漠是商店主要销售健康选择的地区。\n答案：government\n解析：定位 Paragraph B 中 \"areas where the stores sell mostly packaged snacks or fast food, areas otherwise known as food deserts.\"。食物荒漠是商店主要销售包装零食或快餐的地区，与题干矛盾，因此答案为 FALSE。\n（4）题目 4：Citizen map makers may create maps to record problems like burned-out traffic lights.\n题目翻译：公民地图制作者可能会创建地图来记录烧毁的交通信号灯等问题。\n答案：incomes\n解析：定位 Paragraph C 中 \"citizen map makers may make maps because there is no good government map, or to record problems such as burned-out traffic lights.\"。与题干一致，因此答案为 TRUE。\n（5）题目 5：Supermarkets can easily afford the amount of land required for their stores in cities.\n题目翻译：超市可以轻松负担城市商店所需的土地量。\n答案：land\n解析：定位 Paragraph C 中 \"supermarkets often can't afford the amount of land required for their stores in cities.\"。超市通常无法负担城市商店所需的土地量，与题干矛盾，因此答案为 FALSE。\n（6）题目 6：Smaller urban groceries tend to close due to competition from suburban supermarkets.\n题目翻译：较小的城市杂货店往往因来自郊区超市的竞争而关闭。\n答案：competition\n解析：定位 Paragraph D 中 \"smaller urban groceries tend to close due to competition from suburban supermarkets.\"。与题干一致，因此答案为 TRUE。\n（7）题目 7：Food deserts are linked with better local health outcomes.\n题目翻译：食物荒漠与当地更好的健康结果相关。\n答案：FALSE\n解析：定位 Paragraph D 中 \"Food deserts are linked with lower local health outcomes.\"。食物荒漠与当地较低的健康结果相关，与题干矛盾，因此答案为 FALSE。"
+      "text": "题目：The online map provides users with a store's name, ______ and details of its produce.\n题目翻译：在线地图向用户提供商店名称、______ 以及商品详情。\n答案：location\n解析：原文说明彩色圆点显示每家食品商店的具体位置（the specific location），点击后还能查看商店名称和所售商品，因此答案为 location。\n题目：One goal of the mapping project is to help develop new ______ on food.\n题目翻译：该地图项目的一个目标是帮助制定新的食品 ______。\n答案：policies\n解析：原文说该项目将协助政府官员制定关于食品种类和销售地点的未来政策（forming future policies），因此答案为 policies。\n题目：Citizen maps are sometimes made when ______ maps are unsatisfactory.\n题目翻译：当 ______ 地图不够理想时，公民有时会自行制作地图。\n答案：government\n解析：原文指出公民制图者可能因为没有好的政府地图（there is no good government map）而制作地图，因此答案为 government。\n题目：New research suggests that people living in food deserts often have low ______.\n题目翻译：新研究表明，生活在食物荒漠中的人往往 ______ 较低。\n答案：incomes\n解析：原文提到这些居民从工作中获得的收入很低（receive minimal incomes），因此答案为 incomes。\n题目：Some supermarkets are unable to buy enough ______ inside cities for their stores.\n题目翻译：一些超市无法在城市中为门店购买足够的 ______。\n答案：land\n解析：原文说超市往往负担不起城市门店所需的土地（the amount of land required），因此答案为 land。\n题目：Small grocery stores in cities often cannot cope with supermarket ______.\n题目翻译：城市中的小型杂货店往往无法应对超市的 ______。\n答案：competition\n解析：原文明确说小型城市杂货店会因郊区超市的竞争（competition from suburban supermarkets）而关闭，因此答案为 competition。"
     },
     {
-      "sectionTitle": "2. 笔记填空（Questions 8–13）",
+      "sectionTitle": "2. 判断正误（Questions 7–13）",
       "mode": "group",
       "items": [
         {
+          "questionNumber": 7,
+          "text": "题目：A group of professional researchers are in charge of the Brooklyn project.\n题目翻译：一群专业研究人员负责布鲁克林项目。\n答案：FALSE\n解析：原文说该项目由五名当地志愿者负责，而不是受过训练的学术研究人员，因此答案为 FALSE。",
+          "questionId": "q7"
+        },
+        {
           "questionNumber": 8,
-          "text": "（1）题目 8：Colorful dots appear on an online ______ showing food store locations.\n题目翻译：在线 ______ 上出现彩色圆点显示食品商店位置。\n答案：FALSE\n解析：定位 Paragraph A 中 \"colorful dots appear on their online map, which display the specific location of each of the food stores.\"。彩色圆点出现在在线地图上，因此答案为 map。",
+          "text": "题目：The Brooklyn project team carries out their assessment of stores without the owner's knowledge.\n题目翻译：布鲁克林项目团队在店主不知情的情况下评估商店。\n答案：FALSE\n解析：原文说明志愿者取得店主许可后才核对商品清单，因此题干与原文相反，答案为 FALSE。",
           "questionId": "q8"
         },
         {
           "questionNumber": 9,
-          "text": "（2）题目 9：The project aims to help residents find fresh food in urban ______.\n题目翻译：该项目旨在帮助居民在城市 ______ 中找到新鲜食物。\n答案：NOT GIVEN\n解析：定位 Paragraph B 中 \"help residents find fresh food in urban areas where the stores sell mostly packaged snacks or fast food.\"。帮助居民在城市地区找到新鲜食物，因此答案为 areas。",
+          "text": "题目：The Brooklyn project has experienced technical difficulties setting up the website.\n题目翻译：布鲁克林项目在搭建网站时遇到了技术困难。\n答案：NOT GIVEN\n解析：文章提到网站刚上线、尚未建立访问统计系统，也有人认为网站导航令人困惑，但没有说明搭建网站时遇到技术困难，因此答案为 NOT GIVEN。",
           "questionId": "q9"
         },
         {
           "questionNumber": 10,
-          "text": "（3）题目 10：Citizen map makers may create maps because there is no good government ______.\n题目翻译：公民地图制作者可能会创建地图，因为没有好的政府 ______。\n答案：FALSE\n解析：定位 Paragraph C 中 \"citizen map makers may make maps because there is no good government map.\"。因为没有好的政府地图，因此答案为 map。",
+          "text": "题目：The city government has taken a considerable interest in the Brooklyn project website.\n题目翻译：市政府对布鲁克林项目网站表现出浓厚兴趣。\n答案：FALSE\n解析：原文明确说该网站尚未获得多少当地或官方关注（hasn't caught them much local or official attention），因此答案为 FALSE。",
           "questionId": "q10"
         },
         {
           "questionNumber": 11,
-          "text": "（4）题目 11：People at higher risk of chronic disease often live in food ______.\n题目翻译：患慢性病风险较高的人经常居住在食物 ______ 中。\n答案：TRUE\n解析：定位 Paragraph C 中 \"people at higher risk of chronic disease frequently live in neighborhoods located in food deserts.\"。患慢性病风险较高的人经常居住在食物荒漠中，因此答案为 deserts。",
+          "text": "题目：Michele Ver Ploeg believes the Brooklyn project website should contain additional information.\n题目翻译：Michele Ver Ploeg 认为布鲁克林项目网站应包含更多信息。\n答案：TRUE\n解析：她希望地图增加健康商品的价格数据，这正是要求网站提供额外信息，因此答案为 TRUE。",
           "questionId": "q11"
         },
         {
           "questionNumber": 12,
-          "text": "（5）题目 12：Smaller urban groceries close due to competition from ______ supermarkets.\n题目翻译：较小的城市杂货店因来自 ______ 超市的竞争而关闭。\n答案：NOT GIVEN\n解析：定位 Paragraph D 中 \"smaller urban groceries tend to close due to competition from suburban supermarkets.\"。因来自郊区超市的竞争而关闭，因此答案为 suburban。",
+          "text": "题目：The rate of internet use in Brooklyn is unlikely to increase in the near future.\n题目翻译：布鲁克林的互联网使用率近期不太可能提高。\n答案：NOT GIVEN\n解析：文章只给出当前家庭互联网接入和拨号上网比例，没有预测近期使用率是否会上升，因此答案为 NOT GIVEN。",
           "questionId": "q12"
         },
         {
           "questionNumber": 13,
-          "text": "（6）题目 13：Food deserts may be a driving force in health ______ between income groups.\n题目翻译：食物荒漠可能是收入群体之间健康 ______ 的驱动力。\n答案：TRUE\n解析：定位 Paragraph D 中 \"they may be a driving force in the health disparities between lower-income and affluent people.\"。健康差异的驱动力，因此答案为 disparities。",
+          "text": "题目：Jeffrey Heehs would like more people to assist with the Brooklyn project research.\n题目翻译：Jeffrey Heehs 希望更多人协助布鲁克林项目的调查。\n答案：TRUE\n解析：原文说他希望天气转暖后能吸引新的志愿者来宣传并完成剩余调查，因此答案为 TRUE。",
           "questionId": "q13"
         }
       ],
       "questionRange": {
-        "start": 8,
+        "start": 7,
         "end": 13
       },
-      "text": "（1）题目 8：Colorful dots appear on an online ______ showing food store locations.\n题目翻译：在线 ______ 上出现彩色圆点显示食品商店位置。\n答案：FALSE\n解析：定位 Paragraph A 中 \"colorful dots appear on their online map, which display the specific location of each of the food stores.\"。彩色圆点出现在在线地图上，因此答案为 map。\n（2）题目 9：The project aims to help residents find fresh food in urban ______.\n题目翻译：该项目旨在帮助居民在城市 ______ 中找到新鲜食物。\n答案：NOT GIVEN\n解析：定位 Paragraph B 中 \"help residents find fresh food in urban areas where the stores sell mostly packaged snacks or fast food.\"。帮助居民在城市地区找到新鲜食物，因此答案为 areas。\n（3）题目 10：Citizen map makers may create maps because there is no good government ______.\n题目翻译：公民地图制作者可能会创建地图，因为没有好的政府 ______。\n答案：FALSE\n解析：定位 Paragraph C 中 \"citizen map makers may make maps because there is no good government map.\"。因为没有好的政府地图，因此答案为 map。\n（4）题目 11：People at higher risk of chronic disease often live in food ______.\n题目翻译：患慢性病风险较高的人经常居住在食物 ______ 中。\n答案：TRUE\n解析：定位 Paragraph C 中 \"people at higher risk of chronic disease frequently live in neighborhoods located in food deserts.\"。患慢性病风险较高的人经常居住在食物荒漠中，因此答案为 deserts。\n（5）题目 12：Smaller urban groceries close due to competition from ______ supermarkets.\n题目翻译：较小的城市杂货店因来自 ______ 超市的竞争而关闭。\n答案：NOT GIVEN\n解析：定位 Paragraph D 中 \"smaller urban groceries tend to close due to competition from suburban supermarkets.\"。因来自郊区超市的竞争而关闭，因此答案为 suburban。\n（6）题目 13：Food deserts may be a driving force in health ______ between income groups.\n题目翻译：食物荒漠可能是收入群体之间健康 ______ 的驱动力。\n答案：TRUE\n解析：定位 Paragraph D 中 \"they may be a driving force in the health disparities between lower-income and affluent people.\"。健康差异的驱动力，因此答案为 disparities。"
+      "text": "题目：A group of professional researchers are in charge of the Brooklyn project.\n题目翻译：一群专业研究人员负责布鲁克林项目。\n答案：FALSE\n解析：原文说该项目由五名当地志愿者负责，而不是受过训练的学术研究人员，因此答案为 FALSE。\n题目：The Brooklyn project team carries out their assessment of stores without the owner's knowledge.\n题目翻译：布鲁克林项目团队在店主不知情的情况下评估商店。\n答案：FALSE\n解析：原文说明志愿者取得店主许可后才核对商品清单，因此题干与原文相反，答案为 FALSE。\n题目：The Brooklyn project has experienced technical difficulties setting up the website.\n题目翻译：布鲁克林项目在搭建网站时遇到了技术困难。\n答案：NOT GIVEN\n解析：文章提到网站刚上线、尚未建立访问统计系统，也有人认为网站导航令人困惑，但没有说明搭建网站时遇到技术困难，因此答案为 NOT GIVEN。\n题目：The city government has taken a considerable interest in the Brooklyn project website.\n题目翻译：市政府对布鲁克林项目网站表现出浓厚兴趣。\n答案：FALSE\n解析：原文明确说该网站尚未获得多少当地或官方关注（hasn't caught them much local or official attention），因此答案为 FALSE。\n题目：Michele Ver Ploeg believes the Brooklyn project website should contain additional information.\n题目翻译：Michele Ver Ploeg 认为布鲁克林项目网站应包含更多信息。\n答案：TRUE\n解析：她希望地图增加健康商品的价格数据，这正是要求网站提供额外信息，因此答案为 TRUE。\n题目：The rate of internet use in Brooklyn is unlikely to increase in the near future.\n题目翻译：布鲁克林的互联网使用率近期不太可能提高。\n答案：NOT GIVEN\n解析：文章只给出当前家庭互联网接入和拨号上网比例，没有预测近期使用率是否会上升，因此答案为 NOT GIVEN。\n题目：Jeffrey Heehs would like more people to assist with the Brooklyn project research.\n题目翻译：Jeffrey Heehs 希望更多人协助布鲁克林项目的调查。\n答案：TRUE\n解析：原文说他希望天气转暖后能吸引新的志愿者来宣传并完成剩余调查，因此答案为 TRUE。"
     }
   ]
 });

@@ -166,6 +166,14 @@
             logicalKey: 'system.operationJournal', classification: 'system',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: false, import: 'ignore'
+        },
+        {
+            // Monotonic entity revisions survive physical deletes and snapshot
+            // replacement. Keeping this in the existing system store avoids a
+            // schema upgrade while preserving the kernel's atomic CAS contract.
+            logicalKey: 'system.entityRevisions', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
         }
     ].map(freezeEntry);
 

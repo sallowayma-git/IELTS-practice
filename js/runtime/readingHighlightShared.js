@@ -149,26 +149,37 @@
         Object.entries(rootsByScope).forEach(([scope, root]) => {
             if (!root) return;
             const seenByText = new Map();
-            const cursorByText = new Map();
-            const fullText = getText(root);
+            const textNodes = getTextNodes(root);
+            const textNodeOffsets = new Map();
+            let runningOffset = 0;
+            textNodes.forEach((textNode) => {
+                textNodeOffsets.set(textNode, runningOffset);
+                runningOffset += String(textNode.textContent || '').length;
+            });
+            const fullText = textNodes
+                .map((textNode) => textNode.textContent || '')
+                .join('');
             Array.from(root.querySelectorAll('.hl')).forEach((node) => {
                 if (isInsideExplanation(node)) return;
-                const text = String(node.textContent || '').trim();
+                const rawText = String(node.textContent || '');
+                const text = rawText.trim();
                 if (!text) return;
                 const key = `${scope}::${text}`;
                 const seen = seenByText.get(key) || 0;
                 seenByText.set(key, seen + 1);
-                let cursor = cursorByText.get(key) || 0;
-                let hit = -1;
-                for (let index = 0; index <= seen; index += 1) {
-                    hit = fullText.indexOf(text, cursor);
-                    if (hit < 0) break;
-                    cursor = hit + text.length;
+                const containedTextNodes = textNodes.filter((textNode) => node.contains(textNode));
+                if (!containedTextNodes.length) return;
+                const firstTextNode = containedTextNodes[0];
+                const lastTextNode = containedTextNodes[containedTextNodes.length - 1];
+                const leadingTrimLength = rawText.length - rawText.trimStart().length;
+                const trailingTrimLength = rawText.length - rawText.trimEnd().length;
+                const startOffset = textNodeOffsets.get(firstTextNode) + leadingTrimLength;
+                const endOffset = textNodeOffsets.get(lastTextNode)
+                    + String(lastTextNode.textContent || '').length
+                    - trailingTrimLength;
+                if (!Number.isFinite(startOffset) || !Number.isFinite(endOffset) || endOffset <= startOffset) {
+                    return;
                 }
-                if (hit < 0) return;
-                cursorByText.set(key, cursor);
-                const startOffset = hit;
-                const endOffset = hit + text.length;
                 const before = fullText.slice(Math.max(0, startOffset - 20), startOffset);
                 const after = fullText.slice(endOffset, endOffset + 20);
                 records.push({

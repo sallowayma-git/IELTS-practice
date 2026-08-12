@@ -10,6 +10,7 @@
     const DATABASE_NAMES = Object.freeze([
         'IELTSAtlasDataV2',
         'ExamSystemDB',
+        'ExamSystemExternalBackup',
         'IELTSAtlasExternalBackupV2'
     ]);
     let resetPromise = null;

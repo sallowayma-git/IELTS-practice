@@ -722,6 +722,7 @@
     var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
+    var optionalListeningExamDataPromise = null;
     var assetVersion = resolveAssetVersion();
 
     function resolveAssetVersion() {
@@ -931,8 +932,11 @@
     }
 
     function ensureOptionalListeningExamData() {
+        if (optionalListeningExamDataPromise) {
+            return optionalListeningExamDataPromise;
+        }
         setBuiltInListeningAvailability(false, 'pending-manifest');
-        return loadOptionalScript(LISTENING_EXAM_MANIFEST_SCRIPT, 'listening manifest')
+        optionalListeningExamDataPromise = loadOptionalScript(LISTENING_EXAM_MANIFEST_SCRIPT, 'listening manifest')
             .then(function afterManifestLoaded(loaded) {
                 if (!loaded || !hasListeningManifest()) {
                     setBuiltInListeningAvailability(false, loaded ? 'manifest-empty' : 'manifest-missing');
@@ -949,6 +953,7 @@
                         return undefined;
                     });
             });
+        return optionalListeningExamDataPromise;
     }
 
     function loadBatch(batch) {

@@ -96,7 +96,7 @@ try:
     )
 except ModuleNotFoundError:
     VENV_DIR = (REPO_ROOT / ".venv").resolve()
-    VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+    VENV_PYTHON = REPO_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     CURRENT_PREFIX = Path(sys.prefix).resolve()
     if VENV_PYTHON.exists() and CURRENT_PREFIX != VENV_DIR:
         completed = subprocess.run(

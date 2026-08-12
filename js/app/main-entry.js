@@ -274,6 +274,35 @@
         }
     }
 
+    function synchronizeActiveBrowseViewAfterLoad() {
+        if (getActiveViewName() !== 'browse' || typeof global.initializeBrowseView !== 'function') {
+            return Promise.resolve();
+        }
+
+        var pendingFilter = global.__pendingBrowseFilter || null;
+        var canApplyPendingFilter = !!pendingFilter && typeof global.applyBrowseFilter === 'function';
+        return Promise.resolve()
+            .then(function initializeActiveBrowseView() {
+                return global.initializeBrowseView({ skipLoad: canApplyPendingFilter });
+            })
+            .then(function applyPendingBrowseFilter() {
+                if (!canApplyPendingFilter) {
+                    return undefined;
+                }
+                return global.applyBrowseFilter(
+                    pendingFilter.category,
+                    pendingFilter.type,
+                    pendingFilter.filterMode,
+                    pendingFilter.path
+                );
+            })
+            .finally(function clearConsumedPendingBrowseFilter() {
+                if (pendingFilter && global.__pendingBrowseFilter === pendingFilter) {
+                    delete global.__pendingBrowseFilter;
+                }
+            });
+    }
+
     function ensureBrowseGroup() {
         if (!browseGroupPromise) {
             browseGroupPromise = ensureLazyGroup(BROWSE_GROUP).then(function onBrowseLoaded() {
@@ -285,7 +314,13 @@
                         console.warn('[MainEntry] 初始化题库偏好 UI 失败:', error);
                     }
                 }
-                return true;
+                return synchronizeActiveBrowseViewAfterLoad()
+                    .catch(function onBrowseViewSyncError(error) {
+                        console.warn('[MainEntry] 恢复题库视图状态失败:', error);
+                    })
+                    .then(function browseViewSynchronized() {
+                        return true;
+                    });
             }).catch(function onBrowseLoadError(error) {
                 browseGroupPromise = null;
                 throw error;
@@ -380,7 +415,10 @@
     function proxyAfterGroup(groupName, getter, fallback) {
         return function proxiedCall() {
             var args = Array.prototype.slice.call(arguments);
-            return ensureLazyGroup(groupName).then(function invoke() {
+            var groupReady = groupName === BROWSE_GROUP
+                ? ensureBrowseGroup()
+                : ensureLazyGroup(groupName);
+            return groupReady.then(function invoke() {
                 var fn = getter();
                 if (typeof fn === 'function') {
                     return fn.apply(global, args);

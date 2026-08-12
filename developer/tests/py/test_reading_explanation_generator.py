@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "assets" / "scripts" / "generate_reading_explanations_with_agent.py"
+LEGACY_SCRIPT_PATH = REPO_ROOT / "assets" / "scripts" / "generate_reading_explanations.py"
 
 
 def wrap_register(bundle_name: str, payload: dict) -> str:
@@ -44,11 +47,11 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
                 "blocks": [
                     {
                         "blockId": "passage-main",
-                        "kind": "html",
-                        "html": (
-                            "<p>You should spend about 20 minutes on Questions 1-2.</p>"
-                            "<p>Paragraph one text.</p>"
-                            "<p>Paragraph two text.</p>"
+                        "kind": "text",
+                        "bodyHtml": (
+                            '<p class="instructions">You should spend about 20 minutes on Questions 1-2.</p>'
+                            '<p id="paragraph-one">Paragraph one text.</p>'
+                            '<p class="body">Paragraph two text.</p>'
                         ),
                     }
                 ]
@@ -58,9 +61,15 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
                     "groupId": "group-1",
                     "kind": "true_false_not_given",
                     "questionIds": ["q1", "q2"],
+                    "leadHtml": (
+                        '<div id="q1-2-section"><h4>Questions 1-2</h4>'
+                        '<p>In boxes 1-2 on your answer sheet, write TRUE or FALSE.</p>'
+                        '<div class="question-item"><p><strong>1</strong> Statement one.</p>'
+                        '<label><input name="q1" type="radio" value="TRUE"> TRUE</label></div>'
+                    ),
                     "bodyHtml": (
-                        '<div class="question-item" id="q1-anchor"><p>1. Statement one.</p></div>'
-                        '<div class="question-item" id="q2-anchor"><p>2. Statement two.</p></div>'
+                        '<table><tr><td><strong>2</strong> Statement two.</td>'
+                        '<td><input name="q2" type="radio" value="FALSE"></td></tr></table>'
                     ),
                 }
             ],
@@ -79,7 +88,7 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
         env = os.environ.copy()
         env["READING_EXPLANATION_REPO_ROOT"] = str(self.root)
         completed = subprocess.run(
-            ["python3", str(SCRIPT_PATH), *args],
+            [sys.executable, str(SCRIPT_PATH), *args],
             capture_output=True,
             text=True,
             env=env,
@@ -97,6 +106,17 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
         self.assertTrue(response_path.exists())
 
         response = json.loads(response_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [item["questionId"] for item in response["questionExplanations"][0]["items"]],
+            ["q1", "q2"],
+        )
+        self.assertIn("Statement one", response["questionExplanations"][0]["items"][0]["text"])
+        self.assertIn("Statement two", response["questionExplanations"][0]["items"][1]["text"])
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [paragraph["text"] for paragraph in request["examContext"]["passageParagraphs"]],
+            ["Paragraph one text.", "Paragraph two text."],
+        )
         response["passageNotes"] = [
             {"label": "Paragraph 1", "text": "第一段讲第一条信息。"},
             {"label": "Paragraph 2", "text": "第二段讲第二条信息。"},
@@ -152,6 +172,28 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
         )
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("答案与 answerKey 不一致", completed.stdout)
+
+    def test_manifest_parser_accepts_current_and_legacy_assignments(self) -> None:
+        spec = importlib.util.spec_from_file_location("reading_explanation_legacy_generator", LEGACY_SCRIPT_PATH)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+
+        current_manifest = (REPO_ROOT / "assets" / "generated" / "reading-exams" / "manifest.js").read_text(
+            encoding="utf-8"
+        )
+        parsed_current = module.parse_js_manifest_object(current_manifest)
+        self.assertIn("p1-high-01", parsed_current)
+
+        legacy_payload = {"sample": {"examId": "sample", "dataKey": "sample", "script": "./sample.js"}}
+        legacy_manifest = (
+            "(function (global) {\n"
+            f"global.__READING_EXAM_MANIFEST__ = {json.dumps(legacy_payload)};\n"
+            "})(globalThis);\n"
+        )
+        self.assertEqual(module.parse_js_manifest_object(legacy_manifest), legacy_payload)
 
 
 if __name__ == "__main__":

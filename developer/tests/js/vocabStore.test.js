@@ -14,6 +14,7 @@ function clone(value) {
 }
 
 function createVocabFacade(seed = {}) {
+    const committedListeners = new Set();
     const state = {
         words: clone(seed.words || []),
         collections: clone(seed.collections || {}),
@@ -81,7 +82,24 @@ function createVocabFacade(seed = {}) {
             return { committed: true, word: clone(source[index]) };
         }
     };
-    return { state, vocab };
+    const backups = {
+        onDataCommitted(listener) {
+            committedListeners.add(listener);
+            return () => committedListeners.delete(listener);
+        }
+    };
+    function emitCommitted(logicalKeys) {
+        const keys = Array.isArray(logicalKeys) ? logicalKeys : [logicalKeys];
+        const event = {
+            operationId: 'external-test-commit',
+            remote: true,
+            targets: keys.map((logicalKey) => ({ logicalKey }))
+        };
+        for (const listener of committedListeners) {
+            listener(clone(event));
+        }
+    }
+    return { state, vocab, backups, emitCommitted };
 }
 
 function loadVocabStore({ embeddedWords, dataSeed }) {
@@ -91,14 +109,14 @@ function loadVocabStore({ embeddedWords, dataSeed }) {
         error() {},
         info() {}
     };
-    const { state: appDataState, vocab } = createVocabFacade(dataSeed);
+    const { state: appDataState, vocab, backups, emitCommitted } = createVocabFacade(dataSeed);
     const windowStub = {
         console: quietConsole,
         __EMBEDDED_WORDLISTS__: {
             ielts_core: embeddedWords || []
         },
         location: { protocol: 'file:' },
-        AppData: { ready: Promise.resolve(), vocab }
+        AppData: { ready: Promise.resolve(), vocab, backups }
     };
     const sandbox = {
         window: windowStub,
@@ -120,6 +138,7 @@ function loadVocabStore({ embeddedWords, dataSeed }) {
     const source = fs.readFileSync(path.join(repoRoot, 'js/core/vocabStore.js'), 'utf8');
     vm.runInContext(source, context, { filename: 'js/core/vocabStore.js' });
     sandbox.window.VocabStore.__appDataState = appDataState;
+    sandbox.window.VocabStore.__emitDataCommitted = emitCommitted;
     return sandbox.window.VocabStore;
 }
 
@@ -354,6 +373,108 @@ async function testProgressRestoreRequiresCompleteV2Identity() {
     );
 }
 
+async function testReadingHighlightUpsertPreservesStudyProgress() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        dataSeed: {
+            words: [{ id: 'word-1', word: 'seed', meaning: 'Seed' }],
+            collections: {
+                'reading-highlights': {
+                    id: 'reading-highlights',
+                    words: [{
+                        id: 'reading-highlight-alpha',
+                        word: 'alpha',
+                        meaning: '旧释义',
+                        example: 'Old example',
+                        note: '用户记忆笔记',
+                        easeFactor: 2.2,
+                        interval: 10,
+                        repetitions: 5,
+                        intraCycles: 0,
+                        correctCount: 5,
+                        lastReviewed: '2026-08-01T00:00:00.000Z',
+                        nextReview: '2026-08-11T00:00:00.000Z',
+                        createdAt: '2026-07-01T00:00:00.000Z',
+                        updatedAt: '2026-08-01T00:00:00.000Z'
+                    }]
+                }
+            }
+        }
+    });
+
+    await vocabStore.init();
+    const saved = await vocabStore.upsertReadingHighlightWord({
+        word: 'alpha',
+        meaning: '新释义',
+        example: 'New example',
+        sourceLabel: 'Reading passage'
+    });
+    const [stored] = vocabStore.__appDataState.collections['reading-highlights'].words;
+
+    assert.strictEqual(saved.meaning, '新释义');
+    assert.strictEqual(saved.example, 'New example');
+    assert.strictEqual(saved.note, '用户记忆笔记');
+    assert.strictEqual(stored.easeFactor, 2.2);
+    assert.strictEqual(stored.interval, 10);
+    assert.strictEqual(stored.repetitions, 5);
+    assert.strictEqual(stored.correctCount, 5);
+    assert.strictEqual(stored.lastReviewed, '2026-08-01T00:00:00.000Z');
+    assert.strictEqual(stored.nextReview, '2026-08-11T00:00:00.000Z');
+    assert.strictEqual(stored.createdAt, '2026-07-01T00:00:00.000Z');
+}
+
+async function testExternalListCommitInvalidatesCacheAndRefreshesActiveList() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        dataSeed: {
+            words: [{ id: 'word-default', word: 'default', meaning: 'Default' }],
+            collections: {
+                'spelling-errors-p1': {
+                    id: 'spelling-errors-p1',
+                    words: [{ id: 'word-p1-a', word: 'alpha', meaning: 'A' }]
+                },
+                'spelling-errors-p4': {
+                    id: 'spelling-errors-p4',
+                    words: [{ id: 'word-p4-a', word: 'gamma', meaning: 'G' }]
+                }
+            }
+        }
+    });
+
+    await vocabStore.init();
+    await vocabStore.setActiveList('spelling-errors-p1');
+    await vocabStore.loadList('spelling-errors-p4');
+    assert.strictEqual(await vocabStore.getListWordCount('spelling-errors-p4'), 1);
+
+    vocabStore.__appDataState.collections['spelling-errors-p1'].words.push({
+        id: 'word-p1-b', word: 'beta', meaning: 'B'
+    });
+    vocabStore.__appDataState.collections['spelling-errors-p4'].words.push({
+        id: 'word-p4-b', word: 'delta', meaning: 'D'
+    });
+    vocabStore.__emitDataCommitted('vocab.lists');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(vocabStore.getWords().length, 2, '激活词表应在外部提交后刷新');
+    assert.strictEqual(await vocabStore.getListWordCount('spelling-errors-p4'), 2, '计数不应继续使用旧缓存');
+    const reloaded = await vocabStore.loadList('spelling-errors-p4');
+    assert.strictEqual(reloaded.words.length, 2, '词表加载不应继续使用旧缓存');
+
+    const originalDateNow = Date.now;
+    const cacheStartedAt = originalDateNow();
+    try {
+        Date.now = () => cacheStartedAt;
+        vocabStore.__appDataState.collections['spelling-errors-p4'].words.push({
+            id: 'word-p4-c', word: 'epsilon', meaning: 'E'
+        });
+        assert.strictEqual(await vocabStore.getListWordCount('spelling-errors-p4'), 2, 'TTL 内允许复用缓存');
+        Date.now = () => cacheStartedAt + (5 * 60 * 1000) + 1;
+        assert.strictEqual(await vocabStore.getListWordCount('spelling-errors-p4'), 3, '计数缓存过期后应重读存储');
+    } finally {
+        Date.now = originalDateNow;
+    }
+}
+
 async function main() {
     const results = [];
     try {
@@ -371,6 +492,10 @@ async function main() {
         results.push({ name: '配置写入遵守统一范围和类型', status: 'pass' });
         await testProgressRestoreRequiresCompleteV2Identity();
         results.push({ name: '进度恢复要求完整 v2 词表身份', status: 'pass' });
+        await testReadingHighlightUpsertPreservesStudyProgress();
+        results.push({ name: '重复阅读高亮保留学习进度', status: 'pass' });
+        await testExternalListCommitInvalidatesCacheAndRefreshesActiveList();
+        results.push({ name: '外部词表提交会失效缓存并刷新激活词表', status: 'pass' });
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

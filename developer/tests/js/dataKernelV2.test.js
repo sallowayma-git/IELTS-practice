@@ -352,21 +352,58 @@ async function main() {
             const retry = await kernel.mutate([{ logicalKey: 'preferences.values', data: { theme: 'dark' }, expectedRevision: 0 }], { operationId: 'document-1' });
             let conflict = null;
             try { await kernel.mutate([{ logicalKey: 'preferences.values', data: { theme: 'light' }, expectedRevision: 1 }], { operationId: 'document-1' }); } catch (error) { conflict = error.code; }
+            const intent = { command: 'settings-patch', payload: { theme: 'intent-dark' } };
+            const intentFirst = await kernel.mutate([{
+                logicalKey: 'achievements.progress', data: { theme: 'intent-dark' }, expectedRevision: 0
+            }], { operationId: 'intent-retry', intent });
+            const intentRetry = await kernel.mutate([{
+                logicalKey: 'achievements.progress', data: { theme: 'intent-dark' }, expectedRevision: 1
+            }], { operationId: 'intent-retry', intent });
+            const intentState = await kernel.read('achievements.progress', { withMeta: true });
+            let changedIntentCode = null;
+            try {
+                await kernel.mutate([{
+                    logicalKey: 'achievements.progress', data: { theme: 'different' }, expectedRevision: 1
+                }], {
+                    operationId: 'intent-retry',
+                    intent: { command: 'settings-patch', payload: { theme: 'different' } }
+                });
+            } catch (error) { changedIntentCode = error.code; }
+            const sparseWords = [];
+            sparseWords.length = 1;
+            let sparseCode = null;
+            try {
+                await kernel.mutate([{
+                    logicalKey: 'vocab.words', data: sparseWords, expectedRevision: 0
+                }], { operationId: 'sparse-array' });
+            } catch (error) { sparseCode = error.code; }
 
             const entities = await kernel.mutateEntities([
-                { type: 'upsert', store: 'practiceSummaries', recordId: 'r1', data: { title: 'Reading', score: 7 }, expectedRevision: 0 },
-                { type: 'upsert', store: 'practiceDetails', recordId: 'r1', data: { answers: ['A'], correctAnswers: ['B'] }, expectedRevision: 0 },
-                { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { notes: ['review'] }, expectedRevision: 0 }
+                { type: 'upsert', store: 'practiceSummaries', recordId: 'r1', data: { id: 'r1', title: 'Reading', score: 7 }, expectedRevision: 0 },
+                { type: 'upsert', store: 'practiceDetails', recordId: 'r1', data: { recordId: 'r1', answers: ['A'], correctAnswers: ['B'] }, expectedRevision: 0 },
+                { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { recordId: 'r1', notes: ['review'] }, expectedRevision: 0 }
             ], { operationId: 'entity-1' });
             const entityRetry = await kernel.mutateEntities([
-                { type: 'upsert', store: 'practiceSummaries', recordId: 'r1', data: { title: 'Reading', score: 7 }, expectedRevision: 0 },
-                { type: 'upsert', store: 'practiceDetails', recordId: 'r1', data: { answers: ['A'], correctAnswers: ['B'] }, expectedRevision: 0 },
-                { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { notes: ['review'] }, expectedRevision: 0 }
+                { type: 'upsert', store: 'practiceSummaries', recordId: 'r1', data: { id: 'r1', title: 'Reading', score: 7 }, expectedRevision: 0 },
+                { type: 'upsert', store: 'practiceDetails', recordId: 'r1', data: { recordId: 'r1', answers: ['A'], correctAnswers: ['B'] }, expectedRevision: 0 },
+                { type: 'upsert', store: 'practiceAnnotations', recordId: 'r1', data: { recordId: 'r1', notes: ['review'] }, expectedRevision: 0 }
             ], { operationId: 'entity-1' });
             const practiceProjection = await kernel.readPracticeSnapshot(['r1']);
             let detailsListCode = null;
             try { await kernel.listEntities('practiceDetails'); } catch (error) { detailsListCode = error.code; }
             const snapshot = await kernel.exportSnapshot({ includeSystem: true });
+            const ghostSnapshot = structuredClone(snapshot);
+            ghostSnapshot.entities.practiceSummaries[0].data.id = 'payload-id-does-not-match';
+            ghostSnapshot.entities.practiceSummaries[0].checksum = window.__AppDataV2Internals.checksum(
+                ghostSnapshot.entities.practiceSummaries[0].data
+            );
+            ghostSnapshot.checksum = window.__AppDataV2Internals.checksum({
+                envelopes: ghostSnapshot.envelopes,
+                entities: ghostSnapshot.entities
+            });
+            let ghostSnapshotCode = null;
+            try { await kernel.installSnapshot(ghostSnapshot, { operationId: 'ghost-snapshot' }); }
+            catch (error) { ghostSnapshotCode = error.code; }
             const settingsBeforeImport = await kernel.read('settings.values', { withMeta: true });
             const practiceBeforeImport = await kernel.readPracticeSnapshot(null, { withMeta: true });
             const expectedRevisionToken = {
@@ -380,13 +417,68 @@ async function main() {
             };
             await kernel.mutateEntities([{
                 type: 'upsert', store: 'practiceSummaries', recordId: 'late-import-row',
-                data: { title: 'created while import was waiting' }, expectedRevision: 0
+                data: { id: 'late-import-row', title: 'created while import was waiting' }, expectedRevision: 0
             }], { operationId: 'late-import-row' });
             let staleImportCode = null;
             try {
                 await kernel.installSnapshot(snapshot, { operationId: 'stale-import', expectedRevisionToken });
             } catch (error) { staleImportCode = error.code; }
             const lateImportRow = await kernel.readEntity('practiceSummaries', 'late-import-row');
+            const epochSnapshot = await kernel.exportSnapshot();
+            const epochPractice = await kernel.readPracticeSnapshot(null, { withMeta: true });
+            const epochToken = {
+                documents: {},
+                entities: Object.fromEntries(Object.entries(epochPractice).map(([store, rows]) => [
+                    store,
+                    Object.fromEntries(rows.map((row) => [row.recordId, row.revision]))
+                ])),
+                entityEpochs: await kernel.getEntityRevisionEpochs()
+            };
+            await kernel.mutateEntities([{
+                type: 'upsert', store: 'practiceSummaries', recordId: 'epoch-transient',
+                data: { id: 'epoch-transient', title: 'transient' }, expectedRevision: 0
+            }], { operationId: 'epoch-transient-create' });
+            await kernel.mutateEntities([{
+                type: 'delete', store: 'practiceSummaries', recordId: 'epoch-transient', expectedRevision: 1
+            }], { operationId: 'epoch-transient-delete' });
+            let staleEpochCode = null;
+            try {
+                await kernel.installSnapshot(epochSnapshot, {
+                    operationId: 'stale-epoch-import',
+                    expectedRevisionToken: epochToken
+                });
+            } catch (error) { staleEpochCode = error.code; }
+            await kernel.mutateEntities([{
+                type: 'upsert', store: 'practiceSummaries', recordId: 'recreate-after-delete',
+                data: { id: 'recreate-after-delete', title: 'first incarnation' }, expectedRevision: 0
+            }], { operationId: 'recreate-first' });
+            await kernel.mutateEntities([{
+                type: 'delete', store: 'practiceSummaries', recordId: 'recreate-after-delete', expectedRevision: 1
+            }], { operationId: 'recreate-delete' });
+            const deletedRevision = await kernel.getEntityRevision('practiceSummaries', 'recreate-after-delete');
+            let sidecarWriteCode = null;
+            try {
+                await kernel.mutate([{
+                    logicalKey: 'system.entityRevisions', data: {}, expectedRevision: 1
+                }], { operationId: 'sidecar-write-must-fail' });
+            } catch (error) { sidecarWriteCode = error.code; }
+            const deletedRevisionAfterRejectedSidecarWrite = await kernel.getEntityRevision(
+                'practiceSummaries', 'recreate-after-delete'
+            );
+            const recreated = await kernel.mutateEntities([{
+                type: 'upsert', store: 'practiceSummaries', recordId: 'recreate-after-delete',
+                data: { id: 'recreate-after-delete', title: 'second incarnation' }, expectedRevision: deletedRevision
+            }], { operationId: 'recreate-second' });
+            await kernel.mutateEntities([{
+                type: 'upsert', store: 'practiceSummaries', recordId: 'snapshot-tombstone',
+                data: { id: 'snapshot-tombstone', title: 'must remain deleted' }, expectedRevision: 0
+            }], { operationId: 'snapshot-tombstone-create' });
+            await kernel.mutateEntities([{
+                type: 'delete', store: 'practiceSummaries', recordId: 'snapshot-tombstone', expectedRevision: 1
+            }], { operationId: 'snapshot-tombstone-delete' });
+            const snapshotTombstoneBeforeRestore = await kernel.getEntityRevision(
+                'practiceSummaries', 'snapshot-tombstone'
+            );
             const invalidRevisionSnapshot = structuredClone(snapshot);
             invalidRevisionSnapshot.entities.practiceDetails[0].revision = -1;
             invalidRevisionSnapshot.checksum = window.__AppDataV2Internals.checksum({
@@ -395,6 +487,19 @@ async function main() {
             });
             let invalidRevisionCode = null;
             try { await kernel.installSnapshot(invalidRevisionSnapshot, { operationId: 'invalid-revision' }); } catch (error) { invalidRevisionCode = error.code; }
+            const upperBoundRawBefore = await kernel.driver.exportSnapshot(() => true);
+            const upperBoundBefore = await kernel.exportSnapshot({ includeSystem: true });
+            const upperBoundSnapshot = structuredClone(upperBoundBefore);
+            upperBoundSnapshot.entities.practiceSummaries[0].revision = Number.MAX_SAFE_INTEGER - 1;
+            upperBoundSnapshot.checksum = window.__AppDataV2Internals.checksum({
+                envelopes: upperBoundSnapshot.envelopes,
+                entities: upperBoundSnapshot.entities
+            });
+            let upperBoundRevisionCode = null;
+            try {
+                await kernel.installSnapshot(upperBoundSnapshot, { operationId: 'upper-bound-revision' });
+            } catch (error) { upperBoundRevisionCode = error.code; }
+            const upperBoundRawAfter = await kernel.driver.exportSnapshot(() => true);
             const exportableKeys = window.__AppDataV2Catalog.list()
                 .filter((entry) => entry.export === true)
                 .map((entry) => entry.logicalKey)
@@ -403,6 +508,32 @@ async function main() {
             await kernel.installSnapshot(snapshot, { operationId: 'restore-1', resetJournal: true });
             const restored = await kernel.readEntity('practiceSummaries', 'r1', { withMeta: true });
             const journal = await kernel.read('system.operationJournal');
+            const snapshotTombstoneAfterRestore = await kernel.getEntityRevision(
+                'practiceSummaries', 'snapshot-tombstone'
+            );
+            let staleTombstoneAfterRestoreCode = null;
+            try {
+                await kernel.mutateEntities([{
+                    type: 'upsert', store: 'practiceSummaries', recordId: 'snapshot-tombstone',
+                    data: { id: 'snapshot-tombstone', title: 'stale resurrection' },
+                    expectedRevision: snapshotTombstoneBeforeRestore
+                }], { operationId: 'stale-tombstone-after-restore' });
+            } catch (error) { staleTombstoneAfterRestoreCode = error.code; }
+            let staleEntityAfterRestoreCode = null;
+            try {
+                await kernel.mutateEntities([{
+                    type: 'upsert', store: 'practiceSummaries', recordId: 'r1',
+                    data: { id: 'r1', title: 'stale overwrite' },
+                    expectedRevision: snapshot.entities.practiceSummaries[0].revision
+                }], { operationId: 'stale-after-restore' });
+            } catch (error) { staleEntityAfterRestoreCode = error.code; }
+            let staleDocumentAfterRestoreCode = null;
+            try {
+                await kernel.mutate([{
+                    logicalKey: 'preferences.values', data: { theme: 'stale overwrite' },
+                    expectedRevision: snapshot.envelopes['preferences.values'].revision
+                }], { operationId: 'stale-document-after-restore' });
+            } catch (error) { staleDocumentAfterRestoreCode = error.code; }
             await new Promise((resolve, reject) => {
                 const tx = kernel.driver.db.transaction(['practiceSummaries'], 'readwrite');
                 tx.objectStore('practiceSummaries').put({
@@ -425,6 +556,32 @@ async function main() {
             const corruptAfterRestore = await kernel.readEntity('practiceSummaries', 'corrupt');
             const restoredAfterCorruption = await kernel.readEntity('practiceSummaries', 'r1');
             const journalAfterCorruption = await kernel.read('system.operationJournal');
+            await new Promise((resolve, reject) => {
+                const tx = kernel.driver.db.transaction(['system'], 'readwrite');
+                const store = tx.objectStore('system');
+                const request = store.get('system.entityRevisions');
+                request.onsuccess = () => {
+                    const row = structuredClone(request.result);
+                    row.envelope.data.epochs.practiceSummaries = Number.MAX_SAFE_INTEGER - 1;
+                    row.envelope.checksum = window.__AppDataV2Internals.checksum(row.envelope.data);
+                    store.put(row);
+                };
+                request.onerror = () => reject(request.error || new Error('unable to read entity revision sidecar'));
+                tx.oncomplete = resolve;
+                tx.onerror = () => reject(tx.error || new Error('unable to seed entity epoch limit'));
+                tx.onabort = () => reject(tx.error || new Error('entity epoch limit seed aborted'));
+            });
+            const epochLimitBefore = await kernel.getEntityRevisionEpochs();
+            let epochLimitCode = null;
+            try {
+                await kernel.mutateEntities([{
+                    type: 'upsert', store: 'practiceSummaries', recordId: 'epoch-limit-row',
+                    data: { id: 'epoch-limit-row', title: 'must roll back' }, expectedRevision: 0
+                }], { operationId: 'epoch-limit-write' });
+            } catch (error) { epochLimitCode = error.code; }
+            const epochLimitAfter = await kernel.getEntityRevisionEpochs();
+            const epochLimitRow = await kernel.readEntity('practiceSummaries', 'epoch-limit-row');
+            const journalAfterEpochLimit = await kernel.read('system.operationJournal');
             remoteKernel.close();
             kernel.close();
             return {
@@ -441,23 +598,47 @@ async function main() {
                 first,
                 retry,
                 conflict,
+                intentFirst,
+                intentRetry,
+                intentState,
+                changedIntentCode,
+                sparseCode,
                 entities,
                 entityRetry,
                 practiceProjection,
                 detailsListCode,
                 snapshot,
+                ghostSnapshotCode,
                 staleImportCode,
+                staleEpochCode,
+                deletedRevision,
+                sidecarWriteCode,
+                deletedRevisionAfterRejectedSidecarWrite,
+                recreated,
+                snapshotTombstoneBeforeRestore,
                 lateImportRow,
                 invalidRevisionCode,
+                upperBoundRevisionCode,
+                upperBoundRollback: window.__AppDataV2Internals.checksum(upperBoundRawBefore)
+                    === window.__AppDataV2Internals.checksum(upperBoundRawAfter),
                 exportableKeys,
                 restored,
                 journal,
+                snapshotTombstoneAfterRestore,
+                staleTombstoneAfterRestoreCode,
+                staleEntityAfterRestoreCode,
+                staleDocumentAfterRestoreCode,
                 corruptCode,
                 statusAfterCorruption,
                 summariesAfterCorruption,
                 corruptAfterRestore,
                 restoredAfterCorruption,
-                journalAfterCorruption
+                journalAfterCorruption,
+                epochLimitBefore,
+                epochLimitCode,
+                epochLimitAfter,
+                epochLimitRow,
+                journalAfterEpochLimit
             };
         });
         assert.equal(result.unavailableCode, 'BACKEND_UNAVAILABLE');
@@ -487,6 +668,11 @@ async function main() {
         assert.equal(result.remoteCommit.targets[0].logicalKey, 'settings.values');
         assert.deepEqual(result.retry, result.first);
         assert.equal(result.conflict, 'CONFLICT');
+        assert.deepEqual(result.intentRetry, result.intentFirst,
+            'same operationId and semantic intent must replay despite a dynamically refreshed expectedRevision');
+        assert.equal(result.intentState.envelope.revision, 1, 'idempotent replay must not write a second revision');
+        assert.equal(result.changedIntentCode, 'CONFLICT');
+        assert.equal(result.sparseCode, 'VALIDATION');
         assert.deepEqual(result.entityRetry, result.entities);
         assert.deepEqual(Object.keys(result.practiceProjection).sort(), ['practiceAnnotations', 'practiceDetails', 'practiceSummaries']);
         assert.equal(result.practiceProjection.practiceSummaries[0].title, 'Reading');
@@ -494,8 +680,20 @@ async function main() {
         assert.equal(result.practiceProjection.practiceAnnotations[0].notes[0], 'review');
         assert.equal(result.detailsListCode, 'VALIDATION');
         assert.equal(result.staleImportCode, 'CONFLICT');
+        assert.equal(result.staleEpochCode, 'CONFLICT',
+            'an add/delete ABA between preview and commit must be detected even when the physical row set matches');
+        assert.equal(result.deletedRevision, 2);
+        assert.equal(result.sidecarWriteCode, 'VALIDATION');
+        assert.equal(result.deletedRevisionAfterRejectedSidecarWrite, result.deletedRevision,
+            'a rejected public sidecar write must not reset durable tombstones');
+        assert.equal(result.recreated.revision, 3,
+            'an intentional recreate can use the durable tombstone revision without reopening ABA');
         assert.equal(result.lateImportRow.title, 'created while import was waiting');
         assert.equal(result.invalidRevisionCode, 'VALIDATION');
+        assert.equal(result.upperBoundRevisionCode, 'VALIDATION');
+        assert.equal(result.upperBoundRollback, true,
+            'a revision overflow during snapshot install must roll back every queued store write');
+        assert.equal(result.ghostSnapshotCode, 'VALIDATION');
         assert.deepEqual(result.snapshot.entities.practiceSummaries.map((row) => row.recordId), ['r1']);
         assert.deepEqual(
             result.exportableKeys.filter((key) => !Object.prototype.hasOwnProperty.call(result.snapshot.envelopes, key)),
@@ -508,15 +706,30 @@ async function main() {
         assert.equal(result.snapshot.envelopes['library.activeConfigurationId'].state, 'cleared');
         assert.equal(result.snapshot.entities.practiceDetails[0].data.answers[0], 'A');
         assert.equal(result.snapshot.entities.practiceAnnotations[0].data.notes[0], 'review');
-        assert.equal(result.restored.revision, 1);
+        assert.ok(result.restored.revision > result.snapshot.entities.practiceSummaries[0].revision,
+            'snapshot installation must advance the local entity revision instead of restoring an old CAS value');
         assert.equal(result.restored.data.score, 7);
         assert.deepEqual(Object.keys(result.journal), ['restore-1']);
+        assert.ok(result.snapshotTombstoneAfterRestore > result.snapshotTombstoneBeforeRestore,
+            'snapshot replacement must advance sidecar-only tombstones');
+        assert.equal(result.staleTombstoneAfterRestoreCode, 'CONFLICT',
+            'a pre-restore tombstone CAS token must not resurrect data after snapshot replacement');
+        assert.equal(result.staleEntityAfterRestoreCode, 'CONFLICT');
+        assert.equal(result.staleDocumentAfterRestoreCode, 'CONFLICT');
         assert.equal(result.corruptCode, 'CORRUPT_RECORD');
         assert.equal(result.statusAfterCorruption.state, 'ready');
         assert.deepEqual(result.summariesAfterCorruption.map((row) => row.title), ['Reading']);
         assert.equal(result.corruptAfterRestore, null);
         assert.equal(result.restoredAfterCorruption.score, 7);
         assert.deepEqual(Object.keys(result.journalAfterCorruption), ['restore-after-corrupt']);
+        assert.equal(result.epochLimitBefore.practiceSummaries, Number.MAX_SAFE_INTEGER - 1);
+        assert.equal(result.epochLimitCode, 'VALIDATION');
+        assert.deepEqual(result.epochLimitAfter, result.epochLimitBefore,
+            'an epoch overflow must leave the sidecar unchanged');
+        assert.equal(result.epochLimitRow, null,
+            'an epoch overflow must roll back entity writes queued in the same transaction');
+        assert.equal(Object.prototype.hasOwnProperty.call(result.journalAfterEpochLimit, 'epoch-limit-write'), false,
+            'an epoch overflow must not journal an uncommitted operation');
         assert.equal(result.status.state, 'closed');
         await page.evaluate(() => new Promise((resolve, reject) => {
             const request = indexedDB.deleteDatabase('IELTSAtlasDataV2');

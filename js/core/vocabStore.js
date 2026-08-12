@@ -49,6 +49,7 @@
 
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
+    const LIST_CACHE_TTL_MS = 5 * 60 * 1000;
     const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
     const CONFIG_LIMITS = Object.freeze({
         dailyNew: { min: 0, max: 200 },
@@ -67,7 +68,9 @@
         loadingPromise: null,
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
-        listCache: new Map()
+        listCache: new Map(),
+        commitSubscriptionAttached: false,
+        activeRefreshToken: 0
     };
 
     function cloneValue(value) {
@@ -247,9 +250,9 @@
         const embeddedCore = embedded && Array.isArray(embedded.ielts_core)
             ? embedded.ielts_core
             : [];
-        const cacheDefault = state.listCache.get(DEFAULT_LIST_ID);
-        const cachedWords = cacheDefault && cacheDefault.data && Array.isArray(cacheDefault.data.words)
-            ? cacheDefault.data.words
+        const cacheDefault = getFreshCachedList(DEFAULT_LIST_ID);
+        const cachedWords = cacheDefault && Array.isArray(cacheDefault.words)
+            ? cacheDefault.words
             : [];
         const sources = [embeddedCore, cachedWords, state.words];
 
@@ -327,6 +330,71 @@
     function setWordsInternal(words) {
         state.words = words;
         rebuildIndex();
+    }
+
+    function getFreshCachedList(listId) {
+        const cached = state.listCache.get(listId);
+        if (!cached) {
+            return null;
+        }
+        if (!cached.timestamp || (Date.now() - cached.timestamp) >= LIST_CACHE_TTL_MS) {
+            state.listCache.delete(listId);
+            return null;
+        }
+        return cached.data || cached;
+    }
+
+    function refreshActiveListFromStorage() {
+        const refreshToken = ++state.activeRefreshToken;
+        const listId = state.activeListId;
+        Promise.resolve()
+            .then(() => readListData(listId))
+            .then((storedData) => {
+                if (refreshToken !== state.activeRefreshToken || listId !== state.activeListId) {
+                    return;
+                }
+                setWordsInternal(normalizeStoredListWords(storedData, listId));
+                state.lastLoadSource = 'appData-v2-commit';
+            })
+            .catch((error) => {
+                console.error('[VocabStore] 提交后刷新激活词表失败:', error);
+            });
+    }
+
+    function handleDataCommitted(event) {
+        const logicalKeys = new Set((event && Array.isArray(event.targets) ? event.targets : [])
+            .map((target) => (typeof target === 'string' ? target : target && target.logicalKey))
+            .filter(Boolean));
+        let shouldRefreshActiveList = false;
+
+        if (logicalKeys.has('vocab.words')) {
+            state.listCache.delete(DEFAULT_LIST_ID);
+            shouldRefreshActiveList = state.activeListId === DEFAULT_LIST_ID;
+        }
+        if (logicalKeys.has('vocab.lists')) {
+            Array.from(state.listCache.keys()).forEach((listId) => {
+                if (listId !== DEFAULT_LIST_ID) {
+                    state.listCache.delete(listId);
+                }
+            });
+            shouldRefreshActiveList = shouldRefreshActiveList || state.activeListId !== DEFAULT_LIST_ID;
+        }
+
+        if (shouldRefreshActiveList) {
+            refreshActiveListFromStorage();
+        }
+    }
+
+    function ensureCommitSubscription() {
+        if (state.commitSubscriptionAttached) {
+            return;
+        }
+        const backups = window.AppData && window.AppData.backups;
+        if (!backups || typeof backups.onDataCommitted !== 'function') {
+            return;
+        }
+        backups.onDataCommitted(handleDataCommitted);
+        state.commitSubscriptionAttached = true;
     }
 
     function isSpellingErrorList(listId) {
@@ -720,10 +788,10 @@
         }
 
         // 检查缓存（带TTL）
-        const cached = state.listCache.get(listId);
-        if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
+        const cached = getFreshCachedList(listId);
+        if (cached) {
             console.log(`[VocabStore] 从缓存加载词表: ${listId}`);
-            return cached.data;
+            return cached;
         }
 
         try {
@@ -811,10 +879,9 @@
         }
 
         // 尝试从缓存获取
-        if (state.listCache.has(listId)) {
-            const cached = state.listCache.get(listId);
-            const data = cached.data || cached;
-            return data.words ? data.words.length : 0;
+        const cached = getFreshCachedList(listId);
+        if (cached) {
+            return cached.words ? cached.words.length : 0;
         }
 
         // 从存储读取
@@ -903,15 +970,25 @@
         const words = normalizeStoredListWords(storedData, listId);
         const key = normalized.word.toLowerCase();
         const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
+        let committedWord = normalized;
         if (existingIndex >= 0) {
             const existing = words[existingIndex];
-            words.splice(existingIndex, 1, normalizeWordRecord({
+            committedWord = normalizeWordRecord({
                 ...existing,
                 ...normalized,
                 id: existing.id || normalized.id,
                 createdAt: existing.createdAt || normalized.createdAt,
+                note: existing.note || normalized.note,
+                easeFactor: existing.easeFactor,
+                interval: existing.interval,
+                repetitions: existing.repetitions,
+                intraCycles: existing.intraCycles,
+                correctCount: existing.correctCount,
+                lastReviewed: existing.lastReviewed,
+                nextReview: existing.nextReview,
                 updatedAt: getNow()
-            }));
+            });
+            words.splice(existingIndex, 1, committedWord);
         } else {
             words.push(normalized);
         }
@@ -920,11 +997,13 @@
         if (state.activeListId === listId) {
             setWordsInternal(words.filter(Boolean));
         }
-        return normalized;
+        return cloneValue(committedWord);
     }
 
     async function init() {
         ensureReadyPromise();
+        // 先订阅再读取，避免初始化读取与外部提交之间出现丢失更新窗口。
+        ensureCommitSubscription();
         if (!state.ready) {
             await bootstrap();
         }

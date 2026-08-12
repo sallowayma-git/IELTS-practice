@@ -868,15 +868,84 @@ async function run() {
         const session = makeSession('suite_no_standalone_fallback');
         app.currentSuiteSession = session;
         app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+        const suiteWindowInfo = app.ensureExamWindowSession('reading-p1', session.windowRef);
+        suiteWindowInfo.suiteSessionId = session.id;
+        app.examWindows.set('reading-p1', suiteWindowInfo);
+        const suiteRegistration = app._captureExamSessionRegistration('reading-p1', suiteWindowInfo);
         app.handleSuitePracticeComplete = async () => { throw new Error('suite handler failure'); };
         let standaloneWrites = 0;
         app.saveRealPracticeData = async () => { standaloneWrites += 1; return { id: 'unexpected' }; };
         assert.strictEqual(await app.handlePracticeComplete('reading-p1', {
-            suiteSessionId: session.id,
             answers: { q1: 'A' },
             scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
-        }, session.windowRef), false);
+        }, session.windowRef, { expectedRegistration: suiteRegistration }), false);
         assert.strictEqual(standaloneWrites, 0, '套题处理失败不得写入单篇 fallback');
+    }
+
+    // Case 2.4.1c: an active suite must not capture an independently registered
+    // standalone completion, including an exam id that also appears in the suite.
+    {
+        const verifyStandaloneCompletion = async (examId, label) => {
+            const app = createApp(windowStub);
+            const session = makeSession(`suite_parallel_${label}`);
+            app.currentSuiteSession = session;
+            app.suiteExamMap = new Map(session.sequence.map((item) => [item.examId, session.id]));
+
+            let suiteHandlerCalls = 0;
+            app.handleSuitePracticeComplete = async () => {
+                suiteHandlerCalls += 1;
+                return false;
+            };
+
+            const sourceWindow = createStubWindow(`standalone-${label}`);
+            sourceWindow.location.href = `http://localhost/${examId}.html`;
+            const windowInfo = app.ensureExamWindowSession(examId, sourceWindow);
+            windowInfo.expectedOrigin = 'http://localhost';
+            windowInfo.allowOpaqueOrigin = false;
+            windowInfo.suiteSessionId = null;
+            app.examWindows.set(examId, windowInfo);
+            const registration = app._captureExamSessionRegistration(examId, windowInfo);
+
+            let recorderWrites = 0;
+            app.components.practiceRecorder = {
+                activeSessions: new Map([[examId, {
+                    examId,
+                    sessionId: windowInfo.expectedSessionId
+                }]]),
+                async handleSessionCompleted(data) {
+                    recorderWrites += 1;
+                    return {
+                        id: `record-${label}`,
+                        examId,
+                        sessionId: data.sessionId,
+                        endTime: data.endTime
+                    };
+                },
+                endPracticeSession() {}
+            };
+            app._isPracticeCompletionPersisted = async () => true;
+
+            const completion = {
+                examId,
+                sessionId: windowInfo.expectedSessionId,
+                submissionId: `submission-${label}`,
+                endTime: '2026-08-10T00:00:00.000Z',
+                answers: { q1: 'A' },
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                metadata: { type: 'reading', examType: 'reading', practiceMode: 'single' }
+            };
+
+            assert.strictEqual(await app.handlePracticeComplete(examId, completion, sourceWindow, {
+                expectedRegistration: registration
+            }), true, `${label}: standalone completion should commit while a suite is active`);
+            assert.strictEqual(suiteHandlerCalls, 0, `${label}: standalone completion must not enter the suite handler`);
+            assert.strictEqual(recorderWrites, 1, `${label}: standalone completion must persist exactly once`);
+            const ack = sourceWindow._messages.find((message) => message && message.type === 'PRACTICE_SUBMIT_ACK');
+            assert(ack, `${label}: committed standalone completion must receive an ACK`);
+        };
+
+        await verifyStandaloneCompletion('standalone-reading', 'unrelated-exam');
+        await verifyStandaloneCompletion('reading-p2', 'mapped-exam-with-standalone-registration');
     }
 
     // Case 2.4.2: inline simulation 草稿同步必须按篇拆分 elapsed，并镜像回窗口会话域

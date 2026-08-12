@@ -191,7 +191,7 @@ assets/generated/listening-exams/listening-index.compat.js
 - 导入数据：从外部 JSON 数据恢复或合并历史记录。
 - 完整性检查：对导入数据和本地数据进行基础校验。
 
-系统数据优先写入 IndexedDB，并通过 localStorage、sessionStorage 和内存存储提供降级路径。不同浏览器、不同协议和不同域名下的数据互相隔离。
+核心持久化数据使用 IndexedDB；IndexedDB 不可用时应用会明确报错，不会将练习记录静默降级到弱一致性存储。localStorage 仅用于旧数据迁移与少量兼容状态，sessionStorage 用于会话级草稿。不同浏览器、不同协议和不同域名下的数据互相隔离。
 
 ### 更多工具
 
@@ -401,12 +401,11 @@ js/bundles/legacy-app.bundle.js
 
 ### 数据存储
 
-系统采用多层本地存储策略：
+系统按数据用途使用本地存储：
 
-- IndexedDB：优先存储结构化数据。
-- localStorage：兼容和跨标签页同步场景。
-- sessionStorage：会话级降级存储。
-- 内存存储：持久化不可用时的兜底方案。
+- IndexedDB：存储练习记录、词汇、设置、题库配置和备份等核心持久化数据，并提供事务与修订冲突检测。
+- localStorage：仅保留旧版数据迁移和少量兼容状态。
+- sessionStorage：存储会话级草稿，不作为核心数据降级后端。
 
 主要数据包括：
 
@@ -488,7 +487,7 @@ ReadingPractice/
 - 浏览器阻止跨窗口通信。
 - 练习页资源加载失败。
 - 用户在隐私模式中运行，存储被限制。
-- IndexedDB 或 localStorage 被禁用。
+- IndexedDB 被禁用、配额耗尽或后端事务失败。
 - 使用了不同协议或不同域名，导致查看的是另一份本地数据。
 
 处理步骤：

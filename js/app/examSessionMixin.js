@@ -4300,6 +4300,13 @@
             if (!session || typeof this._teardownSuiteSession !== 'function') {
                 return false;
             }
+            // The receipt replay window intentionally keeps the completed suite alive for
+            // 30 seconds.  Capture the registrations owned by that suite now: a user may
+            // start a fresh standalone attempt for the same exam before the timer fires,
+            // and teardown must never delete that replacement registration/handler.
+            if (typeof this._captureSuiteTeardownRegistrations === 'function') {
+                this._captureSuiteTeardownRegistrations(session);
+            }
             if (session.submitReceiptTeardownTimer) {
                 clearTimeout(session.submitReceiptTeardownTimer);
             }
@@ -5527,18 +5534,35 @@
                 && typeof data === 'object'
                 && typeof data.suiteSessionId === 'string'
             ) ? data.suiteSessionId.trim() : '';
-            const hasMappedSuiteExam = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
-            const hasActiveSuiteSession = Boolean(
-                this.currentSuiteSession
-                && this.currentSuiteSession.status === 'active'
-                && (!payloadSuiteSessionId || this.currentSuiteSession.id === payloadSuiteSessionId)
-            );
-            const shouldDelegateToSuiteHandler = Boolean(
+            const payloadSuiteId = (
                 data
                 && typeof data === 'object'
                 && typeof data.suiteId === 'string'
-                && data.suiteId.trim()
-            ) || hasMappedSuiteExam || Boolean(payloadSuiteSessionId) || hasActiveSuiteSession;
+            ) ? data.suiteId.trim() : '';
+            const registeredWindowInfo = expectedRegistration && expectedRegistration.windowInfo
+                ? expectedRegistration.windowInfo
+                : (this.examWindows && this.examWindows.get(examId));
+            const registrationOwnsSource = Boolean(
+                registeredWindowInfo
+                // A current expectedRegistration already passed the message handler's
+                // source/token checks.  Direct callers without that proof still need an
+                // exact source-window match before registration metadata can route them.
+                && (expectedRegistration || !sourceWindow || registeredWindowInfo.window === sourceWindow)
+            );
+            const registeredSuiteSessionId = registrationOwnsSource
+                && typeof registeredWindowInfo.suiteSessionId === 'string'
+                ? registeredWindowInfo.suiteSessionId.trim()
+                : '';
+            const declaredPracticeMode = String(
+                data?.practiceMode || data?.metadata?.practiceMode || ''
+            ).trim().toLowerCase();
+            const shouldDelegateToSuiteHandler = Boolean(
+                payloadSuiteId
+                || payloadSuiteSessionId
+                || registeredSuiteSessionId
+                || data?.suiteSubmission === true
+                || declaredPracticeMode === 'suite'
+            );
 
             if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {

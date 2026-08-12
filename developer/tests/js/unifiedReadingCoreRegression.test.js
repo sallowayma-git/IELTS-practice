@@ -57,6 +57,7 @@ function createContext() {
     });
     const document = {
         title: 'Unified Reading Test',
+        referrer: 'http://localhost/',
         body: {
             dataset: {},
             classList: createClassList()
@@ -104,7 +105,8 @@ function createContext() {
     const window = {
         location: {
             href: 'http://localhost/assets/generated/reading-exams/reading-practice-unified.html?examId=reading-p1',
-            search: '?examId=reading-p1'
+            search: '?examId=reading-p1',
+            protocol: 'http:'
         },
         history: { replaceState() {} },
         document,
@@ -216,8 +218,10 @@ async function testSubmitPostsBeforeExplanationRenderFinishes() {
     hooks.setTestState({
         examId: 'reading-p1',
         dataKey: 'reading-p1',
+        sessionId: 'session-reading-p1',
         practiceMode: 'single',
         parentWindow: hostWindow,
+        expectedParentOrigin: 'http://localhost',
         pageStartTime: Date.now() - 1000,
         dataset: {
             meta: {
@@ -230,10 +234,11 @@ async function testSubmitPostsBeforeExplanationRenderFinishes() {
         }
     });
 
-    let releaseExplanation = null;
-    hooks.setTestOverride('renderExplanations', () => new Promise((resolve) => {
-        releaseExplanation = resolve;
-    }));
+    let explanationStarted = false;
+    hooks.setTestOverride('renderExplanations', () => {
+        explanationStarted = true;
+        return Promise.resolve();
+    });
 
     let submitError = null;
     const submitPromise = hooks.handleSubmit().catch((error) => {
@@ -245,10 +250,18 @@ async function testSubmitPostsBeforeExplanationRenderFinishes() {
     assert.strictEqual(messages.length, 1, 'submit should notify host before explanation rendering completes');
     assert.strictEqual(messages[0].type, 'PRACTICE_COMPLETE', 'submit should post a practice completion message');
     assert.strictEqual(messages[0].data?.answers?.q1, 'A', 'posted submission should include the current answer');
+    assert.strictEqual(explanationStarted, false, 'results and explanations must wait for a matching host ACK');
 
-    releaseExplanation();
     await submitPromise;
     assert.ifError(submitError);
+    const pendingState = hooks.getTestState();
+    const accepted = await hooks.acceptSubmissionAcknowledgement({
+        submissionId: pendingState.submissionId,
+        sessionId: pendingState.sessionId,
+        examId: pendingState.examId
+    });
+    assert.strictEqual(accepted, true, 'matching ACK should finalize the pending submission');
+    assert.strictEqual(explanationStarted, true, 'matching ACK should render the result explanation');
     hooks.setTestOverride('renderExplanations', null);
     assert.strictEqual(window.__UNIFIED_READING_SIMULATION_MODE__, false, 'submit regression harness should remain in non-simulation mode');
 }
@@ -441,6 +454,30 @@ function testReplaySplitCheckboxStringScoresByToken() {
     assert.strictEqual(results.answerComparison.q9.isCorrect, false, 'wrong split choice should not erase the correct option credit');
 }
 
+function testReplayKeepsMissingCorrectAnswersUnknown() {
+    const { hooks } = loadHooks();
+    hooks.setTestState({
+        dataset: {
+            questionGroups: [],
+            questionOrder: ['q1', 'q2']
+        }
+    });
+    const results = hooks.buildReplayResults({
+        answerComparison: {
+            q1: { userAnswer: 'A' },
+            q2: { userAnswer: 'B' }
+        },
+        correctAnswerMap: { q1: 'A' },
+        allQuestionIds: ['q1', 'q2']
+    });
+
+    assert.strictEqual(results.answerComparison.q1.isCorrect, true, 'available canonical answers should still be scored');
+    assert.strictEqual(results.answerComparison.q2.isCorrect, null, 'questions missing a canonical correct answer must remain unknown');
+    assert.strictEqual(results.scoreInfo.correct, 1);
+    assert.strictEqual(results.scoreInfo.totalQuestions, 1, 'unknown questions must not inflate the scored denominator');
+    assert.deepStrictEqual(plain(results.answers), { q1: 'A', q2: 'B' }, 'comparison-only records must still replay user answers into the DOM');
+}
+
 function testSplitCheckboxRequiresExpectedSelectionCount() {
     const { hooks } = loadHooks();
     const dataset = {
@@ -504,6 +541,7 @@ async function main() {
         testGroupedCheckboxSingleKeyArrayScoresPartially();
         testAcceptedAnswerArraysStaySinglePoint();
         testReplaySplitCheckboxStringScoresByToken();
+        testReplayKeepsMissingCorrectAnswersUnknown();
         testSplitCheckboxRequiresExpectedSelectionCount();
         testPersistedChoiceStringSplitsForHighlighting();
         testJudgementChoicesRemainAvailableForHighlighting();
@@ -520,6 +558,7 @@ async function main() {
     testGroupedCheckboxSingleKeyArrayScoresPartially();
     testAcceptedAnswerArraysStaySinglePoint();
     testReplaySplitCheckboxStringScoresByToken();
+    testReplayKeepsMissingCorrectAnswersUnknown();
     testSplitCheckboxRequiresExpectedSelectionCount();
     testPersistedChoiceStringSplitsForHighlighting();
     testJudgementChoicesRemainAvailableForHighlighting();

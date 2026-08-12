@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List
@@ -20,6 +21,11 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
     async_playwright,
 )
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"

@@ -143,52 +143,96 @@
     }
 
     function selectDelimiter(headerLine) {
-        if (headerLine.includes(',')) {
-            return ',';
+        let inQuotes = false;
+        const found = new Set();
+        for (let i = 0; i < headerLine.length; i += 1) {
+            const char = headerLine[i];
+            if (char === '"') {
+                if (inQuotes && headerLine[i + 1] === '"') {
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (!inQuotes && (char === ',' || char === ';' || char === '\t')) {
+                found.add(char);
+            }
         }
-        if (headerLine.includes(';')) {
-            return ';';
-        }
-        if (headerLine.includes('\t')) {
-            return '\t';
-        }
+        if (found.has(',')) return ',';
+        if (found.has(';')) return ';';
+        if (found.has('\t')) return '\t';
         return ',';
     }
 
-    function splitCsvLine(line, delimiter) {
-        const result = [];
+    function parseCsvRows(text, delimiter) {
+        const rows = [];
+        let row = [];
         let current = '';
         let inQuotes = false;
-        for (let i = 0; i < line.length; i += 1) {
-            const char = line[i];
+        let rowTouched = false;
+        const source = String(text || '');
+
+        const pushRow = () => {
+            row.push(current.trim());
+            if (rowTouched && row.some((cell) => cell !== '')) {
+                rows.push(row);
+            }
+            row = [];
+            current = '';
+            rowTouched = false;
+        };
+
+        for (let i = 0; i < source.length; i += 1) {
+            const char = source[i];
             if (char === '"') {
-                if (inQuotes && line[i + 1] === '"') {
+                rowTouched = true;
+                if (inQuotes && source[i + 1] === '"') {
                     current += '"';
                     i += 1;
                 } else {
                     inQuotes = !inQuotes;
                 }
             } else if (!inQuotes && char === delimiter) {
-                result.push(current.trim());
+                rowTouched = true;
+                row.push(current.trim());
                 current = '';
+            } else if (char === '\r' || char === '\n') {
+                if (char === '\r' && source[i + 1] === '\n') {
+                    i += 1;
+                }
+                if (inQuotes) {
+                    current += '\n';
+                    rowTouched = true;
+                } else {
+                    pushRow();
+                }
             } else {
                 current += char;
+                if (!/\s/.test(char)) {
+                    rowTouched = true;
+                }
             }
         }
-        result.push(current.trim());
-        return result;
+
+        if (inQuotes) {
+            throw new Error('CSV 包含未闭合的引号字段');
+        }
+        if (rowTouched || row.length || current.trim()) {
+            pushRow();
+        }
+        return rows;
     }
 
     function parseCsv(text) {
-        const lines = String(text || '')
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-            .filter((line) => line.length);
-        if (!lines.length) {
+        const source = String(text || '');
+        const firstContentLine = source
+            .split(/\r\n|\r|\n/)
+            .find((line) => line.replace(/^\uFEFF/, '').trim()) || '';
+        const delimiter = selectDelimiter(firstContentLine.replace(/^\uFEFF/, ''));
+        const rows = parseCsvRows(source, delimiter);
+        if (!rows.length) {
             return buildImportResult('wordlist', [], { format: 'csv' });
         }
-        const delimiter = selectDelimiter(lines[0]);
-        const headerCells = splitCsvLine(lines[0], delimiter).map((cell) => cell.toLowerCase());
+        const headerCells = rows[0].map((cell) => cell.replace(/^\uFEFF/, '').toLowerCase());
         const columnIndex = {
             word: headerCells.indexOf('word'),
             meaning: headerCells.indexOf('meaning'),
@@ -196,8 +240,8 @@
             freq: headerCells.indexOf('freq')
         };
         const entries = [];
-        for (let i = 1; i < lines.length; i += 1) {
-            const cells = splitCsvLine(lines[i], delimiter);
+        for (let i = 1; i < rows.length; i += 1) {
+            const cells = rows[i];
             const candidate = {
                 word: columnIndex.word >= 0 ? cells[columnIndex.word] : cells[0],
                 meaning: columnIndex.meaning >= 0 ? cells[columnIndex.meaning] : cells[1],
@@ -211,7 +255,7 @@
         }
         return buildImportResult('wordlist', entries, {
             format: 'csv',
-            originalLength: Math.max(lines.length - 1, 0)
+            originalLength: Math.max(rows.length - 1, 0)
         });
     }
 
