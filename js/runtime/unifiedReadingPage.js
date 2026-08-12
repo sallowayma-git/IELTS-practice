@@ -4457,8 +4457,9 @@
             );
             if (itemValue && itemValue === restoredValue && item.dataset.consumed) {
                 // 仅当该选项未被其他 dropzone 使用时才恢复
-                // 左右分栏布局下 dropzone 不在 group 内，需要查询所有 dropzone
-                const allDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone'));
+                // 左右分栏布局下 dropzone 不在 group 内，需要查询所有 dropzone；
+                // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
+                const allDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'));
                 const stillUsed = allDropzones.some((zone) => {
                     const zonePayload = getDropzonePayload(zone);
                     return zonePayload
@@ -4486,9 +4487,14 @@
         }
         const previousPayload = getDropzonePayload(dropzone);
         setDropzoneAnswer(dropzone, payload.value, payload.label);
-        // 从 pool 拖入：消耗选项（若组不允许复用）
+        // 从 pool 拖入：消耗新选项（若组不允许复用）
         if (!sourceDropzone) {
             consumePoolOption(dropzone, payload);
+            // 替换已填答案时，旧选项已不再被该 dropzone 使用，恢复其在 pool 中的可用状态
+            if (previousPayload && previousPayload.value
+                && canonicalizeAnswerToken(previousPayload.value) !== canonicalizeAnswerToken(payload.value)) {
+                restorePoolOption(dropzone, previousPayload);
+            }
         }
         if (sourceDropzone && sourceDropzone !== dropzone) {
             if (previousPayload && previousPayload.value) {
