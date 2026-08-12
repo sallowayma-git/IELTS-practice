@@ -10695,6 +10695,15 @@
         if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
             return;
         }
+        // 限定到当前组的 questionIds：同一页面可能有多个不允许复用的题组
+        // 使用相同选项字母（如 p2-high-233 组2/组3 都用 A-E），
+        // 跨组扫描会误伤其他组的独立选项。
+        const groupQuestionIds = new Set(
+            String(group.dataset.questionIds || '')
+                .split(',')
+                .map((entry) => normalizeQuestionId(entry.trim()))
+                .filter(Boolean)
+        );
         const restoredValue = canonicalizeAnswerToken(payload.value);
         pool.querySelectorAll('.drag-item').forEach((item) => {
             const itemValue = canonicalizeAnswerToken(
@@ -10702,11 +10711,19 @@
                 || item.dataset.word || item.dataset.value || item.textContent
             );
             if (itemValue && itemValue === restoredValue && item.dataset.consumed) {
-                // 仅当该选项未被其他 dropzone 使用时才恢复
-                // 左右分栏布局下 dropzone 不在 group 内，需要查询所有 dropzone；
+                // 仅当该选项未被当前组的其他 dropzone 使用时才恢复
+                // 左右分栏布局下 dropzone 不在 group 内，需按 questionId 匹配；
                 // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
-                const allDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'));
-                const stillUsed = allDropzones.some((zone) => {
+                const groupDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'))
+                    .filter((zone) => {
+                        const zoneQuestion = zone.dataset.question || zone.dataset.questionId || '';
+                        const zoneIds = expandQuestionSequence(zoneQuestion);
+                        const normalizedZoneIds = zoneIds.length
+                            ? zoneIds.map((id) => normalizeQuestionId(id)).filter(Boolean)
+                            : [normalizeQuestionId(zoneQuestion)].filter(Boolean);
+                        return normalizedZoneIds.some((id) => groupQuestionIds.has(id));
+                    });
+                const stillUsed = groupDropzones.some((zone) => {
                     const zonePayload = getDropzonePayload(zone);
                     return zonePayload
                         && canonicalizeAnswerToken(zonePayload.value) === itemValue;
