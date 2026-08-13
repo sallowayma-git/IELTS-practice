@@ -12,6 +12,11 @@
     const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const READING_NOTE_STYLE_ID = 'reading-note-style';
     const READING_DISPLAY_CONTROL_STYLE_ID = 'reading-display-control-style';
+    const OPTION_CONSUMED_STYLE_ID = 'reading-option-consumed-style';
+    // 候选池容器/选项 class 不统一，统一选择器覆盖所有变体。
+    // .headings-pool 当前都包裹 .pool-items 但作为防御一并纳入。
+    const POOL_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
+    const POOL_CONTAINER_SELECTOR = '.pool-items, #word-options, .options-pool, .option-pool, .cardpool, .headings-pool, .pool';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
@@ -1532,14 +1537,14 @@
     }
 
     function initDragPools() {
-        document.querySelectorAll('.pool-items').forEach((pool, index) => {
+        document.querySelectorAll(POOL_CONTAINER_SELECTOR).forEach((pool, index) => {
             if (!pool.id) {
                 pool.id = `practice-pool-${index}`;
             }
         });
-        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+        document.querySelectorAll(`${POOL_CONTAINER_SELECTOR} ${POOL_ITEM_SELECTOR}`).forEach((item) => {
             if (!item.dataset.originPool) {
-                const pool = item.closest('.pool-items');
+                const pool = item.closest(POOL_CONTAINER_SELECTOR);
                 if (pool?.id) {
                     item.dataset.originPool = pool.id;
                 }
@@ -1694,6 +1699,25 @@
             body.hide-reading-highlights .hl:not([data-hl-type="note"]):not([data-note-id]){background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important}
             body.reading-question-nav-collapsed .practice-nav{display:none}
             body.dark-mode .reading-display-toggle-group{background:#1e293b;border-color:#475569;color:#cbd5e1}
+        `;
+        document.head.appendChild(style);
+    }
+
+    function ensureOptionConsumedStyles() {
+        if (document.getElementById(OPTION_CONSUMED_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = OPTION_CONSUMED_STYLE_ID;
+        style.textContent = `
+            .drag-item.option-consumed,
+            .draggable-word.option-consumed,
+            .card.option-consumed {
+                opacity: 0.45 !important;
+                cursor: not-allowed !important;
+                background: #f1f5f9 !important;
+                border-color: #cbd5e1 !important;
+                color: #94a3b8 !important;
+                pointer-events: none !important;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -4230,6 +4254,7 @@
 
     function clearDropzone(dropzone) {
         if (!dropzone) return;
+        const previousPayload = getDropzonePayload(dropzone);
         dropzone.dataset.answerValue = '';
         dropzone.dataset.answerLabel = '';
         // 清除判卷残留的标记，避免重置后旧颜色残留
@@ -4241,6 +4266,10 @@
             if (holder) {
                 holder.innerHTML = '';
             }
+        }
+        // 清空后恢复 pool 中对应选项的显示（不允许复用的题组）
+        if (previousPayload) {
+            restorePoolOption(dropzone, previousPayload);
         }
         updateDropzoneState(dropzone);
     }
@@ -4259,10 +4288,12 @@
     function buildDragPayload(item) {
         if (!item) return null;
         const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
+        const sourcePool = item.closest(POOL_CONTAINER_SELECTOR);
         return {
             value: item.dataset.heading || item.dataset.option || item.dataset.key || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
             label: item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent.trim(),
-            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || ''
+            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || '',
+            sourcePoolId: sourcePool?.id || item.dataset.originPool || ''
         };
     }
 
@@ -4276,7 +4307,8 @@
             return {
                 value: String(payload.value || payload.label || '').trim(),
                 label: String(payload.label || payload.value || '').trim(),
-                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim()
+                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim(),
+                sourcePoolId: String(payload.sourcePoolId || '').trim()
             };
         } catch (_) {
             const fallback = String(rawValue).trim();
@@ -4297,6 +4329,11 @@
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
+            // 已被使用的选项不可拖拽
+            if (item.classList.contains('option-consumed') || item.dataset.consumed === '1') {
+                event.preventDefault();
+                return;
+            }
             const payload = buildDragPayload(item);
             if (!payload || !payload.value) {
                 event.preventDefault();
@@ -4347,6 +4384,140 @@
         updateDropzoneState(dropzone);
     }
 
+    function resolvePoolContainer(group) {
+        // 候选池容器 class 不统一：.pool-items / #word-options / .options-pool /
+        // .option-pool / .cardpool 均可能是（.option-pool 与 .options-pool 是不同 class，
+        // .cardpool 用于卡片匹配题，二者都必须覆盖）
+        if (!group) return null;
+        return group.querySelector(POOL_CONTAINER_SELECTOR);
+    }
+
+    function resolveOptionGroupAndPool(dropzone, payload) {
+        // 辅助函数：在左右分栏布局下也能找到正确的题组容器和选项池。
+        // 优先用 dropzone 定位所属组（consume/restore 针对放置/清空的答案区所属组，
+        // 跨组交换时不能用 payload 来源定位，否则会误伤源组），sourcePoolId 作兜底。
+        let group = null;
+        let pool = null;
+
+        // 1. 优先从 dropzone 向上查找 group（目标/源答案区所属组）
+        if (dropzone) {
+            group = dropzone.closest('.unified-group');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 2. 尝试通过 payload.sourcePoolId 查找 pool（兼容分栏下 closest 失效）
+        if (!group && payload && payload.sourcePoolId) {
+            pool = document.getElementById(payload.sourcePoolId);
+            if (pool) {
+                group = pool.closest('.unified-group');
+            }
+        }
+
+        // 3. 如果还没找到，找到页面上 allowOptionReuse=false 的 group
+        if (!group) {
+            group = document.querySelector('.unified-group[data-allow-option-reuse="false"]');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 4. 最后兜底：直接找第一个 pool
+        if (!pool) {
+            pool = document.querySelector(POOL_CONTAINER_SELECTOR);
+            if (pool) {
+                group = group || pool.closest('.unified-group');
+            }
+        }
+
+        return { group, pool };
+    }
+
+    function findPoolItemByValue(pool, consumedValue) {
+        // 统一候选 item 类型：.drag-item（段落/匹配）、.draggable-word（选词填空）
+        if (!pool) return null;
+        const items = pool.querySelectorAll(POOL_ITEM_SELECTOR);
+        for (const item of items) {
+            const itemValue = canonicalizeAnswerToken(
+                item.dataset.heading || item.dataset.option || item.dataset.key
+                || item.dataset.word || item.dataset.value || item.textContent
+            );
+            if (itemValue && itemValue === consumedValue) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function consumePoolOption(dropzone, payload) {
+        // 段落匹配等不允许复用的题组：选项拖走后在候选池标记为已使用（禁用+标灰），
+        // 便于用户直观看到哪些选项已被使用，且不可再次选择。
+        if (!dropzone || !payload || !payload.value) {
+            return;
+        }
+        const { group, pool } = resolveOptionGroupAndPool(dropzone, payload);
+        if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
+            return;
+        }
+        const consumedValue = canonicalizeAnswerToken(payload.value);
+        const item = findPoolItemByValue(pool, consumedValue);
+        if (item && !item.dataset.consumed) {
+            item.dataset.consumed = '1';
+            item.classList.add('option-consumed');
+            item.setAttribute('draggable', 'false');
+        }
+    }
+
+    function restorePoolOption(dropzone, payload) {
+        if (!dropzone || !payload || !payload.value) {
+            return;
+        }
+        const { group, pool } = resolveOptionGroupAndPool(dropzone, payload);
+        if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
+            return;
+        }
+        // 限定到当前组的 questionIds：同一页面可能有多个不允许复用的题组
+        // 使用相同选项字母（如 p2-high-233 组2/组3 都用 A-E），
+        // 跨组扫描会误伤其他组的独立选项。
+        const groupQuestionIds = new Set(
+            String(group.dataset.questionIds || '')
+                .split(',')
+                .map((entry) => normalizeQuestionId(entry.trim()))
+                .filter(Boolean)
+        );
+        const restoredValue = canonicalizeAnswerToken(payload.value);
+        const item = findPoolItemByValue(pool, restoredValue);
+        if (item && item.dataset.consumed) {
+            // 仅当该选项未被当前组的其他 dropzone 使用时才恢复
+            // 左右分栏布局下 dropzone 不在 group 内，需按 questionId 匹配；
+            // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
+            const groupDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'))
+                .filter((zone) => {
+                    const zoneQuestion = zone.dataset.question || zone.dataset.questionId || '';
+                    const zoneIds = expandQuestionSequence(zoneQuestion);
+                    const normalizedZoneIds = zoneIds.length
+                        ? zoneIds.map((id) => normalizeQuestionId(id)).filter(Boolean)
+                        : [normalizeQuestionId(zoneQuestion)].filter(Boolean);
+                    return normalizedZoneIds.some((id) => groupQuestionIds.has(id));
+                });
+            const stillUsed = groupDropzones.some((zone) => {
+                const zonePayload = getDropzonePayload(zone);
+                return zonePayload
+                    && canonicalizeAnswerToken(zonePayload.value) === restoredValue;
+            });
+            if (!stillUsed) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
+                // 不允许重新启用选项，否则可绕过锁定继续作答
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+                item.classList.toggle('drag-item-locked', interactionLocked);
+            }
+        }
+    }
+
     function handleDropOnDropzone(dropzone, payload) {
         if (!dropzone || !payload || !payload.value) {
             return;
@@ -4359,12 +4530,28 @@
             return;
         }
         const previousPayload = getDropzonePayload(dropzone);
+        const sourcePreviousPayload = getDropzonePayload(sourceDropzone);
         setDropzoneAnswer(dropzone, payload.value, payload.label);
+
+        // 目标 dropzone：消耗新值；若原来有值且被替换，恢复原值（仅当不再被使用）
+        consumePoolOption(dropzone, payload);
+        if (previousPayload && previousPayload.value
+            && canonicalizeAnswerToken(previousPayload.value) !== canonicalizeAnswerToken(payload.value)) {
+            restorePoolOption(dropzone, previousPayload);
+        }
+
         if (sourceDropzone && sourceDropzone !== dropzone) {
+            // 跨答案区拖动：先把目标旧值移入源 dropzone（消耗源组对应选项），
+            // 再恢复源旧值——此时源已更新，才能正确判断源旧值是否仍被使用
             if (previousPayload && previousPayload.value) {
                 setDropzoneAnswer(sourceDropzone, previousPayload.value, previousPayload.label);
+                consumePoolOption(sourceDropzone, previousPayload);
             } else {
                 clearDropzone(sourceDropzone);
+            }
+            // 源 dropzone 的旧值已被移走，恢复其在 pool 中的状态（仅当不再被使用）
+            if (sourcePreviousPayload && sourcePreviousPayload.value) {
+                restorePoolOption(sourceDropzone, sourcePreviousPayload);
             }
         }
         updateNavStatuses();
@@ -4378,11 +4565,17 @@
         if (!sourceDropzone) {
             return;
         }
+        // 先记录原答案，清空后恢复 pool 中的选项显示
+        const previousPayload = getDropzonePayload(sourceDropzone);
         clearDropzone(sourceDropzone);
+        if (previousPayload) {
+            restorePoolOption(sourceDropzone, previousPayload);
+        }
         updateNavStatuses();
     }
 
     function attachDragDrop() {
+        ensureOptionConsumedStyles();
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
@@ -4397,7 +4590,7 @@
         });
         document.addEventListener('dragover', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -4407,13 +4600,13 @@
         });
         document.addEventListener('dragleave', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -4425,7 +4618,7 @@
             if (!payload) {
                 return;
             }
-            if (target.classList.contains('pool-items')) {
+            if (target.matches(POOL_CONTAINER_SELECTOR) || target.closest(POOL_CONTAINER_SELECTOR)) {
                 handleDropBackToPool(payload);
                 return;
             }
@@ -4685,6 +4878,8 @@
         }
         const label = normalizeAnswerForReplay(rawValue, 'label') || value;
         setDropzoneAnswer(dropzone, value, label);
+        // 回放答案时也需要标记选项为已使用（不允许复用的题组）
+        consumePoolOption(dropzone, { value, label });
         return true;
     }
 
@@ -5611,6 +5806,9 @@
     }
 
     function applyReplayAnswersToDom(answers = {}) {
+        // 连续 replay 不同记录时，先重置所有候选池的已使用状态，
+        // 再按新记录的完整答案集重新消耗，避免新旧答案的选项都保持禁用
+        resetAllConsumedOptions();
         applyAnswersToDom(answers);
     }
 
@@ -5662,7 +5860,9 @@
         const locked = Boolean(state.readOnly || state.timerLocked);
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
-            item.setAttribute('draggable', locked ? 'false' : 'true');
+            // 如果选项已被使用（option-consumed），始终保持不可拖拽
+            const isConsumed = item.classList.contains('option-consumed') || item.dataset.consumed === '1';
+            item.setAttribute('draggable', locked || isConsumed ? 'false' : 'true');
             item.classList.toggle('drag-item-locked', locked);
         });
     }
@@ -7031,6 +7231,19 @@
         };
     }
 
+    function resetAllConsumedOptions() {
+        // 重置所有候选池选项的已使用状态（覆盖 .drag-item 和 .draggable-word）。
+        // 供重置和 replay 前调用，避免连续 replay 时新旧答案的选项都保持禁用。
+        document.querySelectorAll(`${POOL_ITEM_SELECTOR}`).forEach((item) => {
+            if (item.dataset.consumed || item.classList.contains('option-consumed')) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+            }
+        });
+    }
+
     function clearCurrentAnswers() {
         document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
             input.checked = false;
@@ -7045,6 +7258,8 @@
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);
         });
+        // 兜底：确保所有选项池中的选项都恢复为可用状态
+        resetAllConsumedOptions();
         // 清除选择题/表格判卷残留的绿/红标记
         document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
             node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');

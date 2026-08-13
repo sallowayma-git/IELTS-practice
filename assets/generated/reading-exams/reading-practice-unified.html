@@ -403,6 +403,17 @@
             border-style: solid;
         }
 
+        .drag-item.option-consumed,
+        .draggable-word.option-consumed,
+        .card.option-consumed {
+            opacity: 0.45;
+            cursor: not-allowed;
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+
         /* Draggable word styles for summary completion */
         .draggable-word {
             border: 1px solid #bfdbfe;
