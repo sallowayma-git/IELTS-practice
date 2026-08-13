@@ -13,6 +13,10 @@
     const READING_NOTE_STYLE_ID = 'reading-note-style';
     const READING_DISPLAY_CONTROL_STYLE_ID = 'reading-display-control-style';
     const OPTION_CONSUMED_STYLE_ID = 'reading-option-consumed-style';
+    // 候选池容器/选项 class 不统一，统一选择器覆盖所有变体。
+    // .headings-pool 当前都包裹 .pool-items 但作为防御一并纳入。
+    const POOL_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
+    const POOL_CONTAINER_SELECTOR = '.pool-items, #word-options, .options-pool, .option-pool, .cardpool, .headings-pool, .pool';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
@@ -1533,14 +1537,14 @@
     }
 
     function initDragPools() {
-        document.querySelectorAll('.pool-items').forEach((pool, index) => {
+        document.querySelectorAll(POOL_CONTAINER_SELECTOR).forEach((pool, index) => {
             if (!pool.id) {
                 pool.id = `practice-pool-${index}`;
             }
         });
-        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+        document.querySelectorAll(`${POOL_CONTAINER_SELECTOR} ${POOL_ITEM_SELECTOR}`).forEach((item) => {
             if (!item.dataset.originPool) {
-                const pool = item.closest('.pool-items');
+                const pool = item.closest(POOL_CONTAINER_SELECTOR);
                 if (pool?.id) {
                     item.dataset.originPool = pool.id;
                 }
@@ -1704,7 +1708,9 @@
         const style = document.createElement('style');
         style.id = OPTION_CONSUMED_STYLE_ID;
         style.textContent = `
-            .drag-item.option-consumed {
+            .drag-item.option-consumed,
+            .draggable-word.option-consumed,
+            .card.option-consumed {
                 opacity: 0.45 !important;
                 cursor: not-allowed !important;
                 background: #f1f5f9 !important;
@@ -4282,7 +4288,7 @@
     function buildDragPayload(item) {
         if (!item) return null;
         const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
-        const sourcePool = item.closest('.pool-items');
+        const sourcePool = item.closest(POOL_CONTAINER_SELECTOR);
         return {
             value: item.dataset.heading || item.dataset.option || item.dataset.key || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
             label: item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent.trim(),
@@ -4301,7 +4307,8 @@
             return {
                 value: String(payload.value || payload.label || '').trim(),
                 label: String(payload.label || payload.value || '').trim(),
-                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim()
+                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim(),
+                sourcePoolId: String(payload.sourcePoolId || '').trim()
             };
         } catch (_) {
             const fallback = String(rawValue).trim();
@@ -4377,12 +4384,12 @@
         updateDropzoneState(dropzone);
     }
 
-    const POOL_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
-
     function resolvePoolContainer(group) {
-        // 候选池容器 class 不统一：.pool-items / #word-options / .options-pool 均可能是
+        // 候选池容器 class 不统一：.pool-items / #word-options / .options-pool /
+        // .option-pool / .cardpool 均可能是（.option-pool 与 .options-pool 是不同 class，
+        // .cardpool 用于卡片匹配题，二者都必须覆盖）
         if (!group) return null;
-        return group.querySelector('.pool-items, #word-options, .options-pool, .pool');
+        return group.querySelector(POOL_CONTAINER_SELECTOR);
     }
 
     function resolveOptionGroupAndPool(dropzone, payload) {
@@ -4418,7 +4425,7 @@
 
         // 4. 最后兜底：直接找第一个 pool
         if (!pool) {
-            pool = document.querySelector('.pool-items, #word-options, .options-pool, .pool');
+            pool = document.querySelector(POOL_CONTAINER_SELECTOR);
             if (pool) {
                 group = group || pool.closest('.unified-group');
             }
@@ -4583,7 +4590,7 @@
         });
         document.addEventListener('dragover', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -4593,13 +4600,13 @@
         });
         document.addEventListener('dragleave', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -4611,7 +4618,7 @@
             if (!payload) {
                 return;
             }
-            if (target.classList.contains('pool-items')) {
+            if (target.matches(POOL_CONTAINER_SELECTOR) || target.closest(POOL_CONTAINER_SELECTOR)) {
                 handleDropBackToPool(payload);
                 return;
             }
