@@ -4377,44 +4377,70 @@
         updateDropzoneState(dropzone);
     }
 
+    const POOL_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
+
+    function resolvePoolContainer(group) {
+        // 候选池容器 class 不统一：.pool-items / #word-options / .options-pool 均可能是
+        if (!group) return null;
+        return group.querySelector('.pool-items, #word-options, .options-pool, .pool');
+    }
+
     function resolveOptionGroupAndPool(dropzone, payload) {
-        // 辅助函数：在左右分栏布局下也能找到正确的题组容器和选项池
+        // 辅助函数：在左右分栏布局下也能找到正确的题组容器和选项池。
+        // 优先用 dropzone 定位所属组（consume/restore 针对放置/清空的答案区所属组，
+        // 跨组交换时不能用 payload 来源定位，否则会误伤源组），sourcePoolId 作兜底。
         let group = null;
         let pool = null;
 
-        // 1. 优先通过 payload.sourcePoolId 查找 pool
-        if (payload && payload.sourcePoolId) {
+        // 1. 优先从 dropzone 向上查找 group（目标/源答案区所属组）
+        if (dropzone) {
+            group = dropzone.closest('.unified-group');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 2. 尝试通过 payload.sourcePoolId 查找 pool（兼容分栏下 closest 失效）
+        if (!group && payload && payload.sourcePoolId) {
             pool = document.getElementById(payload.sourcePoolId);
             if (pool) {
                 group = pool.closest('.unified-group');
             }
         }
 
-        // 2. 尝试从 dropzone 向上查找 group（兼容非分栏布局）
-        if (!group && dropzone) {
-            group = dropzone.closest('.unified-group');
-            if (group) {
-                pool = group.querySelector('.pool-items');
-            }
-        }
-
-        // 3. 如果还没找到，通过 dropzone 关联的题目查找：找到页面上 allowOptionReuse=false 的 group
+        // 3. 如果还没找到，找到页面上 allowOptionReuse=false 的 group
         if (!group) {
             group = document.querySelector('.unified-group[data-allow-option-reuse="false"]');
             if (group) {
-                pool = group.querySelector('.pool-items');
+                pool = resolvePoolContainer(group);
             }
         }
 
         // 4. 最后兜底：直接找第一个 pool
         if (!pool) {
-            pool = document.querySelector('.pool-items');
+            pool = document.querySelector('.pool-items, #word-options, .options-pool, .pool');
             if (pool) {
                 group = group || pool.closest('.unified-group');
             }
         }
 
         return { group, pool };
+    }
+
+    function findPoolItemByValue(pool, consumedValue) {
+        // 统一候选 item 类型：.drag-item（段落/匹配）、.draggable-word（选词填空）
+        if (!pool) return null;
+        const items = pool.querySelectorAll(POOL_ITEM_SELECTOR);
+        for (const item of items) {
+            const itemValue = canonicalizeAnswerToken(
+                item.dataset.heading || item.dataset.option || item.dataset.key
+                || item.dataset.word || item.dataset.value || item.textContent
+            );
+            if (itemValue && itemValue === consumedValue) {
+                return item;
+            }
+        }
+        return null;
     }
 
     function consumePoolOption(dropzone, payload) {
@@ -4428,17 +4454,12 @@
             return;
         }
         const consumedValue = canonicalizeAnswerToken(payload.value);
-        pool.querySelectorAll('.drag-item').forEach((item) => {
-            const itemValue = canonicalizeAnswerToken(
-                item.dataset.heading || item.dataset.option || item.dataset.key
-                || item.dataset.word || item.dataset.value || item.textContent
-            );
-            if (itemValue && itemValue === consumedValue && !item.dataset.consumed) {
-                item.dataset.consumed = '1';
-                item.classList.add('option-consumed');
-                item.setAttribute('draggable', 'false');
-            }
-        });
+        const item = findPoolItemByValue(pool, consumedValue);
+        if (item && !item.dataset.consumed) {
+            item.dataset.consumed = '1';
+            item.classList.add('option-consumed');
+            item.setAttribute('draggable', 'false');
+        }
     }
 
     function restorePoolOption(dropzone, payload) {
@@ -4459,36 +4480,35 @@
                 .filter(Boolean)
         );
         const restoredValue = canonicalizeAnswerToken(payload.value);
-        pool.querySelectorAll('.drag-item').forEach((item) => {
-            const itemValue = canonicalizeAnswerToken(
-                item.dataset.heading || item.dataset.option || item.dataset.key
-                || item.dataset.word || item.dataset.value || item.textContent
-            );
-            if (itemValue && itemValue === restoredValue && item.dataset.consumed) {
-                // 仅当该选项未被当前组的其他 dropzone 使用时才恢复
-                // 左右分栏布局下 dropzone 不在 group 内，需按 questionId 匹配；
-                // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
-                const groupDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'))
-                    .filter((zone) => {
-                        const zoneQuestion = zone.dataset.question || zone.dataset.questionId || '';
-                        const zoneIds = expandQuestionSequence(zoneQuestion);
-                        const normalizedZoneIds = zoneIds.length
-                            ? zoneIds.map((id) => normalizeQuestionId(id)).filter(Boolean)
-                            : [normalizeQuestionId(zoneQuestion)].filter(Boolean);
-                        return normalizedZoneIds.some((id) => groupQuestionIds.has(id));
-                    });
-                const stillUsed = groupDropzones.some((zone) => {
-                    const zonePayload = getDropzonePayload(zone);
-                    return zonePayload
-                        && canonicalizeAnswerToken(zonePayload.value) === itemValue;
+        const item = findPoolItemByValue(pool, restoredValue);
+        if (item && item.dataset.consumed) {
+            // 仅当该选项未被当前组的其他 dropzone 使用时才恢复
+            // 左右分栏布局下 dropzone 不在 group 内，需按 questionId 匹配；
+            // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
+            const groupDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'))
+                .filter((zone) => {
+                    const zoneQuestion = zone.dataset.question || zone.dataset.questionId || '';
+                    const zoneIds = expandQuestionSequence(zoneQuestion);
+                    const normalizedZoneIds = zoneIds.length
+                        ? zoneIds.map((id) => normalizeQuestionId(id)).filter(Boolean)
+                        : [normalizeQuestionId(zoneQuestion)].filter(Boolean);
+                    return normalizedZoneIds.some((id) => groupQuestionIds.has(id));
                 });
-                if (!stillUsed) {
-                    delete item.dataset.consumed;
-                    item.classList.remove('option-consumed');
-                    item.setAttribute('draggable', 'true');
-                }
+            const stillUsed = groupDropzones.some((zone) => {
+                const zonePayload = getDropzonePayload(zone);
+                return zonePayload
+                    && canonicalizeAnswerToken(zonePayload.value) === restoredValue;
+            });
+            if (!stillUsed) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
+                // 不允许重新启用选项，否则可绕过锁定继续作答
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+                item.classList.toggle('drag-item-locked', interactionLocked);
             }
-        });
+        }
     }
 
     function handleDropOnDropzone(dropzone, payload) {
@@ -4503,21 +4523,28 @@
             return;
         }
         const previousPayload = getDropzonePayload(dropzone);
+        const sourcePreviousPayload = getDropzonePayload(sourceDropzone);
         setDropzoneAnswer(dropzone, payload.value, payload.label);
-        // 从 pool 拖入：消耗新选项（若组不允许复用）
-        if (!sourceDropzone) {
-            consumePoolOption(dropzone, payload);
-            // 替换已填答案时，旧选项已不再被该 dropzone 使用，恢复其在 pool 中的可用状态
-            if (previousPayload && previousPayload.value
-                && canonicalizeAnswerToken(previousPayload.value) !== canonicalizeAnswerToken(payload.value)) {
-                restorePoolOption(dropzone, previousPayload);
-            }
+
+        // 目标 dropzone：消耗新值；若原来有值且被替换，恢复原值（仅当不再被使用）
+        consumePoolOption(dropzone, payload);
+        if (previousPayload && previousPayload.value
+            && canonicalizeAnswerToken(previousPayload.value) !== canonicalizeAnswerToken(payload.value)) {
+            restorePoolOption(dropzone, previousPayload);
         }
+
         if (sourceDropzone && sourceDropzone !== dropzone) {
+            // 跨答案区拖动：先把目标旧值移入源 dropzone（消耗源组对应选项），
+            // 再恢复源旧值——此时源已更新，才能正确判断源旧值是否仍被使用
             if (previousPayload && previousPayload.value) {
                 setDropzoneAnswer(sourceDropzone, previousPayload.value, previousPayload.label);
+                consumePoolOption(sourceDropzone, previousPayload);
             } else {
                 clearDropzone(sourceDropzone);
+            }
+            // 源 dropzone 的旧值已被移走，恢复其在 pool 中的状态（仅当不再被使用）
+            if (sourcePreviousPayload && sourcePreviousPayload.value) {
+                restorePoolOption(sourceDropzone, sourcePreviousPayload);
             }
         }
         updateNavStatuses();
@@ -5772,6 +5799,9 @@
     }
 
     function applyReplayAnswersToDom(answers = {}) {
+        // 连续 replay 不同记录时，先重置所有候选池的已使用状态，
+        // 再按新记录的完整答案集重新消耗，避免新旧答案的选项都保持禁用
+        resetAllConsumedOptions();
         applyAnswersToDom(answers);
     }
 
@@ -7194,6 +7224,19 @@
         };
     }
 
+    function resetAllConsumedOptions() {
+        // 重置所有候选池选项的已使用状态（覆盖 .drag-item 和 .draggable-word）。
+        // 供重置和 replay 前调用，避免连续 replay 时新旧答案的选项都保持禁用。
+        document.querySelectorAll(`${POOL_ITEM_SELECTOR}`).forEach((item) => {
+            if (item.dataset.consumed || item.classList.contains('option-consumed')) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+            }
+        });
+    }
+
     function clearCurrentAnswers() {
         document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
             input.checked = false;
@@ -7209,13 +7252,7 @@
             clearDropzone(dropzone);
         });
         // 兜底：确保所有选项池中的选项都恢复为可用状态
-        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
-            if (item.dataset.consumed || item.classList.contains('option-consumed')) {
-                delete item.dataset.consumed;
-                item.classList.remove('option-consumed');
-                item.setAttribute('draggable', 'true');
-            }
-        });
+        resetAllConsumedOptions();
         // 清除选择题/表格判卷残留的绿/红标记
         document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
             node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');
