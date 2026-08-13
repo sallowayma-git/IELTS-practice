@@ -134,6 +134,10 @@ async function run() {
   ok(/displayAnswerValue\(entry\.correctAnswer,\s*''\)/.test(unifiedPage), 'review_results_correct_answer_not_normalized', failed);
   ok(/setDropzoneAnswer\(dropzone,\s*value,\s*label\)/.test(unifiedPage), 'dropzone_replay_label_not_preserved', failed);
   ok(/value:\s*item\.dataset\.heading\s*\|\|\s*item\.dataset\.option\s*\|\|\s*item\.dataset\.key/.test(unifiedPage), 'drag_payload_ignores_data_key', failed);
+  ok(/POOL_CONTAINER_SELECTOR[^\n]*\.cardpool/.test(unifiedPage), 'cardpool_container_missing', failed);
+  ok(/POOL_CONTAINER_SELECTOR[^\n]*\.option-pool/.test(unifiedPage), 'option_pool_container_missing', failed);
+  ok(/\.card\.option-consumed\s*\{[\s\S]*?opacity:\s*0\.45/.test(unifiedPage), 'card_consumed_style_missing', failed);
+  ok(/\.card\.option-consumed\s*\{[\s\S]*?opacity:\s*0\.45/.test(unifiedHtml), 'unified_html_card_consumed_style_missing', failed);
   ok(/splitAnswerTokens\(rawValue\)\s*\.map\(\(entry\) => canonicalizeAnswerToken\(entry\)\)/.test(unifiedPage), 'replay_field_value_list_not_normalized', failed);
   ok(!/String\(rawValue == null \? '' : rawValue\)\.split/.test(unifiedPage), 'replay_raw_object_string_split_regressed', failed);
   ok(/--reading-left-pane-width/.test(unifiedHtml), 'missing_resizable_reading_pane_width_var', failed);

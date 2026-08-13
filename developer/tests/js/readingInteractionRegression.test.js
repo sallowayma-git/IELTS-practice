@@ -125,6 +125,79 @@ async function testBrowserInteractions() {
         assert.deepEqual(replayChecks.split, [true, false, true]);
         assert.deepEqual(replayChecks.single, [true, false, true]);
 
+        const cardPoolChecks = await page.evaluate(() => {
+            const groups = document.getElementById('question-groups');
+            groups.innerHTML = `
+                <section class="unified-group" data-question-ids="q6,q7" data-allow-option-reuse="false">
+                    <div id="test-cardpool" class="cardpool">
+                        <div id="cardpool-A" class="card" data-value="A" draggable="true">A Alpha</div>
+                        <div id="cardpool-B" class="card" data-value="B" draggable="true">B Beta</div>
+                    </div>
+                    <div class="match-dropzone" data-question="q6"></div>
+                    <div class="match-dropzone" data-question="q7"></div>
+                </section>
+                <section class="unified-group" data-question-ids="q20,q21" data-allow-option-reuse="false">
+                    <div id="test-option-pool" class="option-pool">
+                        <div id="optionpool-C" class="card" data-value="C" draggable="true">C Gamma</div>
+                        <div id="optionpool-D" class="card" data-value="D" draggable="true">D Delta</div>
+                    </div>
+                    <div class="match-dropzone" data-question="q20"></div>
+                    <div class="match-dropzone" data-question="q21"></div>
+                </section>
+                <section class="unified-group" data-question-ids="q30" data-allow-option-reuse="true">
+                    <div id="test-reusable-option-pool" class="option-pool">
+                        <div id="optionpool-E" class="card" data-value="E" draggable="true">E Reusable</div>
+                    </div>
+                    <div class="match-dropzone" data-question="q30"></div>
+                </section>`;
+
+            const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+            hooks.setTestState({ readOnly: false, timerLocked: false });
+            const snapshot = (id) => {
+                const item = document.getElementById(id);
+                return {
+                    consumed: item.dataset.consumed || '',
+                    consumedClass: item.classList.contains('option-consumed'),
+                    draggable: item.getAttribute('draggable')
+                };
+            };
+
+            hooks.applyReplayAnswersToDom({ q6: 'A', q20: 'C', q30: 'E' });
+            const first = {
+                cardA: snapshot('cardpool-A'),
+                cardB: snapshot('cardpool-B'),
+                optionC: snapshot('optionpool-C'),
+                optionD: snapshot('optionpool-D'),
+                reusableE: snapshot('optionpool-E')
+            };
+
+            hooks.applyReplayAnswersToDom({ q6: 'B', q20: 'D', q30: 'E' });
+            const second = {
+                cardA: snapshot('cardpool-A'),
+                cardB: snapshot('cardpool-B'),
+                optionC: snapshot('optionpool-C'),
+                optionD: snapshot('optionpool-D'),
+                reusableE: snapshot('optionpool-E')
+            };
+            return { first, second };
+        });
+        assert.deepEqual(cardPoolChecks, {
+            first: {
+                cardA: { consumed: '1', consumedClass: true, draggable: 'false' },
+                cardB: { consumed: '', consumedClass: false, draggable: 'true' },
+                optionC: { consumed: '1', consumedClass: true, draggable: 'false' },
+                optionD: { consumed: '', consumedClass: false, draggable: 'true' },
+                reusableE: { consumed: '', consumedClass: false, draggable: 'true' }
+            },
+            second: {
+                cardA: { consumed: '', consumedClass: false, draggable: 'true' },
+                cardB: { consumed: '1', consumedClass: true, draggable: 'false' },
+                optionC: { consumed: '', consumedClass: false, draggable: 'true' },
+                optionD: { consumed: '1', consumedClass: true, draggable: 'false' },
+                reusableE: { consumed: '', consumedClass: false, draggable: 'true' }
+            }
+        });
+
         const unknownPresentation = await page.evaluate(() => {
             const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
             hooks.captureDom();
@@ -420,7 +493,7 @@ async function main() {
     await testBrowserInteractions();
     console.log(JSON.stringify({
         status: 'pass',
-        detail: 'reading duplicate highlights, grouped replay, unknown results and inline-suite locks covered'
+        detail: 'reading duplicate highlights, grouped/card-pool replay, unknown results and inline-suite locks covered'
     }));
 }
 
