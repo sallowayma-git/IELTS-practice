@@ -4504,7 +4504,14 @@
         return node.dataset && node.dataset.hlType === 'note' ? 'note' : 'highlight';
     }
 
-    function applyHighlightKind(node, kind = 'highlight') {
+    function resolveHighlightLevel(node) {
+        if (!(node instanceof HTMLElement)) {
+            return 'primary';
+        }
+        return node.dataset && node.dataset.hlLevel === 'secondary' ? 'secondary' : 'primary';
+    }
+
+    function applyHighlightKind(node, kind = 'highlight', level = 'primary') {
         if (!(node instanceof HTMLElement)) {
             return;
         }
@@ -4513,6 +4520,11 @@
             node.dataset.hlType = 'note';
         } else {
             delete node.dataset.hlType;
+        }
+        if (level === 'secondary') {
+            node.dataset.hlLevel = 'secondary';
+        } else {
+            delete node.dataset.hlLevel;
         }
     }
 
@@ -4561,6 +4573,7 @@
                     scope,
                     text,
                     kind: resolveHighlightKind(node),
+                    level: resolveHighlightLevel(node),
                     noteId: node.dataset && node.dataset.noteId ? String(node.dataset.noteId) : '',
                     occurrence: seen,
                     start: startOffset,
@@ -4584,6 +4597,7 @@
             return;
         }
         const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
+        const highlightLevel = record.level === 'secondary' ? 'secondary' : 'primary';
         const normalizedRecordText = normalizeComparableText(record.text);
         const startOffset = Number(
             Object.prototype.hasOwnProperty.call(record, 'start')
@@ -4634,7 +4648,7 @@
                 const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
                 if (offsetRange && !offsetRange.collapsed) {
                     const offsetSpan = document.createElement('span');
-                    applyHighlightKind(offsetSpan, highlightKind);
+                    applyHighlightKind(offsetSpan, highlightKind, highlightLevel);
                     if (record.noteId) {
                         offsetSpan.dataset.noteId = String(record.noteId);
                     }
@@ -4685,7 +4699,7 @@
             return false;
         }
         const span = document.createElement('span');
-        applyHighlightKind(span, highlightKind);
+        applyHighlightKind(span, highlightKind, highlightLevel);
         if (record.noteId) {
             span.dataset.noteId = String(record.noteId);
         }
@@ -6930,7 +6944,19 @@
             return;
         }
         const selection = global.getSelection();
-        if (!interaction.lastRange || interaction.lastRange.collapsed || interaction.currentHighlightNode) {
+        if (!interaction.lastRange || interaction.lastRange.collapsed) {
+            return;
+        }
+        if (kind === 'highlight' && interaction.currentHighlightNode instanceof HTMLElement) {
+            interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            selection?.removeAllRanges();
+            if (toolbar) toolbar.style.display = 'none';
+            interaction.lastRange = null;
+            interaction.currentHighlightNode = null;
+            syncReadingAnnotation('highlight');
+            return;
+        }
+        if (interaction.currentHighlightNode) {
             return;
         }
         const span = document.createElement('span');
