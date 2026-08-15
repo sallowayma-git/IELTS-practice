@@ -126,6 +126,17 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                     📚 题库浏览
                 </button>
                 <button
+                    class="question-bank-quick-trigger"
+                    id="question-bank-quick-trigger"
+                    type="button"
+                    aria-label="题库速查：全局搜索或切换题目分类"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="question-bank-quick-picker"
+                >
+                    题库速查
+                </button>
+                <button
                     class="nav-btn hero-nav__btn"
                     type="button"
                     data-view="practice"
@@ -147,6 +158,106 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                     ⚙️ 设置
                 </button>
             </nav>
+
+            <section
+                class="question-bank-quick-picker"
+                id="question-bank-quick-picker"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="question-bank-quick-title"
+                aria-describedby="question-bank-quick-status"
+                hidden
+            >
+                <div
+                    class="question-bank-quick-picker__dialog"
+                    tabindex="-1"
+                >
+                    <header class="question-bank-quick-picker__header">
+                        <div class="question-bank-quick-picker__heading-group">
+                            <span
+                                class="question-bank-quick-picker__eyebrow"
+                                aria-hidden="true"
+                                >QUICK FIND</span
+                            >
+                            <h2 id="question-bank-quick-title">
+                                全局题库速查
+                            </h2>
+                            <p>
+                                搜索当前题库的全部题目，或直接切换题目分类。
+                            </p>
+                        </div>
+                        <button
+                            class="question-bank-quick-picker__close"
+                            id="question-bank-quick-close"
+                            type="button"
+                            aria-label="关闭题库速查"
+                        >
+                            关闭
+                        </button>
+                    </header>
+
+                    <div class="question-bank-quick-picker__search-field">
+                        <label for="question-bank-quick-search"
+                            >全局搜索</label
+                        >
+                        <input
+                            id="question-bank-quick-search"
+                            type="search"
+                            inputmode="search"
+                            enterkeyhint="search"
+                            autocomplete="off"
+                            spellcheck="false"
+                            placeholder="搜索题目标题、分类或关键字…"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-controls="question-bank-quick-results"
+                            aria-describedby="question-bank-quick-status"
+                        />
+                    </div>
+
+                    <p
+                        class="question-bank-quick-picker__status"
+                        id="question-bank-quick-status"
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                    >
+                        选择分类可直接进入题库浏览。
+                    </p>
+
+                    <section
+                        class="question-bank-quick-picker__section"
+                        aria-labelledby="question-bank-quick-scopes-title"
+                    >
+                        <div class="question-bank-quick-picker__section-head">
+                            <h3 id="question-bank-quick-scopes-title">
+                                题目分类
+                            </h3>
+                            <span>无需返回总览</span>
+                        </div>
+                        <div
+                            class="question-bank-quick-picker__scopes"
+                            id="question-bank-quick-scopes"
+                            role="group"
+                            aria-label="可用题目分类"
+                            aria-busy="true"
+                        >
+                            <p class="question-bank-quick-picker__placeholder">
+                                正在读取题目分类…
+                            </p>
+                        </div>
+                    </section>
+
+                    <div
+                        class="question-bank-quick-picker__results"
+                        id="question-bank-quick-results"
+                        role="listbox"
+                        aria-label="全局搜索结果"
+                        hidden
+                    ></div>
+                </div>
+            </section>
 
             <!-- 总览页面 -->
             <div id="overview-view" class="view active hero-panel hero-section">

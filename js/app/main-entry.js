@@ -274,6 +274,21 @@
         }
     }
 
+    function ensureBrowseStateManager() {
+        if (global.browseStateManager) {
+            return global.browseStateManager;
+        }
+        if (typeof global.BrowseStateManager !== 'function') {
+            return null;
+        }
+        try {
+            return new global.BrowseStateManager();
+        } catch (error) {
+            console.warn('[MainEntry] 初始化浏览状态管理器失败:', error);
+            return null;
+        }
+    }
+
     function synchronizeActiveBrowseViewAfterLoad() {
         if (getActiveViewName() !== 'browse' || typeof global.initializeBrowseView !== 'function') {
             return Promise.resolve();
@@ -286,7 +301,7 @@
                 return global.initializeBrowseView({ skipLoad: canApplyPendingFilter });
             })
             .then(function applyPendingBrowseFilter() {
-                if (!canApplyPendingFilter) {
+                if (!canApplyPendingFilter || global.__pendingBrowseFilter !== pendingFilter) {
                     return undefined;
                 }
                 return global.applyBrowseFilter(
@@ -307,6 +322,13 @@
         if (!browseGroupPromise) {
             browseGroupPromise = ensureLazyGroup(BROWSE_GROUP).then(function onBrowseLoaded() {
                 reapplyAppMixins();
+                // NavigationController is part of the shell, while its legacy
+                // implementation and BrowseStateManager arrive with Browse.
+                // Retry their idempotent initialization after the lazy group is
+                // present so cold quick-picker entry has the same runtime as a
+                // preloaded Browse view.
+                initializeNavigationShell();
+                ensureBrowseStateManager();
                 if (typeof global.setupBrowsePreferenceUI === 'function') {
                     try {
                         global.setupBrowsePreferenceUI();
@@ -343,6 +365,7 @@
     function ensureSessionSuiteReady() {
         if (!sessionSuitePromise) {
             sessionSuitePromise = Promise.all([
+                ensureBrowseGroup(),
                 ensurePracticeSuiteGroup(),
                 ensureLazyGroup(SESSION_GROUP)
             ]).then(function afterSuiteLoaded() {
@@ -384,12 +407,13 @@
     }
 
     function initializeNavigationShell() {
+        var controller = null;
         try {
             if (global.NavigationController && typeof global.NavigationController.ensure === 'function') {
-                global.NavigationController.ensure({
+                controller = global.NavigationController.ensure({
                     containerSelector: '.main-nav',
                     activeClass: 'active',
-                    initialView: 'overview',
+                    initialView: getActiveViewName() || 'overview',
                     syncOnNavigate: true,
                     onRepeatNavigate: function onRepeatNavigate(viewName) {
                         if (viewName === 'browse' && typeof global.resetBrowseViewToAll === 'function') {
@@ -410,6 +434,19 @@
         } catch (error) {
             console.warn('[MainEntry] 初始化导航失败:', error);
         }
+        if (controller && typeof document !== 'undefined') {
+            var navRoot = document.querySelector('.main-nav');
+            var fallbackHandler = navRoot && navRoot._legacyNavHandler;
+            if (typeof fallbackHandler === 'function' && typeof navRoot.removeEventListener === 'function') {
+                navRoot.removeEventListener('click', fallbackHandler);
+                try {
+                    delete navRoot._legacyNavHandler;
+                } catch (_) {
+                    navRoot._legacyNavHandler = null;
+                }
+            }
+        }
+        return controller;
     }
 
     function proxyAfterGroup(groupName, getter, fallback) {

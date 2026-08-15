@@ -4,6 +4,7 @@
     var prefetchTriggered = false;
     var attachedPrefetchHandlers = false;
     var browsePrefetchTriggered = false;
+    var browsePrefetchPromise = null;
     var morePrefetchTriggered = false;
 
     function ensurePracticeSuite() {
@@ -11,6 +12,19 @@
             return Promise.resolve();
         }
         return global.AppLazyLoader.ensureGroup('practice-suite');
+    }
+
+    function ensureBrowseRuntime() {
+        if (global.AppEntry && typeof global.AppEntry.ensureBrowseGroup === 'function') {
+            return Promise.resolve(global.AppEntry.ensureBrowseGroup());
+        }
+        if (typeof global.ensureBrowseGroup === 'function') {
+            return Promise.resolve(global.ensureBrowseGroup());
+        }
+        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            return Promise.resolve(global.AppLazyLoader.ensureGroup('browse-runtime'));
+        }
+        return Promise.resolve();
     }
 
     function exportPracticeMarkdown() {
@@ -53,14 +67,15 @@
 
     function triggerBrowsePrefetch() {
         if (browsePrefetchTriggered) {
-            return;
+            return browsePrefetchPromise || Promise.resolve();
         }
         browsePrefetchTriggered = true;
-        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-            global.AppLazyLoader.ensureGroup('browse-runtime').catch(function swallow(error) {
-                console.warn('[AppActions] 浏览模块预加载失败:', error);
-            });
-        }
+        browsePrefetchPromise = ensureBrowseRuntime().catch(function swallow(error) {
+            browsePrefetchTriggered = false;
+            browsePrefetchPromise = null;
+            console.warn('[AppActions] 浏览模块预加载失败:', error);
+        });
+        return browsePrefetchPromise;
     }
 
     function triggerMorePrefetch() {
@@ -500,8 +515,8 @@
         var tasks = [];
         if (loader) {
             tasks.push(loader.ensureGroup('exam-data'));
-            tasks.push(loader.ensureGroup('browse-runtime').catch(function () { return undefined; }));
         }
+        tasks.push(ensureBrowseRuntime().catch(function () { return undefined; }));
         return Promise.all(tasks).then(function () {
             return undefined;
         });

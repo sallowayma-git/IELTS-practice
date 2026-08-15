@@ -86,19 +86,16 @@ class BrowseStateManager {
      * 处理浏览导航
      */
     handleBrowseNavigation() {
-        console.log('[BrowseStateManager] 处理浏览导航，重置为显示所有考试');
+        console.log('[BrowseStateManager] 记录题库浏览导航');
 
-        if (typeof window.clearPendingBrowseAutoScroll === 'function') {
-            try { window.clearPendingBrowseAutoScroll(); } catch (_) {}
-        }
-
-        // 重置到全部考试视图
-        this.resetToAllExams();
+        // 导航控制器单独区分“进入 Browse”和“重复点击 Browse”。
+        // 普通进入时应保留待处理的分类与持久化偏好；只有重复
+        // 导航才由 ExamActions.resetBrowseViewToAll 执行一次原子重置。
 
         // 记录导航历史
         this.addToHistory({
             action: 'navigate_to_browse',
-            filter: 'all',
+            filter: this.currentFilter,
             timestamp: Date.now()
         });
     }
@@ -308,6 +305,11 @@ class BrowseStateManager {
         this.setState({
             currentCategory: null,
             currentFrequency: null,
+            filters: {
+                frequency: 'all',
+                status: 'all',
+                difficulty: 'all'
+            },
             searchQuery: '',
             pagination: {
                 page: 1,
@@ -357,9 +359,14 @@ class BrowseStateManager {
      * 清除搜索状态
      */
     clearSearchState() {
-        const searchInput = document.querySelector('.search-input');
+        const searchInput = document.getElementById('exam-search-input')
+            || document.querySelector('.search-input');
         if (searchInput) {
             searchInput.value = '';
+        }
+        const clearButton = document.getElementById('search-clear-btn');
+        if (clearButton) {
+            clearButton.hidden = true;
         }
     }
 

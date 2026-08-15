@@ -2261,17 +2261,25 @@ class ExamSystemApp {
                     break;
                 case 'browse':
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
-                        const { category, type, filterMode, path } = window.__pendingBrowseFilter;
+                        const pendingFilter = window.__pendingBrowseFilter;
+                        const { category, type, filterMode, path } = pendingFilter;
                         Promise.resolve(
                             typeof window.initializeBrowseView === 'function'
                                 ? window.initializeBrowseView({ skipLoad: true })
                                 : null
-                        ).then(() => window.applyBrowseFilter(category, type, filterMode, path))
+                        ).then(() => {
+                            if (window.__pendingBrowseFilter !== pendingFilter) {
+                                return undefined;
+                            }
+                            return window.applyBrowseFilter(category, type, filterMode, path);
+                        })
                             .catch((error) => {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);
                             })
                             .finally(() => {
-                                delete window.__pendingBrowseFilter;
+                                if (window.__pendingBrowseFilter === pendingFilter) {
+                                    delete window.__pendingBrowseFilter;
+                                }
                             });
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();
