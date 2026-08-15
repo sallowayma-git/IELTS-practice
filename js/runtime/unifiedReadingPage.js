@@ -684,7 +684,19 @@
             return;
         }
         const selection = global.getSelection();
-        if (!interaction.lastRange || interaction.lastRange.collapsed || interaction.currentHighlightNode) {
+        if (!interaction.lastRange || interaction.lastRange.collapsed) {
+            return;
+        }
+        if (kind === 'highlight' && interaction.currentHighlightNode instanceof HTMLElement) {
+            interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            selection?.removeAllRanges();
+            if (toolbar) toolbar.style.display = 'none';
+            interaction.lastRange = null;
+            interaction.currentHighlightNode = null;
+            syncReadingAnnotation('highlight');
+            return;
+        }
+        if (interaction.currentHighlightNode) {
             return;
         }
         const span = document.createElement('span');
