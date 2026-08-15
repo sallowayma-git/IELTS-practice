@@ -249,6 +249,133 @@ async function testColdBrowseProxyRestoresPreferences(harness) {
     });
 }
 
+async function testColdBrowseRuntimeInitializesNavigationAndStateManager() {
+    const harness = createHarness();
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    const fallbackHandler = function fallbackNavigation() {};
+    let fallbackRemovals = 0;
+    const navRoot = {
+        _legacyNavHandler: fallbackHandler,
+        removeEventListener(type, handler) {
+            if (type === 'click' && handler === fallbackHandler) {
+                fallbackRemovals += 1;
+            }
+        }
+    };
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.main-nav') {
+            return navRoot;
+        }
+        if (selector === '.view.active') {
+            return { id: 'browse-view' };
+        }
+        return originalQuerySelector(selector);
+    };
+
+    let navigationEnsureCalls = 0;
+    let navigationOptions = null;
+    let stateManagerCreations = 0;
+    let repeatResets = 0;
+    harness.windowStub.NavigationController = {
+        ensure(options) {
+            navigationEnsureCalls += 1;
+            if (typeof harness.windowStub.ensureLegacyNavigationController !== 'function') {
+                return null;
+            }
+            navigationOptions = options;
+            return harness.windowStub.ensureLegacyNavigationController(options);
+        }
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.ensureLegacyNavigationController = function ensureLegacyNavigationController() {
+                return { mounted: true };
+            };
+            harness.windowStub.BrowseStateManager = function BrowseStateManager() {
+                stateManagerCreations += 1;
+                this.ready = Promise.resolve();
+                harness.windowStub.browseStateManager = this;
+            };
+            harness.windowStub.resetBrowseViewToAll = function resetBrowseViewToAll() {
+                repeatResets += 1;
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    loadScript('js/presentation/app-actions.js', harness.context);
+    await harness.windowStub.AppActions.preloadBrowseView();
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+
+    assert.strictEqual(navigationEnsureCalls, 2, '导航应在冷启动和 Browse 懒加载完成后各尝试初始化一次');
+    assert.strictEqual(stateManagerCreations, 1, 'BrowseStateManager 应在懒加载完成后仅实例化一次');
+    assert(harness.windowStub.browseStateManager, '冷启动 Browse 应暴露全局状态管理器实例');
+    assert.strictEqual(fallbackRemovals, 1, '真实导航控制器挂载后应移除临时 fallback click handler');
+    assert.strictEqual(navRoot._legacyNavHandler, undefined, 'fallback handler 标记应在升级后清理');
+    assert(navigationOptions && typeof navigationOptions.onRepeatNavigate === 'function');
+    assert.strictEqual(navigationOptions.initialView, 'browse', '导航升级必须保留 fallback 已激活的 Browse 高亮');
+
+    navigationOptions.onRepeatNavigate('browse');
+    assert.strictEqual(repeatResets, 1, '懒加载后的首个重复 Browse 点击应直接进入 reset handler');
+    recordResult('browse 冷加载后补齐导航与状态管理器', true, {
+        navigationEnsureCalls,
+        stateManagerCreations,
+        fallbackRemovals,
+        repeatResets
+    });
+}
+
+async function testSessionSuiteFinalizesBrowseDependencyOnce() {
+    const harness = createHarness();
+    let navigationEnsureCalls = 0;
+    let stateManagerCreations = 0;
+    harness.windowStub.NavigationController = {
+        ensure() {
+            navigationEnsureCalls += 1;
+            if (typeof harness.windowStub.ensureLegacyNavigationController !== 'function') {
+                return null;
+            }
+            return harness.windowStub.ensureLegacyNavigationController();
+        }
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.ensureLegacyNavigationController = function ensureLegacyNavigationController() {
+                return { mounted: true };
+            };
+            harness.windowStub.BrowseStateManager = function BrowseStateManager() {
+                stateManagerCreations += 1;
+                harness.windowStub.browseStateManager = this;
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await Promise.all([
+        harness.windowStub.AppEntry.ensureSessionSuiteReady(),
+        harness.windowStub.AppEntry.ensureSessionSuiteReady()
+    ]);
+
+    assert.strictEqual(
+        harness.ensureCalls.filter((name) => name === 'browse-runtime').length,
+        1,
+        'session-suite startup must finalize its Browse dependency through the cached Browse entrypoint'
+    );
+    assert(harness.ensureCalls.includes('practice-suite'), 'session-suite startup must still preload practice-suite');
+    assert(harness.ensureCalls.includes('session-suite'), 'session-suite runtime itself must still load');
+    assert.strictEqual(navigationEnsureCalls, 2, 'navigation should initialize at shell boot and once after Browse loads');
+    assert.strictEqual(stateManagerCreations, 1, 'concurrent session startup must create one BrowseStateManager');
+    recordResult('session-suite 依赖统一完成 Browse 初始化', true, {
+        ensureCalls: harness.ensureCalls,
+        navigationEnsureCalls,
+        stateManagerCreations
+    });
+}
+
 async function testMoreViewActivationLoadsTools(harness) {
     let moreToolsLoads = 0;
     harness.windowStub.AppEntry = {
@@ -384,6 +511,8 @@ async function main() {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
         await testColdBrowseProxyRestoresPreferences(createHarness());
+        await testColdBrowseRuntimeInitializesNavigationAndStateManager();
+        await testSessionSuiteFinalizesBrowseDependencyOnce();
         await testMoreViewActivationLoadsTools(createHarness());
         await testSuiteRecoveryRequiresExplicitContinueChoice();
         await testSuiteRecoveryAbandonThenStartsFreshSuite();
