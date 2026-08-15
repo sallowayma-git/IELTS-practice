@@ -8656,8 +8656,8 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
     font-variant-numeric: tabular-nums;
 }
 
-.question-bank-quick-picker__scopes > button:hover,
-.question-bank-quick-scope:hover,
+.question-bank-quick-picker__scopes > button:hover:not(:disabled),
+.question-bank-quick-scope:hover:not(:disabled),
 .question-bank-quick-picker__scopes > button[aria-pressed="true"],
 .question-bank-quick-picker__scopes > button[aria-current="true"],
 .question-bank-quick-scope.active {
@@ -8665,6 +8665,14 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
     border-color: color-mix(in srgb, var(--question-bank-quick-accent) 52%, var(--question-bank-quick-border-strong));
     box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
     transform: translateY(-1px);
+}
+
+.question-bank-quick-picker__scopes > button:disabled,
+.question-bank-quick-scope:disabled,
+.question-bank-quick-picker__results > button:disabled,
+.question-bank-quick-result:disabled {
+    opacity: 0.58;
+    cursor: wait;
 }
 
 .question-bank-quick-picker__results {
@@ -8705,11 +8713,11 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
         transform 180ms ease;
 }
 
-.question-bank-quick-picker__results > [role="option"]:hover,
+.question-bank-quick-picker__results > [role="option"]:hover:not(:disabled),
 .question-bank-quick-picker__results > [role="option"][aria-selected="true"],
-.question-bank-quick-picker__results > button:hover,
+.question-bank-quick-picker__results > button:hover:not(:disabled),
 .question-bank-quick-picker__results > a:hover,
-.question-bank-quick-result:hover,
+.question-bank-quick-result:hover:not(:disabled),
 .question-bank-quick-result[aria-selected="true"] {
     background: var(--question-bank-quick-surface-strong);
     border-color: color-mix(in srgb, var(--question-bank-quick-accent) 46%, transparent);

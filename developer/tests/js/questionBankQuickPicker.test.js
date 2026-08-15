@@ -287,6 +287,7 @@ function createHarness(options = {}) {
             }
         },
         resolveActiveLibraryIndex: options.resolveActiveLibraryIndex || (() => Promise.resolve([])),
+        ensureBrowseGroup: options.ensureBrowseGroup || (() => Promise.resolve(true)),
         addEventListener(type, handler) {
             if (!windowListeners.has(type)) {
                 windowListeners.set(type, []);
@@ -591,7 +592,7 @@ test('settling an action from a closed session cannot close or overwrite a reope
     assert.equal(warnings.length, warningCount, 'a stale rejection must not report against the new session');
 });
 
-test('category and exam actions await Browse, clear stale search, and call app APIs', async () => {
+test('category and exam actions use the preloaded Browse runtime and call app APIs', async () => {
     const calls = [];
     const harness = createHarness({ resolveActiveLibraryIndex: () => Promise.resolve(activeIndex) });
     const { picker, windowStub, documentStub, elements } = harness;
@@ -611,8 +612,9 @@ test('category and exam actions await Browse, clear stale search, and call app A
         browseCategory(category, type) {
             calls.push(`browse:${category}:${type}`);
         },
-        openExam(examId) {
+        openExam(examId, launchOptions) {
             calls.push(`open:${examId}`);
+            calls.push(`definition:${launchOptions?.examDefinition?.id || 'missing'}`);
             return { closed: false };
         }
     };
@@ -630,19 +632,98 @@ test('category and exam actions await Browse, clear stale search, and call app A
     elements.trigger.focus();
     await picker.open();
     assert.equal(await picker.openExam('l-p1'), true);
-    assert.deepEqual(calls, ['ensure', 'open:l-p1']);
+    assert.deepEqual(calls, ['open:l-p1', 'definition:l-p1']);
 
     calls.length = 0;
     await picker.open();
-    windowStub.app.openExam = (examId) => {
+    windowStub.app.openExam = (examId, launchOptions) => {
         calls.push(`open:${examId}`);
+        calls.push(`definition:${launchOptions?.examDefinition?.id || 'missing'}`);
         return null;
     };
     assert.equal(await picker.openExam('l-p1'), false);
-    assert.deepEqual(calls, ['ensure', 'open:l-p1']);
+    assert.deepEqual(calls, ['open:l-p1', 'definition:l-p1']);
     assert.equal(picker.isOpen, true, 'a null production launch result must preserve the search context');
     assert.equal(elements.panel.hidden, false);
     assert.equal(elements.status.dataset.state, 'error');
+});
+
+test('opening preloads Browse and keeps launch controls disabled until user activation can be preserved', async () => {
+    const runtimeReady = deferred();
+    let ensureCalls = 0;
+    let activationActive = false;
+    let activationSeenByOpenExam = null;
+    const harness = createHarness({
+        resolveActiveLibraryIndex: () => Promise.resolve(activeIndex),
+        ensureBrowseGroup() {
+            ensureCalls += 1;
+            return runtimeReady.promise;
+        }
+    });
+    const { picker, windowStub, elements } = harness;
+    windowStub.app = {
+        openExam(examId, launchOptions) {
+            activationSeenByOpenExam = activationActive;
+            assert.equal(examId, 'l-p1');
+            assert.equal(launchOptions.examDefinition.id, 'l-p1');
+            return { closed: false };
+        }
+    };
+
+    const opening = picker.open();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(ensureCalls, 1, 'opening the picker must start Browse loading before an action');
+    elements.search.value = 'target audio';
+    elements.search.fire('input');
+    assert.equal(picker.resultElements.length, 1);
+    assert.equal(picker.resultElements[0].disabled, true);
+    elements.scopes.children.forEach((button) => assert.equal(button.disabled, true));
+    assert.equal(await picker.openExam('l-p1'), false, 'programmatic activation must be rejected while loading');
+    assert.equal(activationSeenByOpenExam, null);
+
+    runtimeReady.resolve(true);
+    await opening;
+    assert.equal(picker.resultElements[0].disabled, false);
+    elements.scopes.children.forEach((button) => assert.equal(button.disabled, false));
+
+    activationActive = true;
+    const launched = picker.openExam('l-p1');
+    activationActive = false;
+    assert.equal(activationSeenByOpenExam, true, 'app.openExam must run synchronously inside the user event');
+    assert.equal(await launched, true);
+    assert.equal(ensureCalls, 1, 'the click must not re-enter the lazy loader');
+});
+
+test('a failed Browse preload stays non-interactive and retries cleanly after reopening', async () => {
+    let ensureCalls = 0;
+    const harness = createHarness({
+        resolveActiveLibraryIndex: () => Promise.resolve(activeIndex),
+        ensureBrowseGroup() {
+            ensureCalls += 1;
+            return ensureCalls === 1
+                ? Promise.reject(new Error('temporary loader failure'))
+                : Promise.resolve(true);
+        }
+    });
+    const { picker, elements, warnings } = harness;
+
+    await picker.open();
+    assert.equal(ensureCalls, 1);
+    assert.equal(picker._browseReady, false);
+    assert.equal(elements.panel.getAttribute('aria-busy'), 'false');
+    elements.scopes.children.forEach((button) => assert.equal(button.disabled, true));
+    assert.equal(elements.status.dataset.state, 'error');
+    assert.equal(warnings.length, 1);
+    elements.search.value = 'target';
+    elements.search.fire('input');
+    assert.equal(elements.status.dataset.state, 'error', 'typing must not hide the loader failure');
+    assert.match(elements.status.textContent, /加载失败/);
+
+    picker.close();
+    await picker.open();
+    assert.equal(ensureCalls, 2, 'reopening after a rejection must retry the lazy loader');
+    assert.equal(picker._browseReady, true);
+    elements.scopes.children.forEach((button) => assert.equal(button.disabled, false));
 });
 
 test('empty and rejected active indexes expose stable empty/error states', async () => {

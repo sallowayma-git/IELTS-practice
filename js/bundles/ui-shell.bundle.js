@@ -1236,6 +1236,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         this._positionFrame = null;
         this._restoreFocus = null;
         this._actionPending = false;
+        this._browseReady = false;
+        this._browseLoading = false;
+        this._browseLoadError = null;
+        this._browsePreloadPromise = null;
 
         this._onTriggerClick = this._handleTriggerClick.bind(this);
         this._onCloseClick = this._handleCloseClick.bind(this);
@@ -1530,10 +1534,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         setAttribute(this.elements.trigger, 'aria-expanded', 'true');
         this.position();
         this._renderLoading();
+        var browseReady = this._preloadBrowseGroup();
         if (typeof this.elements.search.focus === 'function') {
             this.elements.search.focus();
         }
-        return this.refresh().then(function opened() {
+        return Promise.all([this.refresh(), browseReady]).then(function opened() {
             return true;
         });
     };
@@ -1612,6 +1617,12 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             self.scopes = deriveScopes(self.index);
             self.renderScopes();
             self.renderResults(self.elements.search.value);
+            self._syncBrowseActionAvailability();
+            if (self._browseLoadError) {
+                self._setStatus('题库功能加载失败，请关闭后重试。', 'error');
+            } else if (self._browseLoading) {
+                self._setStatus('题库功能正在加载，搜索结果将在加载完成后可打开。', 'loading');
+            }
             self.position();
             return self.index;
         }).catch(function indexFailed(error) {
@@ -1625,6 +1636,18 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     QuestionBankQuickPicker.prototype._setStatus = function setStatusText(text, state) {
         this.elements.status.textContent = text;
         setState(this.elements.status, state || 'ready');
+    };
+
+    QuestionBankQuickPicker.prototype._setBrowseAwareStatus = function setBrowseAwareStatus(text, state) {
+        if (this._browseLoadError) {
+            this._setStatus('题库功能加载失败，请关闭后重试。', 'error');
+            return;
+        }
+        if (this._browseLoading) {
+            this._setStatus('题库功能正在加载，搜索结果将在加载完成后可打开。', 'loading');
+            return;
+        }
+        this._setStatus(text, state);
     };
 
     QuestionBankQuickPicker.prototype._renderLoading = function renderLoading() {
@@ -1679,6 +1702,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         var button = this.document.createElement('button');
         button.type = 'button';
         button.className = 'question-bank-quick-picker__scope question-bank-quick-scope';
+        button.disabled = !this._browseReady;
         setAttribute(button, ACTION_ATTRIBUTE, 'browse-scope');
         setAttribute(button, 'data-type', type);
         setAttribute(button, 'data-category', category);
@@ -1743,6 +1767,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         var button = this.document.createElement('button');
         button.type = 'button';
         button.className = 'question-bank-quick-picker__result question-bank-quick-result';
+        button.disabled = !this._browseReady;
         setAttribute(button, ACTION_ATTRIBUTE, 'open-exam');
         setAttribute(button, 'data-exam-id', examId);
         setAttribute(button, 'role', 'option');
@@ -1781,7 +1806,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             this.matches = [];
             this.elements.results.hidden = true;
             setAttribute(this.elements.search, 'aria-expanded', 'false');
-            this._setStatus(
+            this._setBrowseAwareStatus(
                 '已加载 ' + this.index.length + ' 道题；选择分类，或输入关键词全局搜索。',
                 'ready'
             );
@@ -1792,7 +1817,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         if (this.matches.length === 0) {
             this.elements.results.hidden = true;
             setAttribute(this.elements.search, 'aria-expanded', 'false');
-            this._setStatus('未找到与“' + String(query).trim() + '”匹配的题目。', 'empty');
+            this._setBrowseAwareStatus('未找到与“' + String(query).trim() + '”匹配的题目。', 'empty');
             return [];
         }
 
@@ -1810,7 +1835,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         var suffix = this.matches.length > this.resultLimit
             ? '，显示前 ' + this.resultLimit + ' 道'
             : '';
-        this._setStatus('找到 ' + this.matches.length + ' 道匹配题目' + suffix + '。', 'results');
+        this._setBrowseAwareStatus('找到 ' + this.matches.length + ' 道匹配题目' + suffix + '。', 'results');
         return this.matches.slice();
     };
 
@@ -1825,6 +1850,77 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             return Promise.reject(new Error('ensureBrowseGroup is unavailable'));
         }
         return Promise.resolve(loader.call(owner));
+    };
+
+    QuestionBankQuickPicker.prototype._syncBrowseActionAvailability = function syncBrowseActionAvailability() {
+        var disabled = !this._browseReady;
+        var containers = [this.elements.scopes, this.elements.results];
+        containers.forEach(function updateContainer(container) {
+            if (!container || typeof container.querySelectorAll !== 'function') {
+                return;
+            }
+            Array.prototype.slice.call(container.querySelectorAll('[' + ACTION_ATTRIBUTE + ']') || [])
+                .forEach(function updateAction(action) {
+                    action.disabled = disabled;
+                });
+        });
+        if (this.elements.panel) {
+            setAttribute(this.elements.panel, 'aria-busy', this._browseLoading ? 'true' : 'false');
+        }
+    };
+
+    QuestionBankQuickPicker.prototype._preloadBrowseGroup = function preloadBrowseGroup() {
+        if (this._browseReady) {
+            this._syncBrowseActionAvailability();
+            return Promise.resolve(true);
+        }
+        if (this._browsePreloadPromise) {
+            return this._browsePreloadPromise;
+        }
+
+        var self = this;
+        var started;
+        this._browseLoading = true;
+        this._browseLoadError = null;
+        this._syncBrowseActionAvailability();
+        try {
+            // Invoke the loader immediately when the panel opens. Result and
+            // scope controls stay disabled until it settles, so their eventual
+            // click handlers never spend transient user activation on loading.
+            started = this._ensureBrowseGroup();
+        } catch (error) {
+            started = Promise.reject(error);
+        }
+
+        var preload = Promise.resolve(started).then(function browseLoaded() {
+            self._browseReady = true;
+            self._browseLoading = false;
+            self._browseLoadError = null;
+            self._syncBrowseActionAvailability();
+            if (self.isOpen && self.index.length > 0) {
+                self.renderResults(self.elements.search.value);
+            }
+            return true;
+        }).catch(function browseLoadFailed(error) {
+            self._browseReady = false;
+            self._browseLoading = false;
+            self._browseLoadError = error;
+            self._syncBrowseActionAvailability();
+            if (self.isOpen) {
+                self._setStatus('题库功能加载失败，请关闭后重试。', 'error');
+            }
+            if (self.global.console && typeof self.global.console.warn === 'function') {
+                self.global.console.warn('[QuestionBankQuickPicker] Failed to preload Browse:', error);
+            }
+            return false;
+        });
+        this._browsePreloadPromise = preload;
+        preload.then(function clearPreload() {
+            if (self._browsePreloadPromise === preload) {
+                self._browsePreloadPromise = null;
+            }
+        });
+        return preload;
     };
 
     QuestionBankQuickPicker.prototype._clearBrowseSearchState = function clearBrowseSearchState() {
@@ -1852,7 +1948,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     };
 
     QuestionBankQuickPicker.prototype.browseScope = function browseScope(type, category) {
-        if (this._actionPending) {
+        if (this._actionPending || !this.isOpen || !this._browseReady) {
+            if (this.isOpen && !this._browseReady) {
+                this._setStatus('题库功能仍在加载，请稍候。', 'loading');
+            }
             return Promise.resolve(false);
         }
         var safeType = normalizeScopeValue(type, 'all');
@@ -1861,18 +1960,18 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         var actionVersion = ++this._actionVersion;
         this._actionPending = true;
         this._setStatus('正在打开题目分类…', 'loading');
-        return this._ensureBrowseGroup().then(function browseReady() {
-            if (!self.isOpen || actionVersion !== self._actionVersion) {
-                return false;
-            }
+        var categoryAction;
+        try {
             if (!self.global.app || typeof self.global.app.browseCategory !== 'function') {
                 throw new Error('app.browseCategory is unavailable');
             }
             self._clearBrowseSearchState();
-            return Promise.resolve(self.global.app.browseCategory(safeCategory, safeType)).then(function categoryDispatched() {
-                return true;
-            });
-        }).then(function categoryOpened(opened) {
+            categoryAction = self.global.app.browseCategory(safeCategory, safeType);
+        } catch (error) {
+            categoryAction = Promise.reject(error);
+        }
+        return Promise.resolve(categoryAction).then(function categoryOpened() {
+            var opened = true;
             if (opened !== true || !self.isOpen || actionVersion !== self._actionVersion) {
                 return false;
             }
@@ -1896,27 +1995,38 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
     QuestionBankQuickPicker.prototype.openExam = function openExam(examId) {
         var safeExamId = normalizeScopeValue(examId, '');
-        if (!safeExamId || this._actionPending) {
+        if (!safeExamId || this._actionPending || !this.isOpen || !this._browseReady) {
+            if (this.isOpen && !this._browseReady) {
+                this._setStatus('题库功能仍在加载，请稍候。', 'loading');
+            }
             return Promise.resolve(false);
         }
         var self = this;
+        var examDefinition = this.index.find(function findExam(exam) {
+            return normalizeScopeValue(exam && (exam.id || exam.examId), '') === safeExamId;
+        });
         var actionVersion = ++this._actionVersion;
         this._actionPending = true;
         this._setStatus('正在打开题目…', 'loading');
-        return this._ensureBrowseGroup().then(function browseReady() {
-            if (!self.isOpen || actionVersion !== self._actionVersion) {
-                return false;
-            }
+        var examAction;
+        try {
             if (!self.global.app || typeof self.global.app.openExam !== 'function') {
                 throw new Error('app.openExam is unavailable');
             }
-            return Promise.resolve(self.global.app.openExam(safeExamId)).then(function examDispatched(launchTarget) {
-                // ExamSystemApp.openExam resolves to the opened Window (or a
-                // launch-context object when requested) on success, and to
-                // undefined/null when the exam cannot be launched.
-                return Boolean(launchTarget);
-            });
-        }).then(function examOpened(opened) {
+            // Calling app.openExam synchronously preserves the click's transient
+            // activation. Supplying the selected snapshot also skips its normal
+            // asynchronous index lookup before window.open.
+            examAction = self.global.app.openExam(safeExamId, examDefinition
+                ? { examDefinition: examDefinition }
+                : {});
+        } catch (error) {
+            examAction = Promise.reject(error);
+        }
+        return Promise.resolve(examAction).then(function examOpened(launchTarget) {
+            // ExamSystemApp.openExam resolves to the opened Window (or a
+            // launch-context object when requested) on success, and to
+            // undefined/null when the exam cannot be launched.
+            var opened = Boolean(launchTarget);
             if (!self.isOpen || actionVersion !== self._actionVersion) {
                 return false;
             }

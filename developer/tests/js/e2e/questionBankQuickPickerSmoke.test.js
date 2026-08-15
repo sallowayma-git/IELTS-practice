@@ -242,19 +242,27 @@ test('real index bundle mounts the quick picker and routes search/scope actions'
     ];
     await page.evaluate((examIndex) => {
         window.__quickPickerSmokeCalls = [];
+        window.__resolveQuickPickerBrowse = null;
         window.__browseFilter = { category: 'P1', type: 'reading' };
         window.resolveActiveLibraryIndex = async () => examIndex;
-        window.ensureBrowseGroup = async () => {
+        window.ensureBrowseGroup = () => {
             window.__quickPickerSmokeCalls.push(['ensure']);
-            return true;
+            return new Promise((resolve) => {
+                window.__resolveQuickPickerBrowse = () => resolve(true);
+            });
         };
         window.app = window.app || {};
         window.app.browseCategory = (category, type) => {
             window.__quickPickerSmokeCalls.push(['browseCategory', category, type]);
             return true;
         };
-        window.app.openExam = (examId) => {
-            window.__quickPickerSmokeCalls.push(['openExam', examId]);
+        window.app.openExam = (examId, launchOptions) => {
+            window.__quickPickerSmokeCalls.push([
+                'openExam',
+                examId,
+                launchOptions?.examDefinition?.id || null,
+                navigator.userActivation?.isActive === true
+            ]);
             return true;
         };
     }, fixture);
@@ -289,10 +297,23 @@ test('real index bundle mounts the quick picker and routes search/scope actions'
         'search must ignore the current P1 browse filter and return cross-category matches'
     );
 
-    await results.locator('button[data-exam-id="listening-p2"]').click();
+    const listeningResult = results.locator('button[data-exam-id="listening-p2"]');
+    assert.equal(await listeningResult.isEnabled(), false, 'launches must stay disabled while Browse is loading');
+    await page.evaluate(() => window.__resolveQuickPickerBrowse?.());
+    await page.waitForFunction(
+        () => document.querySelector(
+            '#question-bank-quick-results button[data-exam-id="listening-p2"]'
+        )?.disabled === false,
+        null,
+        { timeout: 5_000 }
+    );
+    await listeningResult.click();
     await page.waitForFunction(
         () => window.__quickPickerSmokeCalls.some(
-            (call) => call[0] === 'openExam' && call[1] === 'listening-p2'
+            (call) => call[0] === 'openExam'
+                && call[1] === 'listening-p2'
+                && call[2] === 'listening-p2'
+                && call[3] === true
         ),
         null,
         { timeout: 5_000 }
@@ -318,8 +339,7 @@ test('real index bundle mounts the quick picker and routes search/scope actions'
     const calls = await page.evaluate(() => window.__quickPickerSmokeCalls);
     assert.deepEqual(calls, [
         ['ensure'],
-        ['openExam', 'listening-p2'],
-        ['ensure'],
+        ['openExam', 'listening-p2', 'listening-p2', true],
         ['browseCategory', 'P3', 'reading']
     ]);
     assert.equal(await panel.getAttribute('hidden'), '', 'successful scope navigation must close the picker');
