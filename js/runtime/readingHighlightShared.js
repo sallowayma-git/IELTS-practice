@@ -89,6 +89,40 @@
         });
     }
 
+    function expandRangeToFullySelectedBoundaries(range) {
+        if (!range || range.collapsed) {
+            return range;
+        }
+        const commonAncestor = range.commonAncestorContainer;
+        let startContainer = range.startContainer;
+        let startOffset = range.startOffset;
+        while (startContainer !== commonAncestor && startOffset === 0) {
+            const parent = startContainer.parentNode;
+            if (!parent) break;
+            startOffset = Array.prototype.indexOf.call(parent.childNodes, startContainer);
+            startContainer = parent;
+        }
+
+        let endContainer = range.endContainer;
+        let endOffset = range.endOffset;
+        let endLength = endContainer.nodeType === Node.TEXT_NODE
+            ? (endContainer.textContent || '').length
+            : endContainer.childNodes.length;
+        while (endContainer !== commonAncestor && endOffset === endLength) {
+            const parent = endContainer.parentNode;
+            if (!parent) break;
+            endOffset = Array.prototype.indexOf.call(parent.childNodes, endContainer) + 1;
+            endContainer = parent;
+            endLength = endContainer.nodeType === Node.TEXT_NODE
+                ? (endContainer.textContent || '').length
+                : endContainer.childNodes.length;
+        }
+
+        range.setStart(startContainer, startOffset);
+        range.setEnd(endContainer, endOffset);
+        return range;
+    }
+
     function resolveRangeFromOffsets(root, start, end) {
         const nodes = getTextNodes(root);
         let offset = 0;
@@ -100,11 +134,15 @@
             const node = nodes[index];
             const text = node.textContent || '';
             const nextOffset = offset + text.length;
-            if (!startNode && start >= offset && start <= nextOffset) {
+            if (
+                !startNode
+                && start >= offset
+                && (start < nextOffset || (index === nodes.length - 1 && start === nextOffset))
+            ) {
                 startNode = node;
                 startOffset = Math.max(0, start - offset);
             }
-            if (!endNode && end >= offset && end <= nextOffset) {
+            if (!endNode && end > offset && end <= nextOffset) {
                 endNode = node;
                 endOffset = Math.max(0, end - offset);
             }
@@ -119,7 +157,7 @@
         const range = document.createRange();
         range.setStart(startNode, startOffset);
         range.setEnd(endNode, endOffset);
-        return range;
+        return expandRangeToFullySelectedBoundaries(range);
     }
 
     function resolveHighlightKind(node) {

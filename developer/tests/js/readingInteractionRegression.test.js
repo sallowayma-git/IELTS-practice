@@ -62,7 +62,8 @@ async function testBrowserInteractions() {
         await page.setContent(`<!doctype html>
             <html><head></head><body>
                 <header><div class="header-right"></div></header>
-                <div id="highlight-root">alpha <span class="hl" data-note-id="note-1">repeat</span> middle <span class="hl" data-note-id="note-2">repeat</span> omega</div>
+                <div id="highlight-root">alpha <span class="hl" data-note-id="note-1">repeat</span><span class="hl" data-note-id="note-2" data-hl-level="secondary">repeat</span> omega</div>
+                <div id="inline-highlight-root"><span class="hl" data-hl-level="secondary"><em>AB</em>C<strong>DE</strong></span></div>
                 <input type="checkbox" name="q8-9" value="A">
                 <input type="checkbox" name="q8-9" value="B">
                 <input type="checkbox" name="q8-9" value="C">
@@ -76,6 +77,11 @@ async function testBrowserInteractions() {
                 <button id="submit-btn" type="button">Submit</button>
                 <button id="reset-btn" type="button">Reset</button>
                 <button id="exit-btn" type="button">Exit</button>
+                <div id="selbar" style="display: none">
+                    <button id="btnHL" type="button">Highlight</button>
+                    <button id="btnNote" type="button">Note</button>
+                    <button id="btnUH" type="button">Remove</button>
+                </div>
             </body></html>`);
 
         await page.addScriptTag({ content: read('js/runtime/readingHighlightShared.js') });
@@ -83,15 +89,41 @@ async function testBrowserInteractions() {
             const root = document.getElementById('highlight-root');
             const shared = window.__READING_HIGHLIGHT_SHARED__;
             const first = shared.snapshotHighlights({ left: root });
-            shared.restoreHighlights({ left: root }, first);
+            const restored = shared.restoreHighlights({ left: root }, first);
             const second = shared.snapshotHighlights({ left: root });
-            return { first, second };
+            const inlineRoot = document.getElementById('inline-highlight-root');
+            const inlineFirst = shared.snapshotHighlights({ left: inlineRoot });
+            const inlineRestored = shared.restoreHighlights({ left: inlineRoot }, inlineFirst);
+            const inlineSecond = shared.snapshotHighlights({ left: inlineRoot });
+            return {
+                first,
+                restored,
+                second,
+                inline: {
+                    first: inlineFirst,
+                    restored: inlineRestored,
+                    second: inlineSecond,
+                    html: inlineRoot.innerHTML
+                }
+            };
         });
         assert.equal(highlightSnapshot.first.length, 2, 'duplicate highlight text must snapshot both DOM ranges');
-        assert.deepEqual(highlightSnapshot.first.map((entry) => entry.start), [6, 20]);
+        assert.deepEqual(highlightSnapshot.first.map((entry) => entry.start), [6, 12]);
+        assert.deepEqual(highlightSnapshot.first.map((entry) => entry.end), [12, 18]);
         assert.deepEqual(highlightSnapshot.first.map((entry) => entry.noteId), ['note-1', 'note-2']);
-        assert.deepEqual(highlightSnapshot.second.map((entry) => entry.start), [6, 20]);
+        assert.deepEqual(highlightSnapshot.first.map((entry) => entry.level), ['primary', 'secondary']);
+        assert.equal(highlightSnapshot.restored, 2, 'adjacent primary and secondary highlights must both restore');
+        assert.deepEqual(highlightSnapshot.second.map((entry) => entry.start), [6, 12]);
+        assert.deepEqual(highlightSnapshot.second.map((entry) => entry.end), [12, 18]);
         assert.deepEqual(highlightSnapshot.second.map((entry) => entry.noteId), ['note-1', 'note-2']);
+        assert.deepEqual(highlightSnapshot.second.map((entry) => entry.level), ['primary', 'secondary']);
+        assert.equal(highlightSnapshot.inline.restored, 1, 'a highlight spanning inline markup must restore');
+        assert.deepEqual(highlightSnapshot.inline.first.map((entry) => [entry.start, entry.end, entry.level]), [[0, 5, 'secondary']]);
+        assert.deepEqual(highlightSnapshot.inline.second.map((entry) => [entry.start, entry.end, entry.level]), [[0, 5, 'secondary']]);
+        assert.equal(
+            highlightSnapshot.inline.html,
+            '<span class="hl" data-hl-level="secondary"><em>AB</em>C<strong>DE</strong></span>'
+        );
 
         await page.evaluate(() => {
             window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
@@ -99,6 +131,134 @@ async function testBrowserInteractions() {
         await page.addScriptTag({ content: read('js/utils/answerSanitizer.js') });
         await page.addScriptTag({ content: read('js/utils/answerMatchCore.js') });
         await page.addScriptTag({ content: read('js/runtime/unifiedReadingPage.js') });
+
+        const highlightSelectionChecks = await page.evaluate(() => {
+            const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
+            const left = document.getElementById('left');
+            hooks.setTestState({
+                readOnly: false,
+                timerLocked: false,
+                submitted: false,
+                reviewMode: false,
+                memorizeMode: false
+            });
+            hooks.captureDom();
+
+            const runSelection = (html, configureRange) => {
+                left.innerHTML = html;
+                const highlights = Array.from(left.querySelectorAll('.hl'));
+                const range = document.createRange();
+                configureRange(range, highlights);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                hooks.updateSelectionToolbar();
+                hooks.applySelectionHighlight('highlight');
+                const selectionState = hooks.getSelectionHighlightTestState();
+                const selectionRangeCount = selection.rangeCount;
+                const toolbarDisplay = document.getElementById('selbar').style.display;
+                selection.removeAllRanges();
+                return {
+                    html: left.innerHTML,
+                    text: left.textContent,
+                    highlightCount: left.querySelectorAll('.hl').length,
+                    levels: Array.from(left.querySelectorAll('.hl')).map((node) => node.dataset.hlLevel || 'primary'),
+                    selectionState,
+                    selectionRangeCount,
+                    toolbarDisplay
+                };
+            };
+
+            const single = 'plain <span class="hl">ABCDE</span> tail';
+            const partial = runSelection(single, (range, [highlight]) => {
+                range.setStart(highlight.firstChild, 1);
+                range.setEnd(highlight.firstChild, 4);
+            });
+            const mixedPartial = runSelection(single, (range, [highlight]) => {
+                range.setStart(left.firstChild, 2);
+                range.setEnd(highlight.firstChild, 3);
+            });
+            const mixedFull = runSelection(single, (range, [highlight]) => {
+                range.setStart(left.firstChild, 2);
+                range.setEnd(highlight.firstChild, highlight.firstChild.data.length);
+            });
+            const multiple = runSelection(
+                '<span class="hl">ABC</span> gap <span class="hl">DEF</span>',
+                (range, highlights) => {
+                    range.setStart(highlights[0].firstChild, 0);
+                    range.setEnd(highlights[1].firstChild, highlights[1].firstChild.data.length);
+                }
+            );
+            const secondary = runSelection(
+                '<span class="hl" data-hl-level="secondary">ABCDE</span>',
+                (range, [highlight]) => range.selectNodeContents(highlight)
+            );
+            const adjacentBoundary = runSelection(
+                '<span class="hl">A</span><span class="hl">B</span>',
+                (range, highlights) => {
+                    range.setStart(highlights[0].firstChild, 0);
+                    range.setEnd(highlights[1].firstChild, 0);
+                }
+            );
+            const exactTextRange = runSelection(single, (range, [highlight]) => {
+                range.setStart(highlight.firstChild, 0);
+                range.setEnd(highlight.firstChild, highlight.firstChild.data.length);
+            });
+            const exactNodeContents = runSelection(
+                'plain <span class="hl"><em>AB</em>C<strong>DE</strong></span> tail',
+                (range, [highlight]) => range.selectNodeContents(highlight)
+            );
+
+            return {
+                single,
+                partial,
+                mixedPartial,
+                mixedFull,
+                multiple,
+                secondary,
+                adjacentBoundary,
+                exactTextRange,
+                exactNodeContents
+            };
+        });
+        for (const result of [
+            highlightSelectionChecks.partial,
+            highlightSelectionChecks.mixedPartial,
+            highlightSelectionChecks.mixedFull
+        ]) {
+            assert.equal(result.html, highlightSelectionChecks.single, 'partial or mixed selections must leave the primary highlight unchanged');
+            assert.equal(result.highlightCount, 1, 'partial or mixed selections must not create nested highlights');
+            assert.deepEqual(result.levels, ['primary']);
+            assert.equal(result.text, 'plain ABCDE tail');
+            assert.equal(result.selectionRangeCount, 0, 'a rejected highlight action must clear the browser selection');
+            assert.equal(result.toolbarDisplay, 'none', 'a rejected highlight action must dismiss the selection toolbar');
+            assert.deepEqual(result.selectionState, {
+                hasLastRange: false,
+                hasCurrentHighlightNode: false
+            });
+        }
+        assert.equal(highlightSelectionChecks.multiple.highlightCount, 2, 'a selection crossing highlights must not merge or nest spans');
+        assert.deepEqual(highlightSelectionChecks.multiple.levels, ['primary', 'primary']);
+        assert.equal(highlightSelectionChecks.multiple.text, 'ABC gap DEF');
+        assert.equal(highlightSelectionChecks.secondary.highlightCount, 1);
+        assert.deepEqual(highlightSelectionChecks.secondary.levels, ['secondary'], 'an already-secondary highlight must remain unchanged');
+        assert.equal(highlightSelectionChecks.secondary.selectionRangeCount, 0);
+        assert.deepEqual(highlightSelectionChecks.secondary.selectionState, {
+            hasLastRange: false,
+            hasCurrentHighlightNode: false
+        });
+        assert.equal(highlightSelectionChecks.adjacentBoundary.highlightCount, 2);
+        assert.deepEqual(
+            highlightSelectionChecks.adjacentBoundary.levels,
+            ['secondary', 'primary'],
+            'boundary-only contact with an adjacent highlight must not block an exact promotion'
+        );
+        assert.equal(highlightSelectionChecks.exactTextRange.highlightCount, 1);
+        assert.deepEqual(highlightSelectionChecks.exactTextRange.levels, ['secondary'], 'an exact text-boundary selection must become secondary');
+        assert.equal(highlightSelectionChecks.exactTextRange.text, 'plain ABCDE tail');
+        assert.equal(highlightSelectionChecks.exactNodeContents.highlightCount, 1);
+        assert.deepEqual(highlightSelectionChecks.exactNodeContents.levels, ['secondary'], 'a full selection across nested inline markup must become secondary');
+        assert.equal(highlightSelectionChecks.exactNodeContents.text, 'plain ABCDE tail');
 
         const replayChecks = await page.evaluate(() => {
             const hooks = window.__IELTS_UNIFIED_READING_PAGE_TEST__;
