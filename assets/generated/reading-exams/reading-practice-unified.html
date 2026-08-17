@@ -184,6 +184,34 @@
             margin-bottom: 12px;
         }
 
+        /* Single-choice (multiple choice) vertical layout fix */
+        .mc-question-item {
+            margin-bottom: 16px;
+        }
+
+        .mc-question-item > p {
+            margin: 0 0 8px;
+            line-height: 1.45;
+        }
+
+        label.mc-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 0 0 8px;
+            cursor: pointer;
+            line-height: 1.5;
+        }
+
+        label.mc-option:last-child {
+            margin-bottom: 0;
+        }
+
+        label.mc-option input[type="radio"] {
+            flex-shrink: 0;
+            margin-top: 3px;
+        }
+
         .tfng-item {
             margin: 0 0 14px;
         }
