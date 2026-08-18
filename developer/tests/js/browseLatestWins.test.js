@@ -145,7 +145,8 @@ const sandbox = {
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 sandbox.self = sandbox;
-vm.runInContext(source, vm.createContext(sandbox), { filename: 'js/main.js' });
+const context = vm.createContext(sandbox);
+vm.runInContext(source, context, { filename: 'js/main.js' });
 
 const searchFirst = deferred();
 const searchSecond = deferred();
@@ -179,7 +180,69 @@ assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening'], '最终列表�
 assert.strictEqual(typeButtons.find((button) => button.dataset.filterType === 'all').ariaPressed, 'true');
 assert.strictEqual(typeButtons.find((button) => button.dataset.filterType === 'reading').ariaPressed, 'false');
 
+const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
+vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
+const productionLoadExamList = sandbox.ExamActions.loadExamList;
+sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams) {
+    const result = productionLoadExamList.call(this, exams);
+    if (Array.isArray(result)) {
+        rendered.push(Array.from(result, (exam) => exam.id));
+    }
+    return result;
+};
+
+rendered.length = 0;
+const staleResetIndex = deferred();
+const latestFilterIndex = deferred();
+resolverQueue.push(staleResetIndex, latestFilterIndex);
+const staleReset = sandbox.ExamActions.resetBrowseViewToAll();
+await Promise.resolve();
+const latestFilterAfterReset = sandbox.filterByType('reading');
+latestFilterIndex.resolve(allExams);
+await latestFilterAfterReset;
+staleResetIndex.resolve([{ id: 'stale-reset', title: 'Stale reset', type: 'listening', category: 'P2' }]);
+assert.strictEqual(await staleReset, false, 'a newer explicit filter must supersede an older reset');
+assert.deepStrictEqual(rendered.at(-1), ['reading'], 'the newer explicit filter must remain the final render');
+assert.strictEqual(browseState.type, 'reading', 'a stale reset must not clear the newer filter state');
+assert.strictEqual(
+    typeButtons.find((button) => button.dataset.filterType === 'reading').ariaPressed,
+    'true',
+    'a stale reset must not clear the newer filter UI'
+);
+
+rendered.length = 0;
+const staleFilterIndex = deferred();
+const latestResetIndex = deferred();
+resolverQueue.push(staleFilterIndex, latestResetIndex);
+const staleFilterBeforeReset = sandbox.filterByType('reading');
+const latestReset = sandbox.ExamActions.resetBrowseViewToAll();
+latestResetIndex.resolve(allExams);
+await latestReset;
+staleFilterIndex.resolve(allExams);
+await staleFilterBeforeReset;
+assert.strictEqual(browseState.type, 'all', 'a newer reset must supersede an older explicit filter');
+assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening'], 'the reset must remain the final all-exams render');
+
+rendered.length = 0;
+const emptyResetPrefetch = deferred();
+const adapterResolvedIndex = deferred();
+resolverQueue.push(emptyResetPrefetch, adapterResolvedIndex);
+const resetThroughAdapter = sandbox.ExamActions.resetBrowseViewToAll();
+emptyResetPrefetch.resolve([]);
+adapterResolvedIndex.resolve(allExams);
+const adapterResult = await resetThroughAdapter;
+assert.deepStrictEqual(
+    Array.from(adapterResult, (exam) => exam.id),
+    ['reading', 'listening'],
+    'the real global adapter must re-resolve the active index when reset passes null'
+);
+assert.deepStrictEqual(
+    rendered.at(-1),
+    ['reading', 'listening'],
+    'an empty reset prefetch must never render the module-local [] default'
+);
+
 console.log(JSON.stringify({
     status: 'pass',
-    detail: 'browse search and type filters use latest-wins rendering'
+    detail: 'browse search, filters, and repeat reset use latest-wins rendering'
 }, null, 2));

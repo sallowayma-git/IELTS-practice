@@ -893,7 +893,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             syncOnNavigate: true,
             onNavigate: function onNavigate(viewName) {
                 if (typeof global.showView === 'function') {
-                    global.showView(viewName);
+                    global.showView(viewName, false);
                     return;
                 }
                 if (global.app && typeof global.app.navigateToView === 'function') {
@@ -1731,6 +1731,21 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
+    function ensureBrowseStateManager() {
+        if (global.browseStateManager) {
+            return global.browseStateManager;
+        }
+        if (typeof global.BrowseStateManager !== 'function') {
+            return null;
+        }
+        try {
+            return new global.BrowseStateManager();
+        } catch (error) {
+            console.warn('[MainEntry] 初始化浏览状态管理器失败:', error);
+            return null;
+        }
+    }
+
     function synchronizeActiveBrowseViewAfterLoad() {
         if (getActiveViewName() !== 'browse' || typeof global.initializeBrowseView !== 'function') {
             return Promise.resolve();
@@ -1743,7 +1758,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return global.initializeBrowseView({ skipLoad: canApplyPendingFilter });
             })
             .then(function applyPendingBrowseFilter() {
-                if (!canApplyPendingFilter) {
+                if (!canApplyPendingFilter || global.__pendingBrowseFilter !== pendingFilter) {
                     return undefined;
                 }
                 return global.applyBrowseFilter(
@@ -1764,6 +1779,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         if (!browseGroupPromise) {
             browseGroupPromise = ensureLazyGroup(BROWSE_GROUP).then(function onBrowseLoaded() {
                 reapplyAppMixins();
+                initializeNavigationShell();
+                ensureBrowseStateManager();
                 if (typeof global.setupBrowsePreferenceUI === 'function') {
                     try {
                         global.setupBrowsePreferenceUI();
@@ -1841,12 +1858,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function initializeNavigationShell() {
+        var controller = null;
         try {
             if (global.NavigationController && typeof global.NavigationController.ensure === 'function') {
-                global.NavigationController.ensure({
+                controller = global.NavigationController.ensure({
                     containerSelector: '.main-nav',
                     activeClass: 'active',
-                    initialView: 'overview',
+                    initialView: getActiveViewName() || 'overview',
                     syncOnNavigate: true,
                     onRepeatNavigate: function onRepeatNavigate(viewName) {
                         if (viewName === 'browse' && typeof global.resetBrowseViewToAll === 'function') {
@@ -1855,7 +1873,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     },
                     onNavigate: function onNavigate(viewName) {
                         if (typeof global.showView === 'function') {
-                            global.showView(viewName);
+                            global.showView(viewName, false);
                             return;
                         }
                         if (global.app && typeof global.app.navigateToView === 'function') {
@@ -1867,6 +1885,19 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         } catch (error) {
             console.warn('[MainEntry] 初始化导航失败:', error);
         }
+        if (controller && typeof document !== 'undefined') {
+            var navRoot = document.querySelector('.main-nav');
+            var fallbackHandler = navRoot && navRoot._legacyNavHandler;
+            if (typeof fallbackHandler === 'function' && typeof navRoot.removeEventListener === 'function') {
+                navRoot.removeEventListener('click', fallbackHandler);
+                try {
+                    delete navRoot._legacyNavHandler;
+                } catch (_) {
+                    navRoot._legacyNavHandler = null;
+                }
+            }
+        }
+        return controller;
     }
 
     function proxyAfterGroup(groupName, getter, fallback) {
@@ -1928,7 +1959,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
         var proxy = function lazyProxy() {
             var args = Array.prototype.slice.call(arguments);
-            return ensureLazyGroup(group).then(function () {
+            var groupReady = group === BROWSE_GROUP
+                ? ensureBrowseGroup()
+                : ensureLazyGroup(group);
+            return groupReady.then(function () {
                 var fn = global[name];
                 if (typeof fn === 'function' && fn !== proxy) {
                     return fn.apply(global, args);

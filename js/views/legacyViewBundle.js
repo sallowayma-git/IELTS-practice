@@ -3483,7 +3483,7 @@
         }
 
         if (typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
             return;
         }
 

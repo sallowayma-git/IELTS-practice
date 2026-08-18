@@ -107,7 +107,7 @@
         syncOnNavigate: true,
         onNavigate: function onNavigate(viewName) {
           if (typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
           }
         }
       });
@@ -121,8 +121,19 @@
           }
           event.preventDefault();
           var viewName = button.getAttribute('data-view');
+          var alreadyActive = !!(button.classList && button.classList.contains('active'));
+          if (viewName === 'browse' && alreadyActive && typeof window.resetBrowseViewToAll === 'function') {
+            try {
+              Promise.resolve(window.resetBrowseViewToAll()).catch(function (error) {
+                console.warn('[Fallback] 重复题库导航重置失败:', error);
+              });
+            } catch (error) {
+              console.warn('[Fallback] 重复题库导航重置失败:', error);
+            }
+            return;
+          }
           if (viewName && typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
           }
         };
         navRoot._legacyNavHandler = handler;
@@ -1589,7 +1600,7 @@
   function bootInitialView() {
     const targetView = resolveInitialView();
     if (typeof window.showView === 'function') {
-      window.showView(targetView);
+      window.showView(targetView, false);
       return;
     }
     if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {

@@ -187,6 +187,7 @@ async function testRandomPracticeEnsuresBrowseRuntime(harness) {
     loadScript('js/presentation/app-actions.js', harness.context);
 
     await harness.windowStub.AppActions.startRandomPractice('all', 'reading');
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
 
     assert(harness.ensureCalls.includes('browse-runtime'), '随机练习应主动确保 browse-runtime 已加载');
     assert.strictEqual(harness.windowStub.__openedExamId, 'reading-1', '随机练习应在严格按需模式下仍能打开题目');
@@ -194,6 +195,60 @@ async function testRandomPracticeEnsuresBrowseRuntime(harness) {
         ensureCalls: harness.ensureCalls,
         openedExamId: harness.windowStub.__openedExamId
     });
+}
+
+async function testFallbackQueuesRepeatBrowseResetDuringLazyLoad() {
+    const harness = createHarness();
+    let fallbackHandler = null;
+    let resetCalls = 0;
+    const showViewCalls = [];
+    const button = {
+        classList: {
+            contains(value) { return value === 'active'; }
+        },
+        getAttribute(name) { return name === 'data-view' ? 'browse' : null; }
+    };
+    const navRoot = {
+        contains(value) { return value === button; },
+        addEventListener(type, handler) {
+            if (type === 'click') fallbackHandler = handler;
+        },
+        querySelectorAll() { return []; },
+        querySelector() { return null; }
+    };
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.main-nav') return navRoot;
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.showView = function showView(viewName, resetCategory) {
+        showViewCalls.push({ viewName, resetCategory });
+    };
+    harness.windowStub.resetBrowseViewToAll = function resetBrowseViewToAll() {
+        resetCalls += 1;
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/boot-fallbacks.js', harness.context);
+    assert(fallbackHandler, 'strict on-demand startup should install the temporary navigation handler');
+    const showCallsBeforeRepeat = showViewCalls.length;
+    fallbackHandler({
+        preventDefault() {},
+        target: {
+            closest(selector) {
+                return selector === '.nav-btn[data-view]' ? button : null;
+            }
+        }
+    });
+    await Promise.resolve();
+
+    assert.strictEqual(resetCalls, 1, 'a repeat Browse click during lazy load must queue the reset intent');
+    assert.strictEqual(
+        showViewCalls.length,
+        showCallsBeforeRepeat,
+        'the repeat click must not run ordinary Browse navigation again'
+    );
+    recordResult('Browse 冷加载窗口保留重复导航重置意图', true, { resetCalls });
 }
 
 async function testClearSearchProxyLoadsBrowseRuntime(harness) {
@@ -246,6 +301,153 @@ async function testColdBrowseProxyRestoresPreferences(harness) {
     recordResult('browse 冷加载后恢复持久化偏好', true, {
         initializationCalls: initializationCalls.length,
         realLoadCalls
+    });
+}
+
+async function testColdBrowseAppliesExplicitPendingFilter(harness) {
+    const initializationCalls = [];
+    const appliedFilters = [];
+    const pendingFilter = {
+        category: 'P4',
+        type: 'listening',
+        filterMode: 'default',
+        path: 'ListeningPractice/P4'
+    };
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') {
+            return { id: 'browse-view' };
+        }
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.__pendingBrowseFilter = pendingFilter;
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.initializeBrowseView = async function initializeBrowseView(options) {
+                initializationCalls.push(options || {});
+            };
+            harness.windowStub.applyBrowseFilter = async function applyBrowseFilter(...args) {
+                appliedFilters.push(args);
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+
+    assert.strictEqual(
+        initializationCalls.length,
+        1,
+        'cold Browse activation should initialize exactly once when a category is pending'
+    );
+    assert.strictEqual(
+        initializationCalls[0].skipLoad,
+        true,
+        'cold Browse activation should initialize without an unfiltered render when a category is pending'
+    );
+    assert.deepStrictEqual(appliedFilters, [[
+        pendingFilter.category,
+        pendingFilter.type,
+        pendingFilter.filterMode,
+        pendingFilter.path
+    ]], 'cold Browse activation should preserve and apply the explicit category intent');
+    assert.strictEqual(
+        harness.windowStub.__pendingBrowseFilter,
+        undefined,
+        'the applied cold-start category intent should be cleared'
+    );
+    recordResult('browse 冷加载保留显式分类意图', true, {
+        initializationCalls: initializationCalls.length,
+        appliedFilters: appliedFilters.length
+    });
+}
+
+async function testColdBrowseRuntimeInitializesNavigationAndStateManager() {
+    const harness = createHarness();
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    const fallbackHandler = function fallbackNavigation() {};
+    let fallbackRemovals = 0;
+    const navRoot = {
+        _legacyNavHandler: fallbackHandler,
+        removeEventListener(type, handler) {
+            if (type === 'click' && handler === fallbackHandler) {
+                fallbackRemovals += 1;
+            }
+        }
+    };
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.main-nav') {
+            return navRoot;
+        }
+        if (selector === '.view.active') {
+            return { id: 'browse-view' };
+        }
+        return originalQuerySelector(selector);
+    };
+
+    let navigationEnsureCalls = 0;
+    let navigationOptions = null;
+    let stateManagerCreations = 0;
+    let repeatResets = 0;
+    const showViewCalls = [];
+    harness.windowStub.showView = function showView(viewName, resetCategory) {
+        showViewCalls.push({ viewName, resetCategory });
+    };
+    harness.windowStub.NavigationController = {
+        ensure(options) {
+            navigationEnsureCalls += 1;
+            if (typeof harness.windowStub.ensureLegacyNavigationController !== 'function') {
+                return null;
+            }
+            navigationOptions = options;
+            return harness.windowStub.ensureLegacyNavigationController(options);
+        }
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.ensureLegacyNavigationController = function ensureLegacyNavigationController() {
+                return { mounted: true };
+            };
+            harness.windowStub.BrowseStateManager = function BrowseStateManager() {
+                stateManagerCreations += 1;
+                this.ready = Promise.resolve();
+                harness.windowStub.browseStateManager = this;
+            };
+            harness.windowStub.resetBrowseViewToAll = function resetBrowseViewToAll() {
+                repeatResets += 1;
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    loadScript('js/presentation/app-actions.js', harness.context);
+    await harness.windowStub.AppActions.preloadBrowseView();
+
+    assert.strictEqual(navigationEnsureCalls, 2, 'Browse 预取应在冷启动和懒加载完成后各尝试初始化导航');
+    assert.strictEqual(stateManagerCreations, 1, 'BrowseStateManager 应在懒加载完成后仅实例化一次');
+    assert(harness.windowStub.browseStateManager, '冷启动 Browse 应暴露全局状态管理器实例');
+    assert.strictEqual(fallbackRemovals, 1, '真实导航控制器挂载后应移除临时 fallback click handler');
+    assert.strictEqual(navRoot._legacyNavHandler, undefined, 'fallback handler 标记应在升级后清理');
+    assert(navigationOptions && typeof navigationOptions.onRepeatNavigate === 'function');
+    assert.strictEqual(navigationOptions.initialView, 'browse', '导航升级必须保留 fallback 已激活的 Browse 高亮');
+
+    navigationOptions.onNavigate('browse');
+    assert.deepStrictEqual(
+        showViewCalls.at(-1),
+        { viewName: 'browse', resetCategory: false },
+        '普通 Browse 导航必须保留当前分类和筛选状态'
+    );
+    navigationOptions.onRepeatNavigate('browse');
+    assert.strictEqual(repeatResets, 1, '懒加载后的重复 Browse 点击应进入 reset handler');
+    recordResult('browse 冷加载后补齐导航与状态管理器', true, {
+        navigationEnsureCalls,
+        stateManagerCreations,
+        fallbackRemovals,
+        repeatResets
     });
 }
 
@@ -382,8 +584,11 @@ async function testSuiteRecoveryCancelDoesNotMutateSession() {
 async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
+        await testFallbackQueuesRepeatBrowseResetDuringLazyLoad();
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
         await testColdBrowseProxyRestoresPreferences(createHarness());
+        await testColdBrowseAppliesExplicitPendingFilter(createHarness());
+        await testColdBrowseRuntimeInitializesNavigationAndStateManager();
         await testMoreViewActivationLoadsTools(createHarness());
         await testSuiteRecoveryRequiresExplicitContinueChoice();
         await testSuiteRecoveryAbandonThenStartsFreshSuite();

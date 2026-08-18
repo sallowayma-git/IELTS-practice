@@ -110,7 +110,7 @@
         syncOnNavigate: true,
         onNavigate: function onNavigate(viewName) {
           if (typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
           }
         }
       });
@@ -124,8 +124,19 @@
           }
           event.preventDefault();
           var viewName = button.getAttribute('data-view');
+          var alreadyActive = !!(button.classList && button.classList.contains('active'));
+          if (viewName === 'browse' && alreadyActive && typeof window.resetBrowseViewToAll === 'function') {
+            try {
+              Promise.resolve(window.resetBrowseViewToAll()).catch(function (error) {
+                console.warn('[Fallback] 重复题库导航重置失败:', error);
+              });
+            } catch (error) {
+              console.warn('[Fallback] 重复题库导航重置失败:', error);
+            }
+            return;
+          }
           if (viewName && typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
           }
         };
         navRoot._legacyNavHandler = handler;
@@ -1592,7 +1603,7 @@
   function bootInitialView() {
     const targetView = resolveInitialView();
     if (typeof window.showView === 'function') {
-      window.showView(targetView);
+      window.showView(targetView, false);
       return;
     }
     if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {
@@ -2261,17 +2272,25 @@ class ExamSystemApp {
                     break;
                 case 'browse':
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
-                        const { category, type, filterMode, path } = window.__pendingBrowseFilter;
+                        const pendingFilter = window.__pendingBrowseFilter;
+                        const { category, type, filterMode, path } = pendingFilter;
                         Promise.resolve(
                             typeof window.initializeBrowseView === 'function'
                                 ? window.initializeBrowseView({ skipLoad: true })
                                 : null
-                        ).then(() => window.applyBrowseFilter(category, type, filterMode, path))
+                        ).then(() => {
+                            if (window.__pendingBrowseFilter !== pendingFilter) {
+                                return undefined;
+                            }
+                            return window.applyBrowseFilter(category, type, filterMode, path);
+                        })
                             .catch((error) => {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);
                             })
                             .finally(() => {
-                                delete window.__pendingBrowseFilter;
+                                if (window.__pendingBrowseFilter === pendingFilter) {
+                                    delete window.__pendingBrowseFilter;
+                                }
                             });
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();

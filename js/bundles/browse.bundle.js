@@ -3486,7 +3486,7 @@
         }
 
         if (typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
             return;
         }
 
@@ -5071,50 +5071,232 @@
         return examsToShow;
     }
 
-    /**
-     * 重置浏览视图
-     */
-    function resetBrowseViewToAll() {
-        clearReadingMemorizeBrowseMode();
-        // 1. 清除频率模式标记（关键修复）
-        if (typeof global.__browseFilterMode !== 'undefined') {
-            global.__browseFilterMode = 'default';
+    let browseResetInteractionId = 0;
+
+    function isBrowseResetCurrent(interactionId, renderRequestId) {
+        if (interactionId !== browseResetInteractionId) {
+            return false;
         }
-        if (typeof global.__browsePath !== 'undefined') {
-            global.__browsePath = null;
+        return renderRequestId == null
+            || typeof global.__isBrowseResultsRequestCurrent !== 'function'
+            || global.__isBrowseResultsRequestCurrent(renderRequestId);
+    }
+
+    function clearBrowseSearchUI() {
+        if (global.browseStateManager && typeof global.browseStateManager.clearSearchState === 'function') {
+            global.browseStateManager.clearSearchState();
+            return;
+        }
+        const searchInput = document.getElementById('exam-search-input')
+            || document.querySelector('.search-input');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        const clearButton = document.getElementById('search-clear-btn');
+        if (clearButton) {
+            clearButton.hidden = true;
+        }
+    }
+
+    function syncBrowseFilterUI(examIndex) {
+        const controller = global.browseController;
+        if (controller) {
+            controller.currentMode = 'default';
+            controller.activeFilter = 'all';
+            if (typeof controller.renderFilterButtons === 'function') {
+                controller.renderFilterButtons(Array.isArray(examIndex) ? examIndex : []);
+            }
         }
 
-        // 2. 重置 browseController 到默认模式
-        if (global.browseController) {
-            global.browseController.clearPendingBrowseAutoScroll();
+        const typeContainer = document.getElementById('type-filter-buttons');
+        if (typeContainer && typeof typeContainer.querySelectorAll === 'function') {
+            typeContainer.querySelectorAll('.shui-segmented-btn').forEach((button) => {
+                const filterId = button.dataset && (button.dataset.filterId || button.dataset.filterType);
+                const active = filterId === 'all';
+                if (button.classList && typeof button.classList.toggle === 'function') {
+                    button.classList.toggle('active', active);
+                }
+                if (typeof button.setAttribute === 'function') {
+                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                }
+            });
+        }
 
-            // 恢复默认模式（消除频率模式）
-            if (typeof global.browseController.resetToDefault === 'function') {
-                global.browseController.resetToDefault();
-            } else {
-                // 降级：手动重置
-                global.browseController.currentMode = 'default';
-                global.browseController.activeFilter = 'all';
-            }
-
-            const currentCategory = global.browseController.getCurrentCategory();
-            const currentType = global.browseController.getCurrentExamType();
-
-            if (currentCategory === 'all' && currentType === 'all') {
-                if (global.setBrowseTitle) global.setBrowseTitle('题库列表');
-                loadExamList();
-                return;
-            }
-
-            global.browseController.setBrowseFilterState('all', 'all');
+        global.__browseFrequencyFilter = 'all';
+        if (typeof global.updateBrowseFrequencyButtons === 'function') {
+            global.updateBrowseFrequencyButtons('all');
         } else {
-            // 降级
-            if (typeof global.clearPendingBrowseAutoScroll === 'function') global.clearPendingBrowseAutoScroll();
-            if (typeof global.setBrowseFilterState === 'function') global.setBrowseFilterState('all', 'all');
+            const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
+            if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
+                frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+                    if (button.classList && typeof button.classList.remove === 'function') {
+                        button.classList.remove('active');
+                    }
+                    if (typeof button.setAttribute === 'function') {
+                        button.setAttribute('aria-pressed', 'false');
+                    }
+                });
+            }
+        }
+    }
+
+    async function prepareBrowseReset() {
+        const pending = [];
+        const manager = global.browseStateManager;
+        if (manager && manager.ready && typeof manager.ready.then === 'function') {
+            pending.push(Promise.resolve(manager.ready).catch((error) => {
+                console.warn('[ExamActions] 等待浏览状态恢复失败:', error);
+            }));
+        }
+        if (typeof global.setupBrowseControls === 'function') {
+            pending.push(Promise.resolve().then(() => global.setupBrowseControls()).catch((error) => {
+                console.warn('[ExamActions] 初始化浏览筛选控件失败:', error);
+            }));
+        }
+        if (pending.length > 0) {
+            await Promise.all(pending);
+        }
+    }
+
+    async function persistBrowseFrequencyReset() {
+        const preferences = global.AppData && global.AppData.preferences;
+        if (!preferences || typeof preferences.patchBrowse !== 'function') {
+            return;
+        }
+        try {
+            await preferences.patchBrowse({ frequencyFilter: 'all' });
+        } catch (error) {
+            console.warn('[ExamActions] 持久化浏览频率重置失败:', error);
+        }
+    }
+
+    function beginBrowseResetPersistence() {
+        const pending = [persistBrowseFrequencyReset()];
+        if (typeof global.flushBrowsePreferenceWrites === 'function') {
+            pending.push(Promise.resolve().then(() => global.flushBrowsePreferenceWrites()).catch((error) => {
+                console.warn('[ExamActions] 等待浏览筛选偏好写入失败:', error);
+            }));
+        }
+        return Promise.all(pending);
+    }
+
+    function applyBrowseResetState(examIndex) {
+        clearReadingMemorizeBrowseMode();
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+
+        if (global.browseStateManager && typeof global.browseStateManager.resetToAllExams === 'function') {
+            global.browseStateManager.resetToAllExams();
+        } else {
+            if (typeof global.setBrowseFilterState === 'function') {
+                global.setBrowseFilterState('all', 'all');
+            }
+            clearBrowseSearchUI();
         }
 
-        if (global.setBrowseTitle) global.setBrowseTitle('题库列表');
-        loadExamList();
+        syncBrowseFilterUI(examIndex);
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('题库列表');
+        }
+    }
+
+    /**
+     * 重置浏览视图。先解析活动题库快照，再一次性更新 UI/状态并交给
+     * 全局 loadExamList 适配器渲染，避免 IIFE 内部默认 [] 覆盖列表。
+     */
+    async function performBrowseViewResetToAll() {
+        const interactionId = ++browseResetInteractionId;
+        if (global.__pendingBrowseFilter) {
+            delete global.__pendingBrowseFilter;
+        }
+        const renderRequestId = typeof global.__beginBrowseResultsRequest === 'function'
+            ? global.__beginBrowseResultsRequest()
+            : null;
+
+        if (global.browseController) {
+            if (typeof global.browseController.filterInteractionId === 'number') {
+                global.browseController.filterInteractionId += 1;
+            }
+            if (typeof global.browseController.clearPendingBrowseAutoScroll === 'function') {
+                global.browseController.clearPendingBrowseAutoScroll();
+            }
+        } else if (typeof global.clearPendingBrowseAutoScroll === 'function') {
+            global.clearPendingBrowseAutoScroll();
+        }
+
+        const resolver = typeof global.resolveActiveLibraryIndex === 'function'
+            ? global.resolveActiveLibraryIndex
+            : global.resolveActiveExamIndex;
+        const indexPromise = typeof resolver === 'function'
+            ? Promise.resolve().then(() => resolver.call(global)).then((resolved) => (
+                Array.isArray(resolved) ? resolved : null
+            )).catch((error) => {
+                console.warn('[ExamActions] 重置浏览视图时无法预取活动题库:', error);
+                return null;
+            })
+            : Promise.resolve(null);
+        const [examIndex] = await Promise.all([
+            indexPromise,
+            prepareBrowseReset()
+        ]);
+
+        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+            return false;
+        }
+
+        applyBrowseResetState(examIndex);
+
+        const globalLoader = global.loadExamList;
+        if (typeof globalLoader === 'function' && globalLoader !== loadExamList) {
+            // 空索引也交由适配器自行解析；绝不把 [] 当作重置结果渲染。
+            const indexOverride = Array.isArray(examIndex) && examIndex.length > 0 ? examIndex : null;
+            let renderPromise;
+            try {
+                renderPromise = Promise.resolve(globalLoader.call(global, indexOverride, renderRequestId));
+            } catch (error) {
+                renderPromise = Promise.reject(error);
+            }
+            const persistencePromise = beginBrowseResetPersistence();
+            try {
+                const result = await renderPromise;
+                if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                    await persistencePromise;
+                    return false;
+                }
+                if ((!Array.isArray(examIndex) || examIndex.length === 0)
+                    && Array.isArray(result)) {
+                    syncBrowseFilterUI(result);
+                }
+                await persistencePromise;
+                if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                    return false;
+                }
+                return result;
+            } catch (error) {
+                console.warn('[ExamActions] 重置浏览视图加载失败:', error);
+                await persistencePromise;
+                return false;
+            }
+        }
+
+        if (Array.isArray(examIndex) && examIndex.length > 0) {
+            const result = loadExamList(examIndex);
+            await beginBrowseResetPersistence();
+            return result;
+        }
+
+        await beginBrowseResetPersistence();
+        console.warn('[ExamActions] 全局题库加载适配器不可用，已跳过空数组渲染');
+        return false;
+    }
+
+    async function resetBrowseViewToAll() {
+        try {
+            return await performBrowseViewResetToAll();
+        } catch (error) {
+            console.warn('[ExamActions] 重置浏览视图失败:', error);
+            return false;
+        }
     }
 
     /**
@@ -14496,19 +14678,16 @@ class BrowseStateManager {
      * 处理浏览导航
      */
     handleBrowseNavigation() {
-        console.log('[BrowseStateManager] 处理浏览导航，重置为显示所有考试');
+        console.log('[BrowseStateManager] 记录题库浏览导航');
 
-        if (typeof window.clearPendingBrowseAutoScroll === 'function') {
-            try { window.clearPendingBrowseAutoScroll(); } catch (_) {}
-        }
-
-        // 重置到全部考试视图
-        this.resetToAllExams();
+        // 导航控制器单独区分“进入 Browse”和“重复点击 Browse”。
+        // 普通进入时保留待处理的分类与持久化偏好；重复导航才由
+        // ExamActions.resetBrowseViewToAll 执行原子重置。
 
         // 记录导航历史
         this.addToHistory({
             action: 'navigate_to_browse',
-            filter: 'all',
+            filter: this.currentFilter,
             timestamp: Date.now()
         });
     }
@@ -14718,6 +14897,11 @@ class BrowseStateManager {
         this.setState({
             currentCategory: null,
             currentFrequency: null,
+            filters: {
+                frequency: 'all',
+                status: 'all',
+                difficulty: 'all'
+            },
             searchQuery: '',
             pagination: {
                 page: 1,
@@ -14767,9 +14951,14 @@ class BrowseStateManager {
      * 清除搜索状态
      */
     clearSearchState() {
-        const searchInput = document.querySelector('.search-input');
+        const searchInput = document.getElementById('exam-search-input')
+            || document.querySelector('.search-input');
         if (searchInput) {
             searchInput.value = '';
+        }
+        const clearButton = document.getElementById('search-clear-btn');
+        if (clearButton) {
+            clearButton.hidden = true;
         }
     }
 
@@ -17143,7 +17332,7 @@ function ensureLegacyNavigation(options) {
         },
         onNavigate: function onNavigate(viewName) {
             if (typeof window.showView === 'function') {
-                window.showView(viewName);
+                window.showView(viewName, false);
                 return;
             }
             if (window.app && typeof window.app.navigateToView === 'function') {
@@ -17170,7 +17359,11 @@ async function initializeLegacyComponents() {
     try { showMessage('系统准备就绪', 'success'); } catch (_) { }
 
     try {
-        ensureLegacyNavigation({ initialView: 'overview' });
+        const activeView = document.querySelector('.view.active');
+        const activeViewName = activeView && activeView.id
+            ? activeView.id.replace(/-view$/, '')
+            : 'overview';
+        ensureLegacyNavigation({ initialView: activeViewName });
     } catch (error) {
         console.warn('[Navigation] 初始化导航控制器失败:', error);
     }
@@ -17183,8 +17376,8 @@ async function initializeLegacyComponents() {
         console.log('[System] PDF处理器已初始化');
     }
     if (window.BrowseStateManager) {
-        browseStateManager = new BrowseStateManager();
-        console.log('[System] 浏览状态管理器已初始化');
+        browseStateManager = window.browseStateManager || new window.BrowseStateManager();
+        console.log('[System] 浏览状态管理器已就绪');
     }
     // 性能优化器已拆到 diagnostics-tools；浏览页保留无依赖降级路径。
     if (window.PerformanceOptimizer) {
@@ -19193,22 +19386,33 @@ function refreshBrowseResults() {
 }
 
 let browseControlsSeeded = false;
+let browseControlsSeedPromise = null;
 async function setupBrowseControls() {
     if (!browseControlsSeeded) {
-        try {
-            const browse = await window.AppData.preferences.getBrowse();
-            if (browse) {
-                window.__browseSortMode = browse.sortMode || window.__browseSortMode;
-                window.__browseFrequencyFilter = browse.frequencyFilter || window.__browseFrequencyFilter;
-            }
-        } catch (_) { /* defaults remain active */ }
-        browseControlsSeeded = true;
+        if (!browseControlsSeedPromise) {
+            browseControlsSeedPromise = (async () => {
+                try {
+                    const browse = await window.AppData.preferences.getBrowse();
+                    if (browse) {
+                        window.__browseSortMode = browse.sortMode || window.__browseSortMode;
+                        window.__browseFrequencyFilter = browse.frequencyFilter || window.__browseFrequencyFilter;
+                    }
+                } catch (_) { /* defaults remain active */ }
+                browseControlsSeeded = true;
+            })();
+        }
+        await browseControlsSeedPromise;
     }
     setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
 }
 
 async function persistBrowsePreference(patch) {
+    if (window.AppData && window.AppData.preferences
+        && typeof window.AppData.preferences.patchBrowse === 'function') {
+        await window.AppData.preferences.patchBrowse(patch);
+        return;
+    }
     const current = await window.AppData.preferences.getBrowse() || {};
     await window.AppData.preferences.setBrowse(Object.assign({}, current, patch));
 }
@@ -19236,6 +19440,7 @@ function setupBrowseSortControl() {
 
 function updateBrowseFrequencyButtons(filter) {
     const activeFilter = normalizeBrowseFrequencyFilter(filter || window.__browseFrequencyFilter || 'all');
+    window.__browseFrequencyFilter = activeFilter;
     const container = document.getElementById('browse-frequency-filter-buttons');
     if (!container) {
         return;

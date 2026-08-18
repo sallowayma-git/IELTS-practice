@@ -191,6 +191,7 @@ const KNOWN_SYMBOL_CONFLICTS = {
     'js/bundles/browse.bundle.js': {
         __browseFilterMode: ['js/app/examActions.js', 'js/app/browseController.js', 'js/main.js'],
         __browsePath: ['js/app/examActions.js', 'js/app/browseController.js', 'js/main.js'],
+        __browseFrequencyFilter: ['js/app/examActions.js', 'js/main.js'],
         __readingMemorizeBrowseMode: ['js/app/examActions.js', 'js/main.js'],
         __browseMemorizeFilterMode: ['js/app/examActions.js', 'js/main.js'],
         clearPendingBrowseAutoScroll: ['js/utils/BrowsePreferencesUtils.js', 'js/main.js'],

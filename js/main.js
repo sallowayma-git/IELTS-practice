@@ -235,7 +235,7 @@ function ensureLegacyNavigation(options) {
         },
         onNavigate: function onNavigate(viewName) {
             if (typeof window.showView === 'function') {
-                window.showView(viewName);
+                window.showView(viewName, false);
                 return;
             }
             if (window.app && typeof window.app.navigateToView === 'function') {
@@ -262,7 +262,11 @@ async function initializeLegacyComponents() {
     try { showMessage('系统准备就绪', 'success'); } catch (_) { }
 
     try {
-        ensureLegacyNavigation({ initialView: 'overview' });
+        const activeView = document.querySelector('.view.active');
+        const activeViewName = activeView && activeView.id
+            ? activeView.id.replace(/-view$/, '')
+            : 'overview';
+        ensureLegacyNavigation({ initialView: activeViewName });
     } catch (error) {
         console.warn('[Navigation] 初始化导航控制器失败:', error);
     }
@@ -275,8 +279,8 @@ async function initializeLegacyComponents() {
         console.log('[System] PDF处理器已初始化');
     }
     if (window.BrowseStateManager) {
-        browseStateManager = new BrowseStateManager();
-        console.log('[System] 浏览状态管理器已初始化');
+        browseStateManager = window.browseStateManager || new window.BrowseStateManager();
+        console.log('[System] 浏览状态管理器已就绪');
     }
     // 性能优化器已拆到 diagnostics-tools；浏览页保留无依赖降级路径。
     if (window.PerformanceOptimizer) {
@@ -2285,22 +2289,33 @@ function refreshBrowseResults() {
 }
 
 let browseControlsSeeded = false;
+let browseControlsSeedPromise = null;
 async function setupBrowseControls() {
     if (!browseControlsSeeded) {
-        try {
-            const browse = await window.AppData.preferences.getBrowse();
-            if (browse) {
-                window.__browseSortMode = browse.sortMode || window.__browseSortMode;
-                window.__browseFrequencyFilter = browse.frequencyFilter || window.__browseFrequencyFilter;
-            }
-        } catch (_) { /* defaults remain active */ }
-        browseControlsSeeded = true;
+        if (!browseControlsSeedPromise) {
+            browseControlsSeedPromise = (async () => {
+                try {
+                    const browse = await window.AppData.preferences.getBrowse();
+                    if (browse) {
+                        window.__browseSortMode = browse.sortMode || window.__browseSortMode;
+                        window.__browseFrequencyFilter = browse.frequencyFilter || window.__browseFrequencyFilter;
+                    }
+                } catch (_) { /* defaults remain active */ }
+                browseControlsSeeded = true;
+            })();
+        }
+        await browseControlsSeedPromise;
     }
     setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
 }
 
 async function persistBrowsePreference(patch) {
+    if (window.AppData && window.AppData.preferences
+        && typeof window.AppData.preferences.patchBrowse === 'function') {
+        await window.AppData.preferences.patchBrowse(patch);
+        return;
+    }
     const current = await window.AppData.preferences.getBrowse() || {};
     await window.AppData.preferences.setBrowse(Object.assign({}, current, patch));
 }
@@ -2328,6 +2343,7 @@ function setupBrowseSortControl() {
 
 function updateBrowseFrequencyButtons(filter) {
     const activeFilter = normalizeBrowseFrequencyFilter(filter || window.__browseFrequencyFilter || 'all');
+    window.__browseFrequencyFilter = activeFilter;
     const container = document.getElementById('browse-frequency-filter-buttons');
     if (!container) {
         return;
