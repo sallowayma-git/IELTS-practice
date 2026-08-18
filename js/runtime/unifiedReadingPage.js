@@ -611,6 +611,89 @@
         });
     }
 
+    function getNonEmptyTextNodes(root) {
+        const textNodes = [];
+        if (!(root instanceof Node)) {
+            return textNodes;
+        }
+        const ownerDocument = root.ownerDocument || document;
+        const nodeFilter = ownerDocument.defaultView?.NodeFilter || global.NodeFilter;
+        if (!nodeFilter) {
+            return textNodes;
+        }
+        const walker = ownerDocument.createTreeWalker(root, nodeFilter.SHOW_TEXT);
+        let textNode = walker.nextNode();
+        while (textNode) {
+            if ((textNode.data || '').length > 0) {
+                textNodes.push(textNode);
+            }
+            textNode = walker.nextNode();
+        }
+        return textNodes;
+    }
+
+    function rangeHasPositiveTextOverlap(range, node) {
+        if (!range || range.collapsed || !(node instanceof Node)) {
+            return false;
+        }
+        const textNodes = getNonEmptyTextNodes(node);
+        if (!textNodes.length) {
+            return false;
+        }
+        const ownerDocument = node.ownerDocument || document;
+        const rangeType = ownerDocument.defaultView?.Range || global.Range;
+        if (!rangeType || typeof range.compareBoundaryPoints !== 'function') {
+            return false;
+        }
+        try {
+            const nodeTextRange = ownerDocument.createRange();
+            nodeTextRange.setStart(textNodes[0], 0);
+            const lastTextNode = textNodes[textNodes.length - 1];
+            nodeTextRange.setEnd(lastTextNode, lastTextNode.data.length);
+            return range.compareBoundaryPoints(rangeType.START_TO_END, nodeTextRange) > 0
+                && range.compareBoundaryPoints(rangeType.END_TO_START, nodeTextRange) < 0;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function isAtomicPrimaryHighlightSelection(range, highlightNode) {
+        if (
+            !range
+            || range.collapsed
+            || !(highlightNode instanceof HTMLElement)
+            || !highlightNode.matches('.hl')
+            || !highlightNode.isConnected
+            || highlightNode.dataset.hlLevel === 'secondary'
+            || typeof range.comparePoint !== 'function'
+        ) {
+            return false;
+        }
+
+        const textNodes = getNonEmptyTextNodes(highlightNode);
+        if (!textNodes.length) {
+            return false;
+        }
+
+        try {
+            const ownerDocument = highlightNode.ownerDocument || document;
+            const scope = highlightNode.closest('#left, #right') || ownerDocument;
+            const intersectedHighlights = Array.from(scope.querySelectorAll('.hl'))
+                .filter((node) => rangeHasPositiveTextOverlap(range, node));
+            if (intersectedHighlights.length !== 1 || intersectedHighlights[0] !== highlightNode) {
+                return false;
+            }
+
+            const firstTextNode = textNodes[0];
+            const lastTextNode = textNodes[textNodes.length - 1];
+            return range.comparePoint(firstTextNode, 0) === 0
+                && range.comparePoint(lastTextNode, lastTextNode.data.length) === 0
+                && range.toString() === String(highlightNode.textContent || '');
+        } catch (_) {
+            return false;
+        }
+    }
+
     function updateSelectionToolbar() {
         const toolbar = document.getElementById('selbar');
         if (!toolbar) return;
@@ -647,13 +730,7 @@
                 const hls = containerElement.querySelectorAll('.hl');
                 for (let i = 0; i < hls.length; i++) {
                     const hl = hls[i];
-                    let intersects = false;
-                    if (typeof range.intersectsNode === 'function') {
-                        intersects = range.intersectsNode(hl);
-                    } else if (selection && typeof selection.containsNode === 'function') {
-                        intersects = selection.containsNode(hl, true);
-                    }
-                    if (intersects) {
+                    if (rangeHasPositiveTextOverlap(range, hl)) {
                         hasHighlight = true;
                         finalHighlightNode = hl;
                         break;
@@ -688,12 +765,20 @@
             return;
         }
         if (kind === 'highlight' && interaction.currentHighlightNode instanceof HTMLElement) {
-            interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            const shouldPromote = isAtomicPrimaryHighlightSelection(
+                interaction.lastRange,
+                interaction.currentHighlightNode
+            );
+            if (shouldPromote) {
+                interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            }
             selection?.removeAllRanges();
             if (toolbar) toolbar.style.display = 'none';
             interaction.lastRange = null;
             interaction.currentHighlightNode = null;
-            syncReadingAnnotation('highlight');
+            if (shouldPromote) {
+                syncReadingAnnotation('highlight');
+            }
             return;
         }
         if (interaction.currentHighlightNode) {
@@ -6076,6 +6161,14 @@
                 applyAnswersToDom,
                 applyReplayAnswersToDom,
                 captureDom,
+                updateSelectionToolbar,
+                applySelectionHighlight,
+                getSelectionHighlightTestState() {
+                    return {
+                        hasLastRange: Boolean(interaction.lastRange),
+                        hasCurrentHighlightNode: interaction.currentHighlightNode instanceof HTMLElement
+                    };
+                },
                 renderResults,
                 updateNavStatuses,
                 renderTimer,

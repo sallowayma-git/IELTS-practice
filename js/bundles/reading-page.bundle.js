@@ -4464,6 +4464,40 @@
         });
     }
 
+    function expandRangeToFullySelectedBoundaries(range) {
+        if (!range || range.collapsed) {
+            return range;
+        }
+        const commonAncestor = range.commonAncestorContainer;
+        let startContainer = range.startContainer;
+        let startOffset = range.startOffset;
+        while (startContainer !== commonAncestor && startOffset === 0) {
+            const parent = startContainer.parentNode;
+            if (!parent) break;
+            startOffset = Array.prototype.indexOf.call(parent.childNodes, startContainer);
+            startContainer = parent;
+        }
+
+        let endContainer = range.endContainer;
+        let endOffset = range.endOffset;
+        let endLength = endContainer.nodeType === Node.TEXT_NODE
+            ? (endContainer.textContent || '').length
+            : endContainer.childNodes.length;
+        while (endContainer !== commonAncestor && endOffset === endLength) {
+            const parent = endContainer.parentNode;
+            if (!parent) break;
+            endOffset = Array.prototype.indexOf.call(parent.childNodes, endContainer) + 1;
+            endContainer = parent;
+            endLength = endContainer.nodeType === Node.TEXT_NODE
+                ? (endContainer.textContent || '').length
+                : endContainer.childNodes.length;
+        }
+
+        range.setStart(startContainer, startOffset);
+        range.setEnd(endContainer, endOffset);
+        return range;
+    }
+
     function resolveRangeFromOffsets(root, start, end) {
         const nodes = getTextNodes(root);
         let offset = 0;
@@ -4475,11 +4509,15 @@
             const node = nodes[index];
             const text = node.textContent || '';
             const nextOffset = offset + text.length;
-            if (!startNode && start >= offset && start <= nextOffset) {
+            if (
+                !startNode
+                && start >= offset
+                && (start < nextOffset || (index === nodes.length - 1 && start === nextOffset))
+            ) {
                 startNode = node;
                 startOffset = Math.max(0, start - offset);
             }
-            if (!endNode && end >= offset && end <= nextOffset) {
+            if (!endNode && end > offset && end <= nextOffset) {
                 endNode = node;
                 endOffset = Math.max(0, end - offset);
             }
@@ -4494,7 +4532,7 @@
         const range = document.createRange();
         range.setStart(startNode, startOffset);
         range.setEnd(endNode, endOffset);
-        return range;
+        return expandRangeToFullySelectedBoundaries(range);
     }
 
     function resolveHighlightKind(node) {
@@ -6871,6 +6909,89 @@
         });
     }
 
+    function getNonEmptyTextNodes(root) {
+        const textNodes = [];
+        if (!(root instanceof Node)) {
+            return textNodes;
+        }
+        const ownerDocument = root.ownerDocument || document;
+        const nodeFilter = ownerDocument.defaultView?.NodeFilter || global.NodeFilter;
+        if (!nodeFilter) {
+            return textNodes;
+        }
+        const walker = ownerDocument.createTreeWalker(root, nodeFilter.SHOW_TEXT);
+        let textNode = walker.nextNode();
+        while (textNode) {
+            if ((textNode.data || '').length > 0) {
+                textNodes.push(textNode);
+            }
+            textNode = walker.nextNode();
+        }
+        return textNodes;
+    }
+
+    function rangeHasPositiveTextOverlap(range, node) {
+        if (!range || range.collapsed || !(node instanceof Node)) {
+            return false;
+        }
+        const textNodes = getNonEmptyTextNodes(node);
+        if (!textNodes.length) {
+            return false;
+        }
+        const ownerDocument = node.ownerDocument || document;
+        const rangeType = ownerDocument.defaultView?.Range || global.Range;
+        if (!rangeType || typeof range.compareBoundaryPoints !== 'function') {
+            return false;
+        }
+        try {
+            const nodeTextRange = ownerDocument.createRange();
+            nodeTextRange.setStart(textNodes[0], 0);
+            const lastTextNode = textNodes[textNodes.length - 1];
+            nodeTextRange.setEnd(lastTextNode, lastTextNode.data.length);
+            return range.compareBoundaryPoints(rangeType.START_TO_END, nodeTextRange) > 0
+                && range.compareBoundaryPoints(rangeType.END_TO_START, nodeTextRange) < 0;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function isAtomicPrimaryHighlightSelection(range, highlightNode) {
+        if (
+            !range
+            || range.collapsed
+            || !(highlightNode instanceof HTMLElement)
+            || !highlightNode.matches('.hl')
+            || !highlightNode.isConnected
+            || highlightNode.dataset.hlLevel === 'secondary'
+            || typeof range.comparePoint !== 'function'
+        ) {
+            return false;
+        }
+
+        const textNodes = getNonEmptyTextNodes(highlightNode);
+        if (!textNodes.length) {
+            return false;
+        }
+
+        try {
+            const ownerDocument = highlightNode.ownerDocument || document;
+            const scope = highlightNode.closest('#left, #right') || ownerDocument;
+            const intersectedHighlights = Array.from(scope.querySelectorAll('.hl'))
+                .filter((node) => rangeHasPositiveTextOverlap(range, node));
+            if (intersectedHighlights.length !== 1 || intersectedHighlights[0] !== highlightNode) {
+                return false;
+            }
+
+            const firstTextNode = textNodes[0];
+            const lastTextNode = textNodes[textNodes.length - 1];
+            return range.comparePoint(firstTextNode, 0) === 0
+                && range.comparePoint(lastTextNode, lastTextNode.data.length) === 0
+                && range.toString() === String(highlightNode.textContent || '');
+        } catch (_) {
+            return false;
+        }
+    }
+
     function updateSelectionToolbar() {
         const toolbar = document.getElementById('selbar');
         if (!toolbar) return;
@@ -6907,13 +7028,7 @@
                 const hls = containerElement.querySelectorAll('.hl');
                 for (let i = 0; i < hls.length; i++) {
                     const hl = hls[i];
-                    let intersects = false;
-                    if (typeof range.intersectsNode === 'function') {
-                        intersects = range.intersectsNode(hl);
-                    } else if (selection && typeof selection.containsNode === 'function') {
-                        intersects = selection.containsNode(hl, true);
-                    }
-                    if (intersects) {
+                    if (rangeHasPositiveTextOverlap(range, hl)) {
                         hasHighlight = true;
                         finalHighlightNode = hl;
                         break;
@@ -6948,12 +7063,20 @@
             return;
         }
         if (kind === 'highlight' && interaction.currentHighlightNode instanceof HTMLElement) {
-            interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            const shouldPromote = isAtomicPrimaryHighlightSelection(
+                interaction.lastRange,
+                interaction.currentHighlightNode
+            );
+            if (shouldPromote) {
+                interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            }
             selection?.removeAllRanges();
             if (toolbar) toolbar.style.display = 'none';
             interaction.lastRange = null;
             interaction.currentHighlightNode = null;
-            syncReadingAnnotation('highlight');
+            if (shouldPromote) {
+                syncReadingAnnotation('highlight');
+            }
             return;
         }
         if (interaction.currentHighlightNode) {
@@ -12336,6 +12459,14 @@
                 applyAnswersToDom,
                 applyReplayAnswersToDom,
                 captureDom,
+                updateSelectionToolbar,
+                applySelectionHighlight,
+                getSelectionHighlightTestState() {
+                    return {
+                        hasLastRange: Boolean(interaction.lastRange),
+                        hasCurrentHighlightNode: interaction.currentHighlightNode instanceof HTMLElement
+                    };
+                },
                 renderResults,
                 updateNavStatuses,
                 renderTimer,
