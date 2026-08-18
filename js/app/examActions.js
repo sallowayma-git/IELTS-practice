@@ -1052,11 +1052,52 @@
         }
     }
 
+    function getBrowseResetIndexSnapshot(resetIntent) {
+        if (typeof global.__getBrowseResetIndexSnapshot !== 'function') {
+            return null;
+        }
+        try {
+            const snapshot = global.__getBrowseResetIndexSnapshot(resetIntent);
+            if (!snapshot || !Array.isArray(snapshot.index)) {
+                return null;
+            }
+            return {
+                index: snapshot.index,
+                version: Number(snapshot.version) || 0
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function closeBrowseResetIntent(resetIntent, consumedSnapshotVersion) {
+        if (typeof global.__closeBrowseResetIntent !== 'function') {
+            return null;
+        }
+        try {
+            const finalization = global.__closeBrowseResetIntent(
+                resetIntent,
+                consumedSnapshotVersion
+            );
+            if (!finalization || !finalization.snapshot
+                || !Array.isArray(finalization.snapshot.index)) {
+                return null;
+            }
+            return {
+                index: finalization.snapshot.index,
+                version: Number(finalization.snapshot.version) || 0
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
     /**
-     * 重置浏览视图。先解析活动题库快照，再一次性更新 UI/状态并交给
-     * 全局 loadExamList 适配器渲染，避免 IIFE 内部默认 [] 覆盖列表。
+     * 重置浏览视图。先等待浏览状态恢复，再解析活动题库快照并一次性更新
+     * UI/状态，避免恢复期间的题库切换被较早快照覆盖。
      */
-    async function performBrowseViewResetToAll() {
+    async function performBrowseViewResetToAll(resetIntent) {
+        try {
         const interactionId = ++browseResetInteractionId;
         if (global.__pendingBrowseFilter) {
             delete global.__pendingBrowseFilter;
@@ -1064,6 +1105,9 @@
         const renderRequestId = typeof global.__beginBrowseResultsRequest === 'function'
             ? global.__beginBrowseResultsRequest()
             : null;
+        if (typeof global.__setBrowseResetResultsRequest === 'function') {
+            global.__setBrowseResetResultsRequest(resetIntent, renderRequestId);
+        }
 
         if (global.browseController) {
             if (typeof global.browseController.filterInteractionId === 'number') {
@@ -1076,21 +1120,33 @@
             global.clearPendingBrowseAutoScroll();
         }
 
-        const resolver = typeof global.resolveActiveLibraryIndex === 'function'
-            ? global.resolveActiveLibraryIndex
-            : global.resolveActiveExamIndex;
-        const indexPromise = typeof resolver === 'function'
-            ? Promise.resolve().then(() => resolver.call(global)).then((resolved) => (
-                Array.isArray(resolved) ? resolved : null
-            )).catch((error) => {
-                console.warn('[ExamActions] 重置浏览视图时无法预取活动题库:', error);
-                return null;
-            })
-            : Promise.resolve(null);
-        const [examIndex] = await Promise.all([
-            indexPromise,
-            prepareBrowseReset()
-        ]);
+        await prepareBrowseReset();
+
+        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+            return false;
+        }
+
+        let resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+        let examIndex = resetIndexSnapshot ? resetIndexSnapshot.index : null;
+        let resetIndexSnapshotVersion = resetIndexSnapshot ? resetIndexSnapshot.version : 0;
+        if (!resetIndexSnapshot) {
+            const resolver = typeof global.resolveActiveLibraryIndex === 'function'
+                ? global.resolveActiveLibraryIndex
+                : global.resolveActiveExamIndex;
+            examIndex = typeof resolver === 'function'
+                ? await Promise.resolve().then(() => resolver.call(global)).then((resolved) => (
+                    Array.isArray(resolved) ? resolved : null
+                )).catch((error) => {
+                    console.warn('[ExamActions] 重置浏览视图时无法预取活动题库:', error);
+                    return null;
+                })
+                : null;
+            resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+            if (resetIndexSnapshot) {
+                examIndex = resetIndexSnapshot.index;
+                resetIndexSnapshotVersion = resetIndexSnapshot.version;
+            }
+        }
 
         if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
             return false;
@@ -1100,30 +1156,60 @@
 
         const globalLoader = global.loadExamList;
         if (typeof globalLoader === 'function' && globalLoader !== loadExamList) {
-            // 空索引也交由适配器自行解析；绝不把 [] 当作重置结果渲染。
-            const indexOverride = Array.isArray(examIndex) && examIndex.length > 0 ? examIndex : null;
-            let renderPromise;
-            try {
-                renderPromise = Promise.resolve(globalLoader.call(global, indexOverride, renderRequestId));
-            } catch (error) {
-                renderPromise = Promise.reject(error);
-            }
             const persistencePromise = beginBrowseResetPersistence();
             try {
-                const result = await renderPromise;
-                if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
-                    await persistencePromise;
-                    return false;
+                let result;
+                let persistenceComplete = false;
+                while (true) {
+                    // 空索引也交由适配器自行解析；绝不把 [] 当作重置结果渲染。
+                    const indexOverride = Array.isArray(examIndex) && examIndex.length > 0
+                        ? examIndex
+                        : null;
+                    result = await Promise.resolve(globalLoader.call(global, indexOverride, renderRequestId));
+                    if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                        await persistencePromise;
+                        return false;
+                    }
+                    if ((!Array.isArray(examIndex) || examIndex.length === 0)
+                        && Array.isArray(result)) {
+                        syncBrowseFilterUI(result);
+                    }
+                    resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+                    if (resetIndexSnapshot
+                        && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                        examIndex = resetIndexSnapshot.index;
+                        resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                        syncBrowseFilterUI(examIndex);
+                        continue;
+                    }
+                    if (!persistenceComplete) {
+                        await persistencePromise;
+                        persistenceComplete = true;
+                        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                            return false;
+                        }
+                        resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
+                        if (resetIndexSnapshot
+                            && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                            examIndex = resetIndexSnapshot.index;
+                            resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                            syncBrowseFilterUI(examIndex);
+                            continue;
+                        }
+                    }
+                    resetIndexSnapshot = closeBrowseResetIntent(
+                        resetIntent,
+                        resetIndexSnapshotVersion
+                    );
+                    if (resetIndexSnapshot
+                        && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                        examIndex = resetIndexSnapshot.index;
+                        resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                        syncBrowseFilterUI(examIndex);
+                        continue;
+                    }
+                    return result;
                 }
-                if ((!Array.isArray(examIndex) || examIndex.length === 0)
-                    && Array.isArray(result)) {
-                    syncBrowseFilterUI(result);
-                }
-                await persistencePromise;
-                if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
-                    return false;
-                }
-                return result;
             } catch (error) {
                 console.warn('[ExamActions] 重置浏览视图加载失败:', error);
                 await persistencePromise;
@@ -1132,22 +1218,53 @@
         }
 
         if (Array.isArray(examIndex) && examIndex.length > 0) {
-            const result = loadExamList(examIndex);
+            let result = loadExamList(examIndex);
             await beginBrowseResetPersistence();
+            resetIndexSnapshot = closeBrowseResetIntent(
+                resetIntent,
+                resetIndexSnapshotVersion
+            );
+            if (resetIndexSnapshot && resetIndexSnapshot.version > resetIndexSnapshotVersion) {
+                examIndex = resetIndexSnapshot.index;
+                resetIndexSnapshotVersion = resetIndexSnapshot.version;
+                if (examIndex.length > 0) {
+                    syncBrowseFilterUI(examIndex);
+                    result = loadExamList(examIndex);
+                } else {
+                    result = false;
+                }
+                closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
+            }
             return result;
         }
 
         await beginBrowseResetPersistence();
+        closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
         console.warn('[ExamActions] 全局题库加载适配器不可用，已跳过空数组渲染');
         return false;
+        } finally {
+            if (typeof global.__endBrowseResetIntent === 'function') {
+                global.__endBrowseResetIntent(resetIntent);
+            }
+        }
     }
 
     async function resetBrowseViewToAll() {
+        var resetIntent = arguments.length > 0 ? arguments[arguments.length - 1] : null;
+        if (typeof global.__isBrowseResetIntentCurrent === 'function'
+            && !global.__isBrowseResetIntentCurrent(resetIntent)
+            && typeof global.__beginBrowseResetIntent === 'function') {
+            resetIntent = global.__beginBrowseResetIntent();
+        }
         try {
-            return await performBrowseViewResetToAll();
+            return await performBrowseViewResetToAll(resetIntent);
         } catch (error) {
             console.warn('[ExamActions] 重置浏览视图失败:', error);
             return false;
+        } finally {
+            if (typeof global.__endBrowseResetIntent === 'function') {
+                global.__endBrowseResetIntent(resetIntent);
+            }
         }
     }
 

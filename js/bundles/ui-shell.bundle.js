@@ -1716,7 +1716,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             });
     }
 
+    var browseRuntimePromise = null;
     var browseGroupPromise = null;
+    var browseResetIntentGeneration = 0;
+    var activeBrowseResetIntent = null;
+    var browseResultsProxyGeneration = 0;
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
@@ -1753,20 +1757,33 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
         var pendingFilter = global.__pendingBrowseFilter || null;
         var canApplyPendingFilter = !!pendingFilter && typeof global.applyBrowseFilter === 'function';
-        return Promise.resolve()
-            .then(function initializeActiveBrowseView() {
-                return global.initializeBrowseView({ skipLoad: canApplyPendingFilter });
-            })
+        var initialization;
+        var initializationRequestId = null;
+        try {
+            // Start synchronization in this reaction so a queued repeat reset can
+            // acquire the next latest-wins token immediately after it.
+            initialization = global.initializeBrowseView({ skipLoad: canApplyPendingFilter });
+            if (typeof global.__getBrowseResultsRequestId === 'function') {
+                initializationRequestId = global.__getBrowseResultsRequestId();
+            }
+        } catch (error) {
+            return Promise.reject(error);
+        }
+        return Promise.resolve(initialization)
             .then(function applyPendingBrowseFilter() {
                 if (!canApplyPendingFilter || global.__pendingBrowseFilter !== pendingFilter) {
                     return undefined;
                 }
-                return global.applyBrowseFilter(
+                var filterArgs = [
                     pendingFilter.category,
                     pendingFilter.type,
                     pendingFilter.filterMode,
                     pendingFilter.path
-                );
+                ];
+                if (initializationRequestId != null) {
+                    filterArgs.push(initializationRequestId);
+                }
+                return global.applyBrowseFilter.apply(global, filterArgs);
             })
             .finally(function clearConsumedPendingBrowseFilter() {
                 if (pendingFilter && global.__pendingBrowseFilter === pendingFilter) {
@@ -1775,9 +1792,19 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             });
     }
 
+    function ensureBrowseRuntimeGroup() {
+        if (!browseRuntimePromise) {
+            browseRuntimePromise = ensureLazyGroup(BROWSE_GROUP).catch(function onBrowseRuntimeLoadError(error) {
+                browseRuntimePromise = null;
+                throw error;
+            });
+        }
+        return browseRuntimePromise;
+    }
+
     function ensureBrowseGroup() {
         if (!browseGroupPromise) {
-            browseGroupPromise = ensureLazyGroup(BROWSE_GROUP).then(function onBrowseLoaded() {
+            browseGroupPromise = ensureBrowseRuntimeGroup().then(function onBrowseLoaded() {
                 reapplyAppMixins();
                 initializeNavigationShell();
                 ensureBrowseStateManager();
@@ -1900,13 +1927,174 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return controller;
     }
 
+    function beginBrowseResetIntent() {
+        browseResetIntentGeneration += 1;
+        browseResultsProxyGeneration += 1;
+        activeBrowseResetIntent = {
+            __browseResetIntent: true,
+            generation: browseResetIntentGeneration,
+            examIndexSnapshot: null,
+            examIndexSnapshotVersion: 0,
+            resultsRequestId: null
+        };
+        return activeBrowseResetIntent;
+    }
+
+    function isBrowseResetIntentCurrent(intent) {
+        return activeBrowseResetIntent === intent
+            && !!intent
+            && intent.__browseResetIntent === true
+            && intent.generation === browseResetIntentGeneration;
+    }
+
+    function captureBrowseResetIndexSnapshot(index) {
+        if (!isBrowseResetIntentInFlight()) {
+            return false;
+        }
+        activeBrowseResetIntent.examIndexSnapshot = Array.isArray(index)
+            ? index.slice()
+            : [];
+        activeBrowseResetIntent.examIndexSnapshotVersion += 1;
+        return true;
+    }
+
+    function getBrowseResetIndexSnapshot(intent) {
+        if (!isBrowseResetIntentCurrent(intent)
+            || !isBrowseResetIntentInFlight()
+            || intent.examIndexSnapshotVersion < 1) {
+            return null;
+        }
+        return {
+            index: intent.examIndexSnapshot.slice(),
+            version: intent.examIndexSnapshotVersion
+        };
+    }
+
+    function endBrowseResetIntent(intent) {
+        if (activeBrowseResetIntent === intent) {
+            var shouldReplaySnapshot = isBrowseResetIntentInFlight()
+                && intent.examIndexSnapshotVersion > 0;
+            var snapshot = shouldReplaySnapshot
+                ? intent.examIndexSnapshot.slice()
+                : null;
+            var resultsRequestId = intent.resultsRequestId;
+            activeBrowseResetIntent = null;
+            if (snapshot) {
+                handleExamIndexLoaded(snapshot, resultsRequestId);
+            }
+        }
+    }
+
+    function closeBrowseResetIntent(intent, consumedSnapshotVersion) {
+        if (activeBrowseResetIntent !== intent) {
+            return { closed: true, snapshot: null };
+        }
+        if (!isBrowseResetIntentInFlight()) {
+            activeBrowseResetIntent = null;
+            return { closed: true, snapshot: null };
+        }
+        var consumedVersion = Number(consumedSnapshotVersion) || 0;
+        if (intent.examIndexSnapshotVersion > consumedVersion) {
+            return {
+                closed: false,
+                snapshot: {
+                    index: intent.examIndexSnapshot.slice(),
+                    version: intent.examIndexSnapshotVersion
+                }
+            };
+        }
+        activeBrowseResetIntent = null;
+        return { closed: true, snapshot: null };
+    }
+
+    function setBrowseResetResultsRequest(intent, requestId) {
+        if (!isBrowseResetIntentCurrent(intent)) {
+            return false;
+        }
+        intent.resultsRequestId = requestId;
+        return true;
+    }
+
+    function isBrowseResetIntentInFlight() {
+        if (!activeBrowseResetIntent) {
+            return false;
+        }
+        var requestId = activeBrowseResetIntent.resultsRequestId;
+        return requestId == null
+            || typeof global.__isBrowseResultsRequestCurrent !== 'function'
+            || global.__isBrowseResultsRequestCurrent(requestId);
+    }
+
+    global.__beginBrowseResetIntent = beginBrowseResetIntent;
+    global.__isBrowseResetIntentCurrent = isBrowseResetIntentCurrent;
+    global.__captureBrowseResetIndexSnapshot = captureBrowseResetIndexSnapshot;
+    global.__getBrowseResetIndexSnapshot = getBrowseResetIndexSnapshot;
+    global.__setBrowseResetResultsRequest = setBrowseResetResultsRequest;
+    global.__closeBrowseResetIntent = closeBrowseResetIntent;
+    global.__endBrowseResetIntent = endBrowseResetIntent;
+    global.__isBrowseResetIntentInFlight = isBrowseResetIntentInFlight;
+
+    function beginBrowseResultsProxyIntent() {
+        browseResultsProxyGeneration += 1;
+        return browseResultsProxyGeneration;
+    }
+
+    function captureBrowseResultsRequest() {
+        return ensureBrowseRuntimeGroup().then(function captureRequestId() {
+            return typeof global.__getBrowseResultsRequestId === 'function'
+                ? global.__getBrowseResultsRequestId()
+                : null;
+        });
+    }
+
+    function getCurrentBrowseResultsRequest() {
+        return typeof global.__getBrowseResultsRequestId === 'function'
+            ? global.__getBrowseResultsRequestId()
+            : null;
+    }
+
+    function isBrowseResultsSnapshotCurrent(requestId) {
+        return requestId == null
+            || typeof global.__isBrowseResultsRequestCurrent !== 'function'
+            || global.__isBrowseResultsRequestCurrent(requestId);
+    }
+
     function proxyAfterGroup(groupName, getter, fallback) {
         return function proxiedCall() {
             var args = Array.prototype.slice.call(arguments);
+            var resultsProxyGeneration = groupName === BROWSE_GROUP
+                ? beginBrowseResultsProxyIntent()
+                : null;
+            var resetGeneration = groupName === BROWSE_GROUP
+                ? browseResetIntentGeneration
+                : null;
             var groupReady = groupName === BROWSE_GROUP
                 ? ensureBrowseGroup()
                 : ensureLazyGroup(groupName);
+            var resultsRequest = groupName === BROWSE_GROUP
+                ? captureBrowseResultsRequest()
+                : Promise.resolve(null);
+            var resultsRequestId = null;
+            var resultsRequestCaptured = false;
+            if (groupName === BROWSE_GROUP) {
+                resultsRequest.then(function rememberRequestId(requestId) {
+                    resultsRequestId = requestId;
+                    resultsRequestCaptured = true;
+                }).catch(function ignoreRequestCaptureError() {
+                    resultsRequestCaptured = true;
+                });
+            }
             return groupReady.then(function invoke() {
+                if (groupName === BROWSE_GROUP && resetGeneration !== browseResetIntentGeneration) {
+                    return false;
+                }
+                if (groupName === BROWSE_GROUP
+                    && (resultsProxyGeneration !== browseResultsProxyGeneration
+                        || !isBrowseResultsSnapshotCurrent(
+                            resultsRequestCaptured ? resultsRequestId : getCurrentBrowseResultsRequest()
+                        ))) {
+                    return false;
+                }
                 var fn = getter();
                 if (typeof fn === 'function') {
                     return fn.apply(global, args);
@@ -1917,6 +2105,33 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return undefined;
             });
         };
+    }
+
+    function proxyAfterBrowseRuntime(getter, fallback) {
+        var proxy = function proxiedBrowseRuntimeCall() {
+            var args = Array.prototype.slice.call(arguments);
+            var resetIntent = beginBrowseResetIntent();
+            // Start the full handoff, but let repeat reset acquire its latest-wins
+            // token as soon as the raw runtime is available instead of waiting for
+            // an older initializeBrowseView synchronization to finish.
+            ensureBrowseGroup().catch(function swallowBrowseHandoffError() {});
+            return ensureBrowseRuntimeGroup().then(function invoke() {
+                if (!isBrowseResetIntentCurrent(resetIntent)) {
+                    return false;
+                }
+                var fn = getter();
+                if (typeof fn === 'function' && fn !== proxy) {
+                    return fn.apply(global, args.concat([resetIntent]));
+                }
+                if (typeof fallback === 'function') {
+                    return fallback.apply(global, args);
+                }
+                return undefined;
+            }).finally(function finishBrowseResetIntent() {
+                endBrowseResetIntent(resetIntent);
+            });
+        };
+        return proxy;
     }
 
     // 保持对外接口
@@ -1959,10 +2174,46 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
         var proxy = function lazyProxy() {
             var args = Array.prototype.slice.call(arguments);
+            var tracksBrowseResults = group === BROWSE_GROUP && (
+                name === 'filterByType'
+                || name === 'filterByFrequency'
+                || name === 'searchExams'
+                || name === 'clearSearch'
+                || name === 'browseCategory'
+            );
+            var resultsProxyGeneration = tracksBrowseResults
+                ? beginBrowseResultsProxyIntent()
+                : null;
+            var resetGeneration = group === BROWSE_GROUP
+                ? browseResetIntentGeneration
+                : null;
             var groupReady = group === BROWSE_GROUP
                 ? ensureBrowseGroup()
                 : ensureLazyGroup(group);
+            var resultsRequest = tracksBrowseResults
+                ? captureBrowseResultsRequest()
+                : Promise.resolve(null);
+            var resultsRequestId = null;
+            var resultsRequestCaptured = false;
+            if (tracksBrowseResults) {
+                resultsRequest.then(function rememberRequestId(requestId) {
+                    resultsRequestId = requestId;
+                    resultsRequestCaptured = true;
+                }).catch(function ignoreRequestCaptureError() {
+                    resultsRequestCaptured = true;
+                });
+            }
             return groupReady.then(function () {
+                if (group === BROWSE_GROUP && resetGeneration !== browseResetIntentGeneration) {
+                    return false;
+                }
+                if (tracksBrowseResults
+                    && (resultsProxyGeneration !== browseResultsProxyGeneration
+                        || !isBrowseResultsSnapshotCurrent(
+                            resultsRequestCaptured ? resultsRequestId : getCurrentBrowseResultsRequest()
+                        ))) {
+                    return false;
+                }
                 var fn = global[name];
                 if (typeof fn === 'function' && fn !== proxy) {
                     return fn.apply(global, args);
@@ -2099,7 +2350,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     if (typeof global.resetBrowseViewToAll !== 'function') {
-        global.resetBrowseViewToAll = proxyAfterGroup(BROWSE_GROUP, function () {
+        global.resetBrowseViewToAll = proxyAfterBrowseRuntime(function () {
             return global.__legacyResetBrowseViewToAll || global.resetBrowseViewToAll;
         });
     }
@@ -2128,15 +2379,73 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    function handleExamIndexLoaded(index) {
+    function handleExamIndexLoaded(index, replayRequestId) {
         var snapshot = Array.isArray(index) ? index : [];
         syncOverviewAfterIndexLoad(snapshot);
         var activeView = getActiveViewName();
 
         if (activeView === 'browse') {
-            ensureBrowseGroup().then(function afterBrowseReady() {
-                if (typeof global.loadExamList === 'function') {
-                    try { global.loadExamList(snapshot); } catch (_) { }
+            var resetInFlight = typeof global.__isBrowseResetIntentInFlight === 'function'
+                && global.__isBrowseResetIntentInFlight();
+            if (resetInFlight) {
+                if (typeof global.__captureBrowseResetIndexSnapshot === 'function') {
+                    global.__captureBrowseResetIndexSnapshot(snapshot);
+                }
+                var resetLoading = document.querySelector('#browse-view .loading');
+                if (resetLoading) {
+                    resetLoading.style.display = 'none';
+                }
+                return;
+            }
+            var hasReplayRequest = arguments.length > 1 && replayRequestId != null;
+            if (hasReplayRequest && !isBrowseResultsSnapshotCurrent(replayRequestId)) {
+                var staleReplayLoading = document.querySelector('#browse-view .loading');
+                if (staleReplayLoading) {
+                    staleReplayLoading.style.display = 'none';
+                }
+                return;
+            }
+            var browseReady = ensureBrowseGroup();
+            var resultsRequestId = hasReplayRequest ? replayRequestId : null;
+            var resultsRequestCaptured = hasReplayRequest;
+            if (!hasReplayRequest) {
+                captureBrowseResultsRequest().then(function rememberRequestId(requestId) {
+                    resultsRequestId = requestId;
+                    resultsRequestCaptured = true;
+                }).catch(function ignoreRequestCaptureError() {
+                    resultsRequestCaptured = true;
+                });
+            }
+            browseReady.then(function afterBrowseReady() {
+                var effectiveRequestId = resultsRequestCaptured
+                    ? resultsRequestId
+                    : getCurrentBrowseResultsRequest();
+                if (!isBrowseResultsSnapshotCurrent(effectiveRequestId)) {
+                    var staleLoading = document.querySelector('#browse-view .loading');
+                    if (staleLoading) {
+                        staleLoading.style.display = 'none';
+                    }
+                    return;
+                }
+                var searchInput = document.getElementById('exam-search-input')
+                    || document.querySelector('.search-input');
+                var searchQuery = searchInput && typeof searchInput.value === 'string'
+                    ? searchInput.value.trim()
+                    : '';
+                if (searchQuery && typeof global.searchExams === 'function') {
+                    try {
+                        global.searchExams(
+                            searchQuery,
+                            effectiveRequestId
+                        );
+                    } catch (_) { }
+                } else if (typeof global.loadExamList === 'function') {
+                    try {
+                        global.loadExamList(
+                            snapshot,
+                            effectiveRequestId
+                        );
+                    } catch (_) { }
                 }
                 var loading = document.querySelector('#browse-view .loading');
                 if (loading) {

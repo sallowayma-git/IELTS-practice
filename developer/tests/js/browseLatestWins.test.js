@@ -103,6 +103,7 @@ const sandbox = {
     getCurrentExamType() { return browseState.type; },
     setBrowseTitle() {},
     formatBrowseTitle(category, type) { return `${category}:${type}`; },
+    normalizeExamType(type) { return type || 'all'; },
     getPersistedBrowseFilter() { return null; },
     async resolveActiveLibraryIndex() {
         const next = resolverQueue.shift();
@@ -180,6 +181,60 @@ assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening'], '最终列表�
 assert.strictEqual(typeButtons.find((button) => button.dataset.filterType === 'all').ariaPressed, 'true');
 assert.strictEqual(typeButtons.find((button) => button.dataset.filterType === 'reading').ariaPressed, 'false');
 
+rendered.length = 0;
+const sharedPendingFilterIndex = deferred();
+resolverQueue.push(sharedPendingFilterIndex);
+const sharedPendingFilterRequestId = sandbox.__beginBrowseResultsRequest();
+const sharedPendingFilter = sandbox.applyBrowseFilter(
+    'P1',
+    'reading',
+    null,
+    null,
+    sharedPendingFilterRequestId
+);
+assert.strictEqual(
+    sandbox.__getBrowseResultsRequestId(),
+    sharedPendingFilterRequestId,
+    'a synchronized pending filter must reuse the initialization request token'
+);
+sharedPendingFilterIndex.resolve(allExams);
+await sharedPendingFilter;
+assert.strictEqual(browseState.category, 'P1');
+assert.strictEqual(browseState.type, 'reading');
+
+rendered.length = 0;
+const sharedSearchIndex = deferred();
+resolverQueue.push(sharedSearchIndex);
+const sharedSearchRequestId = sandbox.__beginBrowseResultsRequest();
+sandbox.searchExams('reading', sharedSearchRequestId);
+assert.strictEqual(
+    sandbox.__getBrowseResultsRequestId(),
+    sharedSearchRequestId,
+    'a background search replay must reuse the index event request token'
+);
+sharedSearchIndex.resolve(allExams);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(sandbox.__getBrowseResultsRequestId(), sharedSearchRequestId);
+
+const debouncedSearchCalls = [];
+sandbox.performanceOptimizer = {
+    debounce() {
+        return function captureDebouncedSearch() {
+            debouncedSearchCalls.push(Array.from(arguments));
+        };
+    }
+};
+const latestDebouncedSearchRequestId = sandbox.__beginBrowseResultsRequest();
+sandbox.searchExams('latest-query', latestDebouncedSearchRequestId);
+assert.strictEqual(debouncedSearchCalls.length, 1);
+assert.strictEqual(
+    sandbox.searchExams('stale-replay', latestDebouncedSearchRequestId - 1),
+    false,
+    'a stale background replay must stand down before touching the shared debounce'
+);
+assert.strictEqual(debouncedSearchCalls.length, 1, 'stale replay must not replace the pending latest search');
+delete sandbox.performanceOptimizer;
+
 const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
 vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
 const productionLoadExamList = sandbox.ExamActions.loadExamList;
@@ -192,15 +247,12 @@ sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams) {
 };
 
 rendered.length = 0;
-const staleResetIndex = deferred();
 const latestFilterIndex = deferred();
-resolverQueue.push(staleResetIndex, latestFilterIndex);
+resolverQueue.push(latestFilterIndex);
 const staleReset = sandbox.ExamActions.resetBrowseViewToAll();
-await Promise.resolve();
 const latestFilterAfterReset = sandbox.filterByType('reading');
 latestFilterIndex.resolve(allExams);
 await latestFilterAfterReset;
-staleResetIndex.resolve([{ id: 'stale-reset', title: 'Stale reset', type: 'listening', category: 'P2' }]);
 assert.strictEqual(await staleReset, false, 'a newer explicit filter must supersede an older reset');
 assert.deepStrictEqual(rendered.at(-1), ['reading'], 'the newer explicit filter must remain the final render');
 assert.strictEqual(browseState.type, 'reading', 'a stale reset must not clear the newer filter state');

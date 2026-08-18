@@ -15,6 +15,22 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
+function deferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
+
+async function flushMicrotasks(rounds = 8) {
+    for (let index = 0; index < rounds; index += 1) {
+        await Promise.resolve();
+    }
+}
+
 const results = [];
 
 function recordResult(name, passed, detail) {
@@ -249,6 +265,793 @@ async function testFallbackQueuesRepeatBrowseResetDuringLazyLoad() {
         'the repeat click must not run ordinary Browse navigation again'
     );
     recordResult('Browse 冷加载窗口保留重复导航重置意图', true, { resetCalls });
+}
+
+async function testColdRepeatResetPreemptsBrowseSynchronization() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const browseSynchronization = deferred();
+    const resetCompletion = deferred();
+    let synchronizationCalls = 0;
+    let resetCalls = 0;
+    let loadCalls = 0;
+    let resultsRequestId = 0;
+    let synchronizationRequestId = null;
+    let resetRequestId = null;
+    const callOrder = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const initialBrowseLoad = harness.windowStub.loadExamList();
+    const repeatReset = harness.windowStub.resetBrowseViewToAll();
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        callOrder.push('initialize-start');
+        synchronizationCalls += 1;
+        synchronizationRequestId = ++resultsRequestId;
+        return browseSynchronization.promise;
+    };
+    harness.windowStub.loadExamList = function loadExamList() {
+        loadCalls += 1;
+        resultsRequestId += 1;
+    };
+    harness.windowStub.resetBrowseViewToAll = function resetBrowseViewToAll() {
+        callOrder.push('reset-start');
+        resetCalls += 1;
+        resetRequestId = ++resultsRequestId;
+        return resetCompletion.promise;
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks();
+
+    assert.strictEqual(synchronizationCalls, 1, 'the existing Browse synchronization should still start');
+    assert.strictEqual(resetCalls, 1, 'repeat reset should run as soon as the raw runtime is available');
+    assert.strictEqual(loadCalls, 0, 'the older Browse load should remain blocked on synchronization');
+    assert.deepStrictEqual(callOrder, ['initialize-start', 'reset-start']);
+    assert(resetRequestId > synchronizationRequestId, 'repeat reset must own the latest request token');
+    assert.strictEqual(resetRequestId, resultsRequestId);
+
+    browseSynchronization.resolve();
+    await flushMicrotasks();
+    assert.strictEqual(loadCalls, 0, 'an older lazy load must not reclaim the token while reset is pending');
+    assert.strictEqual(resetRequestId, resultsRequestId);
+
+    resetCompletion.resolve(true);
+    await Promise.all([initialBrowseLoad, repeatReset]);
+    assert.strictEqual(loadCalls, 0);
+    recordResult('Browse 冷启动重复重置可抢占旧同步', true, {
+        synchronizationCalls,
+        resetCalls,
+        loadCalls
+    });
+}
+
+async function testDirectResetInvalidatesPendingColdBrowseLoad() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const browseSynchronization = deferred();
+    const resetPreparation = deferred();
+    const loadArguments = [];
+    let resultsRequestId = 0;
+    let initializationRequestId = null;
+    let resetRequestId = null;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.browseStateManager = {
+        ready: resetPreparation.promise,
+        resetToAllExams() {}
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const initialBrowseLoad = harness.windowStub.loadExamList();
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        initializationRequestId = harness.windowStub.__beginBrowseResultsRequest();
+        return browseSynchronization.promise;
+    };
+    harness.windowStub.loadExamList = function loadExamList() {
+        const args = Array.prototype.slice.call(arguments);
+        loadArguments.push(args);
+        return Promise.resolve(args[0]);
+    };
+
+    // The Browse bundle installs the real reset before its raw loader promise resolves.
+    const contextConsole = harness.context.console;
+    harness.context.console = Object.assign({}, contextConsole, { log() {} });
+    loadScript('js/app/examActions.js', harness.context);
+    harness.context.console = contextConsole;
+    runtimeReady.resolve(true);
+    await flushMicrotasks();
+    assert.strictEqual(initializationRequestId, 1, 'Browse synchronization should own the first results token');
+
+    const directReset = harness.windowStub.ExamActions.resetBrowseViewToAll();
+    resetRequestId = resultsRequestId;
+    assert(resetRequestId > initializationRequestId, 'direct reset should invalidate initialization immediately');
+
+    browseSynchronization.resolve();
+    await flushMicrotasks();
+    assert.strictEqual(
+        loadArguments.length,
+        0,
+        'the pre-runtime load must stay invalidated while the direct reset awaits preparation'
+    );
+    assert.strictEqual(resultsRequestId, resetRequestId);
+
+    resetPreparation.resolve();
+    await Promise.all([initialBrowseLoad, directReset]);
+    assert.strictEqual(loadArguments.length, 1, 'only the reset-owned adapter load should run');
+    assert(Array.isArray(loadArguments[0][0]));
+    assert.strictEqual(loadArguments[0][1], resetRequestId);
+    recordResult('Browse handoff 期间的直接重置会淘汰旧加载', true, {
+        initializationRequestId,
+        resetRequestId,
+        loadCalls: loadArguments.length
+    });
+}
+
+async function testHotBrowseCategorySupersedesQueuedColdCategory() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const browseSynchronization = deferred();
+    let resultsRequestId = 0;
+    const appliedCategories = [];
+    const snapshotReads = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    loadScript('js/app/main-entry.js', harness.context);
+    const repeatReset = harness.windowStub.resetBrowseViewToAll();
+    const staleCategory = harness.windowStub.browseCategory('P1', 'reading');
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return browseSynchronization.promise;
+    };
+    harness.windowStub.resetBrowseViewToAll = function resetBrowseViewToAll() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve(true);
+    };
+    harness.windowStub.browseCategory = function browseCategory(category) {
+        harness.windowStub.__beginBrowseResultsRequest();
+        appliedCategories.push(category);
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        snapshotReads.push(resultsRequestId);
+        return resultsRequestId;
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks();
+    assert.strictEqual(snapshotReads[snapshotReads.length - 1], 2, 'cold category should snapshot after reset starts');
+    harness.windowStub.browseCategory('P4', 'reading');
+    assert.deepStrictEqual(appliedCategories, ['P4']);
+
+    browseSynchronization.resolve();
+    await Promise.all([repeatReset, staleCategory]);
+    assert.deepStrictEqual(
+        appliedCategories,
+        ['P4'],
+        'a queued cold category must not overwrite a newer hot category after handoff'
+    );
+    recordResult('热分类交互淘汰 handoff 中的旧冷分类', true, {
+        appliedCategories,
+        resultsRequestId
+    });
+}
+
+async function testQueuedFilterBeatsLaterExamIndexRefresh() {
+    const harness = createHarness();
+    harness.inputState.value = 'ocean';
+    const runtimeReady = deferred();
+    const browseSynchronization = deferred();
+    const filterCompletion = deferred();
+    const listeners = new Map();
+    const callOrder = [];
+    let skippedBackgroundLoads = 0;
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const queuedFilter = harness.windowStub.filterByType('reading');
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return browseSynchronization.promise;
+    };
+    harness.windowStub.filterByType = function filterByType(type) {
+        harness.windowStub.__beginBrowseResultsRequest();
+        callOrder.push(`filter:${type}`);
+        return filterCompletion.promise;
+    };
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        const activeRequestId = requestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : requestId;
+        if (!harness.windowStub.__isBrowseResultsRequestCurrent(activeRequestId)) {
+            skippedBackgroundLoads += 1;
+            return false;
+        }
+        callOrder.push('background-load');
+        return index;
+    };
+    harness.windowStub.searchExams = function searchExams(query, requestId) {
+        const activeRequestId = requestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : requestId;
+        if (!harness.windowStub.__isBrowseResultsRequestCurrent(activeRequestId)) {
+            skippedBackgroundLoads += 1;
+            return false;
+        }
+        callOrder.push(`background-search:${query}`);
+        return query;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks();
+    browseSynchronization.resolve();
+    await flushMicrotasks();
+
+    assert.deepStrictEqual(callOrder, ['filter:reading'], 'the earlier user filter should start before background refresh');
+    assert.strictEqual(skippedBackgroundLoads, 0, 'a stale background search must stand down before calling the adapter');
+    assert.strictEqual(resultsRequestId, 2, 'background refresh must not claim a new results token');
+
+    filterCompletion.resolve(true);
+    await queuedFilter;
+    recordResult('冷筛选优先于稍后登记的题库索引刷新', true, {
+        callOrder,
+        skippedBackgroundLoads,
+        resultsRequestId
+    });
+}
+
+async function testExamIndexRefreshPreservesActiveSearch() {
+    const harness = createHarness();
+    const listeners = new Map();
+    const calls = [];
+    let resultsRequestId = 0;
+    let finalRender = null;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        const requestId = harness.windowStub.__beginBrowseResultsRequest();
+        calls.push(`init:${requestId}`);
+        return Promise.resolve();
+    };
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    harness.windowStub.searchExams = function searchExams(query, renderRequestId) {
+        const requestId = renderRequestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : renderRequestId;
+        if (!harness.windowStub.__isBrowseResultsRequestCurrent(requestId)) {
+            return false;
+        }
+        calls.push(`search:${query}:${requestId}`);
+        finalRender = `search:${query}`;
+    };
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        const activeRequestId = requestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : requestId;
+        calls.push(`background:${activeRequestId}`);
+        finalRender = 'background';
+        return index;
+    };
+    harness.inputState.value = 'ocean';
+    harness.windowStub.searchExams('ocean');
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    await flushMicrotasks();
+
+    assert.deepStrictEqual(calls, ['init:1', 'search:ocean:2', 'search:ocean:2']);
+    assert.strictEqual(finalRender, 'search:ocean', 'background index refresh must preserve active search results');
+    recordResult('题库索引刷新保留活动搜索', true, { calls, finalRender });
+}
+
+async function testExamIndexRefreshStandsDownDuringReset() {
+    const harness = createHarness();
+    const resetIndex = deferred();
+    const listeners = new Map();
+    let resultsRequestId = 0;
+    let searchCalls = 0;
+    let resolverCalls = 0;
+    const loadedIndexes = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+    harness.windowStub.resolveActiveLibraryIndex = function resolveActiveLibraryIndex() {
+        resolverCalls += 1;
+        return resetIndex.promise;
+    };
+    harness.windowStub.browseStateManager = {
+        ready: Promise.resolve(),
+        resetToAllExams() {
+            harness.inputState.value = '';
+        }
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    const contextConsole = harness.context.console;
+    harness.context.console = Object.assign({}, contextConsole, { log() {} });
+    loadScript('js/app/examActions.js', harness.context);
+    harness.context.console = contextConsole;
+    harness.windowStub.searchExams = function searchExams() {
+        searchCalls += 1;
+    };
+    harness.windowStub.loadExamList = function loadExamList(index) {
+        loadedIndexes.push(Array.isArray(index) ? index.map((exam) => exam.id) : null);
+        return Promise.resolve(index);
+    };
+    harness.inputState.value = 'ocean';
+
+    const reset = harness.windowStub.ExamActions.resetBrowseViewToAll();
+    assert.strictEqual(harness.windowStub.__isBrowseResetIntentInFlight(), true);
+    await flushMicrotasks();
+    assert.strictEqual(resolverCalls, 1, 'reset must resolve the active index after restoration finishes');
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    await flushMicrotasks();
+    assert.strictEqual(searchCalls, 0, 'index refresh must not replay an old query during reset preparation');
+    assert.strictEqual(loadedIndexes.length, 0, 'index refresh must not share an in-flight reset token');
+
+    resetIndex.resolve([{ id: 'stale-index' }]);
+    await reset;
+    assert.strictEqual(searchCalls, 0);
+    assert.deepStrictEqual(loadedIndexes, [['fresh-index']], 'reset must render the latest active index');
+    assert.strictEqual(harness.windowStub.__isBrowseResetIntentInFlight(), false);
+    recordResult('题库索引刷新在重置期间让行', true, {
+        searchCalls,
+        loadedIndexes,
+        resolverCalls,
+        resultsRequestId
+    });
+}
+
+async function testExamIndexRefreshDuringResetRenderUsesLatestSnapshot() {
+    const harness = createHarness();
+    const firstRender = deferred();
+    const secondRender = deferred();
+    const listeners = new Map();
+    let resultsRequestId = 0;
+    const loadedIndexes = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+    harness.windowStub.resolveActiveLibraryIndex = function resolveActiveLibraryIndex() {
+        return Promise.resolve([{ id: 'initial-index' }]);
+    };
+    harness.windowStub.browseStateManager = {
+        ready: Promise.resolve(),
+        resetToAllExams() {
+            harness.inputState.value = '';
+        }
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    const contextConsole = harness.context.console;
+    harness.context.console = Object.assign({}, contextConsole, { log() {} });
+    loadScript('js/app/examActions.js', harness.context);
+    harness.context.console = contextConsole;
+    harness.windowStub.loadExamList = function loadExamList(index) {
+        loadedIndexes.push(Array.isArray(index) ? index.map((exam) => exam.id) : null);
+        if (loadedIndexes.length === 1) return firstRender.promise;
+        if (loadedIndexes.length === 2) return secondRender.promise;
+        return Promise.resolve(index);
+    };
+
+    const reset = harness.windowStub.ExamActions.resetBrowseViewToAll();
+    await flushMicrotasks(32);
+    assert.deepStrictEqual(loadedIndexes, [['initial-index']]);
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    await flushMicrotasks();
+    assert.deepStrictEqual(loadedIndexes, [['initial-index']], 'the event must not start a competing load');
+
+    firstRender.resolve([{ id: 'initial-index' }]);
+    await flushMicrotasks();
+    assert.deepStrictEqual(loadedIndexes, [['initial-index'], ['fresh-index']]);
+    secondRender.resolve([{ id: 'fresh-index' }]);
+    queueMicrotask(() => {
+        listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'final-index' }] } });
+    });
+    await reset;
+    await flushMicrotasks();
+    assert.deepStrictEqual(
+        loadedIndexes,
+        [['initial-index'], ['fresh-index'], ['final-index']],
+        'a final microtask event must run through reset replay or the normal background refresh'
+    );
+    assert.strictEqual(harness.windowStub.__isBrowseResetIntentInFlight(), false);
+    recordResult('重置渲染期间采用最新题库快照', true, { loadedIndexes, resultsRequestId });
+}
+
+async function testBrowseResetIntentClearsAfterRuntimeFailure() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const reset = harness.windowStub.resetBrowseViewToAll();
+    assert.strictEqual(harness.windowStub.__isBrowseResetIntentInFlight(), true);
+    runtimeReady.reject(new Error('browse runtime failed'));
+    await assert.rejects(reset, /browse runtime failed/);
+    assert.strictEqual(
+        harness.windowStub.__isBrowseResetIntentInFlight(),
+        false,
+        'a rejected lazy runtime must release its reset intent'
+    );
+    recordResult('Browse runtime 失败后释放重置意图', true);
+}
+
+async function testBrowseResetIntentClearsAfterResetFailure() {
+    const harness = createHarness();
+    const resetIndex = deferred();
+    const listeners = new Map();
+    const loadedIndexes = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+    harness.windowStub.resolveActiveLibraryIndex = function resolveActiveLibraryIndex() {
+        return resetIndex.promise;
+    };
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    const contextConsole = harness.context.console;
+    harness.context.console = Object.assign({}, contextConsole, { log() {}, warn() {} });
+    loadScript('js/app/examActions.js', harness.context);
+    harness.windowStub.browseStateManager = {
+        ready: Promise.resolve(),
+        resetToAllExams() {
+            throw new Error('reset state failed');
+        }
+    };
+    harness.windowStub.loadExamList = function loadExamList(index) {
+        loadedIndexes.push(Array.isArray(index) ? index.map((exam) => exam.id) : null);
+        return Promise.resolve(index);
+    };
+    harness.inputState.value = '';
+
+    const reset = harness.windowStub.ExamActions.resetBrowseViewToAll();
+    await flushMicrotasks();
+    resetIndex.resolve([{ id: 'initial-index' }]);
+    queueMicrotask(() => {
+        listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    });
+    const result = await reset;
+    await flushMicrotasks();
+    harness.context.console = contextConsole;
+    assert.strictEqual(result, false);
+    assert.deepStrictEqual(
+        loadedIndexes,
+        [['fresh-index']],
+        'an event queued behind a failing reset continuation must use the normal refresh path'
+    );
+    assert.strictEqual(
+        harness.windowStub.__isBrowseResetIntentInFlight(),
+        false,
+        'a failed real reset must release its reset intent'
+    );
+    recordResult('真实重置失败后释放重置意图', true, { loadedIndexes, resultsRequestId });
+}
+
+async function testBrowseResetAdapterFailureReplaysCapturedIndex() {
+    const harness = createHarness();
+    const failingRender = deferred();
+    const listeners = new Map();
+    const loadedIndexes = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+    harness.windowStub.resolveActiveLibraryIndex = function resolveActiveLibraryIndex() {
+        return Promise.resolve([{ id: 'initial-index' }]);
+    };
+    harness.windowStub.browseStateManager = {
+        ready: Promise.resolve(),
+        resetToAllExams() {
+            harness.inputState.value = '';
+        }
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    const contextConsole = harness.context.console;
+    harness.context.console = Object.assign({}, contextConsole, { log() {}, warn() {} });
+    loadScript('js/app/examActions.js', harness.context);
+    harness.windowStub.loadExamList = function loadExamList(index) {
+        loadedIndexes.push(Array.isArray(index) ? index.map((exam) => exam.id) : null);
+        return loadedIndexes.length === 1 ? failingRender.promise : Promise.resolve(index);
+    };
+
+    const reset = harness.windowStub.ExamActions.resetBrowseViewToAll();
+    await flushMicrotasks(32);
+    assert.deepStrictEqual(loadedIndexes, [['initial-index']]);
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    await flushMicrotasks();
+    assert.deepStrictEqual(loadedIndexes, [['initial-index']]);
+
+    failingRender.reject(new Error('adapter failed'));
+    assert.strictEqual(await reset, false);
+    await flushMicrotasks(32);
+    harness.context.console = contextConsole;
+    assert.deepStrictEqual(
+        loadedIndexes,
+        [['initial-index'], ['fresh-index']],
+        'an index captured before adapter rejection must be replayed after the reset releases ownership'
+    );
+    assert.strictEqual(harness.windowStub.__isBrowseResetIntentInFlight(), false);
+    recordResult('重置适配器失败后重放最新题库索引', true, { loadedIndexes, resultsRequestId });
+}
+
+async function testFailedResetReplayCannotBorrowNewResetToken() {
+    const harness = createHarness();
+    let resultsRequestId = 0;
+    const searches = [];
+    const loads = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    harness.windowStub.searchExams = function searchExams(query, requestId) {
+        searches.push([query, requestId]);
+    };
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        loads.push([Array.isArray(index) ? index.map((exam) => exam.id) : null, requestId]);
+    };
+    harness.inputState.value = 'old-query';
+
+    const oldIntent = harness.windowStub.__beginBrowseResetIntent();
+    const oldRequestId = harness.windowStub.__beginBrowseResultsRequest();
+    harness.windowStub.__setBrowseResetResultsRequest(oldIntent, oldRequestId);
+    harness.windowStub.__captureBrowseResetIndexSnapshot([{ id: 'old-index' }]);
+    harness.windowStub.__endBrowseResetIntent(oldIntent);
+
+    const newIntent = harness.windowStub.__beginBrowseResetIntent();
+    const newRequestId = harness.windowStub.__beginBrowseResultsRequest();
+    harness.windowStub.__setBrowseResetResultsRequest(newIntent, newRequestId);
+    await flushMicrotasks(32);
+
+    assert.strictEqual(newRequestId > oldRequestId, true);
+    assert.deepStrictEqual(searches, [], 'an old replay must not use the newer reset request token');
+    assert.deepStrictEqual(loads, [], 'an old replay must stand down after a newer reset starts');
+    harness.windowStub.__endBrowseResetIntent(newIntent);
+    recordResult('失败重置重放不得借用后续重置 token', true, {
+        oldRequestId,
+        newRequestId,
+        searches,
+        loads
+    });
+}
+
+async function testQueuedFilterSupersedesOlderPendingCategory() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const browseSynchronization = deferred();
+    const calls = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__pendingBrowseFilter = {
+        category: 'P1',
+        type: 'reading',
+        filterMode: null,
+        path: null
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const queuedFilter = harness.windowStub.filterByType('all');
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return browseSynchronization.promise;
+    };
+    harness.windowStub.applyBrowseFilter = function applyBrowseFilter(category, type, filterMode, path, requestId) {
+        const activeRequestId = requestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : requestId;
+        if (harness.windowStub.__isBrowseResultsRequestCurrent(activeRequestId)) {
+            calls.push(`pending:${category}:${activeRequestId}`);
+        }
+        return Promise.resolve();
+    };
+    harness.windowStub.filterByType = function filterByType(type) {
+        const requestId = harness.windowStub.__beginBrowseResultsRequest();
+        calls.push(`filter:${type}:${requestId}`);
+        return Promise.resolve();
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks();
+    browseSynchronization.resolve();
+    await queuedFilter;
+
+    assert.deepStrictEqual(calls, ['pending:P1:1', 'filter:all:2']);
+    assert.strictEqual(resultsRequestId, 2);
+    assert.strictEqual(harness.windowStub.__pendingBrowseFilter, undefined);
+    recordResult('较新的冷筛选可覆盖旧 pending 分类', true, { calls, resultsRequestId });
 }
 
 async function testClearSearchProxyLoadsBrowseRuntime(harness) {
@@ -585,6 +1388,18 @@ async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testFallbackQueuesRepeatBrowseResetDuringLazyLoad();
+        await testColdRepeatResetPreemptsBrowseSynchronization();
+        await testDirectResetInvalidatesPendingColdBrowseLoad();
+        await testHotBrowseCategorySupersedesQueuedColdCategory();
+        await testQueuedFilterBeatsLaterExamIndexRefresh();
+        await testExamIndexRefreshPreservesActiveSearch();
+        await testExamIndexRefreshStandsDownDuringReset();
+        await testExamIndexRefreshDuringResetRenderUsesLatestSnapshot();
+        await testBrowseResetIntentClearsAfterRuntimeFailure();
+        await testBrowseResetIntentClearsAfterResetFailure();
+        await testBrowseResetAdapterFailureReplaysCapturedIndex();
+        await testFailedResetReplayCannotBorrowNewResetToken();
+        await testQueuedFilterSupersedesOlderPendingCategory();
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
         await testColdBrowseProxyRestoresPreferences(createHarness());
         await testColdBrowseAppliesExplicitPendingFilter(createHarness());

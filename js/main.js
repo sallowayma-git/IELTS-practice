@@ -2039,6 +2039,9 @@ function isBrowseResultsRequestCurrent(requestId) {
 
 window.__beginBrowseResultsRequest = beginBrowseResultsRequest;
 window.__isBrowseResultsRequestCurrent = isBrowseResultsRequestCurrent;
+window.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+    return browseResultsRequestId;
+};
 
 async function filterByType(type, examIndexOverride = null, renderRequestId = null) {
     const activeRequestId = renderRequestId == null
@@ -2112,8 +2115,10 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
 }
 
 // 应用分类筛选（供 App/总览调用）
-async function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null) {
-    const activeRequestId = beginBrowseResultsRequest();
+async function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null, renderRequestId = null) {
+    const activeRequestId = renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : renderRequestId;
     try {
         const indexSnapshot = await resolveActiveExamIndex();
         if (!isBrowseResultsRequestCurrent(activeRequestId)) {
@@ -3023,8 +3028,13 @@ async function setActiveLibraryConfiguration(key) {
 
 let debouncedExamSearch = null;
 
-function searchExams(query) {
-    const activeRequestId = beginBrowseResultsRequest();
+function searchExams(query, renderRequestId = null) {
+    const activeRequestId = renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : renderRequestId;
+    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        return false;
+    }
     toggleSearchClearButton(query);
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         // 跨 input 事件复用同一个 debounce 闭包，避免每个字符都排队一次搜索。

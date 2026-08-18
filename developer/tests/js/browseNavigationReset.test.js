@@ -341,16 +341,14 @@ test('repeat Browse reset clears all browse state and renders the active index t
 });
 
 test('only the latest asynchronous repeat reset may update state or render', async () => {
-    const first = deferred();
-    const second = deferred();
-    const harness = createHarness({ resolverQueue: [first, second] });
+    const latest = deferred();
+    const harness = createHarness({ resolverQueue: [latest] });
     await harness.stateManager.ready;
 
     const staleReset = harness.window.ExamActions.resetBrowseViewToAll();
     const latestReset = harness.window.ExamActions.resetBrowseViewToAll();
-    second.resolve([{ id: 'latest-index', category: 'P1', type: 'reading' }]);
+    latest.resolve([{ id: 'latest-index', category: 'P1', type: 'reading' }]);
     await latestReset;
-    first.resolve([{ id: 'stale-index', category: 'P2', type: 'reading' }]);
     const staleResult = await staleReset;
 
     assert.equal(staleResult, false);
