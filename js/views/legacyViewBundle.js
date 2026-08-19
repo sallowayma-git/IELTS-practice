@@ -3547,6 +3547,11 @@
         }
 
         event.preventDefault();
+        if (viewName === 'browse') {
+            try {
+                event.__browseNavigationHandled = true;
+            } catch (_) { }
+        }
         if (alreadyActive && typeof this.options.onRepeatNavigate === 'function') {
             var repeatHandled = true;
             try {

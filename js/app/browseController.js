@@ -131,7 +131,7 @@
          * 设置浏览模式
          * @param {string} mode - 模式ID (default | frequency-p1 | frequency-p4)
          */
-        setMode(mode, examIndex = [], renderRequestId = null) {
+        setMode(mode, examIndex = [], renderRequestId = null, options = {}) {
             if (isReadingMemorizeBrowseMode()) {
                 mode = 'default';
             }
@@ -153,7 +153,10 @@
             this.renderFilterButtons(examIndex);
 
             // 应用筛选
-            this.applyFilter(this.activeFilter, examIndex, renderRequestId);
+            if (!options.skipApply) {
+                return this.applyFilter(this.activeFilter, examIndex, renderRequestId);
+            }
+            return undefined;
         }
 
         /**
@@ -207,9 +210,11 @@
                 // 绑定点击事件
                 button.addEventListener('click', async () => {
                     const interactionId = ++this.filterInteractionId;
-                    const renderRequestId = typeof global.__beginBrowseResultsRequest === 'function'
-                        ? global.__beginBrowseResultsRequest()
-                        : null;
+                    const renderRequestId = typeof global.__beginBrowseUserResultsRequest === 'function'
+                        ? global.__beginBrowseUserResultsRequest()
+                        : (typeof global.__beginBrowseResultsRequest === 'function'
+                            ? global.__beginBrowseResultsRequest()
+                            : null);
                     try {
                         const index = await global.resolveActiveLibraryIndex();
                         if (interactionId !== this.filterInteractionId) {
@@ -220,9 +225,13 @@
                             && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
                             return;
                         }
-                        this.handleFilterClick(filter.id, index, renderRequestId);
+                        await Promise.resolve(this.handleFilterClick(filter.id, index, renderRequestId));
                     } catch (error) {
                         console.error('[BrowseController] 读取活动题库失败:', error);
+                    } finally {
+                        if (typeof global.__endBrowseUserResultsRequest === 'function') {
+                            global.__endBrowseUserResultsRequest(renderRequestId);
+                        }
                     }
                 });
 
@@ -261,7 +270,7 @@
             this.updateButtonStates();
 
             // 应用筛选
-            this.applyFilter(filterId, examIndex, renderRequestId);
+            return this.applyFilter(filterId, examIndex, renderRequestId);
         }
 
         /**
@@ -294,11 +303,12 @@
 
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
-                this.filterByType(filterId, examIndex, renderRequestId);
+                return this.filterByType(filterId, examIndex, renderRequestId);
             } else if (config.filterLogic === 'folder-based') {
                 // 频率模式：按文件夹筛选
-                this.filterByFolder(filterId, examIndex, renderRequestId);
+                return this.filterByFolder(filterId, examIndex, renderRequestId);
             }
+            return undefined;
         }
 
         /**
@@ -308,10 +318,11 @@
         filterByType(type, examIndex = [], renderRequestId = null) {
             // 调用全局的 filterByType 函数
             if (typeof global.filterByType === 'function') {
-                global.filterByType(type, examIndex, renderRequestId);
+                return global.filterByType(type, examIndex, renderRequestId);
             } else {
                 console.warn('[BrowseController] filterByType 函数未定义');
             }
+            return undefined;
         }
 
         /**
@@ -356,8 +367,12 @@
                 });
             });
 
-            // 显示筛选结果
+            // 活动搜索必须继续约束当前文件夹结果。
+            if (typeof global.__renderBrowseResultsForState === 'function') {
+                return global.__renderBrowseResultsForState(filtered, renderRequestId);
+            }
             this.displayFilteredExams(filtered);
+            return filtered;
         }
         /**
          * 显示筛选后的题目
@@ -412,8 +427,8 @@
         /**
          * 重置为默认模式
          */
-        resetToDefault(examIndex = [], renderRequestId = null) {
-            this.setMode('default', examIndex, renderRequestId);
+        resetToDefault(examIndex = [], renderRequestId = null, options = {}) {
+            return this.setMode('default', examIndex, renderRequestId, options);
         }
 
         // ============================================================================

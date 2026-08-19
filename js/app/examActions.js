@@ -950,14 +950,42 @@
         }
     }
 
-    function syncBrowseFilterUI(examIndex) {
+    function setBrowseFrequencyFilter(value) {
+        const activeFilter = normalizeBrowseFrequencyFilter(value);
+        global.__browseFrequencyFilter = activeFilter;
+        const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
+        if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
+            frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+                const active = button.dataset && button.dataset.frequencyFilter === activeFilter;
+                if (button.classList && typeof button.classList.toggle === 'function') {
+                    button.classList.toggle('active', active);
+                }
+                if (typeof button.setAttribute === 'function') {
+                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                }
+            });
+        }
+        return activeFilter;
+    }
+
+    function resetBrowseFilterStateToAll(examIndex) {
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        setBrowseFrequencyFilter('all');
+
         const controller = global.browseController;
         if (controller) {
             controller.currentMode = 'default';
             controller.activeFilter = 'all';
-            if (typeof controller.renderFilterButtons === 'function') {
-                controller.renderFilterButtons(Array.isArray(examIndex) ? examIndex : []);
+            if (Array.isArray(examIndex) && typeof controller.renderFilterButtons === 'function') {
+                controller.renderFilterButtons(examIndex);
             }
+        }
+
+        if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'all');
+        } else if (controller && typeof controller.setBrowseFilterState === 'function') {
+            controller.setBrowseFilterState('all', 'all');
         }
 
         const typeContainer = document.getElementById('type-filter-buttons');
@@ -973,22 +1001,10 @@
                 }
             });
         }
+    }
 
-        if (typeof global.updateBrowseFrequencyButtons === 'function') {
-            global.updateBrowseFrequencyButtons('all');
-        } else {
-            const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
-            if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
-                frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
-                    if (button.classList && typeof button.classList.remove === 'function') {
-                        button.classList.remove('active');
-                    }
-                    if (typeof button.setAttribute === 'function') {
-                        button.setAttribute('aria-pressed', 'false');
-                    }
-                });
-            }
-        }
+    function syncBrowseFilterUI(examIndex) {
+        resetBrowseFilterStateToAll(examIndex);
     }
 
     async function prepareBrowseReset() {
@@ -1033,19 +1049,14 @@
 
     function applyBrowseResetState(examIndex) {
         clearReadingMemorizeBrowseMode();
-        global.__browseFilterMode = 'default';
-        global.__browsePath = null;
+        resetBrowseFilterStateToAll(examIndex);
 
         if (global.browseStateManager && typeof global.browseStateManager.resetToAllExams === 'function') {
             global.browseStateManager.resetToAllExams();
         } else {
-            if (typeof global.setBrowseFilterState === 'function') {
-                global.setBrowseFilterState('all', 'all');
-            }
             clearBrowseSearchUI();
         }
 
-        syncBrowseFilterUI(examIndex);
         if (typeof global.setBrowseTitle === 'function') {
             global.setBrowseTitle('题库列表');
         }
@@ -1727,6 +1738,8 @@
         applyBrowsePostFilters,
         applyBrowseFrequencyFilter,
         normalizeBrowseFrequencyFilter,
+        setBrowseFrequencyFilter,
+        resetBrowseFilterStateToAll,
         launchReadingMemorizeExam,
         isReadingMemorizeBrowseMode,
         isReadingMemorizeExam

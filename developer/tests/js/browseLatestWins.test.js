@@ -183,6 +183,12 @@ const filterSecond = deferred();
 resolverQueue.push(filterFirst, filterSecond);
 const staleFilter = sandbox.filterByType('reading');
 const latestFilter = sandbox.filterByType('all');
+const latestFilterRequestId = sandbox.__getBrowseResultsRequestId();
+assert.strictEqual(
+    sandbox.__isBrowseUserResultsRequestInFlight(latestFilterRequestId),
+    true,
+    'a hot type filter must own its request while the active index is unresolved'
+);
 const allExams = [
     {
         id: 'reading',
@@ -203,6 +209,7 @@ const allExams = [
 ];
 filterSecond.resolve(allExams);
 await latestFilter;
+assert.strictEqual(sandbox.__isBrowseUserResultsRequestInFlight(latestFilterRequestId), false);
 filterFirst.resolve(allExams);
 await staleFilter;
 
@@ -223,14 +230,43 @@ const sharedPendingFilter = sandbox.applyBrowseFilter(
     sharedPendingFilterRequestId
 );
 assert.strictEqual(
+    sandbox.__isBrowseUserResultsRequestInFlight(sharedPendingFilterRequestId),
+    true,
+    'a caller-supplied user request must be retained during filter resolution'
+);
+assert.strictEqual(
     sandbox.__getBrowseResultsRequestId(),
     sharedPendingFilterRequestId,
     'a synchronized pending filter must reuse the initialization request token'
 );
 sharedPendingFilterIndex.resolve(allExams);
 await sharedPendingFilter;
+assert.strictEqual(sandbox.__isBrowseUserResultsRequestInFlight(sharedPendingFilterRequestId), false);
 assert.strictEqual(browseState.category, 'P1');
 assert.strictEqual(browseState.type, 'reading');
+
+rendered.length = 0;
+searchInput.value = 'zzzz-no-match';
+const queryAwareTypeIndex = deferred();
+resolverQueue.push(queryAwareTypeIndex);
+const queryAwareTypeFilter = sandbox.filterByType('reading');
+queryAwareTypeIndex.resolve(allExams);
+await queryAwareTypeFilter;
+assert.strictEqual(searchInput.value, 'zzzz-no-match');
+assert.strictEqual(browseState.category, 'all');
+assert.strictEqual(browseState.type, 'reading');
+assert.deepStrictEqual(rendered.at(-1), [], 'type filtering must preserve and apply the visible query');
+
+const queryAwareCategoryIndex = deferred();
+resolverQueue.push(queryAwareCategoryIndex);
+const queryAwareCategoryFilter = sandbox.applyBrowseFilter('P1', 'listening');
+queryAwareCategoryIndex.resolve(allExams);
+await queryAwareCategoryFilter;
+assert.strictEqual(searchInput.value, 'zzzz-no-match');
+assert.strictEqual(browseState.category, 'P1');
+assert.strictEqual(browseState.type, 'listening');
+assert.deepStrictEqual(rendered.at(-1), [], 'category filtering must preserve and apply the visible query');
+searchInput.value = '';
 
 rendered.length = 0;
 const sharedSearchIndex = deferred();
@@ -296,20 +332,27 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(navigationIntentMarks, 2, 'each fallback view activation must mark a navigation intent');
 
+const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
+vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
+const productionLoadExamList = sandbox.ExamActions.loadExamList;
+sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams) {
+    const result = productionLoadExamList.call(this, exams);
+    if (Array.isArray(result)) {
+        rendered.push(Array.from(result, (exam) => exam.id));
+    }
+    return result;
+};
+
 searchInput.value = 'stale-query';
 sandbox.__browseFilterMode = 'frequency-p1';
 sandbox.__browsePath = 'ReadingPractice/P1';
 sandbox.__browseFrequencyFilter = 'high';
 sandbox.browseController.currentMode = 'frequency-p1';
 sandbox.browseController.activeFilter = 'reading';
-sandbox.ExamActions.applyBrowsePostFilters = function applyBrowsePostFilters(exams, _sortMode, frequencyFilter) {
-    if (!frequencyFilter || frequencyFilter === 'all') return exams;
-    return exams.filter((exam) => exam.frequency === frequencyFilter);
-};
-const helperFreeLoadExamList = sandbox.ExamActions.loadExamList;
-sandbox.ExamActions.loadExamList = function loadExamListWithActiveFilters(exams) {
-    return helperFreeLoadExamList.call(this, sandbox.getBrowseFilteredExamBase(exams));
-};
+const mainResetBrowseFilterStateToAll = sandbox.resetBrowseFilterStateToAll;
+const mainUpdateBrowseFrequencyButtons = sandbox.updateBrowseFrequencyButtons;
+sandbox.resetBrowseFilterStateToAll = undefined;
+sandbox.updateBrowseFrequencyButtons = undefined;
 const helperFreeResetIndex = deferred();
 resolverQueue.push(helperFreeResetIndex);
 const helperFreeReset = sandbox.showView('browse', true);
@@ -322,6 +365,8 @@ assert.strictEqual(sandbox.__browseFrequencyFilter, 'all');
 assert.strictEqual(sandbox.browseController.currentMode, 'default');
 assert.strictEqual(sandbox.browseController.activeFilter, 'all');
 assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening']);
+sandbox.resetBrowseFilterStateToAll = mainResetBrowseFilterStateToAll;
+sandbox.updateBrowseFrequencyButtons = mainUpdateBrowseFrequencyButtons;
 searchInput.value = '';
 
 const failedReentryIndex = deferred();
@@ -333,17 +378,6 @@ assert.strictEqual(
     false,
     'fallback navigation must observe and contain an asynchronous Browse refresh failure'
 );
-
-const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
-vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
-const productionLoadExamList = sandbox.ExamActions.loadExamList;
-sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams) {
-    const result = productionLoadExamList.call(this, exams);
-    if (Array.isArray(result)) {
-        rendered.push(Array.from(result, (exam) => exam.id));
-    }
-    return result;
-};
 
 rendered.length = 0;
 const latestFilterIndex = deferred();

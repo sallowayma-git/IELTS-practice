@@ -271,6 +271,7 @@ function createHarness(options = {}) {
         filterStateCalls,
         titleCalls,
         preferencePatches,
+        documentListeners,
         context,
         getClearedAutoScroll: () => clearedAutoScroll,
         getResetToDefaultCalls: () => resetToDefaultCalls
@@ -431,20 +432,98 @@ test('repeat reset waits for browse-control hydration before clearing frequency 
     assert.equal(harness.loaderCalls.length, 1);
 });
 
-test('repeat reset delegates frequency state to the main-owned UI helper', async () => {
+test('repeat reset owns frequency state when the main UI helper is unavailable', async () => {
     const harness = createHarness();
     await harness.stateManager.ready;
-    const ownerCalls = [];
-    const updateBrowseFrequencyButtons = harness.window.updateBrowseFrequencyButtons.bind(harness.window);
-    harness.window.updateBrowseFrequencyButtons = (value) => {
-        ownerCalls.push(value);
-        updateBrowseFrequencyButtons(value);
-    };
+    harness.window.updateBrowseFrequencyButtons = undefined;
 
     await harness.window.ExamActions.resetBrowseViewToAll();
 
-    assert.deepEqual(ownerCalls, ['all']);
     assert.equal(harness.window.__browseFrequencyFilter, 'all');
+    assert(harness.frequencyButtons.every((button) => button.ariaPressed === 'false'));
+});
+
+test('owner reset without an index preserves controller buttons and clears controller state', () => {
+    const harness = createHarness();
+    const controllerStateCalls = [];
+    harness.window.setBrowseFilterState = undefined;
+    harness.window.browseController.setBrowseFilterState = (category, type) => {
+        controllerStateCalls.push({ category, type });
+    };
+
+    harness.window.ExamActions.resetBrowseFilterStateToAll();
+
+    assert.deepEqual(harness.renderedFilterIndexes, [], 'an absent index must not be treated as an empty listening library');
+    assert.deepEqual(controllerStateCalls, [{ category: 'all', type: 'all' }]);
+    assert.equal(harness.window.__browseFilterMode, 'default');
+    assert.equal(harness.window.__browsePath, null);
+    assert.equal(harness.window.__browseFrequencyFilter, 'all');
+});
+
+test('one bubbling Browse click refreshes through the controller only once', () => {
+    const harness = createHarness();
+    const browseView = { classList: createClassList(['active']) };
+    const originalGetElementById = harness.window.document.getElementById.bind(harness.window.document);
+    harness.window.document.getElementById = (id) => {
+        if (id === 'browse-view') return browseView;
+        return originalGetElementById(id);
+    };
+    loadScript('js/views/legacyViewBundle.js', harness.context);
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    let appBrowseActivations = 0;
+    let controllerRefreshes = 0;
+    harness.window.initializeBrowseView = () => {
+        appBrowseActivations += 1;
+    };
+    app.currentView = 'overview';
+    app.setupEventListeners();
+
+    const button = {
+        dataset: { view: 'browse' },
+        classList: createClassList()
+    };
+    let rootClickListener = null;
+    const navRoot = {
+        addEventListener(type, listener) {
+            if (type === 'click') rootClickListener = listener;
+        },
+        removeEventListener() {},
+        contains(value) { return value === button; },
+        querySelectorAll() { return [button]; }
+    };
+    const controller = new harness.window.LegacyNavigationController({
+        container: navRoot,
+        onNavigate() {
+            controllerRefreshes += 1;
+            browseView.classList.add('active');
+        }
+    });
+    controller.mount(navRoot);
+
+    const clickListeners = harness.documentListeners.get('click') || [];
+    const appClickListener = clickListeners.at(-1);
+    assert.equal(typeof rootClickListener, 'function');
+    assert.equal(typeof appClickListener, 'function');
+    const event = {
+        preventDefault() {},
+        target: {
+            closest(selector) {
+                if (selector === '.nav-btn' || selector === '.nav-btn[data-view]') {
+                    return button;
+                }
+                return null;
+            }
+        }
+    };
+    rootClickListener(event);
+    appClickListener(event);
+
+    assert.equal(event.__browseNavigationHandled, true);
+    assert.equal(app.currentView, 'browse');
+    assert.equal(controllerRefreshes, 1);
+    assert.equal(appBrowseActivations, 0, 'the bubbled document handler must not start a second Browse render');
+    assert.equal(harness.searchInput.value, 'ocean', 'ordinary Browse navigation must preserve the active query');
 });
 
 test('repeat reset invalidates a captured pending Browse activation filter', async () => {

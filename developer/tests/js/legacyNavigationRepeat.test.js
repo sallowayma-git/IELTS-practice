@@ -191,16 +191,18 @@ test('legacy controller handles an active repeat before ordinary navigation and 
     });
     controller.mount(harness.container);
 
-    harness.listeners.get('click')({
+    const event = {
         preventDefault() {},
         target: {
             closest() { return harness.button; }
         }
-    });
+    };
+    harness.listeners.get('click')(event);
     await Promise.resolve();
     await Promise.resolve();
 
     assert.deepEqual(calls, ['repeat']);
+    assert.equal(event.__browseNavigationHandled, true);
     assert.equal(harness.warnings.length, 1);
     assert.match(String(harness.warnings[0][0]), /onRepeatNavigate/);
 });

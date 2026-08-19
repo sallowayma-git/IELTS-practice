@@ -932,7 +932,21 @@ class ExamSystemApp {
                 if (navBtn) {
                     const view = navBtn.dataset.view;
                     if (view) {
-                        this.navigateToView(view);
+                        const browseViewAlreadyActive = view === 'browse'
+                            && e.__browseNavigationHandled === true
+                            && document.getElementById('browse-view')?.classList.contains('active');
+                        if (browseViewAlreadyActive) {
+                            // The main-nav controller already activated and refreshed Browse.
+                            // Keep app state/URL in sync without starting a second render.
+                            this.currentView = view;
+                            try {
+                                const url = new URL(window.location);
+                                url.searchParams.set('view', view);
+                                window.history.replaceState({}, '', url);
+                            } catch (_) { }
+                        } else {
+                            this.navigateToView(view);
+                        }
                     }
                 }
                 const backBtn = e.target.closest('.btn-back');

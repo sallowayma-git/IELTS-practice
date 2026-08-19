@@ -748,6 +748,94 @@ async function testLaterQueuedFilterBeatsEarlierExamIndexRefresh() {
     recordResult('较新的冷筛选淘汰更早的题库索引刷新', true, { callOrder, resultsRequestId });
 }
 
+async function createHotExamIndexRefreshHarness() {
+    const harness = createHarness();
+    const listeners = new Map();
+    const inFlightUserRequests = new Set();
+    const backgroundLoads = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseUserResultsRequestInFlight = function isUserRequestInFlight(requestId) {
+        return inFlightUserRequests.has(requestId);
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        backgroundLoads.push([index.map((exam) => exam.id), requestId]);
+        return index;
+    };
+    harness.inputState.value = '';
+
+    return {
+        harness,
+        listeners,
+        backgroundLoads,
+        beginUserRequest() {
+            const requestId = harness.windowStub.__beginBrowseResultsRequest();
+            inFlightUserRequests.add(requestId);
+            return requestId;
+        },
+        endUserRequest(requestId) {
+            inFlightUserRequests.delete(requestId);
+        },
+        getResultsRequestId() {
+            return resultsRequestId;
+        }
+    };
+}
+
+async function testHotFilterBeatsLaterExamIndexRefresh() {
+    const state = await createHotExamIndexRefreshHarness();
+    const userRequestId = state.beginUserRequest();
+
+    state.listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'background-index' }] } });
+    await flushMicrotasks(32);
+
+    assert.strictEqual(state.getResultsRequestId(), userRequestId, 'background refresh must not revoke an active hot filter');
+    assert.deepStrictEqual(state.backgroundLoads, []);
+    state.endUserRequest(userRequestId);
+    recordResult('热筛选先发生时题库索引刷新让行', true, { userRequestId });
+}
+
+async function testHotFilterAfterEventReceiptStillWins() {
+    const state = await createHotExamIndexRefreshHarness();
+
+    state.listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'background-index' }] } });
+    const userRequestId = state.beginUserRequest();
+    await flushMicrotasks(32);
+
+    assert.strictEqual(
+        state.getResultsRequestId(),
+        userRequestId,
+        'an index event must validate the token captured at receipt instead of borrowing the later hot token'
+    );
+    assert.deepStrictEqual(state.backgroundLoads, []);
+    state.endUserRequest(userRequestId);
+    recordResult('题库索引事件先登记时后续热筛选仍优先', true, { userRequestId });
+}
+
 async function testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization() {
     const harness = createHarness();
     harness.inputState.value = '';
@@ -1714,6 +1802,8 @@ async function main() {
         await testAppNavigationMarksIntentBeforeSameViewShortCircuit();
         await testQueuedFilterBeatsLaterExamIndexRefresh();
         await testLaterQueuedFilterBeatsEarlierExamIndexRefresh();
+        await testHotFilterBeatsLaterExamIndexRefresh();
+        await testHotFilterAfterEventReceiptStillWins();
         await testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization();
         await testExamIndexRefreshPreservesActiveSearch();
         await testExamIndexRefreshPreemptsSameTokenLoad();

@@ -983,7 +983,13 @@
             var browseReady = ensureBrowseGroup();
             var resultsRequestId = hasReplayRequest ? replayRequestId : null;
             var resultsRequestCaptured = hasReplayRequest;
-            if (!hasReplayRequest) {
+            if (!hasReplayRequest && typeof global.__getBrowseResultsRequestId === 'function') {
+                try {
+                    resultsRequestId = global.__getBrowseResultsRequestId();
+                    resultsRequestCaptured = true;
+                } catch (_) { }
+            }
+            if (!hasReplayRequest && !resultsRequestCaptured) {
                 captureBrowseResultsRequest().then(function rememberRequestId(requestId) {
                     resultsRequestId = requestId;
                     resultsRequestCaptured = true;
@@ -1003,6 +1009,14 @@
                     var staleLoading = document.querySelector('#browse-view .loading');
                     if (staleLoading) {
                         staleLoading.style.display = 'none';
+                    }
+                    return;
+                }
+                if (typeof global.__isBrowseUserResultsRequestInFlight === 'function'
+                    && global.__isBrowseUserResultsRequestInFlight(effectiveRequestId)) {
+                    var deferredLoading = document.querySelector('#browse-view .loading');
+                    if (deferredLoading) {
+                        deferredLoading.style.display = 'none';
                     }
                     return;
                 }

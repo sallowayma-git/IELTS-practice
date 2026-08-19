@@ -112,6 +112,15 @@
             console.warn('[Fallback] 重置题库筛选状态失败:', error);
           }
         }
+        if (!browseFilterStateReset && window.ExamActions
+          && typeof window.ExamActions.resetBrowseFilterStateToAll === 'function') {
+          try {
+            window.ExamActions.resetBrowseFilterStateToAll();
+            browseFilterStateReset = true;
+          } catch (error) {
+            console.warn('[Fallback] 通过题库状态 owner 重置失败:', error);
+          }
+        }
         if (!browseFilterStateReset) {
           if (typeof window.setBrowseFilterState === 'function') {
             try {
@@ -198,6 +207,11 @@
           }
           event.preventDefault();
           var viewName = button.getAttribute('data-view');
+          if (viewName === 'browse') {
+            try {
+              event.__browseNavigationHandled = true;
+            } catch (_) { }
+          }
           var alreadyActive = !!(button.classList && button.classList.contains('active'));
           if (viewName === 'browse' && alreadyActive) {
             try {
@@ -2628,7 +2642,21 @@ class ExamSystemApp {
                 if (navBtn) {
                     const view = navBtn.dataset.view;
                     if (view) {
-                        this.navigateToView(view);
+                        const browseViewAlreadyActive = view === 'browse'
+                            && e.__browseNavigationHandled === true
+                            && document.getElementById('browse-view')?.classList.contains('active');
+                        if (browseViewAlreadyActive) {
+                            // The main-nav controller already activated and refreshed Browse.
+                            // Keep app state/URL in sync without starting a second render.
+                            this.currentView = view;
+                            try {
+                                const url = new URL(window.location);
+                                url.searchParams.set('view', view);
+                                window.history.replaceState({}, '', url);
+                            } catch (_) { }
+                        } else {
+                            this.navigateToView(view);
+                        }
                     }
                 }
                 const backBtn = e.target.closest('.btn-back');
