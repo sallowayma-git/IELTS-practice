@@ -29,6 +29,19 @@
 
   ensureCompatPatch(window);
 
+  function runRepeatedBrowseReset(viewName) {
+    if (viewName !== 'browse') {
+      return false;
+    }
+    if (typeof window.resetBrowseViewToAll === 'function') {
+      return window.resetBrowseViewToAll();
+    }
+    if (typeof window.showView === 'function') {
+      return window.showView('browse', true);
+    }
+    return true;
+  }
+
   if (window.CompatPatch && typeof window.CompatPatch.register === 'function') {
     window.CompatPatch.register('boot-fallbacks', {
       owner: 'runtime',
@@ -40,6 +53,9 @@
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
+      if (typeof window.__markAppNavigationIntent === 'function') {
+        window.__markAppNavigationIntent();
+      }
       if (typeof document === 'undefined') {
         return;
       }
@@ -84,10 +100,66 @@
       if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
         window.currentCategory = 'all';
         window.currentExamType = 'all';
-        if (typeof window.setBrowseTitle === 'function') { window.setBrowseTitle('题库浏览'); return; }
-        var t = document.getElementById('browse-title'); if (t) t.textContent = '题库浏览';
+        var browseFilterStateReset = false;
+        if (typeof window.resetBrowseFilterStateToAll === 'function') {
+          try {
+            window.resetBrowseFilterStateToAll();
+            browseFilterStateReset = true;
+          } catch (error) {
+            console.warn('[Fallback] 重置题库筛选状态失败:', error);
+          }
+        }
+        if (!browseFilterStateReset) {
+          if (typeof window.setBrowseFilterState === 'function') {
+            try {
+              window.setBrowseFilterState('all', 'all');
+            } catch (error) {
+              console.warn('[Fallback] 重置题库分类状态失败:', error);
+            }
+          }
+          if (window.browseController) {
+            window.browseController.currentMode = 'default';
+            window.browseController.activeFilter = 'all';
+          }
+          var frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
+          if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
+            Array.prototype.forEach.call(
+              frequencyContainer.querySelectorAll('[data-frequency-filter]'),
+              function (button) {
+                if (button.classList) button.classList.remove('active');
+                if (typeof button.setAttribute === 'function') button.setAttribute('aria-pressed', 'false');
+              }
+            );
+          }
+        }
+        if (window.browseStateManager && typeof window.browseStateManager.clearSearchState === 'function') {
+          window.browseStateManager.clearSearchState();
+        } else {
+          var searchInput = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+          if (searchInput) searchInput.value = '';
+          var searchClearButton = document.getElementById('search-clear-btn');
+          if (searchClearButton) searchClearButton.hidden = true;
+        }
+        if (typeof window.setBrowseTitle === 'function') {
+          window.setBrowseTitle('题库浏览');
+        } else {
+          var t = document.getElementById('browse-title'); if (t) t.textContent = '题库浏览';
+        }
       }
-      if (normalized === 'browse' && typeof window.loadExamList === 'function') window.loadExamList();
+      var browseRefresh = null;
+      if (normalized === 'browse') {
+        if (typeof window.refreshBrowseResults === 'function') {
+          browseRefresh = window.refreshBrowseResults();
+        } else if (typeof window.loadExamList === 'function') {
+          browseRefresh = window.loadExamList();
+        }
+        if (browseRefresh && typeof browseRefresh.then === 'function') {
+          browseRefresh = Promise.resolve(browseRefresh).catch(function (error) {
+            console.warn('[Fallback] 刷新题库视图失败:', error);
+            return false;
+          });
+        }
+      }
       if (normalized === 'practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
         window.AppActions.ensurePracticeSuite();
       }
@@ -97,6 +169,7 @@
       if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
         window.ensurePracticeRecordsSync('practice-view').catch(function () { });
       }
+      return browseRefresh;
     };
   }
 
@@ -105,6 +178,7 @@
       window.ensureLegacyNavigationController({
         containerSelector: '.main-nav',
         syncOnNavigate: true,
+        onRepeatNavigate: runRepeatedBrowseReset,
         onNavigate: function onNavigate(viewName) {
           if (typeof window.showView === 'function') {
             window.showView(viewName, false);
@@ -122,9 +196,9 @@
           event.preventDefault();
           var viewName = button.getAttribute('data-view');
           var alreadyActive = !!(button.classList && button.classList.contains('active'));
-          if (viewName === 'browse' && alreadyActive && typeof window.resetBrowseViewToAll === 'function') {
+          if (viewName === 'browse' && alreadyActive) {
             try {
-              Promise.resolve(window.resetBrowseViewToAll()).catch(function (error) {
+              Promise.resolve(runRepeatedBrowseReset(viewName)).catch(function (error) {
                 console.warn('[Fallback] 重复题库导航重置失败:', error);
               });
             } catch (error) {

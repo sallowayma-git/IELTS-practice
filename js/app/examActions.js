@@ -974,7 +974,6 @@
             });
         }
 
-        global.__browseFrequencyFilter = 'all';
         if (typeof global.updateBrowseFrequencyButtons === 'function') {
             global.updateBrowseFrequencyButtons('all');
         } else {

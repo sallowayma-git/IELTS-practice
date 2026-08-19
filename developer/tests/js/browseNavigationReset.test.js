@@ -431,15 +431,20 @@ test('repeat reset waits for browse-control hydration before clearing frequency 
     assert.equal(harness.loaderCalls.length, 1);
 });
 
-test('repeat reset clears the global frequency filter without the UI helper', async () => {
+test('repeat reset delegates frequency state to the main-owned UI helper', async () => {
     const harness = createHarness();
     await harness.stateManager.ready;
-    delete harness.window.updateBrowseFrequencyButtons;
+    const ownerCalls = [];
+    const updateBrowseFrequencyButtons = harness.window.updateBrowseFrequencyButtons.bind(harness.window);
+    harness.window.updateBrowseFrequencyButtons = (value) => {
+        ownerCalls.push(value);
+        updateBrowseFrequencyButtons(value);
+    };
 
     await harness.window.ExamActions.resetBrowseViewToAll();
 
+    assert.deepEqual(ownerCalls, ['all']);
     assert.equal(harness.window.__browseFrequencyFilter, 'all');
-    assert(harness.frequencyButtons.every((button) => button.ariaPressed === 'false'));
 });
 
 test('repeat reset invalidates a captured pending Browse activation filter', async () => {

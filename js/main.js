@@ -227,11 +227,12 @@ function ensureLegacyNavigation(options) {
         onRepeatNavigate: function onRepeatNavigate(viewName) {
             if (viewName === 'browse') {
                 if (window.ExamActions && typeof window.ExamActions.resetBrowseViewToAll === 'function') {
-                    window.ExamActions.resetBrowseViewToAll();
+                    return window.ExamActions.resetBrowseViewToAll();
                 } else if (typeof window.resetBrowseViewToAll === 'function') {
-                    window.resetBrowseViewToAll();
+                    return window.resetBrowseViewToAll();
                 }
             }
+            return false;
         },
         onNavigate: function onNavigate(viewName) {
             if (typeof window.showView === 'function') {
@@ -2287,10 +2288,9 @@ function refreshBrowseResults() {
     const activeRequestId = beginBrowseResultsRequest();
     const query = getBrowseSearchQuery();
     if (query) {
-        performSearch(query, activeRequestId);
-        return;
+        return performSearch(query, activeRequestId);
     }
-    loadExamList(null, activeRequestId);
+    return loadExamList(null, activeRequestId);
 }
 
 let browseControlsSeeded = false;
@@ -2358,6 +2358,20 @@ function updateBrowseFrequencyButtons(filter) {
         button.classList.toggle('active', isActive);
         button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+}
+
+function resetBrowseFilterStateToAll() {
+    window.__browseFilterMode = 'default';
+    window.__browsePath = null;
+    updateBrowseFrequencyButtons('all');
+
+    if (window.browseController) {
+        window.browseController.currentMode = 'default';
+        window.browseController.activeFilter = 'all';
+    }
+    if (typeof setBrowseFilterState === 'function') {
+        setBrowseFilterState('all', 'all');
+    }
 }
 
 function setupBrowseFrequencyFilterControl() {

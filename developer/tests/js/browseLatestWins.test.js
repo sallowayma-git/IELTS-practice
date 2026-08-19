@@ -44,7 +44,10 @@ const typeButtons = ['all', 'reading', 'listening'].map((type) => ({
 const typeButtonContainer = {
     querySelectorAll() { return typeButtons; }
 };
-const browseView = { classList: { contains(value) { return value === 'active'; } } };
+const browseView = { id: 'browse-view', classList: createClassList() };
+const overviewView = { id: 'overview-view', classList: createClassList() };
+browseView.classList.add('active');
+const searchInput = { value: '' };
 const searchClearButton = { hidden: true };
 const documentStub = {
     readyState: 'loading',
@@ -52,12 +55,25 @@ const documentStub = {
     documentElement: { classList: createClassList() },
     addEventListener() {},
     removeEventListener() {},
-    querySelector() { return null; },
-    querySelectorAll() { return []; },
+    querySelector(selector) {
+        if (selector === '.search-input') return searchInput;
+        if (selector === '.view.active') {
+            return [browseView, overviewView].find((view) => view.classList.contains('active')) || null;
+        }
+        return null;
+    },
+    querySelectorAll(selector) {
+        if (selector === '.view.active') {
+            return [browseView, overviewView].filter((view) => view.classList.contains('active'));
+        }
+        return [];
+    },
     createElement() { return { style: {}, classList: createClassList(), appendChild() {}, setAttribute() {} }; },
     getElementById(id) {
         if (id === 'type-filter-buttons') return typeButtonContainer;
         if (id === 'browse-view') return browseView;
+        if (id === 'overview-view') return overviewView;
+        if (id === 'exam-search-input') return searchInput;
         if (id === 'search-clear-btn') return searchClearButton;
         return null;
     }
@@ -168,8 +184,22 @@ resolverQueue.push(filterFirst, filterSecond);
 const staleFilter = sandbox.filterByType('reading');
 const latestFilter = sandbox.filterByType('all');
 const allExams = [
-    { id: 'reading', title: 'Reading', type: 'reading', category: 'P1' },
-    { id: 'listening', title: 'Listening', type: 'listening', category: 'P1' }
+    {
+        id: 'reading',
+        title: 'Reading',
+        type: 'reading',
+        category: 'P1',
+        path: 'ReadingPractice/P1/reading.html',
+        frequency: 'high'
+    },
+    {
+        id: 'listening',
+        title: 'Listening',
+        type: 'listening',
+        category: 'P1',
+        path: 'ListeningPractice/P1/listening.html',
+        frequency: 'low'
+    }
 ];
 filterSecond.resolve(allExams);
 await latestFilter;
@@ -234,6 +264,75 @@ assert.strictEqual(
 );
 assert.strictEqual(debouncedSearchCalls.length, 1, 'stale replay must not replace the pending latest search');
 delete sandbox.performanceOptimizer;
+
+let navigationIntentMarks = 0;
+sandbox.__markAppNavigationIntent = function markAppNavigationIntent() {
+    navigationIntentMarks += 1;
+    return navigationIntentMarks;
+};
+const bootFallbackSource = fs.readFileSync(path.join(repoRoot, 'js/boot-fallbacks.js'), 'utf8');
+vm.runInContext(bootFallbackSource, context, { filename: 'js/boot-fallbacks.js' });
+rendered.length = 0;
+searchInput.value = 'zzzz-no-match';
+const initialNoMatchIndex = deferred();
+resolverQueue.push(initialNoMatchIndex);
+sandbox.searchExams(searchInput.value);
+initialNoMatchIndex.resolve(allExams);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(rendered, [[]], 'the active no-match search should render an empty result');
+
+sandbox.showView('overview', false);
+const reentryNoMatchIndex = deferred();
+resolverQueue.push(reentryNoMatchIndex);
+sandbox.showView('browse', false);
+reentryNoMatchIndex.resolve(allExams);
+await new Promise((resolve) => setTimeout(resolve, 0));
+
+assert.strictEqual(searchInput.value, 'zzzz-no-match', 'ordinary Browse re-entry must preserve the query');
+assert.deepStrictEqual(
+    rendered,
+    [[], []],
+    'ordinary Browse re-entry must reapply the preserved query instead of flashing the full list'
+);
+assert.strictEqual(navigationIntentMarks, 2, 'each fallback view activation must mark a navigation intent');
+
+searchInput.value = 'stale-query';
+sandbox.__browseFilterMode = 'frequency-p1';
+sandbox.__browsePath = 'ReadingPractice/P1';
+sandbox.__browseFrequencyFilter = 'high';
+sandbox.browseController.currentMode = 'frequency-p1';
+sandbox.browseController.activeFilter = 'reading';
+sandbox.ExamActions.applyBrowsePostFilters = function applyBrowsePostFilters(exams, _sortMode, frequencyFilter) {
+    if (!frequencyFilter || frequencyFilter === 'all') return exams;
+    return exams.filter((exam) => exam.frequency === frequencyFilter);
+};
+const helperFreeLoadExamList = sandbox.ExamActions.loadExamList;
+sandbox.ExamActions.loadExamList = function loadExamListWithActiveFilters(exams) {
+    return helperFreeLoadExamList.call(this, sandbox.getBrowseFilteredExamBase(exams));
+};
+const helperFreeResetIndex = deferred();
+resolverQueue.push(helperFreeResetIndex);
+const helperFreeReset = sandbox.showView('browse', true);
+helperFreeResetIndex.resolve(allExams);
+await helperFreeReset;
+assert.strictEqual(searchInput.value, '', 'the helper-free repeat reset must clear the preserved query');
+assert.strictEqual(sandbox.__browseFilterMode, 'default');
+assert.strictEqual(sandbox.__browsePath, null);
+assert.strictEqual(sandbox.__browseFrequencyFilter, 'all');
+assert.strictEqual(sandbox.browseController.currentMode, 'default');
+assert.strictEqual(sandbox.browseController.activeFilter, 'all');
+assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening']);
+searchInput.value = '';
+
+const failedReentryIndex = deferred();
+resolverQueue.push(failedReentryIndex);
+const failedReentry = sandbox.showView('browse', false);
+failedReentryIndex.reject(new Error('index unavailable'));
+assert.strictEqual(
+    await failedReentry,
+    false,
+    'fallback navigation must observe and contain an asynchronous Browse refresh failure'
+);
 
 const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
 vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });

@@ -264,6 +264,8 @@
     var browseResetIntentGeneration = 0;
     var activeBrowseResetIntent = null;
     var browseResultsProxyGeneration = 0;
+    var appNavigationIntentGeneration = 0;
+    var examIndexRefreshGeneration = 0;
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
@@ -427,6 +429,21 @@
         return ensureLazyGroup(SETTINGS_GROUP);
     }
 
+    function markAppNavigationIntent(event) {
+        if (event && event.__appEntryNavigationIntentTracked === true) {
+            return appNavigationIntentGeneration;
+        }
+        appNavigationIntentGeneration += 1;
+        if (event) {
+            try {
+                event.__appEntryNavigationIntentTracked = true;
+            } catch (_) { }
+        }
+        return appNavigationIntentGeneration;
+    }
+
+    global.__markAppNavigationIntent = markAppNavigationIntent;
+
     function initializeNavigationShell() {
         var controller = null;
         try {
@@ -438,10 +455,12 @@
                     syncOnNavigate: true,
                     onRepeatNavigate: function onRepeatNavigate(viewName) {
                         if (viewName === 'browse' && typeof global.resetBrowseViewToAll === 'function') {
-                            global.resetBrowseViewToAll();
+                            return global.resetBrowseViewToAll();
                         }
+                        return false;
                     },
-                    onNavigate: function onNavigate(viewName) {
+                    onNavigate: function onNavigate(viewName, event) {
+                        markAppNavigationIntent(event);
                         if (typeof global.showView === 'function') {
                             global.showView(viewName, false);
                             return;
@@ -717,6 +736,12 @@
         }
         var proxy = function lazyProxy() {
             var args = Array.prototype.slice.call(arguments);
+            var activeViewAtRequest = name === 'browseCategory'
+                ? getActiveViewName()
+                : null;
+            var navigationIntentAtRequest = name === 'browseCategory'
+                ? appNavigationIntentGeneration
+                : null;
             var tracksBrowseResults = group === BROWSE_GROUP && (
                 name === 'filterByType'
                 || name === 'filterByFrequency'
@@ -755,6 +780,11 @@
                         || !isBrowseResultsSnapshotCurrent(
                             resultsRequestCaptured ? resultsRequestId : getCurrentBrowseResultsRequest()
                         ))) {
+                    return false;
+                }
+                if (name === 'browseCategory'
+                    && (getActiveViewName() !== activeViewAtRequest
+                        || navigationIntentAtRequest !== appNavigationIntentGeneration)) {
                     return false;
                 }
                 var fn = global[name];
@@ -928,6 +958,8 @@
         var activeView = getActiveViewName();
 
         if (activeView === 'browse') {
+            var refreshGeneration = ++examIndexRefreshGeneration;
+            var resultsProxyGenerationAtReceipt = browseResultsProxyGeneration;
             var resetInFlight = typeof global.__isBrowseResetIntentInFlight === 'function'
                 && global.__isBrowseResetIntentInFlight();
             if (resetInFlight) {
@@ -960,6 +992,10 @@
                 });
             }
             browseReady.then(function afterBrowseReady() {
+                if (refreshGeneration !== examIndexRefreshGeneration
+                    || resultsProxyGenerationAtReceipt !== browseResultsProxyGeneration) {
+                    return;
+                }
                 var effectiveRequestId = resultsRequestCaptured
                     ? resultsRequestId
                     : getCurrentBrowseResultsRequest();
@@ -970,6 +1006,9 @@
                     }
                     return;
                 }
+                var refreshRequestId = typeof global.__beginBrowseResultsRequest === 'function'
+                    ? global.__beginBrowseResultsRequest()
+                    : effectiveRequestId;
                 var searchInput = document.getElementById('exam-search-input')
                     || document.querySelector('.search-input');
                 var searchQuery = searchInput && typeof searchInput.value === 'string'
@@ -979,14 +1018,14 @@
                     try {
                         global.searchExams(
                             searchQuery,
-                            effectiveRequestId
+                            refreshRequestId
                         );
                     } catch (_) { }
                 } else if (typeof global.loadExamList === 'function') {
                     try {
                         global.loadExamList(
                             snapshot,
-                            effectiveRequestId
+                            refreshRequestId
                         );
                     } catch (_) { }
                 }

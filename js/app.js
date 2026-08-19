@@ -620,6 +620,9 @@ class ExamSystemApp {
             this.navigateToView(initialView);
         },
         navigateToView(viewName) {
+            if (typeof window.__markAppNavigationIntent === 'function') {
+                window.__markAppNavigationIntent();
+            }
             if (this.currentView === viewName) {
                 return;
             }

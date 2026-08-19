@@ -3547,14 +3547,28 @@
         }
 
         event.preventDefault();
-        this.navigate(viewName, event);
         if (alreadyActive && typeof this.options.onRepeatNavigate === 'function') {
+            var repeatHandled = true;
             try {
-                this.options.onRepeatNavigate(viewName, event);
+                var repeatResult = this.options.onRepeatNavigate(viewName, event);
+                if (repeatResult === false) {
+                    repeatHandled = false;
+                } else if (repeatResult && typeof repeatResult.then === 'function') {
+                    Promise.resolve(repeatResult).catch(function handleRepeatFailure(repeatError) {
+                        console.warn('[LegacyNavigationController] onRepeatNavigate 执行失败', repeatError);
+                    });
+                }
             } catch (repeatError) {
                 console.warn('[LegacyNavigationController] onRepeatNavigate 执行失败', repeatError);
             }
+            if (repeatHandled) {
+                if (this.options.syncOnNavigate !== false) {
+                    this.syncActive(viewName);
+                }
+                return;
+            }
         }
+        this.navigate(viewName, event);
         if (this.options.syncOnNavigate !== false) {
             this.syncActive(viewName);
         }

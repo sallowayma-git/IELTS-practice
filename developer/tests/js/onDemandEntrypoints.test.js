@@ -264,7 +264,26 @@ async function testFallbackQueuesRepeatBrowseResetDuringLazyLoad() {
         showCallsBeforeRepeat,
         'the repeat click must not run ordinary Browse navigation again'
     );
-    recordResult('Browse 冷加载窗口保留重复导航重置意图', true, { resetCalls });
+
+    delete harness.windowStub.resetBrowseViewToAll;
+    fallbackHandler({
+        preventDefault() {},
+        target: {
+            closest(selector) {
+                return selector === '.nav-btn[data-view]' ? button : null;
+            }
+        }
+    });
+
+    assert.deepStrictEqual(
+        showViewCalls.at(-1),
+        { viewName: 'browse', resetCategory: true },
+        'the helper-free fallback must use the reset-capable Browse activation path'
+    );
+    recordResult('Browse 冷加载窗口保留重复导航重置意图', true, {
+        resetCalls,
+        helperFreeFallback: showViewCalls.at(-1)
+    });
 }
 
 async function testColdRepeatResetPreemptsBrowseSynchronization() {
@@ -472,6 +491,111 @@ async function testHotBrowseCategorySupersedesQueuedColdCategory() {
     });
 }
 
+async function testQueuedBrowseCategoryStandsDownAfterNewNavigation() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    let activeView = 'overview';
+    const appliedCategories = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: `${activeView}-view` };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const queuedCategory = harness.windowStub.browseCategory('P1', 'reading');
+    activeView = 'settings';
+    harness.windowStub.browseCategory = function browseCategory(category) {
+        appliedCategories.push(category);
+        activeView = 'browse';
+    };
+
+    runtimeReady.resolve(true);
+    assert.strictEqual(await queuedCategory, false);
+    assert.deepStrictEqual(
+        appliedCategories,
+        [],
+        'a category queued from an older view must not navigate back after a newer view wins'
+    );
+    assert.strictEqual(activeView, 'settings');
+    recordResult('较新的非 Browse 导航淘汰冷分类代理', true, { activeView, appliedCategories });
+}
+
+async function testQueuedBrowseCategoryStandsDownAfterNavigationRoundTrip() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    let activeView = 'overview';
+    const appliedCategories = [];
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: `${activeView}-view` };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    assert.strictEqual(typeof harness.windowStub.__markAppNavigationIntent, 'function');
+    const queuedCategory = harness.windowStub.browseCategory('P1', 'reading');
+
+    function navigate(viewName) {
+        harness.windowStub.__markAppNavigationIntent();
+        activeView = viewName;
+    }
+
+    navigate('settings');
+    navigate('overview');
+    harness.windowStub.browseCategory = function browseCategory(category) {
+        appliedCategories.push(category);
+        activeView = 'browse';
+    };
+
+    runtimeReady.resolve(true);
+    assert.strictEqual(await queuedCategory, false);
+    assert.deepStrictEqual(
+        appliedCategories,
+        [],
+        'a navigation round trip must still invalidate the older queued category'
+    );
+    assert.strictEqual(activeView, 'overview');
+    recordResult('导航往返仍淘汰旧冷分类代理', true, { activeView, appliedCategories });
+}
+
+async function testAppNavigationMarksIntentBeforeSameViewShortCircuit() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const appliedCategories = [];
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const queuedCategory = harness.windowStub.browseCategory('P1', 'reading');
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.currentView = 'overview';
+    app.navigateToView('overview');
+    harness.windowStub.browseCategory = function browseCategory(category) {
+        appliedCategories.push(category);
+    };
+
+    runtimeReady.resolve(true);
+    assert.strictEqual(await queuedCategory, false);
+    assert.deepStrictEqual(
+        appliedCategories,
+        [],
+        'even a same-view app navigation intent must cancel an older queued category'
+    );
+    recordResult('App 同视图导航也标记较新的导航意图', true, { appliedCategories });
+}
+
 async function testQueuedFilterBeatsLaterExamIndexRefresh() {
     const harness = createHarness();
     harness.inputState.value = 'ocean';
@@ -558,6 +682,128 @@ async function testQueuedFilterBeatsLaterExamIndexRefresh() {
     });
 }
 
+async function testLaterQueuedFilterBeatsEarlierExamIndexRefresh() {
+    const harness = createHarness();
+    harness.inputState.value = '';
+    const runtimeReady = deferred();
+    const listeners = new Map();
+    const callOrder = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'background-index' }] } });
+    const queuedFilter = harness.windowStub.filterByType('reading');
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+    harness.windowStub.filterByType = function filterByType(type) {
+        harness.windowStub.__beginBrowseResultsRequest();
+        callOrder.push(`filter:${type}`);
+        return true;
+    };
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        const activeRequestId = requestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : requestId;
+        if (!harness.windowStub.__isBrowseResultsRequestCurrent(activeRequestId)) {
+            return false;
+        }
+        callOrder.push(`background:${index[0].id}`);
+        return index;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+
+    runtimeReady.resolve(true);
+    assert.strictEqual(await queuedFilter, true);
+    await flushMicrotasks();
+
+    assert.deepStrictEqual(
+        callOrder,
+        ['filter:reading'],
+        'a later cold user filter must invalidate an earlier queued background refresh'
+    );
+    assert.strictEqual(resultsRequestId, 2);
+    recordResult('较新的冷筛选淘汰更早的题库索引刷新', true, { callOrder, resultsRequestId });
+}
+
+async function testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization() {
+    const harness = createHarness();
+    harness.inputState.value = '';
+    const runtimeReady = deferred();
+    const listeners = new Map();
+    const renders = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'older-index' }] } });
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'latest-index' }] } });
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        if (harness.windowStub.__isBrowseResultsRequestCurrent(requestId)) {
+            renders.push(index.map((exam) => exam.id));
+        }
+        return index;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks(32);
+
+    assert.deepStrictEqual(
+        renders,
+        [['latest-index']],
+        'multiple queued index events must coalesce to the latest snapshot'
+    );
+    assert.strictEqual(resultsRequestId, 2);
+    recordResult('Browse 初始化期间仅重放最新题库索引', true, { renders, resultsRequestId });
+}
+
 async function testExamIndexRefreshPreservesActiveSearch() {
     const harness = createHarness();
     const listeners = new Map();
@@ -612,9 +858,81 @@ async function testExamIndexRefreshPreservesActiveSearch() {
     listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
     await flushMicrotasks();
 
-    assert.deepStrictEqual(calls, ['init:1', 'search:ocean:2', 'search:ocean:2']);
+    assert.deepStrictEqual(calls, ['init:1', 'search:ocean:2', 'search:ocean:3']);
     assert.strictEqual(finalRender, 'search:ocean', 'background index refresh must preserve active search results');
     recordResult('题库索引刷新保留活动搜索', true, { calls, finalRender });
+}
+
+async function testExamIndexRefreshPreemptsSameTokenLoad() {
+    const harness = createHarness();
+    const staleResolution = deferred();
+    const listeners = new Map();
+    const renders = [];
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve();
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    await harness.windowStub.AppEntry.ensureBrowseGroup();
+    harness.inputState.value = '';
+    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+        const activeRequestId = requestId == null
+            ? harness.windowStub.__beginBrowseResultsRequest()
+            : requestId;
+        if (Array.isArray(index)) {
+            if (harness.windowStub.__isBrowseResultsRequestCurrent(activeRequestId)) {
+                renders.push(index.map((exam) => exam.id));
+            }
+            return Promise.resolve(index);
+        }
+        return staleResolution.promise.then((resolvedIndex) => {
+            if (!harness.windowStub.__isBrowseResultsRequestCurrent(activeRequestId)) {
+                return false;
+            }
+            renders.push(resolvedIndex.map((exam) => exam.id));
+            return resolvedIndex;
+        });
+    };
+
+    const staleLoad = harness.windowStub.loadExamList(null);
+    assert.strictEqual(resultsRequestId, 2, 'the pending load should own the captured token');
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-index' }] } });
+    await flushMicrotasks(32);
+
+    assert.strictEqual(resultsRequestId, 3, 'the accepted index refresh must claim a newer token');
+    assert.deepStrictEqual(renders, [['fresh-index']]);
+
+    staleResolution.resolve([{ id: 'stale-index' }]);
+    assert.strictEqual(await staleLoad, false);
+    assert.deepStrictEqual(
+        renders,
+        [['fresh-index']],
+        'the older same-token continuation must not overwrite the fresh index render'
+    );
+    recordResult('题库索引刷新领取新 token 并淘汰旧 continuation', true, {
+        resultsRequestId,
+        renders
+    });
 }
 
 async function testExamIndexRefreshStandsDownDuringReset() {
@@ -1391,8 +1709,14 @@ async function main() {
         await testColdRepeatResetPreemptsBrowseSynchronization();
         await testDirectResetInvalidatesPendingColdBrowseLoad();
         await testHotBrowseCategorySupersedesQueuedColdCategory();
+        await testQueuedBrowseCategoryStandsDownAfterNewNavigation();
+        await testQueuedBrowseCategoryStandsDownAfterNavigationRoundTrip();
+        await testAppNavigationMarksIntentBeforeSameViewShortCircuit();
         await testQueuedFilterBeatsLaterExamIndexRefresh();
+        await testLaterQueuedFilterBeatsEarlierExamIndexRefresh();
+        await testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization();
         await testExamIndexRefreshPreservesActiveSearch();
+        await testExamIndexRefreshPreemptsSameTokenLoad();
         await testExamIndexRefreshStandsDownDuringReset();
         await testExamIndexRefreshDuringResetRenderUsesLatestSnapshot();
         await testBrowseResetIntentClearsAfterRuntimeFailure();
