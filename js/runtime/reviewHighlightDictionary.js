@@ -456,7 +456,6 @@
             meaning: payload.meaning || payload.definition || '待补充释义',
             example: payload.example || '',
             note: [
-                payload.phonetic ? `音标: ${payload.phonetic}` : '',
                 payload.partOfSpeech ? `词性: ${payload.partOfSpeech}` : '',
                 payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${payload.selectedText}` : '',
                 payload.sourceLabel ? `来源: ${payload.sourceLabel}` : ''
@@ -464,6 +463,9 @@
             source: 'reading-highlight',
             updatedAt: now
         };
+        if (payload.phonetic) {
+            word.phonetic = payload.phonetic;
+        }
         if (typeof global.AppData.vocab.mergeListWords === 'function') {
             // mergeListWords 对已有词条只更新词典字段，保留用户笔记与学习进度。
             await global.AppData.vocab.mergeListWords({
