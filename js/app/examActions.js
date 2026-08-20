@@ -953,39 +953,75 @@
     function setBrowseFrequencyFilter(value) {
         const activeFilter = normalizeBrowseFrequencyFilter(value);
         global.__browseFrequencyFilter = activeFilter;
-        const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
-        if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
-            frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
-                const active = button.dataset && button.dataset.frequencyFilter === activeFilter;
-                if (button.classList && typeof button.classList.toggle === 'function') {
-                    button.classList.toggle('active', active);
-                }
-                if (typeof button.setAttribute === 'function') {
-                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-                }
-            });
+        try {
+            const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
+            if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
+                frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+                    const active = button.dataset && button.dataset.frequencyFilter === activeFilter;
+                    if (button.classList && typeof button.classList.toggle === 'function') {
+                        button.classList.toggle('active', active);
+                    }
+                    if (typeof button.setAttribute === 'function') {
+                        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn('[ExamActions] 同步题库频率筛选 UI 失败:', error);
         }
         return activeFilter;
     }
 
-    function resetBrowseFilterStateToAll(examIndex) {
-        global.__browseFilterMode = 'default';
-        global.__browsePath = null;
-        setBrowseFrequencyFilter('all');
+    function resetBrowseFunctionalStateToAll() {
+        try {
+            global.__browseFilterMode = 'default';
+            global.__browsePath = null;
+            setBrowseFrequencyFilter('all');
+        } catch (error) {
+            console.warn('[ExamActions] 重置题库功能状态失败:', error);
+            return false;
+        }
 
         const controller = global.browseController;
         if (controller) {
-            controller.currentMode = 'default';
-            controller.activeFilter = 'all';
-            if (Array.isArray(examIndex) && typeof controller.renderFilterButtons === 'function') {
-                controller.renderFilterButtons(examIndex);
+            try {
+                controller.currentMode = 'default';
+                controller.activeFilter = 'all';
+            } catch (error) {
+                console.warn('[ExamActions] 重置题库控制器状态失败:', error);
             }
         }
 
-        if (typeof global.setBrowseFilterState === 'function') {
-            global.setBrowseFilterState('all', 'all');
-        } else if (controller && typeof controller.setBrowseFilterState === 'function') {
-            controller.setBrowseFilterState('all', 'all');
+        try {
+            if (typeof global.setBrowseFilterState === 'function') {
+                global.setBrowseFilterState('all', 'all');
+            } else if (controller && typeof controller.setBrowseFilterState === 'function') {
+                controller.setBrowseFilterState('all', 'all');
+            } else {
+                console.warn('[ExamActions] 缺少题库分类状态适配器');
+                return false;
+            }
+        } catch (error) {
+            console.warn('[ExamActions] 重置题库分类状态失败:', error);
+            return false;
+        }
+        return true;
+    }
+
+    const browseFilterStateOwner = {
+        setFrequencyFilter: setBrowseFrequencyFilter,
+        resetToAll: resetBrowseFunctionalStateToAll
+    };
+
+    function resetBrowseFilterStateToAll(examIndex) {
+        if (!browseFilterStateOwner.resetToAll()) {
+            return false;
+        }
+
+        const controller = global.browseController;
+        if (controller && Array.isArray(examIndex)
+            && typeof controller.renderFilterButtons === 'function') {
+            controller.renderFilterButtons(examIndex);
         }
 
         const typeContainer = document.getElementById('type-filter-buttons');
@@ -1001,6 +1037,7 @@
                 }
             });
         }
+        return true;
     }
 
     function syncBrowseFilterUI(examIndex) {
@@ -1739,6 +1776,7 @@
         applyBrowseFrequencyFilter,
         normalizeBrowseFrequencyFilter,
         setBrowseFrequencyFilter,
+        browseFilterStateOwner,
         resetBrowseFilterStateToAll,
         launchReadingMemorizeExam,
         isReadingMemorizeBrowseMode,

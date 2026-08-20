@@ -5120,39 +5120,75 @@
     function setBrowseFrequencyFilter(value) {
         const activeFilter = normalizeBrowseFrequencyFilter(value);
         global.__browseFrequencyFilter = activeFilter;
-        const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
-        if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
-            frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
-                const active = button.dataset && button.dataset.frequencyFilter === activeFilter;
-                if (button.classList && typeof button.classList.toggle === 'function') {
-                    button.classList.toggle('active', active);
-                }
-                if (typeof button.setAttribute === 'function') {
-                    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-                }
-            });
+        try {
+            const frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
+            if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
+                frequencyContainer.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+                    const active = button.dataset && button.dataset.frequencyFilter === activeFilter;
+                    if (button.classList && typeof button.classList.toggle === 'function') {
+                        button.classList.toggle('active', active);
+                    }
+                    if (typeof button.setAttribute === 'function') {
+                        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn('[ExamActions] 同步题库频率筛选 UI 失败:', error);
         }
         return activeFilter;
     }
 
-    function resetBrowseFilterStateToAll(examIndex) {
-        global.__browseFilterMode = 'default';
-        global.__browsePath = null;
-        setBrowseFrequencyFilter('all');
+    function resetBrowseFunctionalStateToAll() {
+        try {
+            global.__browseFilterMode = 'default';
+            global.__browsePath = null;
+            setBrowseFrequencyFilter('all');
+        } catch (error) {
+            console.warn('[ExamActions] 重置题库功能状态失败:', error);
+            return false;
+        }
 
         const controller = global.browseController;
         if (controller) {
-            controller.currentMode = 'default';
-            controller.activeFilter = 'all';
-            if (Array.isArray(examIndex) && typeof controller.renderFilterButtons === 'function') {
-                controller.renderFilterButtons(examIndex);
+            try {
+                controller.currentMode = 'default';
+                controller.activeFilter = 'all';
+            } catch (error) {
+                console.warn('[ExamActions] 重置题库控制器状态失败:', error);
             }
         }
 
-        if (typeof global.setBrowseFilterState === 'function') {
-            global.setBrowseFilterState('all', 'all');
-        } else if (controller && typeof controller.setBrowseFilterState === 'function') {
-            controller.setBrowseFilterState('all', 'all');
+        try {
+            if (typeof global.setBrowseFilterState === 'function') {
+                global.setBrowseFilterState('all', 'all');
+            } else if (controller && typeof controller.setBrowseFilterState === 'function') {
+                controller.setBrowseFilterState('all', 'all');
+            } else {
+                console.warn('[ExamActions] 缺少题库分类状态适配器');
+                return false;
+            }
+        } catch (error) {
+            console.warn('[ExamActions] 重置题库分类状态失败:', error);
+            return false;
+        }
+        return true;
+    }
+
+    const browseFilterStateOwner = {
+        setFrequencyFilter: setBrowseFrequencyFilter,
+        resetToAll: resetBrowseFunctionalStateToAll
+    };
+
+    function resetBrowseFilterStateToAll(examIndex) {
+        if (!browseFilterStateOwner.resetToAll()) {
+            return false;
+        }
+
+        const controller = global.browseController;
+        if (controller && Array.isArray(examIndex)
+            && typeof controller.renderFilterButtons === 'function') {
+            controller.renderFilterButtons(examIndex);
         }
 
         const typeContainer = document.getElementById('type-filter-buttons');
@@ -5168,6 +5204,7 @@
                 }
             });
         }
+        return true;
     }
 
     function syncBrowseFilterUI(examIndex) {
@@ -5906,6 +5943,7 @@
         applyBrowseFrequencyFilter,
         normalizeBrowseFrequencyFilter,
         setBrowseFrequencyFilter,
+        browseFilterStateOwner,
         resetBrowseFilterStateToAll,
         launchReadingMemorizeExam,
         isReadingMemorizeBrowseMode,
@@ -14059,12 +14097,7 @@
          * 按文件夹筛选（频率模式）
          * @param {string} filterId - 筛选器ID
          */
-        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
-            if (renderRequestId != null
-                && typeof global.__isBrowseResultsRequestCurrent === 'function'
-                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
-                return;
-            }
+        filterExamsByFolder(examIndex = [], filterId = this.activeFilter) {
             const config = this.getCurrentModeConfig();
             const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
@@ -14072,12 +14105,10 @@
             // 允许“全部”入口只按 basePath 过滤（frequency-p1 无全量按钮）
             const isAllFilter = filterId === 'all';
             if (!folders && !isAllFilter) {
-                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
-                return;
+                return null;
             }
 
-            // 筛选题目
-            const filtered = (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
+            return (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
                 if (!exam || !exam.path) {
                     return false;
                 }
@@ -14096,9 +14127,30 @@
                     return exam.path.includes(folder);
                 });
             });
+        }
 
-            // 活动搜索必须继续约束当前文件夹结果。
-            if (typeof global.__renderBrowseResultsForState === 'function') {
+        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
+            if (renderRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                return;
+            }
+            const filtered = this.filterExamsByFolder(examIndex, filterId);
+            if (!Array.isArray(filtered)) {
+                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
+                return;
+            }
+
+            // 活动搜索必须继续约束当前文件夹结果；无查询时在控制器层终止
+            // 渲染，避免 main -> ExamActions -> controller -> main 的递归刷新。
+            const searchInput = document.getElementById('exam-search-input')
+                || (typeof document.querySelector === 'function'
+                    ? document.querySelector('.search-input')
+                    : null);
+            const hasActiveQuery = !!(searchInput
+                && typeof searchInput.value === 'string'
+                && searchInput.value.trim());
+            if (hasActiveQuery && typeof global.__renderBrowseResultsForState === 'function') {
                 return global.__renderBrowseResultsForState(filtered, renderRequestId);
             }
             this.displayFilteredExams(filtered);
@@ -19289,6 +19341,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 
 let browseResultsRequestId = 0;
 const browseUserResultsRequestRetains = new Map();
+let lastBrowseUserResultsRequestId = null;
 
 function beginBrowseResultsRequest() {
     browseResultsRequestId += 1;
@@ -19305,6 +19358,7 @@ function retainBrowseUserResultsRequest(requestId) {
     }
     const retainCount = browseUserResultsRequestRetains.get(requestId) || 0;
     browseUserResultsRequestRetains.set(requestId, retainCount + 1);
+    lastBrowseUserResultsRequestId = requestId;
     return requestId;
 }
 
@@ -19319,6 +19373,15 @@ function endBrowseUserResultsRequest(requestId) {
     const retainCount = browseUserResultsRequestRetains.get(requestId) || 0;
     if (retainCount <= 1) {
         browseUserResultsRequestRetains.delete(requestId);
+        if (retainCount === 1
+            && typeof window.dispatchEvent === 'function'
+            && typeof window.CustomEvent === 'function') {
+            try {
+                window.dispatchEvent(new window.CustomEvent('browseUserResultsRequestSettled', {
+                    detail: { requestId }
+                }));
+            } catch (_) { }
+        }
         return;
     }
     browseUserResultsRequestRetains.set(requestId, retainCount - 1);
@@ -19326,6 +19389,10 @@ function endBrowseUserResultsRequest(requestId) {
 
 function isBrowseUserResultsRequestInFlight(requestId) {
     return requestId != null && (browseUserResultsRequestRetains.get(requestId) || 0) > 0;
+}
+
+function isBrowseUserResultsRequest(requestId) {
+    return requestId != null && requestId === lastBrowseUserResultsRequestId;
 }
 
 window.__beginBrowseResultsRequest = beginBrowseResultsRequest;
@@ -19337,6 +19404,7 @@ window.__beginBrowseUserResultsRequest = beginBrowseUserResultsRequest;
 window.__retainBrowseUserResultsRequest = retainBrowseUserResultsRequest;
 window.__endBrowseUserResultsRequest = endBrowseUserResultsRequest;
 window.__isBrowseUserResultsRequestInFlight = isBrowseUserResultsRequestInFlight;
+window.__isBrowseUserResultsRequest = isBrowseUserResultsRequest;
 
 async function filterByType(type, examIndexOverride = null, renderRequestId = null) {
     const userRequestId = renderRequestId == null
@@ -19554,7 +19622,7 @@ async function initializeBrowseView(options = {}) {
     ]);
 
     if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-        return;
+        return null;
     }
 
     // 初始化 browseController
@@ -19579,7 +19647,24 @@ async function initializeBrowseView(options = {}) {
     if (!options.skipLoad) {
         await renderBrowseResultsForState(examIndex, activeRequestId);
     }
+    return examIndex;
 }
+
+async function activateBrowseView(options = {}) {
+    const activeRequestId = options.renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : options.renderRequestId;
+    const examIndex = await initializeBrowseView({
+        skipLoad: true,
+        renderRequestId: activeRequestId
+    });
+    if (!Array.isArray(examIndex) || !isBrowseResultsRequestCurrent(activeRequestId)) {
+        return false;
+    }
+    return renderBrowseResultsForState(examIndex, activeRequestId);
+}
+
+window.activateBrowseView = activateBrowseView;
 
 function normalizeBrowseFrequencyFilter(value) {
     const raw = String(value || '').trim().toLowerCase();
@@ -19668,6 +19753,10 @@ function updateBrowseFrequencyButtons(filter) {
     if (window.ExamActions && typeof window.ExamActions.setBrowseFrequencyFilter === 'function') {
         return window.ExamActions.setBrowseFrequencyFilter(activeFilter);
     }
+    const stateOwner = window.ExamActions && window.ExamActions.browseFilterStateOwner;
+    if (stateOwner && typeof stateOwner.setFrequencyFilter === 'function') {
+        return stateOwner.setFrequencyFilter(activeFilter);
+    }
     const container = document.getElementById('browse-frequency-filter-buttons');
     if (!container) {
         return activeFilter;
@@ -19684,17 +19773,11 @@ function resetBrowseFilterStateToAll() {
     if (window.ExamActions && typeof window.ExamActions.resetBrowseFilterStateToAll === 'function') {
         return window.ExamActions.resetBrowseFilterStateToAll();
     }
-    window.__browseFilterMode = 'default';
-    window.__browsePath = null;
-    updateBrowseFrequencyButtons('all');
-
-    if (window.browseController) {
-        window.browseController.currentMode = 'default';
-        window.browseController.activeFilter = 'all';
+    const stateOwner = window.ExamActions && window.ExamActions.browseFilterStateOwner;
+    if (stateOwner && typeof stateOwner.resetToAll === 'function') {
+        return stateOwner.resetToAll();
     }
-    if (typeof setBrowseFilterState === 'function') {
-        setBrowseFilterState('all', 'all');
-    }
+    return false;
 }
 
 function setupBrowseFrequencyFilterControl() {
@@ -20417,7 +20500,7 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
         : null;
 
     if (window.ExamFilterService && typeof window.ExamFilterService.filterExams === 'function') {
-        return window.ExamFilterService.filterExams(examIndex, {
+        const filtered = window.ExamFilterService.filterExams(examIndex, {
             activeCategory,
             activeExamType,
             browseFilterMode: window.__browseFilterMode,
@@ -20426,6 +20509,7 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
             sortMode: window.__browseSortMode,
             frequencyFilter: window.__browseFrequencyFilter
         });
+        return applyActiveBrowseFolderFilter(filtered);
     }
 
     let list = Array.isArray(examIndex) ? examIndex.slice() : [];
@@ -20439,9 +20523,32 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
         list = list.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(basePathFilter));
     }
     if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
-        return window.ExamActions.applyBrowsePostFilters(list, window.__browseSortMode, window.__browseFrequencyFilter);
+        list = window.ExamActions.applyBrowsePostFilters(
+            list,
+            window.__browseSortMode,
+            window.__browseFrequencyFilter
+        );
     }
-    return list;
+    return applyActiveBrowseFolderFilter(list);
+}
+
+function applyActiveBrowseFolderFilter(exams) {
+    const list = Array.isArray(exams) ? exams : [];
+    const controller = window.browseController;
+    if (!controller
+        || typeof controller.getCurrentModeConfig !== 'function'
+        || typeof controller.filterExamsByFolder !== 'function') {
+        return list;
+    }
+    const config = controller.getCurrentModeConfig();
+    if (!config || config.filterLogic !== 'folder-based') {
+        return list;
+    }
+    const folderFiltered = controller.filterExamsByFolder(
+        list,
+        controller.activeFilter || 'all'
+    );
+    return Array.isArray(folderFiltered) ? folderFiltered : list;
 }
 
 async function performSearch(query, renderRequestId = null, examIndexOverride = null) {

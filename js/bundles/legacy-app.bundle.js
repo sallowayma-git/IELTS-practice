@@ -32,6 +32,108 @@
 
   ensureCompatPatch(window);
 
+  function getBrowseFilterStateOwner() {
+    var actions = window.ExamActions;
+    var owner = actions && actions.browseFilterStateOwner;
+    return owner && typeof owner.resetToAll === 'function' ? owner : null;
+  }
+
+  function invokeBrowseResetDelegate(delegate, context, label) {
+    if (typeof delegate !== 'function') {
+      return Promise.resolve(false);
+    }
+    try {
+      return Promise.resolve(delegate.call(context)).then(function (result) {
+        return result !== false;
+      }).catch(function (error) {
+        console.warn('[Fallback] ' + label + '失败:', error);
+        return false;
+      });
+    } catch (error) {
+      console.warn('[Fallback] ' + label + '失败:', error);
+      return Promise.resolve(false);
+    }
+  }
+
+  function ensureBrowseFilterStateOwner() {
+    var owner = getBrowseFilterStateOwner();
+    if (owner) {
+      return Promise.resolve({ owner: owner, loaded: true });
+    }
+    var loading = null;
+    try {
+      if (window.AppEntry && typeof window.AppEntry.ensureBrowseRuntimeGroup === 'function') {
+        loading = window.AppEntry.ensureBrowseRuntimeGroup();
+      } else if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        loading = window.AppLazyLoader.ensureGroup('browse-runtime');
+      }
+    } catch (error) {
+      console.warn('[Fallback] 加载题库状态 owner 失败:', error);
+      return Promise.resolve(null);
+    }
+    if (!loading) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(loading).then(function () {
+      var loadedOwner = getBrowseFilterStateOwner();
+      return loadedOwner ? { owner: loadedOwner, loaded: true } : null;
+    }).catch(function (error) {
+      console.warn('[Fallback] 加载题库状态 owner 失败:', error);
+      return null;
+    });
+  }
+
+  function resetBrowseFunctionalStateForFallback() {
+    var delegates = [
+      {
+        fn: window.resetBrowseFilterStateToAll,
+        context: window,
+        label: '重置题库筛选状态'
+      },
+      {
+        fn: window.ExamActions && window.ExamActions.resetBrowseFilterStateToAll,
+        context: window.ExamActions,
+        label: '通过题库状态 owner 重置'
+      }
+    ];
+
+    function tryDelegate(index) {
+      if (index >= delegates.length) {
+        var existingOwner = getBrowseFilterStateOwner();
+        if (existingOwner) {
+          return invokeBrowseResetDelegate(
+            existingOwner.resetToAll,
+            existingOwner,
+            '通过稳定题库状态 owner 重置'
+          ).then(function (succeeded) {
+            return { succeeded: succeeded, ownerLoaded: false };
+          });
+        }
+        return ensureBrowseFilterStateOwner().then(function (loaded) {
+          if (!loaded || !loaded.owner) {
+            return { succeeded: false, ownerLoaded: false };
+          }
+          return invokeBrowseResetDelegate(
+            loaded.owner.resetToAll,
+            loaded.owner,
+            '通过延迟加载的题库状态 owner 重置'
+          ).then(function (succeeded) {
+            return { succeeded: succeeded, ownerLoaded: loaded.loaded === true };
+          });
+        });
+      }
+      var candidate = delegates[index];
+      return invokeBrowseResetDelegate(candidate.fn, candidate.context, candidate.label)
+        .then(function (succeeded) {
+          return succeeded
+            ? { succeeded: true, ownerLoaded: false }
+            : tryDelegate(index + 1);
+        });
+    }
+
+    return tryDelegate(0);
+  }
+
   function runRepeatedBrowseReset(viewName) {
     if (viewName !== 'browse') {
       return false;
@@ -100,48 +202,21 @@
         }
       }
 
+      var browseFunctionalReset = null;
+      var browseResetBarrierRegistered = false;
       if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
-        window.currentCategory = 'all';
-        window.currentExamType = 'all';
-        var browseFilterStateReset = false;
-        if (typeof window.resetBrowseFilterStateToAll === 'function') {
+        browseFunctionalReset = resetBrowseFunctionalStateForFallback();
+        if (window.AppEntry
+          && typeof window.AppEntry.registerBrowseFunctionalResetBarrier === 'function') {
           try {
-            window.resetBrowseFilterStateToAll();
-            browseFilterStateReset = true;
-          } catch (error) {
-            console.warn('[Fallback] 重置题库筛选状态失败:', error);
-          }
-        }
-        if (!browseFilterStateReset && window.ExamActions
-          && typeof window.ExamActions.resetBrowseFilterStateToAll === 'function') {
-          try {
-            window.ExamActions.resetBrowseFilterStateToAll();
-            browseFilterStateReset = true;
-          } catch (error) {
-            console.warn('[Fallback] 通过题库状态 owner 重置失败:', error);
-          }
-        }
-        if (!browseFilterStateReset) {
-          if (typeof window.setBrowseFilterState === 'function') {
-            try {
-              window.setBrowseFilterState('all', 'all');
-            } catch (error) {
-              console.warn('[Fallback] 重置题库分类状态失败:', error);
-            }
-          }
-          if (window.browseController) {
-            window.browseController.currentMode = 'default';
-            window.browseController.activeFilter = 'all';
-          }
-          var frequencyContainer = document.getElementById('browse-frequency-filter-buttons');
-          if (frequencyContainer && typeof frequencyContainer.querySelectorAll === 'function') {
-            Array.prototype.forEach.call(
-              frequencyContainer.querySelectorAll('[data-frequency-filter]'),
-              function (button) {
-                if (button.classList) button.classList.remove('active');
-                if (typeof button.setAttribute === 'function') button.setAttribute('aria-pressed', 'false');
-              }
+            window.AppEntry.registerBrowseFunctionalResetBarrier(
+              Promise.resolve(browseFunctionalReset).then(function (result) {
+                return !!(result && result.succeeded === true);
+              })
             );
+            browseResetBarrierRegistered = true;
+          } catch (error) {
+            console.warn('[Fallback] 注册题库重置屏障失败:', error);
           }
         }
         if (window.browseStateManager && typeof window.browseStateManager.clearSearchState === 'function') {
@@ -160,10 +235,36 @@
       }
       var browseRefresh = null;
       if (normalized === 'browse') {
-        if (typeof window.refreshBrowseResults === 'function') {
-          browseRefresh = window.refreshBrowseResults();
-        } else if (typeof window.loadExamList === 'function') {
-          browseRefresh = window.loadExamList();
+        var runBrowseRefresh = function runBrowseRefresh() {
+          if (resetCategory === false && typeof window.activateBrowseView === 'function') {
+            return window.activateBrowseView();
+          }
+          if (typeof window.refreshBrowseResults === 'function') {
+            return window.refreshBrowseResults();
+          }
+          if (typeof window.loadExamList === 'function') {
+            return window.loadExamList();
+          }
+          return false;
+        };
+        if (browseFunctionalReset) {
+          browseRefresh = Promise.resolve(browseFunctionalReset).then(function (resetResult) {
+            if (!resetResult || resetResult.succeeded !== true) {
+              console.warn('[Fallback] 题库功能状态未能安全重置，跳过刷新');
+              return false;
+            }
+            if (resetResult.ownerLoaded === true
+              && browseResetBarrierRegistered
+              && window.AppEntry
+              && typeof window.AppEntry.ensureBrowseGroup === 'function') {
+              return Promise.resolve(window.AppEntry.ensureBrowseGroup()).then(function () {
+                return true;
+              });
+            }
+            return runBrowseRefresh();
+          });
+        } else {
+          browseRefresh = runBrowseRefresh();
         }
         if (browseRefresh && typeof browseRefresh.then === 'function') {
           browseRefresh = Promise.resolve(browseRefresh).catch(function (error) {

@@ -462,7 +462,7 @@ test('owner reset without an index preserves controller buttons and clears contr
 
 test('one bubbling Browse click refreshes through the controller only once', () => {
     const harness = createHarness();
-    const browseView = { classList: createClassList(['active']) };
+    const browseView = { classList: createClassList() };
     const originalGetElementById = harness.window.document.getElementById.bind(harness.window.document);
     harness.window.document.getElementById = (id) => {
         if (id === 'browse-view') return browseView;
@@ -471,11 +471,18 @@ test('one bubbling Browse click refreshes through the controller only once', () 
     loadScript('js/views/legacyViewBundle.js', harness.context);
     loadScript('js/app.js', harness.context);
     const app = vm.runInContext('new ExamSystemApp()', harness.context);
-    let appBrowseActivations = 0;
-    let controllerRefreshes = 0;
-    harness.window.initializeBrowseView = () => {
-        appBrowseActivations += 1;
+    let activationSetups = 0;
+    let terminalRenders = 0;
+    let unexpectedAppActivations = 0;
+    harness.window.activateBrowseView = () => {
+        activationSetups += 1;
+        terminalRenders += 1;
+        return Promise.resolve();
     };
+    harness.window.initializeBrowseView = () => {
+        unexpectedAppActivations += 1;
+    };
+    loadScript('js/boot-fallbacks.js', harness.context);
     app.currentView = 'overview';
     app.setupEventListeners();
 
@@ -494,9 +501,8 @@ test('one bubbling Browse click refreshes through the controller only once', () 
     };
     const controller = new harness.window.LegacyNavigationController({
         container: navRoot,
-        onNavigate() {
-            controllerRefreshes += 1;
-            browseView.classList.add('active');
+        onNavigate(viewName) {
+            harness.window.showView(viewName, false);
         }
     });
     controller.mount(navRoot);
@@ -521,8 +527,9 @@ test('one bubbling Browse click refreshes through the controller only once', () 
 
     assert.equal(event.__browseNavigationHandled, true);
     assert.equal(app.currentView, 'browse');
-    assert.equal(controllerRefreshes, 1);
-    assert.equal(appBrowseActivations, 0, 'the bubbled document handler must not start a second Browse render');
+    assert.equal(activationSetups, 1, 'the controller path must run first-activation setup exactly once');
+    assert.equal(terminalRenders, 1, 'first activation must produce one terminal render');
+    assert.equal(unexpectedAppActivations, 0, 'the bubbled document handler must not start a second activation');
     assert.equal(harness.searchInput.value, 'ocean', 'ordinary Browse navigation must preserve the active query');
 });
 

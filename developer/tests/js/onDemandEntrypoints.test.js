@@ -213,6 +213,37 @@ async function testRandomPracticeEnsuresBrowseRuntime(harness) {
     });
 }
 
+async function testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView() {
+    const harness = createHarness();
+    let initializationCalls = 0;
+    harness.windowStub.document.readyState = 'loading';
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        initializationCalls += 1;
+        return Promise.resolve();
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    assert.strictEqual(typeof harness.windowStub.AppEntry.ensureBrowseRuntimeGroup, 'function');
+    await harness.windowStub.AppEntry.ensureBrowseRuntimeGroup();
+
+    assert.strictEqual(initializationCalls, 0, 'raw owner loading must not synchronize or render the active view');
+    const resetBarrier = deferred();
+    harness.windowStub.AppEntry.registerBrowseFunctionalResetBarrier(resetBarrier.promise);
+    const synchronizedGroup = harness.windowStub.AppEntry.ensureBrowseGroup();
+    await flushMicrotasks();
+    assert.strictEqual(initializationCalls, 0, 'active-view synchronization must wait for functional reset');
+    resetBarrier.resolve(true);
+    await synchronizedGroup;
+    assert.strictEqual(initializationCalls, 1, 'the safe reset barrier must preserve first-activation setup');
+    assert.ok(harness.ensureCalls.includes('browse-runtime'));
+    recordResult('原始 Browse runtime 加载等待功能重置后再同步视图', true);
+}
+
 async function testFallbackQueuesRepeatBrowseResetDuringLazyLoad() {
     const harness = createHarness();
     let fallbackHandler = null;
@@ -782,9 +813,12 @@ async function createHotExamIndexRefreshHarness() {
 
     loadScript('js/app/main-entry.js', harness.context);
     await harness.windowStub.AppEntry.ensureBrowseGroup();
-    harness.windowStub.loadExamList = function loadExamList(index, requestId) {
+    harness.windowStub.__renderBrowseResultsForState = function renderBrowseResultsForState(index, requestId) {
         backgroundLoads.push([index.map((exam) => exam.id), requestId]);
         return index;
+    };
+    harness.windowStub.loadExamList = function unexpectedLegacyRefresh() {
+        throw new Error('the deferred refresh must use the shared state renderer');
     };
     harness.inputState.value = '';
 
@@ -799,6 +833,10 @@ async function createHotExamIndexRefreshHarness() {
         },
         endUserRequest(requestId) {
             inFlightUserRequests.delete(requestId);
+            const settled = listeners.get('browseUserResultsRequestSettled');
+            if (typeof settled === 'function') {
+                settled({ detail: { requestId } });
+            }
         },
         getResultsRequestId() {
             return resultsRequestId;
@@ -816,7 +854,13 @@ async function testHotFilterBeatsLaterExamIndexRefresh() {
     assert.strictEqual(state.getResultsRequestId(), userRequestId, 'background refresh must not revoke an active hot filter');
     assert.deepStrictEqual(state.backgroundLoads, []);
     state.endUserRequest(userRequestId);
-    recordResult('热筛选先发生时题库索引刷新让行', true, { userRequestId });
+    await flushMicrotasks(32);
+    assert.deepStrictEqual(
+        state.backgroundLoads,
+        [[['background-index'], userRequestId + 1]],
+        'the fresh index must replay after the retained user filter settles'
+    );
+    recordResult('热筛选完成后重放最新题库索引', true, { userRequestId });
 }
 
 async function testHotFilterAfterEventReceiptStillWins() {
@@ -833,7 +877,34 @@ async function testHotFilterAfterEventReceiptStillWins() {
     );
     assert.deepStrictEqual(state.backgroundLoads, []);
     state.endUserRequest(userRequestId);
-    recordResult('题库索引事件先登记时后续热筛选仍优先', true, { userRequestId });
+    await flushMicrotasks(32);
+    assert.deepStrictEqual(
+        state.backgroundLoads,
+        [[['background-index'], userRequestId + 1]],
+        'an event captured before the hot filter must replay its fresh snapshot after settlement'
+    );
+    recordResult('先登记的题库索引在热筛选完成后重放', true, { userRequestId });
+}
+
+async function testRetainedUserRequestCoalescesLatestExamIndexRefresh() {
+    const state = await createHotExamIndexRefreshHarness();
+    const userRequestId = state.beginUserRequest();
+
+    state.listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'index-b' }] } });
+    await flushMicrotasks(16);
+    state.listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'index-c' }] } });
+    await flushMicrotasks(32);
+
+    assert.deepStrictEqual(state.backgroundLoads, [], 'retained user work must not be preempted');
+    state.endUserRequest(userRequestId);
+    await flushMicrotasks(32);
+
+    assert.deepStrictEqual(
+        state.backgroundLoads,
+        [[['index-c'], userRequestId + 1]],
+        'only the latest deferred index snapshot may replay'
+    );
+    recordResult('热筛选期间题库索引刷新合并到最新快照', true, { userRequestId });
 }
 
 async function testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization() {
@@ -890,6 +961,116 @@ async function testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization() 
     );
     assert.strictEqual(resultsRequestId, 2);
     recordResult('Browse 初始化期间仅重放最新题库索引', true, { renders, resultsRequestId });
+}
+
+async function testExamIndexRefreshStopsAfterNavigationAwayDuringRuntimeLoad() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const listeners = new Map();
+    const renders = [];
+    let activeView = 'browse';
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: `${activeView}-view` };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'browse-index' }] } });
+    activeView = 'overview';
+    harness.windowStub.__markAppNavigationIntent();
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        throw new Error('inactive Browse must not initialize');
+    };
+    harness.windowStub.__renderBrowseResultsForState = function renderBrowseResultsForState(index) {
+        renders.push(index.map((exam) => exam.id));
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks(32);
+
+    assert.deepStrictEqual(renders, []);
+    assert.strictEqual(resultsRequestId, 0, 'navigation away must prevent a hidden refresh token');
+    recordResult('Browse 离开后丢弃等待 runtime 的题库索引刷新', true);
+}
+
+async function testSettledHotRequestReplaysIndexAfterRuntimeBecomesReady() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const listeners = new Map();
+    const renders = [];
+    const inFlightUserRequests = new Set();
+    let lastUserRequestId = null;
+    let resultsRequestId = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.addEventListener = function addEventListener(name, listener) {
+        listeners.set(name, listener);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseUserResultsRequestInFlight = function isUserRequestInFlight(requestId) {
+        return inFlightUserRequests.has(requestId);
+    };
+    harness.windowStub.__isBrowseUserResultsRequest = function isUserRequest(requestId) {
+        return requestId === lastUserRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        return Promise.resolve();
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    listeners.get('examIndexLoaded')({ detail: { index: [{ id: 'fresh-after-ready' }] } });
+    const userRequestId = harness.windowStub.__beginBrowseResultsRequest();
+    lastUserRequestId = userRequestId;
+    inFlightUserRequests.add(userRequestId);
+    inFlightUserRequests.delete(userRequestId);
+    const settled = listeners.get('browseUserResultsRequestSettled');
+    settled({ detail: { requestId: userRequestId } });
+    harness.windowStub.__renderBrowseResultsForState = function renderBrowseResultsForState(index, requestId) {
+        renders.push([index.map((exam) => exam.id), requestId]);
+        return index;
+    };
+
+    runtimeReady.resolve(true);
+    await flushMicrotasks(48);
+
+    assert.deepStrictEqual(renders, [[['fresh-after-ready'], userRequestId + 1]]);
+    assert.strictEqual(resultsRequestId, userRequestId + 1);
+    recordResult('runtime 就绪后重放已完成热请求期间的新索引', true, { userRequestId });
 }
 
 async function testExamIndexRefreshPreservesActiveSearch() {
@@ -1793,6 +1974,7 @@ async function testSuiteRecoveryCancelDoesNotMutateSession() {
 async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
+        await testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView();
         await testFallbackQueuesRepeatBrowseResetDuringLazyLoad();
         await testColdRepeatResetPreemptsBrowseSynchronization();
         await testDirectResetInvalidatesPendingColdBrowseLoad();
@@ -1804,7 +1986,10 @@ async function main() {
         await testLaterQueuedFilterBeatsEarlierExamIndexRefresh();
         await testHotFilterBeatsLaterExamIndexRefresh();
         await testHotFilterAfterEventReceiptStillWins();
+        await testRetainedUserRequestCoalescesLatestExamIndexRefresh();
         await testLatestQueuedExamIndexRefreshWinsDuringBrowseInitialization();
+        await testExamIndexRefreshStopsAfterNavigationAwayDuringRuntimeLoad();
+        await testSettledHotRequestReplaysIndexAfterRuntimeBecomesReady();
         await testExamIndexRefreshPreservesActiveSearch();
         await testExamIndexRefreshPreemptsSameTokenLoad();
         await testExamIndexRefreshStandsDownDuringReset();

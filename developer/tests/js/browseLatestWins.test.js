@@ -80,6 +80,7 @@ const documentStub = {
 };
 
 const rendered = [];
+const dispatchedWindowEvents = [];
 const browseState = { category: 'all', type: 'all' };
 const resolverQueue = [];
 const quietConsole = { log() {}, warn() {}, error() {} };
@@ -108,7 +109,7 @@ const sandbox = {
     cancelAnimationFrame: clearTimeout,
     addEventListener() {},
     removeEventListener() {},
-    dispatchEvent() {},
+    dispatchEvent(event) { dispatchedWindowEvents.push(event); },
     confirm() { return false; },
     alert() {},
     setBrowseFilterState(category, type) {
@@ -184,6 +185,7 @@ resolverQueue.push(filterFirst, filterSecond);
 const staleFilter = sandbox.filterByType('reading');
 const latestFilter = sandbox.filterByType('all');
 const latestFilterRequestId = sandbox.__getBrowseResultsRequestId();
+dispatchedWindowEvents.length = 0;
 assert.strictEqual(
     sandbox.__isBrowseUserResultsRequestInFlight(latestFilterRequestId),
     true,
@@ -210,6 +212,11 @@ const allExams = [
 filterSecond.resolve(allExams);
 await latestFilter;
 assert.strictEqual(sandbox.__isBrowseUserResultsRequestInFlight(latestFilterRequestId), false);
+assert.ok(
+    dispatchedWindowEvents.some((event) => event.type === 'browseUserResultsRequestSettled'
+        && event.detail.requestId === latestFilterRequestId),
+    'the final retain release must dispatch the production settlement notification'
+);
 filterFirst.resolve(allExams);
 await staleFilter;
 
@@ -343,6 +350,43 @@ sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams) {
     return result;
 };
 
+rendered.length = 0;
+searchInput.value = '';
+const firstActivationIndex = deferred();
+resolverQueue.push(firstActivationIndex);
+let firstActivationControllerSetups = 0;
+let firstActivationListeningSyncs = 0;
+const previousControllerInitialize = sandbox.browseController.initialize;
+const previousControllerContainer = sandbox.browseController.buttonContainer;
+const previousPersistedFilter = sandbox.getPersistedBrowseFilter;
+const previousListeningAvailabilityRefresh = sandbox.refreshListeningAvailabilityUI;
+sandbox.browseController.buttonContainer = null;
+sandbox.browseController.initialize = function initializeBrowseController(containerId) {
+    firstActivationControllerSetups += 1;
+    this.buttonContainer = containerId === 'type-filter-buttons' ? typeButtonContainer : null;
+    return true;
+};
+sandbox.getPersistedBrowseFilter = () => ({ category: 'P2', type: 'reading' });
+sandbox.refreshListeningAvailabilityUI = () => {
+    firstActivationListeningSyncs += 1;
+};
+sandbox.showView('overview', false);
+const firstActivation = sandbox.showView('browse', false);
+firstActivationIndex.resolve([
+    { id: 'p2-reading', title: 'P2 Reading', category: 'P2', type: 'reading' },
+    { id: 'p2-listening', title: 'P2 Listening', category: 'P2', type: 'listening' }
+]);
+await firstActivation;
+assert.strictEqual(firstActivationControllerSetups, 1, 'first Browse activation must initialize its controller');
+assert.strictEqual(firstActivationListeningSyncs, 1, 'first Browse activation must refresh listening availability');
+assert.strictEqual(browseState.category, 'P2');
+assert.strictEqual(browseState.type, 'reading');
+assert.deepStrictEqual(rendered, [['p2-reading']], 'first activation must render once after restoring persisted scope');
+sandbox.browseController.initialize = previousControllerInitialize;
+sandbox.browseController.buttonContainer = previousControllerContainer;
+sandbox.getPersistedBrowseFilter = previousPersistedFilter;
+sandbox.refreshListeningAvailabilityUI = previousListeningAvailabilityRefresh;
+
 searchInput.value = 'stale-query';
 sandbox.__browseFilterMode = 'frequency-p1';
 sandbox.__browsePath = 'ReadingPractice/P1';
@@ -368,6 +412,45 @@ assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening']);
 sandbox.resetBrowseFilterStateToAll = mainResetBrowseFilterStateToAll;
 sandbox.updateBrowseFrequencyButtons = mainUpdateBrowseFrequencyButtons;
 searchInput.value = '';
+
+rendered.length = 0;
+sandbox.__browseFilterMode = 'frequency-p1';
+sandbox.__browsePath = 'ListeningPractice/100 P1';
+sandbox.__browseFrequencyFilter = 'high';
+sandbox.browseController.currentMode = 'frequency-p1';
+sandbox.browseController.activeFilter = 'high';
+const throwingMainReset = sandbox.resetBrowseFilterStateToAll;
+const throwingPublicOwnerReset = sandbox.ExamActions.resetBrowseFilterStateToAll;
+sandbox.resetBrowseFilterStateToAll = () => {
+    throw new Error('main reset unavailable');
+};
+sandbox.ExamActions.resetBrowseFilterStateToAll = () => {
+    throw new Error('public owner reset unavailable');
+};
+const terminalOwnerIndex = deferred();
+resolverQueue.push(terminalOwnerIndex);
+const terminalResetStates = [];
+const ownerAwareLoadExamList = sandbox.ExamActions.loadExamList;
+sandbox.ExamActions.loadExamList = function captureTerminalResetState(exams) {
+    terminalResetStates.push({
+        mode: sandbox.__browseFilterMode,
+        path: sandbox.__browsePath,
+        frequency: sandbox.__browseFrequencyFilter
+    });
+    return ownerAwareLoadExamList.call(this, exams);
+};
+const terminalOwnerReset = sandbox.showView('browse', true);
+terminalOwnerIndex.resolve(allExams);
+assert.notStrictEqual(await terminalOwnerReset, false);
+assert.deepStrictEqual(
+    terminalResetStates,
+    [{ mode: 'default', path: null, frequency: 'all' }],
+    'the loader must only run after the stable functional-state owner resets all globals'
+);
+assert.deepStrictEqual(rendered.at(-1), ['reading', 'listening']);
+sandbox.ExamActions.loadExamList = ownerAwareLoadExamList;
+sandbox.resetBrowseFilterStateToAll = throwingMainReset;
+sandbox.ExamActions.resetBrowseFilterStateToAll = throwingPublicOwnerReset;
 
 const failedReentryIndex = deferred();
 resolverQueue.push(failedReentryIndex);
@@ -426,6 +509,230 @@ assert.deepStrictEqual(
     ['reading', 'listening'],
     'an empty reset prefetch must never render the module-local [] default'
 );
+
+const previousGetElementByIdForComposition = documentStub.getElementById.bind(documentStub);
+const previousCreateElementForComposition = documentStub.createElement.bind(documentStub);
+const compositionButtons = [];
+const compositionButtonContainer = {
+    classList: createClassList(),
+    appendChild(button) { compositionButtons.push(button); },
+    querySelectorAll(selector) {
+        if (selector.includes('listening')) {
+            return compositionButtons.filter((button) => button.dataset.filterType === 'listening');
+        }
+        return compositionButtons;
+    }
+};
+Object.defineProperty(compositionButtonContainer, 'innerHTML', {
+    set() { compositionButtons.length = 0; }
+});
+documentStub.getElementById = function getCompositionElementById(id) {
+    if (id === 'type-filter-buttons') return compositionButtonContainer;
+    return previousGetElementByIdForComposition(id);
+};
+documentStub.createElement = function createCompositionElement(tagName) {
+    if (tagName === 'button') {
+        return {
+            className: '',
+            textContent: '',
+            dataset: {},
+            classList: createClassList(),
+            addEventListener() {},
+            setAttribute() {},
+            appendChild() {}
+        };
+    }
+    return previousCreateElementForComposition(tagName);
+};
+sandbox.appStateService = {
+    setBrowseFilter(filter) {
+        browseState.category = filter.category;
+        browseState.type = filter.type;
+    },
+    getBrowseFilter() {
+        return { category: browseState.category, type: browseState.type };
+    },
+    setFilteredExams() {}
+};
+const browseControllerSource = fs.readFileSync(path.join(repoRoot, 'js/app/browseController.js'), 'utf8');
+vm.runInContext(browseControllerSource, context, { filename: 'js/app/browseController.js' });
+const productionBrowseController = sandbox.browseController;
+const frequencyIndex = [
+    {
+        id: 'p1-ultra', title: 'Shared Ultra', searchText: 'shared ultra', category: 'P1', type: 'listening',
+        path: 'ListeningPractice/100 P1/P1 超高频（43）/ultra.html'
+    },
+    {
+        id: 'p1-high', title: 'Shared High', searchText: 'shared high', category: 'P1', type: 'listening',
+        path: 'ListeningPractice/100 P1/P1 高频（35）/high.html'
+    },
+    {
+        id: 'p1-medium', title: 'Shared Medium', searchText: 'shared medium', category: 'P1', type: 'listening',
+        path: 'ListeningPractice/100 P1/P1 中频(48)/medium.html'
+    },
+    {
+        id: 'p4-numbered', title: 'Shared P4', searchText: 'shared p4', category: 'P4', type: 'listening',
+        path: 'ListeningPractice/100 P4/1-10/p4.html'
+    }
+];
+const compositionRenders = [];
+sandbox.displayExams = (exams) => {
+    compositionRenders.push(Array.from(exams, (exam) => exam.id));
+};
+sandbox.ExamActions.displayExams = sandbox.displayExams;
+sandbox.setFilteredExamsState = () => {};
+sandbox.handlePostExamListRender = () => {};
+let compositionLoadCalls = 0;
+sandbox.ExamActions.loadExamList = function guardedProductionLoad(exams) {
+    compositionLoadCalls += 1;
+    assert.ok(compositionLoadCalls <= 4, 'frequency-mode rendering must not recurse');
+    return productionLoadExamList.call(this, exams);
+};
+sandbox.__browseFilterMode = 'default';
+sandbox.__browsePath = null;
+sandbox.__browseFrequencyFilter = 'all';
+productionBrowseController.initialize('type-filter-buttons', frequencyIndex);
+
+for (const scenario of [
+    {
+        mode: 'frequency-p1',
+        path: 'ListeningPractice/100 P1',
+        filter: 'ultra-high',
+        expected: ['p1-ultra']
+    },
+    {
+        mode: 'frequency-p4',
+        path: 'ListeningPractice/100 P4',
+        filter: 'all',
+        expected: ['p4-numbered']
+    }
+]) {
+    compositionRenders.length = 0;
+    compositionLoadCalls = 0;
+    searchInput.value = '';
+    sandbox.__browseFilterMode = scenario.mode;
+    sandbox.__browsePath = scenario.path;
+    productionBrowseController.currentMode = scenario.mode;
+    productionBrowseController.activeFilter = scenario.filter;
+    const requestId = sandbox.__beginBrowseResultsRequest();
+
+    await sandbox.__renderBrowseResultsForState(frequencyIndex, requestId);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(compositionLoadCalls, 1, `${scenario.mode} must enter ExamActions once`);
+    assert.strictEqual(sandbox.__getBrowseResultsRequestId(), requestId);
+    assert.deepStrictEqual(compositionRenders, [scenario.expected]);
+}
+
+compositionRenders.length = 0;
+compositionLoadCalls = 0;
+searchInput.value = 'shared';
+sandbox.resolveActiveLibraryIndex = async () => frequencyIndex;
+sandbox.getPersistedBrowseFilter = () => ({ category: 'P1', type: 'listening' });
+await sandbox.applyBrowseFilter(
+    'P1',
+    'listening',
+    'frequency-p1',
+    'ListeningPractice/100 P1'
+);
+assert.strictEqual(productionBrowseController.activeFilter, 'ultra-high');
+assert.deepStrictEqual(compositionRenders, [['p1-ultra']], 'mode entry search must honor the active folder');
+
+compositionRenders.length = 0;
+await productionBrowseController.handleFilterClick('high', frequencyIndex);
+assert.deepStrictEqual(compositionRenders, [['p1-high']]);
+compositionRenders.length = 0;
+sandbox.showView('overview', false);
+await sandbox.showView('browse', false);
+assert.strictEqual(searchInput.value, 'shared');
+assert.strictEqual(productionBrowseController.activeFilter, 'high');
+assert.deepStrictEqual(
+    compositionRenders,
+    [['p1-high']],
+    'ordinary Browse re-entry must preserve the live query and active folder subfilter'
+);
+
+const savedResetDelegate = sandbox.resetBrowseFilterStateToAll;
+const savedExamActions = sandbox.ExamActions;
+const savedEnsureBrowseGroup = sandbox.ensureBrowseGroup;
+const savedAppEntry = sandbox.AppEntry;
+const savedAppLazyLoader = sandbox.AppLazyLoader;
+const savedRefreshBrowseResults = sandbox.refreshBrowseResults;
+const savedLoadExamList = sandbox.loadExamList;
+const coldResetOrder = [];
+let unsafeBrowseGroupCalls = 0;
+sandbox.resetBrowseFilterStateToAll = undefined;
+sandbox.ExamActions = undefined;
+sandbox.refreshBrowseResults = undefined;
+sandbox.ensureBrowseGroup = () => {
+    unsafeBrowseGroupCalls += 1;
+    throw new Error('the synchronizing group loader must not run before reset');
+};
+sandbox.AppEntry = {
+    ...(savedAppEntry || {}),
+    registerBrowseFunctionalResetBarrier(resetPromise) {
+        coldResetOrder.push('barrier');
+        return resetPromise;
+    },
+    async ensureBrowseRuntimeGroup() {
+        coldResetOrder.push('ensure');
+        sandbox.ExamActions = {
+            browseFilterStateOwner: {
+                resetToAll() {
+                    coldResetOrder.push('owner');
+                    sandbox.__browseFilterMode = 'default';
+                    sandbox.__browsePath = null;
+                    sandbox.__browseFrequencyFilter = 'all';
+                    return true;
+                }
+            }
+        };
+    },
+    async ensureBrowseGroup() {
+        coldResetOrder.push('activate');
+        return sandbox.loadExamList();
+    }
+};
+sandbox.loadExamList = () => {
+    coldResetOrder.push('load');
+    return [];
+};
+sandbox.__browseFilterMode = 'frequency-p1';
+sandbox.__browsePath = 'ReadingPractice/P1';
+sandbox.__browseFrequencyFilter = 'high';
+assert.notStrictEqual(await sandbox.showView('browse', true), false);
+assert.deepStrictEqual(
+    coldResetOrder,
+    ['barrier', 'ensure', 'owner', 'activate', 'load'],
+    'a cold reset must run its owner before the synchronized activation can render'
+);
+assert.strictEqual(unsafeBrowseGroupCalls, 0, 'cold reset must not invoke the synchronizing Browse loader');
+
+let unsafeFallbackLoads = 0;
+sandbox.ExamActions = undefined;
+sandbox.ensureBrowseGroup = undefined;
+sandbox.AppEntry = undefined;
+sandbox.AppLazyLoader = undefined;
+sandbox.loadExamList = () => {
+    unsafeFallbackLoads += 1;
+    return [];
+};
+sandbox.__browseFilterMode = 'frequency-p1';
+sandbox.__browsePath = 'ReadingPractice/P1';
+sandbox.__browseFrequencyFilter = 'high';
+assert.strictEqual(await sandbox.showView('browse', true), false);
+assert.strictEqual(
+    unsafeFallbackLoads,
+    0,
+    'an irrecoverable reset must fail closed instead of loading with stale functional state'
+);
+sandbox.resetBrowseFilterStateToAll = savedResetDelegate;
+sandbox.ExamActions = savedExamActions;
+sandbox.ensureBrowseGroup = savedEnsureBrowseGroup;
+sandbox.AppEntry = savedAppEntry;
+sandbox.AppLazyLoader = savedAppLazyLoader;
+sandbox.refreshBrowseResults = savedRefreshBrowseResults;
+sandbox.loadExamList = savedLoadExamList;
 
 console.log(JSON.stringify({
     status: 'pass',

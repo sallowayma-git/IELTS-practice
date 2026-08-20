@@ -1723,6 +1723,8 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var browseResultsProxyGeneration = 0;
     var appNavigationIntentGeneration = 0;
     var examIndexRefreshGeneration = 0;
+    var deferredBrowseIndexRefresh = null;
+    var browseFunctionalResetBarrier = null;
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
@@ -1752,7 +1754,20 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         }
     }
 
-    function synchronizeActiveBrowseViewAfterLoad() {
+    function registerBrowseFunctionalResetBarrier(resetPromise) {
+        var barrier = Promise.resolve(resetPromise).catch(function () {
+            return false;
+        });
+        browseFunctionalResetBarrier = barrier;
+        barrier.finally(function clearBrowseFunctionalResetBarrier() {
+            if (browseFunctionalResetBarrier === barrier) {
+                browseFunctionalResetBarrier = null;
+            }
+        });
+        return barrier;
+    }
+
+    function synchronizeActiveBrowseViewNow() {
         if (getActiveViewName() !== 'browse' || typeof global.initializeBrowseView !== 'function') {
             return Promise.resolve();
         }
@@ -1792,6 +1807,16 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     delete global.__pendingBrowseFilter;
                 }
             });
+    }
+
+    function synchronizeActiveBrowseViewAfterLoad() {
+        var resetBarrier = browseFunctionalResetBarrier;
+        if (!resetBarrier) {
+            return synchronizeActiveBrowseViewNow();
+        }
+        return Promise.resolve(resetBarrier).then(function afterFunctionalReset(resetSucceeded) {
+            return resetSucceeded ? synchronizeActiveBrowseViewNow() : undefined;
+        });
     }
 
     function ensureBrowseRuntimeGroup() {
@@ -2076,6 +2101,51 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         return requestId == null
             || typeof global.__isBrowseResultsRequestCurrent !== 'function'
             || global.__isBrowseResultsRequestCurrent(requestId);
+    }
+
+    function isBrowseUserResultsRequestInFlight(requestId) {
+        return requestId != null
+            && typeof global.__isBrowseUserResultsRequestInFlight === 'function'
+            && global.__isBrowseUserResultsRequestInFlight(requestId);
+    }
+
+    function isBrowseUserResultsRequest(requestId) {
+        return requestId != null
+            && typeof global.__isBrowseUserResultsRequest === 'function'
+            && global.__isBrowseUserResultsRequest(requestId);
+    }
+
+    function deferBrowseIndexRefresh(snapshot, refreshGeneration, proxyGeneration, navigationGeneration) {
+        deferredBrowseIndexRefresh = {
+            snapshot: Array.isArray(snapshot) ? snapshot.slice() : [],
+            refreshGeneration: refreshGeneration,
+            proxyGeneration: proxyGeneration,
+            navigationGeneration: navigationGeneration
+        };
+    }
+
+    function replayDeferredBrowseIndexRefresh(settledRequestId) {
+        var deferred = deferredBrowseIndexRefresh;
+        if (!deferred) {
+            return;
+        }
+        if (deferred.refreshGeneration !== examIndexRefreshGeneration
+            || deferred.proxyGeneration !== browseResultsProxyGeneration
+            || deferred.navigationGeneration !== appNavigationIntentGeneration
+            || getActiveViewName() !== 'browse') {
+            deferredBrowseIndexRefresh = null;
+            return;
+        }
+        var currentRequestId = getCurrentBrowseResultsRequest();
+        if (isBrowseUserResultsRequestInFlight(currentRequestId)) {
+            return;
+        }
+        if (currentRequestId !== settledRequestId) {
+            deferredBrowseIndexRefresh = null;
+            return;
+        }
+        deferredBrowseIndexRefresh = null;
+        handleExamIndexLoaded(deferred.snapshot, currentRequestId);
     }
 
     function proxyAfterGroup(groupName, getter, fallback) {
@@ -2417,6 +2487,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         if (activeView === 'browse') {
             var refreshGeneration = ++examIndexRefreshGeneration;
             var resultsProxyGenerationAtReceipt = browseResultsProxyGeneration;
+            var navigationGenerationAtReceipt = appNavigationIntentGeneration;
             var resetInFlight = typeof global.__isBrowseResetIntentInFlight === 'function'
                 && global.__isBrowseResetIntentInFlight();
             if (resetInFlight) {
@@ -2456,13 +2527,32 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             }
             browseReady.then(function afterBrowseReady() {
                 if (refreshGeneration !== examIndexRefreshGeneration
-                    || resultsProxyGenerationAtReceipt !== browseResultsProxyGeneration) {
+                    || resultsProxyGenerationAtReceipt !== browseResultsProxyGeneration
+                    || navigationGenerationAtReceipt !== appNavigationIntentGeneration
+                    || getActiveViewName() !== 'browse') {
                     return;
                 }
                 var effectiveRequestId = resultsRequestCaptured
                     ? resultsRequestId
                     : getCurrentBrowseResultsRequest();
                 if (!isBrowseResultsSnapshotCurrent(effectiveRequestId)) {
+                    var currentRequestId = getCurrentBrowseResultsRequest();
+                    if (isBrowseUserResultsRequestInFlight(currentRequestId)) {
+                        deferBrowseIndexRefresh(
+                            snapshot,
+                            refreshGeneration,
+                            resultsProxyGenerationAtReceipt,
+                            navigationGenerationAtReceipt
+                        );
+                    } else if (isBrowseUserResultsRequest(currentRequestId)) {
+                        deferBrowseIndexRefresh(
+                            snapshot,
+                            refreshGeneration,
+                            resultsProxyGenerationAtReceipt,
+                            navigationGenerationAtReceipt
+                        );
+                        replayDeferredBrowseIndexRefresh(currentRequestId);
+                    }
                     var staleLoading = document.querySelector('#browse-view .loading');
                     if (staleLoading) {
                         staleLoading.style.display = 'none';
@@ -2471,6 +2561,12 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 }
                 if (typeof global.__isBrowseUserResultsRequestInFlight === 'function'
                     && global.__isBrowseUserResultsRequestInFlight(effectiveRequestId)) {
+                    deferBrowseIndexRefresh(
+                        snapshot,
+                        refreshGeneration,
+                        resultsProxyGenerationAtReceipt,
+                        navigationGenerationAtReceipt
+                    );
                     var deferredLoading = document.querySelector('#browse-view .loading');
                     if (deferredLoading) {
                         deferredLoading.style.display = 'none';
@@ -2480,12 +2576,20 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 var refreshRequestId = typeof global.__beginBrowseResultsRequest === 'function'
                     ? global.__beginBrowseResultsRequest()
                     : effectiveRequestId;
+                if (deferredBrowseIndexRefresh
+                    && deferredBrowseIndexRefresh.refreshGeneration <= refreshGeneration) {
+                    deferredBrowseIndexRefresh = null;
+                }
                 var searchInput = document.getElementById('exam-search-input')
                     || document.querySelector('.search-input');
                 var searchQuery = searchInput && typeof searchInput.value === 'string'
                     ? searchInput.value.trim()
                     : '';
-                if (searchQuery && typeof global.searchExams === 'function') {
+                if (typeof global.__renderBrowseResultsForState === 'function') {
+                    try {
+                        global.__renderBrowseResultsForState(snapshot, refreshRequestId);
+                    } catch (_) { }
+                } else if (searchQuery && typeof global.searchExams === 'function') {
                     try {
                         global.searchExams(
                             searchQuery,
@@ -2523,6 +2627,11 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
     global.addEventListener('examIndexLoaded', function onExamIndexLoaded(event) {
         handleExamIndexLoaded(event && event.detail ? event.detail.index : []);
+    });
+
+    global.addEventListener('browseUserResultsRequestSettled', function onBrowseUserResultsRequestSettled(event) {
+        var requestId = event && event.detail ? event.detail.requestId : null;
+        replayDeferredBrowseIndexRefresh(requestId);
     });
 
     global.addEventListener('appCoreReady', function onAppCoreReady() {
@@ -2594,7 +2703,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     global.AppEntry = Object.assign({}, global.AppEntry || {}, {
         STRICT_ON_DEMAND: STRICT_ON_DEMAND,
         ensureBrowseGroup: ensureBrowseGroup,
+        ensureBrowseRuntimeGroup: ensureBrowseRuntimeGroup,
         ensureBrowseRuntime: ensureBrowseGroup,
+        registerBrowseFunctionalResetBarrier: registerBrowseFunctionalResetBarrier,
         ensureMoreToolsGroup: ensureMoreToolsGroup,
         ensureSettingsToolsGroup: ensureSettingsToolsGroup,
         ensurePracticeSuiteGroup: ensurePracticeSuiteGroup,

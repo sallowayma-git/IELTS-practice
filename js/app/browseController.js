@@ -329,12 +329,7 @@
          * 按文件夹筛选（频率模式）
          * @param {string} filterId - 筛选器ID
          */
-        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
-            if (renderRequestId != null
-                && typeof global.__isBrowseResultsRequestCurrent === 'function'
-                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
-                return;
-            }
+        filterExamsByFolder(examIndex = [], filterId = this.activeFilter) {
             const config = this.getCurrentModeConfig();
             const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
@@ -342,12 +337,10 @@
             // 允许“全部”入口只按 basePath 过滤（frequency-p1 无全量按钮）
             const isAllFilter = filterId === 'all';
             if (!folders && !isAllFilter) {
-                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
-                return;
+                return null;
             }
 
-            // 筛选题目
-            const filtered = (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
+            return (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
                 if (!exam || !exam.path) {
                     return false;
                 }
@@ -366,9 +359,30 @@
                     return exam.path.includes(folder);
                 });
             });
+        }
 
-            // 活动搜索必须继续约束当前文件夹结果。
-            if (typeof global.__renderBrowseResultsForState === 'function') {
+        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
+            if (renderRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                return;
+            }
+            const filtered = this.filterExamsByFolder(examIndex, filterId);
+            if (!Array.isArray(filtered)) {
+                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
+                return;
+            }
+
+            // 活动搜索必须继续约束当前文件夹结果；无查询时在控制器层终止
+            // 渲染，避免 main -> ExamActions -> controller -> main 的递归刷新。
+            const searchInput = document.getElementById('exam-search-input')
+                || (typeof document.querySelector === 'function'
+                    ? document.querySelector('.search-input')
+                    : null);
+            const hasActiveQuery = !!(searchInput
+                && typeof searchInput.value === 'string'
+                && searchInput.value.trim());
+            if (hasActiveQuery && typeof global.__renderBrowseResultsForState === 'function') {
                 return global.__renderBrowseResultsForState(filtered, renderRequestId);
             }
             this.displayFilteredExams(filtered);

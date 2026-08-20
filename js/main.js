@@ -2029,6 +2029,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 
 let browseResultsRequestId = 0;
 const browseUserResultsRequestRetains = new Map();
+let lastBrowseUserResultsRequestId = null;
 
 function beginBrowseResultsRequest() {
     browseResultsRequestId += 1;
@@ -2045,6 +2046,7 @@ function retainBrowseUserResultsRequest(requestId) {
     }
     const retainCount = browseUserResultsRequestRetains.get(requestId) || 0;
     browseUserResultsRequestRetains.set(requestId, retainCount + 1);
+    lastBrowseUserResultsRequestId = requestId;
     return requestId;
 }
 
@@ -2059,6 +2061,15 @@ function endBrowseUserResultsRequest(requestId) {
     const retainCount = browseUserResultsRequestRetains.get(requestId) || 0;
     if (retainCount <= 1) {
         browseUserResultsRequestRetains.delete(requestId);
+        if (retainCount === 1
+            && typeof window.dispatchEvent === 'function'
+            && typeof window.CustomEvent === 'function') {
+            try {
+                window.dispatchEvent(new window.CustomEvent('browseUserResultsRequestSettled', {
+                    detail: { requestId }
+                }));
+            } catch (_) { }
+        }
         return;
     }
     browseUserResultsRequestRetains.set(requestId, retainCount - 1);
@@ -2066,6 +2077,10 @@ function endBrowseUserResultsRequest(requestId) {
 
 function isBrowseUserResultsRequestInFlight(requestId) {
     return requestId != null && (browseUserResultsRequestRetains.get(requestId) || 0) > 0;
+}
+
+function isBrowseUserResultsRequest(requestId) {
+    return requestId != null && requestId === lastBrowseUserResultsRequestId;
 }
 
 window.__beginBrowseResultsRequest = beginBrowseResultsRequest;
@@ -2077,6 +2092,7 @@ window.__beginBrowseUserResultsRequest = beginBrowseUserResultsRequest;
 window.__retainBrowseUserResultsRequest = retainBrowseUserResultsRequest;
 window.__endBrowseUserResultsRequest = endBrowseUserResultsRequest;
 window.__isBrowseUserResultsRequestInFlight = isBrowseUserResultsRequestInFlight;
+window.__isBrowseUserResultsRequest = isBrowseUserResultsRequest;
 
 async function filterByType(type, examIndexOverride = null, renderRequestId = null) {
     const userRequestId = renderRequestId == null
@@ -2294,7 +2310,7 @@ async function initializeBrowseView(options = {}) {
     ]);
 
     if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-        return;
+        return null;
     }
 
     // 初始化 browseController
@@ -2319,7 +2335,24 @@ async function initializeBrowseView(options = {}) {
     if (!options.skipLoad) {
         await renderBrowseResultsForState(examIndex, activeRequestId);
     }
+    return examIndex;
 }
+
+async function activateBrowseView(options = {}) {
+    const activeRequestId = options.renderRequestId == null
+        ? beginBrowseResultsRequest()
+        : options.renderRequestId;
+    const examIndex = await initializeBrowseView({
+        skipLoad: true,
+        renderRequestId: activeRequestId
+    });
+    if (!Array.isArray(examIndex) || !isBrowseResultsRequestCurrent(activeRequestId)) {
+        return false;
+    }
+    return renderBrowseResultsForState(examIndex, activeRequestId);
+}
+
+window.activateBrowseView = activateBrowseView;
 
 function normalizeBrowseFrequencyFilter(value) {
     const raw = String(value || '').trim().toLowerCase();
@@ -2408,6 +2441,10 @@ function updateBrowseFrequencyButtons(filter) {
     if (window.ExamActions && typeof window.ExamActions.setBrowseFrequencyFilter === 'function') {
         return window.ExamActions.setBrowseFrequencyFilter(activeFilter);
     }
+    const stateOwner = window.ExamActions && window.ExamActions.browseFilterStateOwner;
+    if (stateOwner && typeof stateOwner.setFrequencyFilter === 'function') {
+        return stateOwner.setFrequencyFilter(activeFilter);
+    }
     const container = document.getElementById('browse-frequency-filter-buttons');
     if (!container) {
         return activeFilter;
@@ -2424,17 +2461,11 @@ function resetBrowseFilterStateToAll() {
     if (window.ExamActions && typeof window.ExamActions.resetBrowseFilterStateToAll === 'function') {
         return window.ExamActions.resetBrowseFilterStateToAll();
     }
-    window.__browseFilterMode = 'default';
-    window.__browsePath = null;
-    updateBrowseFrequencyButtons('all');
-
-    if (window.browseController) {
-        window.browseController.currentMode = 'default';
-        window.browseController.activeFilter = 'all';
+    const stateOwner = window.ExamActions && window.ExamActions.browseFilterStateOwner;
+    if (stateOwner && typeof stateOwner.resetToAll === 'function') {
+        return stateOwner.resetToAll();
     }
-    if (typeof setBrowseFilterState === 'function') {
-        setBrowseFilterState('all', 'all');
-    }
+    return false;
 }
 
 function setupBrowseFrequencyFilterControl() {
@@ -3157,7 +3188,7 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
         : null;
 
     if (window.ExamFilterService && typeof window.ExamFilterService.filterExams === 'function') {
-        return window.ExamFilterService.filterExams(examIndex, {
+        const filtered = window.ExamFilterService.filterExams(examIndex, {
             activeCategory,
             activeExamType,
             browseFilterMode: window.__browseFilterMode,
@@ -3166,6 +3197,7 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
             sortMode: window.__browseSortMode,
             frequencyFilter: window.__browseFrequencyFilter
         });
+        return applyActiveBrowseFolderFilter(filtered);
     }
 
     let list = Array.isArray(examIndex) ? examIndex.slice() : [];
@@ -3179,9 +3211,32 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
         list = list.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(basePathFilter));
     }
     if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
-        return window.ExamActions.applyBrowsePostFilters(list, window.__browseSortMode, window.__browseFrequencyFilter);
+        list = window.ExamActions.applyBrowsePostFilters(
+            list,
+            window.__browseSortMode,
+            window.__browseFrequencyFilter
+        );
     }
-    return list;
+    return applyActiveBrowseFolderFilter(list);
+}
+
+function applyActiveBrowseFolderFilter(exams) {
+    const list = Array.isArray(exams) ? exams : [];
+    const controller = window.browseController;
+    if (!controller
+        || typeof controller.getCurrentModeConfig !== 'function'
+        || typeof controller.filterExamsByFolder !== 'function') {
+        return list;
+    }
+    const config = controller.getCurrentModeConfig();
+    if (!config || config.filterLogic !== 'folder-based') {
+        return list;
+    }
+    const folderFiltered = controller.filterExamsByFolder(
+        list,
+        controller.activeFilter || 'all'
+    );
+    return Array.isArray(folderFiltered) ? folderFiltered : list;
 }
 
 async function performSearch(query, renderRequestId = null, examIndexOverride = null) {
