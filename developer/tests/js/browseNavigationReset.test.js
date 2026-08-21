@@ -275,6 +275,7 @@ function createHarness(options = {}) {
         preferencePatches,
         documentListeners,
         context,
+        getBrowseRequestId: () => browseRequestId,
         getClearedAutoScroll: () => clearedAutoScroll,
         getResetToDefaultCalls: () => resetToDefaultCalls
     };
@@ -623,6 +624,112 @@ test('explicit category activation applies its pending filter when no reset supe
     );
 });
 
+test('a stable pending Browse activation reuses its initialization results request', async () => {
+    const harness = createHarness();
+    await harness.stateManager.ready;
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.currentView = 'browse';
+    const appliedFilters = [];
+    const pendingFilter = {
+        category: 'P1',
+        type: 'reading',
+        filterMode: null,
+        path: null
+    };
+    let initializationRequestId = null;
+    const retainedRequests = [];
+    const releasedRequests = [];
+    harness.window.__pendingBrowseFilter = pendingFilter;
+    harness.window.__getBrowseResultsRequestId = harness.getBrowseRequestId;
+    harness.window.__retainBrowseUserResultsRequest = (requestId) => {
+        retainedRequests.push(requestId);
+        return requestId;
+    };
+    harness.window.__endBrowseUserResultsRequest = (requestId) => {
+        releasedRequests.push(requestId);
+    };
+    harness.window.initializeBrowseView = () => {
+        initializationRequestId = harness.window.__beginBrowseResultsRequest();
+        return Promise.resolve([{ id: 'p1-reading' }]);
+    };
+    harness.window.applyBrowseFilter = (...args) => {
+        appliedFilters.push(args);
+        return Promise.resolve();
+    };
+
+    app.onViewActivated('browse');
+    await flushMicrotasks();
+
+    assert.equal(appliedFilters.length, 1);
+    assert.deepEqual(appliedFilters[0], [
+        pendingFilter.category,
+        pendingFilter.type,
+        pendingFilter.filterMode,
+        pendingFilter.path,
+        initializationRequestId
+    ]);
+    assert.equal(harness.getBrowseRequestId(), initializationRequestId);
+    assert.deepEqual(retainedRequests, [initializationRequestId]);
+    assert.deepEqual(releasedRequests, [initializationRequestId]);
+});
+
+test('later type, search, and frequency intents supersede a pending Browse activation', async (t) => {
+    const cases = [
+        { name: 'type', initializationResult: null, finalIntent: { type: 'listening' } },
+        { name: 'search', initializationResult: [], finalIntent: { query: 'latest' } },
+        { name: 'frequency', initializationResult: undefined, finalIntent: { frequency: 'high' } }
+    ];
+
+    for (const scenario of cases) {
+        await t.test(scenario.name, async () => {
+            const harness = createHarness();
+            await harness.stateManager.ready;
+            loadScript('js/app.js', harness.context);
+            const app = vm.runInContext('new ExamSystemApp()', harness.context);
+            app.currentView = 'browse';
+            const initialization = deferred();
+            const appliedFilters = [];
+            const pendingFilter = {
+                category: 'P1',
+                type: 'reading',
+                filterMode: null,
+                path: null
+            };
+            let initializationRequestId = null;
+            const finalIntent = { ...scenario.finalIntent };
+            harness.window.__pendingBrowseFilter = pendingFilter;
+            harness.window.__getBrowseResultsRequestId = harness.getBrowseRequestId;
+            harness.window.initializeBrowseView = () => {
+                initializationRequestId = harness.window.__beginBrowseResultsRequest();
+                return initialization.promise;
+            };
+            harness.window.applyBrowseFilter = (...args) => {
+                appliedFilters.push(args);
+                finalIntent.category = args[0];
+                finalIntent.type = args[1];
+                harness.window.__beginBrowseResultsRequest();
+                return Promise.resolve();
+            };
+
+            app.onViewActivated('browse');
+            const laterIntentRequestId = harness.window.__beginBrowseResultsRequest();
+            initialization.resolve(scenario.initializationResult);
+            await flushMicrotasks();
+
+            assert.equal(initializationRequestId + 1, laterIntentRequestId);
+            assert.deepEqual(appliedFilters, [], `the later ${scenario.name} intent must not be replayed over`);
+            assert.equal(
+                harness.getBrowseRequestId(),
+                laterIntentRequestId,
+                'the stale activation must not create a third results request'
+            );
+            assert.deepEqual(finalIntent, scenario.finalIntent);
+            assert.equal(harness.window.__pendingBrowseFilter, undefined);
+        });
+    }
+});
+
 test('a newer navigation cancels a delayed hot pending Browse filter', async () => {
     const harness = createHarness();
     await harness.stateManager.ready;
@@ -750,9 +857,25 @@ test('activation reset waits for hydration and durably clears restored Browse st
         }
     });
     await harness.stateManager.ready;
+    const durableBrowse = {
+        lastFilter: { category: 'P2', type: 'reading' },
+        filter: { category: 'P2', type: 'reading' },
+        frequencyFilter: 'high'
+    };
+    harness.window.AppData.preferences.getBrowse = async () => (
+        JSON.parse(JSON.stringify(durableBrowse))
+    );
+    harness.window.AppData.preferences.patchBrowse = async (partial) => {
+        harness.preferencePatches.push(JSON.parse(JSON.stringify(partial)));
+        Object.assign(durableBrowse, JSON.parse(JSON.stringify(partial)));
+        return partial;
+    };
     let cachedLastFilter = { category: 'P2', type: 'reading' };
     harness.window.saveBrowseViewPreferences = (partial) => {
-        if (partial && partial.lastFilter) cachedLastFilter = partial.lastFilter;
+        if (partial && partial.lastFilter) {
+            cachedLastFilter = partial.lastFilter;
+            durableBrowse.lastFilter = JSON.parse(JSON.stringify(partial.lastFilter));
+        }
         return { lastFilter: cachedLastFilter };
     };
     harness.window.flushBrowsePreferenceWrites = async () => ({ lastFilter: cachedLastFilter });
@@ -785,6 +908,48 @@ test('activation reset waits for hydration and durably clears restored Browse st
         true,
         'the activation reset must persist both current and legacy cleared filters after hydration'
     );
+});
+
+test('activation reset fails closed when the production preference write is rejected', async () => {
+    const durableBrowse = {
+        lastFilter: { category: 'P2', type: 'reading' },
+        filter: { category: 'P2', type: 'reading' },
+        frequencyFilter: 'high',
+        stateManager: {
+            currentFilter: 'P2',
+            previousFilter: null,
+            state: {
+                currentCategory: 'P2',
+                currentFrequency: 'high',
+                filters: { frequency: 'high', status: 'all', difficulty: 'all' },
+                searchQuery: 'ocean'
+            },
+            browseHistory: []
+        }
+    };
+    const harness = createHarness({
+        getBrowse() {
+            return JSON.parse(JSON.stringify(durableBrowse));
+        }
+    });
+    await harness.stateManager.ready;
+    harness.window.AppData.preferences.patchBrowse = async () => {
+        throw new Error('injected Browse preference write failure');
+    };
+    loadScript('js/utils/BrowsePreferencesUtils.js', harness.context);
+    await harness.window.whenBrowseViewPreferencesReady();
+
+    const result = await harness.window.ExamActions.browseFilterStateOwner.resetForActivation();
+
+    assert.equal(result, false, 'the first-render barrier must remain closed after a rejected write');
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(harness.window.getPersistedBrowseFilter())),
+        { category: 'P2', type: 'reading' },
+        'the production preference cache must retain its last committed value'
+    );
+    assert.deepEqual(durableBrowse.lastFilter, { category: 'P2', type: 'reading' });
+    assert.deepEqual(durableBrowse.filter, { category: 'P2', type: 'reading' });
+    assert.equal(durableBrowse.frequencyFilter, 'high');
 });
 
 test('a global adapter failure is contained by the public reset boundary', async () => {

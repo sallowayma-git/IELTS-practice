@@ -83,6 +83,11 @@ const rendered = [];
 const dispatchedWindowEvents = [];
 const browseState = { category: 'all', type: 'all' };
 const resolverQueue = [];
+const persistedBrowseState = {
+    lastFilter: null,
+    filter: { category: 'all', type: 'all' },
+    frequencyFilter: 'all'
+};
 const quietConsole = { log() {}, warn() {}, error() {} };
 const sandbox = {
     console: quietConsole,
@@ -122,6 +127,17 @@ const sandbox = {
     formatBrowseTitle(category, type) { return `${category}:${type}`; },
     normalizeExamType(type) { return type || 'all'; },
     getPersistedBrowseFilter() { return null; },
+    saveBrowseViewPreferences(partial = {}) {
+        if (Object.prototype.hasOwnProperty.call(partial, 'lastFilter')) {
+            persistedBrowseState.lastFilter = partial.lastFilter
+                ? { ...partial.lastFilter }
+                : null;
+        }
+        return { lastFilter: persistedBrowseState.lastFilter };
+    },
+    async flushBrowsePreferenceWrites() {
+        return { lastFilter: persistedBrowseState.lastFilter };
+    },
     async resolveActiveLibraryIndex() {
         const next = resolverQueue.shift();
         if (!next) throw new Error('unexpected index resolution');
@@ -147,11 +163,19 @@ const sandbox = {
     AppData: {
         ready: Promise.resolve(),
         preferences: {
-            async getBrowse() { return {}; },
-            async setBrowse(value) { return value; }
+            async getBrowse() { return JSON.parse(JSON.stringify(persistedBrowseState)); },
+            async setBrowse(value) {
+                Object.assign(persistedBrowseState, JSON.parse(JSON.stringify(value || {})));
+                return value;
+            },
+            async patchBrowse(value) {
+                Object.assign(persistedBrowseState, JSON.parse(JSON.stringify(value || {})));
+                return value;
+            }
         },
         practice: {
             async list() { return []; },
+            async listInsights() { return []; },
             async getStats() { return {}; }
         },
         library: {
@@ -166,6 +190,29 @@ sandbox.self = sandbox;
 const context = vm.createContext(sandbox);
 vm.runInContext(source, context, { filename: 'js/main.js' });
 
+let hydrationNavigationGeneration = 0;
+sandbox.__getAppNavigationIntentGeneration = () => hydrationNavigationGeneration;
+const cancelledApplyIndex = deferred();
+resolverQueue.push(cancelledApplyIndex);
+const cancelledApply = sandbox.applyBrowseFilter(
+    'P3',
+    'listening',
+    null,
+    null,
+    null,
+    hydrationNavigationGeneration
+);
+hydrationNavigationGeneration += 1;
+browseView.classList.remove('active');
+overviewView.classList.add('active');
+cancelledApplyIndex.resolve([
+    { id: 'cancelled-listening', title: 'Cancelled Listening', category: 'P3', type: 'listening' }
+]);
+assert.strictEqual(await cancelledApply, false, 'a navigation-cancelled explicit filter must stand down');
+
+browseView.classList.add('active');
+overviewView.classList.remove('active');
+const cancelledTypeIndex = deferred();
 const firstHydrationIndex = deferred();
 const latestHydrationIndex = deferred();
 const initialPersistedFilterReader = sandbox.getPersistedBrowseFilter;
@@ -174,7 +221,8 @@ sandbox.getPersistedBrowseFilter = () => {
     initialPersistedFilterReads += 1;
     return { category: 'P2', type: 'reading' };
 };
-resolverQueue.push(firstHydrationIndex, latestHydrationIndex);
+resolverQueue.push(cancelledTypeIndex, firstHydrationIndex, latestHydrationIndex);
+const cancelledType = sandbox.filterByType('listening');
 const firstHydration = sandbox.initializeBrowseView({ skipLoad: true });
 const latestHydration = sandbox.initializeBrowseView({ skipLoad: true });
 latestHydrationIndex.resolve([
@@ -188,6 +236,16 @@ firstHydrationIndex.resolve([
 ]);
 assert.strictEqual(await firstHydration, null, 'the superseded initialization must stand down');
 assert.strictEqual(initialPersistedFilterReads, 1, 'a stale initialization must not hydrate a second time');
+cancelledTypeIndex.resolve([
+    { id: 'late-listening', title: 'Late Listening', category: 'P1', type: 'listening' }
+]);
+await cancelledType;
+assert.deepStrictEqual(
+    browseState,
+    { category: 'P2', type: 'reading' },
+    'a superseded first explicit type intent must not suppress or replace persisted hydration'
+);
+assert.strictEqual(initialPersistedFilterReads, 1);
 sandbox.getPersistedBrowseFilter = initialPersistedFilterReader;
 
 const searchFirst = deferred();
@@ -298,6 +356,45 @@ assert.strictEqual(browseState.category, 'P1');
 assert.strictEqual(browseState.type, 'listening');
 assert.deepStrictEqual(rendered.at(-1), [], 'category filtering must preserve and apply the visible query');
 searchInput.value = '';
+
+rendered.length = 0;
+searchInput.value = 'ocean';
+const browseScopeBeforeColdProgress = { ...browseState };
+sandbox.setBrowseFilterState('all', 'all');
+const coldBrowseIndex = [
+    { id: 'ocean', title: 'Ocean Passage', searchText: 'ocean passage', category: 'P1', type: 'reading' },
+    { id: 'desert', title: 'Desert Passage', searchText: 'desert passage', category: 'P2', type: 'reading' }
+];
+const coldActivationIndex = deferred();
+const coldProgressIndex = deferred();
+resolverQueue.push(coldActivationIndex);
+const coldActivation = sandbox.activateBrowseView();
+resolverQueue.push(coldProgressIndex);
+sandbox.updatePracticeView = () => {};
+const coldProgressSync = sandbox.syncPracticeRecords({ forceRender: true });
+coldProgressIndex.resolve(coldBrowseIndex);
+await coldProgressSync;
+const coldActivationRequestId = sandbox.__getBrowseResultsRequestId();
+assert.strictEqual(
+    sandbox.__isBrowseUserResultsRequestInFlight(coldActivationRequestId),
+    true,
+    'the first activation must retain its request while hydration is unresolved'
+);
+assert.deepStrictEqual(rendered, [], 'background progress must wait for the explicit activation');
+
+coldActivationIndex.resolve(coldBrowseIndex);
+await coldActivation;
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    rendered,
+    [['ocean'], ['ocean']],
+    'practice progress refresh must stay query-aware instead of restoring the full library'
+);
+searchInput.value = '';
+sandbox.setBrowseFilterState(
+    browseScopeBeforeColdProgress.category,
+    browseScopeBeforeColdProgress.type
+);
 
 rendered.length = 0;
 const sharedSearchIndex = deferred();
@@ -495,7 +592,7 @@ const helperFreeResetIndex = deferred();
 resolverQueue.push(helperFreeResetIndex);
 const helperFreeReset = sandbox.showView('browse', true);
 helperFreeResetIndex.resolve(allExams);
-await helperFreeReset;
+assert.notStrictEqual(await helperFreeReset, false, 'the helper-free reset must complete');
 assert.strictEqual(searchInput.value, '', 'the helper-free repeat reset must clear the preserved query');
 assert.strictEqual(sandbox.__browseFilterMode, 'default');
 assert.strictEqual(sandbox.__browsePath, null);
@@ -867,6 +964,169 @@ sandbox.AppEntry = savedAppEntry;
 sandbox.AppLazyLoader = savedAppLazyLoader;
 sandbox.refreshBrowseResults = savedRefreshBrowseResults;
 sandbox.loadExamList = savedLoadExamList;
+
+const authoritativeBrowseView = { id: 'browse-view', classList: createClassList() };
+authoritativeBrowseView.classList.add('active');
+const authoritativeDocument = {
+    readyState: 'loading',
+    body: { appendChild() {}, classList: createClassList() },
+    documentElement: { classList: createClassList() },
+    addEventListener() {},
+    removeEventListener() {},
+    querySelector(selector) {
+        if (selector === '.view.active') return authoritativeBrowseView;
+        return null;
+    },
+    querySelectorAll() { return []; },
+    createElement() {
+        return { style: {}, classList: createClassList(), appendChild() {}, setAttribute() {} };
+    },
+    getElementById(id) {
+        return id === 'browse-view' ? authoritativeBrowseView : null;
+    }
+};
+let authoritativePersistedReads = 0;
+const authoritativePatchGate = deferred();
+const authoritativePreferencePatches = [];
+const authoritativeDurableBrowse = {
+    lastFilter: { category: 'P2', type: 'reading' },
+    filter: { category: 'all', type: 'all' },
+    frequencyFilter: 'high'
+};
+const authoritativeIndex = [
+    { id: 'authoritative-reading', title: 'Authoritative Reading', category: 'P1', type: 'reading' }
+];
+const authoritativeSandbox = {
+    console: quietConsole,
+    document: authoritativeDocument,
+    location: { href: 'https://example.test/index.html', search: '', origin: 'https://example.test', protocol: 'https:' },
+    history: { replaceState() {} },
+    navigator: {},
+    URL,
+    URLSearchParams,
+    Promise,
+    Set,
+    Map,
+    Date,
+    Math,
+    JSON,
+    CustomEvent: class CustomEvent {
+        constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+    },
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    requestAnimationFrame(callback) { return setTimeout(callback, 0); },
+    cancelAnimationFrame: clearTimeout,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {},
+    confirm() { return false; },
+    alert() {},
+    setBrowseTitle() {},
+    formatBrowseTitle(category, type) { return `${category}:${type}`; },
+    normalizeExamType(type) { return type || 'all'; },
+    async resolveActiveLibraryIndex() { return authoritativeIndex; },
+    browseController: {
+        currentMode: 'default',
+        buttonContainer: {},
+        currentCategory: 'all',
+        currentExamType: 'all',
+        getCurrentCategory() { return 'all'; },
+        getCurrentExamType() { return 'all'; },
+        updateBrowseTitle() {}
+    },
+    ExamActions: {
+        loadExamList(exams) { return exams; },
+        displayExams(exams) { return exams; }
+    },
+    AppData: {
+        ready: Promise.resolve(),
+        preferences: {
+            async getBrowse() {
+                return JSON.parse(JSON.stringify(authoritativeDurableBrowse));
+            },
+            async setBrowse(value) {
+                Object.assign(authoritativeDurableBrowse, JSON.parse(JSON.stringify(value || {})));
+                return value;
+            },
+            async patchBrowse(value) {
+                authoritativePreferencePatches.push(JSON.parse(JSON.stringify(value || {})));
+                await authoritativePatchGate.promise;
+                Object.assign(authoritativeDurableBrowse, JSON.parse(JSON.stringify(value || {})));
+                return value;
+            }
+        },
+        practice: {
+            async list() { return []; },
+            async listInsights() { return []; },
+            async getStats() { return {}; }
+        },
+        library: {
+            async getActive() { return null; },
+            async listConfigurations() { return []; }
+        }
+    }
+};
+authoritativeSandbox.window = authoritativeSandbox;
+authoritativeSandbox.globalThis = authoritativeSandbox;
+authoritativeSandbox.self = authoritativeSandbox;
+const authoritativeContext = vm.createContext(authoritativeSandbox);
+const stateServiceSource = fs.readFileSync(path.join(repoRoot, 'js/app/state-service.js'), 'utf8');
+vm.runInContext(stateServiceSource, authoritativeContext, { filename: 'js/app/state-service.js' });
+assert.strictEqual(authoritativeSandbox.getBrowseFilterMutationRevision(), 0);
+authoritativeSandbox.appStateService.syncFromAppPath(
+    'ui.browseFilter',
+    { category: 'all', type: 'all' }
+);
+assert.strictEqual(
+    authoritativeSandbox.getBrowseFilterMutationRevision(),
+    0,
+    'legacy-app startup preference hydration must not masquerade as a live mutation'
+);
+const browsePreferencesSource = fs.readFileSync(path.join(repoRoot, 'js/utils/BrowsePreferencesUtils.js'), 'utf8');
+vm.runInContext(browsePreferencesSource, authoritativeContext, { filename: 'js/utils/BrowsePreferencesUtils.js' });
+await authoritativeSandbox.whenBrowseViewPreferencesReady();
+const productionAuthoritativePersistedReader = authoritativeSandbox.getPersistedBrowseFilter;
+authoritativeSandbox.getPersistedBrowseFilter = () => {
+    authoritativePersistedReads += 1;
+    return productionAuthoritativePersistedReader();
+};
+authoritativeSandbox.setBrowseFilterState('all', 'all');
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    authoritativeSandbox.getBrowseFilterMutationRevision(),
+    1,
+    'a same-value authoritative reset before Browse loads must advance the mutation revision'
+);
+assert.strictEqual(authoritativePreferencePatches.length, 1);
+assert.deepStrictEqual(
+    authoritativeDurableBrowse.lastFilter,
+    { category: 'P2', type: 'reading' },
+    'the authoritative all/all write must still be pending during first Browse initialization'
+);
+vm.runInContext(source, authoritativeContext, { filename: 'js/main.js' });
+await authoritativeSandbox.initializeBrowseView({ skipLoad: true });
+assert.strictEqual(
+    authoritativePersistedReads,
+    0,
+    'lazy Browse hydration must not revive committed preferences older than an authoritative mutation'
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(authoritativeSandbox.getBrowseFilterState())),
+    { category: 'all', type: 'all' }
+);
+authoritativePatchGate.resolve();
+await authoritativeSandbox.flushBrowsePreferenceWrites();
+assert.deepStrictEqual(authoritativeDurableBrowse.lastFilter, { category: 'all', type: 'all' });
+assert.strictEqual(
+    authoritativePreferencePatches.some((patch) => (
+        patch.lastFilter?.category === 'P2' && patch.lastFilter?.type === 'reading'
+    )),
+    false,
+    'initial hydration must not enqueue a trailing stale P2/reading write'
+);
 
 console.log(JSON.stringify({
     status: 'pass',

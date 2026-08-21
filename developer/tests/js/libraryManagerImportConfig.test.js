@@ -138,6 +138,9 @@ function createHarness(seed = {}) {
 
     const context = vm.createContext(sandbox);
     loadScript('js/core/resourceCore.js', context);
+    if (seed.useAppStateService) {
+        loadScript('js/app/state-service.js', context);
+    }
     loadScript('js/services/libraryDiscovery.js', context);
     loadScript('js/services/libraryManager.js', context);
     return { window: windowStub, indexes, getActiveId: () => activeId, getConfigurations: () => clone(configurations) };
@@ -304,6 +307,7 @@ async function testIncrementalCreatesSnapshotAndDedupes() {
 
 async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const seed = baseSeed();
+    seed.useAppStateService = true;
     seed.library.importedIndexes.alt_config = [{
         id: 'listening-alt',
         examId: 'listening-alt',
@@ -318,11 +322,22 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const { window } = createHarness(seed);
     const manager = window.LibraryManager.getInstance();
     const before = await window.AppData.practice.list();
+    const revisionBeforeSwitch = window.getBrowseFilterMutationRevision();
     const applied = await manager.applyLibraryConfiguration('alt_config');
 
     assert.strictEqual(applied, true, '配置切换应该成功');
     assert.strictEqual(await window.AppData.library.getActive(), 'alt_config', '活动配置应切换到目标配置');
     assert.deepStrictEqual(await window.AppData.practice.list(), before, '配置切换不能触碰练习记录');
+    assert.strictEqual(
+        window.getBrowseFilterMutationRevision(),
+        revisionBeforeSwitch + 1,
+        '配置切换的权威 all/all 写入必须使首次 Browse hydration 失效'
+    );
+    assert.deepStrictEqual(
+        clone(window.getBrowseFilterState()),
+        { category: 'all', type: 'all' },
+        '配置切换后实时筛选状态必须保持 all/all'
+    );
 
     recordResult('切换题库配置不触碰练习记录', { activeKey: 'alt_config' });
 }

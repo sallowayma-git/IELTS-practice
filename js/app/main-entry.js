@@ -319,12 +319,19 @@
         var canApplyPendingFilter = !!pendingFilter && typeof global.applyBrowseFilter === 'function';
         var initialization;
         var initializationRequestId = null;
+        var retainedInitializationRequestId = null;
         try {
             // Start synchronization in this reaction so a queued repeat reset can
             // acquire the next latest-wins token immediately after it.
             initialization = global.initializeBrowseView({ skipLoad: canApplyPendingFilter });
             if (typeof global.__getBrowseResultsRequestId === 'function') {
                 initializationRequestId = global.__getBrowseResultsRequestId();
+            }
+            if (initializationRequestId != null
+                && typeof global.__retainBrowseUserResultsRequest === 'function') {
+                retainedInitializationRequestId = global.__retainBrowseUserResultsRequest(
+                    initializationRequestId
+                );
             }
         } catch (error) {
             return Promise.reject(error);
@@ -346,6 +353,10 @@
                 return global.applyBrowseFilter.apply(global, filterArgs);
             })
             .finally(function clearConsumedPendingBrowseFilter() {
+                if (retainedInitializationRequestId != null
+                    && typeof global.__endBrowseUserResultsRequest === 'function') {
+                    global.__endBrowseUserResultsRequest(retainedInitializationRequestId);
+                }
                 if (pendingFilter && global.__pendingBrowseFilter === pendingFilter) {
                     delete global.__pendingBrowseFilter;
                 }

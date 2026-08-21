@@ -2503,11 +2503,27 @@ class ExamSystemApp {
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
                         const pendingFilter = window.__pendingBrowseFilter;
                         const { category, type, filterMode, path } = pendingFilter;
-                        Promise.resolve(
-                            typeof window.initializeBrowseView === 'function'
-                                ? window.initializeBrowseView({ skipLoad: true })
-                                : null
-                        ).then(() => {
+                        const hasInitializer = typeof window.initializeBrowseView === 'function';
+                        const initialization = hasInitializer
+                            ? window.initializeBrowseView({ skipLoad: true })
+                            : null;
+                        const initializationRequestId = hasInitializer
+                            && typeof window.__getBrowseResultsRequestId === 'function'
+                            ? window.__getBrowseResultsRequestId()
+                            : null;
+                        const retainedInitializationRequestId = initializationRequestId != null
+                            && typeof window.__retainBrowseUserResultsRequest === 'function'
+                            ? window.__retainBrowseUserResultsRequest(initializationRequestId)
+                            : null;
+                        Promise.resolve(initialization).then((initializationResult) => {
+                            if (hasInitializer && initializationResult === null) {
+                                return undefined;
+                            }
+                            if (initializationRequestId != null
+                                && typeof window.__isBrowseResultsRequestCurrent === 'function'
+                                && !window.__isBrowseResultsRequestCurrent(initializationRequestId)) {
+                                return undefined;
+                            }
                             const activeView = typeof document.querySelector === 'function'
                                 ? document.querySelector('.view.active')
                                 : null;
@@ -2521,8 +2537,11 @@ class ExamSystemApp {
                                 return undefined;
                             }
                             const filterArgs = [category, type, filterMode, path];
+                            if (initializationRequestId != null || sharedNavigationIntentGeneration != null) {
+                                filterArgs.push(initializationRequestId);
+                            }
                             if (sharedNavigationIntentGeneration != null) {
-                                filterArgs.push(null, sharedNavigationIntentGeneration);
+                                filterArgs.push(sharedNavigationIntentGeneration);
                             }
                             return window.applyBrowseFilter(...filterArgs);
                         })
@@ -2530,6 +2549,10 @@ class ExamSystemApp {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);
                             })
                             .finally(() => {
+                                if (retainedInitializationRequestId != null
+                                    && typeof window.__endBrowseUserResultsRequest === 'function') {
+                                    window.__endBrowseUserResultsRequest(retainedInitializationRequestId);
+                                }
                                 if (window.__pendingBrowseFilter === pendingFilter) {
                                     delete window.__pendingBrowseFilter;
                                 }

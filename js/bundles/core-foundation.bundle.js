@@ -12459,6 +12459,7 @@
             this.app = null;
             this.globalRef = global;
             this.globalBindingsInstalled = false;
+            this.browseFilterMutationRevision = 0;
 
             this.state = {
                 filteredExams: Array.isArray(global.filteredExams) ? global.filteredExams : [],
@@ -12554,7 +12555,7 @@
                     this.setFilteredExams(value, { syncApp: false });
                     break;
                 case 'ui.browseFilter':
-                    this.setBrowseFilter(value, { syncApp: false });
+                    this.setBrowseFilter(value, { syncApp: false, trackMutation: false });
                     break;
                 case 'exam.currentCategory':
                     this.setBrowseFilter({
@@ -12606,7 +12607,14 @@
             return this.state.browseFilter;
         }
 
+        getBrowseFilterMutationRevision() {
+            return this.browseFilterMutationRevision;
+        }
+
         setBrowseFilter(filter, options = {}) {
+            if (options.trackMutation !== false) {
+                this.browseFilterMutationRevision += 1;
+            }
             this.state.browseFilter = normalizeFilter(filter);
             if (options.syncApp !== false) {
                 this.applyToApp();
@@ -12851,6 +12859,9 @@
             };
             globalRef.getBrowseFilterState = function getBrowseFilterState() {
                 return service.getBrowseFilter();
+            };
+            globalRef.getBrowseFilterMutationRevision = function getBrowseFilterMutationRevision() {
+                return service.getBrowseFilterMutationRevision();
             };
             globalRef.setBrowseFilterState = function setBrowseFilterState(category, type) {
                 return service.setBrowseFilter({ category, type });

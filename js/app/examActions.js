@@ -1066,16 +1066,54 @@
     async function persistBrowseFrequencyReset() {
         const preferences = global.AppData && global.AppData.preferences;
         if (!preferences || typeof preferences.patchBrowse !== 'function') {
-            return;
+            return false;
         }
         try {
             await preferences.patchBrowse({
                 frequencyFilter: 'all',
                 filter: { category: 'all', type: 'all' }
             });
+            return true;
         } catch (error) {
             console.warn('[ExamActions] 持久化浏览频率重置失败:', error);
+            return false;
         }
+    }
+
+    function isAllBrowseFilter(filter) {
+        return !!filter && filter.category === 'all' && filter.type === 'all';
+    }
+
+    function isBrowseManagerReset(manager) {
+        if (!manager) {
+            return true;
+        }
+        const state = manager.state || {};
+        const filters = state.filters || {};
+        return manager.currentFilter === 'all'
+            && state.currentCategory == null
+            && state.currentFrequency == null
+            && (filters.frequency == null || filters.frequency === 'all')
+            && (state.searchQuery == null || state.searchQuery === '');
+    }
+
+    function isPersistedBrowseReset(browse, requireStateManager) {
+        if (!browse || !isAllBrowseFilter(browse.lastFilter)
+            || !isAllBrowseFilter(browse.filter)
+            || browse.frequencyFilter !== 'all') {
+            return false;
+        }
+        if (!requireStateManager) {
+            return true;
+        }
+        const manager = browse.stateManager;
+        const state = manager && manager.state;
+        const filters = state && state.filters;
+        return !!manager && manager.currentFilter === 'all'
+            && state.currentCategory == null
+            && state.currentFrequency == null
+            && !!filters && filters.frequency === 'all'
+            && state.searchQuery === '';
     }
 
     function beginBrowseResetPersistence() {
@@ -1132,19 +1170,33 @@
                 return false;
             }
 
-            if (typeof global.saveBrowseViewPreferences === 'function') {
-                global.saveBrowseViewPreferences({
-                    lastFilter: { category: 'all', type: 'all' }
-                });
+            if (typeof global.saveBrowseViewPreferences !== 'function'
+                || typeof global.flushBrowsePreferenceWrites !== 'function') {
+                return false;
             }
-            if (typeof global.flushBrowsePreferenceWrites === 'function') {
-                await global.flushBrowsePreferenceWrites();
+            global.saveBrowseViewPreferences({
+                lastFilter: { category: 'all', type: 'all' }
+            });
+            const committedBrowsePreferences = await global.flushBrowsePreferenceWrites();
+            if (!committedBrowsePreferences
+                || !isAllBrowseFilter(committedBrowsePreferences.lastFilter)) {
+                return false;
             }
             if (manager && typeof manager.persistState === 'function') {
                 await manager.persistState();
             }
-            await persistBrowseFrequencyReset();
-            return true;
+            if (!await persistBrowseFrequencyReset() || !isBrowseManagerReset(manager)) {
+                return false;
+            }
+            const preferences = global.AppData && global.AppData.preferences;
+            if (!preferences || typeof preferences.getBrowse !== 'function') {
+                return false;
+            }
+            const persistedBrowse = await preferences.getBrowse();
+            return isPersistedBrowseReset(
+                persistedBrowse,
+                !!(manager && typeof manager.persistState === 'function')
+            );
         } catch (error) {
             console.warn('[ExamActions] 激活前重置题库状态失败:', error);
             return false;
