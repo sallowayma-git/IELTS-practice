@@ -897,7 +897,7 @@ async function testReadingHighlightUpsertPreservesStudyProgress() {
 }
 
 async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
-    const legacyNote = '音标: /legacy/；来源: 旧版阅读高亮；用户补充内容';
+    const legacyNote = '音标: kɑ:vz;kævz；来源: 旧版阅读高亮；用户补充内容';
     const explicitNote = '音标: /note-value/；来源: 旧版阅读高亮';
     const vocabStore = loadVocabStore({
         embeddedWords: [],
@@ -942,7 +942,7 @@ async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
     await vocabStore.init();
     const list = await vocabStore.loadList('reading-highlights');
     const [legacy, explicit] = list.words;
-    assert.strictEqual(legacy.phonetic, 'legacy', '旧 note 开头的音标应只投影到内存结构化字段');
+    assert.strictEqual(legacy.phonetic, 'kɑ:vz;kævz', '旧 note 中的 ASCII 分号应作为音标内容完整投影');
     assert.strictEqual(legacy.note, legacyNote, '投影不得改写旧 note');
     assert.strictEqual(legacy.easeFactor, 2.35);
     assert.strictEqual(legacy.interval, 14);
@@ -972,7 +972,7 @@ async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
         lastReviewed: '2026-08-20T00:00:00.000Z',
         nextReview: '2026-09-10T00:00:00.000Z'
     });
-    assert.strictEqual(updated.phonetic, 'legacy', 'mutation receipt 归一化后仍应投影旧 note 音标');
+    assert.strictEqual(updated.phonetic, 'kɑ:vz;kævz', 'mutation receipt 归一化后仍应完整投影旧 note 音标');
     assert.strictEqual(updated.note, legacyNote);
     assert.strictEqual(updated.easeFactor, 2.35);
     assert.strictEqual(updated.interval, 21);
@@ -982,7 +982,7 @@ async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
     assert.strictEqual(updated.nextReview, '2026-09-10T00:00:00.000Z');
 
     let runtimeLegacy = vocabStore.getWords().find((word) => word.id === 'reading-highlight-legacy');
-    assert.strictEqual(runtimeLegacy.phonetic, 'legacy', 'updateWord 后内存词条必须保留兼容投影');
+    assert.strictEqual(runtimeLegacy.phonetic, 'kɑ:vz;kævz', 'updateWord 后内存词条必须保留完整兼容投影');
     assert.strictEqual(runtimeLegacy.note, legacyNote);
     assert.strictEqual(runtimeLegacy.correctCount, 9);
     const rawAfterUpdate = vocabStore.__appDataState.collections['reading-highlights'].words[0];
@@ -997,7 +997,7 @@ async function testReadingHighlightLegacyNoteProjectsPhoneticWithoutMutation() {
         meaning: '新增记录'
     }]);
     runtimeLegacy = merged.words.find((word) => word.id === 'reading-highlight-legacy');
-    assert.strictEqual(runtimeLegacy.phonetic, 'legacy', 'mergeWords receipt 也必须按激活词表规则归一化');
+    assert.strictEqual(runtimeLegacy.phonetic, 'kɑ:vz;kævz', 'mergeWords receipt 也必须保留 ASCII 分号音标');
     assert.strictEqual(runtimeLegacy.note, legacyNote);
     assert.strictEqual(runtimeLegacy.interval, 21);
     assert.strictEqual(runtimeLegacy.correctCount, 9);

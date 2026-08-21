@@ -1260,7 +1260,7 @@
             return entry;
         }
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
-        const match = /^音标[:：]\s*([^；;]+)(?:[；;]|$)/.exec(note);
+        const match = /^音标[:：]\s*([^；]+)(?:；|$)/.exec(note);
         const phonetic = normalizePhoneticValue(match && match[1]);
         return phonetic ? { ...entry, phonetic } : entry;
     }
