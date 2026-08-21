@@ -25,6 +25,19 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
+function createClassList(initial = []) {
+    const values = new Set(initial);
+    return {
+        add(value) { values.add(value); },
+        remove(value) { values.delete(value); },
+        contains(value) { return values.has(value); },
+        toggle(value, enabled) {
+            if (enabled) values.add(value);
+            else values.delete(value);
+        }
+    };
+}
+
 async function flushMicrotasks(rounds = 8) {
     for (let index = 0; index < rounds; index += 1) {
         await Promise.resolve();
@@ -242,6 +255,103 @@ async function testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView() {
     assert.strictEqual(initializationCalls, 1, 'the safe reset barrier must preserve first-activation setup');
     assert.ok(harness.ensureCalls.includes('browse-runtime'));
     recordResult('原始 Browse runtime 加载等待功能重置后再同步视图', true);
+}
+
+async function testFailedBrowseResetBarrierStopsQueuedLoaderProxy() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    let initializationCalls = 0;
+    let realLoadCalls = 0;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const queuedLoad = harness.windowStub.loadExamList();
+    const resetBarrier = deferred();
+    harness.windowStub.AppEntry.registerBrowseFunctionalResetBarrier(resetBarrier.promise);
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        initializationCalls += 1;
+        return Promise.resolve();
+    };
+    harness.windowStub.__legacyLoadExamList = function loadExamList() {
+        realLoadCalls += 1;
+        return true;
+    };
+
+    runtimeReady.resolve(true);
+    resetBarrier.resolve(false);
+    assert.strictEqual(await queuedLoad, false);
+    assert.strictEqual(initializationCalls, 0, 'a failed reset barrier must skip active-view synchronization');
+    assert.strictEqual(realLoadCalls, 0, 'a failed reset barrier must stop the already queued loader proxy');
+
+    await flushMicrotasks();
+    assert.strictEqual(await harness.windowStub.loadExamList(), true);
+    assert.strictEqual(initializationCalls, 1, 'a later request must retry after the failed barrier clears');
+    assert.strictEqual(realLoadCalls, 1, 'the retry must reach the real loader exactly once');
+    recordResult('失败的 Browse 重置屏障会阻止已排队 loader', true, { initializationCalls, realLoadCalls });
+}
+
+async function testColdFallbackLetsBrowseSynchronizationOwnRender() {
+    const harness = createHarness();
+    let initializationCalls = 0;
+    let realLoadCalls = 0;
+    const terminalRenders = [];
+    const views = {
+        overview: { id: 'overview-view', classList: createClassList(['active']) },
+        browse: { id: 'browse-view', classList: createClassList() }
+    };
+    const originalGetElementById = harness.windowStub.document.getElementById.bind(harness.windowStub.document);
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(harness.windowStub.document);
+    const originalQuerySelectorAll = harness.windowStub.document.querySelectorAll.bind(harness.windowStub.document);
+    harness.windowStub.document.getElementById = function getElementById(id) {
+        if (id === 'overview-view') return views.overview;
+        if (id === 'browse-view') return views.browse;
+        return originalGetElementById(id);
+    };
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') {
+            return Object.values(views).find((view) => view.classList.contains('active')) || null;
+        }
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.document.querySelectorAll = function querySelectorAll(selector) {
+        if (selector === '.view.active') {
+            return Object.values(views).filter((view) => view.classList.contains('active'));
+        }
+        return originalQuerySelectorAll(selector);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.initializeBrowseView = async function initializeBrowseView(options) {
+                initializationCalls += 1;
+                terminalRenders.push(`query:${harness.inputState.value}`);
+                assert.strictEqual(options.skipLoad, false);
+            };
+            harness.windowStub.loadExamList = function loadExamList() {
+                realLoadCalls += 1;
+                terminalRenders.push('all');
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    loadScript('js/boot-fallbacks.js', harness.context);
+    await harness.windowStub.showView('browse', false);
+
+    assert.strictEqual(harness.inputState.value, 'ocean');
+    assert.strictEqual(initializationCalls, 1);
+    assert.strictEqual(realLoadCalls, 0, 'the cold fallback must not invoke a second loader after synchronization');
+    assert.deepStrictEqual(terminalRenders, ['query:ocean']);
+    recordResult('冷 Browse 同步独占首次查询渲染', true, { terminalRenders });
 }
 
 async function testFallbackQueuesRepeatBrowseResetDuringLazyLoad() {
@@ -698,7 +808,7 @@ async function testQueuedFilterBeatsLaterExamIndexRefresh() {
     runtimeReady.resolve(true);
     await flushMicrotasks();
     browseSynchronization.resolve();
-    await flushMicrotasks();
+    await flushMicrotasks(32);
 
     assert.deepStrictEqual(callOrder, ['filter:reading'], 'the earlier user filter should start before background refresh');
     assert.strictEqual(skippedBackgroundLoads, 0, 'a stale background search must stand down before calling the adapter');
@@ -1437,7 +1547,7 @@ async function testBrowseResetIntentClearsAfterResetFailure() {
     const result = await reset;
     await flushMicrotasks();
     harness.context.console = contextConsole;
-    assert.strictEqual(result, false);
+    assert.strictEqual(result, false, 'a state-manager reset failure must return false');
     assert.deepStrictEqual(
         loadedIndexes,
         [['fresh-index']],
@@ -1507,7 +1617,7 @@ async function testBrowseResetAdapterFailureReplaysCapturedIndex() {
     assert.deepStrictEqual(loadedIndexes, [['initial-index']]);
 
     failingRender.reject(new Error('adapter failed'));
-    assert.strictEqual(await reset, false);
+    assert.strictEqual(await reset, false, 'an adapter failure must return false');
     await flushMicrotasks(32);
     harness.context.console = contextConsole;
     assert.deepStrictEqual(
@@ -1975,6 +2085,8 @@ async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView();
+        await testFailedBrowseResetBarrierStopsQueuedLoaderProxy();
+        await testColdFallbackLetsBrowseSynchronizationOwnRender();
         await testFallbackQueuesRepeatBrowseResetDuringLazyLoad();
         await testColdRepeatResetPreemptsBrowseSynchronization();
         await testDirectResetInvalidatesPendingColdBrowseLoad();

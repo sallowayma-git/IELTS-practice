@@ -243,6 +243,8 @@ function createHarness(options = {}) {
         Date,
         Math,
         JSON,
+        URL,
+        URLSearchParams,
         setTimeout,
         clearTimeout
     };
@@ -539,6 +541,7 @@ test('repeat reset invalidates a captured pending Browse activation filter', asy
     await harness.stateManager.ready;
     loadScript('js/app.js', harness.context);
     const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.currentView = 'browse';
     const appliedFilters = [];
     const pendingFilter = {
         category: 'P3',
@@ -583,6 +586,7 @@ test('explicit category activation applies its pending filter when no reset supe
     await harness.stateManager.ready;
     loadScript('js/app.js', harness.context);
     const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.currentView = 'browse';
     const initializationCalls = [];
     const appliedFilters = [];
     const pendingFilter = {
@@ -616,6 +620,170 @@ test('explicit category activation applies its pending filter when no reset supe
         harness.window.__pendingBrowseFilter,
         undefined,
         'the applied explicit category intent should be cleared'
+    );
+});
+
+test('a newer navigation cancels a delayed hot pending Browse filter', async () => {
+    const harness = createHarness();
+    await harness.stateManager.ready;
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    const initialization = deferred();
+    const appliedFilters = [];
+    const browseView = { id: 'browse-view', classList: createClassList() };
+    const overviewView = { id: 'overview-view', classList: createClassList(['active']) };
+    const originalGetElementById = harness.window.document.getElementById.bind(harness.window.document);
+    const originalQuerySelector = harness.window.document.querySelector.bind(harness.window.document);
+    const originalQuerySelectorAll = harness.window.document.querySelectorAll.bind(harness.window.document);
+    harness.window.document.getElementById = (id) => {
+        if (id === 'browse-view') return browseView;
+        if (id === 'overview-view') return overviewView;
+        return originalGetElementById(id);
+    };
+    harness.window.document.querySelector = (selector) => {
+        if (selector === '.view.active') {
+            return [browseView, overviewView].find((view) => view.classList.contains('active')) || null;
+        }
+        if (selector.startsWith('[data-view=')) return null;
+        return originalQuerySelector(selector);
+    };
+    harness.window.document.querySelectorAll = (selector) => {
+        if (selector === '.view') return [browseView, overviewView];
+        if (selector === '.nav-btn') return [];
+        return originalQuerySelectorAll(selector);
+    };
+    harness.window.location = 'https://example.test/?view=overview';
+    harness.window.history = { replaceState() {} };
+    harness.window.initializeBrowseView = () => initialization.promise;
+    harness.window.applyBrowseFilter = (...args) => {
+        appliedFilters.push(args);
+        return Promise.resolve();
+    };
+    app.refreshOverviewData = () => {};
+
+    app.browseCategory('P3', 'reading');
+    app.navigateToView('overview');
+    initialization.resolve();
+    await flushMicrotasks();
+
+    assert.deepEqual(appliedFilters, [], 'the stale pending filter must not reactivate Browse');
+    assert.equal(app.currentView, 'overview');
+    assert.equal(overviewView.classList.contains('active'), true);
+    assert.equal(browseView.classList.contains('active'), false);
+    assert.equal(harness.window.__pendingBrowseFilter, undefined);
+});
+
+test('a fallback navigation round trip invalidates a delayed hot Browse filter', async () => {
+    const harness = createHarness();
+    await harness.stateManager.ready;
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    const initialization = deferred();
+    const appliedFilters = [];
+    let sharedNavigationGeneration = 0;
+    const browseView = { id: 'browse-view', classList: createClassList() };
+    const overviewView = { id: 'overview-view', classList: createClassList(['active']) };
+    const views = [browseView, overviewView];
+    const originalGetElementById = harness.window.document.getElementById.bind(harness.window.document);
+    const originalQuerySelector = harness.window.document.querySelector.bind(harness.window.document);
+    const originalQuerySelectorAll = harness.window.document.querySelectorAll.bind(harness.window.document);
+    harness.window.document.getElementById = (id) => {
+        if (id === 'browse-view') return browseView;
+        if (id === 'overview-view') return overviewView;
+        return originalGetElementById(id);
+    };
+    harness.window.document.querySelector = (selector) => {
+        if (selector === '.view.active') {
+            return views.find((view) => view.classList.contains('active')) || null;
+        }
+        if (selector.startsWith('[data-view=')) return null;
+        return originalQuerySelector(selector);
+    };
+    harness.window.document.querySelectorAll = (selector) => {
+        if (selector === '.view') return views;
+        if (selector === '.nav-btn') return [];
+        return originalQuerySelectorAll(selector);
+    };
+    harness.window.location = 'https://example.test/?view=overview';
+    harness.window.history = { replaceState() {} };
+    harness.window.__markAppNavigationIntent = () => {
+        sharedNavigationGeneration += 1;
+        return sharedNavigationGeneration;
+    };
+    harness.window.__getAppNavigationIntentGeneration = () => sharedNavigationGeneration;
+    harness.window.showView = (viewName) => {
+        harness.window.__markAppNavigationIntent();
+        views.forEach((view) => view.classList.remove('active'));
+        (viewName === 'browse' ? browseView : overviewView).classList.add('active');
+    };
+    harness.window.initializeBrowseView = () => initialization.promise;
+    harness.window.applyBrowseFilter = (...args) => {
+        appliedFilters.push(args);
+        return Promise.resolve();
+    };
+
+    app.browseCategory('P3', 'reading');
+    const capturedPendingFilter = harness.window.__pendingBrowseFilter;
+    harness.window.showView('overview', false);
+    harness.window.showView('browse', false);
+    initialization.resolve();
+    await flushMicrotasks();
+
+    assert.deepEqual(
+        appliedFilters,
+        [],
+        'returning to Browse must not make an older activation intent current again'
+    );
+    assert.equal(app.currentView, 'browse', 'the fallback does not update app-local view state');
+    assert.equal(browseView.classList.contains('active'), true);
+    assert.equal(overviewView.classList.contains('active'), false);
+    assert.notEqual(capturedPendingFilter, undefined);
+    assert.equal(harness.window.__pendingBrowseFilter, undefined);
+});
+
+test('activation reset waits for hydration and durably clears restored Browse state', async () => {
+    const controlsReady = deferred();
+    const harness = createHarness({
+        async setupBrowseControls(windowStub) {
+            await controlsReady.promise;
+            windowStub.__browseFrequencyFilter = 'high';
+        }
+    });
+    await harness.stateManager.ready;
+    let cachedLastFilter = { category: 'P2', type: 'reading' };
+    harness.window.saveBrowseViewPreferences = (partial) => {
+        if (partial && partial.lastFilter) cachedLastFilter = partial.lastFilter;
+        return { lastFilter: cachedLastFilter };
+    };
+    harness.window.flushBrowsePreferenceWrites = async () => ({ lastFilter: cachedLastFilter });
+    harness.window.getPersistedBrowseFilter = () => cachedLastFilter;
+
+    const reset = harness.window.ExamActions.browseFilterStateOwner.resetForActivation();
+    await flushMicrotasks();
+    assert.equal(harness.window.__browseFrequencyFilter, 'high');
+    controlsReady.resolve();
+    assert.equal(await reset, true);
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(cachedLastFilter)),
+        { category: 'all', type: 'all' }
+    );
+    assert.equal(harness.window.__browseFilterMode, 'default');
+    assert.equal(harness.window.__browsePath, null);
+    assert.equal(harness.window.__browseFrequencyFilter, 'all');
+    assert.equal(harness.searchInput.value, '');
+    assert.equal(harness.stateManager.currentFilter, 'all');
+    assert.equal(harness.stateManager.state.currentCategory, null);
+    assert.equal(harness.stateManager.state.currentFrequency, null);
+    assert.equal(harness.stateManager.state.searchQuery, '');
+    assert.equal(
+        harness.preferencePatches.some((patch) => (
+            patch.frequencyFilter === 'all'
+            && patch.filter?.category === 'all'
+            && patch.filter?.type === 'all'
+        )),
+        true,
+        'the activation reset must persist both current and legacy cleared filters after hydration'
     );
 });
 

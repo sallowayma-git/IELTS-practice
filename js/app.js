@@ -6,6 +6,7 @@
 class ExamSystemApp {
     constructor() {
         this.currentView = 'overview';
+        this._navigationIntentGeneration = 0;
         this.components = {};
         this.isInitialized = false;
 
@@ -620,11 +621,20 @@ class ExamSystemApp {
             this.navigateToView(initialView);
         },
         navigateToView(viewName) {
+            const navigationIntentGeneration = ++this._navigationIntentGeneration;
+            let sharedNavigationIntentGeneration = null;
             if (typeof window.__markAppNavigationIntent === 'function') {
-                window.__markAppNavigationIntent();
+                sharedNavigationIntentGeneration = window.__markAppNavigationIntent();
+            }
+            if (sharedNavigationIntentGeneration == null
+                && typeof window.__getAppNavigationIntentGeneration === 'function') {
+                sharedNavigationIntentGeneration = window.__getAppNavigationIntentGeneration();
+            }
+            if (viewName !== 'browse' && window.__pendingBrowseFilter) {
+                delete window.__pendingBrowseFilter;
             }
             if (this.currentView === viewName) {
-                return;
+                return { navigationIntentGeneration, sharedNavigationIntentGeneration };
             }
             document.querySelectorAll('.view').forEach((view) => {
                 view.classList.remove('active');
@@ -643,10 +653,21 @@ class ExamSystemApp {
                 const url = new URL(window.location);
                 url.searchParams.set('view', viewName);
                 window.history.replaceState({}, '', url);
-                this.onViewActivated(viewName);
+                this.onViewActivated(
+                    viewName,
+                    navigationIntentGeneration,
+                    sharedNavigationIntentGeneration
+                );
             }
+            return { navigationIntentGeneration, sharedNavigationIntentGeneration };
         },
-        onViewActivated(viewName) {
+        onViewActivated(
+            viewName,
+            navigationIntentGeneration = this._navigationIntentGeneration,
+            sharedNavigationIntentGeneration = (typeof window.__getAppNavigationIntentGeneration === 'function'
+                ? window.__getAppNavigationIntentGeneration()
+                : null)
+        ) {
             switch (viewName) {
                 case 'overview':
                     this.refreshOverviewData();
@@ -660,10 +681,23 @@ class ExamSystemApp {
                                 ? window.initializeBrowseView({ skipLoad: true })
                                 : null
                         ).then(() => {
-                            if (window.__pendingBrowseFilter !== pendingFilter) {
+                            const activeView = typeof document.querySelector === 'function'
+                                ? document.querySelector('.view.active')
+                                : null;
+                            if (window.__pendingBrowseFilter !== pendingFilter
+                                || navigationIntentGeneration !== this._navigationIntentGeneration
+                                || this.currentView !== 'browse'
+                                || (activeView && activeView.id !== 'browse-view')
+                                || (sharedNavigationIntentGeneration != null
+                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
+                                    && window.__getAppNavigationIntentGeneration() !== sharedNavigationIntentGeneration)) {
                                 return undefined;
                             }
-                            return window.applyBrowseFilter(category, type, filterMode, path);
+                            const filterArgs = [category, type, filterMode, path];
+                            if (sharedNavigationIntentGeneration != null) {
+                                filterArgs.push(null, sharedNavigationIntentGeneration);
+                            }
+                            return window.applyBrowseFilter(...filterArgs);
                         })
                             .catch((error) => {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);

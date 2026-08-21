@@ -166,6 +166,30 @@ sandbox.self = sandbox;
 const context = vm.createContext(sandbox);
 vm.runInContext(source, context, { filename: 'js/main.js' });
 
+const firstHydrationIndex = deferred();
+const latestHydrationIndex = deferred();
+const initialPersistedFilterReader = sandbox.getPersistedBrowseFilter;
+let initialPersistedFilterReads = 0;
+sandbox.getPersistedBrowseFilter = () => {
+    initialPersistedFilterReads += 1;
+    return { category: 'P2', type: 'reading' };
+};
+resolverQueue.push(firstHydrationIndex, latestHydrationIndex);
+const firstHydration = sandbox.initializeBrowseView({ skipLoad: true });
+const latestHydration = sandbox.initializeBrowseView({ skipLoad: true });
+latestHydrationIndex.resolve([
+    { id: 'hydrated-reading', title: 'Hydrated Reading', category: 'P2', type: 'reading' }
+]);
+await latestHydration;
+assert.deepStrictEqual(browseState, { category: 'P2', type: 'reading' });
+assert.strictEqual(initialPersistedFilterReads, 1, 'the latest successful initialization must hydrate once');
+firstHydrationIndex.resolve([
+    { id: 'stale-reading', title: 'Stale Reading', category: 'P1', type: 'reading' }
+]);
+assert.strictEqual(await firstHydration, null, 'the superseded initialization must stand down');
+assert.strictEqual(initialPersistedFilterReads, 1, 'a stale initialization must not hydrate a second time');
+sandbox.getPersistedBrowseFilter = initialPersistedFilterReader;
+
 const searchFirst = deferred();
 const searchSecond = deferred();
 resolverQueue.push(searchFirst, searchSecond);
@@ -313,6 +337,7 @@ sandbox.__markAppNavigationIntent = function markAppNavigationIntent() {
     navigationIntentMarks += 1;
     return navigationIntentMarks;
 };
+sandbox.__getAppNavigationIntentGeneration = () => navigationIntentMarks;
 const bootFallbackSource = fs.readFileSync(path.join(repoRoot, 'js/boot-fallbacks.js'), 'utf8');
 vm.runInContext(bootFallbackSource, context, { filename: 'js/boot-fallbacks.js' });
 rendered.length = 0;
@@ -332,12 +357,67 @@ reentryNoMatchIndex.resolve(allExams);
 await new Promise((resolve) => setTimeout(resolve, 0));
 
 assert.strictEqual(searchInput.value, 'zzzz-no-match', 'ordinary Browse re-entry must preserve the query');
+assert.strictEqual(browseState.category, 'P1', 'ordinary Browse re-entry must preserve the live category');
+assert.strictEqual(
+    browseState.type,
+    'listening',
+    'ordinary Browse re-entry must not restore an older persisted type over the live selection'
+);
 assert.deepStrictEqual(
     rendered,
     [[], []],
     'ordinary Browse re-entry must reapply the preserved query instead of flashing the full list'
 );
 assert.strictEqual(navigationIntentMarks, 2, 'each fallback view activation must mark a navigation intent');
+
+rendered.length = 0;
+const stateBeforeCancelledApply = { ...browseState };
+const delayedNavigationFilterIndex = deferred();
+resolverQueue.push(delayedNavigationFilterIndex);
+const delayedNavigationFilter = sandbox.applyBrowseFilter(
+    'P3',
+    'listening',
+    null,
+    null,
+    null,
+    sandbox.__getAppNavigationIntentGeneration()
+);
+sandbox.showView('overview', false);
+delayedNavigationFilterIndex.resolve(allExams);
+assert.strictEqual(
+    await delayedNavigationFilter,
+    false,
+    'a filter continuation must stop when a newer navigation intent wins'
+);
+assert.deepStrictEqual(browseState, stateBeforeCancelledApply);
+assert.deepStrictEqual(rendered, [], 'the cancelled filter must not render after leaving Browse');
+assert.strictEqual(overviewView.classList.contains('active'), true);
+assert.strictEqual(browseView.classList.contains('active'), false);
+
+rendered.length = 0;
+searchInput.value = '';
+const directOverviewFilterIndex = deferred();
+resolverQueue.push(directOverviewFilterIndex);
+const productionShowView = sandbox.showView;
+const directOverviewNavigations = [];
+sandbox.showView = (viewName, resetCategory) => {
+    directOverviewNavigations.push([viewName, resetCategory]);
+    sandbox.__markAppNavigationIntent();
+    browseView.classList.remove('active');
+    overviewView.classList.remove('active');
+    (viewName === 'browse' ? browseView : overviewView).classList.add('active');
+};
+const directOverviewFilter = sandbox.applyBrowseFilter('P1', 'reading');
+directOverviewFilterIndex.resolve(allExams);
+await directOverviewFilter;
+assert.deepStrictEqual(rendered, [['reading', 'listening']]);
+assert.deepStrictEqual(browseState, { category: 'P1', type: 'reading' });
+assert.deepStrictEqual(
+    directOverviewNavigations,
+    [['browse', false]],
+    'a direct stable Overview filter must retain its contract of entering Browse after rendering'
+);
+sandbox.showView = productionShowView;
 
 const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
 vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
@@ -360,13 +440,18 @@ const previousControllerInitialize = sandbox.browseController.initialize;
 const previousControllerContainer = sandbox.browseController.buttonContainer;
 const previousPersistedFilter = sandbox.getPersistedBrowseFilter;
 const previousListeningAvailabilityRefresh = sandbox.refreshListeningAvailabilityUI;
+let stalePersistedFilterReads = 0;
 sandbox.browseController.buttonContainer = null;
 sandbox.browseController.initialize = function initializeBrowseController(containerId) {
     firstActivationControllerSetups += 1;
     this.buttonContainer = containerId === 'type-filter-buttons' ? typeButtonContainer : null;
     return true;
 };
-sandbox.getPersistedBrowseFilter = () => ({ category: 'P2', type: 'reading' });
+sandbox.setBrowseFilterState('P2', 'reading');
+sandbox.getPersistedBrowseFilter = () => {
+    stalePersistedFilterReads += 1;
+    return { category: 'all', type: 'all' };
+};
 sandbox.refreshListeningAvailabilityUI = () => {
     firstActivationListeningSyncs += 1;
 };
@@ -381,7 +466,16 @@ assert.strictEqual(firstActivationControllerSetups, 1, 'first Browse activation 
 assert.strictEqual(firstActivationListeningSyncs, 1, 'first Browse activation must refresh listening availability');
 assert.strictEqual(browseState.category, 'P2');
 assert.strictEqual(browseState.type, 'reading');
-assert.deepStrictEqual(rendered, [['p2-reading']], 'first activation must render once after restoring persisted scope');
+assert.strictEqual(
+    stalePersistedFilterReads,
+    0,
+    'ordinary Browse re-entry must not read stale persisted scope after an explicit filter intent'
+);
+assert.deepStrictEqual(
+    rendered,
+    [['p2-reading']],
+    'ordinary Browse re-entry must keep the live scope while an older persisted filter is still visible'
+);
 sandbox.browseController.initialize = previousControllerInitialize;
 sandbox.browseController.buttonContainer = previousControllerContainer;
 sandbox.getPersistedBrowseFilter = previousPersistedFilter;
@@ -624,6 +718,43 @@ for (const scenario of [
     assert.deepStrictEqual(compositionRenders, [scenario.expected]);
 }
 
+const duplicateP4Numbered = {
+    id: 'p4-shared-numbered',
+    title: 'Shared P4 Duplicate',
+    searchText: 'shared p4 duplicate',
+    category: 'P4',
+    type: 'listening',
+    path: 'ListeningPractice/100 P4/1-10/shared.html'
+};
+const duplicateP4High = {
+    id: 'p4-shared-high',
+    title: 'Shared P4 Duplicate',
+    searchText: 'shared p4 duplicate',
+    category: 'P4',
+    type: 'listening',
+    path: 'ListeningPractice/100 P4/P4 高频(52)/shared.html'
+};
+sandbox.__browseFilterMode = 'frequency-p4';
+sandbox.__browsePath = 'ListeningPractice/100 P4';
+sandbox.__browseFrequencyFilter = 'all';
+productionBrowseController.currentMode = 'frequency-p4';
+productionBrowseController.activeFilter = 'high';
+sandbox.setBrowseFilterState('P4', 'listening');
+searchInput.value = 'shared p4';
+for (const duplicateOrder of [
+    [duplicateP4Numbered, duplicateP4High],
+    [duplicateP4High, duplicateP4Numbered]
+]) {
+    compositionRenders.length = 0;
+    const requestId = sandbox.__beginBrowseResultsRequest();
+    await sandbox.__renderBrowseResultsForState(duplicateOrder, requestId);
+    assert.deepStrictEqual(
+        compositionRenders,
+        [['p4-shared-high']],
+        'the active folder must be applied before deduplication regardless of index order'
+    );
+}
+
 compositionRenders.length = 0;
 compositionLoadCalls = 0;
 searchInput.value = 'shared';
@@ -678,12 +809,15 @@ sandbox.AppEntry = {
         coldResetOrder.push('ensure');
         sandbox.ExamActions = {
             browseFilterStateOwner: {
-                resetToAll() {
-                    coldResetOrder.push('owner');
+                resetForActivation() {
+                    coldResetOrder.push('owner-activation');
                     sandbox.__browseFilterMode = 'default';
                     sandbox.__browsePath = null;
                     sandbox.__browseFrequencyFilter = 'all';
                     return true;
+                },
+                resetToAll() {
+                    throw new Error('the cold fallback must prefer the hydration-aware activation reset');
                 }
             }
         };
@@ -703,7 +837,7 @@ sandbox.__browseFrequencyFilter = 'high';
 assert.notStrictEqual(await sandbox.showView('browse', true), false);
 assert.deepStrictEqual(
     coldResetOrder,
-    ['barrier', 'ensure', 'owner', 'activate', 'load'],
+    ['barrier', 'ensure', 'owner-activation', 'activate', 'load'],
     'a cold reset must run its owner before the synchronized activation can render'
 );
 assert.strictEqual(unsafeBrowseGroupCalls, 0, 'cold reset must not invoke the synchronizing Browse loader');

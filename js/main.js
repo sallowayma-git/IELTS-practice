@@ -10,6 +10,7 @@ let practiceListScroller = null;
 let app = null;
 let pdfHandler = null;
 let browseStateManager = null;
+let browseInitialFilterHydrationConsumed = false;
 
 function normalizeRecordId(id) {
     if (id == null) {
@@ -2095,6 +2096,7 @@ window.__isBrowseUserResultsRequestInFlight = isBrowseUserResultsRequestInFlight
 window.__isBrowseUserResultsRequest = isBrowseUserResultsRequest;
 
 async function filterByType(type, examIndexOverride = null, renderRequestId = null) {
+    browseInitialFilterHydrationConsumed = true;
     const userRequestId = renderRequestId == null
         ? beginBrowseUserResultsRequest()
         : retainBrowseUserResultsRequest(renderRequestId);
@@ -2171,15 +2173,42 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
 }
 
 // 应用分类筛选（供 App/总览调用）
-async function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null, renderRequestId = null) {
+async function applyBrowseFilter(
+    category = 'all',
+    type = null,
+    filterMode = null,
+    path = null,
+    renderRequestId = null,
+    navigationIntentGeneration = null
+) {
+    browseInitialFilterHydrationConsumed = true;
+    const getActiveViewId = () => {
+        const activeView = typeof document.querySelector === 'function'
+            ? document.querySelector('.view.active')
+            : null;
+        return activeView ? activeView.id : null;
+    };
+    const activeViewIdAtRequest = getActiveViewId();
+    const capturedNavigationIntentGeneration = navigationIntentGeneration == null
+        && typeof window.__getAppNavigationIntentGeneration === 'function'
+        ? window.__getAppNavigationIntentGeneration()
+        : navigationIntentGeneration;
+    const isNavigationIntentCurrent = () => {
+        if (capturedNavigationIntentGeneration != null
+            && typeof window.__getAppNavigationIntentGeneration === 'function'
+            && window.__getAppNavigationIntentGeneration() !== capturedNavigationIntentGeneration) {
+            return false;
+        }
+        return getActiveViewId() === activeViewIdAtRequest;
+    };
     const userRequestId = renderRequestId == null
         ? beginBrowseUserResultsRequest()
         : retainBrowseUserResultsRequest(renderRequestId);
     const activeRequestId = renderRequestId == null ? userRequestId : renderRequestId;
     try {
         const indexSnapshot = await resolveActiveExamIndex();
-        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-            return;
+        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+            return false;
         }
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
         if (memorizeSelectionActive) {
@@ -2254,8 +2283,8 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
             }
         }
 
-        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-            return;
+        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+            return false;
         }
 
         // 2. 再应用具体的分类和类型筛选（确保不被重置覆盖）
@@ -2267,8 +2296,8 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
         // 3. 统一刷新，确保活动搜索继续约束分类/路径结果。
         await renderBrowseResultsForState(indexSnapshot, activeRequestId);
 
-        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-            return;
+        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+            return false;
         }
 
         // 若未在浏览视图，则尽力切换
@@ -2276,8 +2305,8 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
             window.showView('browse', false);
         }
     } catch (e) {
-        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-            return;
+        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+            return false;
         }
         console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
         setBrowseFilterState('all', 'all');
@@ -2286,7 +2315,7 @@ async function applyBrowseFilter(category = 'all', type = null, filterMode = nul
         }
         // 避免在错误处理中再次同步调用可能导致错误的 loadExamList，使用 setTimeout 打断调用栈
         setTimeout(() => {
-            if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
                 return;
             }
             try { renderBrowseResultsForState(null, activeRequestId); } catch (_) { }
@@ -2321,13 +2350,16 @@ async function initializeBrowseView(options = {}) {
         window.refreshListeningAvailabilityUI(examIndex);
     }
 
-    const persisted = getPersistedBrowseFilter();
-    if (persisted) {
-        setBrowseFilterState(persisted.category, persisted.type);
-        setBrowseTitle(formatBrowseTitle(persisted.category, persisted.type));
-    } else {
-        setBrowseFilterState('all', 'all');
-        setBrowseTitle(formatBrowseTitle('all', 'all'));
+    if (!browseInitialFilterHydrationConsumed) {
+        const persisted = getPersistedBrowseFilter();
+        if (persisted) {
+            setBrowseFilterState(persisted.category, persisted.type);
+            setBrowseTitle(formatBrowseTitle(persisted.category, persisted.type));
+        } else {
+            setBrowseFilterState('all', 'all');
+            setBrowseTitle(formatBrowseTitle('all', 'all'));
+        }
+        browseInitialFilterHydrationConsumed = true;
     }
 
     setupBrowseSortControl();
@@ -3180,6 +3212,7 @@ function clearSearch() {
 
 function getBrowseFilteredExamBase(examIndexSnapshot = []) {
     const examIndex = Array.isArray(examIndexSnapshot) ? examIndexSnapshot : [];
+    const folderScopedExamIndex = applyActiveBrowseFolderFilter(examIndex);
     const activeCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
     const activeExamType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
     const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
@@ -3188,7 +3221,7 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
         : null;
 
     if (window.ExamFilterService && typeof window.ExamFilterService.filterExams === 'function') {
-        const filtered = window.ExamFilterService.filterExams(examIndex, {
+        return window.ExamFilterService.filterExams(folderScopedExamIndex, {
             activeCategory,
             activeExamType,
             browseFilterMode: window.__browseFilterMode,
@@ -3197,10 +3230,9 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
             sortMode: window.__browseSortMode,
             frequencyFilter: window.__browseFrequencyFilter
         });
-        return applyActiveBrowseFolderFilter(filtered);
     }
 
-    let list = Array.isArray(examIndex) ? examIndex.slice() : [];
+    let list = folderScopedExamIndex.slice();
     if (activeExamType !== 'all') {
         list = list.filter((exam) => exam && exam.type === activeExamType);
     }
@@ -3217,7 +3249,7 @@ function getBrowseFilteredExamBase(examIndexSnapshot = []) {
             window.__browseFrequencyFilter
         );
     }
-    return applyActiveBrowseFolderFilter(list);
+    return list;
 }
 
 function applyActiveBrowseFolderFilter(exams) {

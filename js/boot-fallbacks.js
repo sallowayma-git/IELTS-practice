@@ -35,6 +35,16 @@
     return owner && typeof owner.resetToAll === 'function' ? owner : null;
   }
 
+  function invokeBrowseStateOwnerReset(owner, label) {
+    if (!owner) {
+      return Promise.resolve(false);
+    }
+    var reset = typeof owner.resetForActivation === 'function'
+      ? owner.resetForActivation
+      : owner.resetToAll;
+    return invokeBrowseResetDelegate(reset, owner, label);
+  }
+
   function invokeBrowseResetDelegate(delegate, context, label) {
     if (typeof delegate !== 'function') {
       return Promise.resolve(false);
@@ -81,6 +91,13 @@
   }
 
   function resetBrowseFunctionalStateForFallback() {
+    var activationOwner = getBrowseFilterStateOwner();
+    if (activationOwner && typeof activationOwner.resetForActivation === 'function') {
+      return invokeBrowseStateOwnerReset(activationOwner, '通过题库状态 owner 完成激活前重置')
+        .then(function (succeeded) {
+          return { succeeded: succeeded, ownerLoaded: false };
+        });
+    }
     var delegates = [
       {
         fn: window.resetBrowseFilterStateToAll,
@@ -98,11 +115,8 @@
       if (index >= delegates.length) {
         var existingOwner = getBrowseFilterStateOwner();
         if (existingOwner) {
-          return invokeBrowseResetDelegate(
-            existingOwner.resetToAll,
-            existingOwner,
-            '通过稳定题库状态 owner 重置'
-          ).then(function (succeeded) {
+          return invokeBrowseStateOwnerReset(existingOwner, '通过稳定题库状态 owner 重置')
+            .then(function (succeeded) {
             return { succeeded: succeeded, ownerLoaded: false };
           });
         }
@@ -110,11 +124,8 @@
           if (!loaded || !loaded.owner) {
             return { succeeded: false, ownerLoaded: false };
           }
-          return invokeBrowseResetDelegate(
-            loaded.owner.resetToAll,
-            loaded.owner,
-            '通过延迟加载的题库状态 owner 重置'
-          ).then(function (succeeded) {
+          return invokeBrowseStateOwnerReset(loaded.owner, '通过延迟加载的题库状态 owner 重置')
+            .then(function (succeeded) {
             return { succeeded: succeeded, ownerLoaded: loaded.loaded === true };
           });
         });
@@ -235,6 +246,11 @@
         var runBrowseRefresh = function runBrowseRefresh() {
           if (resetCategory === false && typeof window.activateBrowseView === 'function') {
             return window.activateBrowseView();
+          }
+          if (resetCategory === false
+            && window.AppEntry
+            && typeof window.AppEntry.ensureBrowseGroup === 'function') {
+            return window.AppEntry.ensureBrowseGroup();
           }
           if (typeof window.refreshBrowseResults === 'function') {
             return window.refreshBrowseResults();

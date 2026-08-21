@@ -1010,7 +1010,8 @@
 
     const browseFilterStateOwner = {
         setFrequencyFilter: setBrowseFrequencyFilter,
-        resetToAll: resetBrowseFunctionalStateToAll
+        resetToAll: resetBrowseFunctionalStateToAll,
+        resetForActivation: resetBrowseFunctionalStateForActivation
     };
 
     function resetBrowseFilterStateToAll(examIndex) {
@@ -1068,7 +1069,10 @@
             return;
         }
         try {
-            await preferences.patchBrowse({ frequencyFilter: 'all' });
+            await preferences.patchBrowse({
+                frequencyFilter: 'all',
+                filter: { category: 'all', type: 'all' }
+            });
         } catch (error) {
             console.warn('[ExamActions] 持久化浏览频率重置失败:', error);
         }
@@ -1086,7 +1090,7 @@
 
     function applyBrowseResetState(examIndex) {
         clearReadingMemorizeBrowseMode();
-        resetBrowseFilterStateToAll(examIndex);
+        const filterResetSucceeded = resetBrowseFilterStateToAll(examIndex);
 
         if (global.browseStateManager && typeof global.browseStateManager.resetToAllExams === 'function') {
             global.browseStateManager.resetToAllExams();
@@ -1096,6 +1100,54 @@
 
         if (typeof global.setBrowseTitle === 'function') {
             global.setBrowseTitle('题库列表');
+        }
+        return filterResetSucceeded;
+    }
+
+    function ensureBrowseStateManagerForReset() {
+        if (global.browseStateManager) {
+            return global.browseStateManager;
+        }
+        if (typeof global.BrowseStateManager !== 'function') {
+            return null;
+        }
+        try {
+            return new global.BrowseStateManager();
+        } catch (error) {
+            console.warn('[ExamActions] 初始化题库状态管理器失败:', error);
+            return null;
+        }
+    }
+
+    async function resetBrowseFunctionalStateForActivation() {
+        try {
+            const manager = ensureBrowseStateManagerForReset();
+            if (manager && manager.ready && typeof manager.ready.then === 'function') {
+                await manager.ready;
+            }
+            if (typeof global.setupBrowseControls === 'function') {
+                await global.setupBrowseControls();
+            }
+            if (!applyBrowseResetState(null)) {
+                return false;
+            }
+
+            if (typeof global.saveBrowseViewPreferences === 'function') {
+                global.saveBrowseViewPreferences({
+                    lastFilter: { category: 'all', type: 'all' }
+                });
+            }
+            if (typeof global.flushBrowsePreferenceWrites === 'function') {
+                await global.flushBrowsePreferenceWrites();
+            }
+            if (manager && typeof manager.persistState === 'function') {
+                await manager.persistState();
+            }
+            await persistBrowseFrequencyReset();
+            return true;
+        } catch (error) {
+            console.warn('[ExamActions] 激活前重置题库状态失败:', error);
+            return false;
         }
     }
 

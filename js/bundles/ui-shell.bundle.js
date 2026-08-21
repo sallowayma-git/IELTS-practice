@@ -1812,10 +1812,17 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     function synchronizeActiveBrowseViewAfterLoad() {
         var resetBarrier = browseFunctionalResetBarrier;
         if (!resetBarrier) {
-            return synchronizeActiveBrowseViewNow();
+            return synchronizeActiveBrowseViewNow().then(function () {
+                return true;
+            });
         }
         return Promise.resolve(resetBarrier).then(function afterFunctionalReset(resetSucceeded) {
-            return resetSucceeded ? synchronizeActiveBrowseViewNow() : undefined;
+            if (!resetSucceeded) {
+                return false;
+            }
+            return synchronizeActiveBrowseViewNow().then(function () {
+                return true;
+            });
         });
     }
 
@@ -1845,8 +1852,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return synchronizeActiveBrowseViewAfterLoad()
                     .catch(function onBrowseViewSyncError(error) {
                         console.warn('[MainEntry] 恢复题库视图状态失败:', error);
+                        return true;
                     })
-                    .then(function browseViewSynchronized() {
+                    .then(function browseViewSynchronized(synchronized) {
+                        if (synchronized === false) {
+                            browseGroupPromise = null;
+                            return false;
+                        }
                         return true;
                     });
             }).catch(function onBrowseLoadError(error) {
@@ -1925,6 +1937,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     global.__markAppNavigationIntent = markAppNavigationIntent;
+    global.__getAppNavigationIntentGeneration = function getAppNavigationIntentGeneration() {
+        return appNavigationIntentGeneration;
+    };
 
     function initializeNavigationShell() {
         var controller = null;
@@ -2173,7 +2188,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     resultsRequestCaptured = true;
                 });
             }
-            return groupReady.then(function invoke() {
+            return groupReady.then(function invoke(groupSucceeded) {
+                if (groupName === BROWSE_GROUP && groupSucceeded === false) {
+                    return false;
+                }
                 if (groupName === BROWSE_GROUP && resetGeneration !== browseResetIntentGeneration) {
                     return false;
                 }
@@ -2298,7 +2316,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     resultsRequestCaptured = true;
                 });
             }
-            return groupReady.then(function () {
+            return groupReady.then(function (groupSucceeded) {
+                if (group === BROWSE_GROUP && groupSucceeded === false) {
+                    return false;
+                }
                 if (group === BROWSE_GROUP && resetGeneration !== browseResetIntentGeneration) {
                     return false;
                 }
@@ -2525,7 +2546,10 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                     resultsRequestCaptured = true;
                 });
             }
-            browseReady.then(function afterBrowseReady() {
+            browseReady.then(function afterBrowseReady(groupSucceeded) {
+                if (groupSucceeded === false) {
+                    return;
+                }
                 if (refreshGeneration !== examIndexRefreshGeneration
                     || resultsProxyGenerationAtReceipt !== browseResultsProxyGeneration
                     || navigationGenerationAtReceipt !== appNavigationIntentGeneration
