@@ -13982,12 +13982,12 @@
             }
             try { global.updateOverview && global.updateOverview(index); } catch (_) { }
             refreshListeningAvailabilityUI(index);
-            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
-                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
-            }
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { index: cloneArray(index) } }));
             } catch (_) { }
+            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+            }
             return loadTime;
         }
 
@@ -14455,6 +14455,9 @@
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
+            }
+            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
             }
 
             if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {

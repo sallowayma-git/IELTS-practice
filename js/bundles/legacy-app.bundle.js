@@ -1478,6 +1478,9 @@
         }
       } catch (_) { }
       try { window.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key: key, index: snapshot } })); } catch (_) { }
+      if (typeof window.startPracticeRecordsSyncInBackground === 'function') {
+        window.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+      }
       return true;
     }
 

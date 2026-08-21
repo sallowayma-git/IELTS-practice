@@ -396,6 +396,393 @@ sandbox.setBrowseFilterState(
     browseScopeBeforeColdProgress.type
 );
 
+const integrationListeners = new Map();
+const integrationBrowseView = { id: 'browse-view', classList: createClassList() };
+const integrationOverviewView = { id: 'overview-view', classList: createClassList() };
+integrationOverviewView.classList.add('active');
+const integrationSearchInput = { value: '' };
+const integrationDocument = {
+    readyState: 'loading',
+    body: { appendChild() {}, classList: createClassList() },
+    documentElement: { classList: createClassList() },
+    addEventListener() {},
+    removeEventListener() {},
+    querySelector(selector) {
+        if (selector === '.search-input') return integrationSearchInput;
+        if (selector === '.view.active') {
+            return [integrationBrowseView, integrationOverviewView]
+                .find((view) => view.classList.contains('active')) || null;
+        }
+        return null;
+    },
+    querySelectorAll() { return []; },
+    createElement() {
+        return { style: {}, classList: createClassList(), appendChild() {}, setAttribute() {} };
+    },
+    getElementById(id) {
+        if (id === 'browse-view') return integrationBrowseView;
+        if (id === 'overview-view') return integrationOverviewView;
+        if (id === 'exam-search-input') return integrationSearchInput;
+        if (id === 'search-clear-btn') return { hidden: true };
+        if (id === 'type-filter-buttons') return { querySelectorAll() { return []; } };
+        return null;
+    }
+};
+const integrationRenders = [];
+const integrationAnchorIndexes = [];
+const integrationCompletionRefreshes = [];
+const integrationBrowseState = { category: 'all', type: 'all' };
+const integrationIndexResolvers = [];
+let integrationIndexResolutionCount = 0;
+const IntegrationCustomEvent = class CustomEvent {
+    constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
+};
+const integrationSandbox = {
+    console: quietConsole,
+    document: integrationDocument,
+    location: { href: 'https://example.test/index.html', search: '', origin: 'https://example.test', protocol: 'https:' },
+    history: { replaceState() {} },
+    navigator: {},
+    URL,
+    URLSearchParams,
+    Promise,
+    Set,
+    Map,
+    Date,
+    Math,
+    JSON,
+    CustomEvent: IntegrationCustomEvent,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    requestAnimationFrame(callback) { return setTimeout(callback, 0); },
+    cancelAnimationFrame: clearTimeout,
+    addEventListener(type, listener) {
+        const listeners = integrationListeners.get(type) || [];
+        listeners.push(listener);
+        integrationListeners.set(type, listeners);
+    },
+    removeEventListener() {},
+    dispatchEvent(event) {
+        (integrationListeners.get(event.type) || []).slice().forEach((listener) => listener(event));
+        return true;
+    },
+    confirm() { return false; },
+    alert() {},
+    showMessage() {},
+    setBrowseFilterState(category, type) {
+        integrationBrowseState.category = category;
+        integrationBrowseState.type = type;
+    },
+    getCurrentCategory() { return integrationBrowseState.category; },
+    getCurrentExamType() { return integrationBrowseState.type; },
+    setBrowseTitle() {},
+    formatBrowseTitle(category, type) { return `${category}:${type}`; },
+    normalizeExamType(type) { return type || 'all'; },
+    async resolveActiveLibraryIndex() {
+        integrationIndexResolutionCount += 1;
+        const next = integrationIndexResolvers.shift();
+        return next ? next.promise : [];
+    },
+    updateBrowseAnchorsFromRecords(records, index) {
+        integrationAnchorIndexes.push(Array.from(index || [], (exam) => exam.id));
+    },
+    rebuildBrowseCompletionIndex(records) {
+        integrationCompletionRefreshes.push(Array.isArray(records) ? records.length : -1);
+    },
+    browseController: {
+        currentMode: 'default',
+        buttonContainer: {},
+        currentCategory: 'all',
+        currentExamType: 'all',
+        getCurrentCategory() { return integrationBrowseState.category; },
+        getCurrentExamType() { return integrationBrowseState.type; },
+        updateBrowseTitle() {}
+    },
+    ExamActions: {
+        loadExamList(exams) {
+            integrationRenders.push(Array.from(exams, (exam) => exam.id));
+            return exams;
+        },
+        displayExams(exams) { return exams; }
+    },
+    AppLazyLoader: {
+        ensureGroup() { return Promise.resolve(true); }
+    },
+    AppData: {
+        ready: Promise.resolve(),
+        preferences: {
+            async getBrowse() { return { lastFilter: null, frequencyFilter: 'all' }; },
+            async patchBrowse(value) { return value; },
+            async setBrowse(value) { return value; }
+        },
+        practice: {
+            async list() { return []; },
+            async listInsights() { return []; },
+            async getStats() { return {}; }
+        },
+        library: {
+            async getActive() { return null; },
+            async listConfigurations() { return []; }
+        }
+    }
+};
+integrationSandbox.window = integrationSandbox;
+integrationSandbox.globalThis = integrationSandbox;
+integrationSandbox.self = integrationSandbox;
+const integrationContext = vm.createContext(integrationSandbox);
+const mainEntrySource = fs.readFileSync(path.join(repoRoot, 'js/app/main-entry.js'), 'utf8');
+vm.runInContext(mainEntrySource, integrationContext, { filename: 'js/app/main-entry.js' });
+vm.runInContext(source, integrationContext, { filename: 'js/main.js' });
+await integrationSandbox.AppEntry.ensureBrowseGroup();
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+
+const oldProgressIndex = deferred();
+integrationIndexResolvers.push(oldProgressIndex);
+const arbitrationUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+await integrationSandbox.__renderBrowseResultsForState(
+    [{ id: 'user-current' }],
+    arbitrationUserRequest
+);
+const oldProgressSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'index-fresh' }] }
+}));
+oldProgressIndex.resolve([{ id: 'progress-old' }]);
+await oldProgressSync;
+integrationSandbox.__endBrowseUserResultsRequest(arbitrationUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [['user-current'], ['index-fresh']],
+    'a fresher authoritative index publication must beat an older progress resolver at settlement'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    arbitrationUserRequest + 1,
+    'discarding stale progress must not consume an extra results token'
+);
+
+integrationRenders.length = 0;
+const laterProgressUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'index-older-than-progress' }] }
+}));
+integrationSandbox.refreshBrowseProgressFromRecords([], [{ id: 'progress-newest' }]);
+integrationSandbox.__endBrowseUserResultsRequest(laterProgressUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [['progress-newest']],
+    'a progress snapshot received after an index publication must remain the latest background render'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    laterProgressUserRequest + 1,
+    'the later progress render must claim exactly one results token'
+);
+
+integrationRenders.length = 0;
+const abaUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+integrationSandbox.refreshBrowseProgressFromRecords([], [{ id: 'aba-progress-old' }]);
+integrationSandbox.__markAppNavigationIntent();
+integrationBrowseView.classList.remove('active');
+integrationOverviewView.classList.add('active');
+integrationSandbox.__markAppNavigationIntent();
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+const abaCurrentRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+await integrationSandbox.__renderBrowseResultsForState(
+    [{ id: 'aba-current' }],
+    abaCurrentRequest
+);
+integrationSandbox.__endBrowseUserResultsRequest(abaCurrentRequest);
+integrationSandbox.__endBrowseUserResultsRequest(abaUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [['aba-current']],
+    'a queued progress snapshot must not survive a Browse navigation ABA epoch'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    abaCurrentRequest,
+    'discarding an ABA progress snapshot must preserve the new activation token'
+);
+
+integrationRenders.length = 0;
+const libraryEpochUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+integrationSandbox.refreshBrowseProgressFromRecords([], [{ id: 'library-progress-old' }]);
+integrationBrowseView.classList.remove('active');
+integrationOverviewView.classList.add('active');
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'library-publication' }] }
+}));
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+integrationSandbox.__endBrowseUserResultsRequest(libraryEpochUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'an authoritative index publication must invalidate queued progress even without a navigation epoch change'
+);
+
+integrationRenders.length = 0;
+const resetEpochUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+integrationSandbox.refreshBrowseProgressFromRecords([], [{ id: 'pre-reset-progress' }]);
+const resetEpochIntent = integrationSandbox.__beginBrowseResetIntent();
+integrationSandbox.__endBrowseResetIntent(resetEpochIntent);
+integrationSandbox.__endBrowseUserResultsRequest(resetEpochUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'a progress snapshot captured before a reset must not repaint after the reset epoch closes'
+);
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+const coalescedOldLibraryIndex = deferred();
+const coalescedCurrentLibraryIndex = deferred();
+integrationIndexResolvers.push(coalescedOldLibraryIndex, coalescedCurrentLibraryIndex);
+const coalescedResolutionCountBefore = integrationIndexResolutionCount;
+const oldLibrarySyncCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'pre-library-publication',
+    { forceRender: true }
+);
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'coalesced-index-publication' }] }
+}));
+const currentLibrarySyncCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'library-loaded',
+    { forceRender: true }
+);
+assert.strictEqual(
+    currentLibrarySyncCycle,
+    oldLibrarySyncCycle,
+    'an overlapping library sync must join the active coalescing cycle'
+);
+coalescedCurrentLibraryIndex.resolve([{ id: 'coalesced-progress-current' }]);
+coalescedOldLibraryIndex.resolve([{ id: 'coalesced-progress-old' }]);
+await oldLibrarySyncCycle;
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    integrationIndexResolutionCount,
+    coalescedResolutionCountBefore + 2,
+    'one overlapping request must schedule exactly one follow-up sync against the latest library epoch'
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [['coalesced-index-publication'], ['coalesced-progress-current']],
+    'the coalesced latest-library sync must repaint progress after the stale source is discarded'
+);
+assert.deepStrictEqual(
+    integrationAnchorIndexes,
+    [['coalesced-progress-current']],
+    'a stale library index must not update or persist Browse anchors'
+);
+assert.strictEqual(
+    integrationCompletionRefreshes.length,
+    2,
+    'record-only completion state may refresh for both the stale and latest library syncs'
+);
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+const rejectedOldLibraryIndex = deferred();
+const currentLibraryIndexAfterFailure = deferred();
+integrationIndexResolvers.push(rejectedOldLibraryIndex, currentLibraryIndexAfterFailure);
+const failedOldCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'failing-pre-library-publication',
+    { forceRender: true }
+);
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'failure-index-publication' }] }
+}));
+const joinedRecoveryCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'library-loaded',
+    { forceRender: true }
+);
+assert.strictEqual(joinedRecoveryCycle, failedOldCycle);
+currentLibraryIndexAfterFailure.resolve([{ id: 'failure-followup-current' }]);
+rejectedOldLibraryIndex.reject(new Error('simulated stale library resolution failure'));
+await joinedRecoveryCycle;
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [['failure-index-publication'], ['failure-followup-current']],
+    'a stale sync failure must not suppress the queued latest-library follow-up'
+);
+assert.deepStrictEqual(
+    integrationAnchorIndexes,
+    [['failure-followup-current']],
+    'only the successful latest-library follow-up may update anchors after an older failure'
+);
+
+const tailFailureIndex = deferred();
+integrationIndexResolvers.push(tailFailureIndex);
+const tailFailureCycle = integrationSandbox.ensurePracticeRecordsSync('tail-failure');
+tailFailureIndex.reject(new Error('simulated terminal sync failure'));
+await assert.rejects(tailFailureCycle, /simulated terminal sync failure/);
+const postFailureRecoveryIndex = deferred();
+integrationIndexResolvers.push(postFailureRecoveryIndex);
+const postFailureRecoveryCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'post-failure-recovery',
+    { forceRender: true }
+);
+postFailureRecoveryIndex.resolve([{ id: 'post-failure-recovery' }]);
+await postFailureRecoveryCycle;
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders.at(-1),
+    ['post-failure-recovery'],
+    'a terminal failure must release the queue so a later sync can recover normally'
+);
+
+integrationRenders.length = 0;
+const postNavigationProgressIndex = deferred();
+integrationIndexResolvers.push(postNavigationProgressIndex);
+const postNavigationProgressSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
+integrationSandbox.__markAppNavigationIntent();
+integrationBrowseView.classList.remove('active');
+integrationOverviewView.classList.add('active');
+integrationSandbox.__markAppNavigationIntent();
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+const postNavigationRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+await integrationSandbox.__renderBrowseResultsForState(
+    [{ id: 'post-navigation-current' }],
+    postNavigationRequest
+);
+postNavigationProgressIndex.resolve([{ id: 'post-navigation-progress' }]);
+await postNavigationProgressSync;
+integrationSandbox.__endBrowseUserResultsRequest(postNavigationRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [['post-navigation-current'], ['post-navigation-progress']],
+    'a same-library sync resolving after navigation must bind to and repaint the current Browse epoch'
+);
+
+integrationRenders.length = 0;
+const postResetProgressIndex = deferred();
+integrationIndexResolvers.push(postResetProgressIndex);
+const postResetProgressSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
+const postResetIntent = integrationSandbox.__beginBrowseResetIntent();
+integrationSandbox.__endBrowseResetIntent(postResetIntent);
+postResetProgressIndex.resolve([{ id: 'post-reset-progress' }]);
+await postResetProgressSync;
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [['post-reset-progress']],
+    'a same-library sync resolving after reset must bind to and repaint the post-reset epoch'
+);
+
 rendered.length = 0;
 const sharedSearchIndex = deferred();
 resolverQueue.push(sharedSearchIndex);
@@ -986,6 +1373,8 @@ const authoritativeDocument = {
     }
 };
 let authoritativePersistedReads = 0;
+let authoritativeDurableReads = 0;
+let authoritativeWritesDurably = false;
 const authoritativePatchGate = deferred();
 const authoritativePreferencePatches = [];
 const authoritativeDurableBrowse = {
@@ -1045,6 +1434,7 @@ const authoritativeSandbox = {
         ready: Promise.resolve(),
         preferences: {
             async getBrowse() {
+                authoritativeDurableReads += 1;
                 return JSON.parse(JSON.stringify(authoritativeDurableBrowse));
             },
             async setBrowse(value) {
@@ -1054,7 +1444,9 @@ const authoritativeSandbox = {
             async patchBrowse(value) {
                 authoritativePreferencePatches.push(JSON.parse(JSON.stringify(value || {})));
                 await authoritativePatchGate.promise;
-                Object.assign(authoritativeDurableBrowse, JSON.parse(JSON.stringify(value || {})));
+                if (authoritativeWritesDurably) {
+                    Object.assign(authoritativeDurableBrowse, JSON.parse(JSON.stringify(value || {})));
+                }
                 return value;
             }
         },
@@ -1085,29 +1477,75 @@ assert.strictEqual(
     0,
     'legacy-app startup preference hydration must not masquerade as a live mutation'
 );
-const browsePreferencesSource = fs.readFileSync(path.join(repoRoot, 'js/utils/BrowsePreferencesUtils.js'), 'utf8');
-vm.runInContext(browsePreferencesSource, authoritativeContext, { filename: 'js/utils/BrowsePreferencesUtils.js' });
-await authoritativeSandbox.whenBrowseViewPreferencesReady();
-const productionAuthoritativePersistedReader = authoritativeSandbox.getPersistedBrowseFilter;
-authoritativeSandbox.getPersistedBrowseFilter = () => {
-    authoritativePersistedReads += 1;
-    return productionAuthoritativePersistedReader();
-};
 authoritativeSandbox.setBrowseFilterState('all', 'all');
-await new Promise((resolve) => setTimeout(resolve, 0));
 assert.strictEqual(
     authoritativeSandbox.getBrowseFilterMutationRevision(),
     1,
     'a same-value authoritative reset before Browse loads must advance the mutation revision'
 );
-assert.strictEqual(authoritativePreferencePatches.length, 1);
+assert.strictEqual(
+    authoritativePreferencePatches.length,
+    0,
+    'a strict pre-activation library mutation cannot persist before BrowsePreferencesUtils loads'
+);
+const browsePreferencesSource = fs.readFileSync(path.join(repoRoot, 'js/utils/BrowsePreferencesUtils.js'), 'utf8');
+vm.runInContext(browsePreferencesSource, authoritativeContext, { filename: 'js/utils/BrowsePreferencesUtils.js' });
+await authoritativeSandbox.whenBrowseViewPreferencesReady();
+const authoritativeDurableReadsAfterPreferencesLoad = authoritativeDurableReads;
+const productionAuthoritativePersistedReader = authoritativeSandbox.getPersistedBrowseFilter;
+authoritativeSandbox.getPersistedBrowseFilter = () => {
+    authoritativePersistedReads += 1;
+    return productionAuthoritativePersistedReader();
+};
+vm.runInContext(source, authoritativeContext, { filename: 'js/main.js' });
+const authoritativeInitialization = authoritativeSandbox.initializeBrowseView({ skipLoad: true });
+for (let attempt = 0; attempt < 16 && authoritativePreferencePatches.length === 0; attempt += 1) {
+    await Promise.resolve();
+}
+assert.strictEqual(
+    authoritativePreferencePatches.length,
+    1,
+    'first Browse initialization must drain the live authoritative filter once preferences are ready'
+);
 assert.deepStrictEqual(
     authoritativeDurableBrowse.lastFilter,
     { category: 'P2', type: 'reading' },
-    'the authoritative all/all write must still be pending during first Browse initialization'
+    'the durable filter must remain old until the authoritative drain commits'
 );
-vm.runInContext(source, authoritativeContext, { filename: 'js/main.js' });
-await authoritativeSandbox.initializeBrowseView({ skipLoad: true });
+authoritativePatchGate.resolve();
+assert.strictEqual(
+    await authoritativeInitialization,
+    null,
+    'a resolved preference write without durable readback must fail closed'
+);
+assert.strictEqual(
+    authoritativeDurableReads,
+    authoritativeDurableReadsAfterPreferencesLoad + 1,
+    'the authoritative drain must verify the storage adapter after flushing its write queue'
+);
+assert.deepStrictEqual(
+    authoritativeDurableBrowse.lastFilter,
+    { category: 'P2', type: 'reading' },
+    'a no-op storage adapter must not be mistaken for a durable commit'
+);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(authoritativeSandbox.getBrowseFilterState())),
+    { category: 'all', type: 'all' },
+    'failed durable verification must not hydrate the older persisted filter'
+);
+
+authoritativeWritesDurably = true;
+const authoritativeRetry = await authoritativeSandbox.initializeBrowseView({ skipLoad: true });
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(authoritativeRetry)),
+    authoritativeIndex,
+    'a later initialization must retry the unconsumed authoritative drain'
+);
+assert.strictEqual(
+    authoritativeDurableReads,
+    authoritativeDurableReadsAfterPreferencesLoad + 2,
+    'the successful retry must perform a fresh durable readback'
+);
 assert.strictEqual(
     authoritativePersistedReads,
     0,
@@ -1117,7 +1555,6 @@ assert.deepStrictEqual(
     JSON.parse(JSON.stringify(authoritativeSandbox.getBrowseFilterState())),
     { category: 'all', type: 'all' }
 );
-authoritativePatchGate.resolve();
 await authoritativeSandbox.flushBrowsePreferenceWrites();
 assert.deepStrictEqual(authoritativeDurableBrowse.lastFilter, { category: 'all', type: 'all' });
 assert.strictEqual(
@@ -1126,6 +1563,79 @@ assert.strictEqual(
     )),
     false,
     'initial hydration must not enqueue a trailing stale P2/reading write'
+);
+
+let reloadPersistedReads = 0;
+const reloadSandbox = {
+    console: quietConsole,
+    document: authoritativeDocument,
+    location: { href: 'https://example.test/index.html', search: '', origin: 'https://example.test', protocol: 'https:' },
+    history: { replaceState() {} },
+    navigator: {},
+    URL,
+    URLSearchParams,
+    Promise,
+    Set,
+    Map,
+    Date,
+    Math,
+    JSON,
+    CustomEvent: authoritativeSandbox.CustomEvent,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    requestAnimationFrame(callback) { return setTimeout(callback, 0); },
+    cancelAnimationFrame: clearTimeout,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {},
+    confirm() { return false; },
+    alert() {},
+    setBrowseTitle() {},
+    formatBrowseTitle(category, type) { return `${category}:${type}`; },
+    normalizeExamType(type) { return type || 'all'; },
+    async resolveActiveLibraryIndex() { return authoritativeIndex; },
+    browseController: {
+        currentMode: 'default',
+        buttonContainer: {},
+        currentCategory: 'all',
+        currentExamType: 'all',
+        getCurrentCategory() { return 'all'; },
+        getCurrentExamType() { return 'all'; },
+        updateBrowseTitle() {}
+    },
+    ExamActions: {
+        loadExamList(exams) { return exams; },
+        displayExams(exams) { return exams; }
+    },
+    AppData: authoritativeSandbox.AppData
+};
+reloadSandbox.window = reloadSandbox;
+reloadSandbox.globalThis = reloadSandbox;
+reloadSandbox.self = reloadSandbox;
+const reloadContext = vm.createContext(reloadSandbox);
+vm.runInContext(stateServiceSource, reloadContext, { filename: 'js/app/state-service.js' });
+assert.strictEqual(
+    reloadSandbox.getBrowseFilterMutationRevision(),
+    0,
+    'a clean reload must begin with no live mutation revision'
+);
+vm.runInContext(browsePreferencesSource, reloadContext, { filename: 'js/utils/BrowsePreferencesUtils.js' });
+await reloadSandbox.whenBrowseViewPreferencesReady();
+const reloadPersistedFilterReader = reloadSandbox.getPersistedBrowseFilter;
+reloadSandbox.getPersistedBrowseFilter = () => {
+    reloadPersistedReads += 1;
+    return reloadPersistedFilterReader();
+};
+vm.runInContext(source, reloadContext, { filename: 'js/main.js' });
+await reloadSandbox.initializeBrowseView({ skipLoad: true });
+await reloadSandbox.flushBrowsePreferenceWrites();
+assert.strictEqual(reloadPersistedReads, 1, 'a clean reload must hydrate the committed filter once');
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(reloadSandbox.getBrowseFilterState())),
+    { category: 'all', type: 'all' },
+    'a clean reload must retain the drained all/all filter instead of reviving P2/reading'
 );
 
 console.log(JSON.stringify({

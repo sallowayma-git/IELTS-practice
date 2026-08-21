@@ -323,6 +323,19 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     const manager = window.LibraryManager.getInstance();
     const before = await window.AppData.practice.list();
     const revisionBeforeSwitch = window.getBrowseFilterMutationRevision();
+    const publicationOrder = [];
+    window.dispatchEvent = function dispatchEvent(event) {
+        if (event && event.type === 'examIndexLoaded') {
+            publicationOrder.push('index-publication');
+        }
+        return true;
+    };
+    window.startPracticeRecordsSyncInBackground = function startPracticeRecordsSyncInBackground(
+        trigger,
+        options
+    ) {
+        publicationOrder.push(`progress-sync:${trigger}:${options?.forceRender === true}`);
+    };
     const applied = await manager.applyLibraryConfiguration('alt_config');
 
     assert.strictEqual(applied, true, '配置切换应该成功');
@@ -337,6 +350,11 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
         clone(window.getBrowseFilterState()),
         { category: 'all', type: 'all' },
         '配置切换后实时筛选状态必须保持 all/all'
+    );
+    assert.deepStrictEqual(
+        publicationOrder,
+        ['index-publication', 'progress-sync:library-loaded:true'],
+        'direct configuration switches must publish the new index epoch before requesting progress sync'
     );
 
     recordResult('切换题库配置不触碰练习记录', { activeKey: 'alt_config' });
@@ -627,6 +645,31 @@ async function testRecordResolverFallsBackForLegacyRecordsWhenNoCustomLibraries(
     recordResult('无自定义题库时旧记录回退当前题库解析', { title: resolved.title });
 }
 
+async function testLibraryPublishesIndexBeforeProgressSync() {
+    const { window } = createHarness(baseSeed());
+    const order = [];
+    window.dispatchEvent = function dispatchEvent(event) {
+        if (event && event.type === 'examIndexLoaded') {
+            order.push('index-publication');
+        }
+        return true;
+    };
+    window.startPracticeRecordsSyncInBackground = function startPracticeRecordsSyncInBackground() {
+        order.push('progress-sync');
+    };
+
+    window.LibraryManager.getInstance().finishLibraryLoading(Date.now(), [
+        { id: 'published-index', type: 'reading', category: 'P1' }
+    ]);
+
+    assert.deepStrictEqual(
+        order,
+        ['index-publication', 'progress-sync'],
+        'a new library index epoch must be published before its progress sync captures ownership'
+    );
+    recordResult('题库索引先于同轮进度同步发布', { order });
+}
+
 async function main() {
     try {
         await testFullListeningCreatesSnapshotAndKeepsReading();
@@ -642,6 +685,7 @@ async function main() {
         await testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing();
         await testRecordResolverUsesStoredLibraryProvenance();
         await testRecordResolverFallsBackForLegacyRecordsWhenNoCustomLibraries();
+        await testLibraryPublishesIndexBeforeProgressSync();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

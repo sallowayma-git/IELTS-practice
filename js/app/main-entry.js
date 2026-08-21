@@ -265,6 +265,7 @@
     var activeBrowseResetIntent = null;
     var browseResultsProxyGeneration = 0;
     var appNavigationIntentGeneration = 0;
+    var activeLibraryGeneration = 0;
     var examIndexRefreshGeneration = 0;
     var deferredBrowseIndexRefresh = null;
     var browseFunctionalResetBarrier = null;
@@ -494,6 +495,9 @@
     global.__getAppNavigationIntentGeneration = function getAppNavigationIntentGeneration() {
         return appNavigationIntentGeneration;
     };
+    global.__getActiveLibraryGeneration = function getActiveLibraryGeneration() {
+        return activeLibraryGeneration;
+    };
 
     function initializeNavigationShell() {
         var controller = null;
@@ -646,6 +650,9 @@
     global.__closeBrowseResetIntent = closeBrowseResetIntent;
     global.__endBrowseResetIntent = endBrowseResetIntent;
     global.__isBrowseResetIntentInFlight = isBrowseResetIntentInFlight;
+    global.__getBrowseResetIntentGeneration = function getBrowseResetIntentGeneration() {
+        return browseResetIntentGeneration;
+    };
 
     function beginBrowseResultsProxyIntent() {
         browseResultsProxyGeneration += 1;
@@ -1204,6 +1211,7 @@
     }
 
     global.addEventListener('examIndexLoaded', function onExamIndexLoaded(event) {
+        activeLibraryGeneration += 1;
         handleExamIndexLoaded(event && event.detail ? event.detail.index : []);
     });
 

@@ -17722,6 +17722,9 @@ let lastPracticeRecordsSignature = null;
 async function syncPracticeRecords(options = {}) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
+    const browseProgressSourceEpoch = {
+        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration')
+    };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
     let [records, insightRecords, examIndex] = await Promise.all([
@@ -17793,7 +17796,7 @@ async function syncPracticeRecords(options = {}) {
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
-    refreshBrowseProgressFromRecords(records, examIndex);
+    refreshBrowseProgressFromRecords(records, examIndex, browseProgressSourceEpoch);
 
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
@@ -17803,16 +17806,65 @@ async function syncPracticeRecords(options = {}) {
 }
 
 let practiceRecordsLoadPromise = null;
+let pendingPracticeRecordsSyncRequest = null;
+
+function queuePendingPracticeRecordsSync(trigger, options = {}) {
+    const previous = pendingPracticeRecordsSyncRequest;
+    const previousOptions = previous && previous.options ? previous.options : {};
+    const nextOptions = Object.assign({}, previousOptions, options || {});
+    nextOptions.forceRender = !!(previousOptions.forceRender || (options && options.forceRender));
+    nextOptions.mode = previousOptions.mode === 'full' || (options && options.mode === 'full')
+        ? 'full'
+        : 'summary';
+    pendingPracticeRecordsSyncRequest = {
+        trigger,
+        options: nextOptions
+    };
+}
+
+async function drainPracticeRecordsSyncQueue(initialRequest) {
+    let request = initialRequest;
+    let result = null;
+    try {
+        while (request) {
+            let syncError = null;
+            try {
+                result = await syncPracticeRecords(Object.assign(
+                    { mode: 'summary' },
+                    request.options || {}
+                ));
+            } catch (error) {
+                syncError = error;
+            }
+            const nextRequest = pendingPracticeRecordsSyncRequest;
+            pendingPracticeRecordsSyncRequest = null;
+            if (syncError && !nextRequest) {
+                throw syncError;
+            }
+            if (syncError) {
+                console.warn(
+                    `[System] 练习记录同步失败(${request.trigger})，继续处理已排队的最新请求:`,
+                    syncError
+                );
+            }
+            request = nextRequest;
+        }
+        return result;
+    } finally {
+        practiceRecordsLoadPromise = null;
+    }
+}
+
 function ensurePracticeRecordsSync(trigger = 'default', options = {}) {
     if (practiceRecordsLoadPromise) {
+        queuePendingPracticeRecordsSync(trigger, options);
         return practiceRecordsLoadPromise;
     }
-    const loadTask = (async () => {
-        return syncPracticeRecords(Object.assign({ mode: 'summary' }, options || {}));
-    })();
-    practiceRecordsLoadPromise = loadTask.finally(() => {
-        practiceRecordsLoadPromise = null;
-    });
+    const initialRequest = {
+        trigger,
+        options: Object.assign({}, options || {})
+    };
+    practiceRecordsLoadPromise = drainPracticeRecordsSyncQueue(initialRequest);
     return practiceRecordsLoadPromise;
 }
 
@@ -19260,8 +19312,61 @@ function clearPracticeHistorySearch() {
     searchPracticeHistory('');
 }
 
-let pendingBrowseProgressRefreshIndex = null;
+let pendingBrowseProgressRefresh = null;
 let browseProgressRefreshRetryTimer = null;
+
+function readBrowseProgressGeneration(getterName) {
+    const getter = window && typeof window[getterName] === 'function'
+        ? window[getterName]
+        : null;
+    if (!getter) {
+        return null;
+    }
+    try {
+        const value = Number(getter());
+        return Number.isFinite(value) ? value : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function captureBrowseProgressRefreshEpoch(sourceEpoch = null) {
+    const source = sourceEpoch && typeof sourceEpoch === 'object' ? sourceEpoch : {};
+    const hasSourceLibraryGeneration = Object.prototype.hasOwnProperty.call(
+        source,
+        'activeLibraryGeneration'
+    );
+    return {
+        navigationGeneration: readBrowseProgressGeneration('__getAppNavigationIntentGeneration'),
+        activeLibraryGeneration: hasSourceLibraryGeneration
+            ? source.activeLibraryGeneration
+            : readBrowseProgressGeneration('__getActiveLibraryGeneration'),
+        resetGeneration: readBrowseProgressGeneration('__getBrowseResetIntentGeneration')
+    };
+}
+
+function isBrowseProgressRefreshEpochCurrent(epoch) {
+    const captured = epoch && typeof epoch === 'object' ? epoch : {};
+    const generationGetters = {
+        navigationGeneration: '__getAppNavigationIntentGeneration',
+        activeLibraryGeneration: '__getActiveLibraryGeneration',
+        resetGeneration: '__getBrowseResetIntentGeneration'
+    };
+    return Object.keys(generationGetters).every((key) => {
+        if (captured[key] == null) {
+            return true;
+        }
+        return readBrowseProgressGeneration(generationGetters[key]) === captured[key];
+    });
+}
+
+function clearPendingBrowseProgressRefresh() {
+    pendingBrowseProgressRefresh = null;
+    if (browseProgressRefreshRetryTimer != null) {
+        clearTimeout(browseProgressRefreshRetryTimer);
+        browseProgressRefreshRetryTimer = null;
+    }
+}
 
 function retryPendingBrowseProgressRefresh() {
     if (browseProgressRefreshRetryTimer != null) {
@@ -19274,13 +19379,18 @@ function retryPendingBrowseProgressRefresh() {
 }
 
 function flushPendingBrowseProgressRefresh() {
-    if (!Array.isArray(pendingBrowseProgressRefreshIndex)) {
+    const pending = pendingBrowseProgressRefresh;
+    if (!pending || !Array.isArray(pending.index)) {
+        return;
+    }
+    if (!isBrowseProgressRefreshEpochCurrent(pending.epoch)) {
+        clearPendingBrowseProgressRefresh();
         return;
     }
     const browseView = document.getElementById('browse-view');
     const isBrowseActive = browseView && browseView.classList.contains('active');
     if (!isBrowseActive) {
-        pendingBrowseProgressRefreshIndex = null;
+        clearPendingBrowseProgressRefresh();
         return;
     }
     const resetInFlight = typeof window.__isBrowseResetIntentInFlight === 'function'
@@ -19292,27 +19402,36 @@ function flushPendingBrowseProgressRefresh() {
     if (isBrowseUserResultsRequestInFlight(browseResultsRequestId)) {
         return;
     }
-    const indexSnapshot = pendingBrowseProgressRefreshIndex;
-    pendingBrowseProgressRefreshIndex = null;
+    const indexSnapshot = pending.index;
+    clearPendingBrowseProgressRefresh();
     Promise.resolve(renderBrowseResultsForState(indexSnapshot)).catch((error) => {
         console.warn('[Browse] 刷新浏览进度列表失败:', error);
     });
 }
 
-function refreshBrowseProgressFromRecords(records, examIndex) {
+function refreshBrowseProgressFromRecords(records, examIndex, refreshEpoch = null) {
     try {
         const recordSnapshot = Array.isArray(records) ? records : [];
         const indexSnapshot = Array.isArray(examIndex) ? examIndex : [];
-        if (typeof updateBrowseAnchorsFromRecords === 'function') {
-            updateBrowseAnchorsFromRecords(recordSnapshot, indexSnapshot);
-        }
         if (typeof rebuildBrowseCompletionIndex === 'function') {
             rebuildBrowseCompletionIndex(recordSnapshot);
+        }
+        const pendingEpoch = captureBrowseProgressRefreshEpoch(refreshEpoch);
+        if (!isBrowseProgressRefreshEpochCurrent({
+            activeLibraryGeneration: pendingEpoch.activeLibraryGeneration
+        })) {
+            return;
+        }
+        if (typeof updateBrowseAnchorsFromRecords === 'function') {
+            updateBrowseAnchorsFromRecords(recordSnapshot, indexSnapshot);
         }
         const browseView = document.getElementById('browse-view');
         const isBrowseActive = browseView && browseView.classList.contains('active');
         if (isBrowseActive && typeof renderBrowseResultsForState === 'function') {
-            pendingBrowseProgressRefreshIndex = indexSnapshot;
+            pendingBrowseProgressRefresh = {
+                index: indexSnapshot,
+                epoch: pendingEpoch
+            };
             flushPendingBrowseProgressRefresh();
         }
     } catch (error) {
@@ -19785,6 +19904,77 @@ async function applyBrowseFilter(
     }
 }
 
+function getLiveBrowseFilterSnapshot() {
+    let filter = null;
+    if (typeof window.getBrowseFilterState === 'function') {
+        try {
+            filter = window.getBrowseFilterState();
+        } catch (_) { }
+    }
+    const rawCategory = filter && typeof filter.category === 'string'
+        ? filter.category
+        : (typeof window.getCurrentCategory === 'function' ? window.getCurrentCategory() : 'all');
+    const rawType = filter && typeof filter.type === 'string'
+        ? filter.type
+        : (typeof window.getCurrentExamType === 'function' ? window.getCurrentExamType() : 'all');
+    const category = typeof window.normalizeCategoryKey === 'function'
+        ? window.normalizeCategoryKey(rawCategory)
+        : (typeof rawCategory === 'string' && rawCategory.trim() ? rawCategory.trim() : 'all');
+    const type = typeof window.normalizeExamType === 'function'
+        ? window.normalizeExamType(rawType)
+        : (rawType === 'reading' || rawType === 'listening' ? rawType : 'all');
+    return { category, type };
+}
+
+function browseFiltersMatch(left, right) {
+    return !!left && !!right
+        && left.category === right.category
+        && left.type === right.type;
+}
+
+async function persistAuthoritativeBrowseFilterBeforeHydration(activeRequestId) {
+    if (typeof window.persistBrowseFilter !== 'function'
+        || typeof window.flushBrowsePreferenceWrites !== 'function'
+        || !window.AppData
+        || !window.AppData.preferences
+        || typeof window.AppData.preferences.getBrowse !== 'function') {
+        return false;
+    }
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return false;
+        }
+        const revisionBefore = typeof window.getBrowseFilterMutationRevision === 'function'
+            ? Number(window.getBrowseFilterMutationRevision()) || 0
+            : 0;
+        const filterSnapshot = getLiveBrowseFilterSnapshot();
+        let durablePreferences;
+        try {
+            window.persistBrowseFilter(filterSnapshot.category, filterSnapshot.type);
+            await window.flushBrowsePreferenceWrites();
+            durablePreferences = await window.AppData.preferences.getBrowse();
+        } catch (error) {
+            console.warn('[Browse] 持久化权威筛选失败:', error);
+            return false;
+        }
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return false;
+        }
+        const revisionAfter = typeof window.getBrowseFilterMutationRevision === 'function'
+            ? Number(window.getBrowseFilterMutationRevision()) || 0
+            : revisionBefore;
+        const currentFilter = getLiveBrowseFilterSnapshot();
+        if (revisionAfter !== revisionBefore || !browseFiltersMatch(currentFilter, filterSnapshot)) {
+            continue;
+        }
+        return browseFiltersMatch(
+            durablePreferences && durablePreferences.lastFilter,
+            filterSnapshot
+        );
+    }
+    return false;
+}
+
 // Initialize browse view when it's activated
 async function initializeBrowseView(options = {}) {
     const userRequestId = options.renderRequestId == null
@@ -19818,6 +20008,13 @@ async function initializeBrowseView(options = {}) {
             ? Number(window.getBrowseFilterMutationRevision()) || 0
             : 0;
         if (!browseInitialFilterHydrationConsumed && browseFilterMutationRevision > 0) {
+            const persistedAuthoritativeFilter = await persistAuthoritativeBrowseFilterBeforeHydration(
+                activeRequestId
+            );
+            if (!persistedAuthoritativeFilter || !isBrowseResultsRequestCurrent(activeRequestId)) {
+                console.warn('[Browse] 权威筛选尚未持久化，已推迟首次 hydration');
+                return null;
+            }
             browseInitialFilterHydrationConsumed = true;
         } else if (!browseInitialFilterHydrationConsumed) {
             const persisted = getPersistedBrowseFilter();
