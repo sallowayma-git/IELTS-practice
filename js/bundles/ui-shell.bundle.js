@@ -1726,6 +1726,13 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var examIndexRefreshGeneration = 0;
     var deferredBrowseIndexRefresh = null;
     var browseFunctionalResetBarrier = null;
+    var completedBrowseFunctionalResetBarrier = null;
+    var browseFunctionalResetGeneration = 0;
+    var browseFunctionalResetState = {
+        generation: 0,
+        status: 'idle',
+        outcome: null
+    };
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
@@ -1756,17 +1763,69 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function registerBrowseFunctionalResetBarrier(resetPromise) {
-        var barrier = Promise.resolve(resetPromise).catch(function () {
+        var generation = ++browseFunctionalResetGeneration;
+        completedBrowseFunctionalResetBarrier = null;
+        browseFunctionalResetState = {
+            generation: generation,
+            status: 'pending',
+            outcome: null
+        };
+        var barrier = Promise.resolve(resetPromise).then(function normalizeResetOutcome(succeeded) {
+            return succeeded === true;
+        }, function normalizeResetFailure() {
             return false;
         });
         browseFunctionalResetBarrier = barrier;
-        barrier.finally(function clearBrowseFunctionalResetBarrier() {
+        if (typeof global.__beginBrowseResultsRequest === 'function') {
+            global.__beginBrowseResultsRequest();
+        }
+        barrier.then(function settleBrowseFunctionalResetState(succeeded) {
             if (browseFunctionalResetBarrier === barrier) {
-                browseFunctionalResetBarrier = null;
+                browseFunctionalResetState = {
+                    generation: generation,
+                    status: succeeded ? 'pending' : 'failed',
+                    outcome: succeeded
+                };
+                if (!succeeded) {
+                    browseFunctionalResetBarrier = null;
+                }
             }
         });
         return barrier;
     }
+
+    function completeBrowseFunctionalResetBarrier(barrier, succeeded) {
+        if (!barrier) {
+            return false;
+        }
+        if (browseFunctionalResetBarrier !== barrier) {
+            return succeeded === true
+                && completedBrowseFunctionalResetBarrier === barrier
+                && browseFunctionalResetState.status === 'succeeded';
+        }
+        browseFunctionalResetState = {
+            generation: browseFunctionalResetGeneration,
+            status: succeeded === true ? 'succeeded' : 'failed',
+            outcome: succeeded === true
+        };
+        browseFunctionalResetBarrier = null;
+        completedBrowseFunctionalResetBarrier = succeeded === true ? barrier : null;
+        return succeeded === true;
+    }
+
+    function isBrowseFunctionalResetBarrierCurrent(barrier) {
+        return !!barrier && browseFunctionalResetBarrier === barrier;
+    }
+
+    function getBrowseFunctionalResetState() {
+        return {
+            generation: browseFunctionalResetState.generation,
+            status: browseFunctionalResetState.status,
+            outcome: browseFunctionalResetState.outcome
+        };
+    }
+
+    global.__getBrowseFunctionalResetState = getBrowseFunctionalResetState;
 
     function synchronizeActiveBrowseViewNow() {
         if (getActiveViewName() !== 'browse' || typeof global.initializeBrowseView !== 'function') {
@@ -1832,8 +1891,15 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
             if (!resetSucceeded) {
                 return false;
             }
+            if (!isBrowseFunctionalResetBarrierCurrent(resetBarrier)) {
+                return false;
+            }
             return synchronizeActiveBrowseViewNow().then(function () {
+                completeBrowseFunctionalResetBarrier(resetBarrier, true);
                 return true;
+            }, function (error) {
+                completeBrowseFunctionalResetBarrier(resetBarrier, false);
+                throw error;
             });
         });
     }
@@ -1864,7 +1930,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
                 return synchronizeActiveBrowseViewAfterLoad()
                     .catch(function onBrowseViewSyncError(error) {
                         console.warn('[MainEntry] 恢复题库视图状态失败:', error);
-                        return true;
+                        return false;
                     })
                     .then(function browseViewSynchronized(synchronized) {
                         if (synchronized === false) {
@@ -2749,6 +2815,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         ensureBrowseRuntimeGroup: ensureBrowseRuntimeGroup,
         ensureBrowseRuntime: ensureBrowseGroup,
         registerBrowseFunctionalResetBarrier: registerBrowseFunctionalResetBarrier,
+        completeBrowseFunctionalResetBarrier: completeBrowseFunctionalResetBarrier,
+        isBrowseFunctionalResetBarrierCurrent: isBrowseFunctionalResetBarrierCurrent,
+        getBrowseFunctionalResetState: getBrowseFunctionalResetState,
         ensureMoreToolsGroup: ensureMoreToolsGroup,
         ensureSettingsToolsGroup: ensureSettingsToolsGroup,
         ensurePracticeSuiteGroup: ensurePracticeSuiteGroup,

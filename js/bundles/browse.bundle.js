@@ -17719,11 +17719,46 @@ async function initializeLegacyComponents() {
 // Practice history is read from AppData for each refresh. Only its signature is
 // retained as runtime UI state; record arrays never become a second authority.
 let lastPracticeRecordsSignature = null;
+let practiceRecordsSyncInvocationGeneration = 0;
+let practiceRecordsDataGeneration = 0;
+let practiceRecordsCommitSubscriptionAttached = false;
+const PRACTICE_RECORD_ENTITY_STORES = new Set([
+    'practiceSummaries',
+    'practiceDetails',
+    'practiceAnnotations'
+]);
+
+function ensurePracticeRecordsCommitSubscription() {
+    if (practiceRecordsCommitSubscriptionAttached) {
+        return;
+    }
+    const backups = window.AppData && window.AppData.backups;
+    if (!backups || typeof backups.onDataCommitted !== 'function') {
+        return;
+    }
+    backups.onDataCommitted((event) => {
+        const targets = event && Array.isArray(event.targets) ? event.targets : [];
+        const touchesPracticeRecords = targets.some((target) => {
+            const store = typeof target === 'string'
+                ? target
+                : target && (target.store || target.logicalKey);
+            return PRACTICE_RECORD_ENTITY_STORES.has(store);
+        });
+        if (touchesPracticeRecords) {
+            practiceRecordsDataGeneration += 1;
+        }
+    });
+    practiceRecordsCommitSubscriptionAttached = true;
+}
+
 async function syncPracticeRecords(options = {}) {
+    ensurePracticeRecordsCommitSubscription();
+    const invocationGeneration = ++practiceRecordsSyncInvocationGeneration;
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
     const browseProgressSourceEpoch = {
-        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration')
+        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration'),
+        practiceRecordsDataGeneration
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
@@ -17783,6 +17818,16 @@ async function syncPracticeRecords(options = {}) {
         });
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
+    const sourceLibraryIsCurrent = isBrowseProgressRefreshEpochCurrent({
+        activeLibraryGeneration: browseProgressSourceEpoch.activeLibraryGeneration
+    });
+    if (invocationGeneration !== practiceRecordsSyncInvocationGeneration
+        || !sourceLibraryIsCurrent
+        || browseProgressSourceEpoch.practiceRecordsDataGeneration !== practiceRecordsDataGeneration) {
+        console.log('[System] 丢弃已过期的练习记录同步投影');
+        return records;
+    }
+
     // Avoid resetting the list when the authoritative light projection is unchanged.
     try {
         const renderer = window.PracticeHistoryRenderer;
@@ -17807,18 +17852,90 @@ async function syncPracticeRecords(options = {}) {
 
 let practiceRecordsLoadPromise = null;
 let pendingPracticeRecordsSyncRequest = null;
+let activePracticeRecordsSyncRequest = null;
 
-function queuePendingPracticeRecordsSync(trigger, options = {}) {
+function normalizePracticeRecordsSyncOptions(options = {}) {
+    const normalized = Object.assign({}, options || {});
+    normalized.forceRender = !!normalized.forceRender;
+    normalized.mode = normalized.mode === 'full' ? 'full' : 'summary';
+    return normalized;
+}
+
+function capturePracticeRecordsSyncRequest(trigger, options = {}) {
+    return {
+        trigger,
+        options: normalizePracticeRecordsSyncOptions(options),
+        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration'),
+        practiceRecordsDataGeneration
+    };
+}
+
+function practiceRecordsSyncGenerationCovers(existing, incoming, key) {
+    if (incoming[key] == null) {
+        return true;
+    }
+    return existing[key] != null && existing[key] >= incoming[key];
+}
+
+function practiceRecordsSyncRequestCovers(existing, incoming) {
+    if (!existing || !incoming) {
+        return false;
+    }
+    const existingOptions = existing.options || {};
+    const incomingOptions = incoming.options || {};
+    return practiceRecordsSyncGenerationCovers(existing, incoming, 'activeLibraryGeneration')
+        && practiceRecordsSyncGenerationCovers(existing, incoming, 'practiceRecordsDataGeneration')
+        && (existingOptions.forceRender || !incomingOptions.forceRender)
+        && (existingOptions.mode === 'full' || incomingOptions.mode !== 'full');
+}
+
+function activePracticeRecordsSyncRequestCovers(incoming) {
+    return !!activePracticeRecordsSyncRequest
+        && activePracticeRecordsSyncRequest.invocationGeneration
+            === practiceRecordsSyncInvocationGeneration
+        && practiceRecordsSyncRequestCovers(activePracticeRecordsSyncRequest, incoming);
+}
+
+function mergePracticeRecordsSyncGeneration(previousValue, nextValue) {
+    if (previousValue == null) {
+        return nextValue;
+    }
+    if (nextValue == null) {
+        return previousValue;
+    }
+    return Math.max(previousValue, nextValue);
+}
+
+function queuePendingPracticeRecordsSync(incoming) {
     const previous = pendingPracticeRecordsSyncRequest;
+    const activeOptions = activePracticeRecordsSyncRequest
+        && activePracticeRecordsSyncRequest.options
+        ? activePracticeRecordsSyncRequest.options
+        : {};
     const previousOptions = previous && previous.options ? previous.options : {};
-    const nextOptions = Object.assign({}, previousOptions, options || {});
-    nextOptions.forceRender = !!(previousOptions.forceRender || (options && options.forceRender));
-    nextOptions.mode = previousOptions.mode === 'full' || (options && options.mode === 'full')
+    const incomingOptions = incoming && incoming.options ? incoming.options : {};
+    const nextOptions = Object.assign({}, activeOptions, previousOptions, incomingOptions);
+    nextOptions.forceRender = !!(
+        activeOptions.forceRender
+        || previousOptions.forceRender
+        || incomingOptions.forceRender
+    );
+    nextOptions.mode = activeOptions.mode === 'full'
+        || previousOptions.mode === 'full'
+        || incomingOptions.mode === 'full'
         ? 'full'
         : 'summary';
     pendingPracticeRecordsSyncRequest = {
-        trigger,
-        options: nextOptions
+        trigger: incoming.trigger,
+        options: nextOptions,
+        activeLibraryGeneration: mergePracticeRecordsSyncGeneration(
+            previous && previous.activeLibraryGeneration,
+            incoming.activeLibraryGeneration
+        ),
+        practiceRecordsDataGeneration: mergePracticeRecordsSyncGeneration(
+            previous && previous.practiceRecordsDataGeneration,
+            incoming.practiceRecordsDataGeneration
+        )
     };
 }
 
@@ -17827,12 +17944,19 @@ async function drainPracticeRecordsSyncQueue(initialRequest) {
     let result = null;
     try {
         while (request) {
+            activePracticeRecordsSyncRequest = request;
             let syncError = null;
             try {
-                result = await syncPracticeRecords(Object.assign(
+                request.activeLibraryGeneration = readBrowseProgressGeneration(
+                    '__getActiveLibraryGeneration'
+                );
+                request.practiceRecordsDataGeneration = practiceRecordsDataGeneration;
+                request.invocationGeneration = practiceRecordsSyncInvocationGeneration + 1;
+                const syncPromise = syncPracticeRecords(Object.assign(
                     { mode: 'summary' },
                     request.options || {}
                 ));
+                result = await syncPromise;
             } catch (error) {
                 syncError = error;
             }
@@ -17851,20 +17975,22 @@ async function drainPracticeRecordsSyncQueue(initialRequest) {
         }
         return result;
     } finally {
+        activePracticeRecordsSyncRequest = null;
         practiceRecordsLoadPromise = null;
     }
 }
 
 function ensurePracticeRecordsSync(trigger = 'default', options = {}) {
+    ensurePracticeRecordsCommitSubscription();
+    const incomingRequest = capturePracticeRecordsSyncRequest(trigger, options);
     if (practiceRecordsLoadPromise) {
-        queuePendingPracticeRecordsSync(trigger, options);
+        if (!activePracticeRecordsSyncRequestCovers(incomingRequest)
+            && !practiceRecordsSyncRequestCovers(pendingPracticeRecordsSyncRequest, incomingRequest)) {
+            queuePendingPracticeRecordsSync(incomingRequest);
+        }
         return practiceRecordsLoadPromise;
     }
-    const initialRequest = {
-        trigger,
-        options: Object.assign({}, options || {})
-    };
-    practiceRecordsLoadPromise = drainPracticeRecordsSyncQueue(initialRequest);
+    practiceRecordsLoadPromise = drainPracticeRecordsSyncQueue(incomingRequest);
     return practiceRecordsLoadPromise;
 }
 
@@ -19330,18 +19456,41 @@ function readBrowseProgressGeneration(getterName) {
     }
 }
 
+function readBrowseFunctionalResetState() {
+    const getter = window && typeof window.__getBrowseFunctionalResetState === 'function'
+        ? window.__getBrowseFunctionalResetState
+        : null;
+    if (!getter) {
+        return { generation: null, status: 'idle', outcome: null };
+    }
+    try {
+        const state = getter();
+        const generation = Number(state && state.generation);
+        return {
+            generation: Number.isFinite(generation) ? generation : null,
+            status: state && typeof state.status === 'string' ? state.status : 'idle',
+            outcome: state && typeof state.outcome === 'boolean' ? state.outcome : null
+        };
+    } catch (_) {
+        return { generation: null, status: 'idle', outcome: null };
+    }
+}
+
 function captureBrowseProgressRefreshEpoch(sourceEpoch = null) {
     const source = sourceEpoch && typeof sourceEpoch === 'object' ? sourceEpoch : {};
     const hasSourceLibraryGeneration = Object.prototype.hasOwnProperty.call(
         source,
         'activeLibraryGeneration'
     );
+    const functionalResetState = readBrowseFunctionalResetState();
     return {
         navigationGeneration: readBrowseProgressGeneration('__getAppNavigationIntentGeneration'),
         activeLibraryGeneration: hasSourceLibraryGeneration
             ? source.activeLibraryGeneration
             : readBrowseProgressGeneration('__getActiveLibraryGeneration'),
-        resetGeneration: readBrowseProgressGeneration('__getBrowseResetIntentGeneration')
+        resetGeneration: readBrowseProgressGeneration('__getBrowseResetIntentGeneration'),
+        functionalResetGeneration: functionalResetState.generation,
+        functionalResetWasPending: functionalResetState.status === 'pending'
     };
 }
 
@@ -19352,12 +19501,16 @@ function isBrowseProgressRefreshEpochCurrent(epoch) {
         activeLibraryGeneration: '__getActiveLibraryGeneration',
         resetGeneration: '__getBrowseResetIntentGeneration'
     };
-    return Object.keys(generationGetters).every((key) => {
+    const ordinaryGenerationsAreCurrent = Object.keys(generationGetters).every((key) => {
         if (captured[key] == null) {
             return true;
         }
         return readBrowseProgressGeneration(generationGetters[key]) === captured[key];
     });
+    if (!ordinaryGenerationsAreCurrent || captured.functionalResetGeneration == null) {
+        return ordinaryGenerationsAreCurrent;
+    }
+    return readBrowseFunctionalResetState().generation === captured.functionalResetGeneration;
 }
 
 function clearPendingBrowseProgressRefresh() {
@@ -19387,6 +19540,21 @@ function flushPendingBrowseProgressRefresh() {
         clearPendingBrowseProgressRefresh();
         return;
     }
+    const functionalResetState = readBrowseFunctionalResetState();
+    if (functionalResetState.status === 'failed') {
+        clearPendingBrowseProgressRefresh();
+        return;
+    }
+    if (functionalResetState.status === 'pending') {
+        retryPendingBrowseProgressRefresh();
+        return;
+    }
+    if (pending.epoch && pending.epoch.functionalResetWasPending) {
+        // The post-reset activation owns the canonical render. A progress
+        // snapshot observed during the barrier must never replay afterward.
+        clearPendingBrowseProgressRefresh();
+        return;
+    }
     const browseView = document.getElementById('browse-view');
     const isBrowseActive = browseView && browseView.classList.contains('active');
     if (!isBrowseActive) {
@@ -19413,14 +19581,14 @@ function refreshBrowseProgressFromRecords(records, examIndex, refreshEpoch = nul
     try {
         const recordSnapshot = Array.isArray(records) ? records : [];
         const indexSnapshot = Array.isArray(examIndex) ? examIndex : [];
-        if (typeof rebuildBrowseCompletionIndex === 'function') {
-            rebuildBrowseCompletionIndex(recordSnapshot);
-        }
         const pendingEpoch = captureBrowseProgressRefreshEpoch(refreshEpoch);
         if (!isBrowseProgressRefreshEpochCurrent({
             activeLibraryGeneration: pendingEpoch.activeLibraryGeneration
         })) {
             return;
+        }
+        if (typeof rebuildBrowseCompletionIndex === 'function') {
+            rebuildBrowseCompletionIndex(recordSnapshot);
         }
         if (typeof updateBrowseAnchorsFromRecords === 'function') {
             updateBrowseAnchorsFromRecords(recordSnapshot, indexSnapshot);

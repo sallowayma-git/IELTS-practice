@@ -178,6 +178,29 @@
         console.warn('[Fallback] 未找到视图节点:', normalized);
         return;
       }
+      var browseFunctionalReset = null;
+      var browseFunctionalResetBarrier = null;
+      var browseResetBarrierRegistered = false;
+      if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
+        // Register the functional barrier before Browse becomes active. Deferring
+        // the reset body closes the synchronous activation-to-registration gap.
+        browseFunctionalReset = Promise.resolve().then(function beginBrowseFunctionalReset() {
+          return resetBrowseFunctionalStateForFallback();
+        });
+        if (window.AppEntry
+          && typeof window.AppEntry.registerBrowseFunctionalResetBarrier === 'function') {
+          try {
+            browseFunctionalResetBarrier = window.AppEntry.registerBrowseFunctionalResetBarrier(
+              Promise.resolve(browseFunctionalReset).then(function (result) {
+                return !!(result && result.succeeded === true);
+              })
+            );
+            browseResetBarrierRegistered = true;
+          } catch (error) {
+            console.warn('[Fallback] 注册题库重置屏障失败:', error);
+          }
+        }
+      }
       Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function (v) {
         v.classList.remove('active');
       });
@@ -210,23 +233,7 @@
         }
       }
 
-      var browseFunctionalReset = null;
-      var browseResetBarrierRegistered = false;
       if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
-        browseFunctionalReset = resetBrowseFunctionalStateForFallback();
-        if (window.AppEntry
-          && typeof window.AppEntry.registerBrowseFunctionalResetBarrier === 'function') {
-          try {
-            window.AppEntry.registerBrowseFunctionalResetBarrier(
-              Promise.resolve(browseFunctionalReset).then(function (result) {
-                return !!(result && result.succeeded === true);
-              })
-            );
-            browseResetBarrierRegistered = true;
-          } catch (error) {
-            console.warn('[Fallback] 注册题库重置屏障失败:', error);
-          }
-        }
         if (window.browseStateManager && typeof window.browseStateManager.clearSearchState === 'function') {
           window.browseStateManager.clearSearchState();
         } else {
@@ -266,12 +273,20 @@
               console.warn('[Fallback] 题库功能状态未能安全重置，跳过刷新');
               return false;
             }
+            if (browseFunctionalResetBarrier
+              && window.AppEntry
+              && typeof window.AppEntry.isBrowseFunctionalResetBarrierCurrent === 'function'
+              && !window.AppEntry.isBrowseFunctionalResetBarrierCurrent(
+                browseFunctionalResetBarrier
+              )) {
+              return false;
+            }
             if (resetResult.ownerLoaded === true
               && browseResetBarrierRegistered
               && window.AppEntry
               && typeof window.AppEntry.ensureBrowseGroup === 'function') {
-              return Promise.resolve(window.AppEntry.ensureBrowseGroup()).then(function () {
-                return true;
+              return Promise.resolve(window.AppEntry.ensureBrowseGroup()).then(function (result) {
+                return result !== false;
               });
             }
             return runBrowseRefresh();
@@ -285,14 +300,24 @@
             return false;
           });
         }
+        if (browseFunctionalResetBarrier
+          && window.AppEntry
+          && typeof window.AppEntry.completeBrowseFunctionalResetBarrier === 'function') {
+          browseRefresh = Promise.resolve(browseRefresh).then(function completeFunctionalReset(result) {
+            var completed = window.AppEntry.completeBrowseFunctionalResetBarrier(
+              browseFunctionalResetBarrier,
+              result !== false
+            );
+            return completed ? result : false;
+          });
+        }
       }
       if (normalized === 'practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
         window.AppActions.ensurePracticeSuite();
       }
       if (normalized === 'practice' && typeof window.startPracticeRecordsSyncInBackground === 'function') {
         window.startPracticeRecordsSyncInBackground('practice-view');
-      }
-      if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
+      } else if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
         window.ensurePracticeRecordsSync('practice-view').catch(function () { });
       }
       return browseRefresh;
