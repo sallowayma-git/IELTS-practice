@@ -151,6 +151,21 @@ const sandbox = {
         if (!next) throw new Error('unexpected index resolution');
         return next.promise;
     },
+    prepareBrowseCompletionIndex(records) {
+        return { records: Array.from(records || []) };
+    },
+    isPreparedBrowseCompletionIndex(prepared) {
+        return !!prepared;
+    },
+    commitBrowseCompletionIndex() {
+        return true;
+    },
+    prepareBrowseAnchorUpdates(records, index) {
+        return { records: Array.from(records || []), index: Array.from(index || []) };
+    },
+    commitBrowseAnchorUpdates() {
+        return true;
+    },
     browseController: {
         currentMode: 'default',
         buttonContainer: typeButtonContainer,
@@ -518,6 +533,29 @@ const integrationSandbox = {
             Array.isArray(records) ? Array.from(records, (record) => record && record.id) : null
         );
     },
+    prepareBrowseCompletionIndex(records) {
+        return {
+            records: Array.isArray(records)
+                ? Array.from(records, (record) => record && record.id)
+                : null
+        };
+    },
+    isPreparedBrowseCompletionIndex(prepared) {
+        return !!prepared;
+    },
+    commitBrowseCompletionIndex(prepared) {
+        integrationCompletionRefreshes.push(prepared.records);
+        return true;
+    },
+    prepareBrowseAnchorUpdates(records, index) {
+        return {
+            index: Array.from(index || [], (exam) => exam.id)
+        };
+    },
+    commitBrowseAnchorUpdates(prepared) {
+        integrationAnchorIndexes.push(prepared.index);
+        return true;
+    },
     browseController: {
         currentMode: 'default',
         buttonContainer: {},
@@ -793,71 +831,75 @@ assert.deepStrictEqual(
     'the successful queued Browse projection must render after the foreground request settles'
 );
 
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const acceptedPublicationRecords = deferred();
-const acceptedPublicationIndex = deferred();
-const rejectedPublicationRecords = deferred();
-const rejectedPublicationIndex = deferred();
-integrationPracticeRecordResolvers.push(
-    acceptedPublicationRecords,
-    rejectedPublicationRecords
-);
-integrationIndexResolvers.push(acceptedPublicationIndex, rejectedPublicationIndex);
-const publicationUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
-const acceptedPublication = integrationSandbox.syncPracticeRecords({ forceRender: true });
-acceptedPublicationRecords.resolve([{ id: 'accepted-publication-record' }]);
-acceptedPublicationIndex.resolve([{ id: 'accepted-publication-index' }]);
-assert.deepStrictEqual(
-    Array.from(await acceptedPublication, (record) => record.id),
-    ['accepted-publication-record']
-);
-const productionCompletionRebuild = integrationSandbox.rebuildBrowseCompletionIndex;
-integrationSandbox.rebuildBrowseCompletionIndex = function rejectProjectionPublication() {
-    throw new Error('newer projection publication failed');
-};
-const rejectedPublication = integrationSandbox.syncPracticeRecords({ forceRender: true });
-rejectedPublicationRecords.resolve([{ id: 'rejected-publication-record' }]);
-rejectedPublicationIndex.resolve([{ id: 'rejected-publication-index' }]);
-assert.deepStrictEqual(
-    Array.from(await rejectedPublication, (record) => record.id),
-    ['rejected-publication-record'],
-    'Browse publication failure must not change the baseline Practice sync result'
-);
-integrationSandbox.rebuildBrowseCompletionIndex = productionCompletionRebuild;
-integrationSandbox.__endBrowseUserResultsRequest(publicationUserRequest);
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepStrictEqual(
-    integrationCompletionRefreshes,
-    [['accepted-publication-record']],
-    'a rejected newer publication must preserve the accepted completion projection'
-);
-assert.deepStrictEqual(
-    integrationAnchorIndexes,
-    [['accepted-publication-index']],
-    'a rejected newer publication must preserve the accepted anchor projection'
-);
-assert.deepStrictEqual(
-    integrationPracticeUpdates,
-    [
-        {
-            records: ['accepted-publication-record'],
-            index: ['accepted-publication-index']
-        },
-        {
-            records: ['rejected-publication-record'],
-            index: ['rejected-publication-index']
-        }
-    ],
-    'Browse publication rejection must not suppress either Practice update'
-);
-assert.deepStrictEqual(
-    integrationRenders,
-    [['accepted-publication-index']],
-    'a rejected newer publication must not invalidate the accepted queued repaint'
-);
+for (const failurePoint of [
+    'prepareBrowseCompletionIndex',
+    'prepareBrowseAnchorUpdates',
+    'commitBrowseAnchorUpdates'
+]) {
+    integrationRenders.length = 0;
+    integrationAnchorIndexes.length = 0;
+    integrationCompletionRefreshes.length = 0;
+    integrationPracticeUpdates.length = 0;
+    const acceptedRecordId = `accepted-${failurePoint}-record`;
+    const acceptedIndexId = `accepted-${failurePoint}-index`;
+    const rejectedRecordId = `rejected-${failurePoint}-record`;
+    const rejectedIndexId = `rejected-${failurePoint}-index`;
+    const acceptedPublicationRecords = deferred();
+    const acceptedPublicationIndex = deferred();
+    const rejectedPublicationRecords = deferred();
+    const rejectedPublicationIndex = deferred();
+    integrationPracticeRecordResolvers.push(
+        acceptedPublicationRecords,
+        rejectedPublicationRecords
+    );
+    integrationIndexResolvers.push(acceptedPublicationIndex, rejectedPublicationIndex);
+    const publicationUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+    const acceptedPublication = integrationSandbox.syncPracticeRecords({ forceRender: true });
+    acceptedPublicationRecords.resolve([{ id: acceptedRecordId }]);
+    acceptedPublicationIndex.resolve([{ id: acceptedIndexId }]);
+    assert.deepStrictEqual(
+        Array.from(await acceptedPublication, (record) => record.id),
+        [acceptedRecordId]
+    );
+    const productionPublicationStage = integrationSandbox[failurePoint];
+    integrationSandbox[failurePoint] = function rejectProjectionPublication() {
+        throw new Error(`newer projection ${failurePoint} failed`);
+    };
+    const rejectedPublication = integrationSandbox.syncPracticeRecords({ forceRender: true });
+    rejectedPublicationRecords.resolve([{ id: rejectedRecordId }]);
+    rejectedPublicationIndex.resolve([{ id: rejectedIndexId }]);
+    assert.deepStrictEqual(
+        Array.from(await rejectedPublication, (record) => record.id),
+        [rejectedRecordId],
+        'Browse publication failure must not change the baseline Practice sync result'
+    );
+    integrationSandbox[failurePoint] = productionPublicationStage;
+    integrationSandbox.__endBrowseUserResultsRequest(publicationUserRequest);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepStrictEqual(
+        integrationCompletionRefreshes,
+        [[acceptedRecordId]],
+        `${failurePoint} failure must preserve the accepted completion projection`
+    );
+    assert.deepStrictEqual(
+        integrationAnchorIndexes,
+        [[acceptedIndexId]],
+        `${failurePoint} failure must preserve the accepted anchor projection`
+    );
+    assert.deepStrictEqual(
+        integrationPracticeUpdates,
+        [
+            { records: [acceptedRecordId], index: [acceptedIndexId] },
+            { records: [rejectedRecordId], index: [rejectedIndexId] }
+        ],
+        'Browse publication rejection must not suppress either Practice update'
+    );
+    assert.deepStrictEqual(
+        integrationRenders,
+        [[acceptedIndexId]],
+        `${failurePoint} failure must not invalidate the accepted queued repaint`
+    );
+}
 
 const identicalHeadIndex = deferred();
 const redundantTailPoison = {
@@ -2215,6 +2257,33 @@ assert.strictEqual(
     'failed',
     'only a terminal DOM commit receipt may clear failed-reset debt'
 );
+const getElementByIdBeforeMissingCommit = integrationDocument.getElementById;
+integrationDocument.getElementById = function getElementByIdWithUncommittedContainer(id) {
+    if (id === 'exam-list-container') {
+        return {};
+    }
+    return getElementByIdBeforeMissingCommit.call(this, id);
+};
+assert.strictEqual(
+    integrationSandbox.ExamListView.render([{ id: 'uncommitted-wrapper-result' }]),
+    false,
+    'the exported view wrapper must propagate a cached view commit failure'
+);
+integrationDocument.getElementById = getElementByIdBeforeMissingCommit;
+const missingCommitResetIndex = deferred();
+integrationIndexResolvers.push(missingCommitResetIndex);
+const missingCommitReset = integrationSandbox.ExamActions.resetBrowseViewToAll();
+missingCommitResetIndex.resolve([{ id: 'uncommitted-direct-reset-result' }]);
+assert.strictEqual(
+    await missingCommitReset,
+    false,
+    'the direct reset path must propagate a missing-container view failure'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'an uncommitted direct reset must leave failed-reset debt intact'
+);
 integrationSandbox.refreshBrowseProgressFromRecords(
     [],
     [{ id: 'progress-blocked-after-missing-commit-receipt' }]
@@ -2465,6 +2534,17 @@ sandbox.showView = productionShowView;
 const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
 vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
 const productionLoadExamList = sandbox.ExamActions.loadExamList;
+const successfulProductionExamListView = {
+    render() {
+        return true;
+    }
+};
+sandbox.browseController.getExamListView = function getExamListView() {
+    return successfulProductionExamListView;
+};
+sandbox.browseController.ensureExamListView = function ensureExamListView() {
+    return successfulProductionExamListView;
+};
 sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams, options = {}) {
     const result = productionLoadExamList.call(this, exams, options);
     if (Array.isArray(result)) {

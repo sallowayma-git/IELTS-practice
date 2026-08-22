@@ -107,6 +107,26 @@ describe('LegacyExamListView.render commit contract', () => {
 });
 
 describe('LegacyExamListView._getCompletionStatus', () => {
+    it('keeps a prepared completion map invisible until commit', () => {
+        const { windowStub, LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+        const exam = { id: 'staged-reading', title: 'Staged Reading' };
+        const prepared = windowStub.prepareBrowseCompletionIndex([{
+            examId: 'staged-reading',
+            title: 'Staged Reading',
+            percentage: 77,
+            date: '2026-08-23T00:00:00.000Z'
+        }]);
+
+        assert.strictEqual(
+            view._getCompletionStatus(exam),
+            null,
+            'preparation alone must not replace the accepted completion map'
+        );
+        assert.strictEqual(windowStub.commitBrowseCompletionIndex(prepared), true);
+        assert.strictEqual(view._getCompletionStatus(exam).percentage, 77);
+    });
+
     it('reads score and timestamp from matching suite child entries', () => {
         const { windowStub, LegacyExamListView } = loadLegacyExamListView();
         const view = new LegacyExamListView();

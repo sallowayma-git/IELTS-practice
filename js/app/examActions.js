@@ -911,18 +911,20 @@
             ? 'reading-memorize'
             : (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
 
-        // 6. 更新状态并渲染
+        // 6. 先证明 DOM commit，再发布对应的筛选状态。
+        const displayed = displayExams(examsToShow, {
+            selectionMode,
+            customSuiteDraft,
+            commitReceipt: options.commitReceipt
+        });
+        if (displayed !== true) {
+            return false;
+        }
         if (global.appStateService) {
             global.appStateService.setFilteredExams(examsToShow);
         } else if (typeof global.setFilteredExamsState === 'function') {
             global.setFilteredExamsState(examsToShow);
         }
-
-        displayExams(examsToShow, {
-            selectionMode,
-            customSuiteDraft,
-            commitReceipt: options.commitReceipt
-        });
         refreshCustomSuiteSelectionPortal();
 
         // 7. 触发渲染后钩子
@@ -1953,8 +1955,7 @@
         if (!container) {
             return false;
         }
-        displayExams(exams, options);
-        return true;
+        return displayExams(exams, options) === true;
     }
 
     // ============================================================================

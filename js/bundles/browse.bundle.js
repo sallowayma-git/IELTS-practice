@@ -3292,7 +3292,7 @@
         return Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
     }
 
-    function rebuildBrowseCompletionIndex(records) {
+    function prepareBrowseCompletionIndex(records) {
         var byExamId = new Map();
         var byTitle = new Map();
         var recordSnapshot = ensureArray(records).slice();
@@ -3326,13 +3326,37 @@
                 }
             });
         });
-        browseCompletionIndex = {
+        return {
             byExamId: byExamId,
             byTitle: byTitle,
             records: recordSnapshot,
             ready: true
         };
-        return browseCompletionIndex;
+    }
+
+    function isPreparedBrowseCompletionIndex(preparedIndex) {
+        return !!preparedIndex
+            && preparedIndex.byExamId instanceof Map
+            && preparedIndex.byTitle instanceof Map
+            && Array.isArray(preparedIndex.records)
+            && preparedIndex.ready === true;
+    }
+
+    function commitBrowseCompletionIndex(preparedIndex) {
+        if (!isPreparedBrowseCompletionIndex(preparedIndex)) {
+            return false;
+        }
+        // Preparation performs every operation that can fail. Publication is
+        // deliberately one assignment so later stages cannot observe a
+        // partially rebuilt completion map.
+        browseCompletionIndex = preparedIndex;
+        return true;
+    }
+
+    function rebuildBrowseCompletionIndex(records) {
+        var preparedIndex = prepareBrowseCompletionIndex(records);
+        commitBrowseCompletionIndex(preparedIndex);
+        return preparedIndex;
     }
 
     function ensureBrowseCompletionIndex() {
@@ -3402,6 +3426,9 @@
         };
     };
 
+    global.prepareBrowseCompletionIndex = prepareBrowseCompletionIndex;
+    global.isPreparedBrowseCompletionIndex = isPreparedBrowseCompletionIndex;
+    global.commitBrowseCompletionIndex = commitBrowseCompletionIndex;
     global.rebuildBrowseCompletionIndex = rebuildBrowseCompletionIndex;
 
     // --- Legacy navigation controller ---
@@ -5079,18 +5106,20 @@
             ? 'reading-memorize'
             : (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
 
-        // 6. 更新状态并渲染
+        // 6. 先证明 DOM commit，再发布对应的筛选状态。
+        const displayed = displayExams(examsToShow, {
+            selectionMode,
+            customSuiteDraft,
+            commitReceipt: options.commitReceipt
+        });
+        if (displayed !== true) {
+            return false;
+        }
         if (global.appStateService) {
             global.appStateService.setFilteredExams(examsToShow);
         } else if (typeof global.setFilteredExamsState === 'function') {
             global.setFilteredExamsState(examsToShow);
         }
-
-        displayExams(examsToShow, {
-            selectionMode,
-            customSuiteDraft,
-            commitReceipt: options.commitReceipt
-        });
         refreshCustomSuiteSelectionPortal();
 
         // 7. 触发渲染后钩子
@@ -6121,8 +6150,7 @@
         if (!container) {
             return false;
         }
-        displayExams(exams, options);
-        return true;
+        return displayExams(exams, options) === true;
     }
 
     // ============================================================================
@@ -17479,7 +17507,7 @@ window.BrowseStateManager = BrowseStateManager;
         }
     }
 
-    function updateBrowseAnchorsFromRecords(records, examIndex) {
+    function prepareBrowseAnchorUpdates(records, examIndex) {
         const list = Array.isArray(records) ? records : [];
         const indexSnapshot = Array.isArray(examIndex) ? examIndex : [];
         const updates = {};
@@ -17514,11 +17542,23 @@ window.BrowseStateManager = BrowseStateManager;
             }
         });
 
-        if (Object.keys(updates).length === 0) {
-            return;
-        }
+        return updates;
+    }
 
-        saveBrowseViewPreferences({ listAnchors: updates });
+    function commitBrowseAnchorUpdates(updates) {
+        if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+            return false;
+        }
+        if (Object.keys(updates).length > 0) {
+            saveBrowseViewPreferences({ listAnchors: updates });
+        }
+        return true;
+    }
+
+    function updateBrowseAnchorsFromRecords(records, examIndex) {
+        const updates = prepareBrowseAnchorUpdates(records, examIndex);
+        commitBrowseAnchorUpdates(updates);
+        return updates;
     }
 
     // --- Global Event Listeners ---
@@ -17547,6 +17587,8 @@ window.BrowseStateManager = BrowseStateManager;
     global.flushBrowsePreferenceWrites = flushBrowsePreferenceWrites;
     global.persistBrowseFilter = persistBrowseFilter;
     global.getPersistedBrowseFilter = getPersistedBrowseFilter;
+    global.prepareBrowseAnchorUpdates = prepareBrowseAnchorUpdates;
+    global.commitBrowseAnchorUpdates = commitBrowseAnchorUpdates;
     global.updateBrowseAnchorsFromRecords = updateBrowseAnchorsFromRecords;
 
     global.setBrowseTitle = setBrowseTitle;
@@ -19683,12 +19725,29 @@ function refreshBrowseProgressFromRecords(
         if (isBrowseActive && typeof renderBrowseResultsForState !== 'function') {
             return false;
         }
-        if (typeof rebuildBrowseCompletionIndex === 'function') {
-            rebuildBrowseCompletionIndex(recordSnapshot);
+        const canStageProjection = typeof prepareBrowseCompletionIndex === 'function'
+            && typeof isPreparedBrowseCompletionIndex === 'function'
+            && typeof commitBrowseCompletionIndex === 'function'
+            && typeof prepareBrowseAnchorUpdates === 'function'
+            && typeof commitBrowseAnchorUpdates === 'function';
+        if (!canStageProjection) {
+            return false;
         }
-        if (typeof updateBrowseAnchorsFromRecords === 'function') {
-            updateBrowseAnchorsFromRecords(recordSnapshot, indexSnapshot);
+        // Both derived states are built without mutation. Validate the
+        // completion candidate before accepting the anchor queue; the later
+        // completion commit is then one non-throwing assignment.
+        const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot);
+        if (!isPreparedBrowseCompletionIndex(preparedCompletionIndex)) {
+            return false;
         }
+        const preparedAnchorUpdates = prepareBrowseAnchorUpdates(
+            recordSnapshot,
+            indexSnapshot
+        );
+        if (commitBrowseAnchorUpdates(preparedAnchorUpdates) !== true) {
+            return false;
+        }
+        commitBrowseCompletionIndex(preparedCompletionIndex);
         if (isBrowseActive) {
             if (candidatePracticeProjectionGeneration != null) {
                 pendingEpoch.practiceProjectionGeneration =
@@ -19701,7 +19760,11 @@ function refreshBrowseProgressFromRecords(
             // Candidate projections are flushed by syncPracticeRecords only
             // after their accepted generation becomes the public watermark.
             if (candidatePracticeProjectionGeneration == null) {
-                flushPendingBrowseProgressRefresh();
+                Promise.resolve().then(() => {
+                    flushPendingBrowseProgressRefresh();
+                }).catch((error) => {
+                    console.warn('[Browse] 刷新浏览进度列表失败:', error);
+                });
             }
         }
         return true;

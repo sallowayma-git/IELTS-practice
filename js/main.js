@@ -2119,12 +2119,29 @@ function refreshBrowseProgressFromRecords(
         if (isBrowseActive && typeof renderBrowseResultsForState !== 'function') {
             return false;
         }
-        if (typeof rebuildBrowseCompletionIndex === 'function') {
-            rebuildBrowseCompletionIndex(recordSnapshot);
+        const canStageProjection = typeof prepareBrowseCompletionIndex === 'function'
+            && typeof isPreparedBrowseCompletionIndex === 'function'
+            && typeof commitBrowseCompletionIndex === 'function'
+            && typeof prepareBrowseAnchorUpdates === 'function'
+            && typeof commitBrowseAnchorUpdates === 'function';
+        if (!canStageProjection) {
+            return false;
         }
-        if (typeof updateBrowseAnchorsFromRecords === 'function') {
-            updateBrowseAnchorsFromRecords(recordSnapshot, indexSnapshot);
+        // Both derived states are built without mutation. Validate the
+        // completion candidate before accepting the anchor queue; the later
+        // completion commit is then one non-throwing assignment.
+        const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot);
+        if (!isPreparedBrowseCompletionIndex(preparedCompletionIndex)) {
+            return false;
         }
+        const preparedAnchorUpdates = prepareBrowseAnchorUpdates(
+            recordSnapshot,
+            indexSnapshot
+        );
+        if (commitBrowseAnchorUpdates(preparedAnchorUpdates) !== true) {
+            return false;
+        }
+        commitBrowseCompletionIndex(preparedCompletionIndex);
         if (isBrowseActive) {
             if (candidatePracticeProjectionGeneration != null) {
                 pendingEpoch.practiceProjectionGeneration =
@@ -2137,7 +2154,11 @@ function refreshBrowseProgressFromRecords(
             // Candidate projections are flushed by syncPracticeRecords only
             // after their accepted generation becomes the public watermark.
             if (candidatePracticeProjectionGeneration == null) {
-                flushPendingBrowseProgressRefresh();
+                Promise.resolve().then(() => {
+                    flushPendingBrowseProgressRefresh();
+                }).catch((error) => {
+                    console.warn('[Browse] 刷新浏览进度列表失败:', error);
+                });
             }
         }
         return true;

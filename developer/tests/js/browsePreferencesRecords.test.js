@@ -168,6 +168,31 @@ async function testLatestTimestampWinsPerFilter() {
     recordResult('浏览锚点按时间保留最新记录', prefs.listAnchors['P3|reading']);
 }
 
+async function testPreparedAnchorUpdatesRemainInvisibleUntilCommit() {
+    const { window } = createHarness();
+    await window.whenBrowseViewPreferencesReady();
+    const updates = window.prepareBrowseAnchorUpdates([{
+        id: 'staged-anchor-record',
+        examId: 'staged-anchor-exam',
+        title: 'P2 Reading Staged',
+        metadata: { category: 'P2', examType: 'reading' },
+        timestamp: 1800000000000
+    }], []);
+
+    assert.strictEqual(
+        window.getBrowseViewPreferences().listAnchors['P2|reading'],
+        undefined,
+        'anchor preparation must not mutate the accepted preference cache'
+    );
+    assert.strictEqual(window.commitBrowseAnchorUpdates(updates), true);
+    await window.flushBrowsePreferenceWrites();
+    assert.strictEqual(
+        window.getBrowseViewPreferences().listAnchors['P2|reading'].examId,
+        'staged-anchor-exam'
+    );
+    recordResult('浏览锚点仅在显式 commit 后发布', updates['P2|reading']);
+}
+
 async function testFailedPreferenceWriteDoesNotReplaceCommittedCache() {
     const { window } = createHarness();
     await window.flushBrowsePreferenceWrites();
@@ -224,6 +249,7 @@ async function main() {
         await testRecordMetadataBuildsAnchorWithoutCurrentExamIndex();
         await testExplicitMetadataOutranksCurrentExamIndex();
         await testLatestTimestampWinsPerFilter();
+        await testPreparedAnchorUpdatesRemainInvisibleUntilCommit();
         await testFailedPreferenceWriteDoesNotReplaceCommittedCache();
         await testFirstReadCanAwaitPersistedPreferences();
         console.log(JSON.stringify({

@@ -758,7 +758,7 @@
         }
     }
 
-    function updateBrowseAnchorsFromRecords(records, examIndex) {
+    function prepareBrowseAnchorUpdates(records, examIndex) {
         const list = Array.isArray(records) ? records : [];
         const indexSnapshot = Array.isArray(examIndex) ? examIndex : [];
         const updates = {};
@@ -793,11 +793,23 @@
             }
         });
 
-        if (Object.keys(updates).length === 0) {
-            return;
-        }
+        return updates;
+    }
 
-        saveBrowseViewPreferences({ listAnchors: updates });
+    function commitBrowseAnchorUpdates(updates) {
+        if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+            return false;
+        }
+        if (Object.keys(updates).length > 0) {
+            saveBrowseViewPreferences({ listAnchors: updates });
+        }
+        return true;
+    }
+
+    function updateBrowseAnchorsFromRecords(records, examIndex) {
+        const updates = prepareBrowseAnchorUpdates(records, examIndex);
+        commitBrowseAnchorUpdates(updates);
+        return updates;
     }
 
     // --- Global Event Listeners ---
@@ -826,6 +838,8 @@
     global.flushBrowsePreferenceWrites = flushBrowsePreferenceWrites;
     global.persistBrowseFilter = persistBrowseFilter;
     global.getPersistedBrowseFilter = getPersistedBrowseFilter;
+    global.prepareBrowseAnchorUpdates = prepareBrowseAnchorUpdates;
+    global.commitBrowseAnchorUpdates = commitBrowseAnchorUpdates;
     global.updateBrowseAnchorsFromRecords = updateBrowseAnchorsFromRecords;
 
     global.setBrowseTitle = setBrowseTitle;
