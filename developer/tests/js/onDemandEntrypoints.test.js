@@ -298,6 +298,89 @@ async function testFailedBrowseResetBarrierStopsQueuedLoaderProxy() {
     recordResult('失败的 Browse 重置屏障会阻止已排队 loader', true, { initializationCalls, realLoadCalls });
 }
 
+async function testAtomicForegroundRecoveryCancelsOnlyStaleRetryBarrier() {
+    const harness = createHarness();
+    harness.windowStub.document.readyState = 'loading';
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(
+        harness.windowStub.document
+    );
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    let resultsRequestId = 0;
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(
+        requestId
+    ) {
+        return requestId === resultsRequestId;
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const failedReset = deferred();
+    const failedBarrier = harness.windowStub.AppEntry.registerBrowseFunctionalResetBarrier(
+        failedReset.promise
+    );
+    failedReset.resolve(false);
+    assert.strictEqual(await failedBarrier, false);
+    await flushMicrotasks();
+    assert.strictEqual(harness.windowStub.__getBrowseFunctionalResetState().status, 'failed');
+
+    const retryReset = deferred();
+    const retryBarrier = harness.windowStub.AppEntry.registerBrowseFunctionalResetBarrier(
+        retryReset.promise
+    );
+    const retryRequestId = resultsRequestId;
+    assert.strictEqual(harness.windowStub.__getBrowseFunctionalResetState().status, 'pending');
+    assert.strictEqual(
+        harness.windowStub.AppEntry.prepareBrowseFunctionalResetRecoveryForForeground(
+            retryRequestId
+        ),
+        null,
+        'the retry canonical request must retain its own current barrier'
+    );
+    assert.strictEqual(harness.windowStub.__getBrowseFunctionalResetState().status, 'pending');
+
+    const foregroundRequestId = harness.windowStub.__beginBrowseResultsRequest();
+    const prepared = harness.windowStub.AppEntry
+        .prepareBrowseFunctionalResetRecoveryForForeground(foregroundRequestId);
+    assert.ok(prepared && prepared.recovery, 'the newer foreground request must receive a recovery lease');
+    assert.strictEqual(prepared.recovery.resultsRequestId, foregroundRequestId);
+    assert.strictEqual(
+        prepared.functionalResetGeneration,
+        harness.windowStub.__getBrowseFunctionalResetState().generation
+    );
+    assert.strictEqual(harness.windowStub.__getBrowseFunctionalResetState().status, 'failed');
+    assert.strictEqual(Object.hasOwn(prepared, 'barrier'), false, 'the API must not expose the raw barrier');
+    assert.strictEqual(
+        harness.windowStub.AppEntry.completeBrowseFunctionalResetRecovery(
+            prepared.recovery,
+            true
+        ),
+        true
+    );
+    assert.strictEqual(harness.windowStub.__getBrowseFunctionalResetState().status, 'succeeded');
+
+    retryReset.resolve(true);
+    assert.strictEqual(await retryBarrier, true);
+    await flushMicrotasks();
+    assert.strictEqual(
+        harness.windowStub.__getBrowseFunctionalResetState().status,
+        'succeeded',
+        'the canceled retry must not reclaim the recovery committed by the newer foreground request'
+    );
+    recordResult('前台恢复原子边界仅取消 stale retry barrier', true, {
+        retryRequestId,
+        foregroundRequestId
+    });
+}
+
 async function testColdFallbackLetsBrowseSynchronizationOwnRender() {
     const harness = createHarness();
     let initializationCalls = 0;
@@ -1804,6 +1887,98 @@ async function testColdBrowseProxyRestoresPreferences(harness) {
     });
 }
 
+async function testColdBrowseRetryRetainsPendingFilterAfterRetryableInitializationFailure() {
+    const harness = createHarness();
+    const pendingFilter = {
+        category: 'P2',
+        type: 'reading',
+        filterMode: 'default',
+        path: 'ReadingPractice/P2'
+    };
+    const appliedFilters = [];
+    const releasedRequests = [];
+    let initializationAttempt = 0;
+    let resultsRequestId = 0;
+    let successfulInitializationRequestId = null;
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(
+        harness.windowStub.document
+    );
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') {
+            return { id: 'browse-view' };
+        }
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.__pendingBrowseFilter = pendingFilter;
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(requestId) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.__retainBrowseUserResultsRequest = function retainBrowseUserResultsRequest(requestId) {
+        return requestId;
+    };
+    harness.windowStub.__endBrowseUserResultsRequest = function endBrowseUserResultsRequest(requestId) {
+        releasedRequests.push(requestId);
+        resultsRequestId += 1;
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        if (name === 'browse-runtime') {
+            harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+                initializationAttempt += 1;
+                const requestId = harness.windowStub.__beginBrowseResultsRequest();
+                if (initializationAttempt === 2) {
+                    successfulInitializationRequestId = requestId;
+                }
+                return Promise.resolve(initializationAttempt === 1
+                    ? null
+                    : [{ id: 'p2-reading', category: 'P2', type: 'reading' }]);
+            };
+            harness.windowStub.applyBrowseFilter = function applyBrowseFilter(...args) {
+                appliedFilters.push(args);
+                return Promise.resolve(true);
+            };
+        }
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+
+    assert.strictEqual(await harness.windowStub.AppEntry.ensureBrowseGroup(), false);
+    assert.strictEqual(
+        harness.windowStub.__pendingBrowseFilter,
+        pendingFilter,
+        'a retryable cold initialization failure must retain the pending category intent'
+    );
+    assert.deepStrictEqual(appliedFilters, []);
+
+    assert.strictEqual(await harness.windowStub.AppEntry.ensureBrowseGroup(), true);
+    assert.strictEqual(initializationAttempt, 2);
+    assert.deepStrictEqual(appliedFilters, [[
+        pendingFilter.category,
+        pendingFilter.type,
+        pendingFilter.filterMode,
+        pendingFilter.path,
+        successfulInitializationRequestId
+    ]]);
+    assert.deepStrictEqual(releasedRequests, [1, successfulInitializationRequestId]);
+    assert.strictEqual(
+        harness.windowStub.__pendingBrowseFilter,
+        undefined,
+        'the successful cold retry must consume the pending category intent exactly once'
+    );
+    recordResult('冷入口可重试失败保留 pending 分类', true, {
+        initializationAttempt,
+        appliedFilters: appliedFilters.length
+    });
+}
+
 async function testColdBrowseAppliesExplicitPendingFilter(harness) {
     const initializationCalls = [];
     const appliedFilters = [];
@@ -1829,6 +2004,7 @@ async function testColdBrowseAppliesExplicitPendingFilter(harness) {
             };
             harness.windowStub.applyBrowseFilter = async function applyBrowseFilter(...args) {
                 appliedFilters.push(args);
+                return true;
             };
         }
         return Promise.resolve(true);
@@ -2086,6 +2262,7 @@ async function main() {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView();
         await testFailedBrowseResetBarrierStopsQueuedLoaderProxy();
+        await testAtomicForegroundRecoveryCancelsOnlyStaleRetryBarrier();
         await testColdFallbackLetsBrowseSynchronizationOwnRender();
         await testFallbackQueuesRepeatBrowseResetDuringLazyLoad();
         await testColdRepeatResetPreemptsBrowseSynchronization();
@@ -2113,6 +2290,7 @@ async function main() {
         await testQueuedFilterSupersedesOlderPendingCategory();
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
         await testColdBrowseProxyRestoresPreferences(createHarness());
+        await testColdBrowseRetryRetainsPendingFilterAfterRetryableInitializationFailure();
         await testColdBrowseAppliesExplicitPendingFilter(createHarness());
         await testColdBrowseRuntimeInitializesNavigationAndStateManager();
         await testMoreViewActivationLoadsTools(createHarness());

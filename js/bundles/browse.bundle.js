@@ -5092,9 +5092,30 @@
 
     let browseResetInteractionId = 0;
 
-    function isBrowseResetCurrent(interactionId, renderRequestId) {
+    function isBrowseResetCurrent(
+        interactionId,
+        renderRequestId,
+        navigationIntentGeneration = null
+    ) {
         if (interactionId !== browseResetInteractionId) {
             return false;
+        }
+        if (navigationIntentGeneration != null
+            && typeof global.__getAppNavigationIntentGeneration === 'function') {
+            try {
+                if (global.__getAppNavigationIntentGeneration() !== navigationIntentGeneration) {
+                    return false;
+                }
+            } catch (_) {
+                return false;
+            }
+        }
+        if (typeof document !== 'undefined'
+            && typeof document.querySelector === 'function') {
+            const activeView = document.querySelector('.view.active');
+            if (activeView && activeView.id !== 'browse-view') {
+                return false;
+            }
         }
         return renderRequestId == null
             || typeof global.__isBrowseResultsRequestCurrent !== 'function'
@@ -5212,7 +5233,13 @@
         resetBrowseFilterStateToAll(examIndex);
     }
 
-    async function prepareBrowseReset() {
+    async function prepareBrowseReset(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        if (!isCurrent()) {
+            return false;
+        }
         const pending = [];
         const manager = global.browseStateManager;
         if (manager && manager.ready && typeof manager.ready.then === 'function') {
@@ -5221,13 +5248,17 @@
             }));
         }
         if (typeof global.setupBrowseControls === 'function') {
-            pending.push(Promise.resolve().then(() => global.setupBrowseControls()).catch((error) => {
+            pending.push(Promise.resolve().then(() => global.setupBrowseControls({ isCurrent })).catch((error) => {
                 console.warn('[ExamActions] 初始化浏览筛选控件失败:', error);
             }));
         }
         if (pending.length > 0) {
-            await Promise.all(pending);
+            const results = await Promise.all(pending);
+            if (results.some((result) => result === false)) {
+                return false;
+            }
         }
+        return isCurrent();
     }
 
     async function persistBrowseFrequencyReset() {
@@ -5340,8 +5371,8 @@
                 }
             }
             if (typeof global.setupBrowseControls === 'function') {
-                await global.setupBrowseControls();
-                if (!isCurrent()) {
+                const controlsReady = await global.setupBrowseControls({ isCurrent });
+                if (controlsReady === false || !isCurrent()) {
                     return false;
                 }
             }
@@ -5440,6 +5471,9 @@
     async function performBrowseViewResetToAll(resetIntent) {
         try {
         const interactionId = ++browseResetInteractionId;
+        const navigationIntentGeneration = typeof global.__getAppNavigationIntentGeneration === 'function'
+            ? global.__getAppNavigationIntentGeneration()
+            : null;
         if (global.__pendingBrowseFilter) {
             delete global.__pendingBrowseFilter;
         }
@@ -5461,9 +5495,12 @@
             global.clearPendingBrowseAutoScroll();
         }
 
-        await prepareBrowseReset();
-
-        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+        const isCurrent = () => isBrowseResetCurrent(
+            interactionId,
+            renderRequestId,
+            navigationIntentGeneration
+        );
+        if (!await prepareBrowseReset({ isCurrent }) || !isCurrent()) {
             return false;
         }
 
@@ -5489,7 +5526,7 @@
             }
         }
 
-        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+        if (!isCurrent()) {
             return false;
         }
 
@@ -5507,7 +5544,7 @@
                         ? examIndex
                         : null;
                     result = await Promise.resolve(globalLoader.call(global, indexOverride, renderRequestId));
-                    if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                    if (!isCurrent()) {
                         await persistencePromise;
                         return false;
                     }
@@ -5526,7 +5563,7 @@
                     if (!persistenceComplete) {
                         await persistencePromise;
                         persistenceComplete = true;
-                        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                        if (!isCurrent()) {
                             return false;
                         }
                         resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
@@ -5561,7 +5598,7 @@
         if (Array.isArray(examIndex) && examIndex.length > 0) {
             let result = loadExamList(examIndex);
             await beginBrowseResetPersistence();
-            if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+            if (!isCurrent()) {
                 return false;
             }
             resetIndexSnapshot = closeBrowseResetIntent(
@@ -5583,7 +5620,7 @@
         }
 
         await beginBrowseResetPersistence();
-        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+        if (!isCurrent()) {
             return false;
         }
         closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
@@ -5610,11 +5647,15 @@
         let functionalResetRecoverySucceeded = false;
         try {
             const resetPromise = performBrowseViewResetToAll(resetIntent);
+            const foregroundResultsRequestId = typeof global.__getBrowseResultsRequestId === 'function'
+                ? global.__getBrowseResultsRequestId()
+                : null;
             if (functionalResetRecovery
                 && global.AppEntry
                 && typeof global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest === 'function') {
                 global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest(
-                    functionalResetRecovery
+                    functionalResetRecovery,
+                    foregroundResultsRequestId
                 );
             }
             const result = await resetPromise;
@@ -17771,67 +17812,16 @@ async function initializeLegacyComponents() {
 // Practice history is read from AppData for each refresh. Only its signature is
 // retained as runtime UI state; record arrays never become a second authority.
 let lastPracticeRecordsSignature = null;
-let practiceRecordsSyncInvocationGeneration = 0;
-let practiceRecordsDataGeneration = 0;
-let practiceRecordsCommitSubscriptionAttached = false;
-const activePracticeRecordsSyncInvocations = new Map();
-const PRACTICE_RECORD_ENTITY_STORES = new Set([
-    'practiceSummaries',
-    'practiceDetails'
-]);
-
-function ensurePracticeRecordsCommitSubscription() {
-    if (practiceRecordsCommitSubscriptionAttached) {
-        return;
-    }
-    const backups = window.AppData && window.AppData.backups;
-    if (!backups || typeof backups.onDataCommitted !== 'function') {
-        return;
-    }
-    backups.onDataCommitted((event) => {
-        const targets = event && Array.isArray(event.targets) ? event.targets : [];
-        const touchesPracticeRecords = targets.some((target) => {
-            const store = typeof target === 'string'
-                ? target
-                : target && (target.store || target.logicalKey);
-            return PRACTICE_RECORD_ENTITY_STORES.has(store);
-        });
-        if (touchesPracticeRecords) {
-            practiceRecordsDataGeneration += 1;
-            if (activePracticeRecordsSyncInvocations.size > 0) {
-                const replacementMode = Array.from(
-                    activePracticeRecordsSyncInvocations.values()
-                ).some((activeOptions) => activeOptions && activeOptions.mode === 'full')
-                    ? 'full'
-                    : 'summary';
-                startPracticeRecordsSyncInBackground('practice-data-committed', {
-                    forceRender: true,
-                    mode: replacementMode
-                });
-            }
-        }
-    });
-    practiceRecordsCommitSubscriptionAttached = true;
-}
-
+// Browse progress is a derived projection. This generation orders only that
+// projection; it never changes syncPracticeRecords' public return value or the
+// Practice-history single-flight contract below.
+let browsePracticeProjectionGeneration = 0;
 async function syncPracticeRecords(options = {}) {
-    ensurePracticeRecordsCommitSubscription();
-    const invocationGeneration = ++practiceRecordsSyncInvocationGeneration;
-    const normalizedOptions = normalizePracticeRecordsSyncOptions(options);
-    activePracticeRecordsSyncInvocations.set(invocationGeneration, normalizedOptions);
-    try {
-        return await executePracticeRecordsSync(normalizedOptions, invocationGeneration);
-    } finally {
-        activePracticeRecordsSyncInvocations.delete(invocationGeneration);
-    }
-}
-
-async function executePracticeRecordsSync(options, invocationGeneration) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
     const browseProgressSourceEpoch = {
         activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration'),
-        practiceRecordsDataGeneration
+        practiceProjectionGeneration: ++browsePracticeProjectionGeneration
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
@@ -17891,16 +17881,6 @@ async function executePracticeRecordsSync(options, invocationGeneration) {
         });
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
-    const sourceLibraryIsCurrent = isBrowseProgressRefreshEpochCurrent({
-        activeLibraryGeneration: browseProgressSourceEpoch.activeLibraryGeneration
-    });
-    if (invocationGeneration !== practiceRecordsSyncInvocationGeneration
-        || !sourceLibraryIsCurrent
-        || browseProgressSourceEpoch.practiceRecordsDataGeneration !== practiceRecordsDataGeneration) {
-        console.log('[System] 丢弃已过期的练习记录同步投影');
-        return records;
-    }
-
     // Avoid resetting the list when the authoritative light projection is unchanged.
     try {
         const renderer = window.PracticeHistoryRenderer;
@@ -17924,146 +17904,85 @@ async function executePracticeRecordsSync(options, invocationGeneration) {
 }
 
 let practiceRecordsLoadPromise = null;
-let pendingPracticeRecordsSyncRequest = null;
-let activePracticeRecordsSyncRequest = null;
+let activeBrowseProgressSyncLibraryGeneration = null;
+let pendingBrowseProgressLibrarySync = null;
 
-function normalizePracticeRecordsSyncOptions(options = {}) {
-    const normalized = Object.assign({}, options || {});
-    normalized.forceRender = !!normalized.forceRender;
-    normalized.mode = normalized.mode === 'full' ? 'full' : 'summary';
-    return normalized;
-}
-
-function capturePracticeRecordsSyncRequest(trigger, options = {}) {
-    return {
-        trigger,
-        options: normalizePracticeRecordsSyncOptions(options),
-        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration'),
-        practiceRecordsDataGeneration
-    };
-}
-
-function practiceRecordsSyncGenerationCovers(existing, incoming, key) {
-    if (incoming[key] == null) {
-        return true;
-    }
-    return existing[key] != null && existing[key] >= incoming[key];
-}
-
-function practiceRecordsSyncRequestCovers(existing, incoming) {
-    if (!existing || !incoming) {
-        return false;
-    }
-    const existingOptions = existing.options || {};
-    const incomingOptions = incoming.options || {};
-    return practiceRecordsSyncGenerationCovers(existing, incoming, 'activeLibraryGeneration')
-        && practiceRecordsSyncGenerationCovers(existing, incoming, 'practiceRecordsDataGeneration')
-        && (existingOptions.forceRender || !incomingOptions.forceRender)
-        && (existingOptions.mode === 'full' || incomingOptions.mode !== 'full');
-}
-
-function activePracticeRecordsSyncRequestCovers(incoming) {
-    return !!activePracticeRecordsSyncRequest
-        && activePracticeRecordsSyncRequest.invocationGeneration
-            === practiceRecordsSyncInvocationGeneration
-        && practiceRecordsSyncRequestCovers(activePracticeRecordsSyncRequest, incoming);
-}
-
-function mergePracticeRecordsSyncGeneration(previousValue, nextValue) {
-    if (previousValue == null) {
-        return nextValue;
-    }
-    if (nextValue == null) {
-        return previousValue;
-    }
-    return Math.max(previousValue, nextValue);
-}
-
-function queuePendingPracticeRecordsSync(incoming) {
-    const previous = pendingPracticeRecordsSyncRequest;
-    const activeOptions = activePracticeRecordsSyncRequest
-        && activePracticeRecordsSyncRequest.options
-        ? activePracticeRecordsSyncRequest.options
-        : {};
+function mergeBrowseProgressLibrarySyncRequest(trigger, options, libraryGeneration) {
+    const previous = pendingBrowseProgressLibrarySync;
     const previousOptions = previous && previous.options ? previous.options : {};
-    const incomingOptions = incoming && incoming.options ? incoming.options : {};
-    const nextOptions = Object.assign({}, activeOptions, previousOptions, incomingOptions);
-    nextOptions.forceRender = !!(
-        activeOptions.forceRender
-        || previousOptions.forceRender
-        || incomingOptions.forceRender
-    );
-    nextOptions.mode = activeOptions.mode === 'full'
-        || previousOptions.mode === 'full'
-        || incomingOptions.mode === 'full'
-        ? 'full'
-        : 'summary';
-    pendingPracticeRecordsSyncRequest = {
-        trigger: incoming.trigger,
-        options: nextOptions,
-        activeLibraryGeneration: mergePracticeRecordsSyncGeneration(
-            previous && previous.activeLibraryGeneration,
-            incoming.activeLibraryGeneration
-        ),
-        practiceRecordsDataGeneration: mergePracticeRecordsSyncGeneration(
-            previous && previous.practiceRecordsDataGeneration,
-            incoming.practiceRecordsDataGeneration
-        )
+    const incomingOptions = options || {};
+    pendingBrowseProgressLibrarySync = {
+        trigger,
+        libraryGeneration,
+        options: {
+            forceRender: !!(previousOptions.forceRender || incomingOptions.forceRender),
+            mode: previousOptions.mode === 'full' || incomingOptions.mode === 'full'
+                ? 'full'
+                : 'summary'
+        }
     };
 }
 
-async function drainPracticeRecordsSyncQueue(initialRequest) {
+async function drainBrowseProgressLibrarySync(initialRequest) {
     let request = initialRequest;
     let result = null;
     try {
         while (request) {
-            activePracticeRecordsSyncRequest = request;
+            activeBrowseProgressSyncLibraryGeneration = readBrowseProgressGeneration(
+                '__getActiveLibraryGeneration'
+            );
             let syncError = null;
             try {
-                request.activeLibraryGeneration = readBrowseProgressGeneration(
-                    '__getActiveLibraryGeneration'
-                );
-                request.practiceRecordsDataGeneration = practiceRecordsDataGeneration;
-                request.invocationGeneration = practiceRecordsSyncInvocationGeneration + 1;
-                const syncPromise = syncPracticeRecords(Object.assign(
+                result = await syncPracticeRecords(Object.assign(
                     { mode: 'summary' },
                     request.options || {}
                 ));
-                result = await syncPromise;
             } catch (error) {
                 syncError = error;
             }
-            const nextRequest = pendingPracticeRecordsSyncRequest;
-            pendingPracticeRecordsSyncRequest = null;
-            if (syncError && !nextRequest) {
+            request = pendingBrowseProgressLibrarySync;
+            pendingBrowseProgressLibrarySync = null;
+            if (syncError && !request) {
                 throw syncError;
             }
             if (syncError) {
                 console.warn(
-                    `[System] 练习记录同步失败(${request.trigger})，继续处理已排队的最新请求:`,
+                    `[System] 练习记录同步失败(${initialRequest.trigger})，继续刷新最新题库进度:`,
                     syncError
                 );
             }
-            request = nextRequest;
         }
         return result;
     } finally {
-        activePracticeRecordsSyncRequest = null;
+        activeBrowseProgressSyncLibraryGeneration = null;
+        pendingBrowseProgressLibrarySync = null;
         practiceRecordsLoadPromise = null;
     }
 }
 
 function ensurePracticeRecordsSync(trigger = 'default', options = {}) {
-    ensurePracticeRecordsCommitSubscription();
-    const incomingRequest = capturePracticeRecordsSyncRequest(trigger, options);
+    const requestedLibraryGeneration = readBrowseProgressGeneration(
+        '__getActiveLibraryGeneration'
+    );
     if (practiceRecordsLoadPromise) {
-        if (!activePracticeRecordsSyncRequestCovers(incomingRequest)
-            && !practiceRecordsSyncRequestCovers(pendingPracticeRecordsSyncRequest, incomingRequest)) {
-            queuePendingPracticeRecordsSync(incomingRequest);
+        // Keep the baseline single-flight contract for same-library calls. Only
+        // a newer active library earns one coalesced Browse-progress tail; this
+        // is not a generic Practice-data replacement scheduler.
+        if (requestedLibraryGeneration != null
+            && requestedLibraryGeneration !== activeBrowseProgressSyncLibraryGeneration) {
+            mergeBrowseProgressLibrarySyncRequest(
+                trigger,
+                options,
+                requestedLibraryGeneration
+            );
         }
         return practiceRecordsLoadPromise;
     }
-    practiceRecordsLoadPromise = drainPracticeRecordsSyncQueue(incomingRequest);
+    practiceRecordsLoadPromise = drainBrowseProgressLibrarySync({
+        trigger,
+        options: Object.assign({}, options || {}),
+        libraryGeneration: requestedLibraryGeneration
+    });
     return practiceRecordsLoadPromise;
 }
 
@@ -19555,19 +19474,15 @@ function captureBrowseProgressRefreshEpoch(sourceEpoch = null) {
         source,
         'activeLibraryGeneration'
     );
-    const hasSourcePracticeRecordsDataGeneration = Object.prototype.hasOwnProperty.call(
-        source,
-        'practiceRecordsDataGeneration'
-    );
     const functionalResetState = readBrowseFunctionalResetState();
     return {
         navigationGeneration: readBrowseProgressGeneration('__getAppNavigationIntentGeneration'),
         activeLibraryGeneration: hasSourceLibraryGeneration
             ? source.activeLibraryGeneration
             : readBrowseProgressGeneration('__getActiveLibraryGeneration'),
-        practiceRecordsDataGeneration: hasSourcePracticeRecordsDataGeneration
-            ? source.practiceRecordsDataGeneration
-            : practiceRecordsDataGeneration,
+        practiceProjectionGeneration: Number.isFinite(Number(source.practiceProjectionGeneration))
+            ? Number(source.practiceProjectionGeneration)
+            : browsePracticeProjectionGeneration,
         resetGeneration: readBrowseProgressGeneration('__getBrowseResetIntentGeneration'),
         functionalResetGeneration: functionalResetState.generation,
         functionalResetWasPending: functionalResetState.status === 'pending'
@@ -19590,8 +19505,8 @@ function isBrowseProgressRefreshEpochCurrent(epoch) {
     if (!ordinaryGenerationsAreCurrent) {
         return false;
     }
-    if (captured.practiceRecordsDataGeneration != null
-        && captured.practiceRecordsDataGeneration !== practiceRecordsDataGeneration) {
+    if (captured.practiceProjectionGeneration != null
+        && captured.practiceProjectionGeneration !== browsePracticeProjectionGeneration) {
         return false;
     }
     if (captured.functionalResetGeneration == null) {
@@ -19669,9 +19584,7 @@ function refreshBrowseProgressFromRecords(records, examIndex, refreshEpoch = nul
         const recordSnapshot = Array.isArray(records) ? records : [];
         const indexSnapshot = Array.isArray(examIndex) ? examIndex : [];
         const pendingEpoch = captureBrowseProgressRefreshEpoch(refreshEpoch);
-        if (!isBrowseProgressRefreshEpochCurrent({
-            activeLibraryGeneration: pendingEpoch.activeLibraryGeneration
-        })) {
+        if (!isBrowseProgressRefreshEpochCurrent(pendingEpoch)) {
             return;
         }
         if (typeof rebuildBrowseCompletionIndex === 'function') {
@@ -19917,6 +19830,89 @@ function isBrowseUserResultsRequest(requestId) {
     return requestId != null && requestId === lastBrowseUserResultsRequestId;
 }
 
+function captureBrowseForegroundRenderEpoch(sourceEpoch = null) {
+    const source = sourceEpoch && typeof sourceEpoch === 'object' ? sourceEpoch : {};
+    const functionalResetState = readBrowseFunctionalResetState();
+    const readSourceOrGeneration = (key, getterName) => Object.prototype.hasOwnProperty.call(source, key)
+        ? source[key]
+        : readBrowseProgressGeneration(getterName);
+    return {
+        navigationGeneration: readSourceOrGeneration(
+            'navigationGeneration',
+            '__getAppNavigationIntentGeneration'
+        ),
+        activeLibraryGeneration: readSourceOrGeneration(
+            'activeLibraryGeneration',
+            '__getActiveLibraryGeneration'
+        ),
+        resetGeneration: readSourceOrGeneration(
+            'resetGeneration',
+            '__getBrowseResetIntentGeneration'
+        ),
+        functionalResetGeneration: Object.prototype.hasOwnProperty.call(
+            source,
+            'functionalResetGeneration'
+        )
+            ? source.functionalResetGeneration
+            : functionalResetState.generation
+    };
+}
+
+function isBrowseForegroundRenderEpochCurrent(epoch) {
+    if (!epoch || typeof epoch !== 'object') {
+        return true;
+    }
+    const generations = {
+        navigationGeneration: '__getAppNavigationIntentGeneration',
+        activeLibraryGeneration: '__getActiveLibraryGeneration',
+        resetGeneration: '__getBrowseResetIntentGeneration'
+    };
+    const ordinaryGenerationsAreCurrent = Object.keys(generations).every((key) => {
+        if (epoch[key] == null) {
+            return true;
+        }
+        return readBrowseProgressGeneration(generations[key]) === epoch[key];
+    });
+    if (!ordinaryGenerationsAreCurrent || epoch.functionalResetGeneration == null) {
+        return ordinaryGenerationsAreCurrent;
+    }
+    return readBrowseFunctionalResetState().generation === epoch.functionalResetGeneration;
+}
+
+function captureCurrentForegroundBrowseRecovery(requestId, explicitlyForeground = false) {
+    const isForeground = explicitlyForeground
+        || isBrowseUserResultsRequestInFlight(requestId);
+    if (!isForeground || !isBrowseResultsRequestCurrent(requestId)) {
+        return null;
+    }
+    const appEntry = window.AppEntry;
+    if (appEntry
+        && typeof appEntry.prepareBrowseFunctionalResetRecoveryForForeground === 'function') {
+        const prepared = appEntry.prepareBrowseFunctionalResetRecoveryForForeground(requestId);
+        return prepared && prepared.recovery ? prepared.recovery : prepared;
+    }
+    if (!appEntry
+        || typeof appEntry.captureBrowseFunctionalResetRecovery !== 'function') {
+        return null;
+    }
+    const recovery = appEntry.captureBrowseFunctionalResetRecovery();
+    if (recovery
+        && typeof appEntry.updateBrowseFunctionalResetRecoveryResultsRequest === 'function') {
+        appEntry.updateBrowseFunctionalResetRecoveryResultsRequest(recovery, requestId);
+    }
+    return recovery;
+}
+
+function completeCurrentForegroundBrowseRecovery(recovery, succeeded) {
+    const appEntry = window.AppEntry;
+    if (!recovery
+        || !appEntry
+        || typeof appEntry.completeBrowseFunctionalResetRecovery !== 'function') {
+        return false;
+    }
+    return appEntry.completeBrowseFunctionalResetRecovery(recovery, succeeded === true);
+}
+
 window.__beginBrowseResultsRequest = beginBrowseResultsRequest;
 window.__isBrowseResultsRequestCurrent = isBrowseResultsRequestCurrent;
 window.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
@@ -19933,8 +19929,10 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
         ? beginBrowseUserResultsRequest()
         : retainBrowseUserResultsRequest(renderRequestId);
     const activeRequestId = renderRequestId == null ? userRequestId : renderRequestId;
+    const foregroundEpoch = captureBrowseForegroundRenderEpoch();
     try {
         const requestedType = type;
+        let listeningUnavailable = false;
         let examIndex = Array.isArray(examIndexOverride) ? examIndexOverride : [];
         try {
             if (!Array.isArray(examIndexOverride)) {
@@ -19945,9 +19943,7 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
                 : examIndex.some((exam) => exam && exam.type === 'listening');
             if (requestedType === 'listening' && !listeningAvailable) {
                 type = 'all';
-                if (typeof window.showMessage === 'function') {
-                    window.showMessage('听力题库尚未加载', 'warning');
-                }
+                listeningUnavailable = true;
             }
         } catch (_) {
             if (requestedType === 'listening') {
@@ -19955,8 +19951,12 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
             }
         }
 
-        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-            return;
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return false;
+        }
+        if (listeningUnavailable && typeof window.showMessage === 'function') {
+            window.showMessage('听力题库尚未加载', 'warning');
         }
 
         // 重置筛选器状态
@@ -19999,7 +19999,9 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
         }
 
         // 保留活动搜索与新类型筛选的交集。
-        await renderBrowseResultsForState(examIndex, activeRequestId);
+        return await renderBrowseResultsForState(examIndex, activeRequestId, {
+            foregroundEpoch
+        });
     } finally {
         endBrowseUserResultsRequest(userRequestId);
     }
@@ -20037,14 +20039,12 @@ async function applyBrowseFilter(
         ? beginBrowseUserResultsRequest()
         : retainBrowseUserResultsRequest(renderRequestId);
     const activeRequestId = renderRequestId == null ? userRequestId : renderRequestId;
-    const functionalResetRecovery = window.AppEntry
-        && typeof window.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
-        ? window.AppEntry.captureBrowseFunctionalResetRecovery()
-        : null;
-    let functionalResetRecoverySucceeded = false;
+    const foregroundEpoch = captureBrowseForegroundRenderEpoch();
     try {
         const indexSnapshot = await resolveActiveExamIndex();
-        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isNavigationIntentCurrent()
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
         }
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
@@ -20120,7 +20120,9 @@ async function applyBrowseFilter(
             }
         }
 
-        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isNavigationIntentCurrent()
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
         }
 
@@ -20132,9 +20134,13 @@ async function applyBrowseFilter(
         setBrowseTitle(memorizeSelectionActive ? '阅读背题选题' : formatBrowseTitle(normalizedCategory, effectiveType));
 
         // 3. 统一刷新，确保活动搜索继续约束分类/路径结果。
-        await renderBrowseResultsForState(indexSnapshot, activeRequestId);
+        const renderResult = await renderBrowseResultsForState(indexSnapshot, activeRequestId, {
+            foregroundEpoch
+        });
 
-        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+        if (renderResult === false
+            || !isBrowseResultsRequestCurrent(activeRequestId)
+            || !isNavigationIntentCurrent()) {
             return false;
         }
 
@@ -20142,10 +20148,11 @@ async function applyBrowseFilter(
         if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
             window.showView('browse', false);
         }
-        functionalResetRecoverySucceeded = true;
         return true;
     } catch (e) {
-        if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isNavigationIntentCurrent()
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
         }
         console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
@@ -20154,23 +20161,19 @@ async function applyBrowseFilter(
         if (window.browseController && typeof window.browseController.resetToDefault === 'function') {
             window.browseController.resetToDefault(null, activeRequestId, { skipApply: true });
         }
-        // 避免在错误处理中再次同步调用可能导致错误的 loadExamList，使用 setTimeout 打断调用栈
-        setTimeout(() => {
-            if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
-                return;
-            }
-            try { renderBrowseResultsForState(null, activeRequestId); } catch (_) { }
-        }, 0);
+        // Break the failing call stack while retaining this foreground lease.
+        // The original epoch must still be current before the fallback may write.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isNavigationIntentCurrent()
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return false;
+        }
+        try {
+            await renderBrowseResultsForState(null, activeRequestId, { foregroundEpoch });
+        } catch (_) { }
         return false;
     } finally {
-        if (functionalResetRecovery
-            && window.AppEntry
-            && typeof window.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
-            window.AppEntry.completeBrowseFunctionalResetRecovery(
-                functionalResetRecovery,
-                functionalResetRecoverySucceeded
-            );
-        }
         endBrowseUserResultsRequest(userRequestId);
     }
 }
@@ -20254,12 +20257,9 @@ async function initializeBrowseView(options = {}) {
     const activeRequestId = options.renderRequestId == null
         ? userRequestId
         : options.renderRequestId;
-    const functionalResetRecovery = !options.skipLoad
-        && window.AppEntry
-        && typeof window.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
-        ? window.AppEntry.captureBrowseFunctionalResetRecovery()
-        : null;
-    let functionalResetRecoverySucceeded = false;
+    const foregroundEpoch = options.foregroundEpoch
+        ? captureBrowseForegroundRenderEpoch(options.foregroundEpoch)
+        : captureBrowseForegroundRenderEpoch();
     try {
         console.log('[System] Initializing browse view...');
         const [examIndex] = await Promise.all([
@@ -20269,7 +20269,8 @@ async function initializeBrowseView(options = {}) {
                 : Promise.resolve()
         ]);
 
-        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return null;
         }
 
@@ -20288,7 +20289,9 @@ async function initializeBrowseView(options = {}) {
             const persistedAuthoritativeFilter = await persistAuthoritativeBrowseFilterBeforeHydration(
                 activeRequestId
             );
-            if (!persistedAuthoritativeFilter || !isBrowseResultsRequestCurrent(activeRequestId)) {
+            if (!persistedAuthoritativeFilter
+                || !isBrowseResultsRequestCurrent(activeRequestId)
+                || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
                 console.warn('[Browse] 权威筛选尚未持久化，已推迟首次 hydration');
                 return null;
             }
@@ -20307,23 +20310,20 @@ async function initializeBrowseView(options = {}) {
 
         setupBrowseSortControl();
         setupBrowseFrequencyFilterControl();
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return null;
+        }
         if (!options.skipLoad) {
-            const renderResult = await renderBrowseResultsForState(examIndex, activeRequestId);
+            const renderResult = await renderBrowseResultsForState(examIndex, activeRequestId, {
+                foregroundEpoch
+            });
             if (renderResult === false || !isBrowseResultsRequestCurrent(activeRequestId)) {
                 return null;
             }
-            functionalResetRecoverySucceeded = true;
         }
         return examIndex;
     } finally {
-        if (functionalResetRecovery
-            && window.AppEntry
-            && typeof window.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
-            window.AppEntry.completeBrowseFunctionalResetRecovery(
-                functionalResetRecovery,
-                functionalResetRecoverySucceeded
-            );
-        }
         endBrowseUserResultsRequest(userRequestId);
     }
 }
@@ -20335,32 +20335,25 @@ async function activateBrowseView(options = {}) {
     const activeRequestId = options.renderRequestId == null
         ? userRequestId
         : options.renderRequestId;
-    const functionalResetRecovery = window.AppEntry
-        && typeof window.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
-        ? window.AppEntry.captureBrowseFunctionalResetRecovery()
-        : null;
-    let functionalResetRecoverySucceeded = false;
+    const foregroundEpoch = options.foregroundEpoch
+        ? captureBrowseForegroundRenderEpoch(options.foregroundEpoch)
+        : captureBrowseForegroundRenderEpoch();
     try {
         const examIndex = await initializeBrowseView({
             skipLoad: true,
-            renderRequestId: activeRequestId
+            renderRequestId: activeRequestId,
+            foregroundEpoch
         });
-        if (!Array.isArray(examIndex) || !isBrowseResultsRequestCurrent(activeRequestId)) {
+        if (!Array.isArray(examIndex)
+            || !isBrowseResultsRequestCurrent(activeRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
         }
-        const result = await renderBrowseResultsForState(examIndex, activeRequestId);
-        functionalResetRecoverySucceeded = result !== false
-            && isBrowseResultsRequestCurrent(activeRequestId);
+        const result = await renderBrowseResultsForState(examIndex, activeRequestId, {
+            foregroundEpoch
+        });
         return result;
     } finally {
-        if (functionalResetRecovery
-            && window.AppEntry
-            && typeof window.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
-            window.AppEntry.completeBrowseFunctionalResetRecovery(
-                functionalResetRecovery,
-                functionalResetRecoverySucceeded
-            );
-        }
         endBrowseUserResultsRequest(userRequestId);
     }
 }
@@ -20377,45 +20370,146 @@ function getBrowseSearchQuery() {
     return input && typeof input.value === 'string' ? input.value.trim() : '';
 }
 
-function renderBrowseResultsForState(examIndexOverride = null, renderRequestId = null) {
+async function renderBrowseResultsForState(
+    examIndexOverride = null,
+    renderRequestId = null,
+    options = {}
+) {
+    const hasQueryOverride = Object.prototype.hasOwnProperty.call(options || {}, 'query');
+    const query = hasQueryOverride ? String(options.query || '').trim() : getBrowseSearchQuery();
+    const explicitlyForeground = options && options.foreground === true;
+    const foregroundRetainId = explicitlyForeground
+        ? (renderRequestId == null
+            ? beginBrowseUserResultsRequest()
+            : retainBrowseUserResultsRequest(renderRequestId))
+        : null;
     const activeRequestId = renderRequestId == null
-        ? beginBrowseResultsRequest()
+        ? (explicitlyForeground ? foregroundRetainId : beginBrowseResultsRequest())
         : renderRequestId;
-    const query = getBrowseSearchQuery();
-    if (query) {
-        return performSearch(query, activeRequestId, examIndexOverride);
+    if (explicitlyForeground && foregroundRetainId == null) {
+        return false;
     }
-    return loadExamList(examIndexOverride, activeRequestId);
+    const isForeground = explicitlyForeground
+        || isBrowseUserResultsRequestInFlight(activeRequestId);
+    const foregroundEpoch = isForeground
+        ? captureBrowseForegroundRenderEpoch(options && options.foregroundEpoch)
+        : null;
+    let foregroundRecovery = null;
+    let renderSucceeded = false;
+    try {
+        if (!isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return false;
+        }
+        foregroundRecovery = captureCurrentForegroundBrowseRecovery(
+            activeRequestId,
+            explicitlyForeground
+        );
+        if (foregroundEpoch) {
+            // Atomic preparation may neutrally cancel a stale retry barrier and
+            // restore its durable failure debt (or idle state). Adopt only that
+            // synchronous internal generation; navigation/library/reset
+            // ownership remains the foreground intent captured by the caller.
+            const preparedFunctionalResetState = readBrowseFunctionalResetState();
+            foregroundEpoch.functionalResetGeneration = preparedFunctionalResetState.generation;
+        }
+        const isRenderCurrent = () => isBrowseResultsRequestCurrent(activeRequestId)
+            && isBrowseForegroundRenderEpochCurrent(foregroundEpoch);
+        const result = query
+            ? await performSearch(query, activeRequestId, examIndexOverride, {
+                isCurrent: isRenderCurrent
+            })
+            : await loadExamList(examIndexOverride, activeRequestId, {
+                isCurrent: isRenderCurrent
+            });
+        if (result === false
+            || !isBrowseResultsRequestCurrent(activeRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return false;
+        }
+        renderSucceeded = true;
+        return result;
+    } finally {
+        completeCurrentForegroundBrowseRecovery(foregroundRecovery, renderSucceeded);
+        endBrowseUserResultsRequest(foregroundRetainId);
+    }
 }
 
 window.__renderBrowseResultsForState = renderBrowseResultsForState;
 
-function refreshBrowseResults() {
-    return renderBrowseResultsForState();
+function refreshBrowseResults(options = {}) {
+    return renderBrowseResultsForState(null, null, options);
 }
 
 let browseControlsSeeded = false;
 let browseControlsSeedPromise = null;
-async function setupBrowseControls() {
+let browseControlsSeedReadRevision = null;
+let browseControlsSeedReadEpoch = null;
+let browseControlsMutationRevision = 0;
+
+function isBrowseControlsSetupCurrent(options = {}) {
+    if (!options || typeof options.isCurrent !== 'function') {
+        return true;
+    }
+    try {
+        return options.isCurrent() !== false;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function setupBrowseControls(options = {}) {
+    if (!isBrowseControlsSetupCurrent(options)) {
+        return false;
+    }
     if (!browseControlsSeeded) {
         if (!browseControlsSeedPromise) {
+            browseControlsSeedReadRevision = browseControlsMutationRevision;
+            browseControlsSeedReadEpoch = captureBrowseForegroundRenderEpoch();
             browseControlsSeedPromise = (async () => {
                 try {
-                    const browse = await window.AppData.preferences.getBrowse();
-                    if (browse) {
-                        window.__browseSortMode = browse.sortMode || window.__browseSortMode;
-                        updateBrowseFrequencyButtons(
-                            browse.frequencyFilter || window.__browseFrequencyFilter || 'all'
-                        );
-                    }
+                    return await window.AppData.preferences.getBrowse();
                 } catch (_) { /* defaults remain active */ }
-                browseControlsSeeded = true;
+                return null;
             })();
         }
-        await browseControlsSeedPromise;
+        const seedPromise = browseControlsSeedPromise;
+        const browse = await seedPromise;
+        if (!isBrowseControlsSetupCurrent(options)) {
+            if (!browseControlsSeeded && browseControlsSeedPromise === seedPromise) {
+                browseControlsSeedPromise = null;
+                browseControlsSeedReadRevision = null;
+                browseControlsSeedReadEpoch = null;
+            }
+            return false;
+        }
+        if (browseControlsSeedPromise !== seedPromise) {
+            return setupBrowseControls(options);
+        }
+        if (!isBrowseForegroundRenderEpochCurrent(browseControlsSeedReadEpoch)) {
+            browseControlsSeedPromise = null;
+            browseControlsSeedReadRevision = null;
+            browseControlsSeedReadEpoch = null;
+            return setupBrowseControls(options);
+        }
+        if (!browseControlsSeeded) {
+            // A user frequency/sort intent that happened while storage was being
+            // read owns the controls. The older preference snapshot must not
+            // overwrite it when the await settles.
+            if (browseControlsSeedReadRevision === browseControlsMutationRevision && browse) {
+                window.__browseSortMode = browse.sortMode || window.__browseSortMode;
+                updateBrowseFrequencyButtons(
+                    browse.frequencyFilter || window.__browseFrequencyFilter || 'all'
+                );
+            }
+            browseControlsSeeded = true;
+        }
+    }
+    if (!isBrowseControlsSetupCurrent(options)) {
+        return false;
     }
     setupBrowseSortControl();
     setupBrowseFrequencyFilterControl();
+    return true;
 }
 
 async function persistBrowsePreference(patch) {
@@ -20442,9 +20536,10 @@ function setupBrowseSortControl() {
     sortSelect.value = normalizeSortMode(savedMode);
     window.__browseSortMode = sortSelect.value;
     sortSelect.addEventListener('change', () => {
+        browseControlsMutationRevision += 1;
         window.__browseSortMode = normalizeSortMode(sortSelect.value);
         persistBrowsePreference({ sortMode: window.__browseSortMode }).catch(console.warn);
-        refreshBrowseResults();
+        refreshBrowseResults({ foreground: true });
     });
     sortSelect.dataset.bound = 'true';
 }
@@ -20494,9 +20589,12 @@ function filterByFrequency(filter) {
     const requested = normalizeBrowseFrequencyFilter(filter);
     const current = normalizeBrowseFrequencyFilter(window.__browseFrequencyFilter || 'all');
     const next = requested !== 'all' && requested === current ? 'all' : requested;
+    browseControlsMutationRevision += 1;
+    // Record the live intent before any async preference write or lazy owner
+    // delegation so an older control-seed read cannot become authoritative.
     persistBrowsePreference({ frequencyFilter: next }).catch(console.warn);
     updateBrowseFrequencyButtons(next);
-    refreshBrowseResults();
+    refreshBrowseResults({ foreground: true });
 }
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
@@ -20543,20 +20641,33 @@ function filterRecordsByType(type) {
 }
 
 
-async function loadExamList(examIndexOverride = null, renderRequestId = null) {
+async function loadExamList(examIndexOverride = null, renderRequestId = null, options = {}) {
     const activeRequestId = renderRequestId == null
         ? beginBrowseResultsRequest()
         : renderRequestId;
-    await setupBrowseControls();
-    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-        return;
+    const isCurrent = () => {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return false;
+        }
+        if (!options || typeof options.isCurrent !== 'function') {
+            return true;
+        }
+        try {
+            return options.isCurrent() !== false;
+        } catch (_) {
+            return false;
+        }
+    };
+    const controlsReady = await setupBrowseControls({ isCurrent });
+    if (controlsReady === false || !isCurrent()) {
+        return false;
     }
     const examIndex = Array.isArray(examIndexOverride)
         ? examIndexOverride
         : await resolveActiveExamIndex();
 
-    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-        return;
+    if (!isCurrent()) {
+        return false;
     }
 
     if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
@@ -20564,27 +20675,30 @@ async function loadExamList(examIndexOverride = null, renderRequestId = null) {
     }
     console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
     if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        return window.AppLazyLoader.ensureGroup('browse-view').then(function () {
-            if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-                return;
+        return window.AppLazyLoader.ensureGroup('browse-view').then(async function () {
+            if (!isCurrent()) {
+                return false;
             }
-            setupBrowseControls();
+            const lazyControlsReady = await setupBrowseControls({ isCurrent });
+            if (lazyControlsReady === false || !isCurrent()) {
+                return false;
+            }
             if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
-                window.ExamActions.loadExamList(examIndex);
+                return window.ExamActions.loadExamList(examIndex);
             } else {
                 // 最终降级：直接 DOM 渲染
-                loadExamListFallback(examIndex);
+                return loadExamListFallback(examIndex);
             }
         }).catch(function (err) {
-            if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-                return;
+            if (!isCurrent()) {
+                return false;
             }
             console.error('[main.js] browse-view 组加载失败:', err);
-            loadExamListFallback(examIndex);
+            return loadExamListFallback(examIndex);
         });
     } else {
         // 无懒加载器，直接降级
-        loadExamListFallback(examIndex);
+        return loadExamListFallback(examIndex);
     }
 }
 
@@ -21146,25 +21260,76 @@ async function setActiveLibraryConfiguration(key) {
 
 
 let debouncedExamSearch = null;
+let pendingDebouncedExamSearchRequestId = null;
 
 function searchExams(query, renderRequestId = null) {
-    const activeRequestId = renderRequestId == null
-        ? beginBrowseResultsRequest()
-        : renderRequestId;
-    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+    const explicitRequestIsForeground = renderRequestId != null
+        && isBrowseUserResultsRequestInFlight(renderRequestId);
+    const isForegroundIntent = renderRequestId == null || explicitRequestIsForeground;
+    const userRequestId = renderRequestId == null
+        ? beginBrowseUserResultsRequest()
+        : (explicitRequestIsForeground
+            ? retainBrowseUserResultsRequest(renderRequestId)
+            : null);
+    const activeRequestId = renderRequestId == null ? userRequestId : renderRequestId;
+    if (activeRequestId == null
+        || !isBrowseResultsRequestCurrent(activeRequestId)
+        || (isForegroundIntent && userRequestId == null)) {
+        endBrowseUserResultsRequest(userRequestId);
         return false;
     }
+    // Capture navigation/reset/library ownership at input time, before the
+    // debounce delay. A later callback must not adopt an intervening intent.
+    const foregroundEpoch = captureBrowseForegroundRenderEpoch();
     toggleSearchClearButton(query);
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         // 跨 input 事件复用同一个 debounce 闭包，避免每个字符都排队一次搜索。
         if (!debouncedExamSearch) {
-            debouncedExamSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');
+            debouncedExamSearch = window.performanceOptimizer.debounce((
+                nextQuery,
+                nextRequestId,
+                retainedRequestId,
+                intentEpoch,
+                foregroundIntent
+            ) => {
+                if (pendingDebouncedExamSearchRequestId === retainedRequestId) {
+                    pendingDebouncedExamSearchRequestId = null;
+                }
+                Promise.resolve(renderBrowseResultsForState(null, nextRequestId, {
+                    foreground: foregroundIntent,
+                    foregroundEpoch: intentEpoch,
+                    query: nextQuery
+                })).catch((error) => {
+                    console.warn('[Search] 搜索结果刷新失败:', error);
+                }).finally(() => {
+                    endBrowseUserResultsRequest(retainedRequestId);
+                });
+            }, 300, 'exam_search');
         }
-        debouncedExamSearch(query, activeRequestId);
+        if (pendingDebouncedExamSearchRequestId != null) {
+            endBrowseUserResultsRequest(pendingDebouncedExamSearchRequestId);
+        }
+        pendingDebouncedExamSearchRequestId = userRequestId;
+        debouncedExamSearch(
+            query,
+            activeRequestId,
+            userRequestId,
+            foregroundEpoch,
+            isForegroundIntent
+        );
     } else {
         // Fallback: direct call if optimizer not available
-        performSearch(query, activeRequestId);
+        Promise.resolve(renderBrowseResultsForState(null, activeRequestId, {
+            foreground: isForegroundIntent,
+            foregroundEpoch,
+            query
+        })).catch((error) => {
+            console.warn('[Search] 搜索结果刷新失败:', error);
+        }).finally(() => {
+            endBrowseUserResultsRequest(userRequestId);
+        });
     }
+    return true;
 }
 
 function toggleSearchClearButton(query) {
@@ -21252,13 +21417,31 @@ function applyActiveBrowseFolderFilter(exams) {
     return Array.isArray(folderFiltered) ? folderFiltered : list;
 }
 
-async function performSearch(query, renderRequestId = null, examIndexOverride = null) {
+async function performSearch(
+    query,
+    renderRequestId = null,
+    examIndexOverride = null,
+    options = {}
+) {
     const activeRequestId = renderRequestId == null
         ? beginBrowseResultsRequest()
         : renderRequestId;
+    const isCurrent = () => {
+        if (!isBrowseResultsRequestCurrent(activeRequestId)) {
+            return false;
+        }
+        if (!options || typeof options.isCurrent !== 'function') {
+            return true;
+        }
+        try {
+            return options.isCurrent() !== false;
+        } catch (_) {
+            return false;
+        }
+    };
     const normalizedQuery = String(query || '').toLowerCase().trim();
     if (!normalizedQuery) {
-        return loadExamList(examIndexOverride, activeRequestId);
+        return loadExamList(examIndexOverride, activeRequestId, { isCurrent });
     }
 
     // 调试日志
@@ -21266,8 +21449,8 @@ async function performSearch(query, renderRequestId = null, examIndexOverride = 
     const examIndexSnapshot = Array.isArray(examIndexOverride)
         ? examIndexOverride
         : await resolveActiveExamIndex();
-    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-        return;
+    if (!isCurrent()) {
+        return false;
     }
     const searchBase = getBrowseFilteredExamBase(examIndexSnapshot);
     console.log('[Search] 当前筛选后索引数量:', searchBase.length);
@@ -21281,8 +21464,8 @@ async function performSearch(query, renderRequestId = null, examIndexOverride = 
     });
 
     console.log('[Search] 搜索结果数量:', searchResults.length);
-    if (!isBrowseResultsRequestCurrent(activeRequestId)) {
-        return;
+    if (!isCurrent()) {
+        return false;
     }
     if (window.ExamActions && typeof window.ExamActions.displayExams === 'function') {
         window.ExamActions.displayExams(searchResults);

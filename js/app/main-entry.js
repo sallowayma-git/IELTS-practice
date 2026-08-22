@@ -273,6 +273,7 @@
     var activeBrowseFunctionalResetRecovery = null;
     var completedBrowseFunctionalResetBarrier = null;
     var browseFunctionalResetGeneration = 0;
+    var browseFunctionalResetFailureDebt = null;
     var browseFunctionalResetState = {
         generation: 0,
         status: 'idle',
@@ -388,8 +389,8 @@
         completedBrowseFunctionalResetBarrier = null;
         browseFunctionalResetState = {
             generation: ++browseFunctionalResetGeneration,
-            status: 'idle',
-            outcome: null
+            status: browseFunctionalResetFailureDebt ? 'failed' : 'idle',
+            outcome: browseFunctionalResetFailureDebt ? false : null
         };
         return true;
     }
@@ -463,6 +464,10 @@
                     outcome: succeeded
                 };
                 if (!succeeded) {
+                    browseFunctionalResetFailureDebt = {
+                        generation: generation,
+                        outcome: false
+                    };
                     browseFunctionalResetBarrier = null;
                     browseFunctionalResetOwnership = null;
                 }
@@ -498,6 +503,12 @@
             status: succeeded === true ? 'succeeded' : 'failed',
             outcome: succeeded === true
         };
+        browseFunctionalResetFailureDebt = succeeded === true
+            ? null
+            : {
+                generation: completedGeneration,
+                outcome: false
+            };
         browseFunctionalResetBarrier = null;
         browseFunctionalResetOwnership = null;
         completedBrowseFunctionalResetBarrier = succeeded === true ? barrier : null;
@@ -574,6 +585,56 @@
         return true;
     }
 
+    function prepareBrowseFunctionalResetRecoveryForForeground(requestId) {
+        if (requestId == null
+            || getActiveViewName() !== 'browse'
+            || typeof global.__isBrowseResultsRequestCurrent !== 'function') {
+            return null;
+        }
+        try {
+            if (!global.__isBrowseResultsRequestCurrent(requestId)) {
+                return null;
+            }
+        } catch (_) {
+            return null;
+        }
+
+        var barrier = browseFunctionalResetBarrier;
+        if (barrier) {
+            var ownership = browseFunctionalResetOwnership;
+            var ownedRequestId = ownership && ownership.barrier === barrier
+                ? ownership.resultsRequestId
+                : null;
+            if (ownedRequestId != null) {
+                try {
+                    if (global.__isBrowseResultsRequestCurrent(ownedRequestId)) {
+                        // The retry's own canonical render must retain its barrier.
+                        return null;
+                    }
+                } catch (_) {
+                    // An ownership token that cannot be classified is not proven stale.
+                    return null;
+                }
+            }
+            if (!cancelBrowseFunctionalResetBarrier(barrier, false)) {
+                return null;
+            }
+        }
+
+        var recovery = captureBrowseFunctionalResetRecovery();
+        if (!recovery
+            || !updateBrowseFunctionalResetRecoveryResultsRequest(recovery, requestId)) {
+            if (recovery && activeBrowseFunctionalResetRecovery === recovery) {
+                activeBrowseFunctionalResetRecovery = null;
+            }
+            return null;
+        }
+        return {
+            recovery: recovery,
+            functionalResetGeneration: recovery.functionalResetGeneration
+        };
+    }
+
     function completeBrowseFunctionalResetRecovery(recovery, succeeded) {
         if (!recovery || activeBrowseFunctionalResetRecovery !== recovery) {
             return false;
@@ -585,9 +646,9 @@
             || browseFunctionalResetState.generation !== recovery.functionalResetGeneration
             || appNavigationIntentGeneration !== recovery.navigationGeneration
             || browseResetIntentGeneration !== recovery.resetGeneration
-            || (recovery.resultsRequestId != null
-                && typeof global.__isBrowseResultsRequestCurrent === 'function'
-                && !global.__isBrowseResultsRequestCurrent(recovery.resultsRequestId))
+            || recovery.resultsRequestId == null
+            || typeof global.__isBrowseResultsRequestCurrent !== 'function'
+            || !global.__isBrowseResultsRequestCurrent(recovery.resultsRequestId)
             || getActiveViewName() !== 'browse') {
             return false;
         }
@@ -596,6 +657,7 @@
             status: 'succeeded',
             outcome: true
         };
+        browseFunctionalResetFailureDebt = null;
         completedBrowseFunctionalResetBarrier = null;
         return true;
     }
@@ -620,6 +682,18 @@
         var initialization;
         var initializationRequestId = null;
         var retainedInitializationRequestId = null;
+        var pendingFilterOutcome = canApplyPendingFilter ? 'retryable-failure' : 'not-applicable';
+        function pendingFilterWasSuperseded() {
+            if (!pendingFilter || global.__pendingBrowseFilter !== pendingFilter) {
+                return true;
+            }
+            if (getActiveViewName() !== 'browse') {
+                return true;
+            }
+            return initializationRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(initializationRequestId);
+        }
         try {
             // Start synchronization in this reaction so a queued repeat reset can
             // acquire the next latest-wins token immediately after it.
@@ -650,7 +724,8 @@
                 if (!canApplyPendingFilter) {
                     return true;
                 }
-                if (global.__pendingBrowseFilter !== pendingFilter) {
+                if (pendingFilterWasSuperseded()) {
+                    pendingFilterOutcome = 'superseded';
                     return false;
                 }
                 var filterArgs = [
@@ -664,16 +739,32 @@
                 }
                 return Promise.resolve(global.applyBrowseFilter.apply(global, filterArgs))
                     .then(function normalizePendingFilterResult(result) {
-                        return result !== false;
+                        // Legacy filter implementations resolve without a value
+                        // after applying successfully; only explicit null/false
+                        // are retryable non-application outcomes.
+                        if (result !== false && result !== null) {
+                            pendingFilterOutcome = 'applied';
+                            return true;
+                        }
+                        if (pendingFilterWasSuperseded()) {
+                            pendingFilterOutcome = 'superseded';
+                        }
+                        return false;
                     });
             })
             .finally(function clearConsumedPendingBrowseFilter() {
+                if (pendingFilterOutcome !== 'applied' && pendingFilterWasSuperseded()) {
+                    pendingFilterOutcome = 'superseded';
+                }
+                if (pendingFilter
+                    && global.__pendingBrowseFilter === pendingFilter
+                    && (pendingFilterOutcome === 'applied'
+                        || pendingFilterOutcome === 'superseded')) {
+                    delete global.__pendingBrowseFilter;
+                }
                 if (retainedInitializationRequestId != null
                     && typeof global.__endBrowseUserResultsRequest === 'function') {
                     global.__endBrowseUserResultsRequest(retainedInitializationRequestId);
-                }
-                if (pendingFilter && global.__pendingBrowseFilter === pendingFilter) {
-                    delete global.__pendingBrowseFilter;
                 }
             });
     }
@@ -1640,6 +1731,8 @@
         captureBrowseFunctionalResetRecovery: captureBrowseFunctionalResetRecovery,
         updateBrowseFunctionalResetRecoveryResultsRequest:
             updateBrowseFunctionalResetRecoveryResultsRequest,
+        prepareBrowseFunctionalResetRecoveryForForeground:
+            prepareBrowseFunctionalResetRecoveryForForeground,
         completeBrowseFunctionalResetRecovery: completeBrowseFunctionalResetRecovery,
         ensureMoreToolsGroup: ensureMoreToolsGroup,
         ensureSettingsToolsGroup: ensureSettingsToolsGroup,

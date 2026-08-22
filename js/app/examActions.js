@@ -925,9 +925,30 @@
 
     let browseResetInteractionId = 0;
 
-    function isBrowseResetCurrent(interactionId, renderRequestId) {
+    function isBrowseResetCurrent(
+        interactionId,
+        renderRequestId,
+        navigationIntentGeneration = null
+    ) {
         if (interactionId !== browseResetInteractionId) {
             return false;
+        }
+        if (navigationIntentGeneration != null
+            && typeof global.__getAppNavigationIntentGeneration === 'function') {
+            try {
+                if (global.__getAppNavigationIntentGeneration() !== navigationIntentGeneration) {
+                    return false;
+                }
+            } catch (_) {
+                return false;
+            }
+        }
+        if (typeof document !== 'undefined'
+            && typeof document.querySelector === 'function') {
+            const activeView = document.querySelector('.view.active');
+            if (activeView && activeView.id !== 'browse-view') {
+                return false;
+            }
         }
         return renderRequestId == null
             || typeof global.__isBrowseResultsRequestCurrent !== 'function'
@@ -1045,7 +1066,13 @@
         resetBrowseFilterStateToAll(examIndex);
     }
 
-    async function prepareBrowseReset() {
+    async function prepareBrowseReset(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
+        if (!isCurrent()) {
+            return false;
+        }
         const pending = [];
         const manager = global.browseStateManager;
         if (manager && manager.ready && typeof manager.ready.then === 'function') {
@@ -1054,13 +1081,17 @@
             }));
         }
         if (typeof global.setupBrowseControls === 'function') {
-            pending.push(Promise.resolve().then(() => global.setupBrowseControls()).catch((error) => {
+            pending.push(Promise.resolve().then(() => global.setupBrowseControls({ isCurrent })).catch((error) => {
                 console.warn('[ExamActions] 初始化浏览筛选控件失败:', error);
             }));
         }
         if (pending.length > 0) {
-            await Promise.all(pending);
+            const results = await Promise.all(pending);
+            if (results.some((result) => result === false)) {
+                return false;
+            }
         }
+        return isCurrent();
     }
 
     async function persistBrowseFrequencyReset() {
@@ -1173,8 +1204,8 @@
                 }
             }
             if (typeof global.setupBrowseControls === 'function') {
-                await global.setupBrowseControls();
-                if (!isCurrent()) {
+                const controlsReady = await global.setupBrowseControls({ isCurrent });
+                if (controlsReady === false || !isCurrent()) {
                     return false;
                 }
             }
@@ -1273,6 +1304,9 @@
     async function performBrowseViewResetToAll(resetIntent) {
         try {
         const interactionId = ++browseResetInteractionId;
+        const navigationIntentGeneration = typeof global.__getAppNavigationIntentGeneration === 'function'
+            ? global.__getAppNavigationIntentGeneration()
+            : null;
         if (global.__pendingBrowseFilter) {
             delete global.__pendingBrowseFilter;
         }
@@ -1294,9 +1328,12 @@
             global.clearPendingBrowseAutoScroll();
         }
 
-        await prepareBrowseReset();
-
-        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+        const isCurrent = () => isBrowseResetCurrent(
+            interactionId,
+            renderRequestId,
+            navigationIntentGeneration
+        );
+        if (!await prepareBrowseReset({ isCurrent }) || !isCurrent()) {
             return false;
         }
 
@@ -1322,7 +1359,7 @@
             }
         }
 
-        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+        if (!isCurrent()) {
             return false;
         }
 
@@ -1340,7 +1377,7 @@
                         ? examIndex
                         : null;
                     result = await Promise.resolve(globalLoader.call(global, indexOverride, renderRequestId));
-                    if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                    if (!isCurrent()) {
                         await persistencePromise;
                         return false;
                     }
@@ -1359,7 +1396,7 @@
                     if (!persistenceComplete) {
                         await persistencePromise;
                         persistenceComplete = true;
-                        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                        if (!isCurrent()) {
                             return false;
                         }
                         resetIndexSnapshot = getBrowseResetIndexSnapshot(resetIntent);
@@ -1394,7 +1431,7 @@
         if (Array.isArray(examIndex) && examIndex.length > 0) {
             let result = loadExamList(examIndex);
             await beginBrowseResetPersistence();
-            if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+            if (!isCurrent()) {
                 return false;
             }
             resetIndexSnapshot = closeBrowseResetIntent(
@@ -1416,7 +1453,7 @@
         }
 
         await beginBrowseResetPersistence();
-        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+        if (!isCurrent()) {
             return false;
         }
         closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
@@ -1443,11 +1480,15 @@
         let functionalResetRecoverySucceeded = false;
         try {
             const resetPromise = performBrowseViewResetToAll(resetIntent);
+            const foregroundResultsRequestId = typeof global.__getBrowseResultsRequestId === 'function'
+                ? global.__getBrowseResultsRequestId()
+                : null;
             if (functionalResetRecovery
                 && global.AppEntry
                 && typeof global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest === 'function') {
                 global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest(
-                    functionalResetRecovery
+                    functionalResetRecovery,
+                    foregroundResultsRequestId
                 );
             }
             const result = await resetPromise;

@@ -449,7 +449,6 @@ const integrationPracticeUpdates = [];
 const integrationBrowseState = { category: 'all', type: 'all' };
 const integrationIndexResolvers = [];
 const integrationPracticeRecordResolvers = [];
-const integrationCommitListeners = new Set();
 let integrationIndexResolutionCount = 0;
 const IntegrationCustomEvent = class CustomEvent {
     constructor(type, init = {}) { this.type = type; this.detail = init.detail; }
@@ -521,6 +520,10 @@ const integrationSandbox = {
         updateBrowseTitle() {}
     },
     ExamActions: {
+        setBrowseFrequencyFilter(value) {
+            integrationSandbox.__browseFrequencyFilter = value;
+            return value;
+        },
         loadExamList(exams) {
             integrationRenders.push(Array.from(exams, (exam) => exam.id));
             return exams;
@@ -544,12 +547,6 @@ const integrationSandbox = {
             },
             async listInsights() { return []; },
             async getStats() { return {}; }
-        },
-        backups: {
-            onDataCommitted(listener) {
-                integrationCommitListeners.add(listener);
-                return () => integrationCommitListeners.delete(listener);
-            }
         },
         library: {
             async getActive() { return null; },
@@ -581,10 +578,40 @@ await integrationSandbox.AppEntry.ensureBrowseGroup();
 integrationOverviewView.classList.remove('active');
 integrationBrowseView.classList.add('active');
 
-function emitIntegrationDataCommitted(targets) {
-    const event = { targets: Array.isArray(targets) ? targets : [] };
-    integrationCommitListeners.forEach((listener) => listener(event));
-}
+assert.ok(
+    !source.includes('practiceRecordsDataGeneration')
+        && !source.includes('ensurePracticeRecordsCommitSubscription')
+        && !source.includes('activePracticeRecordsSyncInvocations')
+        && !source.includes('pendingPracticeRecordsSyncRequest'),
+    'Browse reset scope must not add a generic practice-data commit scheduler contract'
+);
+
+const productionIntegrationGetBrowse = integrationSandbox.AppData.preferences.getBrowse;
+const staleBrowseControlSeed = deferred();
+let staleBrowseControlSeedReads = 0;
+integrationSandbox.AppData.preferences.getBrowse = function getStaleBrowseControlSeed() {
+    staleBrowseControlSeedReads += 1;
+    return staleBrowseControlSeed.promise;
+};
+const browseControlSeed = integrationSandbox.setupBrowseControls();
+await waitForCondition(
+    () => staleBrowseControlSeedReads === 1,
+    'Browse controls must enter the persisted seed read before the live frequency intent'
+);
+const liveFrequencyIndex = deferred();
+integrationIndexResolvers.push(liveFrequencyIndex);
+integrationSandbox.filterByFrequency('high');
+liveFrequencyIndex.resolve([{ id: 'live-frequency-high', frequency: 7 }]);
+staleBrowseControlSeed.resolve({ sortMode: 'default', frequencyFilter: 'all' });
+assert.strictEqual(await browseControlSeed, true);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    integrationSandbox.__browseFrequencyFilter,
+    'high',
+    'a live high-frequency intent during seed hydration must beat the older persisted all value'
+);
+integrationSandbox.AppData.preferences.getBrowse = productionIntegrationGetBrowse;
+integrationRenders.length = 0;
 
 const oldProgressIndex = deferred();
 integrationIndexResolvers.push(oldProgressIndex);
@@ -690,35 +717,6 @@ assert.deepStrictEqual(
     'a progress snapshot captured before a reset must not repaint after the reset epoch closes'
 );
 
-integrationRenders.length = 0;
-const preCommitProgressRecords = deferred();
-const preCommitProgressIndex = deferred();
-integrationPracticeRecordResolvers.push(preCommitProgressRecords);
-integrationIndexResolvers.push(preCommitProgressIndex);
-const dataEpochUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
-const preCommitProgressSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
-preCommitProgressRecords.resolve([{ id: 'pre-commit-progress-record' }]);
-preCommitProgressIndex.resolve([{ id: 'pre-commit-progress' }]);
-await preCommitProgressSync;
-assert.deepStrictEqual(
-    integrationRenders,
-    [],
-    'progress must remain queued while the user results request is retained'
-);
-emitIntegrationDataCommitted([{ store: 'practiceSummaries' }]);
-integrationSandbox.__endBrowseUserResultsRequest(dataEpochUserRequest);
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepStrictEqual(
-    integrationRenders,
-    [],
-    'a pre-commit pending progress snapshot must not replay after the practice-data epoch changes'
-);
-assert.strictEqual(
-    integrationSandbox.__getBrowseResultsRequestId(),
-    dataEpochUserRequest,
-    'discarding data-stale pending progress must not consume a Browse results token'
-);
-
 const identicalHeadIndex = deferred();
 const redundantTailPoison = {
     get promise() {
@@ -754,325 +752,71 @@ assert.strictEqual(
     'a head success must not be overturned by an invented failing tail'
 );
 
-const queuedEpochHeadIndex = deferred();
-const queuedEpochCurrentIndex = deferred();
-const queuedEpochRedundantPoison = {
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+const libraryARecords = deferred();
+const libraryBRecords = deferred();
+const libraryAIndex = deferred();
+const libraryBIndex = deferred();
+const redundantLibraryTailPoison = {
     get promise() {
-        return Promise.reject(new Error('the running current-epoch tail must cover its join'));
+        return Promise.reject(new Error('one library generation change must schedule only one tail'));
     }
 };
-integrationIndexResolvers.push(
-    queuedEpochHeadIndex,
-    queuedEpochCurrentIndex,
-    queuedEpochRedundantPoison
-);
-const queuedEpochResolutionCountBefore = integrationIndexResolutionCount;
-const queuedEpochCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'queued-epoch-head',
+integrationPracticeRecordResolvers.push(libraryARecords, libraryBRecords);
+integrationIndexResolvers.push(libraryAIndex, libraryBIndex, redundantLibraryTailPoison);
+const libraryTailResolutionCountBefore = integrationIndexResolutionCount;
+const libraryACycle = integrationSandbox.ensurePracticeRecordsSync(
+    'library-a',
     { forceRender: true }
 );
 integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
-    detail: { index: [{ id: 'queued-epoch-one-publication' }] }
+    detail: { index: [{ id: 'library-b-publication' }] }
 }));
-const queuedEpochTail = integrationSandbox.ensurePracticeRecordsSync(
-    'queued-epoch-tail',
+const libraryBJoin = integrationSandbox.ensurePracticeRecordsSync(
+    'library-b',
     { forceRender: true }
 );
-assert.strictEqual(queuedEpochTail, queuedEpochCycle);
-integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
-    detail: { index: [{ id: 'queued-epoch-two-publication' }] }
-}));
-queuedEpochHeadIndex.resolve([{ id: 'queued-epoch-stale-head' }]);
+assert.strictEqual(
+    libraryBJoin,
+    libraryACycle,
+    'the newer library request must join the active managed cycle'
+);
+libraryARecords.resolve([{ id: 'library-a-record' }]);
+libraryAIndex.resolve([{ id: 'library-a-index' }]);
 await waitForCondition(
-    () => integrationIndexResolutionCount === queuedEpochResolutionCountBefore + 2,
-    'the queued current-epoch tail must start before the alias joins it'
+    () => integrationIndexResolutionCount === libraryTailResolutionCountBefore + 2,
+    'settling library A must start exactly one coalesced library B tail'
 );
-const queuedEpochCurrentJoin = integrationSandbox.ensurePracticeRecordsSync(
-    'queued-epoch-current-alias',
-    { forceRender: true }
-);
-assert.strictEqual(queuedEpochCurrentJoin, queuedEpochCycle);
-queuedEpochCurrentIndex.resolve([{ id: 'queued-epoch-current-tail' }]);
-await queuedEpochCurrentJoin;
+libraryBRecords.resolve([{ id: 'library-b-record' }]);
+libraryBIndex.resolve([{ id: 'library-b-index' }]);
+await libraryBJoin;
+await new Promise((resolve) => setTimeout(resolve, 0));
 assert.strictEqual(
     integrationIndexResolutionCount,
-    queuedEpochResolutionCountBefore + 2,
-    'a queued tail must advertise the current epoch it reads when execution starts'
+    libraryTailResolutionCountBefore + 2,
+    'a single library change must perform one head read and one current-library tail read'
 );
 assert.strictEqual(
     integrationIndexResolvers.shift(),
-    queuedEpochRedundantPoison,
-    'a current-epoch join must not enqueue a third physical read'
-);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const dataEpochHeadRecords = deferred();
-const dataEpochCurrentRecords = deferred();
-const dataEpochHeadIndex = deferred();
-const dataEpochCurrentIndex = deferred();
-integrationPracticeRecordResolvers.push(dataEpochHeadRecords, dataEpochCurrentRecords);
-integrationIndexResolvers.push(dataEpochHeadIndex, dataEpochCurrentIndex);
-const dataEpochResolutionCountBefore = integrationIndexResolutionCount;
-const dataEpochHeadCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'practice-view',
-    { forceRender: true }
-);
-emitIntegrationDataCommitted([{ store: 'practiceSummaries' }]);
-dataEpochHeadRecords.resolve([{ id: 'data-epoch-stale-record' }]);
-dataEpochHeadIndex.resolve([{ id: 'data-epoch-stale' }]);
-await waitForCondition(
-    () => integrationIndexResolutionCount === dataEpochResolutionCountBefore + 2,
-    'a relevant commit must start the managed current-data replacement'
-);
-dataEpochCurrentRecords.resolve([{ id: 'data-epoch-current-record' }]);
-dataEpochCurrentIndex.resolve([{ id: 'data-epoch-current' }]);
-await dataEpochHeadCycle;
-assert.strictEqual(
-    integrationIndexResolutionCount,
-    dataEpochResolutionCountBefore + 2,
-    'a managed sync invalidated by a practice-store commit must schedule exactly one automatic follow-up'
-);
-assert.strictEqual(vm.runInContext('lastPracticeRecordsSignature', integrationContext), 'data-epoch-current-record');
-assert.deepStrictEqual(integrationCompletionRefreshes, [['data-epoch-current-record']]);
-assert.deepStrictEqual(integrationAnchorIndexes, [['data-epoch-current']]);
-assert.deepStrictEqual(integrationRenders, [['data-epoch-current']]);
-assert.deepStrictEqual(integrationPracticeUpdates, [{
-    records: ['data-epoch-current-record'],
-    index: ['data-epoch-current']
-}]);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const directCommitHeadRecords = deferred();
-const directCommitCurrentRecords = deferred();
-const directCommitHeadIndex = deferred();
-const directCommitCurrentIndex = deferred();
-integrationPracticeRecordResolvers.push(directCommitHeadRecords, directCommitCurrentRecords);
-integrationIndexResolvers.push(directCommitHeadIndex, directCommitCurrentIndex);
-const directCommitResolutionCountBefore = integrationIndexResolutionCount;
-const directCommitHead = integrationSandbox.syncPracticeRecords({ forceRender: true });
-emitIntegrationDataCommitted([{ store: 'practiceDetails' }]);
-await waitForCondition(
-    () => integrationIndexResolutionCount === directCommitResolutionCountBefore + 2,
-    'a relevant commit must start a replacement for an active direct sync'
-);
-directCommitCurrentRecords.resolve([{ id: 'direct-commit-current-record' }]);
-directCommitCurrentIndex.resolve([{ id: 'direct-commit-current-index' }]);
-directCommitHeadRecords.resolve([{ id: 'direct-commit-stale-record' }]);
-directCommitHeadIndex.resolve([{ id: 'direct-commit-stale-index' }]);
-await directCommitHead;
-await waitForCondition(
-    () => integrationPracticeUpdates.length === 1,
-    'the automatic direct replacement must complete all current-data projections'
-);
-assert.strictEqual(
-    integrationIndexResolutionCount,
-    directCommitResolutionCountBefore + 2,
-    'a direct sync invalidated by a commit must start exactly one automatic physical replacement'
-);
-assert.strictEqual(vm.runInContext('lastPracticeRecordsSignature', integrationContext), 'direct-commit-current-record');
-assert.deepStrictEqual(integrationCompletionRefreshes, [['direct-commit-current-record']]);
-assert.deepStrictEqual(integrationAnchorIndexes, [['direct-commit-current-index']]);
-assert.deepStrictEqual(integrationRenders, [['direct-commit-current-index']]);
-assert.deepStrictEqual(integrationPracticeUpdates, [{
-    records: ['direct-commit-current-record'],
-    index: ['direct-commit-current-index']
-}]);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const annotationHeadRecords = deferred();
-const annotationHeadIndex = deferred();
-const annotationTailPoison = {
-    get promise() {
-        return Promise.reject(new Error('annotation commits must not schedule a practice projection tail'));
-    }
-};
-integrationPracticeRecordResolvers.push(annotationHeadRecords);
-integrationIndexResolvers.push(annotationHeadIndex, annotationTailPoison);
-const annotationResolutionCountBefore = integrationIndexResolutionCount;
-const annotationCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'annotation-no-op',
-    { forceRender: true }
-);
-emitIntegrationDataCommitted([{ store: 'practiceAnnotations' }]);
-annotationHeadRecords.resolve([{ id: 'annotation-head-record' }]);
-annotationHeadIndex.resolve([{ id: 'annotation-head-index' }]);
-await annotationCycle;
-assert.strictEqual(
-    integrationIndexResolutionCount,
-    annotationResolutionCountBefore + 1,
-    'annotation-only commits must not invalidate the summary/detail projection'
-);
-assert.strictEqual(integrationIndexResolvers.shift(), annotationTailPoison);
-assert.strictEqual(vm.runInContext('lastPracticeRecordsSignature', integrationContext), 'annotation-head-record');
-assert.deepStrictEqual(integrationCompletionRefreshes, [['annotation-head-record']]);
-assert.deepStrictEqual(integrationAnchorIndexes, [['annotation-head-index']]);
-assert.deepStrictEqual(integrationRenders, [['annotation-head-index']]);
-assert.deepStrictEqual(integrationPracticeUpdates, [{
-    records: ['annotation-head-record'],
-    index: ['annotation-head-index']
-}]);
-
-const preservedForceBaselineRecords = deferred();
-const preservedForceBaselineIndex = deferred();
-integrationPracticeRecordResolvers.push(preservedForceBaselineRecords);
-integrationIndexResolvers.push(preservedForceBaselineIndex);
-const preservedForceBaselineCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'force-baseline',
-    { forceRender: true }
-);
-preservedForceBaselineRecords.resolve([{ id: 'preserved-force-record' }]);
-preservedForceBaselineIndex.resolve([{ id: 'preserved-force-baseline' }]);
-await preservedForceBaselineCycle;
-integrationPracticeUpdates.length = 0;
-const preservedForceStaleRecords = deferred();
-const preservedForceCurrentRecords = deferred();
-const preservedForceStaleIndex = deferred();
-const preservedForceCurrentIndex = deferred();
-integrationPracticeRecordResolvers.push(
-    preservedForceStaleRecords,
-    preservedForceCurrentRecords
-);
-integrationIndexResolvers.push(preservedForceStaleIndex, preservedForceCurrentIndex);
-const preservedForceCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'force-before-data-epoch',
-    { forceRender: true }
-);
-emitIntegrationDataCommitted([{ store: 'practiceDetails' }]);
-const preservedForceJoinedCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'current-data-default-options'
-);
-assert.strictEqual(preservedForceJoinedCycle, preservedForceCycle);
-preservedForceCurrentRecords.resolve([{ id: 'preserved-force-record' }]);
-preservedForceCurrentIndex.resolve([{ id: 'preserved-force-current' }]);
-preservedForceStaleRecords.resolve([{ id: 'preserved-force-record' }]);
-preservedForceStaleIndex.resolve([{ id: 'preserved-force-stale' }]);
-await preservedForceJoinedCycle;
-assert.deepStrictEqual(
-    integrationPracticeUpdates,
-    [{ records: ['preserved-force-record'], index: ['preserved-force-current'] }],
-    'a replacement tail must preserve stronger options from a stale active head'
-);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-const coalescedOldLibraryIndex = deferred();
-const coalescedCurrentLibraryIndex = deferred();
-integrationIndexResolvers.push(coalescedOldLibraryIndex, coalescedCurrentLibraryIndex);
-const coalescedResolutionCountBefore = integrationIndexResolutionCount;
-const oldLibrarySyncCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'pre-library-publication',
-    { forceRender: true }
-);
-integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
-    detail: { index: [{ id: 'coalesced-index-publication' }] }
-}));
-const currentLibrarySyncCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'library-loaded',
-    { forceRender: true }
-);
-assert.strictEqual(
-    currentLibrarySyncCycle,
-    oldLibrarySyncCycle,
-    'an overlapping library sync must join the active coalescing cycle'
-);
-coalescedCurrentLibraryIndex.resolve([{ id: 'coalesced-progress-current' }]);
-coalescedOldLibraryIndex.resolve([{ id: 'coalesced-progress-old' }]);
-await oldLibrarySyncCycle;
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.strictEqual(
-    integrationIndexResolutionCount,
-    coalescedResolutionCountBefore + 2,
-    'one overlapping request must schedule exactly one follow-up sync against the latest library epoch'
+    redundantLibraryTailPoison,
+    'the current-library tail must cover the joined B request without a third read'
 );
 assert.deepStrictEqual(
-    integrationRenders,
-    [['coalesced-index-publication'], ['coalesced-progress-current']],
-    'the coalesced latest-library sync must repaint progress after the stale source is discarded'
+    integrationCompletionRefreshes,
+    [['library-b-record']],
+    'only the current library tail may rebuild Browse completion state'
 );
 assert.deepStrictEqual(
     integrationAnchorIndexes,
-    [['coalesced-progress-current']],
-    'a stale library index must not update or persist Browse anchors'
+    [['library-b-index']],
+    'only the current library tail may update Browse anchors'
 );
-assert.strictEqual(
-    integrationCompletionRefreshes.length,
-    1,
-    'a stale-library sync must not mutate the completion projection before standing down'
-);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-const rejectedOldLibraryIndex = deferred();
-const currentLibraryIndexAfterFailure = deferred();
-integrationIndexResolvers.push(rejectedOldLibraryIndex, currentLibraryIndexAfterFailure);
-const failedOldCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'failing-pre-library-publication',
-    { forceRender: true }
-);
-integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
-    detail: { index: [{ id: 'failure-index-publication' }] }
-}));
-const joinedRecoveryCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'library-loaded',
-    { forceRender: true }
-);
-assert.strictEqual(joinedRecoveryCycle, failedOldCycle);
-currentLibraryIndexAfterFailure.resolve([{ id: 'failure-followup-current' }]);
-rejectedOldLibraryIndex.reject(new Error('simulated stale library resolution failure'));
-await joinedRecoveryCycle;
-await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepStrictEqual(
     integrationRenders,
-    [['failure-index-publication'], ['failure-followup-current']],
-    'a stale sync failure must not suppress the queued latest-library follow-up'
-);
-assert.deepStrictEqual(
-    integrationAnchorIndexes,
-    [['failure-followup-current']],
-    'only the successful latest-library follow-up may update anchors after an older failure'
-);
-
-const headBeforeTailFailureIndex = deferred();
-const genuineTailFailureIndex = deferred();
-integrationIndexResolvers.push(headBeforeTailFailureIndex, genuineTailFailureIndex);
-const tailFailureCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'pre-tail-failure',
-    { forceRender: true }
-);
-integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
-    detail: { index: [{ id: 'tail-failure-publication' }] }
-}));
-const joinedTailFailureCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'library-loaded',
-    { forceRender: true }
-);
-assert.strictEqual(joinedTailFailureCycle, tailFailureCycle);
-headBeforeTailFailureIndex.resolve([{ id: 'successful-stale-head' }]);
-genuineTailFailureIndex.reject(new Error('simulated current tail failure'));
-await assert.rejects(joinedTailFailureCycle, /simulated current tail failure/);
-const postFailureRecoveryIndex = deferred();
-integrationIndexResolvers.push(postFailureRecoveryIndex);
-const postFailureRecoveryCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'post-failure-recovery',
-    { forceRender: true }
-);
-postFailureRecoveryIndex.resolve([{ id: 'post-failure-recovery' }]);
-await postFailureRecoveryCycle;
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepStrictEqual(
-    integrationRenders.at(-1),
-    ['post-failure-recovery'],
-    'a terminal failure must release the queue so a later sync can recover normally'
+    [['library-b-publication'], ['library-b-index']],
+    'the authoritative publication and current tail must never be followed by library A'
 );
 
 integrationRenders.length = 0;
@@ -1114,142 +858,6 @@ assert.deepStrictEqual(
     [['post-reset-progress']],
     'a same-library sync resolving after reset must bind to and repaint the post-reset epoch'
 );
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const sameLibraryOldRecords = deferred();
-const sameLibraryCurrentRecords = deferred();
-const sameLibraryOldIndex = deferred();
-const sameLibraryCurrentIndex = deferred();
-integrationPracticeRecordResolvers.push(sameLibraryOldRecords, sameLibraryCurrentRecords);
-integrationIndexResolvers.push(sameLibraryOldIndex, sameLibraryCurrentIndex);
-const directResultsTokenBefore = integrationSandbox.__getBrowseResultsRequestId();
-const sameLibraryOldSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
-const sameLibraryCurrentSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
-sameLibraryCurrentRecords.resolve([{ id: 'direct-r2' }]);
-sameLibraryCurrentIndex.resolve([{ id: 'direct-index-r2' }]);
-await sameLibraryCurrentSync;
-sameLibraryOldRecords.resolve([{ id: 'direct-r1' }]);
-sameLibraryOldIndex.resolve([{ id: 'direct-index-r1' }]);
-await sameLibraryOldSync;
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.strictEqual(
-    vm.runInContext('lastPracticeRecordsSignature', integrationContext),
-    'direct-r2',
-    'a late same-library direct sync must not replace the current records signature'
-);
-assert.deepStrictEqual(integrationCompletionRefreshes, [['direct-r2']]);
-assert.deepStrictEqual(integrationAnchorIndexes, [['direct-index-r2']]);
-assert.deepStrictEqual(integrationRenders, [['direct-index-r2']]);
-assert.deepStrictEqual(integrationPracticeUpdates, [{
-    records: ['direct-r2'],
-    index: ['direct-index-r2']
-}]);
-assert.strictEqual(
-    integrationSandbox.__getBrowseResultsRequestId(),
-    directResultsTokenBefore + 1,
-    'discarding the late direct sync must not consume a Browse results token'
-);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const oldLibraryDirectRecords = deferred();
-const currentLibraryManagedRecords = deferred();
-const oldLibraryDirectIndex = deferred();
-const currentLibraryManagedIndex = deferred();
-integrationPracticeRecordResolvers.push(oldLibraryDirectRecords, currentLibraryManagedRecords);
-integrationIndexResolvers.push(oldLibraryDirectIndex, currentLibraryManagedIndex);
-const oldLibraryDirectSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
-integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
-    detail: { index: [{ id: 'direct-library-publication' }] }
-}));
-const currentLibraryManagedSync = integrationSandbox.ensurePracticeRecordsSync(
-    'library-loaded',
-    { forceRender: true }
-);
-currentLibraryManagedRecords.resolve([{ id: 'managed-r2' }]);
-currentLibraryManagedIndex.resolve([{ id: 'managed-index-r2' }]);
-await currentLibraryManagedSync;
-await new Promise((resolve) => setTimeout(resolve, 0));
-const projectionsBeforeLateDirect = {
-    signature: vm.runInContext('lastPracticeRecordsSignature', integrationContext),
-    completion: JSON.parse(JSON.stringify(integrationCompletionRefreshes)),
-    anchors: JSON.parse(JSON.stringify(integrationAnchorIndexes)),
-    renders: JSON.parse(JSON.stringify(integrationRenders)),
-    practice: JSON.parse(JSON.stringify(integrationPracticeUpdates)),
-    token: integrationSandbox.__getBrowseResultsRequestId()
-};
-oldLibraryDirectRecords.resolve([{ id: 'direct-old-library-r1' }]);
-oldLibraryDirectIndex.resolve([{ id: 'direct-old-library-index-r1' }]);
-await oldLibraryDirectSync;
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepStrictEqual(
-    {
-        signature: vm.runInContext('lastPracticeRecordsSignature', integrationContext),
-        completion: integrationCompletionRefreshes,
-        anchors: integrationAnchorIndexes,
-        renders: integrationRenders,
-        practice: integrationPracticeUpdates,
-        token: integrationSandbox.__getBrowseResultsRequestId()
-    },
-    projectionsBeforeLateDirect,
-    'a late pre-publication direct sync must not mutate any records projection'
-);
-
-integrationRenders.length = 0;
-integrationAnchorIndexes.length = 0;
-integrationCompletionRefreshes.length = 0;
-integrationPracticeUpdates.length = 0;
-const mixedManagedHeadRecords = deferred();
-const mixedDirectRecords = deferred();
-const mixedManagedTailRecords = deferred();
-const mixedManagedHeadIndex = deferred();
-const mixedDirectIndex = deferred();
-const mixedManagedTailIndex = deferred();
-integrationPracticeRecordResolvers.push(
-    mixedManagedHeadRecords,
-    mixedDirectRecords,
-    mixedManagedTailRecords
-);
-integrationIndexResolvers.push(
-    mixedManagedHeadIndex,
-    mixedDirectIndex,
-    mixedManagedTailIndex
-);
-const mixedManagedCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'mixed-managed',
-    { forceRender: true }
-);
-const mixedDirectSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
-const mixedManagedJoin = integrationSandbox.ensurePracticeRecordsSync(
-    'mixed-managed',
-    { forceRender: true }
-);
-assert.strictEqual(mixedManagedJoin, mixedManagedCycle);
-mixedManagedTailRecords.resolve([{ id: 'mixed-managed-tail-record' }]);
-mixedManagedTailIndex.resolve([{ id: 'mixed-managed-tail-index' }]);
-mixedManagedHeadRecords.resolve([{ id: 'mixed-managed-head-record' }]);
-mixedManagedHeadIndex.resolve([{ id: 'mixed-managed-head-index' }]);
-await mixedManagedCycle;
-mixedDirectRecords.resolve([{ id: 'mixed-direct-record' }]);
-mixedDirectIndex.resolve([{ id: 'mixed-direct-index' }]);
-await mixedDirectSync;
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.strictEqual(
-    vm.runInContext('lastPracticeRecordsSignature', integrationContext),
-    'mixed-managed-tail-record'
-);
-assert.deepStrictEqual(integrationCompletionRefreshes, [['mixed-managed-tail-record']]);
-assert.deepStrictEqual(integrationAnchorIndexes, [['mixed-managed-tail-index']]);
-assert.deepStrictEqual(integrationRenders, [['mixed-managed-tail-index']]);
-assert.deepStrictEqual(integrationPracticeUpdates, [{
-    records: ['mixed-managed-tail-record'],
-    index: ['mixed-managed-tail-index']
-}]);
 
 const bootFallbackIntegrationSource = fs.readFileSync(
     path.join(repoRoot, 'js/boot-fallbacks.js'),
@@ -1831,6 +1439,479 @@ async function establishFailedIntegrationFunctionalReset(message) {
             = productionActivationReset;
     }
 }
+
+await establishFailedIntegrationFunctionalReset(
+    'the retry-cancellation fixture must start with durable failed-reset debt'
+);
+integrationRenders.length = 0;
+const retryingFunctionalReset = deferred();
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = function () {
+    return retryingFunctionalReset.promise;
+};
+const retryingFunctionalNavigation = integrationSandbox.showView('browse', true);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'pending',
+    'a retry may temporarily own the active functional-reset lease'
+);
+const failedOrdinaryReentryIndex = deferred();
+integrationIndexResolvers.push(failedOrdinaryReentryIndex);
+const loaderBeforeFailedOrdinaryReentry = integrationSandbox.ExamActions.loadExamList;
+integrationSandbox.ExamActions.loadExamList = function failOrdinaryReentry() {
+    return false;
+};
+const failedOrdinaryReentry = integrationSandbox.showView('browse', false);
+failedOrdinaryReentryIndex.resolve([{ id: 'failed-ordinary-reentry' }]);
+assert.strictEqual(await failedOrdinaryReentry, false);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'superseding a retry with a failed ordinary re-entry must preserve the predecessor debt'
+);
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'progress-must-remain-blocked-after-failed-reentry' }]
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(integrationRenders, []);
+retryingFunctionalReset.resolve(true);
+assert.strictEqual(
+    await retryingFunctionalNavigation,
+    false,
+    'the canceled retry must not settle over the newer failed re-entry'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'a late canceled retry settlement must not erase durable failed-reset debt'
+);
+integrationSandbox.ExamActions.loadExamList = loaderBeforeFailedOrdinaryReentry;
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation
+    = productionActivationReset;
+
+await establishFailedIntegrationFunctionalReset(
+    'the successful supersession fixture must start with durable failed-reset debt'
+);
+integrationRenders.length = 0;
+const staleSuccessfulRetry = deferred();
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = function () {
+    return staleSuccessfulRetry.promise;
+};
+const staleSuccessfulRetryNavigation = integrationSandbox.showView('browse', true);
+const staleSuccessfulRetryRequestId = integrationSandbox.__getBrowseResultsRequestId();
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'pending',
+    'the retry barrier must own its request before a newer foreground intent starts'
+);
+assert.notStrictEqual(
+    await integrationSandbox.__renderBrowseResultsForState(
+        [{ id: 'newer-foreground-clears-failed-debt' }],
+        null,
+        { foreground: true }
+    ),
+    false
+);
+const newerSuccessfulForegroundRequestId = integrationSandbox.__getBrowseResultsRequestId();
+assert.ok(
+    newerSuccessfulForegroundRequestId > staleSuccessfulRetryRequestId,
+    'the successful foreground commit must own a request newer than the retry barrier'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'succeeded',
+    'the atomic foreground preparation and commit must clear the predecessor debt'
+);
+assert.deepStrictEqual(integrationRenders, [['newer-foreground-clears-failed-debt']]);
+assert.strictEqual(
+    integrationSandbox.AppEntry.captureBrowseFunctionalResetRecovery(),
+    null,
+    'a successful foreground commit must leave no failed-reset debt to recapture'
+);
+staleSuccessfulRetry.resolve(true);
+assert.strictEqual(
+    await staleSuccessfulRetryNavigation,
+    false,
+    'the retry that lost its request must remain stale when it settles'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'succeeded',
+    'a late stale retry settlement must not recreate cleared failed-reset debt'
+);
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation
+    = productionActivationReset;
+
+await establishFailedIntegrationFunctionalReset(
+    'the old-library foreground fixture must start with durable failed-reset debt'
+);
+integrationRenders.length = 0;
+const displayBeforeLibraryEpochForeground = integrationSandbox.ExamActions.displayExams;
+const libraryEpochForegroundDisplays = [];
+integrationSandbox.ExamActions.displayExams = function captureLibraryEpochForeground(exams) {
+    const snapshot = Array.isArray(exams) ? exams : [];
+    libraryEpochForegroundDisplays.push(Array.from(snapshot, (exam) => exam && exam.id));
+    return snapshot;
+};
+const oldLibraryForegroundIndex = deferred();
+integrationIndexResolvers.push(oldLibraryForegroundIndex);
+assert.strictEqual(integrationSandbox.searchExams('old-library-query'), true);
+const oldLibraryForegroundRequestId = integrationSandbox.__getBrowseResultsRequestId();
+assert.strictEqual(
+    integrationSandbox.__isBrowseUserResultsRequestInFlight(oldLibraryForegroundRequestId),
+    true,
+    'the foreground search must retain its request across the asynchronous library read'
+);
+integrationBrowseView.classList.remove('active');
+integrationOverviewView.classList.add('active');
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'new-library-publication-without-token-steal' }] }
+}));
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    oldLibraryForegroundRequestId,
+    'advancing only the active library generation must not steal the foreground token'
+);
+oldLibraryForegroundIndex.resolve([{
+    id: 'old-library-result-must-not-display',
+    title: 'Old Library Query',
+    searchText: 'old-library-query',
+    category: 'P1',
+    type: 'reading'
+}]);
+await waitForCondition(
+    () => !integrationSandbox.__isBrowseUserResultsRequestInFlight(
+        oldLibraryForegroundRequestId
+    ),
+    'the old-library foreground request must settle without displaying its stale result'
+);
+assert.deepStrictEqual(
+    libraryEpochForegroundDisplays,
+    [],
+    'a retained foreground result from the previous active library must not display'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'discarding the old-library result must not clear failed-reset debt'
+);
+const currentLibraryForegroundIndex = deferred();
+integrationIndexResolvers.push(currentLibraryForegroundIndex);
+assert.strictEqual(integrationSandbox.searchExams('current-library-query'), true);
+const currentLibraryForegroundRequestId = integrationSandbox.__getBrowseResultsRequestId();
+currentLibraryForegroundIndex.resolve([{
+    id: 'current-library-result',
+    title: 'Current Library Query',
+    searchText: 'current-library-query',
+    category: 'P2',
+    type: 'reading'
+}]);
+await waitForCondition(
+    () => libraryEpochForegroundDisplays.length === 1
+        && !integrationSandbox.__isBrowseUserResultsRequestInFlight(
+            currentLibraryForegroundRequestId
+        ),
+    'a later current-library foreground search must render and settle normally'
+);
+assert.deepStrictEqual(libraryEpochForegroundDisplays, [['current-library-result']]);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'succeeded',
+    'the later current-library foreground commit must be allowed to recover the debt'
+);
+integrationSandbox.ExamActions.displayExams = displayBeforeLibraryEpochForeground;
+
+integrationRenders.length = 0;
+integrationSearchInput.value = '';
+const setBrowseFilterStateBeforeApplyFailure = integrationSandbox.setBrowseFilterState;
+const resetToDefaultBeforeApplyFailure = integrationSandbox.browseController.resetToDefault;
+const showMessageBeforeApplyFailure = integrationSandbox.showMessage;
+const loadExamListBeforeApplyFailure = integrationSandbox.ExamActions.loadExamList;
+const applyFailureStateWrites = [];
+const applyFailureControllerResets = [];
+const applyFailureToasts = [];
+const applyFailureFallbackRenders = [];
+integrationSandbox.setBrowseFilterState = function captureApplyFailureState(category, type) {
+    applyFailureStateWrites.push({ category, type });
+    setBrowseFilterStateBeforeApplyFailure(category, type);
+};
+integrationSandbox.browseController.resetToDefault = function captureApplyFailureReset(...args) {
+    applyFailureControllerResets.push(args);
+};
+integrationSandbox.showMessage = function captureApplyFailureToast(...args) {
+    applyFailureToasts.push(args);
+};
+integrationSandbox.ExamActions.loadExamList = function captureApplyFailureFallback(exams) {
+    const snapshot = Array.isArray(exams) ? exams : [];
+    applyFailureFallbackRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    return snapshot;
+};
+setBrowseFilterStateBeforeApplyFailure('P2', 'reading');
+const staleApplyFailureIndex = deferred();
+integrationIndexResolvers.push(staleApplyFailureIndex);
+const staleApplyFailureResolutionCount = integrationIndexResolutionCount;
+const staleApplyFailure = integrationSandbox.applyBrowseFilter('P1', 'reading');
+const staleApplyFailureRequestId = integrationSandbox.__getBrowseResultsRequestId();
+assert.strictEqual(
+    integrationSandbox.__isBrowseUserResultsRequestInFlight(staleApplyFailureRequestId),
+    true,
+    'the failing filter must retain its foreground request while resolving the index'
+);
+assert.strictEqual(
+    integrationIndexResolutionCount,
+    staleApplyFailureResolutionCount + 1,
+    'the stale failure fixture must enter its asynchronous index read'
+);
+integrationBrowseView.classList.remove('active');
+integrationOverviewView.classList.add('active');
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: [{ id: 'apply-failure-new-library' }] }
+}));
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    staleApplyFailureRequestId,
+    'a library-only generation change must not hide the stale catch behind token supersession'
+);
+staleApplyFailureIndex.reject(new Error('stale apply index failure'));
+assert.strictEqual(await staleApplyFailure, false);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationBrowseState,
+    { category: 'P2', type: 'reading' },
+    'a stale catch must not replace the live filter with all/all'
+);
+assert.deepStrictEqual(applyFailureStateWrites, []);
+assert.deepStrictEqual(applyFailureControllerResets, []);
+assert.deepStrictEqual(applyFailureToasts, []);
+assert.deepStrictEqual(applyFailureFallbackRenders, []);
+assert.strictEqual(
+    integrationIndexResolutionCount,
+    staleApplyFailureResolutionCount + 1,
+    'a stale catch must not start the deferred fallback index read'
+);
+
+const currentApplyFailureIndex = deferred();
+const currentApplyFallbackIndex = deferred();
+integrationIndexResolvers.push(currentApplyFailureIndex, currentApplyFallbackIndex);
+const currentApplyFailureResolutionCount = integrationIndexResolutionCount;
+const currentApplyFailure = integrationSandbox.applyBrowseFilter('P3', 'listening');
+const currentApplyFailureRequestId = integrationSandbox.__getBrowseResultsRequestId();
+currentApplyFailureIndex.reject(new Error('current apply index failure'));
+await waitForCondition(
+    () => integrationIndexResolutionCount === currentApplyFailureResolutionCount + 2,
+    'a current-epoch catch must retain ownership through its deferred fallback read'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    currentApplyFailureRequestId,
+    'the current fallback must reuse the retained foreground request'
+);
+currentApplyFallbackIndex.resolve([{ id: 'current-apply-fallback' }]);
+assert.strictEqual(await currentApplyFailure, false);
+assert.deepStrictEqual(
+    integrationBrowseState,
+    { category: 'all', type: 'all' },
+    'a current-epoch failure may still reset the filter to its safe fallback'
+);
+assert.deepStrictEqual(applyFailureStateWrites, [{ category: 'all', type: 'all' }]);
+assert.strictEqual(applyFailureControllerResets.length, 1);
+assert.deepStrictEqual(applyFailureFallbackRenders, [['current-apply-fallback']]);
+integrationSandbox.setBrowseFilterState = setBrowseFilterStateBeforeApplyFailure;
+integrationSandbox.browseController.resetToDefault = resetToDefaultBeforeApplyFailure;
+integrationSandbox.showMessage = showMessageBeforeApplyFailure;
+integrationSandbox.ExamActions.loadExamList = loadExamListBeforeApplyFailure;
+
+await establishFailedIntegrationFunctionalReset(
+    'the explicit-token search fixture must start from failed-reset debt'
+);
+integrationRenders.length = 0;
+integrationSearchInput.value = 'raw-background-query';
+integrationSandbox.__browseFrequencyFilter = 'all';
+const displayBeforeExplicitTokenSearch = integrationSandbox.ExamActions.displayExams;
+integrationSandbox.ExamActions.displayExams = function captureExplicitTokenSearch(exams) {
+    const snapshot = Array.isArray(exams) ? exams : [];
+    integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    return snapshot;
+};
+const explicitTokenSearchIndex = deferred();
+integrationIndexResolvers.push(explicitTokenSearchIndex);
+const explicitTokenSearchRequestId = integrationSandbox.__beginBrowseResultsRequest();
+assert.strictEqual(
+    integrationSandbox.__isBrowseUserResultsRequestInFlight(explicitTokenSearchRequestId),
+    false,
+    'a raw results token must not acquire foreground ownership before search replay'
+);
+assert.strictEqual(
+    integrationSandbox.searchExams('raw-background-query', explicitTokenSearchRequestId),
+    true
+);
+assert.strictEqual(
+    integrationSandbox.__isBrowseUserResultsRequestInFlight(explicitTokenSearchRequestId),
+    false,
+    'search replay must not silently promote an unretained explicit token to foreground'
+);
+explicitTokenSearchIndex.resolve([{
+    id: 'explicit-token-background-search',
+    title: 'Raw Background Query',
+    searchText: 'raw-background-query',
+    category: 'P1',
+    type: 'reading',
+    frequency: 7
+}]);
+await waitForCondition(
+    () => integrationRenders.length === 1,
+    'a current explicit-token search replay may still render as background work'
+);
+assert.deepStrictEqual(integrationRenders, [['explicit-token-background-search']]);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'a background search replay must not clear failed-reset debt'
+);
+const explicitTokenSearchDebt =
+    integrationSandbox.AppEntry.captureBrowseFunctionalResetRecovery();
+assert.ok(
+    explicitTokenSearchDebt,
+    'failed-reset debt must remain capturable after the background search render'
+);
+assert.strictEqual(
+    integrationSandbox.AppEntry.completeBrowseFunctionalResetRecovery(
+        explicitTokenSearchDebt,
+        false
+    ),
+    false,
+    'discarding the audit capture must leave the failed debt unresolved'
+);
+assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'failed');
+integrationSandbox.ExamActions.displayExams = displayBeforeExplicitTokenSearch;
+
+await establishFailedIntegrationFunctionalReset(
+    'the central foreground-boundary fixture must start from failed-reset debt'
+);
+integrationRenders.length = 0;
+const backgroundRecoveryRequestId = integrationSandbox.__beginBrowseResultsRequest();
+assert.notStrictEqual(
+    await integrationSandbox.__renderBrowseResultsForState(
+        [{ id: 'background-must-not-recover' }],
+        backgroundRecoveryRequestId
+    ),
+    false
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'a current background render must not clear failed-reset debt'
+);
+assert.deepStrictEqual(integrationRenders, [['background-must-not-recover']]);
+assert.notStrictEqual(
+    await integrationSandbox.__renderBrowseResultsForState(
+        [{ id: 'foreground-recovers-centrally' }],
+        null,
+        { foreground: true }
+    ),
+    false
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'succeeded',
+    'the same canonical commit boundary must recover only an owned foreground render'
+);
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'progress-after-central-foreground-recovery' }]
+);
+await waitForCondition(
+    () => integrationRenders.length === 3,
+    'background progress must resume after the central foreground recovery commit'
+);
+assert.deepStrictEqual(integrationRenders, [
+    ['background-must-not-recover'],
+    ['foreground-recovers-centrally'],
+    ['progress-after-central-foreground-recovery']
+]);
+
+const displayBeforeForegroundRecoveryMatrix = integrationSandbox.ExamActions.displayExams;
+integrationSandbox.ExamActions.displayExams = function captureForegroundSearch(exams) {
+    const snapshot = Array.isArray(exams) ? exams : [];
+    integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    return snapshot;
+};
+const foregroundRecoveryScenarios = [
+    {
+        name: 'type',
+        start() {
+            integrationSearchInput.value = '';
+            return integrationSandbox.filterByType('reading');
+        }
+    },
+    {
+        name: 'search',
+        start() {
+            integrationSearchInput.value = 'needle';
+            return integrationSandbox.searchExams('needle');
+        }
+    },
+    {
+        name: 'sort',
+        start() {
+            integrationSearchInput.value = '';
+            integrationSandbox.__browseSortMode = 'difficulty-desc';
+            return integrationSandbox.refreshBrowseResults({ foreground: true });
+        }
+    },
+    {
+        name: 'frequency',
+        start() {
+            integrationSearchInput.value = '';
+            integrationSandbox.__browseFrequencyFilter = 'all';
+            return integrationSandbox.filterByFrequency('high');
+        }
+    }
+];
+for (const scenario of foregroundRecoveryScenarios) {
+    await establishFailedIntegrationFunctionalReset(
+        `the ${scenario.name} recovery fixture must start from failed-reset debt`
+    );
+    integrationRenders.length = 0;
+    const foregroundIndex = deferred();
+    integrationIndexResolvers.push(foregroundIndex);
+    const foregroundResult = scenario.start();
+    foregroundIndex.resolve([{
+        id: `foreground-${scenario.name}`,
+        title: `Needle ${scenario.name}`,
+        searchText: `needle ${scenario.name}`,
+        category: 'P1',
+        type: 'reading',
+        frequency: 7
+    }]);
+    if (foregroundResult && typeof foregroundResult.then === 'function') {
+        assert.notStrictEqual(await foregroundResult, false);
+    }
+    await waitForCondition(
+        () => integrationSandbox.__getBrowseFunctionalResetState().status === 'succeeded',
+        `a current ${scenario.name} render must recover the failed-reset gate`
+    );
+    assert.deepStrictEqual(
+        integrationRenders,
+        [[`foreground-${scenario.name}`]],
+        `the ${scenario.name} path must commit one current foreground render`
+    );
+    integrationSearchInput.value = '';
+    integrationSandbox.refreshBrowseProgressFromRecords(
+        [],
+        [{ id: `progress-after-${scenario.name}` }]
+    );
+    await waitForCondition(
+        () => integrationRenders.length === 2,
+        `progress must resume after the ${scenario.name} foreground recovery`
+    );
+    assert.deepStrictEqual(integrationRenders.at(-1), [`progress-after-${scenario.name}`]);
+}
+integrationSandbox.ExamActions.displayExams = displayBeforeForegroundRecoveryMatrix;
 
 await establishFailedIntegrationFunctionalReset(
     'the pending-filter recovery fixture must start from a failed functional barrier'

@@ -688,26 +688,34 @@ class ExamSystemApp {
                             && typeof window.__retainBrowseUserResultsRequest === 'function'
                             ? window.__retainBrowseUserResultsRequest(initializationRequestId)
                             : null;
-                        Promise.resolve(initialization).then((initializationResult) => {
-                            if (hasInitializer && initializationResult === null) {
-                                return undefined;
-                            }
-                            if (initializationRequestId != null
-                                && typeof window.__isBrowseResultsRequestCurrent === 'function'
-                                && !window.__isBrowseResultsRequestCurrent(initializationRequestId)) {
-                                return undefined;
-                            }
+                        let pendingFilterOutcome = 'retryable-failure';
+                        const pendingFilterWasSuperseded = () => {
                             const activeView = typeof document.querySelector === 'function'
                                 ? document.querySelector('.view.active')
                                 : null;
-                            if (window.__pendingBrowseFilter !== pendingFilter
+                            return window.__pendingBrowseFilter !== pendingFilter
                                 || navigationIntentGeneration !== this._navigationIntentGeneration
                                 || this.currentView !== 'browse'
                                 || (activeView && activeView.id !== 'browse-view')
                                 || (sharedNavigationIntentGeneration != null
                                     && typeof window.__getAppNavigationIntentGeneration === 'function'
-                                    && window.__getAppNavigationIntentGeneration() !== sharedNavigationIntentGeneration)) {
-                                return undefined;
+                                    && window.__getAppNavigationIntentGeneration()
+                                        !== sharedNavigationIntentGeneration)
+                                || (initializationRequestId != null
+                                    && typeof window.__isBrowseResultsRequestCurrent === 'function'
+                                    && !window.__isBrowseResultsRequestCurrent(
+                                        initializationRequestId
+                                    ));
+                        };
+                        Promise.resolve(initialization).then((initializationResult) => {
+                            if (hasInitializer
+                                && (initializationResult === null
+                                    || initializationResult === false)) {
+                                return false;
+                            }
+                            if (pendingFilterWasSuperseded()) {
+                                pendingFilterOutcome = 'superseded';
+                                return false;
                             }
                             const filterArgs = [category, type, filterMode, path];
                             if (initializationRequestId != null || sharedNavigationIntentGeneration != null) {
@@ -718,16 +726,35 @@ class ExamSystemApp {
                             }
                             return window.applyBrowseFilter(...filterArgs);
                         })
+                            .then((result) => {
+                                // Legacy filter implementations resolve without a
+                                // value after applying; null/false mean it did not
+                                // reach an authoritative commit.
+                                if (result !== false && result !== null) {
+                                    pendingFilterOutcome = 'applied';
+                                    return true;
+                                }
+                                if (pendingFilterWasSuperseded()) {
+                                    pendingFilterOutcome = 'superseded';
+                                }
+                                return false;
+                            })
                             .catch((error) => {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);
                             })
                             .finally(() => {
+                                if (pendingFilterOutcome !== 'applied'
+                                    && pendingFilterWasSuperseded()) {
+                                    pendingFilterOutcome = 'superseded';
+                                }
+                                if (window.__pendingBrowseFilter === pendingFilter
+                                    && (pendingFilterOutcome === 'applied'
+                                        || pendingFilterOutcome === 'superseded')) {
+                                    delete window.__pendingBrowseFilter;
+                                }
                                 if (retainedInitializationRequestId != null
                                     && typeof window.__endBrowseUserResultsRequest === 'function') {
                                     window.__endBrowseUserResultsRequest(retainedInitializationRequestId);
-                                }
-                                if (window.__pendingBrowseFilter === pendingFilter) {
-                                    delete window.__pendingBrowseFilter;
                                 }
                             });
                     } else if (typeof window.initializeBrowseView === 'function') {

@@ -435,6 +435,75 @@ test('repeat reset waits for browse-control hydration before clearing frequency 
     assert.equal(harness.loaderCalls.length, 1);
 });
 
+test('navigation ABA during control hydration cancels reset before state, persistence, or render', async () => {
+    const controlsReady = deferred();
+    let controlsHydrationStarted = false;
+    const harness = createHarness({
+        async setupBrowseControls() {
+            controlsHydrationStarted = true;
+            await controlsReady.promise;
+            return true;
+        }
+    });
+    await harness.stateManager.ready;
+
+    let navigationGeneration = 7;
+    const browseView = { id: 'browse-view', classList: createClassList(['active']) };
+    const overviewView = { id: 'overview-view', classList: createClassList() };
+    const views = [browseView, overviewView];
+    const originalQuerySelector = harness.window.document.querySelector.bind(
+        harness.window.document
+    );
+    harness.window.document.querySelector = (selector) => {
+        if (selector === '.view.active') {
+            return views.find((view) => view.classList.contains('active')) || null;
+        }
+        return originalQuerySelector(selector);
+    };
+    harness.window.__getAppNavigationIntentGeneration = () => navigationGeneration;
+
+    const reset = harness.window.ExamActions.resetBrowseViewToAll();
+    await flushMicrotasks();
+    assert.equal(
+        controlsHydrationStarted,
+        true,
+        'the reset must capture its navigation epoch before awaiting control hydration'
+    );
+
+    navigationGeneration += 1;
+    browseView.classList.remove('active');
+    overviewView.classList.add('active');
+    navigationGeneration += 1;
+    overviewView.classList.remove('active');
+    browseView.classList.add('active');
+    controlsReady.resolve();
+
+    assert.equal(
+        await reset,
+        false,
+        'returning to Browse must not make the pre-navigation reset current again'
+    );
+    assert.equal(browseView.classList.contains('active'), true);
+    assert.equal(harness.loaderCalls.length, 0, 'the stale reset must not load or render');
+    assert.deepEqual(harness.renderedFilterIndexes, []);
+    assert.deepEqual(harness.filterStateCalls, [], 'the stale reset must not apply all/all');
+    assert.deepEqual(harness.titleCalls, []);
+    assert.deepEqual(harness.preferencePatches, [], 'the stale reset must not persist defaults');
+    assert.equal(harness.stateManager.currentFilter, 'P2');
+    assert.equal(harness.stateManager.state.currentCategory, 'P2');
+    assert.equal(harness.stateManager.state.currentFrequency, 'high');
+    assert.equal(harness.stateManager.state.searchQuery, 'ocean');
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(harness.stateManager.state.filters)),
+        { frequency: 'high', status: 'started', difficulty: 'hard' }
+    );
+    assert.equal(harness.window.__browseFilterMode, 'frequency-p1');
+    assert.equal(harness.window.__browsePath, 'ListeningPractice/100 P1');
+    assert.equal(harness.window.__browseFrequencyFilter, 'high');
+    assert.equal(harness.window.__readingMemorizeBrowseMode, true);
+    assert.equal(harness.searchInput.value, 'ocean');
+});
+
 test('repeat reset owns frequency state when the main UI helper is unavailable', async () => {
     const harness = createHarness();
     await harness.stateManager.ready;
@@ -554,7 +623,7 @@ test('repeat reset invalidates a captured pending Browse activation filter', asy
     harness.window.initializeBrowseView = () => activation.promise;
     harness.window.applyBrowseFilter = (...args) => {
         appliedFilters.push(args);
-        return Promise.resolve();
+        return Promise.resolve(true);
     };
 
     app.onViewActivated('browse');
@@ -603,7 +672,7 @@ test('explicit category activation applies its pending filter when no reset supe
     };
     harness.window.applyBrowseFilter = (...args) => {
         appliedFilters.push(args);
-        return Promise.resolve();
+        return Promise.resolve(true);
     };
 
     app.onViewActivated('browse');
@@ -655,7 +724,7 @@ test('a stable pending Browse activation reuses its initialization results reque
     };
     harness.window.applyBrowseFilter = (...args) => {
         appliedFilters.push(args);
-        return Promise.resolve();
+        return Promise.resolve(true);
     };
 
     app.onViewActivated('browse');
@@ -672,6 +741,59 @@ test('a stable pending Browse activation reuses its initialization results reque
     assert.equal(harness.getBrowseRequestId(), initializationRequestId);
     assert.deepEqual(retainedRequests, [initializationRequestId]);
     assert.deepEqual(releasedRequests, [initializationRequestId]);
+});
+
+test('retryable Browse initialization failure retains the pending filter for the next activation', async () => {
+    const harness = createHarness();
+    await harness.stateManager.ready;
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.currentView = 'browse';
+    const pendingFilter = {
+        category: 'P4',
+        type: 'listening',
+        filterMode: 'default',
+        path: 'ListeningPractice/P4'
+    };
+    const appliedFilters = [];
+    let initializationAttempt = 0;
+    harness.window.__pendingBrowseFilter = pendingFilter;
+    harness.window.initializeBrowseView = () => {
+        initializationAttempt += 1;
+        return Promise.resolve(initializationAttempt === 1
+            ? null
+            : [{ id: 'p4-listening', category: 'P4', type: 'listening' }]);
+    };
+    harness.window.applyBrowseFilter = (...args) => {
+        appliedFilters.push(args);
+        return Promise.resolve(true);
+    };
+
+    app.onViewActivated('browse');
+    await flushMicrotasks();
+
+    assert.strictEqual(
+        harness.window.__pendingBrowseFilter,
+        pendingFilter,
+        'a retryable initialization failure must not consume the explicit category intent'
+    );
+    assert.deepEqual(appliedFilters, []);
+
+    app.onViewActivated('browse');
+    await flushMicrotasks();
+
+    assert.equal(initializationAttempt, 2);
+    assert.deepEqual(appliedFilters, [[
+        pendingFilter.category,
+        pendingFilter.type,
+        pendingFilter.filterMode,
+        pendingFilter.path
+    ]]);
+    assert.equal(
+        harness.window.__pendingBrowseFilter,
+        undefined,
+        'the pending category intent must be consumed after its successful retry'
+    );
 });
 
 test('later type, search, and frequency intents supersede a pending Browse activation', async (t) => {
