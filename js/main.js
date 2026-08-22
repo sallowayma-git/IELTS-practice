@@ -2128,8 +2128,10 @@ function refreshBrowseProgressFromRecords(
             return false;
         }
         // Both derived states are built without mutation. Validate the
-        // completion candidate before accepting the anchor queue; the later
-        // completion commit is then one non-throwing assignment.
+        // completion candidate before publishing the generation-fenced live
+        // anchor snapshot; durable anchor persistence remains downstream of
+        // that accepted projection. The completion commit is then one
+        // non-throwing assignment.
         const preparedCompletionIndex = prepareBrowseCompletionIndex(recordSnapshot);
         if (!isPreparedBrowseCompletionIndex(preparedCompletionIndex)) {
             return false;
@@ -2138,7 +2140,13 @@ function refreshBrowseProgressFromRecords(
             recordSnapshot,
             indexSnapshot
         );
-        if (commitBrowseAnchorUpdates(preparedAnchorUpdates) !== true) {
+        const anchorPublication = candidatePracticeProjectionGeneration != null
+            ? { practiceProjectionGeneration: candidatePracticeProjectionGeneration }
+            : null;
+        if (commitBrowseAnchorUpdates(
+            preparedAnchorUpdates,
+            anchorPublication
+        ) !== true) {
             return false;
         }
         commitBrowseCompletionIndex(preparedCompletionIndex);

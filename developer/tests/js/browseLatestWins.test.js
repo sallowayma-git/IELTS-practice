@@ -467,6 +467,7 @@ const integrationDocument = {
 };
 const integrationRenders = [];
 const integrationAnchorIndexes = [];
+const integrationAnchorPublicationGenerations = [];
 const integrationCompletionRefreshes = [];
 const integrationPracticeUpdates = [];
 const integrationBrowseState = { category: 'all', type: 'all' };
@@ -552,8 +553,11 @@ const integrationSandbox = {
             index: Array.from(index || [], (exam) => exam.id)
         };
     },
-    commitBrowseAnchorUpdates(prepared) {
+    commitBrowseAnchorUpdates(prepared, publication = null) {
         integrationAnchorIndexes.push(prepared.index);
+        integrationAnchorPublicationGenerations.push(
+            publication && publication.practiceProjectionGeneration
+        );
         return true;
     },
     browseController: {
@@ -838,6 +842,7 @@ for (const failurePoint of [
 ]) {
     integrationRenders.length = 0;
     integrationAnchorIndexes.length = 0;
+    integrationAnchorPublicationGenerations.length = 0;
     integrationCompletionRefreshes.length = 0;
     integrationPracticeUpdates.length = 0;
     const acceptedRecordId = `accepted-${failurePoint}-record`;
@@ -885,6 +890,15 @@ for (const failurePoint of [
         integrationAnchorIndexes,
         [[acceptedIndexId]],
         `${failurePoint} failure must preserve the accepted anchor projection`
+    );
+    assert.strictEqual(
+        integrationAnchorPublicationGenerations.length,
+        1,
+        `${failurePoint} failure must not publish a generation for rejected B anchors`
+    );
+    assert.ok(
+        Number.isFinite(integrationAnchorPublicationGenerations[0]),
+        'the accepted anchor projection must receive the Practice publication generation'
     );
     assert.deepStrictEqual(
         integrationPracticeUpdates,
