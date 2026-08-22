@@ -287,7 +287,7 @@ async function testFailedBrowseResetBarrierStopsQueuedLoaderProxy() {
 
     runtimeReady.resolve(true);
     resetBarrier.resolve(false);
-    assert.strictEqual(await queuedLoad, false);
+    assert.strictEqual(await queuedLoad, false, 'the queued loader must observe the failed reset barrier');
     assert.strictEqual(initializationCalls, 0, 'a failed reset barrier must skip active-view synchronization');
     assert.strictEqual(realLoadCalls, 0, 'a failed reset barrier must stop the already queued loader proxy');
 
@@ -328,7 +328,7 @@ async function testAtomicForegroundRecoveryCancelsOnlyStaleRetryBarrier() {
         failedReset.promise
     );
     failedReset.resolve(false);
-    assert.strictEqual(await failedBarrier, false);
+    assert.strictEqual(await failedBarrier, false, 'the functional reset fixture must enter failed state');
     await flushMicrotasks();
     assert.strictEqual(harness.windowStub.__getBrowseFunctionalResetState().status, 'failed');
 
@@ -1887,6 +1887,81 @@ async function testColdBrowseProxyRestoresPreferences(harness) {
     });
 }
 
+async function testColdBrowseSynchronizationRejectsNavigationAba() {
+    const harness = createHarness();
+    const runtimeReady = deferred();
+    const pendingFilter = {
+        category: 'P3',
+        type: 'reading',
+        filterMode: 'default',
+        path: 'ReadingPractice/P3'
+    };
+    const initializationCalls = [];
+    const appliedFilters = [];
+    let activeView = 'browse';
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(
+        harness.windowStub.document
+    );
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') {
+            return { id: `${activeView}-view` };
+        }
+        return originalQuerySelector(selector);
+    };
+    harness.windowStub.__pendingBrowseFilter = pendingFilter;
+    harness.windowStub.initializeBrowseView = function initializeBrowseView(options) {
+        initializationCalls.push(options || {});
+        return Promise.resolve(true);
+    };
+    harness.windowStub.applyBrowseFilter = function applyBrowseFilter(...args) {
+        appliedFilters.push(args);
+        return Promise.resolve(true);
+    };
+    harness.windowStub.AppLazyLoader.ensureGroup = function ensureGroup(name) {
+        harness.ensureCalls.push(name);
+        return name === 'browse-runtime' ? runtimeReady.promise : Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const staleBrowseSynchronization = harness.windowStub.AppEntry.ensureBrowseGroup();
+    await flushMicrotasks();
+    harness.windowStub.__markAppNavigationIntent();
+    activeView = 'overview';
+    harness.windowStub.__markAppNavigationIntent();
+    activeView = 'browse';
+    runtimeReady.resolve(true);
+
+    assert.strictEqual(
+        await staleBrowseSynchronization,
+        false,
+        'a cold synchronization lease must fail closed after a Browse navigation ABA'
+    );
+    assert.deepStrictEqual(
+        initializationCalls,
+        [],
+        'the stale cold lease must not initialize the newer Browse activation'
+    );
+    assert.deepStrictEqual(appliedFilters, []);
+    assert.strictEqual(
+        harness.windowStub.__pendingBrowseFilter,
+        undefined,
+        'the stale lease may discard only the pending identity it originally captured'
+    );
+
+    assert.strictEqual(await harness.windowStub.AppEntry.ensureBrowseGroup(), true);
+    assert.strictEqual(initializationCalls.length, 1);
+    assert.strictEqual(initializationCalls[0].skipLoad, false);
+    assert.deepStrictEqual(
+        appliedFilters,
+        [],
+        'the current activation must not adopt the stale pending category'
+    );
+    recordResult('冷 Browse 同步绑定导航 epoch', true, {
+        initializationCalls: initializationCalls.length,
+        appliedFilters: appliedFilters.length
+    });
+}
+
 async function testColdBrowseRetryRetainsPendingFilterAfterRetryableInitializationFailure() {
     const harness = createHarness();
     const pendingFilter = {
@@ -2290,6 +2365,7 @@ async function main() {
         await testQueuedFilterSupersedesOlderPendingCategory();
         await testClearSearchProxyLoadsBrowseRuntime(createHarness());
         await testColdBrowseProxyRestoresPreferences(createHarness());
+        await testColdBrowseSynchronizationRejectsNavigationAba();
         await testColdBrowseRetryRetainsPendingFilterAfterRetryableInitializationFailure();
         await testColdBrowseAppliesExplicitPendingFilter(createHarness());
         await testColdBrowseRuntimeInitializesNavigationAndStateManager();

@@ -796,6 +796,75 @@ test('retryable Browse initialization failure retains the pending filter for the
     );
 });
 
+test('an older pending-filter consumer cannot consume the current retry intent', async () => {
+    const harness = createHarness();
+    await harness.stateManager.ready;
+    loadScript('js/app.js', harness.context);
+    const app = vm.runInContext('new ExamSystemApp()', harness.context);
+    app.currentView = 'browse';
+    const pendingFilter = {
+        category: 'P3',
+        type: 'reading',
+        filterMode: 'default',
+        path: 'ReadingPractice/P3'
+    };
+    const firstInitialization = deferred();
+    const currentInitialization = deferred();
+    const initializationQueue = [firstInitialization, currentInitialization];
+    const appliedFilters = [];
+    let consumerGeneration = 0;
+    let currentConsumer = null;
+    harness.window.__pendingBrowseFilter = pendingFilter;
+    harness.window.AppEntry = {
+        beginBrowsePendingFilterConsumer(filter) {
+            currentConsumer = {
+                generation: ++consumerGeneration,
+                pendingFilter: filter
+            };
+            return currentConsumer;
+        },
+        isBrowsePendingFilterConsumerCurrent(consumer) {
+            return currentConsumer === consumer
+                && harness.window.__pendingBrowseFilter === consumer.pendingFilter;
+        },
+        isBrowsePendingFilterIntentCurrent(consumer) {
+            return this.isBrowsePendingFilterConsumerCurrent(consumer);
+        }
+    };
+    harness.window.initializeBrowseView = () => initializationQueue.shift().promise;
+    harness.window.applyBrowseFilter = (...args) => {
+        appliedFilters.push(args);
+        return Promise.resolve(true);
+    };
+
+    app.onViewActivated('browse');
+    app.onViewActivated('browse');
+    firstInitialization.resolve(null);
+    await flushMicrotasks();
+
+    assert.strictEqual(
+        harness.window.__pendingBrowseFilter,
+        pendingFilter,
+        'the older activation must not delete the pending object owned by the current retry'
+    );
+    assert.deepEqual(appliedFilters, []);
+
+    currentInitialization.resolve([{ id: 'current-p3-reading' }]);
+    await flushMicrotasks();
+
+    assert.deepEqual(appliedFilters, [[
+        pendingFilter.category,
+        pendingFilter.type,
+        pendingFilter.filterMode,
+        pendingFilter.path
+    ]]);
+    assert.equal(
+        harness.window.__pendingBrowseFilter,
+        undefined,
+        'only the current successful consumer may consume the shared pending intent'
+    );
+});
+
 test('later type, search, and frequency intents supersede a pending Browse activation', async (t) => {
     const cases = [
         { name: 'type', initializationResult: null, finalIntent: { type: 'listening' } },

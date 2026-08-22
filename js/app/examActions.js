@@ -808,7 +808,7 @@
     /**
      * 加载并渲染题库列表
      */
-    function loadExamList(examIndex = []) {
+    function loadExamList(examIndex = [], options = {}) {
         console.log('[ExamActions] loadExamList called');
 
         if (typeof global.setupBrowseControls === 'function') {
@@ -831,12 +831,21 @@
                     global.browseController.initialize('type-filter-buttons', examIndex);
                 }
                 if (global.browseController.currentMode !== global.__browseFilterMode) {
-                    global.browseController.setMode(global.__browseFilterMode, examIndex);
+                    return global.browseController.setMode(
+                        global.__browseFilterMode,
+                        examIndex,
+                        options.renderRequestId,
+                        options
+                    );
                 } else {
                     const activeFilter = global.browseController.activeFilter || 'all';
-                    global.browseController.applyFilter(activeFilter, examIndex);
+                    return global.browseController.applyFilter(
+                        activeFilter,
+                        examIndex,
+                        options.renderRequestId,
+                        options
+                    );
                 }
-                return;
             } catch (error) {
                 console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
             }
@@ -911,7 +920,8 @@
 
         displayExams(examsToShow, {
             selectionMode,
-            customSuiteDraft
+            customSuiteDraft,
+            commitReceipt: options.commitReceipt
         });
         refreshCustomSuiteSelectionPortal();
 
@@ -1548,13 +1558,16 @@
                 customSuiteDraft: effectiveOptions.customSuiteDraft || null
             });
             setupExamActionHandlers();
-            return;
+            if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+                global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+            }
+            return true;
         }
 
         // 2. 降级：直接 DOM 操作 (从 main.js 迁移)
         const container = document.getElementById('exam-list-container');
         if (!container) {
-            return;
+            return false;
         }
 
         while (container.firstChild) {
@@ -1570,7 +1583,10 @@
         const normalizedExams = Array.isArray(renderExams) ? renderExams : [];
         if (normalizedExams.length === 0) {
             renderEmptyState(container);
-            return;
+            if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+                global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+            }
+            return true;
         }
 
         const list = document.createElement('div');
@@ -1584,6 +1600,10 @@
 
         container.appendChild(list);
         setupExamActionHandlers();
+        if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+            global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+        }
+        return true;
     }
 
     /**

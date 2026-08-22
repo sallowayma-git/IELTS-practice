@@ -677,6 +677,19 @@ class ExamSystemApp {
                         const pendingFilter = window.__pendingBrowseFilter;
                         const { category, type, filterMode, path } = pendingFilter;
                         const hasInitializer = typeof window.initializeBrowseView === 'function';
+                        const appEntry = window.AppEntry || null;
+                        const consumerNavigationGeneration = sharedNavigationIntentGeneration != null
+                            ? sharedNavigationIntentGeneration
+                            : (typeof window.__getAppNavigationIntentGeneration === 'function'
+                                ? window.__getAppNavigationIntentGeneration()
+                                : null);
+                        const pendingFilterConsumer = appEntry
+                            && typeof appEntry.beginBrowsePendingFilterConsumer === 'function'
+                            ? appEntry.beginBrowsePendingFilterConsumer(
+                                pendingFilter,
+                                consumerNavigationGeneration
+                            )
+                            : null;
                         const initialization = hasInitializer
                             ? window.initializeBrowseView({ skipLoad: true })
                             : null;
@@ -689,32 +702,50 @@ class ExamSystemApp {
                             ? window.__retainBrowseUserResultsRequest(initializationRequestId)
                             : null;
                         let pendingFilterOutcome = 'retryable-failure';
-                        const pendingFilterWasSuperseded = () => {
+                        const ownsPendingFilterConsumer = () => !pendingFilterConsumer
+                            || !appEntry
+                            || typeof appEntry.isBrowsePendingFilterConsumerCurrent !== 'function'
+                            || appEntry.isBrowsePendingFilterConsumerCurrent(pendingFilterConsumer);
+                        const pendingFilterIntentIsCurrent = () => {
                             const activeView = typeof document.querySelector === 'function'
                                 ? document.querySelector('.view.active')
                                 : null;
-                            return window.__pendingBrowseFilter !== pendingFilter
-                                || navigationIntentGeneration !== this._navigationIntentGeneration
-                                || this.currentView !== 'browse'
-                                || (activeView && activeView.id !== 'browse-view')
-                                || (sharedNavigationIntentGeneration != null
-                                    && typeof window.__getAppNavigationIntentGeneration === 'function'
-                                    && window.__getAppNavigationIntentGeneration()
-                                        !== sharedNavigationIntentGeneration)
+                            const sharedIntentIsCurrent = !pendingFilterConsumer
+                                || !appEntry
+                                || typeof appEntry.isBrowsePendingFilterIntentCurrent !== 'function'
+                                || appEntry.isBrowsePendingFilterIntentCurrent(pendingFilterConsumer);
+                            return sharedIntentIsCurrent
+                                && window.__pendingBrowseFilter === pendingFilter
+                                && navigationIntentGeneration === this._navigationIntentGeneration
+                                && this.currentView === 'browse'
+                                && (!activeView || activeView.id === 'browse-view')
+                                && (sharedNavigationIntentGeneration == null
+                                    || typeof window.__getAppNavigationIntentGeneration !== 'function'
+                                    || window.__getAppNavigationIntentGeneration()
+                                        === sharedNavigationIntentGeneration);
+                        };
+                        const pendingFilterAttemptIsCurrent = () => ownsPendingFilterConsumer()
+                            && pendingFilterIntentIsCurrent()
+                            && (initializationRequestId == null
+                                || typeof window.__isBrowseResultsRequestCurrent !== 'function'
+                                || window.__isBrowseResultsRequestCurrent(initializationRequestId));
+                        const currentConsumerWasSuperseded = () => ownsPendingFilterConsumer()
+                            && (!pendingFilterIntentIsCurrent()
                                 || (initializationRequestId != null
                                     && typeof window.__isBrowseResultsRequestCurrent === 'function'
                                     && !window.__isBrowseResultsRequestCurrent(
                                         initializationRequestId
-                                    ));
-                        };
+                                    )));
                         Promise.resolve(initialization).then((initializationResult) => {
                             if (hasInitializer
                                 && (initializationResult === null
                                     || initializationResult === false)) {
                                 return false;
                             }
-                            if (pendingFilterWasSuperseded()) {
-                                pendingFilterOutcome = 'superseded';
+                            if (!pendingFilterAttemptIsCurrent()) {
+                                if (currentConsumerWasSuperseded()) {
+                                    pendingFilterOutcome = 'superseded';
+                                }
                                 return false;
                             }
                             const filterArgs = [category, type, filterMode, path];
@@ -734,7 +765,7 @@ class ExamSystemApp {
                                     pendingFilterOutcome = 'applied';
                                     return true;
                                 }
-                                if (pendingFilterWasSuperseded()) {
+                                if (currentConsumerWasSuperseded()) {
                                     pendingFilterOutcome = 'superseded';
                                 }
                                 return false;
@@ -743,11 +774,14 @@ class ExamSystemApp {
                                 console.warn('[App] 应用待处理题库筛选失败:', error);
                             })
                             .finally(() => {
-                                if (pendingFilterOutcome !== 'applied'
-                                    && pendingFilterWasSuperseded()) {
+                                const ownsCurrentConsumer = ownsPendingFilterConsumer();
+                                if (ownsCurrentConsumer
+                                    && pendingFilterOutcome !== 'applied'
+                                    && currentConsumerWasSuperseded()) {
                                     pendingFilterOutcome = 'superseded';
                                 }
-                                if (window.__pendingBrowseFilter === pendingFilter
+                                if (ownsCurrentConsumer
+                                    && window.__pendingBrowseFilter === pendingFilter
                                     && (pendingFilterOutcome === 'applied'
                                         || pendingFilterOutcome === 'superseded')) {
                                     delete window.__pendingBrowseFilter;

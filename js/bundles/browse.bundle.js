@@ -4975,7 +4975,7 @@
     /**
      * 加载并渲染题库列表
      */
-    function loadExamList(examIndex = []) {
+    function loadExamList(examIndex = [], options = {}) {
         console.log('[ExamActions] loadExamList called');
 
         if (typeof global.setupBrowseControls === 'function') {
@@ -4998,12 +4998,21 @@
                     global.browseController.initialize('type-filter-buttons', examIndex);
                 }
                 if (global.browseController.currentMode !== global.__browseFilterMode) {
-                    global.browseController.setMode(global.__browseFilterMode, examIndex);
+                    return global.browseController.setMode(
+                        global.__browseFilterMode,
+                        examIndex,
+                        options.renderRequestId,
+                        options
+                    );
                 } else {
                     const activeFilter = global.browseController.activeFilter || 'all';
-                    global.browseController.applyFilter(activeFilter, examIndex);
+                    return global.browseController.applyFilter(
+                        activeFilter,
+                        examIndex,
+                        options.renderRequestId,
+                        options
+                    );
                 }
-                return;
             } catch (error) {
                 console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
             }
@@ -5078,7 +5087,8 @@
 
         displayExams(examsToShow, {
             selectionMode,
-            customSuiteDraft
+            customSuiteDraft,
+            commitReceipt: options.commitReceipt
         });
         refreshCustomSuiteSelectionPortal();
 
@@ -5715,13 +5725,16 @@
                 customSuiteDraft: effectiveOptions.customSuiteDraft || null
             });
             setupExamActionHandlers();
-            return;
+            if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+                global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+            }
+            return true;
         }
 
         // 2. 降级：直接 DOM 操作 (从 main.js 迁移)
         const container = document.getElementById('exam-list-container');
         if (!container) {
-            return;
+            return false;
         }
 
         while (container.firstChild) {
@@ -5737,7 +5750,10 @@
         const normalizedExams = Array.isArray(renderExams) ? renderExams : [];
         if (normalizedExams.length === 0) {
             renderEmptyState(container);
-            return;
+            if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+                global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+            }
+            return true;
         }
 
         const list = document.createElement('div');
@@ -5751,6 +5767,10 @@
 
         container.appendChild(list);
         setupExamActionHandlers();
+        if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
+            global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);
+        }
+        return true;
     }
 
     /**
@@ -14119,7 +14139,7 @@
 
             // 应用筛选
             if (!options.skipApply) {
-                return this.applyFilter(this.activeFilter, examIndex, renderRequestId);
+                return this.applyFilter(this.activeFilter, examIndex, renderRequestId, options);
             }
             return undefined;
         }
@@ -14180,6 +14200,9 @@
                         : (typeof global.__beginBrowseResultsRequest === 'function'
                             ? global.__beginBrowseResultsRequest()
                             : null);
+                    const foregroundEpoch = typeof global.__captureBrowseForegroundRenderEpoch === 'function'
+                        ? global.__captureBrowseForegroundRenderEpoch()
+                        : null;
                     try {
                         const index = await global.resolveActiveLibraryIndex();
                         if (interactionId !== this.filterInteractionId) {
@@ -14190,7 +14213,12 @@
                             && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
                             return;
                         }
-                        await Promise.resolve(this.handleFilterClick(filter.id, index, renderRequestId));
+                        await Promise.resolve(this.handleFilterClick(
+                            filter.id,
+                            index,
+                            renderRequestId,
+                            { foregroundEpoch }
+                        ));
                     } catch (error) {
                         console.error('[BrowseController] 读取活动题库失败:', error);
                     } finally {
@@ -14228,14 +14256,14 @@
          * 处理筛选按钮点击
          * @param {string} filterId - 筛选器ID
          */
-        handleFilterClick(filterId, examIndex = [], renderRequestId = null) {
+        handleFilterClick(filterId, examIndex = [], renderRequestId = null, options = {}) {
             this.activeFilter = filterId;
 
             // 更新按钮激活状态
             this.updateButtonStates();
 
             // 应用筛选
-            return this.applyFilter(filterId, examIndex, renderRequestId);
+            return this.applyFilter(filterId, examIndex, renderRequestId, options);
         }
 
         /**
@@ -14263,15 +14291,15 @@
          * 应用筛选
          * @param {string} filterId - 筛选器ID
          */
-        applyFilter(filterId, examIndex = [], renderRequestId = null) {
+        applyFilter(filterId, examIndex = [], renderRequestId = null, options = {}) {
             const config = this.getCurrentModeConfig();
 
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
-                return this.filterByType(filterId, examIndex, renderRequestId);
+                return this.filterByType(filterId, examIndex, renderRequestId, options);
             } else if (config.filterLogic === 'folder-based') {
                 // 频率模式：按文件夹筛选
-                return this.filterByFolder(filterId, examIndex, renderRequestId);
+                return this.filterByFolder(filterId, examIndex, renderRequestId, options);
             }
             return undefined;
         }
@@ -14280,10 +14308,10 @@
          * 按类型筛选（默认模式）
          * @param {string} type - 类型 (all | reading | listening)
          */
-        filterByType(type, examIndex = [], renderRequestId = null) {
+        filterByType(type, examIndex = [], renderRequestId = null, options = {}) {
             // 调用全局的 filterByType 函数
             if (typeof global.filterByType === 'function') {
-                return global.filterByType(type, examIndex, renderRequestId);
+                return global.filterByType(type, examIndex, renderRequestId, options);
             } else {
                 console.warn('[BrowseController] filterByType 函数未定义');
             }
@@ -14326,7 +14354,7 @@
             });
         }
 
-        filterByFolder(filterId, examIndex = [], renderRequestId = null) {
+        filterByFolder(filterId, examIndex = [], renderRequestId = null, options = {}) {
             if (renderRequestId != null
                 && typeof global.__isBrowseResultsRequestCurrent === 'function'
                 && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
@@ -14348,24 +14376,46 @@
                 && typeof searchInput.value === 'string'
                 && searchInput.value.trim());
             if (hasActiveQuery && typeof global.__renderBrowseResultsForState === 'function') {
-                return global.__renderBrowseResultsForState(filtered, renderRequestId);
+                return global.__renderBrowseResultsForState(filtered, renderRequestId, {
+                    foregroundEpoch: options.foregroundEpoch
+                });
             }
-            this.displayFilteredExams(filtered);
+            if (!options.recoveryManaged
+                && renderRequestId != null
+                && typeof global.__commitForegroundBrowseResults === 'function') {
+                return global.__commitForegroundBrowseResults(
+                    renderRequestId,
+                    options.foregroundEpoch,
+                    (commitReceipt) => {
+                        const committed = this.displayFilteredExams(filtered, { commitReceipt });
+                        return committed === false ? false : filtered;
+                    }
+                );
+            }
+            const committed = this.displayFilteredExams(filtered, {
+                commitReceipt: options.commitReceipt
+            });
+            if (committed === false) {
+                return false;
+            }
             return filtered;
         }
         /**
          * 显示筛选后的题目
          * @param {Array} exams - 题目数组
          */
-        displayFilteredExams(exams) {
-            // 更新筛选状态
-            if (typeof global.setFilteredExamsState === 'function') {
-                global.setFilteredExamsState(exams);
+        displayFilteredExams(exams, options = {}) {
+            // DOM commit is the authority. Do not publish filtered state or
+            // post-render effects when no renderer/container accepted it.
+            const displayed = typeof global.displayExams === 'function'
+                ? global.displayExams(exams, { commitReceipt: options.commitReceipt })
+                : false;
+            if (displayed !== true) {
+                return false;
             }
 
-            // 显示题目
-            if (typeof global.displayExams === 'function') {
-                global.displayExams(exams);
+            if (typeof global.setFilteredExamsState === 'function') {
+                global.setFilteredExamsState(exams);
             }
 
             // 处理渲染后逻辑
@@ -14374,6 +14424,7 @@
                 const type = global.getCurrentExamType ? global.getCurrentExamType() : 'all';
                 global.handlePostExamListRender(exams, { category, type });
             }
+            return true;
         }
 
         /**
@@ -17812,16 +17863,20 @@ async function initializeLegacyComponents() {
 // Practice history is read from AppData for each refresh. Only its signature is
 // retained as runtime UI state; record arrays never become a second authority.
 let lastPracticeRecordsSignature = null;
-// Browse progress is a derived projection. This generation orders only that
-// projection; it never changes syncPracticeRecords' public return value or the
-// Practice-history single-flight contract below.
+// Browse progress is a derived projection. Invocation order and the accepted
+// projection watermark are intentionally separate: a newer sync that merely
+// starts must not invalidate an already successful projection if it later
+// fails. Neither counter changes syncPracticeRecords' public return value or
+// the Practice-history single-flight contract below.
+let browsePracticeProjectionInvocationSequence = 0;
 let browsePracticeProjectionGeneration = 0;
 async function syncPracticeRecords(options = {}) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
+    const practiceProjectionInvocation = ++browsePracticeProjectionInvocationSequence;
     const browseProgressSourceEpoch = {
         activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration'),
-        practiceProjectionGeneration: ++browsePracticeProjectionGeneration
+        practiceProjectionGeneration: null
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
@@ -17894,7 +17949,15 @@ async function syncPracticeRecords(options = {}) {
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
-    refreshBrowseProgressFromRecords(records, examIndex, browseProgressSourceEpoch);
+    // Publish Browse ownership only after this invocation has produced a
+    // complete snapshot. A failed newer invocation therefore cannot strand a
+    // successful repaint queued behind a foreground request. Conversely, an
+    // older success that settles after a newer success remains stale.
+    if (practiceProjectionInvocation > browsePracticeProjectionGeneration) {
+        browsePracticeProjectionGeneration = practiceProjectionInvocation;
+        browseProgressSourceEpoch.practiceProjectionGeneration = practiceProjectionInvocation;
+        refreshBrowseProgressFromRecords(records, examIndex, browseProgressSourceEpoch);
+    }
 
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
     if (!recordsUnchanged) {
@@ -19913,6 +19976,56 @@ function completeCurrentForegroundBrowseRecovery(recovery, succeeded) {
     return appEntry.completeBrowseFunctionalResetRecovery(recovery, succeeded === true);
 }
 
+const browseRenderCommitReceiptMarker = {};
+
+function createBrowseRenderCommitReceipt(requestId, foregroundEpoch) {
+    return {
+        marker: browseRenderCommitReceiptMarker,
+        requestId,
+        foregroundEpoch,
+        committed: false
+    };
+}
+
+function markBrowseRenderCommitReceipt(receipt) {
+    if (!receipt || receipt.marker !== browseRenderCommitReceiptMarker) {
+        return false;
+    }
+    receipt.committed = true;
+    return true;
+}
+
+function commitForegroundBrowseResults(
+    renderRequestId,
+    sourceEpoch,
+    commit
+) {
+    const foregroundEpoch = captureBrowseForegroundRenderEpoch(sourceEpoch);
+    if (!isBrowseResultsRequestCurrent(renderRequestId)
+        || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)
+        || typeof commit !== 'function') {
+        return false;
+    }
+    const foregroundRecovery = captureCurrentForegroundBrowseRecovery(renderRequestId, false);
+    const preparedFunctionalResetState = readBrowseFunctionalResetState();
+    foregroundEpoch.functionalResetGeneration = preparedFunctionalResetState.generation;
+    const receipt = createBrowseRenderCommitReceipt(renderRequestId, foregroundEpoch);
+    let committed = false;
+    try {
+        if (!isBrowseResultsRequestCurrent(renderRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return false;
+        }
+        const result = commit(receipt);
+        committed = receipt.committed === true
+            && isBrowseResultsRequestCurrent(renderRequestId)
+            && isBrowseForegroundRenderEpochCurrent(foregroundEpoch);
+        return committed ? result : false;
+    } finally {
+        completeCurrentForegroundBrowseRecovery(foregroundRecovery, committed);
+    }
+}
+
 window.__beginBrowseResultsRequest = beginBrowseResultsRequest;
 window.__isBrowseResultsRequestCurrent = isBrowseResultsRequestCurrent;
 window.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
@@ -19923,13 +20036,16 @@ window.__retainBrowseUserResultsRequest = retainBrowseUserResultsRequest;
 window.__endBrowseUserResultsRequest = endBrowseUserResultsRequest;
 window.__isBrowseUserResultsRequestInFlight = isBrowseUserResultsRequestInFlight;
 window.__isBrowseUserResultsRequest = isBrowseUserResultsRequest;
+window.__captureBrowseForegroundRenderEpoch = captureBrowseForegroundRenderEpoch;
+window.__markBrowseRenderCommitReceipt = markBrowseRenderCommitReceipt;
+window.__commitForegroundBrowseResults = commitForegroundBrowseResults;
 
-async function filterByType(type, examIndexOverride = null, renderRequestId = null) {
+async function filterByType(type, examIndexOverride = null, renderRequestId = null, options = {}) {
     const userRequestId = renderRequestId == null
         ? beginBrowseUserResultsRequest()
         : retainBrowseUserResultsRequest(renderRequestId);
     const activeRequestId = renderRequestId == null ? userRequestId : renderRequestId;
-    const foregroundEpoch = captureBrowseForegroundRenderEpoch();
+    const foregroundEpoch = captureBrowseForegroundRenderEpoch(options.foregroundEpoch);
     try {
         const requestedType = type;
         let listeningUnavailable = false;
@@ -19945,10 +20061,9 @@ async function filterByType(type, examIndexOverride = null, renderRequestId = nu
                 type = 'all';
                 listeningUnavailable = true;
             }
-        } catch (_) {
-            if (requestedType === 'listening') {
-                type = 'all';
-            }
+        } catch (error) {
+            console.warn('[Browse] 读取活动题库失败，已取消类型筛选提交:', error);
+            return false;
         }
 
         if (!isBrowseResultsRequestCurrent(activeRequestId)
@@ -20396,6 +20511,7 @@ async function renderBrowseResultsForState(
         : null;
     let foregroundRecovery = null;
     let renderSucceeded = false;
+    let commitReceipt = null;
     try {
         if (!isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
@@ -20414,14 +20530,21 @@ async function renderBrowseResultsForState(
         }
         const isRenderCurrent = () => isBrowseResultsRequestCurrent(activeRequestId)
             && isBrowseForegroundRenderEpochCurrent(foregroundEpoch);
+        commitReceipt = createBrowseRenderCommitReceipt(activeRequestId, foregroundEpoch);
         const result = query
             ? await performSearch(query, activeRequestId, examIndexOverride, {
-                isCurrent: isRenderCurrent
+                isCurrent: isRenderCurrent,
+                commitReceipt,
+                foregroundEpoch
             })
             : await loadExamList(examIndexOverride, activeRequestId, {
-                isCurrent: isRenderCurrent
+                isCurrent: isRenderCurrent,
+                commitReceipt,
+                foregroundEpoch
             });
         if (result === false
+            || !commitReceipt
+            || commitReceipt.committed !== true
             || !isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
@@ -20443,7 +20566,6 @@ function refreshBrowseResults(options = {}) {
 let browseControlsSeeded = false;
 let browseControlsSeedPromise = null;
 let browseControlsSeedReadRevision = null;
-let browseControlsSeedReadEpoch = null;
 let browseControlsMutationRevision = 0;
 
 function isBrowseControlsSetupCurrent(options = {}) {
@@ -20464,7 +20586,6 @@ async function setupBrowseControls(options = {}) {
     if (!browseControlsSeeded) {
         if (!browseControlsSeedPromise) {
             browseControlsSeedReadRevision = browseControlsMutationRevision;
-            browseControlsSeedReadEpoch = captureBrowseForegroundRenderEpoch();
             browseControlsSeedPromise = (async () => {
                 try {
                     return await window.AppData.preferences.getBrowse();
@@ -20475,20 +20596,12 @@ async function setupBrowseControls(options = {}) {
         const seedPromise = browseControlsSeedPromise;
         const browse = await seedPromise;
         if (!isBrowseControlsSetupCurrent(options)) {
-            if (!browseControlsSeeded && browseControlsSeedPromise === seedPromise) {
-                browseControlsSeedPromise = null;
-                browseControlsSeedReadRevision = null;
-                browseControlsSeedReadEpoch = null;
-            }
+            // Caller cancellation is local. The promise and its immutable
+            // mutation fence belong to the shared hydration transaction; a
+            // stale waiter must not force a current waiter to reread storage.
             return false;
         }
         if (browseControlsSeedPromise !== seedPromise) {
-            return setupBrowseControls(options);
-        }
-        if (!isBrowseForegroundRenderEpochCurrent(browseControlsSeedReadEpoch)) {
-            browseControlsSeedPromise = null;
-            browseControlsSeedReadRevision = null;
-            browseControlsSeedReadEpoch = null;
             return setupBrowseControls(options);
         }
         if (!browseControlsSeeded) {
@@ -20502,6 +20615,8 @@ async function setupBrowseControls(options = {}) {
                 );
             }
             browseControlsSeeded = true;
+            browseControlsSeedPromise = null;
+            browseControlsSeedReadRevision = null;
         }
     }
     if (!isBrowseControlsSetupCurrent(options)) {
@@ -20671,7 +20786,12 @@ async function loadExamList(examIndexOverride = null, renderRequestId = null, op
     }
 
     if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
-        return window.ExamActions.loadExamList(examIndex);
+        return window.ExamActions.loadExamList(examIndex, {
+            commitReceipt: options.commitReceipt,
+            renderRequestId: activeRequestId,
+            foregroundEpoch: options.foregroundEpoch,
+            recoveryManaged: true
+        });
     }
     console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
     if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
@@ -20684,21 +20804,26 @@ async function loadExamList(examIndexOverride = null, renderRequestId = null, op
                 return false;
             }
             if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
-                return window.ExamActions.loadExamList(examIndex);
+                return window.ExamActions.loadExamList(examIndex, {
+                    commitReceipt: options.commitReceipt,
+                    renderRequestId: activeRequestId,
+                    foregroundEpoch: options.foregroundEpoch,
+                    recoveryManaged: true
+                });
             } else {
                 // 最终降级：直接 DOM 渲染
-                return loadExamListFallback(examIndex);
+                return loadExamListFallback(examIndex, options);
             }
         }).catch(function (err) {
             if (!isCurrent()) {
                 return false;
             }
             console.error('[main.js] browse-view 组加载失败:', err);
-            return loadExamListFallback(examIndex);
+            return loadExamListFallback(examIndex, options);
         });
     } else {
         // 无懒加载器，直接降级
-        return loadExamListFallback(examIndex);
+        return loadExamListFallback(examIndex, options);
     }
 }
 
@@ -20848,12 +20973,12 @@ function createFallbackExamCard(exam, options = {}) {
     return item;
 }
 
-function loadExamListFallback(examIndexSnapshot = []) {
+function loadExamListFallback(examIndexSnapshot = [], options = {}) {
     console.warn('[main.js] 使用降级渲染逻辑');
     try {
         let examIndex = Array.isArray(examIndexSnapshot) ? examIndexSnapshot : [];
         const container = document.getElementById('exam-list-container');
-        if (!container) return;
+        if (!container) return false;
 
         // 清除 loading 指示器
         const loadingEl = document.querySelector('#browse-view .loading');
@@ -20865,7 +20990,8 @@ function loadExamListFallback(examIndexSnapshot = []) {
 
         if (examIndex.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>暂无题目</p></div>';
-            return;
+            markBrowseRenderCommitReceipt(options.commitReceipt);
+            return [];
         }
 
         // 应用当前筛选状态（修复 P2 bug）
@@ -20933,7 +21059,8 @@ function loadExamListFallback(examIndexSnapshot = []) {
 
         if (filtered.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
-            return;
+            markBrowseRenderCommitReceipt(options.commitReceipt);
+            return filtered;
         }
 
         const list = document.createElement('div');
@@ -20947,8 +21074,11 @@ function loadExamListFallback(examIndexSnapshot = []) {
         });
         container.innerHTML = '';
         container.appendChild(list);
+        markBrowseRenderCommitReceipt(options.commitReceipt);
+        return filtered;
     } catch (err) {
         console.error('[main.js] 降级渲染失败:', err);
+        return false;
     }
 }
 
@@ -21467,11 +21597,17 @@ async function performSearch(
     if (!isCurrent()) {
         return false;
     }
+    let committed = false;
     if (window.ExamActions && typeof window.ExamActions.displayExams === 'function') {
-        window.ExamActions.displayExams(searchResults);
+        committed = window.ExamActions.displayExams(searchResults, {
+            commitReceipt: options.commitReceipt
+        }) === true;
     } else if (typeof window.displayExams === 'function') {
-        window.displayExams(searchResults);
+        committed = window.displayExams(searchResults, {
+            commitReceipt: options.commitReceipt
+        }) === true;
     }
+    return committed ? searchResults : false;
 }
 
 async function toggleBulkDelete() {

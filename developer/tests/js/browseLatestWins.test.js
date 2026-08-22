@@ -165,8 +165,16 @@ const sandbox = {
         updateBrowseTitle() {}
     },
     ExamActions: {
-        loadExamList(exams) { rendered.push(Array.from(exams, (exam) => exam.id)); },
-        displayExams(exams) { rendered.push(Array.from(exams, (exam) => exam.id)); }
+        loadExamList(exams, options = {}) {
+            rendered.push(Array.from(exams, (exam) => exam.id));
+            sandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+            return exams;
+        },
+        displayExams(exams, options = {}) {
+            rendered.push(Array.from(exams, (exam) => exam.id));
+            sandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+            return true;
+        }
     },
     AppData: {
         ready: Promise.resolve(),
@@ -524,11 +532,15 @@ const integrationSandbox = {
             integrationSandbox.__browseFrequencyFilter = value;
             return value;
         },
-        loadExamList(exams) {
+        loadExamList(exams, options = {}) {
             integrationRenders.push(Array.from(exams, (exam) => exam.id));
+            integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
             return exams;
         },
-        displayExams(exams) { return exams; }
+        displayExams(exams, options = {}) {
+            integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+            return true;
+        }
     },
     AppLazyLoader: {
         ensureGroup() { return Promise.resolve(true); }
@@ -589,22 +601,35 @@ assert.ok(
 const productionIntegrationGetBrowse = integrationSandbox.AppData.preferences.getBrowse;
 const staleBrowseControlSeed = deferred();
 let staleBrowseControlSeedReads = 0;
+let staleBrowseControlSeedCallerCurrent = true;
 integrationSandbox.AppData.preferences.getBrowse = function getStaleBrowseControlSeed() {
     staleBrowseControlSeedReads += 1;
     return staleBrowseControlSeed.promise;
 };
-const browseControlSeed = integrationSandbox.setupBrowseControls();
+const staleBrowseControlSeedWaiter = integrationSandbox.setupBrowseControls({
+    isCurrent() { return staleBrowseControlSeedCallerCurrent; }
+});
 await waitForCondition(
     () => staleBrowseControlSeedReads === 1,
-    'Browse controls must enter the persisted seed read before the live frequency intent'
+    'the first Browse-controls waiter must enter the shared persisted seed read'
 );
+const currentBrowseControlSeedWaiter = integrationSandbox.setupBrowseControls({
+    isCurrent() { return true; }
+});
 const liveFrequencyIndex = deferred();
 integrationIndexResolvers.push(liveFrequencyIndex);
 integrationSandbox.filterByFrequency('high');
 liveFrequencyIndex.resolve([{ id: 'live-frequency-high', frequency: 7 }]);
+staleBrowseControlSeedCallerCurrent = false;
 staleBrowseControlSeed.resolve({ sortMode: 'default', frequencyFilter: 'all' });
-assert.strictEqual(await browseControlSeed, true);
+assert.strictEqual(await staleBrowseControlSeedWaiter, false);
+assert.strictEqual(await currentBrowseControlSeedWaiter, true);
 await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    staleBrowseControlSeedReads,
+    1,
+    'a stale waiter must not discard and reread the shared controls seed for a current waiter'
+);
 assert.strictEqual(
     integrationSandbox.__browseFrequencyFilter,
     'high',
@@ -715,6 +740,57 @@ assert.deepStrictEqual(
     integrationRenders,
     [],
     'a progress snapshot captured before a reset must not repaint after the reset epoch closes'
+);
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+const successfulProjectionRecords = deferred();
+const successfulProjectionIndex = deferred();
+const failedNewerProjectionRecords = deferred();
+const failedNewerProjectionIndex = deferred();
+integrationPracticeRecordResolvers.push(
+    successfulProjectionRecords,
+    failedNewerProjectionRecords
+);
+integrationIndexResolvers.push(successfulProjectionIndex, failedNewerProjectionIndex);
+const projectionUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+const successfulProjection = integrationSandbox.syncPracticeRecords({ forceRender: true });
+successfulProjectionRecords.resolve([{ id: 'successful-projection-record' }]);
+successfulProjectionIndex.resolve([{ id: 'successful-projection-index' }]);
+assert.deepStrictEqual(
+    Array.from(await successfulProjection, (record) => record.id),
+    ['successful-projection-record']
+);
+const failedNewerProjection = integrationSandbox.syncPracticeRecords({ forceRender: true });
+failedNewerProjectionRecords.resolve([{ id: 'failed-newer-projection-record' }]);
+failedNewerProjectionIndex.reject(new Error('newer projection read failed'));
+await assert.rejects(failedNewerProjection, /newer projection read failed/);
+integrationSandbox.__endBrowseUserResultsRequest(projectionUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationCompletionRefreshes,
+    [['successful-projection-record']],
+    'a failed newer sync must not invalidate an already successful completion projection'
+);
+assert.deepStrictEqual(
+    integrationAnchorIndexes,
+    [['successful-projection-index']],
+    'a failed newer sync must not invalidate the successful Browse anchor projection'
+);
+assert.deepStrictEqual(
+    integrationPracticeUpdates,
+    [{
+        records: ['successful-projection-record'],
+        index: ['successful-projection-index']
+    }],
+    'the successful direct sync must keep the baseline Practice commit contract'
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [['successful-projection-index']],
+    'the successful queued Browse projection must render after the foreground request settles'
 );
 
 const identicalHeadIndex = deferred();
@@ -1136,9 +1212,10 @@ vm.runInContext(integrationExamActionsSource, integrationContext, {
     filename: 'js/app/examActions.js'
 });
 const integrationProductionExamListLoader = integrationSandbox.ExamActions.loadExamList;
-integrationSandbox.ExamActions.loadExamList = function captureResetRecoveryRender(exams) {
+integrationSandbox.ExamActions.loadExamList = function captureResetRecoveryRender(exams, options = {}) {
     const snapshot = Array.isArray(exams) ? exams : [];
     integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
     return snapshot;
 };
 
@@ -1548,10 +1625,11 @@ await establishFailedIntegrationFunctionalReset(
 integrationRenders.length = 0;
 const displayBeforeLibraryEpochForeground = integrationSandbox.ExamActions.displayExams;
 const libraryEpochForegroundDisplays = [];
-integrationSandbox.ExamActions.displayExams = function captureLibraryEpochForeground(exams) {
+integrationSandbox.ExamActions.displayExams = function captureLibraryEpochForeground(exams, options = {}) {
     const snapshot = Array.isArray(exams) ? exams : [];
     libraryEpochForegroundDisplays.push(Array.from(snapshot, (exam) => exam && exam.id));
-    return snapshot;
+    integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+    return true;
 };
 const oldLibraryForegroundIndex = deferred();
 integrationIndexResolvers.push(oldLibraryForegroundIndex);
@@ -1643,9 +1721,10 @@ integrationSandbox.browseController.resetToDefault = function captureApplyFailur
 integrationSandbox.showMessage = function captureApplyFailureToast(...args) {
     applyFailureToasts.push(args);
 };
-integrationSandbox.ExamActions.loadExamList = function captureApplyFailureFallback(exams) {
+integrationSandbox.ExamActions.loadExamList = function captureApplyFailureFallback(exams, options = {}) {
     const snapshot = Array.isArray(exams) ? exams : [];
     applyFailureFallbackRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
     return snapshot;
 };
 setBrowseFilterStateBeforeApplyFailure('P2', 'reading');
@@ -1732,10 +1811,11 @@ integrationRenders.length = 0;
 integrationSearchInput.value = 'raw-background-query';
 integrationSandbox.__browseFrequencyFilter = 'all';
 const displayBeforeExplicitTokenSearch = integrationSandbox.ExamActions.displayExams;
-integrationSandbox.ExamActions.displayExams = function captureExplicitTokenSearch(exams) {
+integrationSandbox.ExamActions.displayExams = function captureExplicitTokenSearch(exams, options = {}) {
     const snapshot = Array.isArray(exams) ? exams : [];
     integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
-    return snapshot;
+    integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+    return true;
 };
 const explicitTokenSearchIndex = deferred();
 integrationIndexResolvers.push(explicitTokenSearchIndex);
@@ -1835,10 +1915,11 @@ assert.deepStrictEqual(integrationRenders, [
 ]);
 
 const displayBeforeForegroundRecoveryMatrix = integrationSandbox.ExamActions.displayExams;
-integrationSandbox.ExamActions.displayExams = function captureForegroundSearch(exams) {
+integrationSandbox.ExamActions.displayExams = function captureForegroundSearch(exams, options = {}) {
     const snapshot = Array.isArray(exams) ? exams : [];
     integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
-    return snapshot;
+    integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+    return true;
 };
 const foregroundRecoveryScenarios = [
     {
@@ -1912,6 +1993,157 @@ for (const scenario of foregroundRecoveryScenarios) {
     assert.deepStrictEqual(integrationRenders.at(-1), [`progress-after-${scenario.name}`]);
 }
 integrationSandbox.ExamActions.displayExams = displayBeforeForegroundRecoveryMatrix;
+
+await establishFailedIntegrationFunctionalReset(
+    'the folder-filter recovery fixture must start from failed-reset debt'
+);
+integrationRenders.length = 0;
+integrationSearchInput.value = '';
+const browseControllerBeforeFolderRecovery = integrationSandbox.browseController;
+const displayBeforeFolderRecovery = integrationSandbox.displayExams;
+const refreshListeningBeforeFolderRecovery =
+    integrationSandbox.refreshListeningAvailabilityUI;
+const BrowseControllerBeforeFolderRecovery = integrationSandbox.BrowseController;
+const browseModesBeforeFolderRecovery = integrationSandbox.BROWSE_MODES;
+const folderRecoveryBrowseControllerSource = fs.readFileSync(
+    path.join(repoRoot, 'js/app/browseController.js'),
+    'utf8'
+);
+vm.runInContext(folderRecoveryBrowseControllerSource, integrationContext, {
+    filename: 'js/app/browseController.js'
+});
+const folderRecoveryController = integrationSandbox.browseController;
+folderRecoveryController.currentMode = 'frequency-p1';
+folderRecoveryController.activeFilter = 'high';
+integrationSandbox.__browseFilterMode = 'frequency-p1';
+integrationSandbox.__browsePath = 'ListeningPractice/100 P1';
+integrationSandbox.displayExams = function captureFolderRecoveryCommit(exams, options = {}) {
+    const snapshot = Array.isArray(exams) ? exams : [];
+    integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    integrationSandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
+    return true;
+};
+const folderRecoveryRequestId = integrationSandbox.__beginBrowseUserResultsRequest();
+const folderRecoveryEpoch = integrationSandbox.__captureBrowseForegroundRenderEpoch();
+const folderRecoveryResult = folderRecoveryController.filterByFolder(
+    'high',
+    [
+        {
+            id: 'folder-recovery-high',
+            path: 'ListeningPractice/100 P1/P1 高频（35）/question.html',
+            type: 'listening'
+        },
+        {
+            id: 'folder-recovery-medium',
+            path: 'ListeningPractice/100 P1/P1 中频(48)/question.html',
+            type: 'listening'
+        }
+    ],
+    folderRecoveryRequestId,
+    { foregroundEpoch: folderRecoveryEpoch }
+);
+integrationSandbox.__endBrowseUserResultsRequest(folderRecoveryRequestId);
+assert.ok(Array.isArray(folderRecoveryResult));
+assert.deepStrictEqual(
+    Array.from(folderRecoveryResult, (exam) => exam.id),
+    ['folder-recovery-high']
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [['folder-recovery-high']],
+    'the direct folder path must commit through the authoritative foreground boundary'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'succeeded',
+    'a receipted folder DOM commit must recover failed-reset debt'
+);
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'progress-after-folder-recovery' }]
+);
+await waitForCondition(
+    () => integrationRenders.length === 2,
+    'progress must resume after the folder path recovers failed-reset debt'
+);
+assert.deepStrictEqual(integrationRenders.at(-1), ['progress-after-folder-recovery']);
+integrationSandbox.displayExams = displayBeforeFolderRecovery;
+integrationSandbox.browseController = browseControllerBeforeFolderRecovery;
+if (refreshListeningBeforeFolderRecovery === undefined) {
+    integrationSandbox.refreshListeningAvailabilityUI = undefined;
+} else {
+    integrationSandbox.refreshListeningAvailabilityUI =
+        refreshListeningBeforeFolderRecovery;
+}
+if (BrowseControllerBeforeFolderRecovery === undefined) {
+    integrationSandbox.BrowseController = undefined;
+} else {
+    integrationSandbox.BrowseController = BrowseControllerBeforeFolderRecovery;
+}
+if (browseModesBeforeFolderRecovery === undefined) {
+    integrationSandbox.BROWSE_MODES = undefined;
+} else {
+    integrationSandbox.BROWSE_MODES = browseModesBeforeFolderRecovery;
+}
+integrationSandbox.__browseFilterMode = 'default';
+integrationSandbox.__browsePath = null;
+
+await establishFailedIntegrationFunctionalReset(
+    'the rejected type-index fixture must start from failed-reset debt'
+);
+integrationRenders.length = 0;
+const rejectedTypeIndex = deferred();
+integrationIndexResolvers.push(rejectedTypeIndex);
+const rejectedTypeFilter = integrationSandbox.filterByType('reading');
+rejectedTypeIndex.reject(new Error('type filter index read failed'));
+assert.strictEqual(await rejectedTypeFilter, false);
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'an index-read rejection must not manufacture an empty-list DOM commit'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'an index-read rejection must leave failed-reset debt intact'
+);
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'progress-blocked-after-type-index-rejection' }]
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(integrationRenders, []);
+
+await establishFailedIntegrationFunctionalReset(
+    'the missing-commit-receipt fixture must start from failed-reset debt'
+);
+integrationRenders.length = 0;
+const receiptedLoaderBeforeMissingCommit = integrationSandbox.ExamActions.loadExamList;
+integrationSandbox.ExamActions.loadExamList = function returnWithoutDomCommit(exams) {
+    return Array.isArray(exams) ? exams : [];
+};
+assert.strictEqual(
+    await integrationSandbox.__renderBrowseResultsForState(
+        [{ id: 'uncommitted-foreground-result' }],
+        null,
+        { foreground: true }
+    ),
+    false,
+    'a resolved loader value without a DOM commit receipt must fail closed'
+);
+assert.deepStrictEqual(integrationRenders, []);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'only a terminal DOM commit receipt may clear failed-reset debt'
+);
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'progress-blocked-after-missing-commit-receipt' }]
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(integrationRenders, []);
+integrationSandbox.ExamActions.loadExamList = receiptedLoaderBeforeMissingCommit;
 
 await establishFailedIntegrationFunctionalReset(
     'the pending-filter recovery fixture must start from a failed functional barrier'
@@ -2154,10 +2386,11 @@ sandbox.showView = productionShowView;
 const examActionsSource = fs.readFileSync(path.join(repoRoot, 'js/app/examActions.js'), 'utf8');
 vm.runInContext(examActionsSource, context, { filename: 'js/app/examActions.js' });
 const productionLoadExamList = sandbox.ExamActions.loadExamList;
-sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams) {
-    const result = productionLoadExamList.call(this, exams);
+sandbox.ExamActions.loadExamList = function captureExamActionsRender(exams, options = {}) {
+    const result = productionLoadExamList.call(this, exams, options);
     if (Array.isArray(result)) {
         rendered.push(Array.from(result, (exam) => exam.id));
+        sandbox.__markBrowseRenderCommitReceipt?.(options.commitReceipt);
     }
     return result;
 };
@@ -2257,13 +2490,13 @@ const terminalOwnerIndex = deferred();
 resolverQueue.push(terminalOwnerIndex);
 const terminalResetStates = [];
 const ownerAwareLoadExamList = sandbox.ExamActions.loadExamList;
-sandbox.ExamActions.loadExamList = function captureTerminalResetState(exams) {
+sandbox.ExamActions.loadExamList = function captureTerminalResetState(exams, options = {}) {
     terminalResetStates.push({
         mode: sandbox.__browseFilterMode,
         path: sandbox.__browsePath,
         frequency: sandbox.__browseFrequencyFilter
     });
-    return ownerAwareLoadExamList.call(this, exams);
+    return ownerAwareLoadExamList.call(this, exams, options);
 };
 const terminalOwnerReset = sandbox.showView('browse', true);
 terminalOwnerIndex.resolve(allExams);
