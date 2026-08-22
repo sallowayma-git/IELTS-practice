@@ -793,6 +793,72 @@ assert.deepStrictEqual(
     'the successful queued Browse projection must render after the foreground request settles'
 );
 
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+const acceptedPublicationRecords = deferred();
+const acceptedPublicationIndex = deferred();
+const rejectedPublicationRecords = deferred();
+const rejectedPublicationIndex = deferred();
+integrationPracticeRecordResolvers.push(
+    acceptedPublicationRecords,
+    rejectedPublicationRecords
+);
+integrationIndexResolvers.push(acceptedPublicationIndex, rejectedPublicationIndex);
+const publicationUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+const acceptedPublication = integrationSandbox.syncPracticeRecords({ forceRender: true });
+acceptedPublicationRecords.resolve([{ id: 'accepted-publication-record' }]);
+acceptedPublicationIndex.resolve([{ id: 'accepted-publication-index' }]);
+assert.deepStrictEqual(
+    Array.from(await acceptedPublication, (record) => record.id),
+    ['accepted-publication-record']
+);
+const productionCompletionRebuild = integrationSandbox.rebuildBrowseCompletionIndex;
+integrationSandbox.rebuildBrowseCompletionIndex = function rejectProjectionPublication() {
+    throw new Error('newer projection publication failed');
+};
+const rejectedPublication = integrationSandbox.syncPracticeRecords({ forceRender: true });
+rejectedPublicationRecords.resolve([{ id: 'rejected-publication-record' }]);
+rejectedPublicationIndex.resolve([{ id: 'rejected-publication-index' }]);
+assert.deepStrictEqual(
+    Array.from(await rejectedPublication, (record) => record.id),
+    ['rejected-publication-record'],
+    'Browse publication failure must not change the baseline Practice sync result'
+);
+integrationSandbox.rebuildBrowseCompletionIndex = productionCompletionRebuild;
+integrationSandbox.__endBrowseUserResultsRequest(publicationUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationCompletionRefreshes,
+    [['accepted-publication-record']],
+    'a rejected newer publication must preserve the accepted completion projection'
+);
+assert.deepStrictEqual(
+    integrationAnchorIndexes,
+    [['accepted-publication-index']],
+    'a rejected newer publication must preserve the accepted anchor projection'
+);
+assert.deepStrictEqual(
+    integrationPracticeUpdates,
+    [
+        {
+            records: ['accepted-publication-record'],
+            index: ['accepted-publication-index']
+        },
+        {
+            records: ['rejected-publication-record'],
+            index: ['rejected-publication-index']
+        }
+    ],
+    'Browse publication rejection must not suppress either Practice update'
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [['accepted-publication-index']],
+    'a rejected newer publication must not invalidate the accepted queued repaint'
+);
+
 const identicalHeadIndex = deferred();
 const redundantTailPoison = {
     get promise() {
@@ -2119,9 +2185,21 @@ await establishFailedIntegrationFunctionalReset(
 );
 integrationRenders.length = 0;
 const receiptedLoaderBeforeMissingCommit = integrationSandbox.ExamActions.loadExamList;
-integrationSandbox.ExamActions.loadExamList = function returnWithoutDomCommit(exams) {
-    return Array.isArray(exams) ? exams : [];
+const browseControllerBeforeMissingCommit = integrationSandbox.browseController;
+const missingContainerView = {
+    render() {
+        return false;
+    }
 };
+integrationSandbox.browseController = Object.assign({}, browseControllerBeforeMissingCommit, {
+    getExamListView() {
+        return missingContainerView;
+    },
+    ensureExamListView() {
+        return missingContainerView;
+    }
+});
+integrationSandbox.ExamActions.loadExamList = integrationProductionExamListLoader;
 assert.strictEqual(
     await integrationSandbox.__renderBrowseResultsForState(
         [{ id: 'uncommitted-foreground-result' }],
@@ -2144,6 +2222,7 @@ integrationSandbox.refreshBrowseProgressFromRecords(
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepStrictEqual(integrationRenders, []);
 integrationSandbox.ExamActions.loadExamList = receiptedLoaderBeforeMissingCommit;
+integrationSandbox.browseController = browseControllerBeforeMissingCommit;
 
 await establishFailedIntegrationFunctionalReset(
     'the pending-filter recovery fixture must start from a failed functional barrier'

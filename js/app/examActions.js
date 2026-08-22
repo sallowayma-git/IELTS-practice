@@ -1552,11 +1552,14 @@
         }
 
         if (view) {
-            view.render(renderExams, {
+            const committed = view.render(renderExams, {
                 loadingSelector: '#browse-view .loading',
                 selectionMode: effectiveOptions.selectionMode || '',
                 customSuiteDraft: effectiveOptions.customSuiteDraft || null
             });
+            if (committed !== true) {
+                return false;
+            }
             setupExamActionHandlers();
             if (typeof global.__markBrowseRenderCommitReceipt === 'function') {
                 global.__markBrowseRenderCommitReceipt(effectiveOptions.commitReceipt);

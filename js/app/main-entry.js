@@ -361,6 +361,20 @@
             && left.pendingFilterIntentGeneration === right.pendingFilterIntentGeneration;
     }
 
+    function retireCompletedBrowseGroupLeaseBarrier(lease, barrier) {
+        if (!lease
+            || !barrier
+            || browseGroupLease !== lease
+            || lease.functionalResetBarrier !== barrier
+            || browseFunctionalResetBarrier !== null
+            || completedBrowseFunctionalResetBarrier !== barrier
+            || browseFunctionalResetState.status !== 'succeeded') {
+            return false;
+        }
+        lease.functionalResetBarrier = null;
+        return true;
+    }
+
     function isBrowseGroupLeaseCurrent(lease) {
         if (!lease
             || lease.navigationGeneration !== appNavigationIntentGeneration
@@ -940,7 +954,14 @@
                     completeBrowseFunctionalResetBarrier(resetBarrier, false);
                     return false;
                 }
-                return completeBrowseFunctionalResetBarrier(resetBarrier, true);
+                var completed = completeBrowseFunctionalResetBarrier(resetBarrier, true);
+                if (completed) {
+                    retireCompletedBrowseGroupLeaseBarrier(
+                        synchronizationLease,
+                        resetBarrier
+                    );
+                }
+                return completed;
             }, function (error) {
                 completeBrowseFunctionalResetBarrier(resetBarrier, false);
                 throw error;

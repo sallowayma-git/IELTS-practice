@@ -80,6 +80,32 @@ function it(name, fn) {
     }
 }
 
+describe('LegacyExamListView.render commit contract', () => {
+    it('fails closed when its container is unavailable', () => {
+        const { LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+
+        assert.strictEqual(view.render([]), false);
+    });
+
+    it('reports success only after committing the empty state', () => {
+        const { LegacyExamListView } = loadLegacyExamListView();
+        const view = new LegacyExamListView();
+        const container = {};
+        let emptyStateCommits = 0;
+        view._getContainer = () => container;
+        view._getLoadingIndicator = () => null;
+        view._renderEmptyState = (target) => {
+            assert.strictEqual(target, container);
+            emptyStateCommits += 1;
+        };
+        view._hideLoading = () => {};
+
+        assert.strictEqual(view.render([]), true);
+        assert.strictEqual(emptyStateCommits, 1);
+    });
+});
+
 describe('LegacyExamListView._getCompletionStatus', () => {
     it('reads score and timestamp from matching suite child entries', () => {
         const { windowStub, LegacyExamListView } = loadLegacyExamListView();

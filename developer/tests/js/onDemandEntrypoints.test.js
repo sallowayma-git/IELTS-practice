@@ -257,6 +257,66 @@ async function testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView() {
     recordResult('原始 Browse runtime 加载等待功能重置后再同步视图', true);
 }
 
+async function testCompletedBrowseResetBarrierRetiresCachedLease() {
+    const harness = createHarness();
+    harness.windowStub.document.readyState = 'loading';
+    const originalQuerySelector = harness.windowStub.document.querySelector.bind(
+        harness.windowStub.document
+    );
+    harness.windowStub.document.querySelector = function querySelector(selector) {
+        if (selector === '.view.active') return { id: 'browse-view' };
+        return originalQuerySelector(selector);
+    };
+    let resultsRequestId = 0;
+    let initializationCalls = 0;
+    harness.windowStub.__beginBrowseResultsRequest = function beginBrowseResultsRequest() {
+        resultsRequestId += 1;
+        return resultsRequestId;
+    };
+    harness.windowStub.__getBrowseResultsRequestId = function getBrowseResultsRequestId() {
+        return resultsRequestId;
+    };
+    harness.windowStub.__isBrowseResultsRequestCurrent = function isBrowseResultsRequestCurrent(
+        requestId
+    ) {
+        return requestId === resultsRequestId;
+    };
+    harness.windowStub.initializeBrowseView = function initializeBrowseView() {
+        initializationCalls += 1;
+        harness.windowStub.__beginBrowseResultsRequest();
+        return Promise.resolve(true);
+    };
+
+    loadScript('js/app/main-entry.js', harness.context);
+    const resetBarrier = harness.windowStub.AppEntry.registerBrowseFunctionalResetBarrier(
+        Promise.resolve(true)
+    );
+    assert.strictEqual(await resetBarrier, true);
+    assert.strictEqual(await harness.windowStub.AppEntry.ensureBrowseGroup(), true);
+    assert.strictEqual(initializationCalls, 1);
+    assert.strictEqual(
+        harness.windowStub.__getBrowseFunctionalResetState().status,
+        'succeeded'
+    );
+
+    const userFilterRequestId = harness.windowStub.__beginBrowseResultsRequest();
+    assert.strictEqual(await harness.windowStub.AppEntry.ensureBrowseGroup(), true);
+    assert.strictEqual(
+        initializationCalls,
+        1,
+        'an already completed barrier must not force a second active-view synchronization'
+    );
+    assert.strictEqual(
+        resultsRequestId,
+        userFilterRequestId,
+        'cached synchronization must not steal the newer user filter token'
+    );
+    recordResult('已完成的 Browse 重置屏障会从缓存 lease 精确退休', true, {
+        initializationCalls,
+        userFilterRequestId
+    });
+}
+
 async function testFailedBrowseResetBarrierStopsQueuedLoaderProxy() {
     const harness = createHarness();
     const runtimeReady = deferred();
@@ -2336,6 +2396,7 @@ async function main() {
     try {
         await testRandomPracticeEnsuresBrowseRuntime(createHarness());
         await testRawBrowseRuntimeLoadDoesNotSynchronizeActiveView();
+        await testCompletedBrowseResetBarrierRetiresCachedLease();
         await testFailedBrowseResetBarrierStopsQueuedLoaderProxy();
         await testAtomicForegroundRecoveryCancelsOnlyStaleRetryBarrier();
         await testColdFallbackLetsBrowseSynchronizationOwnRender();

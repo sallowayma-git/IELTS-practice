@@ -2657,7 +2657,7 @@
         options = options || {};
         var container = this._getContainer();
         if (!container) {
-            return;
+            return false;
         }
 
         var loadingSelector = options.loadingSelector || this.loadingSelector;
@@ -2667,7 +2667,7 @@
         if (normalizedExams.length === 0) {
             this._renderEmptyState(container, options.emptyState);
             this._hideLoading(loadingIndicator);
-            return;
+            return true;
         }
 
         var examList = this._createExamList();
@@ -2686,6 +2686,7 @@
 
         this._replaceContent(container, [examList]);
         this._hideLoading(loadingIndicator);
+        return true;
     };
 
     LegacyExamListView.prototype._createExamList = function _createExamList() {

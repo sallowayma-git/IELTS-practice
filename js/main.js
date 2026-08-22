@@ -315,8 +315,7 @@ async function syncPracticeRecords(options = {}) {
     const loadMode = mode === 'full' ? 'full' : 'summary';
     const practiceProjectionInvocation = ++browsePracticeProjectionInvocationSequence;
     const browseProgressSourceEpoch = {
-        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration'),
-        practiceProjectionGeneration: null
+        activeLibraryGeneration: readBrowseProgressGeneration('__getActiveLibraryGeneration')
     };
     let recordsUnchanged = false;
     console.log(`[System] 正在从存储中同步练习记录... (mode=${loadMode})`);
@@ -389,14 +388,25 @@ async function syncPracticeRecords(options = {}) {
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
-    // Publish Browse ownership only after this invocation has produced a
-    // complete snapshot. A failed newer invocation therefore cannot strand a
-    // successful repaint queued behind a foreground request. Conversely, an
-    // older success that settles after a newer success remains stale.
+    // Publish Browse ownership only after the derived completion state,
+    // anchors, and any active-view repaint have accepted this snapshot. A
+    // newer invocation that reads successfully but fails publication must not
+    // invalidate an older repaint already queued behind a foreground request.
     if (practiceProjectionInvocation > browsePracticeProjectionGeneration) {
-        browsePracticeProjectionGeneration = practiceProjectionInvocation;
-        browseProgressSourceEpoch.practiceProjectionGeneration = practiceProjectionInvocation;
-        refreshBrowseProgressFromRecords(records, examIndex, browseProgressSourceEpoch);
+        const projectionAccepted = refreshBrowseProgressFromRecords(
+            records,
+            examIndex,
+            browseProgressSourceEpoch,
+            { practiceProjectionGeneration: practiceProjectionInvocation }
+        );
+        if (projectionAccepted) {
+            browsePracticeProjectionGeneration = practiceProjectionInvocation;
+            Promise.resolve().then(() => {
+                flushPendingBrowseProgressRefresh();
+            }).catch((error) => {
+                console.warn('[Browse] 刷新浏览进度列表失败:', error);
+            });
+        }
     }
 
     console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
@@ -2082,13 +2092,32 @@ function flushPendingBrowseProgressRefresh() {
     });
 }
 
-function refreshBrowseProgressFromRecords(records, examIndex, refreshEpoch = null) {
+function refreshBrowseProgressFromRecords(
+    records,
+    examIndex,
+    refreshEpoch = null,
+    publication = null
+) {
     try {
         const recordSnapshot = Array.isArray(records) ? records : [];
         const indexSnapshot = Array.isArray(examIndex) ? examIndex : [];
+        const candidateValue = publication && publication.practiceProjectionGeneration;
+        const candidatePracticeProjectionGeneration = candidateValue != null
+            && Number.isFinite(Number(candidateValue))
+            ? Number(candidateValue)
+            : null;
+        if (candidatePracticeProjectionGeneration != null
+            && candidatePracticeProjectionGeneration <= browsePracticeProjectionGeneration) {
+            return false;
+        }
         const pendingEpoch = captureBrowseProgressRefreshEpoch(refreshEpoch);
         if (!isBrowseProgressRefreshEpochCurrent(pendingEpoch)) {
-            return;
+            return false;
+        }
+        const browseView = document.getElementById('browse-view');
+        const isBrowseActive = browseView && browseView.classList.contains('active');
+        if (isBrowseActive && typeof renderBrowseResultsForState !== 'function') {
+            return false;
         }
         if (typeof rebuildBrowseCompletionIndex === 'function') {
             rebuildBrowseCompletionIndex(recordSnapshot);
@@ -2096,17 +2125,25 @@ function refreshBrowseProgressFromRecords(records, examIndex, refreshEpoch = nul
         if (typeof updateBrowseAnchorsFromRecords === 'function') {
             updateBrowseAnchorsFromRecords(recordSnapshot, indexSnapshot);
         }
-        const browseView = document.getElementById('browse-view');
-        const isBrowseActive = browseView && browseView.classList.contains('active');
-        if (isBrowseActive && typeof renderBrowseResultsForState === 'function') {
+        if (isBrowseActive) {
+            if (candidatePracticeProjectionGeneration != null) {
+                pendingEpoch.practiceProjectionGeneration =
+                    candidatePracticeProjectionGeneration;
+            }
             pendingBrowseProgressRefresh = {
                 index: indexSnapshot,
                 epoch: pendingEpoch
             };
-            flushPendingBrowseProgressRefresh();
+            // Candidate projections are flushed by syncPracticeRecords only
+            // after their accepted generation becomes the public watermark.
+            if (candidatePracticeProjectionGeneration == null) {
+                flushPendingBrowseProgressRefresh();
+            }
         }
+        return true;
     } catch (error) {
         console.warn('[Browse] 刷新浏览进度失败:', error);
+        return false;
     }
 }
 
