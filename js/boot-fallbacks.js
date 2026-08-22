@@ -35,23 +35,29 @@
     return owner && typeof owner.resetToAll === 'function' ? owner : null;
   }
 
-  function invokeBrowseStateOwnerReset(owner, label) {
+  function isBrowseResetAttemptCurrent(options) {
+    return !options
+      || typeof options.isCurrent !== 'function'
+      || options.isCurrent() === true;
+  }
+
+  function invokeBrowseStateOwnerReset(owner, label, options) {
     if (!owner) {
       return Promise.resolve(false);
     }
     var reset = typeof owner.resetForActivation === 'function'
       ? owner.resetForActivation
       : owner.resetToAll;
-    return invokeBrowseResetDelegate(reset, owner, label);
+    return invokeBrowseResetDelegate(reset, owner, label, options);
   }
 
-  function invokeBrowseResetDelegate(delegate, context, label) {
-    if (typeof delegate !== 'function') {
+  function invokeBrowseResetDelegate(delegate, context, label, options) {
+    if (typeof delegate !== 'function' || !isBrowseResetAttemptCurrent(options)) {
       return Promise.resolve(false);
     }
     try {
-      return Promise.resolve(delegate.call(context)).then(function (result) {
-        return result !== false;
+      return Promise.resolve(delegate.call(context, options)).then(function (result) {
+        return isBrowseResetAttemptCurrent(options) && result !== false;
       }).catch(function (error) {
         console.warn('[Fallback] ' + label + '失败:', error);
         return false;
@@ -90,10 +96,14 @@
     });
   }
 
-  function resetBrowseFunctionalStateForFallback() {
+  function resetBrowseFunctionalStateForFallback(options) {
     var activationOwner = getBrowseFilterStateOwner();
     if (activationOwner && typeof activationOwner.resetForActivation === 'function') {
-      return invokeBrowseStateOwnerReset(activationOwner, '通过题库状态 owner 完成激活前重置')
+      return invokeBrowseStateOwnerReset(
+        activationOwner,
+        '通过题库状态 owner 完成激活前重置',
+        options
+      )
         .then(function (succeeded) {
           return { succeeded: succeeded, ownerLoaded: false };
         });
@@ -115,7 +125,11 @@
       if (index >= delegates.length) {
         var existingOwner = getBrowseFilterStateOwner();
         if (existingOwner) {
-          return invokeBrowseStateOwnerReset(existingOwner, '通过稳定题库状态 owner 重置')
+          return invokeBrowseStateOwnerReset(
+            existingOwner,
+            '通过稳定题库状态 owner 重置',
+            options
+          )
             .then(function (succeeded) {
             return { succeeded: succeeded, ownerLoaded: false };
           });
@@ -124,14 +138,18 @@
           if (!loaded || !loaded.owner) {
             return { succeeded: false, ownerLoaded: false };
           }
-          return invokeBrowseStateOwnerReset(loaded.owner, '通过延迟加载的题库状态 owner 重置')
+          return invokeBrowseStateOwnerReset(
+            loaded.owner,
+            '通过延迟加载的题库状态 owner 重置',
+            options
+          )
             .then(function (succeeded) {
             return { succeeded: succeeded, ownerLoaded: loaded.loaded === true };
           });
         });
       }
       var candidate = delegates[index];
-      return invokeBrowseResetDelegate(candidate.fn, candidate.context, candidate.label)
+      return invokeBrowseResetDelegate(candidate.fn, candidate.context, candidate.label, options)
         .then(function (succeeded) {
           return succeeded
             ? { succeeded: true, ownerLoaded: false }
@@ -185,7 +203,17 @@
         // Register the functional barrier before Browse becomes active. Deferring
         // the reset body closes the synchronous activation-to-registration gap.
         browseFunctionalReset = Promise.resolve().then(function beginBrowseFunctionalReset() {
-          return resetBrowseFunctionalStateForFallback();
+          return resetBrowseFunctionalStateForFallback({
+            isCurrent: function isFunctionalResetCurrent() {
+              return !browseResetBarrierRegistered
+                || (!!browseFunctionalResetBarrier
+                && !!window.AppEntry
+                && typeof window.AppEntry.isBrowseFunctionalResetBarrierCurrent === 'function'
+                && window.AppEntry.isBrowseFunctionalResetBarrierCurrent(
+                  browseFunctionalResetBarrier
+                ));
+            }
+          });
         });
         if (window.AppEntry
           && typeof window.AppEntry.registerBrowseFunctionalResetBarrier === 'function') {
@@ -285,11 +313,25 @@
               && browseResetBarrierRegistered
               && window.AppEntry
               && typeof window.AppEntry.ensureBrowseGroup === 'function') {
-              return Promise.resolve(window.AppEntry.ensureBrowseGroup()).then(function (result) {
+              var groupRefresh = window.AppEntry.ensureBrowseGroup();
+              if (typeof window.AppEntry.updateBrowseFunctionalResetResultsRequest === 'function') {
+                window.AppEntry.updateBrowseFunctionalResetResultsRequest(
+                  browseFunctionalResetBarrier
+                );
+              }
+              return Promise.resolve(groupRefresh).then(function (result) {
                 return result !== false;
               });
             }
-            return runBrowseRefresh();
+            var refreshResult = runBrowseRefresh();
+            if (browseFunctionalResetBarrier
+              && window.AppEntry
+              && typeof window.AppEntry.updateBrowseFunctionalResetResultsRequest === 'function') {
+              window.AppEntry.updateBrowseFunctionalResetResultsRequest(
+                browseFunctionalResetBarrier
+              );
+            }
+            return refreshResult;
           });
         } else {
           browseRefresh = runBrowseRefresh();

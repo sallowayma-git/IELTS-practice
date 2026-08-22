@@ -1157,35 +1157,58 @@
         }
     }
 
-    async function resetBrowseFunctionalStateForActivation() {
+    async function resetBrowseFunctionalStateForActivation(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function'
+            ? options.isCurrent
+            : () => true;
         try {
+            if (!isCurrent()) {
+                return false;
+            }
             const manager = ensureBrowseStateManagerForReset();
             if (manager && manager.ready && typeof manager.ready.then === 'function') {
                 await manager.ready;
+                if (!isCurrent()) {
+                    return false;
+                }
             }
             if (typeof global.setupBrowseControls === 'function') {
                 await global.setupBrowseControls();
+                if (!isCurrent()) {
+                    return false;
+                }
             }
-            if (!applyBrowseResetState(null)) {
+            if (!isCurrent() || !applyBrowseResetState(null)) {
                 return false;
             }
 
             if (typeof global.saveBrowseViewPreferences !== 'function'
-                || typeof global.flushBrowsePreferenceWrites !== 'function') {
+                || typeof global.flushBrowsePreferenceWrites !== 'function'
+                || !isCurrent()) {
                 return false;
             }
             global.saveBrowseViewPreferences({
                 lastFilter: { category: 'all', type: 'all' }
             });
             const committedBrowsePreferences = await global.flushBrowsePreferenceWrites();
-            if (!committedBrowsePreferences
+            if (!isCurrent()
+                || !committedBrowsePreferences
                 || !isAllBrowseFilter(committedBrowsePreferences.lastFilter)) {
                 return false;
             }
             if (manager && typeof manager.persistState === 'function') {
+                if (!isCurrent()) {
+                    return false;
+                }
                 await manager.persistState();
+                if (!isCurrent()) {
+                    return false;
+                }
             }
-            if (!await persistBrowseFrequencyReset() || !isBrowseManagerReset(manager)) {
+            if (!isCurrent()
+                || !await persistBrowseFrequencyReset()
+                || !isCurrent()
+                || !isBrowseManagerReset(manager)) {
                 return false;
             }
             const preferences = global.AppData && global.AppData.preferences;
@@ -1193,7 +1216,7 @@
                 return false;
             }
             const persistedBrowse = await preferences.getBrowse();
-            return isPersistedBrowseReset(
+            return isCurrent() && isPersistedBrowseReset(
                 persistedBrowse,
                 !!(manager && typeof manager.persistState === 'function')
             );
@@ -1371,6 +1394,9 @@
         if (Array.isArray(examIndex) && examIndex.length > 0) {
             let result = loadExamList(examIndex);
             await beginBrowseResetPersistence();
+            if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+                return false;
+            }
             resetIndexSnapshot = closeBrowseResetIntent(
                 resetIntent,
                 resetIndexSnapshotVersion
@@ -1390,6 +1416,9 @@
         }
 
         await beginBrowseResetPersistence();
+        if (!isBrowseResetCurrent(interactionId, renderRequestId)) {
+            return false;
+        }
         closeBrowseResetIntent(resetIntent, resetIndexSnapshotVersion);
         console.warn('[ExamActions] 全局题库加载适配器不可用，已跳过空数组渲染');
         return false;
@@ -1407,12 +1436,35 @@
             && typeof global.__beginBrowseResetIntent === 'function') {
             resetIntent = global.__beginBrowseResetIntent();
         }
+        const functionalResetRecovery = global.AppEntry
+            && typeof global.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
+            ? global.AppEntry.captureBrowseFunctionalResetRecovery()
+            : null;
+        let functionalResetRecoverySucceeded = false;
         try {
-            return await performBrowseViewResetToAll(resetIntent);
+            const resetPromise = performBrowseViewResetToAll(resetIntent);
+            if (functionalResetRecovery
+                && global.AppEntry
+                && typeof global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest === 'function') {
+                global.AppEntry.updateBrowseFunctionalResetRecoveryResultsRequest(
+                    functionalResetRecovery
+                );
+            }
+            const result = await resetPromise;
+            functionalResetRecoverySucceeded = result !== false;
+            return result;
         } catch (error) {
             console.warn('[ExamActions] 重置浏览视图失败:', error);
             return false;
         } finally {
+            if (functionalResetRecovery
+                && global.AppEntry
+                && typeof global.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
+                global.AppEntry.completeBrowseFunctionalResetRecovery(
+                    functionalResetRecovery,
+                    functionalResetRecoverySucceeded
+                );
+            }
             if (typeof global.__endBrowseResetIntent === 'function') {
                 global.__endBrowseResetIntent(resetIntent);
             }

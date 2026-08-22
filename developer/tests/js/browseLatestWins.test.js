@@ -20,6 +20,14 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
+async function waitForCondition(predicate, message, attempts = 100) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        if (predicate()) return;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    throw new Error(message || 'timed out waiting for condition');
+}
+
 function createClassList() {
     const values = new Set();
     return {
@@ -486,6 +494,7 @@ const integrationSandbox = {
     },
     getCurrentCategory() { return integrationBrowseState.category; },
     getCurrentExamType() { return integrationBrowseState.type; },
+    getPersistedBrowseFilter() { return null; },
     setBrowseTitle() {},
     formatBrowseTitle(category, type) { return `${category}:${type}`; },
     normalizeExamType(type) { return type || 'all'; },
@@ -681,6 +690,35 @@ assert.deepStrictEqual(
     'a progress snapshot captured before a reset must not repaint after the reset epoch closes'
 );
 
+integrationRenders.length = 0;
+const preCommitProgressRecords = deferred();
+const preCommitProgressIndex = deferred();
+integrationPracticeRecordResolvers.push(preCommitProgressRecords);
+integrationIndexResolvers.push(preCommitProgressIndex);
+const dataEpochUserRequest = integrationSandbox.__beginBrowseUserResultsRequest();
+const preCommitProgressSync = integrationSandbox.syncPracticeRecords({ forceRender: true });
+preCommitProgressRecords.resolve([{ id: 'pre-commit-progress-record' }]);
+preCommitProgressIndex.resolve([{ id: 'pre-commit-progress' }]);
+await preCommitProgressSync;
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'progress must remain queued while the user results request is retained'
+);
+emitIntegrationDataCommitted([{ store: 'practiceSummaries' }]);
+integrationSandbox.__endBrowseUserResultsRequest(dataEpochUserRequest);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'a pre-commit pending progress snapshot must not replay after the practice-data epoch changes'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    dataEpochUserRequest,
+    'discarding data-stale pending progress must not consume a Browse results token'
+);
+
 const identicalHeadIndex = deferred();
 const redundantTailPoison = {
     get promise() {
@@ -745,9 +783,10 @@ integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
     detail: { index: [{ id: 'queued-epoch-two-publication' }] }
 }));
 queuedEpochHeadIndex.resolve([{ id: 'queued-epoch-stale-head' }]);
-while (integrationIndexResolutionCount < queuedEpochResolutionCountBefore + 2) {
-    await Promise.resolve();
-}
+await waitForCondition(
+    () => integrationIndexResolutionCount === queuedEpochResolutionCountBefore + 2,
+    'the queued current-epoch tail must start before the alias joins it'
+);
 const queuedEpochCurrentJoin = integrationSandbox.ensurePracticeRecordsSync(
     'queued-epoch-current-alias',
     { forceRender: true }
@@ -766,8 +805,15 @@ assert.strictEqual(
     'a current-epoch join must not enqueue a third physical read'
 );
 
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+const dataEpochHeadRecords = deferred();
+const dataEpochCurrentRecords = deferred();
 const dataEpochHeadIndex = deferred();
 const dataEpochCurrentIndex = deferred();
+integrationPracticeRecordResolvers.push(dataEpochHeadRecords, dataEpochCurrentRecords);
 integrationIndexResolvers.push(dataEpochHeadIndex, dataEpochCurrentIndex);
 const dataEpochResolutionCountBefore = integrationIndexResolutionCount;
 const dataEpochHeadCycle = integrationSandbox.ensurePracticeRecordsSync(
@@ -775,24 +821,105 @@ const dataEpochHeadCycle = integrationSandbox.ensurePracticeRecordsSync(
     { forceRender: true }
 );
 emitIntegrationDataCommitted([{ store: 'practiceSummaries' }]);
-const dataEpochJoinedCycle = integrationSandbox.ensurePracticeRecordsSync(
-    'practice-view',
-    { forceRender: true }
-);
-assert.strictEqual(dataEpochJoinedCycle, dataEpochHeadCycle);
-dataEpochCurrentIndex.resolve([{ id: 'data-epoch-current' }]);
+dataEpochHeadRecords.resolve([{ id: 'data-epoch-stale-record' }]);
 dataEpochHeadIndex.resolve([{ id: 'data-epoch-stale' }]);
-await dataEpochJoinedCycle;
+await waitForCondition(
+    () => integrationIndexResolutionCount === dataEpochResolutionCountBefore + 2,
+    'a relevant commit must start the managed current-data replacement'
+);
+dataEpochCurrentRecords.resolve([{ id: 'data-epoch-current-record' }]);
+dataEpochCurrentIndex.resolve([{ id: 'data-epoch-current' }]);
+await dataEpochHeadCycle;
 assert.strictEqual(
     integrationIndexResolutionCount,
     dataEpochResolutionCountBefore + 2,
-    'a proven practice-store commit must schedule exactly one current-data follow-up'
+    'a managed sync invalidated by a practice-store commit must schedule exactly one automatic follow-up'
 );
-assert.deepStrictEqual(
-    integrationAnchorIndexes.at(-1),
-    ['data-epoch-current'],
-    'only the current practice-data epoch may update Browse anchors'
+assert.strictEqual(vm.runInContext('lastPracticeRecordsSignature', integrationContext), 'data-epoch-current-record');
+assert.deepStrictEqual(integrationCompletionRefreshes, [['data-epoch-current-record']]);
+assert.deepStrictEqual(integrationAnchorIndexes, [['data-epoch-current']]);
+assert.deepStrictEqual(integrationRenders, [['data-epoch-current']]);
+assert.deepStrictEqual(integrationPracticeUpdates, [{
+    records: ['data-epoch-current-record'],
+    index: ['data-epoch-current']
+}]);
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+const directCommitHeadRecords = deferred();
+const directCommitCurrentRecords = deferred();
+const directCommitHeadIndex = deferred();
+const directCommitCurrentIndex = deferred();
+integrationPracticeRecordResolvers.push(directCommitHeadRecords, directCommitCurrentRecords);
+integrationIndexResolvers.push(directCommitHeadIndex, directCommitCurrentIndex);
+const directCommitResolutionCountBefore = integrationIndexResolutionCount;
+const directCommitHead = integrationSandbox.syncPracticeRecords({ forceRender: true });
+emitIntegrationDataCommitted([{ store: 'practiceDetails' }]);
+await waitForCondition(
+    () => integrationIndexResolutionCount === directCommitResolutionCountBefore + 2,
+    'a relevant commit must start a replacement for an active direct sync'
 );
+directCommitCurrentRecords.resolve([{ id: 'direct-commit-current-record' }]);
+directCommitCurrentIndex.resolve([{ id: 'direct-commit-current-index' }]);
+directCommitHeadRecords.resolve([{ id: 'direct-commit-stale-record' }]);
+directCommitHeadIndex.resolve([{ id: 'direct-commit-stale-index' }]);
+await directCommitHead;
+await waitForCondition(
+    () => integrationPracticeUpdates.length === 1,
+    'the automatic direct replacement must complete all current-data projections'
+);
+assert.strictEqual(
+    integrationIndexResolutionCount,
+    directCommitResolutionCountBefore + 2,
+    'a direct sync invalidated by a commit must start exactly one automatic physical replacement'
+);
+assert.strictEqual(vm.runInContext('lastPracticeRecordsSignature', integrationContext), 'direct-commit-current-record');
+assert.deepStrictEqual(integrationCompletionRefreshes, [['direct-commit-current-record']]);
+assert.deepStrictEqual(integrationAnchorIndexes, [['direct-commit-current-index']]);
+assert.deepStrictEqual(integrationRenders, [['direct-commit-current-index']]);
+assert.deepStrictEqual(integrationPracticeUpdates, [{
+    records: ['direct-commit-current-record'],
+    index: ['direct-commit-current-index']
+}]);
+
+integrationRenders.length = 0;
+integrationAnchorIndexes.length = 0;
+integrationCompletionRefreshes.length = 0;
+integrationPracticeUpdates.length = 0;
+const annotationHeadRecords = deferred();
+const annotationHeadIndex = deferred();
+const annotationTailPoison = {
+    get promise() {
+        return Promise.reject(new Error('annotation commits must not schedule a practice projection tail'));
+    }
+};
+integrationPracticeRecordResolvers.push(annotationHeadRecords);
+integrationIndexResolvers.push(annotationHeadIndex, annotationTailPoison);
+const annotationResolutionCountBefore = integrationIndexResolutionCount;
+const annotationCycle = integrationSandbox.ensurePracticeRecordsSync(
+    'annotation-no-op',
+    { forceRender: true }
+);
+emitIntegrationDataCommitted([{ store: 'practiceAnnotations' }]);
+annotationHeadRecords.resolve([{ id: 'annotation-head-record' }]);
+annotationHeadIndex.resolve([{ id: 'annotation-head-index' }]);
+await annotationCycle;
+assert.strictEqual(
+    integrationIndexResolutionCount,
+    annotationResolutionCountBefore + 1,
+    'annotation-only commits must not invalidate the summary/detail projection'
+);
+assert.strictEqual(integrationIndexResolvers.shift(), annotationTailPoison);
+assert.strictEqual(vm.runInContext('lastPracticeRecordsSignature', integrationContext), 'annotation-head-record');
+assert.deepStrictEqual(integrationCompletionRefreshes, [['annotation-head-record']]);
+assert.deepStrictEqual(integrationAnchorIndexes, [['annotation-head-index']]);
+assert.deepStrictEqual(integrationRenders, [['annotation-head-index']]);
+assert.deepStrictEqual(integrationPracticeUpdates, [{
+    records: ['annotation-head-record'],
+    index: ['annotation-head-index']
+}]);
 
 const preservedForceBaselineRecords = deferred();
 const preservedForceBaselineIndex = deferred();
@@ -1162,7 +1289,10 @@ assert.strictEqual(
 assert.deepStrictEqual(integrationRenders, []);
 failedFunctionalReset.resolve(false);
 assert.strictEqual(await failedFunctionalResetNavigation, false);
-await new Promise((resolve) => setTimeout(resolve, 80));
+await waitForCondition(
+    () => integrationSandbox.__getBrowseFunctionalResetState().status === 'failed',
+    'the failed functional reset must settle to the fail-closed state'
+);
 assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'failed');
 assert.deepStrictEqual(
     integrationRenders,
@@ -1180,8 +1310,36 @@ assert.deepStrictEqual(
     'a failed functional reset must remain fail-closed for later progress refreshes'
 );
 
-integrationBrowseView.classList.remove('active');
-integrationOverviewView.classList.add('active');
+integrationSandbox.showView('overview', false);
+const ordinaryRecoveryIndex = deferred();
+integrationIndexResolvers.push(ordinaryRecoveryIndex);
+const ordinaryRecoveryNavigation = integrationSandbox.showView('browse', false);
+ordinaryRecoveryIndex.resolve([{ id: 'functional-reset-ordinary-recovery' }]);
+assert.notStrictEqual(await ordinaryRecoveryNavigation, false);
+assert.deepStrictEqual(
+    integrationRenders,
+    [['functional-reset-ordinary-recovery']],
+    'a successful ordinary Browse activation must provide the canonical recovery render'
+);
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'functional-reset-progress-after-ordinary-recovery' }]
+);
+await waitForCondition(
+    () => integrationRenders.length === 2,
+    'progress must resume after a successful ordinary Browse recovery'
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [
+        ['functional-reset-ordinary-recovery'],
+        ['functional-reset-progress-after-ordinary-recovery']
+    ],
+    'a failed functional reset must not poison progress after ordinary activation recovers'
+);
+
+integrationRenders.length = 0;
+integrationSandbox.showView('overview', false);
 const successfulFunctionalReset = deferred();
 const successfulFunctionalResetIndex = deferred();
 integrationIndexResolvers.push(successfulFunctionalResetIndex);
@@ -1201,7 +1359,10 @@ assert.deepStrictEqual(integrationRenders, []);
 successfulFunctionalReset.resolve(true);
 successfulFunctionalResetIndex.resolve([{ id: 'functional-reset-canonical' }]);
 assert.notStrictEqual(await successfulFunctionalResetNavigation, false);
-await new Promise((resolve) => setTimeout(resolve, 80));
+await waitForCondition(
+    () => integrationSandbox.__getBrowseFunctionalResetState().status === 'succeeded',
+    'the successful functional reset must complete its canonical barrier'
+);
 assert.deepStrictEqual(
     integrationRenders,
     [['functional-reset-canonical']],
@@ -1220,6 +1381,99 @@ assert.deepStrictEqual(
 );
 
 integrationRenders.length = 0;
+integrationSandbox.showView('overview', false);
+const navigationAbaFunctionalReset = deferred();
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = function () {
+    return navigationAbaFunctionalReset.promise;
+};
+const navigationAbaFunctionalNavigation = integrationSandbox.showView('browse', true);
+assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'pending');
+integrationSandbox.showView('overview', false);
+const navigationAbaReentryIndex = deferred();
+integrationIndexResolvers.push(navigationAbaReentryIndex);
+const navigationAbaReentry = integrationSandbox.showView('browse', false);
+navigationAbaReentryIndex.resolve([{ id: 'navigation-aba-reentry', category: 'all', type: 'reading' }]);
+assert.notStrictEqual(await navigationAbaReentry, false);
+integrationRenders.length = 0;
+const navigationAbaFilterIndex = deferred();
+integrationIndexResolvers.push(navigationAbaFilterIndex);
+const navigationAbaFilter = integrationSandbox.applyBrowseFilter('P2', 'reading');
+const navigationAbaPoisonIndex = {
+    promise: Promise.resolve([{ id: 'navigation-aba-stale-reset' }])
+};
+integrationIndexResolvers.push(navigationAbaPoisonIndex);
+const navigationAbaResolutionCount = integrationIndexResolutionCount;
+const navigationAbaResultsToken = integrationSandbox.__getBrowseResultsRequestId();
+navigationAbaFunctionalReset.resolve(true);
+assert.strictEqual(
+    await navigationAbaFunctionalNavigation,
+    false,
+    'a functional reset superseded by a navigation ABA must stand down'
+);
+assert.strictEqual(
+    integrationIndexResolutionCount,
+    navigationAbaResolutionCount,
+    'the superseded functional reset must not start another index read'
+);
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    navigationAbaResultsToken,
+    'the superseded functional reset must not claim the newer filter token'
+);
+assert.strictEqual(
+    integrationIndexResolvers.shift(),
+    navigationAbaPoisonIndex,
+    'the superseded functional reset must leave the poison index untouched'
+);
+navigationAbaFilterIndex.resolve([
+    { id: 'navigation-aba-p2-reading', category: 'P2', type: 'reading' }
+]);
+assert.notStrictEqual(await navigationAbaFilter, false);
+assert.deepStrictEqual(integrationBrowseState, { category: 'P2', type: 'reading' });
+assert.deepStrictEqual(
+    integrationRenders,
+    [['navigation-aba-p2-reading']],
+    'the newer filter must remain authoritative after the old reset settles'
+);
+assert.ok(
+    !['pending', 'failed'].includes(integrationSandbox.__getBrowseFunctionalResetState().status),
+    'a superseded functional reset must not leave a pending or failed global gate'
+);
+
+integrationRenders.length = 0;
+integrationSandbox.showView('overview', false);
+const midCanonicalFunctionalReset = deferred();
+const midCanonicalFunctionalIndex = deferred();
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = function () {
+    return midCanonicalFunctionalReset.promise;
+};
+integrationIndexResolvers.push(midCanonicalFunctionalIndex);
+const midCanonicalResolutionCountBefore = integrationIndexResolutionCount;
+const midCanonicalFunctionalNavigation = integrationSandbox.showView('browse', true);
+midCanonicalFunctionalReset.resolve(true);
+await waitForCondition(
+    () => integrationIndexResolutionCount === midCanonicalResolutionCountBefore + 1,
+    'the functional reset canonical refresh must start before the navigation supersedes it'
+);
+integrationSandbox.showView('overview', false);
+midCanonicalFunctionalIndex.resolve([{ id: 'mid-canonical-stale-reset' }]);
+assert.strictEqual(
+    await midCanonicalFunctionalNavigation,
+    false,
+    'navigation must cancel an already-started functional-reset canonical refresh'
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'an in-flight functional canonical refresh must not render after leaving Browse'
+);
+assert.ok(
+    !['pending', 'failed'].includes(integrationSandbox.__getBrowseFunctionalResetState().status),
+    'mid-canonical navigation cancellation must release the global barrier gate'
+);
+
+integrationRenders.length = 0;
 integrationBrowseView.classList.remove('active');
 integrationOverviewView.classList.add('active');
 const supersededFunctionalReset = deferred();
@@ -1234,7 +1488,11 @@ integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = funct
 };
 const supersededFunctionalNavigation = integrationSandbox.showView('browse', true);
 supersededFunctionalReset.resolve(true);
-await new Promise((resolve) => setTimeout(resolve, 0));
+const overlappingResolutionCountBefore = integrationIndexResolutionCount;
+await waitForCondition(
+    () => integrationIndexResolutionCount === overlappingResolutionCountBefore + 1,
+    'the first overlapping functional reset must enter its canonical refresh'
+);
 const currentFunctionalNavigation = integrationSandbox.showView('browse', true);
 assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'pending');
 supersededFunctionalIndex.resolve([{ id: 'superseded-functional-canonical' }]);
@@ -1252,6 +1510,444 @@ assert.deepStrictEqual(
     [['current-functional-canonical']],
     'only the newest functional reset may complete a canonical render'
 );
+
+integrationRenders.length = 0;
+integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = function () {
+    return false;
+};
+assert.strictEqual(await integrationSandbox.showView('browse', true), false);
+await waitForCondition(
+    () => integrationSandbox.__getBrowseFunctionalResetState().status === 'failed',
+    'the second failed functional reset must settle before reset recovery begins'
+);
+const integrationExamActionsSource = fs.readFileSync(
+    path.join(repoRoot, 'js/app/examActions.js'),
+    'utf8'
+);
+vm.runInContext(integrationExamActionsSource, integrationContext, {
+    filename: 'js/app/examActions.js'
+});
+const integrationProductionExamListLoader = integrationSandbox.ExamActions.loadExamList;
+integrationSandbox.ExamActions.loadExamList = function captureResetRecoveryRender(exams) {
+    const snapshot = Array.isArray(exams) ? exams : [];
+    integrationRenders.push(Array.from(snapshot, (exam) => exam && exam.id));
+    return snapshot;
+};
+
+const productionActivationReset = integrationSandbox.ExamActions
+    .browseFilterStateOwner.resetForActivation;
+const productionBrowseStateManager = integrationSandbox.browseStateManager;
+const productionSetBrowseFilterState = integrationSandbox.setBrowseFilterState;
+const productionSaveBrowseViewPreferences = integrationSandbox.saveBrowseViewPreferences;
+const productionFlushBrowsePreferenceWrites = integrationSandbox.flushBrowsePreferenceWrites;
+const productionPatchBrowse = integrationSandbox.AppData.preferences.patchBrowse;
+const activationManagerReady = deferred();
+let activationManagerReadyObserved = false;
+let staleActivationManagerResetCount = 0;
+const staleActivationStateCalls = [];
+const staleActivationPreferenceWrites = [];
+integrationSandbox.browseStateManager = {
+    ready: {
+        then(resolve, reject) {
+            activationManagerReadyObserved = true;
+            return activationManagerReady.promise.then(resolve, reject);
+        }
+    },
+    currentFilter: 'high',
+    state: {
+        currentCategory: 'P1',
+        currentFrequency: 'high',
+        filters: { frequency: 'high' },
+        searchQuery: 'keep-current-search'
+    },
+    clearSearchState() {},
+    resetToAllExams() { staleActivationManagerResetCount += 1; },
+    async persistState() {
+        staleActivationPreferenceWrites.push({ stateManager: true });
+    }
+};
+integrationSandbox.setBrowseFilterState = function captureActivationState(category, type) {
+    staleActivationStateCalls.push({ category, type });
+    productionSetBrowseFilterState(category, type);
+};
+integrationSandbox.saveBrowseViewPreferences = function captureActivationSave(patch) {
+    staleActivationPreferenceWrites.push({ save: patch });
+};
+integrationSandbox.flushBrowsePreferenceWrites = async function flushActivationSave() {
+    return {
+        lastFilter: {
+            category: integrationBrowseState.category,
+            type: integrationBrowseState.type
+        }
+    };
+};
+integrationSandbox.AppData.preferences.patchBrowse = async function captureActivationPatch(patch) {
+    staleActivationPreferenceWrites.push({ patch });
+    return patch;
+};
+productionSetBrowseFilterState('P1', 'listening');
+integrationSandbox.__browseFilterMode = 'legacy-mode';
+integrationSandbox.__browsePath = 'legacy/path';
+integrationSandbox.__browseFrequencyFilter = 'high';
+const staleProductionActivation = integrationSandbox.showView('browse', true);
+await waitForCondition(
+    () => activationManagerReadyObserved,
+    'the production activation reset must enter its awaited manager preparation'
+);
+integrationSandbox.showView('overview', false);
+const activationReentryIndex = deferred();
+integrationIndexResolvers.push(activationReentryIndex);
+const activationReentry = integrationSandbox.showView('browse', false);
+activationReentryIndex.resolve([
+    { id: 'activation-reentry-reading', category: 'P1', type: 'reading' }
+]);
+assert.notStrictEqual(await activationReentry, false);
+integrationRenders.length = 0;
+const activationNewerFilterIndex = deferred();
+integrationIndexResolvers.push(activationNewerFilterIndex);
+const activationNewerFilter = integrationSandbox.applyBrowseFilter(
+    'P2',
+    'reading',
+    'frequency',
+    'newer/path'
+);
+activationNewerFilterIndex.resolve([
+    { id: 'activation-newer-reading', category: 'P2', type: 'reading' },
+    { id: 'activation-listening-capability', category: 'P2', type: 'listening' }
+]);
+assert.notStrictEqual(await activationNewerFilter, false);
+activationManagerReady.resolve();
+assert.strictEqual(
+    await staleProductionActivation,
+    false,
+    'a real activation reset canceled during manager preparation must stand down'
+);
+assert.deepStrictEqual(integrationBrowseState, { category: 'P2', type: 'reading' });
+assert.strictEqual(integrationSandbox.__browseFilterMode, 'frequency');
+assert.strictEqual(integrationSandbox.__browsePath, 'newer/path');
+assert.strictEqual(integrationSandbox.__browseFrequencyFilter, 'high');
+assert.strictEqual(staleActivationManagerResetCount, 0);
+assert.deepStrictEqual(
+    staleActivationStateCalls.filter((call) => call.category === 'all' && call.type === 'all'),
+    [],
+    'the canceled production reset must not apply all/all over the newer filter'
+);
+assert.deepStrictEqual(
+    staleActivationPreferenceWrites,
+    [],
+    'the canceled production reset must not persist any all/all state'
+);
+integrationSandbox.browseStateManager = productionBrowseStateManager;
+integrationSandbox.setBrowseFilterState = productionSetBrowseFilterState;
+integrationSandbox.saveBrowseViewPreferences = productionSaveBrowseViewPreferences;
+integrationSandbox.flushBrowsePreferenceWrites = productionFlushBrowsePreferenceWrites;
+integrationSandbox.AppData.preferences.patchBrowse = productionPatchBrowse;
+
+integrationRenders.length = 0;
+const warmFunctionalManagerReady = deferred();
+const warmFunctionalCanonicalIndex = deferred();
+const warmFunctionalLatestIndex = [
+    { id: 'warm-functional-latest-p2', category: 'P2', type: 'reading' },
+    { id: 'warm-functional-latest-listening', category: 'all', type: 'listening' }
+];
+const warmFunctionalPersistedBrowse = {
+    lastFilter: { category: 'P2', type: 'reading' },
+    filter: { category: 'P2', type: 'reading' },
+    frequencyFilter: 'high',
+    stateManager: null
+};
+const warmFunctionalOriginalGetBrowse = integrationSandbox.AppData.preferences.getBrowse;
+let warmFunctionalManagerReadyObserved = false;
+integrationSandbox.browseStateManager = {
+    ready: {
+        then(resolve, reject) {
+            warmFunctionalManagerReadyObserved = true;
+            return warmFunctionalManagerReady.promise.then(resolve, reject);
+        }
+    },
+    currentFilter: 'P2',
+    state: {
+        currentCategory: 'P2',
+        currentFrequency: 'high',
+        filters: { frequency: 'high' },
+        searchQuery: 'warm-reset-search'
+    },
+    clearSearchState() {
+        this.state.searchQuery = '';
+    },
+    resetToAllExams() {
+        this.currentFilter = 'all';
+        this.state.currentCategory = null;
+        this.state.currentFrequency = null;
+        this.state.filters.frequency = 'all';
+        this.state.searchQuery = '';
+    },
+    async persistState() {
+        warmFunctionalPersistedBrowse.stateManager = {
+            currentFilter: this.currentFilter,
+            state: JSON.parse(JSON.stringify(this.state))
+        };
+    }
+};
+integrationSandbox.saveBrowseViewPreferences = function saveWarmFunctionalPreferences(patch) {
+    if (patch && patch.lastFilter) {
+        warmFunctionalPersistedBrowse.lastFilter = Object.assign({}, patch.lastFilter);
+    }
+    return warmFunctionalPersistedBrowse;
+};
+integrationSandbox.flushBrowsePreferenceWrites = async function flushWarmFunctionalPreferences() {
+    return JSON.parse(JSON.stringify(warmFunctionalPersistedBrowse));
+};
+integrationSandbox.AppData.preferences.patchBrowse = async function patchWarmFunctionalPreferences(patch) {
+    Object.assign(warmFunctionalPersistedBrowse, JSON.parse(JSON.stringify(patch || {})));
+    return patch;
+};
+integrationSandbox.AppData.preferences.getBrowse = async function getWarmFunctionalPreferences() {
+    return JSON.parse(JSON.stringify(warmFunctionalPersistedBrowse));
+};
+productionSetBrowseFilterState('P2', 'reading');
+integrationSandbox.__browseFilterMode = 'frequency';
+integrationSandbox.__browsePath = 'warm/reset/path';
+integrationSandbox.__browseFrequencyFilter = 'high';
+integrationIndexResolvers.push(warmFunctionalCanonicalIndex);
+const warmFunctionalNavigation = integrationSandbox.showView('browse', true);
+await waitForCondition(
+    () => warmFunctionalManagerReadyObserved,
+    'the warm production reset must pause at manager readiness'
+);
+const warmFunctionalBarrierToken = integrationSandbox.__getBrowseResultsRequestId();
+integrationSandbox.dispatchEvent(new IntegrationCustomEvent('examIndexLoaded', {
+    detail: { index: warmFunctionalLatestIndex }
+}));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    integrationSandbox.__getBrowseResultsRequestId(),
+    warmFunctionalBarrierToken,
+    'a warm-runtime index publication must not steal a pending functional-reset token'
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [],
+    'a warm-runtime index publication must wait for the functional canonical barrier'
+);
+warmFunctionalCanonicalIndex.resolve(warmFunctionalLatestIndex);
+warmFunctionalManagerReady.resolve();
+assert.notStrictEqual(
+    await warmFunctionalNavigation,
+    false,
+    'the foreground functional reset must survive a warm-runtime index publication'
+);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepStrictEqual(integrationBrowseState, { category: 'all', type: 'all' });
+assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'succeeded');
+assert.ok(integrationRenders.length > 0, 'the successful functional reset must render canonically');
+assert.deepStrictEqual(
+    integrationRenders.at(-1),
+    warmFunctionalLatestIndex.map((exam) => exam.id),
+    'the latest published index must remain authoritative after the functional canonical render'
+);
+integrationSandbox.browseStateManager = productionBrowseStateManager;
+integrationSandbox.saveBrowseViewPreferences = productionSaveBrowseViewPreferences;
+integrationSandbox.flushBrowsePreferenceWrites = productionFlushBrowsePreferenceWrites;
+integrationSandbox.AppData.preferences.patchBrowse = productionPatchBrowse;
+integrationSandbox.AppData.preferences.getBrowse = warmFunctionalOriginalGetBrowse;
+
+const productionBeginBrowseResultsRequest = integrationSandbox.__beginBrowseResultsRequest;
+const productionGetBrowseResultsRequestId = integrationSandbox.__getBrowseResultsRequestId;
+const productionIsBrowseResultsRequestCurrent = integrationSandbox.__isBrowseResultsRequestCurrent;
+integrationSandbox.__beginBrowseResultsRequest = undefined;
+integrationSandbox.__getBrowseResultsRequestId = undefined;
+integrationSandbox.__isBrowseResultsRequestCurrent = undefined;
+const coldFunctionalLeaseReset = deferred();
+const coldFunctionalLeaseBarrier = integrationSandbox.AppEntry.registerBrowseFunctionalResetBarrier(
+    coldFunctionalLeaseReset.promise
+);
+let coldFunctionalResultsRequestId = 0;
+integrationSandbox.__beginBrowseResultsRequest = function beginColdFunctionalResultsRequest() {
+    coldFunctionalResultsRequestId += 1;
+    return coldFunctionalResultsRequestId;
+};
+integrationSandbox.__getBrowseResultsRequestId = function getColdFunctionalResultsRequestId() {
+    return coldFunctionalResultsRequestId;
+};
+integrationSandbox.__isBrowseResultsRequestCurrent = function isColdFunctionalResultsRequestCurrent(
+    requestId
+) {
+    return requestId == null || requestId === coldFunctionalResultsRequestId;
+};
+await waitForCondition(
+    () => coldFunctionalResultsRequestId === 1,
+    'a cold functional barrier must bind the first token as soon as the runtime API appears'
+);
+assert.strictEqual(
+    integrationSandbox.AppEntry.isBrowseFunctionalResetBarrierCurrent(
+        coldFunctionalLeaseBarrier
+    ),
+    true,
+    'the newly bound cold functional lease must initially own the results token'
+);
+const coldFunctionalPendingGeneration =
+    integrationSandbox.__getBrowseFunctionalResetState().generation;
+const newerColdFilterRequestId = integrationSandbox.__beginBrowseResultsRequest();
+assert.strictEqual(newerColdFilterRequestId, 2);
+assert.strictEqual(
+    integrationSandbox.AppEntry.isBrowseFunctionalResetBarrierCurrent(
+        coldFunctionalLeaseBarrier
+    ),
+    false,
+    'a newer cold-runtime filter token must cancel the older functional lease'
+);
+const coldFunctionalCancelledState = integrationSandbox.__getBrowseFunctionalResetState();
+assert.strictEqual(coldFunctionalCancelledState.status, 'idle');
+assert.strictEqual(coldFunctionalCancelledState.outcome, null);
+assert.ok(
+    coldFunctionalCancelledState.generation > coldFunctionalPendingGeneration,
+    'cold token supersession must cancel neutrally and invalidate pending-era work'
+);
+coldFunctionalLeaseReset.resolve(true);
+assert.strictEqual(await coldFunctionalLeaseBarrier, true);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'idle',
+    'a late cold reset settlement must not reclaim ownership after cancellation'
+);
+integrationSandbox.__beginBrowseResultsRequest = productionBeginBrowseResultsRequest;
+integrationSandbox.__getBrowseResultsRequestId = productionGetBrowseResultsRequestId;
+integrationSandbox.__isBrowseResultsRequestCurrent = productionIsBrowseResultsRequestCurrent;
+
+async function establishFailedIntegrationFunctionalReset(message) {
+    integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation = function () {
+        return false;
+    };
+    try {
+        assert.strictEqual(await integrationSandbox.showView('browse', true), false);
+        await waitForCondition(
+            () => integrationSandbox.__getBrowseFunctionalResetState().status === 'failed',
+            message
+        );
+    } finally {
+        integrationSandbox.ExamActions.browseFilterStateOwner.resetForActivation
+            = productionActivationReset;
+    }
+}
+
+await establishFailedIntegrationFunctionalReset(
+    'the pending-filter recovery fixture must start from a failed functional barrier'
+);
+integrationRenders.length = 0;
+const pendingRecoveryInitializationIndex = deferred();
+const pendingRecoveryFilterIndex = deferred();
+integrationIndexResolvers.push(pendingRecoveryInitializationIndex, pendingRecoveryFilterIndex);
+const pendingRecoveryRequestId = integrationSandbox.__beginBrowseUserResultsRequest();
+const pendingRecoveryFilter = {
+    category: 'P2',
+    type: 'reading',
+    filterMode: null,
+    path: null
+};
+integrationSandbox.__pendingBrowseFilter = pendingRecoveryFilter;
+const pendingRecoveryInitialization = integrationSandbox.initializeBrowseView({
+    skipLoad: true,
+    renderRequestId: pendingRecoveryRequestId
+});
+pendingRecoveryInitializationIndex.resolve([
+    { id: 'pending-recovery-initialize', category: 'all', type: 'reading' }
+]);
+assert.ok(Array.isArray(await pendingRecoveryInitialization));
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'the pending-filter skipLoad initialization must not recover the failed barrier early'
+);
+const pendingRecoveryApply = integrationSandbox.applyBrowseFilter(
+    pendingRecoveryFilter.category,
+    pendingRecoveryFilter.type,
+    pendingRecoveryFilter.filterMode,
+    pendingRecoveryFilter.path,
+    pendingRecoveryRequestId
+);
+pendingRecoveryFilterIndex.resolve([
+    { id: 'pending-recovery-current', category: 'P2', type: 'reading' }
+]);
+assert.notStrictEqual(await pendingRecoveryApply, false);
+delete integrationSandbox.__pendingBrowseFilter;
+integrationSandbox.__endBrowseUserResultsRequest(pendingRecoveryRequestId);
+assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'succeeded');
+assert.deepStrictEqual(
+    integrationRenders,
+    [['pending-recovery-current']],
+    'only the successful shared-token pending filter may provide the recovery render'
+);
+
+await establishFailedIntegrationFunctionalReset(
+    'the stale-filter recovery fixture must start from a failed functional barrier'
+);
+integrationRenders.length = 0;
+const staleRecoveryFilterIndex = deferred();
+integrationIndexResolvers.push(staleRecoveryFilterIndex);
+const staleRecoveryResolutionCount = integrationIndexResolutionCount;
+const staleRecoveryFilter = integrationSandbox.applyBrowseFilter('P1', 'reading');
+await waitForCondition(
+    () => integrationIndexResolutionCount === staleRecoveryResolutionCount + 1,
+    'the failed-barrier filter recovery must enter its canonical index read'
+);
+integrationSandbox.showView('overview', false);
+staleRecoveryFilterIndex.resolve([
+    { id: 'stale-filter-must-not-recover', category: 'P1', type: 'reading' }
+]);
+assert.strictEqual(await staleRecoveryFilter, false);
+assert.deepStrictEqual(integrationRenders, []);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'a filter made stale by navigation must not recover the failed barrier'
+);
+
+integrationOverviewView.classList.remove('active');
+integrationBrowseView.classList.add('active');
+const resetSupersededRecoveryIndex = deferred();
+integrationIndexResolvers.push(resetSupersededRecoveryIndex);
+const resetSupersededResolutionCount = integrationIndexResolutionCount;
+const resetSupersededRecovery = integrationSandbox.activateBrowseView();
+await waitForCondition(
+    () => integrationIndexResolutionCount === resetSupersededResolutionCount + 1,
+    'the failed-barrier activation recovery must enter its canonical index read'
+);
+const supersedingRecoveryResetIntent = integrationSandbox.__beginBrowseResetIntent();
+resetSupersededRecoveryIndex.resolve([{ id: 'reset-superseded-recovery' }]);
+assert.strictEqual(await resetSupersededRecovery, false);
+integrationSandbox.__endBrowseResetIntent(supersedingRecoveryResetIntent);
+assert.deepStrictEqual(integrationRenders, []);
+assert.strictEqual(
+    integrationSandbox.__getBrowseFunctionalResetState().status,
+    'failed',
+    'a reset intent superseding mid-canonical must not allow stale state recovery'
+);
+
+const explicitResetRecoveryIndex = deferred();
+integrationIndexResolvers.push(explicitResetRecoveryIndex);
+const explicitResetRecovery = integrationSandbox.ExamActions.resetBrowseViewToAll();
+explicitResetRecoveryIndex.resolve([{ id: 'functional-reset-explicit-recovery' }]);
+assert.notStrictEqual(await explicitResetRecovery, false);
+assert.strictEqual(integrationSandbox.__getBrowseFunctionalResetState().status, 'succeeded');
+integrationSandbox.refreshBrowseProgressFromRecords(
+    [],
+    [{ id: 'functional-reset-progress-after-explicit-recovery' }]
+);
+await waitForCondition(
+    () => integrationRenders.length === 2,
+    'progress must resume after resetBrowseViewToAll recovers a failed barrier'
+);
+assert.deepStrictEqual(
+    integrationRenders,
+    [
+        ['functional-reset-explicit-recovery'],
+        ['functional-reset-progress-after-explicit-recovery']
+    ],
+    'a real resetBrowseViewToAll recovery must release the failed progress gate'
+);
+integrationSandbox.ExamActions.loadExamList = integrationProductionExamListLoader;
 integrationBrowseView.classList.add = originalIntegrationBrowseAdd;
 
 rendered.length = 0;
@@ -1759,6 +2455,15 @@ sandbox.AppEntry = {
     registerBrowseFunctionalResetBarrier(resetPromise) {
         coldResetOrder.push('barrier');
         return resetPromise;
+    },
+    isBrowseFunctionalResetBarrierCurrent() {
+        return true;
+    },
+    completeBrowseFunctionalResetBarrier(_barrier, succeeded) {
+        return succeeded === true;
+    },
+    updateBrowseFunctionalResetResultsRequest() {
+        return true;
     },
     async ensureBrowseRuntimeGroup() {
         coldResetOrder.push('ensure');

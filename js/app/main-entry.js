@@ -269,6 +269,8 @@
     var examIndexRefreshGeneration = 0;
     var deferredBrowseIndexRefresh = null;
     var browseFunctionalResetBarrier = null;
+    var browseFunctionalResetOwnership = null;
+    var activeBrowseFunctionalResetRecovery = null;
     var completedBrowseFunctionalResetBarrier = null;
     var browseFunctionalResetGeneration = 0;
     var browseFunctionalResetState = {
@@ -305,7 +307,110 @@
         }
     }
 
+    function invalidateBrowseResultsForSupersedingIntent() {
+        if (typeof global.__beginBrowseResultsRequest !== 'function') {
+            return;
+        }
+        try {
+            global.__beginBrowseResultsRequest();
+        } catch (_) { }
+    }
+
+    function isBrowseFunctionalResetOwnershipCurrent(barrier, includeResultsRequest) {
+        var ownership = browseFunctionalResetOwnership;
+        if (!barrier
+            || browseFunctionalResetBarrier !== barrier
+            || !ownership
+            || ownership.barrier !== barrier
+            || ownership.navigationGeneration !== appNavigationIntentGeneration
+            || ownership.resetGeneration !== browseResetIntentGeneration
+            || getActiveViewName() !== 'browse') {
+            return false;
+        }
+        if (includeResultsRequest && typeof global.__isBrowseResultsRequestCurrent === 'function') {
+            // Once the runtime exposes token arbitration, an unbound cold lease
+            // must fail closed instead of adopting whichever request is current.
+            if (ownership.resultsRequestId == null
+                || !global.__isBrowseResultsRequestCurrent(ownership.resultsRequestId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function claimBrowseFunctionalResetResultsRequest(barrier) {
+        var ownership = browseFunctionalResetOwnership;
+        if (!barrier
+            || browseFunctionalResetBarrier !== barrier
+            || !ownership
+            || ownership.barrier !== barrier
+            || ownership.navigationGeneration !== appNavigationIntentGeneration
+            || ownership.resetGeneration !== browseResetIntentGeneration
+            || getActiveViewName() !== 'browse') {
+            return false;
+        }
+        if (ownership.resultsRequestId != null) {
+            return true;
+        }
+        if (typeof global.__beginBrowseResultsRequest !== 'function') {
+            return false;
+        }
+        if (typeof global.__getBrowseResultsRequestId === 'function') {
+            try {
+                if (global.__getBrowseResultsRequestId() !== 0) {
+                    return false;
+                }
+            } catch (_) {
+                return false;
+            }
+        }
+        try {
+            var resultsRequestId = global.__beginBrowseResultsRequest();
+            if (resultsRequestId == null) {
+                return false;
+            }
+            ownership.resultsRequestId = resultsRequestId;
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function cancelBrowseFunctionalResetBarrier(barrier, invalidateResults) {
+        if (!barrier || browseFunctionalResetBarrier !== barrier) {
+            return false;
+        }
+        if (invalidateResults === true) {
+            invalidateBrowseResultsForSupersedingIntent();
+        }
+        browseFunctionalResetBarrier = null;
+        browseFunctionalResetOwnership = null;
+        completedBrowseFunctionalResetBarrier = null;
+        browseFunctionalResetState = {
+            generation: ++browseFunctionalResetGeneration,
+            status: 'idle',
+            outcome: null
+        };
+        return true;
+    }
+
+    function cancelCurrentBrowseFunctionalResetForSupersedingIntent() {
+        var shouldInvalidateResults = false;
+        if (browseFunctionalResetBarrier) {
+            cancelBrowseFunctionalResetBarrier(browseFunctionalResetBarrier, false);
+            shouldInvalidateResults = true;
+        }
+        if (activeBrowseFunctionalResetRecovery) {
+            activeBrowseFunctionalResetRecovery = null;
+            shouldInvalidateResults = true;
+        }
+        if (shouldInvalidateResults) {
+            invalidateBrowseResultsForSupersedingIntent();
+        }
+    }
+
     function registerBrowseFunctionalResetBarrier(resetPromise) {
+        activeBrowseFunctionalResetRecovery = null;
         var generation = ++browseFunctionalResetGeneration;
         completedBrowseFunctionalResetBarrier = null;
         browseFunctionalResetState = {
@@ -319,11 +424,39 @@
             return false;
         });
         browseFunctionalResetBarrier = barrier;
+        var resultsRequestId = null;
         if (typeof global.__beginBrowseResultsRequest === 'function') {
-            global.__beginBrowseResultsRequest();
+            resultsRequestId = global.__beginBrowseResultsRequest();
+        }
+        browseFunctionalResetOwnership = {
+            barrier: barrier,
+            generation: generation,
+            navigationGeneration: appNavigationIntentGeneration,
+            resetGeneration: browseResetIntentGeneration,
+            resultsRequestId: resultsRequestId,
+            deferredExamIndexSnapshot: null
+        };
+        if (resultsRequestId == null) {
+            // This continuation is registered before the deferred reset body can
+            // attach its lazy-owner continuation, so a cold barrier claims R1
+            // before any later filter or background refresh can own the runtime.
+            ensureBrowseRuntimeGroup().then(function bindColdFunctionalResetResultsRequest() {
+                if (browseFunctionalResetBarrier !== barrier) {
+                    return;
+                }
+                if (!claimBrowseFunctionalResetResultsRequest(barrier)
+                    && browseFunctionalResetBarrier === barrier
+                    && typeof global.__isBrowseResultsRequestCurrent === 'function') {
+                    cancelBrowseFunctionalResetBarrier(barrier, false);
+                }
+            }).catch(function ignoreColdFunctionalResetBindingFailure() { });
         }
         barrier.then(function settleBrowseFunctionalResetState(succeeded) {
             if (browseFunctionalResetBarrier === barrier) {
+                if (!isBrowseFunctionalResetOwnershipCurrent(barrier, false)) {
+                    cancelBrowseFunctionalResetBarrier(barrier, false);
+                    return;
+                }
                 browseFunctionalResetState = {
                     generation: generation,
                     status: succeeded ? 'pending' : 'failed',
@@ -331,6 +464,7 @@
                 };
                 if (!succeeded) {
                     browseFunctionalResetBarrier = null;
+                    browseFunctionalResetOwnership = null;
                 }
             }
         });
@@ -346,18 +480,124 @@
                 && completedBrowseFunctionalResetBarrier === barrier
                 && browseFunctionalResetState.status === 'succeeded';
         }
+        if (!isBrowseFunctionalResetOwnershipCurrent(barrier, true)) {
+            cancelBrowseFunctionalResetBarrier(barrier, false);
+            return false;
+        }
+        var completedOwnership = browseFunctionalResetOwnership;
+        var deferredExamIndexSnapshot = succeeded === true
+            && completedOwnership
+            && Array.isArray(completedOwnership.deferredExamIndexSnapshot)
+            ? completedOwnership.deferredExamIndexSnapshot.slice()
+            : null;
+        var completedGeneration = browseFunctionalResetGeneration;
+        var completedNavigationGeneration = appNavigationIntentGeneration;
+        var completedResetGeneration = browseResetIntentGeneration;
         browseFunctionalResetState = {
-            generation: browseFunctionalResetGeneration,
+            generation: completedGeneration,
             status: succeeded === true ? 'succeeded' : 'failed',
             outcome: succeeded === true
         };
         browseFunctionalResetBarrier = null;
+        browseFunctionalResetOwnership = null;
         completedBrowseFunctionalResetBarrier = succeeded === true ? barrier : null;
+        if (deferredExamIndexSnapshot) {
+            Promise.resolve().then(function replayFunctionalResetIndexSnapshot() {
+                if (browseFunctionalResetGeneration !== completedGeneration
+                    || browseFunctionalResetState.status !== 'succeeded'
+                    || appNavigationIntentGeneration !== completedNavigationGeneration
+                    || browseResetIntentGeneration !== completedResetGeneration
+                    || getActiveViewName() !== 'browse') {
+                    return;
+                }
+                handleExamIndexLoaded(deferredExamIndexSnapshot);
+            });
+        }
         return succeeded === true;
     }
 
     function isBrowseFunctionalResetBarrierCurrent(barrier) {
-        return !!barrier && browseFunctionalResetBarrier === barrier;
+        if (isBrowseFunctionalResetOwnershipCurrent(barrier, true)) {
+            return true;
+        }
+        if (barrier && browseFunctionalResetBarrier === barrier) {
+            cancelBrowseFunctionalResetBarrier(barrier, false);
+        }
+        return false;
+    }
+
+    function updateBrowseFunctionalResetResultsRequest(barrier, requestId) {
+        if (!isBrowseFunctionalResetOwnershipCurrent(barrier, false)) {
+            return false;
+        }
+        var nextRequestId = requestId;
+        if (nextRequestId == null && typeof global.__getBrowseResultsRequestId === 'function') {
+            nextRequestId = global.__getBrowseResultsRequestId();
+        }
+        if (nextRequestId == null) {
+            return false;
+        }
+        browseFunctionalResetOwnership.resultsRequestId = nextRequestId;
+        return true;
+    }
+
+    function captureBrowseFunctionalResetRecovery() {
+        if (browseFunctionalResetBarrier
+            || browseFunctionalResetState.status !== 'failed'
+            || getActiveViewName() !== 'browse') {
+            return null;
+        }
+        var recovery = {
+            functionalResetGeneration: browseFunctionalResetState.generation,
+            navigationGeneration: appNavigationIntentGeneration,
+            resetGeneration: browseResetIntentGeneration,
+            resultsRequestId: typeof global.__getBrowseResultsRequestId === 'function'
+                ? global.__getBrowseResultsRequestId()
+                : null
+        };
+        activeBrowseFunctionalResetRecovery = recovery;
+        return recovery;
+    }
+
+    function updateBrowseFunctionalResetRecoveryResultsRequest(recovery, requestId) {
+        if (!recovery || activeBrowseFunctionalResetRecovery !== recovery) {
+            return false;
+        }
+        var nextRequestId = requestId;
+        if (nextRequestId == null && typeof global.__getBrowseResultsRequestId === 'function') {
+            nextRequestId = global.__getBrowseResultsRequestId();
+        }
+        if (nextRequestId == null) {
+            return false;
+        }
+        recovery.resultsRequestId = nextRequestId;
+        return true;
+    }
+
+    function completeBrowseFunctionalResetRecovery(recovery, succeeded) {
+        if (!recovery || activeBrowseFunctionalResetRecovery !== recovery) {
+            return false;
+        }
+        activeBrowseFunctionalResetRecovery = null;
+        if (succeeded !== true
+            || browseFunctionalResetBarrier
+            || browseFunctionalResetState.status !== 'failed'
+            || browseFunctionalResetState.generation !== recovery.functionalResetGeneration
+            || appNavigationIntentGeneration !== recovery.navigationGeneration
+            || browseResetIntentGeneration !== recovery.resetGeneration
+            || (recovery.resultsRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(recovery.resultsRequestId))
+            || getActiveViewName() !== 'browse') {
+            return false;
+        }
+        browseFunctionalResetState = {
+            generation: ++browseFunctionalResetGeneration,
+            status: 'succeeded',
+            outcome: true
+        };
+        completedBrowseFunctionalResetBarrier = null;
+        return true;
     }
 
     function getBrowseFunctionalResetState() {
@@ -370,7 +610,7 @@
 
     global.__getBrowseFunctionalResetState = getBrowseFunctionalResetState;
 
-    function synchronizeActiveBrowseViewNow() {
+    function synchronizeActiveBrowseViewNow(functionalResetBarrier) {
         if (getActiveViewName() !== 'browse' || typeof global.initializeBrowseView !== 'function') {
             return Promise.resolve();
         }
@@ -387,6 +627,12 @@
             if (typeof global.__getBrowseResultsRequestId === 'function') {
                 initializationRequestId = global.__getBrowseResultsRequestId();
             }
+            if (functionalResetBarrier) {
+                updateBrowseFunctionalResetResultsRequest(
+                    functionalResetBarrier,
+                    initializationRequestId
+                );
+            }
             if (initializationRequestId != null
                 && typeof global.__retainBrowseUserResultsRequest === 'function') {
                 retainedInitializationRequestId = global.__retainBrowseUserResultsRequest(
@@ -397,9 +643,15 @@
             return Promise.reject(error);
         }
         return Promise.resolve(initialization)
-            .then(function applyPendingBrowseFilter() {
-                if (!canApplyPendingFilter || global.__pendingBrowseFilter !== pendingFilter) {
-                    return undefined;
+            .then(function applyPendingBrowseFilter(initializationResult) {
+                if (initializationResult === null || initializationResult === false) {
+                    return false;
+                }
+                if (!canApplyPendingFilter) {
+                    return true;
+                }
+                if (global.__pendingBrowseFilter !== pendingFilter) {
+                    return false;
                 }
                 var filterArgs = [
                     pendingFilter.category,
@@ -410,7 +662,10 @@
                 if (initializationRequestId != null) {
                     filterArgs.push(initializationRequestId);
                 }
-                return global.applyBrowseFilter.apply(global, filterArgs);
+                return Promise.resolve(global.applyBrowseFilter.apply(global, filterArgs))
+                    .then(function normalizePendingFilterResult(result) {
+                        return result !== false;
+                    });
             })
             .finally(function clearConsumedPendingBrowseFilter() {
                 if (retainedInitializationRequestId != null
@@ -426,8 +681,8 @@
     function synchronizeActiveBrowseViewAfterLoad() {
         var resetBarrier = browseFunctionalResetBarrier;
         if (!resetBarrier) {
-            return synchronizeActiveBrowseViewNow().then(function () {
-                return true;
+            return synchronizeActiveBrowseViewNow().then(function (synchronized) {
+                return synchronized !== false;
             });
         }
         return Promise.resolve(resetBarrier).then(function afterFunctionalReset(resetSucceeded) {
@@ -437,9 +692,12 @@
             if (!isBrowseFunctionalResetBarrierCurrent(resetBarrier)) {
                 return false;
             }
-            return synchronizeActiveBrowseViewNow().then(function () {
-                completeBrowseFunctionalResetBarrier(resetBarrier, true);
-                return true;
+            return synchronizeActiveBrowseViewNow(resetBarrier).then(function (synchronized) {
+                if (synchronized === false) {
+                    completeBrowseFunctionalResetBarrier(resetBarrier, false);
+                    return false;
+                }
+                return completeBrowseFunctionalResetBarrier(resetBarrier, true);
             }, function (error) {
                 completeBrowseFunctionalResetBarrier(resetBarrier, false);
                 throw error;
@@ -549,6 +807,7 @@
             return appNavigationIntentGeneration;
         }
         appNavigationIntentGeneration += 1;
+        cancelCurrentBrowseFunctionalResetForSupersedingIntent();
         if (event) {
             try {
                 event.__appEntryNavigationIntentTracked = true;
@@ -613,6 +872,7 @@
     function beginBrowseResetIntent() {
         browseResetIntentGeneration += 1;
         browseResultsProxyGeneration += 1;
+        cancelCurrentBrowseFunctionalResetForSupersedingIntent();
         activeBrowseResetIntent = {
             __browseResetIntent: true,
             generation: browseResetIntentGeneration,
@@ -1148,6 +1408,20 @@
                 }
                 return;
             }
+            var functionalResetBarrier = browseFunctionalResetBarrier;
+            if (functionalResetBarrier
+                && isBrowseFunctionalResetOwnershipCurrent(functionalResetBarrier, true)) {
+                browseFunctionalResetOwnership.deferredExamIndexSnapshot = snapshot.slice();
+                var functionalResetLoading = document.querySelector('#browse-view .loading');
+                if (functionalResetLoading) {
+                    functionalResetLoading.style.display = 'none';
+                }
+                return;
+            }
+            if (functionalResetBarrier
+                && browseFunctionalResetBarrier === functionalResetBarrier) {
+                isBrowseFunctionalResetBarrierCurrent(functionalResetBarrier);
+            }
             var hasReplayRequest = arguments.length > 1 && replayRequestId != null;
             if (hasReplayRequest && !isBrowseResultsSnapshotCurrent(replayRequestId)) {
                 var staleReplayLoading = document.querySelector('#browse-view .loading');
@@ -1360,7 +1634,13 @@
         registerBrowseFunctionalResetBarrier: registerBrowseFunctionalResetBarrier,
         completeBrowseFunctionalResetBarrier: completeBrowseFunctionalResetBarrier,
         isBrowseFunctionalResetBarrierCurrent: isBrowseFunctionalResetBarrierCurrent,
+        cancelBrowseFunctionalResetBarrier: cancelBrowseFunctionalResetBarrier,
+        updateBrowseFunctionalResetResultsRequest: updateBrowseFunctionalResetResultsRequest,
         getBrowseFunctionalResetState: getBrowseFunctionalResetState,
+        captureBrowseFunctionalResetRecovery: captureBrowseFunctionalResetRecovery,
+        updateBrowseFunctionalResetRecoveryResultsRequest:
+            updateBrowseFunctionalResetRecoveryResultsRequest,
+        completeBrowseFunctionalResetRecovery: completeBrowseFunctionalResetRecovery,
         ensureMoreToolsGroup: ensureMoreToolsGroup,
         ensureSettingsToolsGroup: ensureSettingsToolsGroup,
         ensurePracticeSuiteGroup: ensurePracticeSuiteGroup,

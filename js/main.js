@@ -306,10 +306,10 @@ let lastPracticeRecordsSignature = null;
 let practiceRecordsSyncInvocationGeneration = 0;
 let practiceRecordsDataGeneration = 0;
 let practiceRecordsCommitSubscriptionAttached = false;
+const activePracticeRecordsSyncInvocations = new Map();
 const PRACTICE_RECORD_ENTITY_STORES = new Set([
     'practiceSummaries',
-    'practiceDetails',
-    'practiceAnnotations'
+    'practiceDetails'
 ]);
 
 function ensurePracticeRecordsCommitSubscription() {
@@ -330,6 +330,17 @@ function ensurePracticeRecordsCommitSubscription() {
         });
         if (touchesPracticeRecords) {
             practiceRecordsDataGeneration += 1;
+            if (activePracticeRecordsSyncInvocations.size > 0) {
+                const replacementMode = Array.from(
+                    activePracticeRecordsSyncInvocations.values()
+                ).some((activeOptions) => activeOptions && activeOptions.mode === 'full')
+                    ? 'full'
+                    : 'summary';
+                startPracticeRecordsSyncInBackground('practice-data-committed', {
+                    forceRender: true,
+                    mode: replacementMode
+                });
+            }
         }
     });
     practiceRecordsCommitSubscriptionAttached = true;
@@ -338,6 +349,16 @@ function ensurePracticeRecordsCommitSubscription() {
 async function syncPracticeRecords(options = {}) {
     ensurePracticeRecordsCommitSubscription();
     const invocationGeneration = ++practiceRecordsSyncInvocationGeneration;
+    const normalizedOptions = normalizePracticeRecordsSyncOptions(options);
+    activePracticeRecordsSyncInvocations.set(invocationGeneration, normalizedOptions);
+    try {
+        return await executePracticeRecordsSync(normalizedOptions, invocationGeneration);
+    } finally {
+        activePracticeRecordsSyncInvocations.delete(invocationGeneration);
+    }
+}
+
+async function executePracticeRecordsSync(options, invocationGeneration) {
     const { forceRender = false, mode = 'summary' } = options || {};
     const loadMode = mode === 'full' ? 'full' : 'summary';
     const browseProgressSourceEpoch = {
@@ -2066,12 +2087,19 @@ function captureBrowseProgressRefreshEpoch(sourceEpoch = null) {
         source,
         'activeLibraryGeneration'
     );
+    const hasSourcePracticeRecordsDataGeneration = Object.prototype.hasOwnProperty.call(
+        source,
+        'practiceRecordsDataGeneration'
+    );
     const functionalResetState = readBrowseFunctionalResetState();
     return {
         navigationGeneration: readBrowseProgressGeneration('__getAppNavigationIntentGeneration'),
         activeLibraryGeneration: hasSourceLibraryGeneration
             ? source.activeLibraryGeneration
             : readBrowseProgressGeneration('__getActiveLibraryGeneration'),
+        practiceRecordsDataGeneration: hasSourcePracticeRecordsDataGeneration
+            ? source.practiceRecordsDataGeneration
+            : practiceRecordsDataGeneration,
         resetGeneration: readBrowseProgressGeneration('__getBrowseResetIntentGeneration'),
         functionalResetGeneration: functionalResetState.generation,
         functionalResetWasPending: functionalResetState.status === 'pending'
@@ -2091,8 +2119,15 @@ function isBrowseProgressRefreshEpochCurrent(epoch) {
         }
         return readBrowseProgressGeneration(generationGetters[key]) === captured[key];
     });
-    if (!ordinaryGenerationsAreCurrent || captured.functionalResetGeneration == null) {
-        return ordinaryGenerationsAreCurrent;
+    if (!ordinaryGenerationsAreCurrent) {
+        return false;
+    }
+    if (captured.practiceRecordsDataGeneration != null
+        && captured.practiceRecordsDataGeneration !== practiceRecordsDataGeneration) {
+        return false;
+    }
+    if (captured.functionalResetGeneration == null) {
+        return true;
     }
     return readBrowseFunctionalResetState().generation === captured.functionalResetGeneration;
 }
@@ -2534,6 +2569,11 @@ async function applyBrowseFilter(
         ? beginBrowseUserResultsRequest()
         : retainBrowseUserResultsRequest(renderRequestId);
     const activeRequestId = renderRequestId == null ? userRequestId : renderRequestId;
+    const functionalResetRecovery = window.AppEntry
+        && typeof window.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
+        ? window.AppEntry.captureBrowseFunctionalResetRecovery()
+        : null;
+    let functionalResetRecoverySucceeded = false;
     try {
         const indexSnapshot = await resolveActiveExamIndex();
         if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
@@ -2634,6 +2674,8 @@ async function applyBrowseFilter(
         if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
             window.showView('browse', false);
         }
+        functionalResetRecoverySucceeded = true;
+        return true;
     } catch (e) {
         if (!isBrowseResultsRequestCurrent(activeRequestId) || !isNavigationIntentCurrent()) {
             return false;
@@ -2651,7 +2693,16 @@ async function applyBrowseFilter(
             }
             try { renderBrowseResultsForState(null, activeRequestId); } catch (_) { }
         }, 0);
+        return false;
     } finally {
+        if (functionalResetRecovery
+            && window.AppEntry
+            && typeof window.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
+            window.AppEntry.completeBrowseFunctionalResetRecovery(
+                functionalResetRecovery,
+                functionalResetRecoverySucceeded
+            );
+        }
         endBrowseUserResultsRequest(userRequestId);
     }
 }
@@ -2735,6 +2786,12 @@ async function initializeBrowseView(options = {}) {
     const activeRequestId = options.renderRequestId == null
         ? userRequestId
         : options.renderRequestId;
+    const functionalResetRecovery = !options.skipLoad
+        && window.AppEntry
+        && typeof window.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
+        ? window.AppEntry.captureBrowseFunctionalResetRecovery()
+        : null;
+    let functionalResetRecoverySucceeded = false;
     try {
         console.log('[System] Initializing browse view...');
         const [examIndex] = await Promise.all([
@@ -2783,10 +2840,22 @@ async function initializeBrowseView(options = {}) {
         setupBrowseSortControl();
         setupBrowseFrequencyFilterControl();
         if (!options.skipLoad) {
-            await renderBrowseResultsForState(examIndex, activeRequestId);
+            const renderResult = await renderBrowseResultsForState(examIndex, activeRequestId);
+            if (renderResult === false || !isBrowseResultsRequestCurrent(activeRequestId)) {
+                return null;
+            }
+            functionalResetRecoverySucceeded = true;
         }
         return examIndex;
     } finally {
+        if (functionalResetRecovery
+            && window.AppEntry
+            && typeof window.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
+            window.AppEntry.completeBrowseFunctionalResetRecovery(
+                functionalResetRecovery,
+                functionalResetRecoverySucceeded
+            );
+        }
         endBrowseUserResultsRequest(userRequestId);
     }
 }
@@ -2798,6 +2867,11 @@ async function activateBrowseView(options = {}) {
     const activeRequestId = options.renderRequestId == null
         ? userRequestId
         : options.renderRequestId;
+    const functionalResetRecovery = window.AppEntry
+        && typeof window.AppEntry.captureBrowseFunctionalResetRecovery === 'function'
+        ? window.AppEntry.captureBrowseFunctionalResetRecovery()
+        : null;
+    let functionalResetRecoverySucceeded = false;
     try {
         const examIndex = await initializeBrowseView({
             skipLoad: true,
@@ -2806,8 +2880,19 @@ async function activateBrowseView(options = {}) {
         if (!Array.isArray(examIndex) || !isBrowseResultsRequestCurrent(activeRequestId)) {
             return false;
         }
-        return renderBrowseResultsForState(examIndex, activeRequestId);
+        const result = await renderBrowseResultsForState(examIndex, activeRequestId);
+        functionalResetRecoverySucceeded = result !== false
+            && isBrowseResultsRequestCurrent(activeRequestId);
+        return result;
     } finally {
+        if (functionalResetRecovery
+            && window.AppEntry
+            && typeof window.AppEntry.completeBrowseFunctionalResetRecovery === 'function') {
+            window.AppEntry.completeBrowseFunctionalResetRecovery(
+                functionalResetRecovery,
+                functionalResetRecoverySucceeded
+            );
+        }
         endBrowseUserResultsRequest(userRequestId);
     }
 }
