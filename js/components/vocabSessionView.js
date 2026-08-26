@@ -1317,6 +1317,13 @@
             .replace(/'/g, '&#039;');
     }
 
+    function normalizePhoneticValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
+
     function formatDateTime(value) {
         if (!value) {
             return '-';
@@ -1556,6 +1563,10 @@
                 meaning: String(word?.meaning || '').trim(),
                 example: String(word?.example || '').trim()
             };
+            const phonetic = normalizePhoneticValue(word?.phonetic);
+            if (phonetic) {
+                entry.phonetic = phonetic;
+            }
             if (typeof word?.freq === 'number' && Number.isFinite(word.freq)) {
                 entry.freq = word.freq;
             }
@@ -2163,6 +2174,10 @@
         if (session.stage === 'recognition') {
             const safeWord = escapeHtml(word.word);
             const safeMeaning = escapeHtml(word.meaning || '暂无释义');
+            const phonetic = normalizePhoneticValue(word.phonetic);
+            const phoneticBlock = phonetic
+                ? `<div class="vocab-card__phonetic"><span class="visually-hidden">音标：</span><span aria-hidden="true">/</span><span>${escapeHtml(phonetic)}</span><span aria-hidden="true">/</span></div>`
+                : '';
             const meaningBlock = session.meaningVisible
                 ? `<div class="vocab-card__meaning" data-visible="true">${safeMeaning}</div>`
                 : '';
@@ -2173,6 +2188,7 @@
                 <div class="vocab-card vocab-card--recognition">
                     <div class="vocab-card__wordline">
                         <div class="vocab-card__word">${safeWord}</div>
+                        ${phoneticBlock}
                     </div>
                     ${meaningBlock}
                     ${revealControl}
@@ -2357,6 +2373,10 @@
             
             const safeWord = escapeHtml(word.word);
             const safeMeaning = escapeHtml(word.meaning || '暂无释义');
+            const phonetic = normalizePhoneticValue(word.phonetic);
+            const phoneticDetail = phonetic
+                ? `<div><dt>音标</dt><dd class="vocab-feedback__phonetic"><span aria-hidden="true">/</span><span>${escapeHtml(phonetic)}</span><span aria-hidden="true">/</span></dd></div>`
+                : '';
             card.innerHTML = `
                 <div class="vocab-card vocab-card--feedback vocab-card--${feedbackKind}">
                     <div class="vocab-feedback__head">
@@ -2368,6 +2388,7 @@
                     </div>
                     <dl class="vocab-feedback__details">
                         <div><dt>正确拼写</dt><dd>${safeWord}</dd></div>
+                        ${phoneticDetail}
                         <div><dt>释义</dt><dd>${safeMeaning}</dd></div>
                         <div><dt>间隔天数</dt><dd>${intervalDays} 天</dd></div>
                         <div><dt>难度因子</dt><dd>${easeFactor}</dd></div>

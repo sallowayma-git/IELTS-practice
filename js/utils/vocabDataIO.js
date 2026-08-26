@@ -30,6 +30,13 @@
         return Math.round(clamped * 1000) / 1000;
     }
 
+    function normalizePhonetic(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
+
     function normalizeCategory(value, fallback = null) {
         if (typeof value !== 'string') {
             return fallback;
@@ -95,7 +102,14 @@
         if (!word || !meaning) {
             return null;
         }
-        return { ...raw, word, meaning };
+        const entry = { ...raw, word, meaning };
+        const phonetic = normalizePhonetic(raw.phonetic);
+        if (phonetic) {
+            entry.phonetic = phonetic;
+        } else {
+            delete entry.phonetic;
+        }
+        return entry;
     }
 
     function buildImportResult(type, entries, meta = {}) {
@@ -119,6 +133,7 @@
             return null;
         }
         const example = typeof raw.example === 'string' ? raw.example.trim() : '';
+        const phonetic = normalizePhonetic(raw.phonetic);
         const freq = normalizeFrequency(raw.freq);
         const normalized = {
             word,
@@ -127,6 +142,9 @@
         };
         if (freq !== null) {
             normalized.freq = freq;
+        }
+        if (phonetic) {
+            normalized.phonetic = phonetic;
         }
         return normalized;
     }
@@ -237,6 +255,7 @@
             word: headerCells.indexOf('word'),
             meaning: headerCells.indexOf('meaning'),
             example: headerCells.indexOf('example'),
+            phonetic: headerCells.indexOf('phonetic'),
             freq: headerCells.indexOf('freq')
         };
         const entries = [];
@@ -246,6 +265,7 @@
                 word: columnIndex.word >= 0 ? cells[columnIndex.word] : cells[0],
                 meaning: columnIndex.meaning >= 0 ? cells[columnIndex.meaning] : cells[1],
                 example: columnIndex.example >= 0 ? cells[columnIndex.example] : '',
+                phonetic: columnIndex.phonetic >= 0 ? cells[columnIndex.phonetic] : '',
                 freq: columnIndex.freq >= 0 ? cells[columnIndex.freq] : null
             };
             const normalized = normalizeEntry(candidate);

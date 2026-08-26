@@ -69,6 +69,7 @@
         lastLoadSource: 'init',
         activeListId: DEFAULT_LIST_ID,
         listCache: new Map(),
+        bundledPhoneticIndex: null,
         commitSubscriptionAttached: false,
         activeRefreshToken: 0
     };
@@ -126,6 +127,49 @@
         return `${base}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    function normalizePhoneticValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
+
+    function normalizePhoneticLookupKey(word) {
+        return String(word || '').trim().toLowerCase();
+    }
+
+    function getBundledPhonetic(word) {
+        if (!state.bundledPhoneticIndex) {
+            const index = new Map();
+            const embedded = window.__EMBEDDED_WORDLISTS__;
+            const entries = embedded && Array.isArray(embedded.ielts_core)
+                ? embedded.ielts_core
+                : [];
+            entries.forEach((entry) => {
+                const key = normalizePhoneticLookupKey(entry && entry.word);
+                const phonetic = normalizePhoneticValue(entry && entry.phonetic);
+                if (key && phonetic && !index.has(key)) {
+                    index.set(key, phonetic);
+                }
+            });
+            state.bundledPhoneticIndex = index;
+        }
+        return state.bundledPhoneticIndex.get(normalizePhoneticLookupKey(word)) || '';
+    }
+
+    function getBundledPhoneticEntries() {
+        getBundledPhonetic('');
+        return Array.from(state.bundledPhoneticIndex.entries()).map(([word, phonetic]) => ({ word, phonetic }));
+    }
+
+    function resolveWordPhonetic(record) {
+        if (!record || normalizePhoneticValue(record.phonetic)) {
+            return record;
+        }
+        const phonetic = getBundledPhonetic(record.word);
+        return phonetic ? { ...record, phonetic } : record;
+    }
+
     function normalizeWordRecord(entry) {
         if (!entry || typeof entry !== 'object') {
             return null;
@@ -139,6 +183,7 @@
         const example = typeof entry.example === 'string' ? entry.example.trim() : '';
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
         const source = typeof entry.source === 'string' ? entry.source.trim() : '';
+        const phonetic = normalizePhoneticValue(entry.phonetic);
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
         
         // SM-2 字段
@@ -199,6 +244,9 @@
         }
         if (source) {
             record.source = source;
+        }
+        if (phonetic) {
+            record.phonetic = phonetic;
         }
         [
             'userInput',
@@ -401,11 +449,51 @@
         return SPELLING_ERROR_LIST_IDS.has(listId);
     }
 
-    function normalizeListEntry(entry, listId) {
-        if (isSpellingErrorList(listId)) {
-            return convertSpellingErrorToWord(entry, listId) || normalizeWordRecord(entry);
+    function projectLegacyReadingHighlightPhonetic(entry, listId) {
+        if (listId !== 'reading-highlights' || !entry || normalizePhoneticValue(entry.phonetic)) {
+            return entry;
         }
-        return normalizeWordRecord(entry);
+        const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+        const match = /^音标[:：]\s*([^；]+)(?:；|$)/.exec(note);
+        const phonetic = normalizePhoneticValue(match && match[1]);
+        return phonetic ? { ...entry, phonetic } : entry;
+    }
+
+    function isSpellingErrorEntry(entry) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return false;
+        }
+        if (isSpellingFallbackMeaning(entry.meaning)) {
+            return true;
+        }
+        return [
+            'userInput',
+            'questionId',
+            'examId',
+            'errorCount',
+            'spellingNote',
+            'acceptedAnswers',
+            'canonicalAnswer',
+            'reasonCode'
+        ].some((key) => Object.prototype.hasOwnProperty.call(entry, key));
+    }
+
+    function normalizeListEntry(entry, listId) {
+        const projectedEntry = projectLegacyReadingHighlightPhonetic(entry, listId);
+        const normalized = isSpellingErrorList(listId) && isSpellingErrorEntry(projectedEntry)
+            ? (convertSpellingErrorToWord(projectedEntry, listId) || normalizeWordRecord(projectedEntry))
+            : normalizeWordRecord(projectedEntry);
+        return resolveWordPhonetic(normalized);
+    }
+
+    function normalizeMutationWord(entry, listId) {
+        return listId === 'reading-highlights'
+            ? normalizeListEntry(entry, listId)
+            : resolveWordPhonetic(normalizeWordRecord(entry));
+    }
+
+    function normalizeMutationInputWord(entry, listId) {
+        return normalizeWordRecord(projectLegacyReadingHighlightPhonetic(entry, listId));
     }
 
     function normalizeStoredListWords(storedData, listId = DEFAULT_LIST_ID) {
@@ -540,13 +628,51 @@
     async function ensureDefaultLexicon() {
         try {
             const storedDefault = await readListData(DEFAULT_LIST_ID);
+            const storedDefaultWords = storedDefault && typeof storedDefault === 'object' && Array.isArray(storedDefault.words)
+                ? storedDefault.words
+                : (Array.isArray(storedDefault) ? storedDefault : []);
             const normalizedStored = normalizeStoredListWords(storedDefault, DEFAULT_LIST_ID);
             const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
             if (normalizedStored.length && !pollutedBySpellingList) {
-                if (state.activeListId === DEFAULT_LIST_ID && !state.words.length) {
-                    setWordsInternal(normalizedStored);
+                let backfilled = normalizedStored.map((word) => {
+                    if (normalizePhoneticValue(word.phonetic)) {
+                        return word;
+                    }
+                    const bundledPhonetic = getBundledPhonetic(word.word);
+                    return bundledPhonetic ? { ...word, phonetic: bundledPhonetic } : word;
+                });
+                const hasBackfill = storedDefaultWords.some((word) => (
+                    !normalizePhoneticValue(word && word.phonetic)
+                    && Boolean(getBundledPhonetic(word && word.word))
+                ));
+                let backfillPersisted = false;
+                if (hasBackfill) {
+                    const vocab = await requireVocabData();
+                    if (typeof vocab.backfillListWordPhonetics === 'function') {
+                        try {
+                            const receipt = await vocab.backfillListWordPhonetics({
+                                listId: DEFAULT_LIST_ID,
+                                entries: getBundledPhoneticEntries()
+                            });
+                            backfilled = normalizeStoredListWords(receipt.words, DEFAULT_LIST_ID);
+                            backfillPersisted = true;
+                        } catch (error) {
+                            console.warn('[VocabStore] 默认词表音标持久化回填失败，当前会话继续使用内存补全:', error);
+                        }
+                    } else {
+                        console.warn('[VocabStore] AppData 音标回填接口不可用，当前会话仅使用内存补全');
+                    }
+                    state.listCache.delete(DEFAULT_LIST_ID);
                 }
-                return normalizedStored;
+                if (state.activeListId === DEFAULT_LIST_ID) {
+                    setWordsInternal(backfilled);
+                    if (hasBackfill) {
+                        state.lastLoadSource = backfillPersisted
+                            ? 'appData-v2-phonetic-backfill'
+                            : 'appData-v2-phonetic-runtime';
+                    }
+                }
+                return backfilled;
             }
             if (pollutedBySpellingList) {
                 console.warn('[VocabStore] 检测到默认词表被错词快照污染，正在恢复 IELTS 核心词表');
@@ -596,12 +722,12 @@
 
     async function mergeWords(words) {
         const normalized = Array.isArray(words)
-            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            ? words.map((word) => normalizeMutationInputWord(word, state.activeListId)).filter(Boolean)
             : [];
         const vocab = await requireVocabData();
         const receipt = await vocab.mergeListWords({ listId: state.activeListId, words: normalized });
         const committedWords = Array.isArray(receipt.words) ? receipt.words : [];
-        setWordsInternal(committedWords.map((word) => normalizeWordRecord(word)).filter(Boolean));
+        setWordsInternal(committedWords.map((word) => normalizeMutationWord(word, state.activeListId)).filter(Boolean));
         state.listCache.delete(state.activeListId);
         return {
             words: getWords(),
@@ -615,8 +741,17 @@
             return null;
         }
         const vocab = await requireVocabData();
-        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch });
-        const updated = normalizeWordRecord(receipt.word);
+        const normalizedPatch = { ...patch };
+        if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'phonetic')) {
+            const phonetic = normalizePhoneticValue(normalizedPatch.phonetic);
+            if (phonetic) {
+                normalizedPatch.phonetic = phonetic;
+            } else {
+                delete normalizedPatch.phonetic;
+            }
+        }
+        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch: normalizedPatch });
+        const updated = normalizeMutationWord(receipt.word, state.activeListId);
         const index = state.words.findIndex((word) => word.id === id);
         if (index >= 0 && updated) {
             state.words.splice(index, 1, updated);
@@ -647,14 +782,17 @@
             throw new Error('进度备份包含未知词表');
         }
         const normalized = Array.isArray(words)
-            ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
+            ? words.map((word) => normalizeMutationInputWord(word, requestedListId)).filter(Boolean)
             : [];
         const nextConfig = mergeConfig({ ...config, activeListId: requestedListId });
         const vocab = await requireVocabData();
-        await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
+        const receipt = await vocab.replaceProgress({ listId: requestedListId, words: normalized, config: nextConfig });
+        const committedWords = Array.isArray(receipt && receipt.words)
+            ? receipt.words.map((word) => normalizeMutationWord(word, requestedListId)).filter(Boolean)
+            : normalized;
         state.config = nextConfig;
         state.activeListId = requestedListId;
-        setWordsInternal(normalized);
+        setWordsInternal(committedWords);
         state.listCache.delete(requestedListId);
         return { words: getWords(), config: getConfig() };
     }
@@ -928,7 +1066,6 @@
             ? payload.meaning.trim()
             : (typeof payload.definition === 'string' && payload.definition.trim() ? payload.definition.trim() : '待补充释义');
         const noteParts = [
-            payload.phonetic ? `音标: ${String(payload.phonetic).trim()}` : '',
             payload.partOfSpeech ? `词性: ${String(payload.partOfSpeech).trim()}` : '',
             selectedText && selectedText !== word ? `原高亮: ${selectedText}` : '',
             payload.sourceLabel ? `来源: ${String(payload.sourceLabel).trim()}` : '',
@@ -945,6 +1082,7 @@
             id: generateId(`reading-highlight:${word}`),
             word,
             meaning,
+            phonetic: normalizePhoneticValue(payload.phonetic),
             example: typeof payload.example === 'string' ? payload.example.trim() : '',
             note: noteParts.join('；'),
             easeFactor: null,
@@ -995,9 +1133,9 @@
         await saveListData(listId, words.filter(Boolean));
         state.listCache.delete(listId);
         if (state.activeListId === listId) {
-            setWordsInternal(words.filter(Boolean));
+            setWordsInternal(words.map((word) => resolveWordPhonetic(word)).filter(Boolean));
         }
-        return cloneValue(committedWord);
+        return cloneValue(resolveWordPhonetic(committedWord));
     }
 
     async function init() {

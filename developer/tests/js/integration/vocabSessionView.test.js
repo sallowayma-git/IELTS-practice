@@ -1004,6 +1004,148 @@ async function run() {
         assert.ok(!elements.sessionCard.innerHTML.includes('<svg'));
     });
 
+    await record('recognition renders a labeled phonetic below the word and spelling omits it', () => {
+        hooks.resetSessionState();
+        hooks.state.session.currentWord = {
+            id: 'phonetic-1',
+            word: 'alpha',
+            meaning: '阿尔法',
+            phonetic: ' /ˈæl.fə '
+        };
+        hooks.state.session.stage = 'recognition';
+
+        hooks.renderCard();
+
+        const recognitionMarkup = elements.sessionCard.innerHTML;
+        assert.match(
+            recognitionMarkup,
+            /<div class="vocab-card__word">alpha<\/div>\s*<div class="vocab-card__phonetic">/,
+            'Expected the phonetic block immediately below the word'
+        );
+        assert.ok(recognitionMarkup.includes('<span class="visually-hidden">音标：</span>'));
+        assert.ok(recognitionMarkup.includes('<span>ˈæl.fə</span>'));
+        assert.ok(!recognitionMarkup.includes('//'));
+        assert.strictEqual((recognitionMarkup.match(/aria-hidden="true">\/<\/span>/g) || []).length, 2);
+        const wordlineRule = readSource('css/main.css').match(/\.vocab-card__wordline\s*\{([^}]*)\}/);
+        assert.ok(wordlineRule, 'Missing word-and-phonetic layout rule');
+        assert.match(wordlineRule[1], /flex-direction:\s*column/);
+
+        hooks.state.session.stage = 'spelling';
+        hooks.renderCard();
+
+        const spellingMarkup = elements.sessionCard.innerHTML;
+        assert.ok(!spellingMarkup.includes('vocab-card__phonetic'));
+        assert.ok(!spellingMarkup.includes('vocab-feedback__phonetic'));
+        assert.ok(!spellingMarkup.includes('音标'));
+        assert.ok(!spellingMarkup.includes('ˈæl.fə'));
+    });
+
+    await record('feedback renders phonetic as a labeled detail', () => {
+        hooks.resetSessionState();
+        hooks.state.session.currentWord = {
+            id: 'phonetic-2',
+            word: 'beta',
+            meaning: '贝塔',
+            phonetic: 'ˈbiː.tə/',
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 1,
+            lastReviewed: '2026-08-19T00:00:00.000Z'
+        };
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'good',
+            spellingAttempts: 0,
+            spellingCorrect: true,
+            finalQuality: 'good',
+            finalEF: 2.5,
+            saved: true
+        };
+        hooks.state.session.stage = 'feedback';
+
+        hooks.renderCard();
+
+        const markup = elements.sessionCard.innerHTML;
+        assert.match(
+            markup,
+            /<div><dt>音标<\/dt><dd class="vocab-feedback__phonetic">[\s\S]*?<span>ˈbiː\.tə<\/span>[\s\S]*?<\/dd><\/div>/
+        );
+    });
+
+    await record('missing blank and slash-only phonetics omit recognition blocks and feedback rows', () => {
+        const omittedPhonetics = [undefined, '   ', ' /   / ', '/', '///'];
+
+        omittedPhonetics.forEach((phonetic, index) => {
+            hooks.resetSessionState();
+            hooks.state.session.currentWord = {
+                id: `phonetic-empty-${index}`,
+                word: 'gamma',
+                meaning: '伽马',
+                phonetic,
+                easeFactor: 2.5,
+                interval: 1,
+                repetitions: 1,
+                lastReviewed: '2026-08-19T00:00:00.000Z'
+            };
+            hooks.state.session.stage = 'recognition';
+            hooks.renderCard();
+
+            assert.ok(!elements.sessionCard.innerHTML.includes('vocab-card__phonetic'));
+            assert.ok(!elements.sessionCard.innerHTML.includes('//'));
+
+            hooks.state.session.lastAnswer = {
+                recognitionQuality: 'good',
+                spellingAttempts: 0,
+                spellingCorrect: true,
+                finalQuality: 'good',
+                finalEF: 2.5,
+                saved: true
+            };
+            hooks.state.session.stage = 'feedback';
+            hooks.renderCard();
+
+            assert.ok(!elements.sessionCard.innerHTML.includes('vocab-feedback__phonetic'));
+            assert.ok(!elements.sessionCard.innerHTML.includes('<dt>音标</dt>'));
+            assert.ok(!elements.sessionCard.innerHTML.includes('//'));
+        });
+    });
+
+    await record('recognition and feedback escape malicious phonetics', () => {
+        const maliciousPhonetic = '/<img src=x onerror="window.__phoneticXss=1">/';
+        hooks.resetSessionState();
+        hooks.state.session.currentWord = {
+            id: 'phonetic-unsafe',
+            word: 'delta',
+            meaning: '德尔塔',
+            phonetic: maliciousPhonetic,
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 1,
+            lastReviewed: '2026-08-19T00:00:00.000Z'
+        };
+        hooks.state.session.stage = 'recognition';
+
+        hooks.renderCard();
+
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&quot;window.__phoneticXss=1&quot;'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+
+        hooks.state.session.lastAnswer = {
+            recognitionQuality: 'good',
+            spellingAttempts: 0,
+            spellingCorrect: true,
+            finalQuality: 'good',
+            finalEF: 2.5,
+            saved: true
+        };
+        hooks.state.session.stage = 'feedback';
+        hooks.renderCard();
+
+        assert.ok(elements.sessionCard.innerHTML.includes('&lt;img'));
+        assert.ok(elements.sessionCard.innerHTML.includes('&quot;window.__phoneticXss=1&quot;'));
+        assert.ok(!elements.sessionCard.innerHTML.includes('<img'));
+    });
+
     await record('move to next word handles completion', () => {
         hooks.resetSessionState();
         hooks.state.session.activeQueue = [];
@@ -1369,8 +1511,31 @@ async function run() {
 
     await record('filtered list export remains a complete mergeable word list', async () => {
         const store = createMockStore([
-            { word: 'alpha', meaning: 'A', example: 'First', freq: 0.8, correctCount: 2 },
-            { word: 'beta', meaning: 'B', note: 'private note', questionId: 'internal-id' }
+            {
+                word: 'alpha',
+                meaning: 'A',
+                example: 'First',
+                phonetic: ' /ˈæl.fə ',
+                freq: 0.8,
+                correctCount: 2
+            },
+            {
+                word: 'beta',
+                meaning: 'B',
+                phonetic: ' /   / ',
+                note: 'private note',
+                questionId: 'internal-id'
+            },
+            {
+                word: 'gamma',
+                meaning: 'C',
+                phonetic: '/'
+            },
+            {
+                word: 'delta',
+                meaning: 'D',
+                phonetic: '///'
+            }
         ]);
         hooks.setStore(store);
         hooks.state.ui.listBrowserQuery = 'alpha';
@@ -1386,12 +1551,16 @@ async function run() {
         const payload = JSON.parse(await download.blob.text());
         assert.strictEqual(payload.type, 'wordlist');
         assert.strictEqual(payload.category, 'external');
-        assert.strictEqual(payload.entries.length, 2);
-        assert.deepStrictEqual(Array.from(payload.entries, (entry) => entry.word), ['alpha', 'beta']);
+        assert.strictEqual(payload.entries.length, 4);
+        assert.deepStrictEqual(Array.from(payload.entries, (entry) => entry.word), ['alpha', 'beta', 'gamma', 'delta']);
         assert.ok(!Object.prototype.hasOwnProperty.call(payload, 'version'));
         assert.ok(!Object.prototype.hasOwnProperty.call(payload, 'words'));
         assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[0], 'correctCount'));
         assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[1], 'questionId'));
+        assert.strictEqual(payload.entries[0].phonetic, 'ˈæl.fə');
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[1], 'phonetic'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[2], 'phonetic'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(payload.entries[3], 'phonetic'));
         assert.match(windowStub.messages.at(-1).text, /可分享词表/);
     });
 

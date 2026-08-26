@@ -1493,6 +1493,17 @@ body.no-scroll {
     text-align: center;
 }
 
+.vocab-card__phonetic {
+    max-width: 100%;
+    color: var(--vocab-muted);
+    font-family: var(--vocab-font-body);
+    font-size: clamp(16px, 2vw, 20px);
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .vocab-card__meaning {
     padding: var(--sp-3, 12px) var(--sp-4, 16px);
     border-radius: var(--border-radius-lg, var(--radius-md, 12px));
@@ -1682,6 +1693,11 @@ body.no-scroll {
     font-size: 16px;
     line-height: 1.7;
     color: var(--vocab-ink);
+}
+
+.vocab-feedback__phonetic {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .vocab-feedback__typed {
@@ -8313,5 +8329,4 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
         grid-template-columns: minmax(0, 1fr);
     }
 }
-
 

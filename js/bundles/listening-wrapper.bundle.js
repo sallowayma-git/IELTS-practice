@@ -1749,11 +1749,44 @@
 
     function asObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
     function asArray(value) { return Array.isArray(value) ? value : []; }
+    function normalizePhoneticValue(value) {
+        if (typeof value !== 'string') return '';
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
     function idOf(value, fields) {
         for (const field of fields) {
             if (value && value[field] !== undefined && value[field] !== null && value[field] !== '') return String(value[field]);
         }
         return '';
+    }
+
+    function preserveProgressPhonetics(incomingWords, existingWords) {
+        const existingById = new Map();
+        const existingByWord = new Map();
+        asArray(existingWords).forEach((rawWord) => {
+            const word = asObject(rawWord);
+            const phonetic = normalizePhoneticValue(word.phonetic);
+            if (!phonetic) return;
+            const id = typeof word.id === 'string' ? word.id.trim() : '';
+            const identity = String(word.word || '').trim().toLowerCase();
+            if (id && !existingById.has(id)) existingById.set(id, phonetic);
+            if (identity && !existingByWord.has(identity)) existingByWord.set(identity, phonetic);
+        });
+        return asArray(incomingWords).map((rawWord) => {
+            if (!rawWord || typeof rawWord !== 'object' || Array.isArray(rawWord)) return clone(rawWord);
+            const word = clone(rawWord);
+            const incomingPhonetic = normalizePhoneticValue(word.phonetic);
+            if (incomingPhonetic) {
+                word.phonetic = incomingPhonetic;
+                return word;
+            }
+            delete word.phonetic;
+            const id = typeof word.id === 'string' ? word.id.trim() : '';
+            const identity = String(word.word || '').trim().toLowerCase();
+            const preserved = (id && existingById.get(id)) || (identity && existingByWord.get(identity)) || '';
+            if (preserved) word.phonetic = preserved;
+            return word;
+        });
     }
 
     function importedLibraryId(value, options = {}) {
@@ -3250,12 +3283,40 @@
             const item = jsonValue(rawItem, `${logicalKey} item`);
             const identity = collectionIdentity(logicalKey, item);
             if (!identity) throw new AppDataError('VALIDATION', `${logicalKey} import item has no stable identity`);
-            if (positions.has(identity)) result[positions.get(identity)] = item;
+            const position = positions.get(identity);
+            const mergedItem = logicalKey === 'vocab.words'
+                ? preserveProgressPhonetics([item], position === undefined ? [] : [result[position]])[0]
+                : item;
+            if (position !== undefined) result[position] = mergedItem;
             else {
                 positions.set(identity, result.length);
-                result.push(item);
+                result.push(mergedItem);
             }
         }
+        return result;
+    }
+
+    function mergeVocabListPhonetics(existing, incoming) {
+        const result = Object.assign({}, asObject(existing));
+        Object.entries(asObject(incoming)).forEach(([listId, incomingValue]) => {
+            const existingValue = result[listId];
+            const existingWords = Array.isArray(existingValue)
+                ? existingValue
+                : asObject(existingValue).words;
+            if (Array.isArray(incomingValue)) {
+                result[listId] = preserveProgressPhonetics(incomingValue, existingWords);
+                return;
+            }
+            if (incomingValue && typeof incomingValue === 'object') {
+                const nextList = clone(incomingValue);
+                if (Array.isArray(nextList.words)) {
+                    nextList.words = preserveProgressPhonetics(nextList.words, existingWords);
+                }
+                result[listId] = nextList;
+                return;
+            }
+            result[listId] = clone(incomingValue);
+        });
         return result;
     }
 
@@ -3263,6 +3324,9 @@
         const policy = entry.import;
         if (policy === 'merge-by-id') return mergeCollection(existing, incoming, entry.logicalKey);
         if (policy === 'patch') {
+            if (entry.logicalKey === 'vocab.lists') {
+                return mergeVocabListPhonetics(existing, incoming);
+            }
             if (Array.isArray(existing) || Array.isArray(incoming)) {
                 // Array-shaped keys should use merge-by-id; treat accidental patch as replace.
                 return clone(incoming);
@@ -3645,7 +3709,12 @@
             if (!id) throw new AppDataError('VALIDATION', 'vocab collection id is required');
             const identity = String(word.word || word.id || '').trim().toLowerCase();
             if (!identity) throw new AppDataError('VALIDATION', 'vocab word identity is required');
-            const mutation = optionsMutationOptions(options, 'vocab-word', { collectionId: id, word });
+            const normalizedWord = clone(word);
+            if (Object.prototype.hasOwnProperty.call(normalizedWord, 'phonetic')) {
+                const phonetic = normalizePhoneticValue(normalizedWord.phonetic);
+                if (phonetic) normalizedWord.phonetic = phonetic; else delete normalizedWord.phonetic;
+            }
+            const mutation = optionsMutationOptions(options, 'vocab-word', { collectionId: id, word: normalizedWord });
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const collections = Object.assign({}, asObject(current.data));
@@ -3654,7 +3723,7 @@
                     ? Object.assign({}, clone(existing), { words: asArray(existing.words) })
                     : { id, words: asArray(existing) };
                 const index = list.words.findIndex((item) => String(item && (item.word || item.id) || '').trim().toLowerCase() === identity);
-                const nextWord = Object.assign({}, index >= 0 ? list.words[index] : {}, clone(word), { updatedAt: word.updatedAt || nowIso() });
+                const nextWord = Object.assign({}, index >= 0 ? list.words[index] : {}, normalizedWord, { updatedAt: normalizedWord.updatedAt || nowIso() });
                 if (!nextWord.createdAt) nextWord.createdAt = nextWord.updatedAt;
                 if (index >= 0) list.words[index] = nextWord; else list.words.push(nextWord);
                 list.updatedAt = nowIso();
@@ -3715,8 +3784,13 @@
                     const identity = String(rawWord.word || rawWord.id || '').trim().toLowerCase();
                     if (!identity) throw new AppDataError('VALIDATION', 'vocab word identity is required');
                     if (!positions.has(identity)) {
+                        const addedWord = clone(rawWord);
+                        if (Object.prototype.hasOwnProperty.call(addedWord, 'phonetic')) {
+                            const phonetic = normalizePhoneticValue(addedWord.phonetic);
+                            if (phonetic) addedWord.phonetic = phonetic; else delete addedWord.phonetic;
+                        }
                         positions.set(identity, merged.length);
-                        merged.push(clone(rawWord));
+                        merged.push(addedWord);
                         addedCount += 1;
                         continue;
                     }
@@ -3725,6 +3799,8 @@
                     const patch = {};
                     if (typeof rawWord.meaning === 'string' && rawWord.meaning.trim()) patch.meaning = rawWord.meaning.trim();
                     if (typeof rawWord.example === 'string' && rawWord.example.trim()) patch.example = rawWord.example.trim();
+                    const phonetic = normalizePhoneticValue(rawWord.phonetic);
+                    if (phonetic) patch.phonetic = phonetic;
                     if (typeof rawWord.freq === 'number' && Number.isFinite(rawWord.freq)) patch.freq = rawWord.freq;
                     merged[index] = Object.assign({}, existing, patch, { updatedAt: nowIso() });
                     updatedCount += 1;
@@ -3751,30 +3827,98 @@
                 return Object.assign({}, receipt, { listId, words: clone(merged), addedCount, updatedCount });
             });
         },
+        async backfillListWordPhonetics(command, options = {}) {
+            await ready;
+            assertObject(command, 'vocab.backfillListWordPhonetics requires a command');
+            const listId = String(command.listId || 'default');
+            const phonetics = new Map();
+            asArray(command.entries).forEach((entry) => {
+                assertObject(entry, 'vocab.backfillListWordPhonetics entries must be objects');
+                const identity = String(entry.word || '').trim().toLowerCase();
+                const phonetic = normalizePhoneticValue(entry.phonetic);
+                if (identity && phonetic && !phonetics.has(identity)) {
+                    phonetics.set(identity, phonetic);
+                }
+            });
+            const logicalKey = listId === 'default' ? 'vocab.words' : 'vocab.lists';
+            const mutation = optionsMutationOptions(options, 'vocab-phonetic-backfill', {
+                listId,
+                entryCount: phonetics.size,
+                entriesChecksum: checksum(Array.from(phonetics.entries()))
+            });
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read(logicalKey, { withMeta: true });
+                const collections = listId === 'default' ? null : Object.assign({}, asObject(current.data));
+                const storedList = listId === 'default'
+                    ? asArray(current.data)
+                    : (function readStoredCollection() {
+                        const collection = collections[listId];
+                        return collection && typeof collection === 'object' && !Array.isArray(collection)
+                            ? asArray(collection.words)
+                            : asArray(collection);
+                    }());
+                let updatedCount = 0;
+                const words = storedList.map((word) => {
+                    if (!word || typeof word !== 'object' || Array.isArray(word)) {
+                        return clone(word);
+                    }
+                    const existing = asObject(word);
+                    if (normalizePhoneticValue(existing.phonetic)) return clone(existing);
+                    const identity = String(existing.word || existing.id || '').trim().toLowerCase();
+                    const phonetic = phonetics.get(identity);
+                    if (!phonetic) return clone(existing);
+                    updatedCount += 1;
+                    return Object.assign({}, clone(existing), { phonetic });
+                });
+                if (!updatedCount) {
+                    return { committed: false, listId, words: clone(words), updatedCount: 0 };
+                }
+                const data = listId === 'default'
+                    ? words
+                    : Object.assign({}, collections, {
+                        [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words })
+                    });
+                const receipt = await kernel.mutate([{
+                    logicalKey,
+                    data,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+                return Object.assign({}, receipt, { listId, words: clone(words), updatedCount });
+            });
+        },
         async patchWord(command, options = {}) {
             await ready; assertObject(command, 'vocab.patchWord requires a command');
             const listId = String(command.listId || 'default'); const wordId = String(command.wordId || command.id || '');
             if (!wordId) throw new AppDataError('VALIDATION', 'vocab word id is required');
+            const normalizedPatch = clone(asObject(command.patch));
+            if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'phonetic')) {
+                const phonetic = normalizePhoneticValue(normalizedPatch.phonetic);
+                if (phonetic) normalizedPatch.phonetic = phonetic; else delete normalizedPatch.phonetic;
+            }
             const logicalKey = listId === 'default' ? 'vocab.words' : 'vocab.lists';
             const mutation = optionsMutationOptions(
                 Object.assign({}, options, { operationId: command.operationId || options.operationId }),
                 'vocab-word-patch',
-                command
+                Object.assign({}, command, { patch: normalizedPatch })
             );
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read(logicalKey, { withMeta: true });
                 const collections = listId === 'default' ? null : asObject(current.data);
+                const collectionValue = listId === 'default' ? null : collections[listId];
+                const collection = collectionValue && typeof collectionValue === 'object' && !Array.isArray(collectionValue)
+                    ? asObject(collectionValue)
+                    : {};
                 const list = listId === 'default'
                     ? asArray(current.data)
-                    : asArray(asObject(collections[listId]).words);
+                    : (Array.isArray(collectionValue) ? collectionValue : asArray(collection.words));
                 const index = list.findIndex((word) => idOf(word, ['id', 'word', 'key']) === wordId);
                 if (index < 0) throw new AppDataError('VALIDATION', `Unknown vocab word: ${wordId}`);
-                const updated = Object.assign({}, list[index], clone(asObject(command.patch)), { id: list[index].id || wordId, updatedAt: nowIso() });
+                const updated = Object.assign({}, list[index], normalizedPatch, { id: list[index].id || wordId, updatedAt: nowIso() });
                 const next = list.slice(); next[index] = updated;
                 const data = listId === 'default'
                     ? next
                     : Object.assign({}, collections, {
-                        [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words: next, updatedAt: nowIso() })
+                        [listId]: Object.assign({}, collection, { id: listId, words: next, updatedAt: nowIso() })
                     });
                 const receipt = await kernel.mutate([{
                     logicalKey,
@@ -3790,6 +3934,7 @@
             const mutation = optionsMutationOptions(options, 'vocab-progress', command);
             return retryVocabMutation(options, async () => {
                 const configMeta = await kernel.read('vocab.userConfig', { withMeta: true });
+                let committedWords = words;
                 const changes = [{
                     logicalKey: 'vocab.userConfig',
                     data: Object.assign({}, asObject(configMeta.data), asObject(command.config), { activeListId: listId }),
@@ -3797,13 +3942,23 @@
                 }];
                 if (listId === 'default') {
                     const wordsMeta = await kernel.read('vocab.words', { withMeta: true });
-                    changes.push({ logicalKey: 'vocab.words', data: words, expectedRevision: wordsMeta.envelope ? wordsMeta.envelope.revision : 0 });
+                    committedWords = preserveProgressPhonetics(words, wordsMeta.data);
+                    changes.push({ logicalKey: 'vocab.words', data: committedWords, expectedRevision: wordsMeta.envelope ? wordsMeta.envelope.revision : 0 });
                 } else {
                     const listsMeta = await kernel.read('vocab.lists', { withMeta: true }); const lists = Object.assign({}, asObject(listsMeta.data));
-                    lists[listId] = Object.assign({}, asObject(lists[listId]), { id: listId, words });
+                    const existingValue = lists[listId];
+                    const existingList = existingValue && typeof existingValue === 'object' && !Array.isArray(existingValue)
+                        ? asObject(existingValue)
+                        : {};
+                    const existingWords = Array.isArray(existingValue)
+                        ? existingValue
+                        : existingList.words;
+                    committedWords = preserveProgressPhonetics(words, existingWords);
+                    lists[listId] = Object.assign({}, existingList, { id: listId, words: committedWords });
                     changes.push({ logicalKey: 'vocab.lists', data: lists, expectedRevision: listsMeta.envelope ? listsMeta.envelope.revision : 0 });
                 }
-                return kernel.mutate(changes, mutation);
+                const receipt = await kernel.mutate(changes, mutation);
+                return Object.assign({}, receipt, { listId, words: clone(committedWords) });
             });
         }
     });
