@@ -12,6 +12,11 @@
     const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const READING_NOTE_STYLE_ID = 'reading-note-style';
     const READING_DISPLAY_CONTROL_STYLE_ID = 'reading-display-control-style';
+    const OPTION_CONSUMED_STYLE_ID = 'reading-option-consumed-style';
+    // 候选池容器/选项 class 不统一，统一选择器覆盖所有变体。
+    // .headings-pool 当前都包裹 .pool-items 但作为防御一并纳入。
+    const POOL_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
+    const POOL_CONTAINER_SELECTOR = '.pool-items, #word-options, .options-pool, .option-pool, .cardpool, .headings-pool, .pool';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const READING_CANDIDATE_CODE_PATTERN = /^\d{6}$/;
@@ -122,7 +127,8 @@
             currentIndex: 0,
             activeStartedAtMs: null,
             slotsByExamId: new Map(),
-            activating: false
+            activating: false,
+            activationGeneration: 0
         },
         simulationDraftSyncTimer: null,
         simulationDraftFingerprint: '',
@@ -605,6 +611,89 @@
         });
     }
 
+    function getNonEmptyTextNodes(root) {
+        const textNodes = [];
+        if (!(root instanceof Node)) {
+            return textNodes;
+        }
+        const ownerDocument = root.ownerDocument || document;
+        const nodeFilter = ownerDocument.defaultView?.NodeFilter || global.NodeFilter;
+        if (!nodeFilter) {
+            return textNodes;
+        }
+        const walker = ownerDocument.createTreeWalker(root, nodeFilter.SHOW_TEXT);
+        let textNode = walker.nextNode();
+        while (textNode) {
+            if ((textNode.data || '').length > 0) {
+                textNodes.push(textNode);
+            }
+            textNode = walker.nextNode();
+        }
+        return textNodes;
+    }
+
+    function rangeHasPositiveTextOverlap(range, node) {
+        if (!range || range.collapsed || !(node instanceof Node)) {
+            return false;
+        }
+        const textNodes = getNonEmptyTextNodes(node);
+        if (!textNodes.length) {
+            return false;
+        }
+        const ownerDocument = node.ownerDocument || document;
+        const rangeType = ownerDocument.defaultView?.Range || global.Range;
+        if (!rangeType || typeof range.compareBoundaryPoints !== 'function') {
+            return false;
+        }
+        try {
+            const nodeTextRange = ownerDocument.createRange();
+            nodeTextRange.setStart(textNodes[0], 0);
+            const lastTextNode = textNodes[textNodes.length - 1];
+            nodeTextRange.setEnd(lastTextNode, lastTextNode.data.length);
+            return range.compareBoundaryPoints(rangeType.START_TO_END, nodeTextRange) > 0
+                && range.compareBoundaryPoints(rangeType.END_TO_START, nodeTextRange) < 0;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function isAtomicPrimaryHighlightSelection(range, highlightNode) {
+        if (
+            !range
+            || range.collapsed
+            || !(highlightNode instanceof HTMLElement)
+            || !highlightNode.matches('.hl')
+            || !highlightNode.isConnected
+            || highlightNode.dataset.hlLevel === 'secondary'
+            || typeof range.comparePoint !== 'function'
+        ) {
+            return false;
+        }
+
+        const textNodes = getNonEmptyTextNodes(highlightNode);
+        if (!textNodes.length) {
+            return false;
+        }
+
+        try {
+            const ownerDocument = highlightNode.ownerDocument || document;
+            const scope = highlightNode.closest('#left, #right') || ownerDocument;
+            const intersectedHighlights = Array.from(scope.querySelectorAll('.hl'))
+                .filter((node) => rangeHasPositiveTextOverlap(range, node));
+            if (intersectedHighlights.length !== 1 || intersectedHighlights[0] !== highlightNode) {
+                return false;
+            }
+
+            const firstTextNode = textNodes[0];
+            const lastTextNode = textNodes[textNodes.length - 1];
+            return range.comparePoint(firstTextNode, 0) === 0
+                && range.comparePoint(lastTextNode, lastTextNode.data.length) === 0
+                && range.toString() === String(highlightNode.textContent || '');
+        } catch (_) {
+            return false;
+        }
+    }
+
     function updateSelectionToolbar() {
         const toolbar = document.getElementById('selbar');
         if (!toolbar) return;
@@ -641,13 +730,7 @@
                 const hls = containerElement.querySelectorAll('.hl');
                 for (let i = 0; i < hls.length; i++) {
                     const hl = hls[i];
-                    let intersects = false;
-                    if (typeof range.intersectsNode === 'function') {
-                        intersects = range.intersectsNode(hl);
-                    } else if (selection && typeof selection.containsNode === 'function') {
-                        intersects = selection.containsNode(hl, true);
-                    }
-                    if (intersects) {
+                    if (rangeHasPositiveTextOverlap(range, hl)) {
                         hasHighlight = true;
                         finalHighlightNode = hl;
                         break;
@@ -678,7 +761,27 @@
             return;
         }
         const selection = global.getSelection();
-        if (!interaction.lastRange || interaction.lastRange.collapsed || interaction.currentHighlightNode) {
+        if (!interaction.lastRange || interaction.lastRange.collapsed) {
+            return;
+        }
+        if (kind === 'highlight' && interaction.currentHighlightNode instanceof HTMLElement) {
+            const shouldPromote = isAtomicPrimaryHighlightSelection(
+                interaction.lastRange,
+                interaction.currentHighlightNode
+            );
+            if (shouldPromote) {
+                interaction.currentHighlightNode.dataset.hlLevel = 'secondary';
+            }
+            selection?.removeAllRanges();
+            if (toolbar) toolbar.style.display = 'none';
+            interaction.lastRange = null;
+            interaction.currentHighlightNode = null;
+            if (shouldPromote) {
+                syncReadingAnnotation('highlight');
+            }
+            return;
+        }
+        if (interaction.currentHighlightNode) {
             return;
         }
         const span = document.createElement('span');
@@ -1531,14 +1634,14 @@
     }
 
     function initDragPools() {
-        document.querySelectorAll('.pool-items').forEach((pool, index) => {
+        document.querySelectorAll(POOL_CONTAINER_SELECTOR).forEach((pool, index) => {
             if (!pool.id) {
                 pool.id = `practice-pool-${index}`;
             }
         });
-        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+        document.querySelectorAll(`${POOL_CONTAINER_SELECTOR} ${POOL_ITEM_SELECTOR}`).forEach((item) => {
             if (!item.dataset.originPool) {
-                const pool = item.closest('.pool-items');
+                const pool = item.closest(POOL_CONTAINER_SELECTOR);
                 if (pool?.id) {
                     item.dataset.originPool = pool.id;
                 }
@@ -1562,6 +1665,54 @@
         initDragPools();
     }
 
+    function isCurrentSuiteActivation(examId, activationGeneration) {
+        return Boolean(
+            state.suite?.inline
+            && state.suite.activationGeneration === activationGeneration
+            && state.suite.activeExamId === examId
+            && state.examId === examId
+        );
+    }
+
+    async function restoreActiveSuiteSlotPresentation(slot, activationGeneration) {
+        const targetExamId = String(slot?.examId || '').trim();
+        const isCurrentActivation = () => isCurrentSuiteActivation(targetExamId, activationGeneration);
+        if (!isCurrentActivation()) {
+            return false;
+        }
+        const shouldShowResults = Boolean(
+            slot?.lastResults
+            && (state.readOnly || state.reviewMode || state.submitted)
+        );
+        if (shouldShowResults) {
+            renderResults(slot.lastResults);
+            await renderExplanations({
+                dataKey: slot.dataKey || targetExamId,
+                examId: targetExamId,
+                isCurrent: isCurrentActivation
+            });
+            if (!isCurrentActivation()) {
+                return false;
+            }
+            applyHighlights(Array.isArray(slot.draft?.highlights) ? slot.draft.highlights : []);
+            refreshNoteHighlightAttributes();
+            restoreMissingNoteAnchors();
+            applyMemorizeLocatorHighlights();
+            enhanceReviewHighlights();
+        }
+        updateNavStatuses(shouldShowResults ? slot.lastResults : null);
+        if (state.readOnly) {
+            setReadOnlyMode(true, state.readOnlyReason);
+        }
+        if (state.timerLocked) {
+            setTimerLockMode(true);
+        } else {
+            disableDragInteractions();
+        }
+        syncPrimaryActionButtons();
+        return true;
+    }
+
     async function activateSuiteSlot(examId, options = {}) {
         if (!state.suite?.inline) {
             return false;
@@ -1571,6 +1722,8 @@
         if (!slot || !slot.dataset) {
             return false;
         }
+        const activationGeneration = (Number(state.suite.activationGeneration) || 0) + 1;
+        state.suite.activationGeneration = activationGeneration;
         if (!options.skipSave) {
             updateActiveSlotFromCurrentDom('deactivate');
         }
@@ -1594,9 +1747,16 @@
         syncInlineSuiteIdentity();
         state.simulationMode = true;
         state.simulationContextReady = true;
-        updateNavStatuses(slot.lastResults || null);
-        syncPrimaryActionButtons();
-        state.suite.activating = false;
+        try {
+            await restoreActiveSuiteSlotPresentation(slot, activationGeneration);
+        } finally {
+            if (isCurrentSuiteActivation(targetExamId, activationGeneration)) {
+                state.suite.activating = false;
+            }
+        }
+        if (!isCurrentSuiteActivation(targetExamId, activationGeneration)) {
+            return false;
+        }
         if (Number.isFinite(Number(slot.draft?.scrollY))) {
             global.scrollTo(0, Number(slot.draft.scrollY) || 0);
         }
@@ -1636,6 +1796,25 @@
             body.hide-reading-highlights .hl:not([data-hl-type="note"]):not([data-note-id]){background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important}
             body.reading-question-nav-collapsed .practice-nav{display:none}
             body.dark-mode .reading-display-toggle-group{background:#1e293b;border-color:#475569;color:#cbd5e1}
+        `;
+        document.head.appendChild(style);
+    }
+
+    function ensureOptionConsumedStyles() {
+        if (document.getElementById(OPTION_CONSUMED_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = OPTION_CONSUMED_STYLE_ID;
+        style.textContent = `
+            .drag-item.option-consumed,
+            .draggable-word.option-consumed,
+            .card.option-consumed {
+                opacity: 0.45 !important;
+                cursor: not-allowed !important;
+                background: #f1f5f9 !important;
+                border-color: #cbd5e1 !important;
+                color: #94a3b8 !important;
+                pointer-events: none !important;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -2482,7 +2661,10 @@
         }
     }
 
-    async function ensureExplanationDataset() {
+    async function ensureExplanationDataset(options = {}) {
+        const targetDataKey = String(options.dataKey || state.dataKey || '').trim();
+        const targetExamId = String(options.examId || state.examId || '').trim();
+        const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : null;
         const registry = global.__READING_EXPLANATION_DATA__;
         if (!registry || typeof registry.get !== 'function') {
             return null;
@@ -2493,7 +2675,10 @@
         } catch (_) {
             return null;
         }
-        const entry = manifest[state.dataKey] || manifest[state.examId];
+        if (isCurrent && !isCurrent()) {
+            return null;
+        }
+        const entry = manifest[targetDataKey] || manifest[targetExamId];
         if (!entry || !entry.dataKey || !entry.script) {
             return null;
         }
@@ -2503,6 +2688,9 @@
             } catch (_) {
                 return null;
             }
+        }
+        if (isCurrent && !isCurrent()) {
+            return null;
         }
         const payload = registry.get(entry.dataKey);
         state.explanation = payload || null;
@@ -2874,6 +3062,19 @@
         return index >= 0 ? (state.suite.sequence[index] || null) : null;
     }
 
+    function resolveComparisonNavStatus(comparison, answered = false) {
+        if (!comparison || typeof comparison !== 'object') {
+            return answered ? 'answered' : '';
+        }
+        if (comparison.isCorrect === true) {
+            return 'correct';
+        }
+        if (comparison.isCorrect === false) {
+            return 'incorrect';
+        }
+        return answered ? 'answered' : '';
+    }
+
     function getPassageQuestionStates() {
         if (state.suite?.inline && state.suite.sequence.length) {
             const info = {
@@ -2907,7 +3108,7 @@
                     }
                     const comparison = slot?.lastResults?.answerComparison?.[qId];
                     if (comparison) {
-                        status = comparison.isCorrect ? 'correct' : 'incorrect';
+                        status = resolveComparisonNavStatus(comparison, answered);
                     }
                     return { qId, label, status, examId: entry.examId };
                 });
@@ -2969,7 +3170,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -3001,7 +3202,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -3033,7 +3234,7 @@
                     status = 'answered';
                 }
                 if (comparison[qId]) {
-                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                    status = resolveComparisonNavStatus(comparison[qId], answered);
                 }
                 return { qId, label, status };
             });
@@ -3501,7 +3702,7 @@
                 navStatus.set(questionId, hasAnswer(questionId) ? 'answered' : '');
                 return;
             }
-            navStatus.set(questionId, entry.isCorrect ? 'correct' : 'incorrect');
+            navStatus.set(questionId, resolveComparisonNavStatus(entry, hasAnswer(questionId)));
         });
         buildQuestionNav();
         syncPrimaryActionButtons();
@@ -3803,18 +4004,32 @@
         });
     }
 
-    async function renderExplanations() {
+    async function renderExplanations(options = {}) {
+        const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : null;
+        if (isCurrent && !isCurrent()) {
+            return false;
+        }
         if (typeof testOverrides.renderExplanations === 'function') {
-            await testOverrides.renderExplanations();
-            return;
+            const commitOverride = await testOverrides.renderExplanations(options);
+            if (isCurrent && !isCurrent()) {
+                return false;
+            }
+            if (typeof commitOverride === 'function') {
+                commitOverride();
+            }
+            return true;
         }
         clearExplanations();
-        const explanation = await ensureExplanationDataset();
+        const explanation = await ensureExplanationDataset(options);
+        if (isCurrent && !isCurrent()) {
+            return false;
+        }
         if (!explanation) {
-            return;
+            return false;
         }
         renderPassageExplanations();
         renderQuestionExplanations();
+        return true;
     }
 
     function createAnswerKeyCard(questionId, answerValue) {
@@ -4136,6 +4351,7 @@
 
     function clearDropzone(dropzone) {
         if (!dropzone) return;
+        const previousPayload = getDropzonePayload(dropzone);
         dropzone.dataset.answerValue = '';
         dropzone.dataset.answerLabel = '';
         // 清除判卷残留的标记，避免重置后旧颜色残留
@@ -4147,6 +4363,10 @@
             if (holder) {
                 holder.innerHTML = '';
             }
+        }
+        // 清空后恢复 pool 中对应选项的显示（不允许复用的题组）
+        if (previousPayload) {
+            restorePoolOption(dropzone, previousPayload);
         }
         updateDropzoneState(dropzone);
     }
@@ -4165,10 +4385,12 @@
     function buildDragPayload(item) {
         if (!item) return null;
         const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
+        const sourcePool = item.closest(POOL_CONTAINER_SELECTOR);
         return {
             value: item.dataset.heading || item.dataset.option || item.dataset.key || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
             label: item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent.trim(),
-            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || ''
+            sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || '',
+            sourcePoolId: sourcePool?.id || item.dataset.originPool || ''
         };
     }
 
@@ -4182,7 +4404,8 @@
             return {
                 value: String(payload.value || payload.label || '').trim(),
                 label: String(payload.label || payload.value || '').trim(),
-                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim()
+                sourceDropzoneId: String(payload.sourceDropzoneId || '').trim(),
+                sourcePoolId: String(payload.sourcePoolId || '').trim()
             };
         } catch (_) {
             const fallback = String(rawValue).trim();
@@ -4203,6 +4426,11 @@
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
+            // 已被使用的选项不可拖拽
+            if (item.classList.contains('option-consumed') || item.dataset.consumed === '1') {
+                event.preventDefault();
+                return;
+            }
             const payload = buildDragPayload(item);
             if (!payload || !payload.value) {
                 event.preventDefault();
@@ -4253,6 +4481,140 @@
         updateDropzoneState(dropzone);
     }
 
+    function resolvePoolContainer(group) {
+        // 候选池容器 class 不统一：.pool-items / #word-options / .options-pool /
+        // .option-pool / .cardpool 均可能是（.option-pool 与 .options-pool 是不同 class，
+        // .cardpool 用于卡片匹配题，二者都必须覆盖）
+        if (!group) return null;
+        return group.querySelector(POOL_CONTAINER_SELECTOR);
+    }
+
+    function resolveOptionGroupAndPool(dropzone, payload) {
+        // 辅助函数：在左右分栏布局下也能找到正确的题组容器和选项池。
+        // 优先用 dropzone 定位所属组（consume/restore 针对放置/清空的答案区所属组，
+        // 跨组交换时不能用 payload 来源定位，否则会误伤源组），sourcePoolId 作兜底。
+        let group = null;
+        let pool = null;
+
+        // 1. 优先从 dropzone 向上查找 group（目标/源答案区所属组）
+        if (dropzone) {
+            group = dropzone.closest('.unified-group');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 2. 尝试通过 payload.sourcePoolId 查找 pool（兼容分栏下 closest 失效）
+        if (!group && payload && payload.sourcePoolId) {
+            pool = document.getElementById(payload.sourcePoolId);
+            if (pool) {
+                group = pool.closest('.unified-group');
+            }
+        }
+
+        // 3. 如果还没找到，找到页面上 allowOptionReuse=false 的 group
+        if (!group) {
+            group = document.querySelector('.unified-group[data-allow-option-reuse="false"]');
+            if (group) {
+                pool = resolvePoolContainer(group);
+            }
+        }
+
+        // 4. 最后兜底：直接找第一个 pool
+        if (!pool) {
+            pool = document.querySelector(POOL_CONTAINER_SELECTOR);
+            if (pool) {
+                group = group || pool.closest('.unified-group');
+            }
+        }
+
+        return { group, pool };
+    }
+
+    function findPoolItemByValue(pool, consumedValue) {
+        // 统一候选 item 类型：.drag-item（段落/匹配）、.draggable-word（选词填空）
+        if (!pool) return null;
+        const items = pool.querySelectorAll(POOL_ITEM_SELECTOR);
+        for (const item of items) {
+            const itemValue = canonicalizeAnswerToken(
+                item.dataset.heading || item.dataset.option || item.dataset.key
+                || item.dataset.word || item.dataset.value || item.textContent
+            );
+            if (itemValue && itemValue === consumedValue) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function consumePoolOption(dropzone, payload) {
+        // 段落匹配等不允许复用的题组：选项拖走后在候选池标记为已使用（禁用+标灰），
+        // 便于用户直观看到哪些选项已被使用，且不可再次选择。
+        if (!dropzone || !payload || !payload.value) {
+            return;
+        }
+        const { group, pool } = resolveOptionGroupAndPool(dropzone, payload);
+        if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
+            return;
+        }
+        const consumedValue = canonicalizeAnswerToken(payload.value);
+        const item = findPoolItemByValue(pool, consumedValue);
+        if (item && !item.dataset.consumed) {
+            item.dataset.consumed = '1';
+            item.classList.add('option-consumed');
+            item.setAttribute('draggable', 'false');
+        }
+    }
+
+    function restorePoolOption(dropzone, payload) {
+        if (!dropzone || !payload || !payload.value) {
+            return;
+        }
+        const { group, pool } = resolveOptionGroupAndPool(dropzone, payload);
+        if (!group || !pool || group.dataset.allowOptionReuse !== 'false') {
+            return;
+        }
+        // 限定到当前组的 questionIds：同一页面可能有多个不允许复用的题组
+        // 使用相同选项字母（如 p2-high-233 组2/组3 都用 A-E），
+        // 跨组扫描会误伤其他组的独立选项。
+        const groupQuestionIds = new Set(
+            String(group.dataset.questionIds || '')
+                .split(',')
+                .map((entry) => normalizeQuestionId(entry.trim()))
+                .filter(Boolean)
+        );
+        const restoredValue = canonicalizeAnswerToken(payload.value);
+        const item = findPoolItemByValue(pool, restoredValue);
+        if (item && item.dataset.consumed) {
+            // 仅当该选项未被当前组的其他 dropzone 使用时才恢复
+            // 左右分栏布局下 dropzone 不在 group 内，需按 questionId 匹配；
+            // summary 填空题的答案也存在 .drop-target-summary 中，需一并检查
+            const groupDropzones = Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'))
+                .filter((zone) => {
+                    const zoneQuestion = zone.dataset.question || zone.dataset.questionId || '';
+                    const zoneIds = expandQuestionSequence(zoneQuestion);
+                    const normalizedZoneIds = zoneIds.length
+                        ? zoneIds.map((id) => normalizeQuestionId(id)).filter(Boolean)
+                        : [normalizeQuestionId(zoneQuestion)].filter(Boolean);
+                    return normalizedZoneIds.some((id) => groupQuestionIds.has(id));
+                });
+            const stillUsed = groupDropzones.some((zone) => {
+                const zonePayload = getDropzonePayload(zone);
+                return zonePayload
+                    && canonicalizeAnswerToken(zonePayload.value) === restoredValue;
+            });
+            if (!stillUsed) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
+                // 不允许重新启用选项，否则可绕过锁定继续作答
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+                item.classList.toggle('drag-item-locked', interactionLocked);
+            }
+        }
+    }
+
     function handleDropOnDropzone(dropzone, payload) {
         if (!dropzone || !payload || !payload.value) {
             return;
@@ -4265,12 +4627,28 @@
             return;
         }
         const previousPayload = getDropzonePayload(dropzone);
+        const sourcePreviousPayload = getDropzonePayload(sourceDropzone);
         setDropzoneAnswer(dropzone, payload.value, payload.label);
+
+        // 目标 dropzone：消耗新值；若原来有值且被替换，恢复原值（仅当不再被使用）
+        consumePoolOption(dropzone, payload);
+        if (previousPayload && previousPayload.value
+            && canonicalizeAnswerToken(previousPayload.value) !== canonicalizeAnswerToken(payload.value)) {
+            restorePoolOption(dropzone, previousPayload);
+        }
+
         if (sourceDropzone && sourceDropzone !== dropzone) {
+            // 跨答案区拖动：先把目标旧值移入源 dropzone（消耗源组对应选项），
+            // 再恢复源旧值——此时源已更新，才能正确判断源旧值是否仍被使用
             if (previousPayload && previousPayload.value) {
                 setDropzoneAnswer(sourceDropzone, previousPayload.value, previousPayload.label);
+                consumePoolOption(sourceDropzone, previousPayload);
             } else {
                 clearDropzone(sourceDropzone);
+            }
+            // 源 dropzone 的旧值已被移走，恢复其在 pool 中的状态（仅当不再被使用）
+            if (sourcePreviousPayload && sourcePreviousPayload.value) {
+                restorePoolOption(sourceDropzone, sourcePreviousPayload);
             }
         }
         updateNavStatuses();
@@ -4284,11 +4662,17 @@
         if (!sourceDropzone) {
             return;
         }
+        // 先记录原答案，清空后恢复 pool 中的选项显示
+        const previousPayload = getDropzonePayload(sourceDropzone);
         clearDropzone(sourceDropzone);
+        if (previousPayload) {
+            restorePoolOption(sourceDropzone, previousPayload);
+        }
         updateNavStatuses();
     }
 
     function attachDragDrop() {
+        ensureOptionConsumedStyles();
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
@@ -4303,7 +4687,7 @@
         });
         document.addEventListener('dragover', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -4313,13 +4697,13 @@
         });
         document.addEventListener('dragleave', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
             const target = event.target instanceof HTMLElement
-                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                ? event.target.closest(`.paragraph-dropzone, .match-dropzone, .drop-target-summary, ${POOL_CONTAINER_SELECTOR}`)
                 : null;
             if (!target) {
                 return;
@@ -4331,7 +4715,7 @@
             if (!payload) {
                 return;
             }
-            if (target.classList.contains('pool-items')) {
+            if (target.matches(POOL_CONTAINER_SELECTOR) || target.closest(POOL_CONTAINER_SELECTOR)) {
                 handleDropBackToPool(payload);
                 return;
             }
@@ -4591,6 +4975,8 @@
         }
         const label = normalizeAnswerForReplay(rawValue, 'label') || value;
         setDropzoneAnswer(dropzone, value, label);
+        // 回放答案时也需要标记选项为已使用（不允许复用的题组）
+        consumePoolOption(dropzone, { value, label });
         return true;
     }
 
@@ -5076,9 +5462,14 @@
             const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
             const partial = Number(entry.partialCorrectCount) || 0;
             const weight = Number(entry.weight) || 1;
-            const isPartial = !entry.isCorrect && partial > 0 && weight > 1;
-            const status = entry.isCorrect ? '✓' : (isPartial ? `${partial}/${weight}` : '✗');
-            const statusClass = entry.isCorrect ? 'result-correct' : (isPartial ? 'result-partial' : 'result-incorrect');
+            const correctnessKnown = entry.isCorrect === true || entry.isCorrect === false;
+            const isPartial = entry.isCorrect === false && partial > 0 && weight > 1;
+            const status = entry.isCorrect === true
+                ? '✓'
+                : (isPartial ? `${partial}/${weight}` : (correctnessKnown ? '✗' : '—'));
+            const statusClass = entry.isCorrect === true
+                ? 'result-correct'
+                : (isPartial ? 'result-partial' : (correctnessKnown ? 'result-incorrect' : 'result-unknown'));
             return `
                 <tr>
                     <td><button type="button" class="question-jump-btn" data-result-question-id="${escapeHtml(entry.questionId)}" aria-label="跳转到题号 ${label} 的原文证据">${label}</button></td>
@@ -5315,19 +5706,46 @@
                 : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
         });
 
-        const hasCanonicalCorrectAnswers = Object.keys(normalizedCorrectAnswers).length > 0;
-        if (hasCanonicalCorrectAnswers) {
+        const hasUsableCorrectAnswer = (questionId) => (
+            Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId)
+            && splitAnswerTokens(normalizedCorrectAnswers[questionId]).length > 0
+        );
+        const replayGroupLookup = buildQuestionGroupLookup(state.dataset);
+        const knownQuestionIds = Array.from(questionIds).filter((questionId) => {
+            if (!hasUsableCorrectAnswer(questionId)) {
+                return false;
+            }
+            const questionGroup = replayGroupLookup.get(questionId);
+            const isSplitMultiChoiceGroup = Boolean(
+                questionGroup
+                && (questionGroup.kind === 'multi_choice' || questionGroup.kind === 'multiple_choice')
+                && Array.isArray(questionGroup.questionIds)
+                && questionGroup.questionIds.length > 1
+            );
+            return !isSplitMultiChoiceGroup
+                || questionGroup.questionIds.every((groupQuestionId) => hasUsableCorrectAnswer(groupQuestionId));
+        });
+        if (knownQuestionIds.length > 0) {
             const replayResults = buildResultsFromAnswers(
                 Object.assign({}, state.dataset || {}, {
                     answerKey: normalizedCorrectAnswers,
-                    questionOrder: Array.from(questionIds)
+                    questionOrder: knownQuestionIds
                 }),
                 replayAnswers
             );
+            const answerComparison = {};
+            questionIds.forEach((questionId) => {
+                answerComparison[questionId] = replayResults.answerComparison[questionId] || {
+                    questionId,
+                    userAnswer: replayAnswers[questionId],
+                    correctAnswer: '',
+                    isCorrect: null
+                };
+            });
             return {
-                answers: normalizedAnswers,
+                answers: replayAnswers,
                 correctAnswers: normalizedCorrectAnswers,
-                answerComparison: replayResults.answerComparison,
+                answerComparison,
                 scoreInfo: Object.assign({}, entry.scoreInfo || {}, replayResults.scoreInfo)
             };
         }
@@ -5353,7 +5771,7 @@
             : Math.round(scoreInfo.accuracy * 100);
 
         return {
-            answers: normalizedAnswers,
+            answers: replayAnswers,
             correctAnswers: normalizedCorrectAnswers,
             answerComparison: normalizedComparison,
             scoreInfo
@@ -5374,55 +5792,121 @@
         );
     }
 
-    function applyReplayAnswersToDom(answers = {}) {
+    function applyAnswersToDom(answers = {}) {
+        if (!answers || typeof answers !== 'object') {
+            return;
+        }
+
+        const groupedHandledQuestionIds = new Set();
+        const groupedChoiceInputs = new Map();
+        document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
+            const groupName = String(input.getAttribute('name') || '').trim();
+            if (!groupName) return;
+            const expandedQuestionIds = expandQuestionSequence(groupName);
+            if (expandedQuestionIds.length <= 1) return;
+            const questionIds = resolveCheckboxQuestionIds(groupName);
+            if (!questionIds.length) return;
+            const existing = groupedChoiceInputs.get(groupName) || {
+                groupName,
+                questionIds,
+                inputs: []
+            };
+            existing.inputs.push(input);
+            groupedChoiceInputs.set(groupName, existing);
+        });
+
+        groupedChoiceInputs.forEach((group) => {
+            const mergedValues = [];
+            const appendValues = (rawValue) => {
+                splitAnswerTokens(rawValue).forEach((entry) => {
+                    const normalized = canonicalizeAnswerToken(entry);
+                    if (normalized) {
+                        mergedValues.push(normalized);
+                    }
+                });
+            };
+            group.questionIds.forEach((questionId) => {
+                groupedHandledQuestionIds.add(questionId);
+                if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
+                    appendValues(answers[questionId]);
+                }
+            });
+            if (Object.prototype.hasOwnProperty.call(answers, group.groupName)) {
+                appendValues(answers[group.groupName]);
+            }
+            const normalizedValues = Array.from(new Set(mergedValues));
+            group.inputs.forEach((input) => {
+                const candidate = canonicalizeAnswerToken(
+                    input.value || input.dataset?.option || input.dataset?.value || input.id || ''
+                );
+                input.checked = normalizedValues.some((value) => areAnswerTokensEquivalent(candidate, value));
+            });
+        });
+
         Object.entries(answers).forEach(([questionId, rawValue]) => {
             const normalizedId = normalizeReplayQuestionId(questionId);
-            if (!normalizedId) return;
+            if (!normalizedId || groupedHandledQuestionIds.has(normalizedId)) return;
             if (applyDropzoneAnswer(normalizedId, rawValue)) {
                 return;
             }
-            const aliases = Array.from(new Set([
-                normalizedId,
-                normalizedId.replace(/^q/i, ''),
-                `question${normalizedId.replace(/^q/i, '')}`
-            ])).filter(Boolean);
-
-            const valueList = splitAnswerTokens(rawValue);
-            const firstValue = valueList[0] || '';
-
+            const aliases = resolveAnswerAliases(normalizedId);
+            const choiceFields = new Set();
+            const textFields = new Set();
+            const selectFields = new Set();
             aliases.forEach((alias) => {
                 const escapedAlias = escapeSelector(alias);
-                const selector = [
+                document.querySelectorAll(
+                    `input[type="radio"][name="${escapedAlias}"], input[type="checkbox"][name="${escapedAlias}"]`
+                ).forEach((field) => choiceFields.add(field));
+                document.querySelectorAll([
                     `input[name="${escapedAlias}"]`,
                     `textarea[name="${escapedAlias}"]`,
-                    `select[name="${escapedAlias}"]`,
                     `input[id="${escapedAlias}"]`,
                     `textarea[id="${escapedAlias}"]`,
-                    `select[id="${escapedAlias}"]`
-                ].join(', ');
-                const fields = Array.from(document.querySelectorAll(selector));
-                fields.forEach((field) => {
-                    if (!(field instanceof HTMLElement)) return;
-                    if (field instanceof HTMLInputElement) {
-                        if (field.type === 'radio') {
-                            const candidate = String(field.value || field.dataset?.option || '').trim();
-                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
-                            return;
-                        }
-                        if (field.type === 'checkbox') {
-                            const candidate = String(field.value || field.dataset?.option || '').trim();
-                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
-                            return;
-                        }
-                        field.value = firstValue;
-                        return;
-                    }
-                    if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
-                        field.value = firstValue;
+                    `input[data-question-id="${escapedAlias}"]`,
+                    `textarea[data-question-id="${escapedAlias}"]`
+                ].join(', ')).forEach((field) => {
+                    if (field.type !== 'radio' && field.type !== 'checkbox') {
+                        textFields.add(field);
                     }
                 });
+                document.querySelectorAll([
+                    `select[name="${escapedAlias}"]`,
+                    `select[id="${escapedAlias}"]`,
+                    `select[data-question-id="${escapedAlias}"]`
+                ].join(', ')).forEach((field) => selectFields.add(field));
+            });
+
+            const normalizedValues = splitAnswerTokens(rawValue)
+                .map((entry) => canonicalizeAnswerToken(entry))
+                .filter(Boolean);
+            choiceFields.forEach((input) => {
+                const candidate = canonicalizeAnswerToken(
+                    input.value || input.dataset?.option || input.dataset?.value || input.id || ''
+                );
+                input.checked = normalizedValues.some((value) => areAnswerTokensEquivalent(candidate, value));
+            });
+
+            const textValue = displayAnswerValue(rawValue, '');
+            textFields.forEach((field) => {
+                field.value = textValue;
+            });
+            selectFields.forEach((select) => {
+                for (let index = 0; index < select.options.length; index += 1) {
+                    if (compareAnswers(select.options[index].value, rawValue)) {
+                        select.selectedIndex = index;
+                        break;
+                    }
+                }
             });
         });
+    }
+
+    function applyReplayAnswersToDom(answers = {}) {
+        // 连续 replay 不同记录时，先重置所有候选池的已使用状态，
+        // 再按新记录的完整答案集重新消耗，避免新旧答案的选项都保持禁用
+        resetAllConsumedOptions();
+        applyAnswersToDom(answers);
     }
 
     function setReadOnlyMode(enabled, reason = '') {
@@ -5473,7 +5957,9 @@
         const locked = Boolean(state.readOnly || state.timerLocked);
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
-            item.setAttribute('draggable', locked ? 'false' : 'true');
+            // 如果选项已被使用（option-consumed），始终保持不可拖拽
+            const isConsumed = item.classList.contains('option-consumed') || item.dataset.consumed === '1';
+            item.setAttribute('draggable', locked || isConsumed ? 'false' : 'true');
             item.classList.toggle('drag-item-locked', locked);
         });
     }
@@ -5670,7 +6156,21 @@
                 buildInitSignature,
                 handleIncoming,
                 initializeInlineSimulationSuite,
+                activateSuiteSlot,
                 buildResultsFromAnswers,
+                applyAnswersToDom,
+                applyReplayAnswersToDom,
+                captureDom,
+                updateSelectionToolbar,
+                applySelectionHighlight,
+                getSelectionHighlightTestState() {
+                    return {
+                        hasLastRange: Boolean(interaction.lastRange),
+                        hasCurrentHighlightNode: interaction.currentHighlightNode instanceof HTMLElement
+                    };
+                },
+                renderResults,
+                updateNavStatuses,
                 renderTimer,
                 handleSubmit,
                 beginSubmission,
@@ -5697,11 +6197,15 @@
                         activeExamId: state.suite?.activeExamId || null,
                         currentIndex: state.suite?.currentIndex || 0,
                         suiteInline: Boolean(state.suite?.inline),
+                        suiteActivating: Boolean(state.suite?.activating),
+                        activationGeneration: Number(state.suite?.activationGeneration) || 0,
                         suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                         reviewRecordId: state.reviewRecordId,
                         submittedRecordId: state.submittedRecordId,
                         submitted: state.submitted,
                         readOnly: state.readOnly,
+                        reviewMode: state.reviewMode,
+                        timerLocked: state.timerLocked,
                         submissionStatus: state.submissionStatus,
                         submissionId: state.submissionId,
                         parentOrigin: state.parentOrigin,
@@ -5711,6 +6215,7 @@
                         notes: collectNotes(),
                         noteOutlines: collectNoteOutlines(),
                         markedQuestions: normalizeMarkedQuestions(state.markedQuestions),
+                        navStatus: Array.from(navStatus.entries()),
                         suiteSequence: Array.isArray(state.suite?.sequence)
                             ? state.suite.sequence.map((entry) => ({ ...entry }))
                             : [],
@@ -6635,109 +7140,7 @@
             return;
         }
         if (draft.answers && typeof draft.answers === 'object') {
-            const answers = draft.answers;
-            const groupedHandledQuestionIds = new Set();
-            const groupedChoiceInputs = new Map();
-
-            document.querySelectorAll('input[type="radio"][name], input[type="checkbox"][name]').forEach((input) => {
-                const groupName = String(input.getAttribute('name') || '').trim();
-                if (!groupName) return;
-                const questionIds = expandQuestionSequence(groupName);
-                if (questionIds.length <= 1) return;
-                const existing = groupedChoiceInputs.get(groupName) || {
-                    questionIds,
-                    inputs: []
-                };
-                existing.inputs.push(input);
-                groupedChoiceInputs.set(groupName, existing);
-            });
-
-            groupedChoiceInputs.forEach((group) => {
-                const mergedValues = [];
-                group.questionIds.forEach((questionId) => {
-                    groupedHandledQuestionIds.add(questionId);
-                    if (!Object.prototype.hasOwnProperty.call(answers, questionId)) {
-                        return;
-                    }
-                    splitAnswerTokens(answers[questionId]).forEach((entry) => {
-                        const normalized = canonicalizeAnswerToken(entry);
-                        if (normalized) {
-                            mergedValues.push(normalized);
-                        }
-                    });
-                });
-                const normalizedValues = Array.from(new Set(mergedValues));
-                group.inputs.forEach((input) => {
-                    const candidate = canonicalizeAnswerToken(
-                        input.value || input.dataset?.option || input.dataset?.value || input.id || ''
-                    );
-                    input.checked = normalizedValues.includes(candidate)
-                        || normalizedValues.some((value) => compareAnswers(input.value, value));
-                });
-            });
-
-            Object.entries(answers).forEach(([qid, value]) => {
-                const normalized = normalizeQuestionId(qid);
-                if (!normalized) return;
-                if (groupedHandledQuestionIds.has(normalized)) {
-                    return;
-                }
-                if (applyDropzoneAnswer(normalized, value)) {
-                    return;
-                }
-                const escapedId = escapeSelector(normalized);
-                // Radio / checkbox
-                const choices = document.querySelectorAll(
-                    `input[type="radio"][name="${escapedId}"], input[type="checkbox"][name="${escapedId}"]`
-                );
-                if (choices.length) {
-                    const normalizedValues = splitAnswerTokens(value)
-                        .map((entry) => canonicalizeAnswerToken(entry))
-                        .filter(Boolean);
-                    choices.forEach((input) => {
-                        const candidate = canonicalizeAnswerToken(
-                            input.value || input.dataset?.option || input.dataset?.value || input.id || ''
-                        );
-                        input.checked = normalizedValues.includes(candidate) || compareAnswers(input.value, value);
-                    });
-                    return;
-                }
-                // Text input
-                const textInput = document.querySelector(`input[data-question-id="${escapedId}"], input#${escapedId}`);
-                if (textInput && textInput.type !== 'radio' && textInput.type !== 'checkbox') {
-                    textInput.value = displayAnswerValue(value, '');
-                    return;
-                }
-                const namedTextFields = Array.from(
-                    document.querySelectorAll(`input[name="${escapedId}"], textarea[name="${escapedId}"]`)
-                ).filter((field) => field.type !== 'radio' && field.type !== 'checkbox');
-                if (namedTextFields.length) {
-                    const normalizedTextValue = displayAnswerValue(value, '');
-                    namedTextFields.forEach((field) => {
-                        field.value = normalizedTextValue;
-                    });
-                    return;
-                }
-                // Select
-                const select = document.querySelector(`select[data-question-id="${escapedId}"], select#${escapedId}`);
-                if (select) {
-                    for (let i = 0; i < select.options.length; i++) {
-                        if (compareAnswers(select.options[i].value, value)) {
-                            select.selectedIndex = i;
-                            break;
-                        }
-                    }
-                }
-                const namedSelects = document.querySelectorAll(`select[name="${escapedId}"]`);
-                namedSelects.forEach((namedSelect) => {
-                    for (let i = 0; i < namedSelect.options.length; i++) {
-                        if (compareAnswers(namedSelect.options[i].value, value)) {
-                            namedSelect.selectedIndex = i;
-                            break;
-                        }
-                    }
-                });
-            });
+            applyAnswersToDom(draft.answers);
         }
         if (Array.isArray(draft.highlights)) {
             applyHighlights(draft.highlights);
@@ -6856,7 +7259,13 @@
             slot.lastResults = results;
             slot.navStatus = new Map();
             Object.entries(results.answerComparison || {}).forEach(([questionId, comparison]) => {
-                slot.navStatus.set(questionId, comparison && comparison.isCorrect ? 'correct' : 'incorrect');
+                slot.navStatus.set(
+                    questionId,
+                    resolveComparisonNavStatus(
+                        comparison,
+                        hasAnswerInDataset(questionId, draft.answers || {}, slot.dataset)
+                    )
+                );
             });
             const scoreInfo = results.scoreInfo || {};
             totalCorrect += Number(scoreInfo.correct) || 0;
@@ -6927,6 +7336,19 @@
         };
     }
 
+    function resetAllConsumedOptions() {
+        // 重置所有候选池选项的已使用状态（覆盖 .drag-item 和 .draggable-word）。
+        // 供重置和 replay 前调用，避免连续 replay 时新旧答案的选项都保持禁用。
+        document.querySelectorAll(`${POOL_ITEM_SELECTOR}`).forEach((item) => {
+            if (item.dataset.consumed || item.classList.contains('option-consumed')) {
+                delete item.dataset.consumed;
+                item.classList.remove('option-consumed');
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked);
+                item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
+            }
+        });
+    }
+
     function clearCurrentAnswers() {
         document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
             input.checked = false;
@@ -6941,6 +7363,8 @@
         getDropzones().forEach((dropzone) => {
             clearDropzone(dropzone);
         });
+        // 兜底：确保所有选项池中的选项都恢复为可用状态
+        resetAllConsumedOptions();
         // 清除选择题/表格判卷残留的绿/红标记
         document.querySelectorAll('.option-correct, .option-wrong, .correct, .wrong').forEach((node) => {
             node.classList.remove('option-correct', 'option-wrong', 'correct', 'wrong');

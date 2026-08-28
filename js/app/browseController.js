@@ -104,6 +104,7 @@
             this.currentMode = 'default';
             this.activeFilter = 'all';
             this.buttonContainer = null;
+            this.filterInteractionId = 0;
         }
 
         /**
@@ -130,7 +131,7 @@
          * 设置浏览模式
          * @param {string} mode - 模式ID (default | frequency-p1 | frequency-p4)
          */
-        setMode(mode, examIndex = []) {
+        setMode(mode, examIndex = [], renderRequestId = null, options = {}) {
             if (isReadingMemorizeBrowseMode()) {
                 mode = 'default';
             }
@@ -152,7 +153,10 @@
             this.renderFilterButtons(examIndex);
 
             // 应用筛选
-            this.applyFilter(this.activeFilter, examIndex);
+            if (!options.skipApply) {
+                return this.applyFilter(this.activeFilter, examIndex, renderRequestId, options);
+            }
+            return undefined;
         }
 
         /**
@@ -205,11 +209,37 @@
 
                 // 绑定点击事件
                 button.addEventListener('click', async () => {
+                    const interactionId = ++this.filterInteractionId;
+                    const renderRequestId = typeof global.__beginBrowseUserResultsRequest === 'function'
+                        ? global.__beginBrowseUserResultsRequest()
+                        : (typeof global.__beginBrowseResultsRequest === 'function'
+                            ? global.__beginBrowseResultsRequest()
+                            : null);
+                    const foregroundEpoch = typeof global.__captureBrowseForegroundRenderEpoch === 'function'
+                        ? global.__captureBrowseForegroundRenderEpoch()
+                        : null;
                     try {
                         const index = await global.resolveActiveLibraryIndex();
-                        this.handleFilterClick(filter.id, index);
+                        if (interactionId !== this.filterInteractionId) {
+                            return;
+                        }
+                        if (renderRequestId != null
+                            && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                            && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                            return;
+                        }
+                        await Promise.resolve(this.handleFilterClick(
+                            filter.id,
+                            index,
+                            renderRequestId,
+                            { foregroundEpoch }
+                        ));
                     } catch (error) {
                         console.error('[BrowseController] 读取活动题库失败:', error);
+                    } finally {
+                        if (typeof global.__endBrowseUserResultsRequest === 'function') {
+                            global.__endBrowseUserResultsRequest(renderRequestId);
+                        }
                     }
                 });
 
@@ -241,14 +271,14 @@
          * 处理筛选按钮点击
          * @param {string} filterId - 筛选器ID
          */
-        handleFilterClick(filterId, examIndex = []) {
+        handleFilterClick(filterId, examIndex = [], renderRequestId = null, options = {}) {
             this.activeFilter = filterId;
 
             // 更新按钮激活状态
             this.updateButtonStates();
 
             // 应用筛选
-            this.applyFilter(filterId, examIndex);
+            return this.applyFilter(filterId, examIndex, renderRequestId, options);
         }
 
         /**
@@ -276,36 +306,38 @@
          * 应用筛选
          * @param {string} filterId - 筛选器ID
          */
-        applyFilter(filterId, examIndex = []) {
+        applyFilter(filterId, examIndex = [], renderRequestId = null, options = {}) {
             const config = this.getCurrentModeConfig();
 
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
-                this.filterByType(filterId, examIndex);
+                return this.filterByType(filterId, examIndex, renderRequestId, options);
             } else if (config.filterLogic === 'folder-based') {
                 // 频率模式：按文件夹筛选
-                this.filterByFolder(filterId, examIndex);
+                return this.filterByFolder(filterId, examIndex, renderRequestId, options);
             }
+            return undefined;
         }
 
         /**
          * 按类型筛选（默认模式）
          * @param {string} type - 类型 (all | reading | listening)
          */
-        filterByType(type, examIndex = []) {
+        filterByType(type, examIndex = [], renderRequestId = null, options = {}) {
             // 调用全局的 filterByType 函数
             if (typeof global.filterByType === 'function') {
-                global.filterByType(type, examIndex);
+                return global.filterByType(type, examIndex, renderRequestId, options);
             } else {
                 console.warn('[BrowseController] filterByType 函数未定义');
             }
+            return undefined;
         }
 
         /**
          * 按文件夹筛选（频率模式）
          * @param {string} filterId - 筛选器ID
          */
-        filterByFolder(filterId, examIndex = []) {
+        filterExamsByFolder(examIndex = [], filterId = this.activeFilter) {
             const config = this.getCurrentModeConfig();
             const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
@@ -313,12 +345,10 @@
             // 允许“全部”入口只按 basePath 过滤（frequency-p1 无全量按钮）
             const isAllFilter = filterId === 'all';
             if (!folders && !isAllFilter) {
-                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
-                return;
+                return null;
             }
 
-            // 筛选题目
-            const filtered = (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
+            return (Array.isArray(examIndex) ? examIndex : []).filter(exam => {
                 if (!exam || !exam.path) {
                     return false;
                 }
@@ -337,23 +367,70 @@
                     return exam.path.includes(folder);
                 });
             });
+        }
 
-            // 显示筛选结果
-            this.displayFilteredExams(filtered);
+        filterByFolder(filterId, examIndex = [], renderRequestId = null, options = {}) {
+            if (renderRequestId != null
+                && typeof global.__isBrowseResultsRequestCurrent === 'function'
+                && !global.__isBrowseResultsRequestCurrent(renderRequestId)) {
+                return;
+            }
+            const filtered = this.filterExamsByFolder(examIndex, filterId);
+            if (!Array.isArray(filtered)) {
+                console.warn('[BrowseController] 未找到文件夹映射:', filterId);
+                return;
+            }
+
+            // 活动搜索必须继续约束当前文件夹结果；无查询时在控制器层终止
+            // 渲染，避免 main -> ExamActions -> controller -> main 的递归刷新。
+            const searchInput = document.getElementById('exam-search-input')
+                || (typeof document.querySelector === 'function'
+                    ? document.querySelector('.search-input')
+                    : null);
+            const hasActiveQuery = !!(searchInput
+                && typeof searchInput.value === 'string'
+                && searchInput.value.trim());
+            if (hasActiveQuery && typeof global.__renderBrowseResultsForState === 'function') {
+                return global.__renderBrowseResultsForState(filtered, renderRequestId, {
+                    foregroundEpoch: options.foregroundEpoch
+                });
+            }
+            if (!options.recoveryManaged
+                && renderRequestId != null
+                && typeof global.__commitForegroundBrowseResults === 'function') {
+                return global.__commitForegroundBrowseResults(
+                    renderRequestId,
+                    options.foregroundEpoch,
+                    (commitReceipt) => {
+                        const committed = this.displayFilteredExams(filtered, { commitReceipt });
+                        return committed === false ? false : filtered;
+                    }
+                );
+            }
+            const committed = this.displayFilteredExams(filtered, {
+                commitReceipt: options.commitReceipt
+            });
+            if (committed === false) {
+                return false;
+            }
+            return filtered;
         }
         /**
          * 显示筛选后的题目
          * @param {Array} exams - 题目数组
          */
-        displayFilteredExams(exams) {
-            // 更新筛选状态
-            if (typeof global.setFilteredExamsState === 'function') {
-                global.setFilteredExamsState(exams);
+        displayFilteredExams(exams, options = {}) {
+            // DOM commit is the authority. Do not publish filtered state or
+            // post-render effects when no renderer/container accepted it.
+            const displayed = typeof global.displayExams === 'function'
+                ? global.displayExams(exams, { commitReceipt: options.commitReceipt })
+                : false;
+            if (displayed !== true) {
+                return false;
             }
 
-            // 显示题目
-            if (typeof global.displayExams === 'function') {
-                global.displayExams(exams);
+            if (typeof global.setFilteredExamsState === 'function') {
+                global.setFilteredExamsState(exams);
             }
 
             // 处理渲染后逻辑
@@ -362,6 +439,7 @@
                 const type = global.getCurrentExamType ? global.getCurrentExamType() : 'all';
                 global.handlePostExamListRender(exams, { category, type });
             }
+            return true;
         }
 
         /**
@@ -394,8 +472,8 @@
         /**
          * 重置为默认模式
          */
-        resetToDefault(examIndex = []) {
-            this.setMode('default', examIndex);
+        resetToDefault(examIndex = [], renderRequestId = null, options = {}) {
+            return this.setMode('default', examIndex, renderRequestId, options);
         }
 
         // ============================================================================

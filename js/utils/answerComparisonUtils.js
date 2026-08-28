@@ -8,20 +8,20 @@
         'volume-slider',
         'volumeslider',
         'audio-volume',
-        'audioCurrentTime',
+        'audiocurrenttime',
         'audio-duration',
-        'audioDuration',
+        'audioduration',
         'settings',
-        'lastFocusElement',
+        'lastfocuselement',
         'sessionid',
         'examid',
-        'nextExamId',
-        'previousExamId',
+        'nextexamid',
+        'previousexamid',
         'folder',
         'source',
         'result',
         'metadata',
-        'practiceSettings'
+        'practicesettings'
     ]);
     const NOISE_PATTERNS = [
         /playback/i,
@@ -227,7 +227,7 @@
         }
 
         if (correctInfo.normalized == null) {
-            return false;
+            return null;
         }
 
         const core = getAnswerMatchCore();
@@ -541,13 +541,15 @@
                 total: 0,
                 correct: 0,
                 incorrect: 0,
-                unanswered: 0
+                unanswered: 0,
+                unknown: 0
             };
         }
 
         let correct = 0;
         let incorrect = 0;
         let unanswered = 0;
+        let unknown = 0;
 
         entries.forEach(entry => {
             if (!entry) {
@@ -559,8 +561,10 @@
             }
             if (entry.isCorrect === true) {
                 correct += 1;
-            } else {
+            } else if (entry.isCorrect === false) {
                 incorrect += 1;
+            } else {
+                unknown += 1;
             }
         });
 
@@ -568,7 +572,8 @@
             total: entries.length,
             correct,
             incorrect,
-            unanswered
+            unanswered,
+            unknown
         };
     }
 

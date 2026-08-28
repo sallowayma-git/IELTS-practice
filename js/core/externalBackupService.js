@@ -240,17 +240,20 @@
 
     async function persistMeta(patch, options) {
         if (state.suspended && !(options && options.allowSuspended === true)) return false;
-        state.meta = Object.assign({}, state.meta, cloneMeta(Object.assign({}, state.meta, patch || {})));
+        var nextMeta = Object.assign({}, state.meta, cloneMeta(Object.assign({}, state.meta, patch || {})));
         try {
             await writeStoredValues((function () {
                 var values = {};
-                values[META_KEY] = state.meta;
+                values[META_KEY] = nextMeta;
                 return values;
             })());
+            state.meta = nextMeta;
+            return true;
         } catch (error) {
             if (global.console && console.warn) console.warn('[ExternalBackup v2] metadata persistence failed:', error);
+            if (!(options && options.requireDurable === true)) state.meta = nextMeta;
+            return false;
         }
-        return true;
     }
 
     async function queryPermission(handle, mode) {
@@ -622,7 +625,9 @@
                 throw new Error('本地备份服务刚刚开始重置，请重新选择文件夹');
             }
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
-            existingBackupFound = await fileExists(handle, LATEST_FILENAME);
+            var existingLatest = await readValidatedV2File(handle, LATEST_FILENAME, V2_SCHEMA_VERSION);
+            var existingGeneration = existingLatest ? null : await findLatestDatedGeneration(handle);
+            existingBackupFound = Boolean(existingLatest || existingGeneration);
             meta = cloneMeta({
                 directoryName: handle.name || 'backup',
                 lastWriteAt: null,
@@ -960,12 +965,14 @@
             // though ordinary backup work is suspended. The lock prevents
             // another service operation from interleaving with this section.
             var resetGeneration = state.dirtyGeneration;
+            var dirtyBeforeBindingCleanup = state.dirty;
+            var freshnessUnknownBeforeBindingCleanup = state.freshnessUnknown;
             state.suspended = true;
             await clearStoredBinding();
             preparation.bindingCleared = true;
             var changedDuringReset = state.dirtyGeneration !== resetGeneration
-                || state.dirty
-                || state.freshnessUnknown;
+                || (!dirtyBeforeBindingCleanup && state.dirty)
+                || (!freshnessUnknownBeforeBindingCleanup && state.freshnessUnknown);
             if (!changedDuringReset && preparation.resetSnapshotChecksum) {
                 var postResetSnapshot = null;
                 try {
@@ -975,8 +982,8 @@
                 }
                 var postResetSnapshotValid = isValidV2Snapshot(postResetSnapshot, V2_SCHEMA_VERSION);
                 changedDuringReset = state.dirtyGeneration !== resetGeneration
-                    || state.dirty
-                    || state.freshnessUnknown
+                    || (!dirtyBeforeBindingCleanup && state.dirty)
+                    || (!freshnessUnknownBeforeBindingCleanup && state.freshnessUnknown)
                     || !postResetSnapshotValid
                     || postResetSnapshot.checksum !== preparation.resetSnapshotChecksum;
                 if (changedDuringReset && !state.dirty) {
@@ -1185,11 +1192,17 @@
                     state.dirty = false;
                     state.freshnessUnknown = false;
                 }
-                await persistMeta({
+                var metadataPersisted = await persistMeta({
                     lastChecksum: payload && payload.checksum ? payload.checksum : state.meta.lastChecksum,
                     lastWriteError: null,
                     awaitingRestore: false
-                });
+                }, { requireDurable: true });
+                result.metadataPersisted = metadataPersisted;
+                if (!metadataPersisted) {
+                    result.success = false;
+                    result.restored = true;
+                    result.reason = 'metadata_persistence_failed';
+                }
 
                 // `scheduleSilentFlush` deliberately refuses to schedule
                 // while awaitingRestore is true. Clear that durable guard
@@ -1421,6 +1434,11 @@
                 var restored = await restoreFromLatest();
                 if (restored.success) {
                     notify('已从本地磁盘备份恢复', 'success');
+                    if (typeof global.syncPracticeRecords === 'function') {
+                        Promise.resolve(global.syncPracticeRecords({ forceRender: true })).catch(function () {});
+                    }
+                } else if (restored.reason === 'metadata_persistence_failed' && restored.restored) {
+                    notify('数据已恢复，但备份安全状态保存失败；请保持页面开启并重试恢复', 'error');
                     if (typeof global.syncPracticeRecords === 'function') {
                         Promise.resolve(global.syncPracticeRecords({ forceRender: true })).catch(function () {});
                     }

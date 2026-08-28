@@ -450,27 +450,31 @@
         const key = String(payload.word).trim().toLowerCase();
         const now = new Date().toISOString();
         await global.AppData.ready;
-        await global.AppData.vocab.upsertCollectionWord('reading-highlights', {
+        const word = {
             id: `reading-highlight-${key.replace(/[^a-z0-9]+/g, '-')}`,
             word: payload.word,
             meaning: payload.meaning || payload.definition || '待补充释义',
             example: payload.example || '',
             note: [
-                payload.phonetic ? `音标: ${payload.phonetic}` : '',
                 payload.partOfSpeech ? `词性: ${payload.partOfSpeech}` : '',
                 payload.selectedText && payload.selectedText !== payload.word ? `原高亮: ${payload.selectedText}` : '',
                 payload.sourceLabel ? `来源: ${payload.sourceLabel}` : ''
             ].filter(Boolean).join('；'),
             source: 'reading-highlight',
-            easeFactor: null,
-            interval: 1,
-            repetitions: 0,
-            intraCycles: 0,
-            correctCount: 0,
-            lastReviewed: null,
-            nextReview: null,
             updatedAt: now
-        });
+        };
+        if (payload.phonetic) {
+            word.phonetic = payload.phonetic;
+        }
+        if (typeof global.AppData.vocab.mergeListWords === 'function') {
+            // mergeListWords 对已有词条只更新词典字段，保留用户笔记与学习进度。
+            await global.AppData.vocab.mergeListWords({
+                listId: 'reading-highlights',
+                words: [word]
+            });
+        } else {
+            await global.AppData.vocab.upsertCollectionWord('reading-highlights', word);
+        }
         return true;
     }
 

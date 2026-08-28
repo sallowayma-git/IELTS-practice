@@ -113,10 +113,18 @@
         ancestors.add(value);
         try {
             if (Array.isArray(value)) {
-                return value.map((item, index) => {
-                    if (!Object.prototype.hasOwnProperty.call(value, index)) throw validation(`Sparse array entry at ${path}[${index}]`, { path });
-                    return canonicalizeJson(item, `${path}[${index}]`, ancestors);
-                });
+                const result = new Array(value.length);
+                for (let index = 0; index < value.length; index += 1) {
+                    if (!Object.prototype.hasOwnProperty.call(value, index)) {
+                        throw validation(`Sparse array entry at ${path}[${index}]`, { path });
+                    }
+                    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+                    if (!descriptor || descriptor.get || descriptor.set) {
+                        throw validation(`Accessor property at ${path}[${index}]`, { path });
+                    }
+                    result[index] = canonicalizeJson(descriptor.value, `${path}[${index}]`, ancestors);
+                }
+                return result;
             }
             const result = {};
             for (const key of Object.keys(value).sort()) {
@@ -248,6 +256,10 @@
             try { request = indexedDBApi.open(LEGACY_EXTERNAL_DATABASE_NAME); } catch (_) { finish(null); return; }
             request.onerror = () => finish(null);
             request.onupgradeneeded = () => {
+                // Opening a missing legacy database creates a temporary
+                // versionchange connection. Mark it closed before aborting so
+                // a later full reset cannot remain blocked by this probe.
+                try { request.result.close(); } catch (_) {}
                 try { request.transaction.abort(); } catch (_) {}
                 finish(null);
             };
@@ -291,7 +303,7 @@
             if (!entry.validate(normalized)) throw validation(`Invalid data for ${entry.logicalKey}`, { logicalKey: entry.logicalKey });
         }
         const revision = options.revision === undefined ? 1 : Number(options.revision);
-        if (!Number.isInteger(revision) || revision < 1) throw validation(`Invalid revision for ${entry.logicalKey}`);
+        if (!Number.isSafeInteger(revision) || revision < 1 || revision >= Number.MAX_SAFE_INTEGER) throw validation(`Invalid revision for ${entry.logicalKey}`);
         const payload = { schemaVersion: entry.schemaVersion, revision, operationId: String(options.operationId || randomId('op')),
             updatedAt: options.updatedAt || nowIso(), state, data: normalized };
         payload.checksum = checksum(payload.data);
@@ -306,7 +318,7 @@
     function assertValidEnvelope(entry, envelope) {
         if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
             || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
-            || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+            || !Number.isSafeInteger(Number(envelope.revision)) || Number(envelope.revision) < 1 || Number(envelope.revision) >= Number.MAX_SAFE_INTEGER
             || typeof envelope.operationId !== 'string' || !envelope.operationId.trim()
             || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt.trim()
             || (envelope.state !== 'present' && envelope.state !== 'cleared')) {
@@ -332,8 +344,24 @@
     function expectedRevision(value, label) {
         if (value === undefined || value === null) return null;
         const revision = Number(value);
-        if (!Number.isInteger(revision) || revision < 0) throw validation(`Invalid expectedRevision for ${label}`);
+        if (!Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER) throw validation(`Invalid expectedRevision for ${label}`);
         return revision;
+    }
+    function incrementCounter(value, label) {
+        const current = Number(value);
+        if (!Number.isSafeInteger(current) || current < 0 || current >= Number.MAX_SAFE_INTEGER - 1) {
+            throw validation(`Revision limit reached for ${label}`, { label, current });
+        }
+        return current + 1;
+    }
+    function requestFingerprint(options, fallback, warnings) {
+        if (options && Object.prototype.hasOwnProperty.call(options, 'intent')) {
+            return checksum({
+                intent: canonicalizeJson(options.intent, '$.intent'),
+                warnings: warnings || []
+            });
+        }
+        return checksum(fallback);
     }
     function compactJournal(journal) {
         const ranked = Object.entries(journal).sort((left, right) => Number(right[1].sequence) - Number(left[1].sequence));
@@ -361,11 +389,72 @@
     function putJournal(tx, currentRow, journal, spec, receipt) {
         const current = currentRow && currentRow.envelope;
         const envelope = makeEnvelope(lookupEntry('system.operationJournal'), writeJournal(journal, spec, receipt), {
-            revision: current ? Number(current.revision) + 1 : 1,
+            revision: incrementCounter(current ? current.revision : 0, 'system.operationJournal'),
             operationId: spec.operationId,
             normalized: true
         });
         tx.objectStore(SYSTEM_STORE).put({ logicalKey: 'system.operationJournal', envelope: canonicalizeJson(envelope) });
+    }
+
+    const ENTITY_REVISION_LOGICAL_KEY = 'system.entityRevisions';
+    function emptyEntityRevisionState() {
+        return {
+            epochs: Object.fromEntries(ENTITY_STORES.map((store) => [store, 0])),
+            revisions: Object.fromEntries(ENTITY_STORES.map((store) => [store, {}]))
+        };
+    }
+    function entityRevisionMapKey(recordId) { return `$${String(recordId)}`; }
+    function readEntityRevisionState(row) {
+        const state = emptyEntityRevisionState();
+        if (!row) return state;
+        const entry = lookupEntry(ENTITY_REVISION_LOGICAL_KEY);
+        if (!row.envelope || !validateEnvelope(entry, row.envelope)) {
+            throw corruption('Invalid entity revision state');
+        }
+        const data = canonicalizeJson(row.envelope.data, '$.system.entityRevisions');
+        const sourceEpochs = data && typeof data.epochs === 'object' && !Array.isArray(data.epochs) ? data.epochs : {};
+        const sourceRevisions = data && typeof data.revisions === 'object' && !Array.isArray(data.revisions) ? data.revisions : {};
+        for (const store of ENTITY_STORES) {
+            const epoch = Number(sourceEpochs[store]);
+            if (Object.prototype.hasOwnProperty.call(sourceEpochs, store)) {
+                if (!Number.isSafeInteger(epoch) || epoch < 0 || epoch >= Number.MAX_SAFE_INTEGER) {
+                    throw corruption(`Invalid entity revision epoch: ${store}`, { store });
+                }
+                state.epochs[store] = epoch;
+            }
+            const rows = sourceRevisions[store];
+            if (!rows || typeof rows !== 'object' || Array.isArray(rows)) continue;
+            for (const [key, value] of Object.entries(rows)) {
+                const revision = Number(value);
+                if (!key.startsWith('$')) continue;
+                if (!Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER) {
+                    throw corruption(`Invalid tracked entity revision: ${store}`, { store });
+                }
+                state.revisions[store][key] = revision;
+            }
+        }
+        return state;
+    }
+    function trackedEntityRevision(state, store, recordId, row) {
+        return Math.max(
+            Number(row && row.revision) || 0,
+            Number(state.revisions[store][entityRevisionMapKey(recordId)]) || 0
+        );
+    }
+    function trackEntityRevision(state, store, recordId, revision) {
+        state.revisions[store][entityRevisionMapKey(recordId)] = Number(revision) || 0;
+    }
+    function bumpEntityEpoch(state, store) {
+        state.epochs[store] = incrementCounter(state.epochs[store], `${ENTITY_REVISION_LOGICAL_KEY}.epochs.${store}`);
+    }
+    function putEntityRevisionState(tx, currentRow, state, operationIdValue) {
+        const current = currentRow && currentRow.envelope;
+        const envelope = makeEnvelope(lookupEntry(ENTITY_REVISION_LOGICAL_KEY), state, {
+            revision: incrementCounter(current ? current.revision : 0, ENTITY_REVISION_LOGICAL_KEY),
+            operationId: operationIdValue,
+            normalized: true
+        });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: ENTITY_REVISION_LOGICAL_KEY, envelope: canonicalizeJson(envelope) });
     }
 
     class IndexedDBDriver {
@@ -433,6 +522,21 @@
                 const request = tx.objectStore(store).get(recordId);
                 request.onsuccess = () => done(request.result || null);
                 request.onerror = () => fail(request.error || new Error('Entity read failed'));
+            });
+        }
+        readEntityRevisionInputs(store, recordId) {
+            return this._transaction([store, SYSTEM_STORE], 'readonly', `read revision ${store}/${recordId}`, (tx, done, fail) => {
+                const rowRequest = tx.objectStore(store).get(recordId);
+                const stateRequest = tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY);
+                let remaining = 2;
+                const finish = () => {
+                    remaining -= 1;
+                    if (!remaining) done({ row: rowRequest.result || null, stateRow: stateRequest.result || null });
+                };
+                rowRequest.onerror = () => fail(rowRequest.error || new Error('Entity revision row read failed'));
+                stateRequest.onerror = () => fail(stateRequest.error || new Error('Entity revision state read failed'));
+                rowRequest.onsuccess = finish;
+                stateRequest.onsuccess = finish;
             });
         }
         readPracticeSnapshot(recordIds = null, options = {}) {
@@ -507,15 +611,35 @@
         if (!ENTITY_STORES.includes(value)) throw validation(`Unknown entity store: ${value}`, { store: value });
         return value;
     }
+    function assertEntityIdentity(store, recordId, data, errorFactory = validation) {
+        const prototype = data && typeof data === 'object' && !Array.isArray(data)
+            ? Object.getPrototypeOf(data)
+            : undefined;
+        if (!data || typeof data !== 'object' || Array.isArray(data)
+            || (prototype !== Object.prototype && prototype !== null)) {
+            throw errorFactory(`Invalid entity payload: ${store}/${recordId}`, { store, recordId });
+        }
+        const identityField = store === 'practiceSummaries' ? 'id' : 'recordId';
+        if (typeof data[identityField] !== 'string' || data[identityField] !== String(recordId)) {
+            throw errorFactory(`Entity identity mismatch: ${store}/${recordId}`, {
+                store,
+                recordId,
+                identityField,
+                payloadIdentity: data[identityField] === undefined ? null : String(data[identityField])
+            });
+        }
+        return data;
+    }
     function validateEntityRow(store, row) {
         if (!row || typeof row !== 'object' || Array.isArray(row)
             || typeof row.recordId !== 'string' || !row.recordId.trim()
-            || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
+            || !Number.isSafeInteger(Number(row.revision)) || Number(row.revision) < 1 || Number(row.revision) >= Number.MAX_SAFE_INTEGER
             || typeof row.operationId !== 'string' || !row.operationId.trim()
             || typeof row.updatedAt !== 'string' || !row.updatedAt.trim()) {
             throw corruption(`Invalid entity row: ${store}`, { store, recordId: row && row.recordId || null });
         }
         const data = canonicalizeJson(row.data, `$.${store}.${row.recordId}`);
+        assertEntityIdentity(store, row.recordId, data, corruption);
         if (typeof row.checksum !== 'string' || row.checksum !== checksum(data)) {
             throw corruption(`Entity checksum mismatch: ${store}/${row.recordId}`, { store, recordId: row.recordId });
         }
@@ -557,6 +681,7 @@
         const recordId = type === 'clear' ? null : String(operation.recordId || '');
         if (type !== 'clear' && !recordId.trim()) throw validation(`Entity operation ${type} requires recordId`);
         const data = type === 'upsert' ? canonicalizeJson(operation.data, `$.operations[${index}].data`) : null;
+        if (type === 'upsert') assertEntityIdentity(store, recordId, data, validation);
         return { type, store, recordId, data, expectedRevision: expectedRevision(operation.expectedRevision, `${store}/${recordId || '*'}`) };
     }
     function receiptFor(operationIdValue, revisions, warnings, pending) {
@@ -665,13 +790,37 @@
             const data = !envelope || envelope.state === 'cleared' ? entry.defaultValue() : envelope.data;
             return options.withMeta ? { data: clone(data), envelope: envelope ? clone(envelope) : null } : clone(data);
         }
+        async getEntityRevisionEpochs() {
+            const envelope = await this.getEnvelope(ENTITY_REVISION_LOGICAL_KEY);
+            return clone(readEntityRevisionState(envelope ? { envelope } : null).epochs);
+        }
+        async getEntityRevision(store, recordId, options = {}) {
+            this._assertReady();
+            const normalizedStore = entityStore(store);
+            const id = String(recordId || '');
+            if (!id) throw validation('getEntityRevision requires recordId');
+            try {
+                const inputs = await this.driver.readEntityRevisionInputs(normalizedStore, id);
+                const state = readEntityRevisionState(inputs.stateRow);
+                const result = {
+                    revision: trackedEntityRevision(state, normalizedStore, id, inputs.row),
+                    present: Boolean(inputs.row)
+                };
+                return options.withPresence === true ? clone(result) : result.revision;
+            } catch (error) {
+                if (error instanceof AppDataError) throw error;
+                throw this._latch(error);
+            }
+        }
         _documentSpec(changes, options) {
             if (!Array.isArray(changes) || (!changes.length && !options.allowNoop && !options.noop)) throw validation('DataKernel.mutate requires changes');
             const opId = operationId(options.operationId); const seen = new Set();
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
                 const logicalKey = String(change.logicalKey || ''); const entry = lookupEntry(logicalKey);
-                if (logicalKey === 'system.operationJournal') throw validation('system.operationJournal is managed by DataKernel');
+                if (logicalKey === 'system.operationJournal' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
+                    throw validation(`${logicalKey} is managed by DataKernel`);
+                }
                 if (seen.has(logicalKey)) throw validation(`Duplicate mutation key: ${logicalKey}`); seen.add(logicalKey);
                 const state = change.state === 'cleared' ? 'cleared' : 'present';
                 if (change.state !== undefined && state !== change.state) throw validation(`Invalid mutation state for ${logicalKey}`);
@@ -682,7 +831,10 @@
             });
             const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
             if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
-            const fingerprint = checksum({ changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })), warnings });
+            const fingerprint = requestFingerprint(options, {
+                changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })),
+                warnings
+            }, warnings);
             return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
         }
         async mutate(changes, options = {}) {
@@ -699,7 +851,12 @@
                             if (current && !validateEnvelope(item.change.entry, current)) throw corruption(`Invalid stored envelope: ${item.change.logicalKey}`, { logicalKey: item.change.logicalKey });
                             const revision = current ? Number(current.revision) : 0;
                             if (item.change.expectedRevision !== null && item.change.expectedRevision !== revision) throw new AppDataError('CONFLICT', `Revision conflict for ${item.change.logicalKey}`, { logicalKey: item.change.logicalKey, expectedRevision: item.change.expectedRevision, actualRevision: revision });
-                            const envelope = makeEnvelope(item.change.entry, item.change.data, { state: item.change.state, revision: revision + 1, operationId: spec.operationId, normalized: true });
+                            const envelope = makeEnvelope(item.change.entry, item.change.data, {
+                                state: item.change.state,
+                                revision: incrementCounter(revision, item.change.logicalKey),
+                                operationId: spec.operationId,
+                                normalized: true
+                            });
                             tx.objectStore(storeFor(item.change.logicalKey)).put({ logicalKey: item.change.logicalKey, envelope: canonicalizeJson(envelope) }); revisions[item.change.logicalKey] = envelope.revision;
                         }
                         const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
@@ -782,20 +939,90 @@
             }
             const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
             if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
-            const spec = { operationId: opId, warnings, pending: [], fingerprint: checksum({ operations: items, warnings }), stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))) };
+            const spec = {
+                operationId: opId,
+                warnings,
+                pending: [],
+                fingerprint: requestFingerprint(options, { operations: items, warnings }, warnings),
+                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store))))
+            };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
                     const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
-                    const reads = items.filter((item) => item.type !== 'clear').map((item) => ({ item, request: tx.objectStore(item.store).get(item.recordId) })); let remaining = reads.length;
-                    const finish = () => { const revisions = {};
-                        for (const read of reads) { const current = read.request.result || null; const revision = current ? Number(current.revision) : 0;
-                            if (read.item.expectedRevision !== null && read.item.expectedRevision !== revision) throw new AppDataError('CONFLICT', `Revision conflict for ${read.item.store}/${read.item.recordId}`);
-                            const key = `${read.item.store}/${read.item.recordId}`; if (read.item.type === 'delete') { tx.objectStore(read.item.store).delete(read.item.recordId); revisions[key] = revision + 1; } else { const next = { recordId: read.item.recordId, revision: revision + 1, operationId: spec.operationId, updatedAt: nowIso(), data: read.item.data }; next.checksum = checksum(next.data); tx.objectStore(read.item.store).put(next); revisions[key] = next.revision; }
+                    const revisionRequest = tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY);
+                    revisionRequest.onerror = () => fail(revisionRequest.error || new Error('Entity revision state read failed'));
+                    revisionRequest.onsuccess = () => {
+                        let revisionState;
+                        try { revisionState = readEntityRevisionState(revisionRequest.result || null); }
+                        catch (error) { fail(error); return; }
+                        const reads = items.map((item) => ({
+                            item,
+                            request: item.type === 'clear'
+                                ? tx.objectStore(item.store).getAll()
+                                : tx.objectStore(item.store).get(item.recordId)
+                        }));
+                        let remaining = reads.length;
+                        const finish = () => {
+                            const revisions = {};
+                            const affectedStores = new Set();
+                            for (const read of reads) {
+                                const item = read.item;
+                                affectedStores.add(item.store);
+                                if (item.type === 'clear') {
+                                    for (const row of read.request.result || []) {
+                                        const revision = incrementCounter(
+                                            trackedEntityRevision(revisionState, item.store, row.recordId, row),
+                                            `${item.store}/${row.recordId}`
+                                        );
+                                        trackEntityRevision(revisionState, item.store, row.recordId, revision);
+                                    }
+                                    tx.objectStore(item.store).clear();
+                                    revisions[`${item.store}/*`] = 0;
+                                    continue;
+                                }
+                                const current = read.request.result || null;
+                                const revision = trackedEntityRevision(revisionState, item.store, item.recordId, current);
+                                if (item.expectedRevision !== null && item.expectedRevision !== revision) {
+                                    throw new AppDataError('CONFLICT', `Revision conflict for ${item.store}/${item.recordId}`, {
+                                        store: item.store,
+                                        recordId: item.recordId,
+                                        expectedRevision: item.expectedRevision,
+                                        actualRevision: revision
+                                    });
+                                }
+                                const nextRevision = incrementCounter(revision, `${item.store}/${item.recordId}`);
+                                const key = `${item.store}/${item.recordId}`;
+                                if (item.type === 'delete') {
+                                    tx.objectStore(item.store).delete(item.recordId);
+                                    revisions[key] = nextRevision;
+                                } else {
+                                    const next = {
+                                        recordId: item.recordId,
+                                        revision: nextRevision,
+                                        operationId: spec.operationId,
+                                        updatedAt: nowIso(),
+                                        data: item.data,
+                                        checksum: checksum(item.data)
+                                    };
+                                    tx.objectStore(item.store).put(next);
+                                    revisions[key] = nextRevision;
+                                }
+                                trackEntityRevision(revisionState, item.store, item.recordId, nextRevision);
+                            }
+                            for (const store of affectedStores) bumpEntityEpoch(revisionState, store);
+                            putEntityRevisionState(tx, revisionRequest.result || null, revisionState, spec.operationId);
+                            const receipt = receiptFor(spec.operationId, revisions, warnings, []);
+                            putJournal(tx, journalRow, journal, spec, receipt);
+                            done(receipt);
+                        };
+                        for (const read of reads) {
+                            read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed'));
+                            read.request.onsuccess = () => {
+                                remaining -= 1;
+                                if (!remaining) { try { finish(); } catch (error) { fail(error); } }
+                            };
                         }
-                        for (const item of items.filter((item) => item.type === 'clear')) { tx.objectStore(item.store).clear(); revisions[`${item.store}/*`] = 0; }
-                        const receipt = receiptFor(spec.operationId, revisions, warnings, []); putJournal(tx, journalRow, journal, spec, receipt); done(receipt); };
-                    if (!remaining) { try { finish(); } catch (error) { fail(error); } return; }
-                    for (const read of reads) { read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed')); read.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
+                    };
                 } }));
                 this._notifyCommitted(items.map((item) => ({ store: item.store, recordId: item.recordId, type: item.type })), receipt); return receipt;
             } catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
@@ -856,9 +1083,10 @@
                     if (ids.has(recordId)) throw validation(`Duplicate snapshot entity: ${store}/${recordId}`);
                     ids.add(recordId);
                     const data = canonicalizeJson(row.data);
+                    assertEntityIdentity(store, recordId, data, validation);
                     if (!row.checksum || row.checksum !== checksum(data)) throw validation(`Invalid snapshot entity checksum: ${store}/${recordId}`);
                     const revision = row.revision === undefined ? 1 : Number(row.revision);
-                    if (!Number.isInteger(revision) || revision < 1) throw validation(`Invalid snapshot entity revision: ${store}/${recordId}`);
+                    if (!Number.isSafeInteger(revision) || revision < 1 || revision >= Number.MAX_SAFE_INTEGER) throw validation(`Invalid snapshot entity revision: ${store}/${recordId}`);
                     return { recordId, revision, operationId: String(row.operationId || options.operationId || 'snapshot'), updatedAt: String(row.updatedAt || nowIso()), data, checksum: checksum(data) };
                 });
             }
@@ -867,48 +1095,155 @@
             const expectedRevisionToken = options.expectedRevisionToken && typeof options.expectedRevisionToken === 'object'
                 ? canonicalizeJson(options.expectedRevisionToken, '$.expectedRevisionToken')
                 : null;
-            const opId = operationId(options.operationId || randomId('restore')); const spec = { operationId: opId, warnings: [], pending: [], fingerprint: checksum({ envelopes: changes.map((item) => [item.logicalKey, item.envelope]), entities: entityRows, resetJournal, expectedRevisionToken }), stores: STORE_NAMES.slice() };
+            const warnings = options.warnings === undefined ? [] : canonicalizeJson(options.warnings, '$.warnings');
+            if (!Array.isArray(warnings) || warnings.some((item) => typeof item !== 'string')) throw validation('warnings must be an array of strings');
+            const opId = operationId(options.operationId || randomId('restore'));
+            const spec = {
+                operationId: opId,
+                warnings,
+                pending: [],
+                fingerprint: requestFingerprint(options, {
+                    envelopes: changes.map((item) => [item.logicalKey, item.envelope]),
+                    entities: entityRows,
+                    resetJournal,
+                    expectedRevisionToken,
+                    warnings
+                }, warnings),
+                stores: STORE_NAMES.slice()
+            };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
                     const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
                     const documentChecks = expectedRevisionToken && expectedRevisionToken.documents || {};
                     const entityChecks = expectedRevisionToken && expectedRevisionToken.entities || {};
-                    const reads = Object.entries(documentChecks).map(([logicalKey, expected]) => ({
-                        kind: 'document', logicalKey, expected, request: tx.objectStore(DOCUMENT_STORE).get(logicalKey)
-                    })).concat(Object.entries(entityChecks).map(([store, expected]) => ({
-                        kind: 'entities', store, expected, request: tx.objectStore(store).getAll()
-                    })));
+                    const entityEpochChecks = expectedRevisionToken && expectedRevisionToken.entityEpochs || {};
+                    const changesByKey = new Map(changes.map((item) => [item.logicalKey, item]));
+                    const documentKeys = new Set(Array.from(changesByKey.keys()).concat(Object.keys(documentChecks)));
+                    const entityStores = new Set(Object.keys(entityRows).concat(Object.keys(entityChecks), Object.keys(entityEpochChecks)));
+                    const reads = Array.from(documentKeys).map((logicalKey) => ({
+                        kind: 'document',
+                        logicalKey,
+                        expected: documentChecks[logicalKey],
+                        hasExpected: Object.prototype.hasOwnProperty.call(documentChecks, logicalKey),
+                        request: tx.objectStore(DOCUMENT_STORE).get(logicalKey)
+                    })).concat(Array.from(entityStores).map((store) => {
+                        entityStore(store);
+                        return {
+                            kind: 'entities',
+                            store,
+                            expected: entityChecks[store],
+                            hasExpected: Object.prototype.hasOwnProperty.call(entityChecks, store),
+                            request: tx.objectStore(store).getAll()
+                        };
+                    }));
+                    const revisionRead = {
+                        kind: 'entity-revisions',
+                        request: tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY)
+                    };
+                    reads.push(revisionRead);
                     const finish = () => {
+                        const revisionState = readEntityRevisionState(revisionRead.request.result || null);
                         for (const read of reads) {
                             if (read.kind === 'document') {
                                 const current = read.request.result ? read.request.result.envelope : null;
                                 const actualRevision = current ? Number(current.revision) : 0;
                                 const expectedRevision = Number(read.expected) || 0;
-                                if (actualRevision !== expectedRevision) {
+                                if (read.hasExpected && actualRevision !== expectedRevision) {
                                     throw new AppDataError('CONFLICT', `Snapshot revision conflict for ${read.logicalKey}`, { logicalKey: read.logicalKey, expectedRevision, actualRevision });
                                 }
-                            } else {
+                            } else if (read.kind === 'entities') {
                                 const actual = Object.fromEntries((read.request.result || []).map((row) => [String(row.recordId), Number(row.revision) || 0]));
                                 const expected = read.expected && typeof read.expected === 'object' ? read.expected : {};
                                 const ids = new Set(Object.keys(actual).concat(Object.keys(expected)));
                                 for (const recordId of ids) {
                                     const current = actual[recordId] || 0;
                                     const wanted = Number(expected[recordId]) || 0;
-                                    if (current !== wanted) {
+                                    if (read.hasExpected && current !== wanted) {
                                         throw new AppDataError('CONFLICT', `Snapshot revision conflict for ${read.store}/${recordId}`, { store: read.store, recordId });
+                                    }
+                                }
+                                if (Object.prototype.hasOwnProperty.call(entityEpochChecks, read.store)) {
+                                    const expectedEpoch = Number(entityEpochChecks[read.store]) || 0;
+                                    const actualEpoch = Number(revisionState.epochs[read.store]) || 0;
+                                    if (actualEpoch !== expectedEpoch) {
+                                        throw new AppDataError('CONFLICT', `Snapshot entity epoch conflict for ${read.store}`, {
+                                            store: read.store,
+                                            expectedEpoch,
+                                            actualEpoch
+                                        });
                                     }
                                 }
                             }
                         }
                         const revisions = {};
-                        for (const item of changes) { tx.objectStore(DOCUMENT_STORE).put({ logicalKey: item.logicalKey, envelope: makeEnvelope(item.entry, item.envelope.data, { state: item.envelope.state, revision: item.envelope.revision, operationId: spec.operationId, normalized: true }) }); revisions[item.logicalKey] = Number(item.envelope.revision); }
-                        for (const [store, rows] of Object.entries(entityRows)) {
-                            tx.objectStore(store).clear();
-                            for (const row of rows) tx.objectStore(store).put(row);
+                        const documentReads = new Map(reads.filter((read) => read.kind === 'document').map((read) => [read.logicalKey, read]));
+                        for (const item of changes) {
+                            const currentRow = documentReads.get(item.logicalKey).request.result;
+                            const currentRevision = Number(currentRow && currentRow.envelope && currentRow.envelope.revision) || 0;
+                            const nextRevision = incrementCounter(
+                                Math.max(currentRevision, Number(item.envelope.revision) || 0),
+                                item.logicalKey
+                            );
+                            const envelope = makeEnvelope(item.entry, item.envelope.data, {
+                                state: item.envelope.state,
+                                revision: nextRevision,
+                                operationId: spec.operationId,
+                                normalized: true
+                            });
+                            tx.objectStore(DOCUMENT_STORE).put({ logicalKey: item.logicalKey, envelope });
+                            revisions[item.logicalKey] = nextRevision;
                         }
-                        const receipt = receiptFor(spec.operationId, revisions, [], []); putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt); done(receipt);
+                        const entityReads = new Map(reads.filter((read) => read.kind === 'entities').map((read) => [read.store, read]));
+                        for (const [store, rows] of Object.entries(entityRows)) {
+                            const currentRows = entityReads.get(store).request.result || [];
+                            const currentById = new Map(currentRows.map((row) => [String(row.recordId), row]));
+                            const incomingIds = new Set(rows.map((row) => String(row.recordId)));
+                            for (const key of Object.keys(revisionState.revisions[store])) {
+                                if (!key.startsWith('$')) continue;
+                                const recordId = key.slice(1);
+                                if (currentById.has(recordId) || incomingIds.has(recordId)) continue;
+                                const deletedRevision = incrementCounter(
+                                    trackedEntityRevision(revisionState, store, recordId, null),
+                                    `${store}/${recordId}`
+                                );
+                                trackEntityRevision(revisionState, store, recordId, deletedRevision);
+                            }
+                            for (const row of currentRows) {
+                                if (incomingIds.has(String(row.recordId))) continue;
+                                const deletedRevision = incrementCounter(
+                                    trackedEntityRevision(revisionState, store, row.recordId, row),
+                                    `${store}/${row.recordId}`
+                                );
+                                trackEntityRevision(revisionState, store, row.recordId, deletedRevision);
+                            }
+                            tx.objectStore(store).clear();
+                            for (const row of rows) {
+                                const current = currentById.get(String(row.recordId)) || null;
+                                const nextRevision = incrementCounter(Math.max(
+                                    trackedEntityRevision(revisionState, store, row.recordId, current),
+                                    Number(row.revision) || 0
+                                ), `${store}/${row.recordId}`);
+                                const next = {
+                                    recordId: row.recordId,
+                                    revision: nextRevision,
+                                    operationId: spec.operationId,
+                                    updatedAt: nowIso(),
+                                    data: row.data,
+                                    checksum: checksum(row.data)
+                                };
+                                tx.objectStore(store).put(next);
+                                trackEntityRevision(revisionState, store, row.recordId, nextRevision);
+                                revisions[`${store}/${row.recordId}`] = nextRevision;
+                            }
+                            bumpEntityEpoch(revisionState, store);
+                        }
+                        if (Object.keys(entityRows).length) {
+                            putEntityRevisionState(tx, revisionRead.request.result || null, revisionState, spec.operationId);
+                        }
+                        const receipt = receiptFor(spec.operationId, revisions, warnings, []);
+                        putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt);
+                        done(receipt);
                     };
-                    if (!reads.length) { try { finish(); } catch (error) { fail(error); } return; }
                     let remaining = reads.length;
                     for (const read of reads) {
                         read.request.onerror = () => fail(read.request.error || new Error('Snapshot revalidation read failed'));

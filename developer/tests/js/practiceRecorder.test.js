@@ -324,6 +324,52 @@ async function main() {
             assert(commitCall);
             assert.strictEqual(commitCall.options.confirmDestructive, true);
             assert(state.backupCalls.some((call) => call.method === 'recordImport'));
+            assert.deepStrictEqual(
+                state.backupCalls.slice(0, 3).map((call) => call.method),
+                ['previewImport', 'create', 'commitImport'],
+                'validation must complete before a retention-limited safety backup is created'
+            );
+        });
+
+        await record('invalid import does not consume a backup retention slot', async () => {
+            const { recorder, state, windowStub } = createHarness();
+            windowStub.AppData.backups.previewImport = async () => {
+                state.backupCalls.push({ method: 'previewImport' });
+                const error = new Error('invalid import');
+                error.code = 'VALIDATION';
+                throw error;
+            };
+            await assert.rejects(() => recorder.importData({ broken: true }), { code: 'VALIDATION' });
+            assert.deepStrictEqual(state.backupCalls.map((call) => call.method), ['previewImport']);
+        });
+
+        await record('failed interrupted save keeps the active checkpoint', async () => {
+            const { recorder, windowStub } = createHarness();
+            const session = {
+                id: 'active-session:session-interrupted',
+                sessionId: 'session-interrupted',
+                examId: 'reading-p1',
+                startTime: '2026-07-26T00:00:00.000Z',
+                status: 'active',
+                progress: { currentQuestion: 4 },
+                answers: { q1: 'A' },
+                metadata: {}
+            };
+            recorder.activeSessions = new Map([['reading-p1', session]]);
+            recorder.cleanupSessionListener = () => {};
+            recorder.dispatchSessionEvent = () => {};
+            recorder.saveInterruptedRecord = async () => {
+                const error = new Error('quota exceeded');
+                error.code = 'QUOTA_EXCEEDED';
+                throw error;
+            };
+            let discardCalls = 0;
+            windowStub.AppData.recovery.discardActiveSession = async () => { discardCalls += 1; };
+
+            const ended = await recorder.endPracticeSession('reading-p1', 'timeout');
+            assert.strictEqual(ended, false);
+            assert.strictEqual(recorder.activeSessions.get('reading-p1'), session);
+            assert.strictEqual(discardCalls, 0, 'the only durable checkpoint must not be discarded after save failure');
         });
 
         await record('backup create and restore delegate to the backups domain', async () => {

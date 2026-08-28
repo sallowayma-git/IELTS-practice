@@ -1,6 +1,7 @@
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
+import vm from 'vm';
 import { fileURLToPath } from 'url';
 import '../../../js/utils/safeObjectLiteralParser.js';
 
@@ -94,6 +95,61 @@ function testBridgeHasNoDynamicCodeExecution() {
     assert.ok(source.includes('SafeObjectLiteralParser.parseAt'), 'bridge 应使用纯数据解析器');
 }
 
+function testWrapperBridgeUrlKeepsStaticHostingPrefix() {
+    const wrapperPath = path.join(__dirname, '../../../js/listeningUnifiedWrapper.js');
+    const source = fs.readFileSync(wrapperPath, 'utf8');
+    assert.ok(!source.includes("var BRIDGE_SCRIPT_URL = '/js/"), 'wrapper must not resolve the bridge from the host root');
+    assert.ok(source.includes('document.currentScript') || source.includes('doc.currentScript'), 'wrapper should derive assets from its own script URL');
+    assert.ok(
+        source.includes("new URL('listening-record-bridge.bundle.js', currentScriptUrl)"),
+        'bundled wrapper and bridge should resolve as sibling assets'
+    );
+    assert.strictEqual(
+        new URL('listening-record-bridge.bundle.js', 'https://example.test/app/js/bundles/listening-wrapper.bundle.js').href,
+        'https://example.test/app/js/bundles/listening-record-bridge.bundle.js'
+    );
+
+    const observeResolvedUrl = (currentScriptSrc, pageUrl) => {
+        const marker = 'var BRIDGE_SCRIPT_URL = resolveBridgeScriptUrl();';
+        const instrumented = source.replace(
+            marker,
+            `${marker}\n    global.__resolvedBridgeScriptUrl = BRIDGE_SCRIPT_URL;`
+        );
+        assert.notStrictEqual(instrumented, source, 'wrapper URL resolution must remain instrumentable');
+        const document = {
+            currentScript: { src: currentScriptSrc },
+            readyState: 'loading',
+            referrer: '',
+            addEventListener() {}
+        };
+        const window = {
+            document,
+            location: new URL(pageUrl),
+            opener: null
+        };
+        window.parent = window;
+        vm.runInNewContext(instrumented, { window, URL });
+        return window.__resolvedBridgeScriptUrl;
+    };
+
+    assert.strictEqual(
+        observeResolvedUrl(
+            'https://example.test/app/js/bundles/listening-wrapper.bundle.js',
+            'https://example.test/app/assets/generated/listening-exams/listening-practice-unified.html'
+        ),
+        'https://example.test/app/js/bundles/listening-record-bridge.bundle.js',
+        'HTTP subpath deployments must load the bridge below the same application prefix'
+    );
+    assert.strictEqual(
+        observeResolvedUrl(
+            'file:///D:/IELTS/js/listeningUnifiedWrapper.js',
+            'file:///D:/IELTS/assets/generated/listening-exams/listening-practice-unified.html'
+        ),
+        'file:///D:/IELTS/js/bundles/listening-record-bridge.bundle.js',
+        'raw wrapper source must preserve local file compatibility'
+    );
+}
+
 function run() {
     testLegacyDataSyntax();
     testParseAtStopsAfterLiteral();
@@ -101,6 +157,7 @@ function run() {
     testPrototypePollutionKeysAreRejected();
     testLimitsAndMalformedInput();
     testBridgeHasNoDynamicCodeExecution();
+    testWrapperBridgeUrlKeepsStaticHostingPrefix();
     console.log(JSON.stringify({
         status: 'pass',
         detail: 'listening bridge safe object-literal parser regression checks passed'

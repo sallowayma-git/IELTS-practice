@@ -52,7 +52,7 @@ function harness() {
     const catalogSandbox = { structuredClone }; catalogSandbox.globalThis = catalogSandbox;
     vm.runInContext(catalogSource, vm.createContext(catalogSandbox), { filename: 'dataCatalog.js' });
     const catalog = catalogSandbox.__AppDataV2Catalog;
-    const shared = { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), reads: [], lists: [], mutations: [], counter: 0, failEntityStore: null, lastInstallOptions: null };
+    const shared = { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), reads: [], lists: [], mutations: [], counter: 0, failEntityStore: null, lastInstallOptions: null, beforeInstall: null };
     const envelope = (key, data, state = 'present', revision = 1, operationId = 'seed') => ({ schemaVersion: 2, revision, operationId, updatedAt: new Date().toISOString(), state, data: state === 'cleared' ? null : clone(data), checksum: checksum(state === 'cleared' ? null : data) });
     class Kernel {
         async initialize() { this.state = 'ready'; this.backend = 'memory'; return this; }
@@ -85,6 +85,11 @@ function harness() {
         }
         async installSnapshot(snapshot, options = {}) {
             if (snapshot.checksum !== checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities })) throw new AppDataError('VALIDATION', 'snapshot checksum');
+            if (typeof shared.beforeInstall === 'function') {
+                const hook = shared.beforeInstall;
+                shared.beforeInstall = null;
+                await hook();
+            }
             const token = options.expectedRevisionToken || {};
             for (const [key, expected] of Object.entries(token.documents || {})) {
                 const actual = shared.docs.get(key) || null;
@@ -118,7 +123,356 @@ function harness() {
     const context = vm.createContext(sandbox); vm.runInContext(recordSource, context, { filename: 'practiceRecordSource.js' }); vm.runInContext(appDataSource, context, { filename: 'appData.js' }); return { app: sandbox.AppData, shared, envelope, sandbox };
 }
 
+async function testVocabPhoneticMutationProtection() {
+    const fixture = harness();
+    await fixture.app.ready;
+    await fixture.app.vocab.saveWords([{
+        id: 'phonetic-merge-word',
+        word: 'Alpha',
+        phonetic: 'legacy-value',
+        meaning: 'stored meaning'
+    }]);
+
+    const mergeReceipt = await fixture.app.vocab.mergeListWords({
+        listId: 'default',
+        words: [{ word: ' alpha ', phonetic: '  /\u02c8\u00e6lf\u0259  ' }]
+    });
+    assert.strictEqual(mergeReceipt.addedCount, 0);
+    assert.strictEqual(mergeReceipt.updatedCount, 1);
+    assert.strictEqual(
+        (await fixture.app.vocab.listWords())[0].phonetic,
+        '\u02c8\u00e6lf\u0259',
+        'a non-empty incoming phonetic must be trimmed and update the existing word'
+    );
+
+    await fixture.app.vocab.mergeListWords({
+        listId: 'default',
+        words: [
+            { word: 'ALPHA', phonetic: '   ' },
+            { word: 'alpha' }
+        ]
+    });
+    assert.strictEqual(
+        (await fixture.app.vocab.listWords())[0].phonetic,
+        '\u02c8\u00e6lf\u0259',
+        'blank or missing merge values must not erase a stored phonetic'
+    );
+
+    const patchReceipt = await fixture.app.vocab.patchWord({
+        listId: 'default',
+        wordId: 'phonetic-merge-word',
+        patch: { phonetic: ' \t\r\n ', meaning: 'patched meaning' }
+    });
+    assert.strictEqual(patchReceipt.word.phonetic, '\u02c8\u00e6lf\u0259', 'patchWord must ignore a blank phonetic');
+    assert.strictEqual(patchReceipt.word.meaning, 'patched meaning', 'patchWord must still apply sibling fields');
+
+    await fixture.app.vocab.saveCollection('phonetic-upsert-list', {
+        id: 'phonetic-upsert-list',
+        rawCollectionField: { retain: true },
+        words: [{
+            id: 'phonetic-upsert-word',
+            word: 'Bravo',
+            phonetic: 'stored-upsert-value',
+            note: 'before upsert'
+        }]
+    });
+    const upsertReceipt = await fixture.app.vocab.upsertCollectionWord('phonetic-upsert-list', {
+        word: 'Bravo',
+        phonetic: '   ',
+        note: 'after upsert'
+    });
+    assert.strictEqual(upsertReceipt.word.phonetic, 'stored-upsert-value', 'upsertCollectionWord must ignore a blank phonetic');
+    assert.strictEqual(upsertReceipt.word.note, 'after upsert', 'upsertCollectionWord must still apply sibling fields');
+    assert.deepStrictEqual(
+        (await fixture.app.vocab.readList('phonetic-upsert-list')).rawCollectionField,
+        { retain: true },
+        'upserting one word must preserve unknown collection fields'
+    );
+
+    await fixture.app.vocab.saveCollection('legacy-array-list', [{
+        id: 'legacy-array-word',
+        word: 'Charlie',
+        phonetic: 'stored-array-value',
+        meaning: 'before patch'
+    }]);
+    const legacyPatchReceipt = await fixture.app.vocab.patchWord({
+        listId: 'legacy-array-list',
+        wordId: 'legacy-array-word',
+        patch: { phonetic: ' / ', meaning: 'after patch' }
+    });
+    assert.strictEqual(legacyPatchReceipt.word.phonetic, 'stored-array-value');
+    assert.strictEqual(legacyPatchReceipt.word.meaning, 'after patch');
+    const upgradedLegacyList = await fixture.app.vocab.readList('legacy-array-list');
+    assert.strictEqual(upgradedLegacyList.words[0].phonetic, 'stored-array-value');
+    assert.strictEqual(upgradedLegacyList.words[0].meaning, 'after patch');
+}
+
+async function testAtomicVocabPhoneticBackfill() {
+    const fixture = harness();
+    await fixture.app.ready;
+    const words = [
+        {
+            id: 'alpha-first',
+            word: 'Alpha',
+            phonetic: '',
+            note: 'first duplicate',
+            status: 'review',
+            repetitions: 4,
+            interval: 12,
+            easeFactor: 2.35,
+            nextReview: '2025-02-01T00:00:00.000Z',
+            lastReviewed: '2025-01-20T00:00:00.000Z',
+            createdAt: '2024-12-01T00:00:00.000Z',
+            updatedAt: '2025-01-20T00:00:00.000Z',
+            rawWordField: { sourceRow: 17, untouched: ['one', 'two'] }
+        },
+        {
+            id: 'explicit-beta',
+            word: 'Beta',
+            phonetic: 'custom-explicit-value',
+            status: 'learning',
+            repetitions: 2,
+            nextReview: '2025-01-25T00:00:00.000Z',
+            createdAt: '2024-12-02T00:00:00.000Z',
+            updatedAt: '2025-01-18T00:00:00.000Z'
+        },
+        {
+            id: 'alpha-second',
+            word: ' alpha ',
+            note: 'second duplicate',
+            status: 'new',
+            repetitions: 0,
+            nextReview: null,
+            createdAt: '2024-12-03T00:00:00.000Z',
+            updatedAt: '2024-12-03T00:00:00.000Z',
+            rawWordField: { sourceRow: 29 }
+        },
+        {
+            id: 'blank-gamma',
+            word: 'Gamma',
+            phonetic: '   ',
+            status: 'review',
+            repetitions: 7,
+            nextReview: '2025-03-01T00:00:00.000Z',
+            createdAt: '2024-12-04T00:00:00.000Z',
+            updatedAt: '2025-01-21T00:00:00.000Z'
+        },
+        'legacy-string-word'
+    ];
+    await fixture.app.vocab.saveWords(words);
+    const revisionBefore = fixture.shared.docs.get('vocab.words').revision;
+    const entries = [
+        { word: ' ALPHA ', phonetic: '  /\u02c8\u00e6lf\u0259/  ' },
+        { word: 'alpha', phonetic: 'must-not-win-over-the-first-candidate' },
+        { word: 'beta', phonetic: 'must-not-overwrite-explicit' },
+        { word: 'Gamma', phonetic: '  \u02c8\u0261\u00e6m\u0259  ' },
+        { word: 'not-in-the-list', phonetic: 'missing-candidate' },
+        { word: 'blank-candidate', phonetic: '   ' }
+    ];
+
+    const receipt = await fixture.app.vocab.backfillListWordPhonetics({
+        listId: 'default',
+        entries
+    }, { operationId: 'phonetic-backfill-atomic' });
+    assert.strictEqual(receipt.committed, true);
+    assert.strictEqual(receipt.updatedCount, 3, 'every stored duplicate with a missing phonetic must be filled');
+    assert.deepStrictEqual(Object.keys(receipt.revisions), ['vocab.words'], 'the backfill must commit as one list-document mutation');
+    assert.strictEqual(
+        fixture.shared.docs.get('vocab.words').revision,
+        revisionBefore + 1,
+        'the whole backfill must advance the list document exactly once'
+    );
+    assert.strictEqual(fixture.shared.docs.get('vocab.words').operationId, 'phonetic-backfill-atomic');
+
+    const expected = clone(words);
+    expected[0].phonetic = '\u02c8\u00e6lf\u0259';
+    expected[2].phonetic = '\u02c8\u00e6lf\u0259';
+    expected[3].phonetic = '\u02c8\u0261\u00e6m\u0259';
+    const stored = await fixture.app.vocab.listWords();
+    assert.deepStrictEqual(
+        stored,
+        expected,
+        'backfill must preserve raw fields, progress, timestamps, explicit values, and word order'
+    );
+    assert.deepStrictEqual(stored.slice(0, 4).map((word) => word.id), ['alpha-first', 'explicit-beta', 'alpha-second', 'blank-gamma']);
+    assert.strictEqual(stored[4], 'legacy-string-word', 'backfill must retain non-object legacy entries byte-for-byte');
+    assert.strictEqual(stored.some((word) => word.word === 'not-in-the-list'), false, 'candidate-only words must not be added');
+    assert.strictEqual(stored[1].phonetic, 'custom-explicit-value', 'an explicit stored phonetic must win over a candidate');
+
+    const envelopeAfterFirstRun = clone(fixture.shared.docs.get('vocab.words'));
+    const noOpReceipt = await fixture.app.vocab.backfillListWordPhonetics({
+        listId: 'default',
+        entries
+    }, { operationId: 'phonetic-backfill-idempotent' });
+    assert.strictEqual(noOpReceipt.committed, false);
+    assert.strictEqual(noOpReceipt.updatedCount, 0);
+    assert.deepStrictEqual(
+        fixture.shared.docs.get('vocab.words'),
+        envelopeAfterFirstRun,
+        'an idempotent backfill must not rewrite the list envelope'
+    );
+    assert.deepStrictEqual(noOpReceipt.words, expected, 'the no-op receipt must expose the unchanged stored order and values');
+}
+
+async function testReplaceProgressPhoneticProtection() {
+    const fixture = harness();
+    await fixture.app.ready;
+    const storedWords = [
+        { id: 'stored-alpha', word: 'Alpha', phonetic: 'stored-alpha-value' },
+        { id: 'stored-bravo', word: 'Bravo', phonetic: 'stored-bravo-value' },
+        { id: 'stored-charlie', word: 'Charlie', phonetic: 'stored-charlie-value' },
+        { id: 'stored-delta', word: 'Delta', phonetic: 'stored-delta-value' }
+    ];
+    const incomingWords = [
+        { id: 'incoming-alpha', word: ' alpha ', repetitions: 1 },
+        { id: 'incoming-bravo', word: 'BRAVO', phonetic: ' \t ', repetitions: 2 },
+        { id: 'incoming-charlie', word: ' charlie ', phonetic: '  /////  ', repetitions: 3 },
+        { id: 'incoming-delta', word: 'Delta', phonetic: '  /incoming-delta-value/  ', repetitions: 4 }
+    ];
+    const expectedPhonetics = [
+        'stored-alpha-value',
+        'stored-bravo-value',
+        'stored-charlie-value',
+        'incoming-delta-value'
+    ];
+
+    await fixture.app.vocab.saveWords(storedWords);
+    const defaultReceipt = await fixture.app.vocab.replaceProgress({
+        listId: 'default',
+        words: incomingWords,
+        config: { dailyGoal: 12 }
+    }, { operationId: 'replace-progress-default-phonetics' });
+    assert.deepStrictEqual(
+        defaultReceipt.words.map((word) => word.phonetic),
+        expectedPhonetics,
+        'default progress restore must preserve explicit phonetics for missing, blank, and pure-slash inputs while normalizing a real update'
+    );
+    assert.deepStrictEqual(
+        (await fixture.app.vocab.listWords()).map((word) => word.phonetic),
+        expectedPhonetics,
+        'default progress restore must persist the protected phonetics'
+    );
+
+    await fixture.app.vocab.saveCollection('replace-progress-collection', {
+        id: 'replace-progress-collection',
+        rawCollectionField: { retained: true },
+        words: storedWords
+    });
+    const collectionReceipt = await fixture.app.vocab.replaceProgress({
+        listId: 'replace-progress-collection',
+        words: incomingWords,
+        config: { dailyGoal: 8 }
+    }, { operationId: 'replace-progress-collection-phonetics' });
+    assert.deepStrictEqual(
+        collectionReceipt.words.map((word) => word.phonetic),
+        expectedPhonetics,
+        'collection progress restore must apply the same phonetic protection rule'
+    );
+    const storedCollection = await fixture.app.vocab.readList('replace-progress-collection');
+    assert.deepStrictEqual(storedCollection.words.map((word) => word.phonetic), expectedPhonetics);
+    assert.deepStrictEqual(storedCollection.rawCollectionField, { retained: true });
+}
+
+async function testV2MergeImportPhoneticProtection() {
+    const fixture = harness();
+    await fixture.app.ready;
+    const storedDefaultWords = [
+        { id: 'default-missing', word: 'Alpha', phonetic: 'stored-default-alpha', meaning: 'stored alpha' },
+        { id: 'default-blank', word: 'Bravo', phonetic: 'stored-default-bravo', meaning: 'stored bravo' },
+        { id: 'default-slashes', word: 'Charlie', phonetic: 'stored-default-charlie', meaning: 'stored charlie' },
+        { id: 'default-update', word: 'Delta', phonetic: 'stored-default-delta', meaning: 'stored delta' }
+    ];
+    const incomingDefaultWords = [
+        { id: 'default-missing', word: 'Alpha', meaning: 'imported alpha', importMarker: 'missing' },
+        { id: 'default-blank', word: 'Bravo', phonetic: ' \t ', meaning: 'imported bravo', importMarker: 'blank' },
+        { id: 'default-slashes', word: 'Charlie', phonetic: '  /////  ', meaning: 'imported charlie', importMarker: 'slashes' },
+        { id: 'default-update', word: 'Delta', phonetic: '  /imported-default-delta/  ', meaning: 'imported delta', importMarker: 'update' }
+    ];
+    const storedNamedWords = [
+        { id: 'named-missing', word: 'Echo', phonetic: 'stored-named-echo', meaning: 'stored echo' },
+        { id: 'named-blank', word: 'Foxtrot', phonetic: 'stored-named-foxtrot', meaning: 'stored foxtrot' },
+        { id: 'named-slashes', word: 'Golf', phonetic: 'stored-named-golf', meaning: 'stored golf' },
+        { id: 'named-update', word: 'Hotel', phonetic: 'stored-named-hotel', meaning: 'stored hotel' }
+    ];
+    const incomingNamedWords = [
+        { id: 'named-missing', word: 'Echo', meaning: 'imported echo', importMarker: 'missing' },
+        { id: 'named-blank', word: 'Foxtrot', phonetic: '   ', meaning: 'imported foxtrot', importMarker: 'blank' },
+        { id: 'named-slashes', word: 'Golf', phonetic: '  ////  ', meaning: 'imported golf', importMarker: 'slashes' },
+        { id: 'named-update', word: 'Hotel', phonetic: '  /imported-named-hotel/  ', meaning: 'imported hotel', importMarker: 'update' }
+    ];
+
+    await fixture.app.vocab.saveWords(storedDefaultWords);
+    await fixture.app.vocab.saveCollections({
+        'phonetic-import-list': {
+            id: 'phonetic-import-list',
+            name: 'Stored list name',
+            words: storedNamedWords
+        },
+        'unrelated-list': {
+            id: 'unrelated-list',
+            name: 'Must survive document merge',
+            words: [{ id: 'untouched', word: 'Untouched', phonetic: 'untouched-value' }]
+        }
+    });
+
+    const snapshot = {
+        format: 'ielts-atlas-data-v2',
+        schemaVersion: 2,
+        scope: 'partial',
+        envelopes: {
+            'vocab.words': fixture.envelope('vocab.words', incomingDefaultWords),
+            'vocab.lists': fixture.envelope('vocab.lists', {
+                'phonetic-import-list': {
+                    id: 'phonetic-import-list',
+                    name: 'Imported list name',
+                    importMarker: 'updated-list-fields',
+                    words: incomingNamedWords
+                }
+            })
+        },
+        entities: {}
+    };
+    snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
+
+    const plan = await fixture.app.backups.previewImport(snapshot, { practiceMode: 'merge' });
+    assert.deepStrictEqual(new Set(plan.keys), new Set(['vocab.words', 'vocab.lists']));
+    assert.strictEqual(plan.destructive, false);
+    await fixture.app.backups.commitImport(plan.id);
+
+    const defaultWords = await fixture.app.vocab.listWords();
+    assert.deepStrictEqual(
+        defaultWords.map((word) => word.phonetic),
+        ['stored-default-alpha', 'stored-default-bravo', 'stored-default-charlie', 'imported-default-delta'],
+        'v2 merge import must protect stored default-list phonetics from missing, blank, and pure-slash values'
+    );
+    assert.deepStrictEqual(
+        defaultWords.map((word) => [word.meaning, word.importMarker]),
+        incomingDefaultWords.map((word) => [word.meaning, word.importMarker]),
+        'default-list fields other than the protected phonetic must retain merge-by-id semantics'
+    );
+
+    const collections = await fixture.app.vocab.listCollections();
+    const namedList = collections['phonetic-import-list'];
+    assert.strictEqual(namedList.name, 'Imported list name');
+    assert.strictEqual(namedList.importMarker, 'updated-list-fields');
+    assert.deepStrictEqual(
+        namedList.words.map((word) => word.phonetic),
+        ['stored-named-echo', 'stored-named-foxtrot', 'stored-named-golf', 'imported-named-hotel'],
+        'v2 merge import must apply the same phonetic protection inside named lists'
+    );
+    assert.deepStrictEqual(
+        namedList.words.map((word) => [word.meaning, word.importMarker]),
+        incomingNamedWords.map((word) => [word.meaning, word.importMarker]),
+        'named-list incoming fields must still replace their prior values'
+    );
+    assert.strictEqual(collections['unrelated-list'].words[0].phonetic, 'untouched-value');
+}
+
 async function run() {
+    await testVocabPhoneticMutationProtection();
+    await testAtomicVocabPhoneticBackfill();
+    await testReplaceProgressPhoneticProtection();
+    await testV2MergeImportPhoneticProtection();
     const { app, shared, envelope, sandbox } = harness(); await app.ready;
     const huge = 'x'.repeat(20000);
     const completed = await app.practice.completeAttempt({ operationId: 'complete', record: { id: 'r1', examId: 'reading-1', type: 'reading', title: 'Test', totalQuestions: 2, correctAnswers: 1, answers: { 1: 'A' }, answerMap: { 2: 'B' }, answerList: [{ questionId: '3', answer: 'C' }], correctAnswerMap: { 1: 'B' }, answerDetails: huge, scoreInfo: { band: 7 }, markedQuestions: ['q1'], highlights: [{ text: huge }], notes: { q1: huge }, interactions: [{ type: 'click' }], metadata: { examId: 'reading-1', examTitle: 'Reading 1', category: 'academic', frequency: 4, libraryConfigurationId: 'library-1', privatePayload: huge }, realData: { rawData: { token: huge }, answers: { 1: 'wrong', 4: 'D' }, answerMap: { 5: 'E' } }, rawData: { shouldNotPersist: huge, answers: { 6: 'F' }, answerMap: { 7: 'G' }, realData: { answers: { 8: 'H' } } } } });
@@ -332,7 +686,23 @@ async function run() {
         ['invalid entity row checksum', (snapshot) => { snapshot.entities.practiceSummaries[0].checksum = 'fnv1a-forged-row'; }],
         ['invalid entity row field', (snapshot) => { delete snapshot.entities.practiceSummaries[0].operationId; }],
         ['duplicate entity recordId', (snapshot) => { snapshot.entities.practiceSummaries.push(clone(snapshot.entities.practiceSummaries[0])); }],
-        ['practice layer recordId mismatch', (snapshot) => { snapshot.entities.practiceDetails[0].recordId = 'different-practice-id'; }]
+        ['sparse entity array', (snapshot) => { snapshot.entities.practiceSummaries = new Array(1); }],
+        ['practice layer recordId mismatch', (snapshot) => { snapshot.entities.practiceDetails[0].recordId = 'different-practice-id'; }],
+        ['summary payload id mismatch', (snapshot) => {
+            const row = snapshot.entities.practiceSummaries[0];
+            row.data.id = 'payload-id-does-not-match';
+            row.checksum = checksum(row.data);
+        }],
+        ['detail payload id mismatch', (snapshot) => {
+            const row = snapshot.entities.practiceDetails[0];
+            row.data.recordId = 'payload-id-does-not-match';
+            row.checksum = checksum(row.data);
+        }],
+        ['annotation payload id mismatch', (snapshot) => {
+            const row = snapshot.entities.practiceAnnotations[0];
+            row.data.recordId = 'payload-id-does-not-match';
+            row.checksum = checksum(row.data);
+        }]
     ];
     for (const [label, mutate] of deepValidationCases) {
         const malformed = sealSnapshot(clone(exported));
@@ -436,6 +806,8 @@ async function run() {
     assert.deepStrictEqual(await app.goals.list(), []);
     assert.deepStrictEqual(await app.preferences.getAll(), {});
     assert.strictEqual(shared.lastInstallOptions.resetJournal, true);
+    assert(shared.lastInstallOptions.expectedRevisionToken,
+        'local backup restore must pass the plan revision token into the atomic snapshot install');
     assert.deepStrictEqual(
         new Set(Array.from(shared.entities, ([store, rows]) => `${store}:${Array.from(rows.keys()).sort().join(',')}`)),
         new Set([
@@ -444,6 +816,24 @@ async function run() {
             'practiceAnnotations:r-overloaded-score,r-zero-score,r1'
         ])
     );
+    const restoreRace = await backupFixture('restore-race');
+    await restoreRace.app.settings.patch({ beforeRace: true });
+    restoreRace.shared.beforeInstall = async () => {
+        const current = restoreRace.shared.docs.get('settings.values');
+        restoreRace.shared.docs.set('settings.values', restoreRace.envelope(
+            'settings.values',
+            { concurrentDuringRestore: true },
+            'present',
+            Number(current && current.revision || 0) + 1,
+            'concurrent-during-restore'
+        ));
+    };
+    await assert.rejects(
+        () => restoreRace.app.backups.restore('restore-race'),
+        { code: 'CONFLICT' },
+        'a concurrent write after the pre-restore safety backup must abort restore'
+    );
+    assert.strictEqual((await restoreRace.app.settings.getAll()).concurrentDuringRestore, true);
     await Promise.all([
         app.vocab.upsertCollectionWord('highlights', { word: 'alpha' }),
         app.vocab.upsertCollectionWord('highlights', { word: 'beta' })
@@ -626,6 +1016,6 @@ async function run() {
     assert.strictEqual(await app.practice.get('legacy-1'), null);
     assert.strictEqual((await app.practice.get('snake-1')).answers[1], 'yes');
 
-    console.log(JSON.stringify({ status: 'pass', tests: 47 }));
+    console.log(JSON.stringify({ status: 'pass', tests: 51 }));
 }
 run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

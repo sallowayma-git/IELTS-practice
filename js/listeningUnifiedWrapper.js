@@ -1,7 +1,26 @@
 (function initListeningUnifiedWrapper(global) {
     'use strict';
 
-    var BRIDGE_SCRIPT_URL = '/js/bundles/listening-record-bridge.bundle.js';
+    function resolveBridgeScriptUrl() {
+        var doc = global.document;
+        var currentScriptSrc = doc && doc.currentScript && doc.currentScript.src;
+        try {
+            if (currentScriptSrc) {
+                var currentScriptUrl = new URL(currentScriptSrc, global.location.href);
+                if (/\/listening-wrapper\.bundle\.js$/i.test(currentScriptUrl.pathname)) {
+                    return new URL('listening-record-bridge.bundle.js', currentScriptUrl).href;
+                }
+                if (/\/listeningUnifiedWrapper\.js$/i.test(currentScriptUrl.pathname)) {
+                    return new URL('bundles/listening-record-bridge.bundle.js', currentScriptUrl).href;
+                }
+            }
+            return new URL('../../../js/bundles/listening-record-bridge.bundle.js', global.location.href).href;
+        } catch (_) {
+            return '../../../js/bundles/listening-record-bridge.bundle.js';
+        }
+    }
+
+    var BRIDGE_SCRIPT_URL = resolveBridgeScriptUrl();
     var ADAPTER_STYLE_ID = 'listening-unified-wrapper-adapter-style';
     var TIMER_INTERVAL_MS = 1000;
     var CANDIDATE_CODE_PATTERN = /^\d{6}$/;

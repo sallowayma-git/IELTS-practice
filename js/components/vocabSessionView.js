@@ -459,6 +459,14 @@
         }
     }
 
+    function syncListSwitcherFromStore() {
+        const switcher = state.ui.listSwitcher;
+        if (!switcher || typeof switcher.syncFromStore !== 'function') {
+            return false;
+        }
+        return switcher.syncFromStore();
+    }
+
     function navigateToMoreView() {
         const moreView = document.getElementById('more-view');
         const vocabView = document.getElementById('vocab-view');
@@ -977,6 +985,7 @@
                     meta.config && typeof meta.config === 'object' ? meta.config : {},
                     typeof meta.listId === 'string' ? meta.listId : null
                 );
+                syncListSwitcherFromStore();
                 const latestConfig = state.store.getConfig();
                 const limit = Number(latestConfig?.reviewLimit);
                 if (Number.isFinite(limit) && limit > 0) {
@@ -1308,6 +1317,13 @@
             .replace(/'/g, '&#039;');
     }
 
+    function normalizePhoneticValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
+
     function formatDateTime(value) {
         if (!value) {
             return '-';
@@ -1547,6 +1563,10 @@
                 meaning: String(word?.meaning || '').trim(),
                 example: String(word?.example || '').trim()
             };
+            const phonetic = normalizePhoneticValue(word?.phonetic);
+            if (phonetic) {
+                entry.phonetic = phonetic;
+            }
             if (typeof word?.freq === 'number' && Number.isFinite(word.freq)) {
                 entry.freq = word.freq;
             }
@@ -1809,8 +1829,9 @@
         
         // 确定最终质量（考虑拼写错误）
         let finalQuality = recognitionQuality;
-        if (skipped) {
-            finalQuality = 'hard'; // 跳过视为困难
+        if (qualityOrStatus === 'wrong' || options.attemptsExhausted || skipped) {
+            // 拼写失败和跳过都必须按遗忘处理，不能增加正确次数或拉长复习间隔。
+            finalQuality = 'wrong';
         } else if (spellingAttempts >= 2) {
             finalQuality = 'hard'; // 多次拼写错误视为困难
         } else if (spellingAttempts === 1 && recognitionQuality === 'easy') {
@@ -1820,11 +1841,18 @@
         // 处理新词或轮内循环
         let patch;
         if (!word.easeFactor) {
-            // 新词：设置起始难度因子
-            patch = state.scheduler.setInitialEaseFactor(word, finalQuality);
+            // 新词先建立 EF；遗忘结果还要继续走失败调度，避免只初始化却未记录复习。
+            const initialQuality = finalQuality === 'wrong' ? 'hard' : finalQuality;
+            patch = state.scheduler.setInitialEaseFactor(word, initialQuality);
+            if (finalQuality === 'wrong') {
+                patch = state.scheduler.scheduleAfterResult(patch, 'wrong', now);
+            }
         } else if (isIntraReview) {
             // 轮内循环：调整难度因子
-            patch = state.scheduler.adjustIntraCycleEF(word, finalQuality);
+            patch = state.scheduler.adjustIntraCycleEF(
+                word,
+                finalQuality === 'wrong' ? 'hard' : finalQuality
+            );
         } else {
             // 正常复习：使用标准SM-2算法
             patch = state.scheduler.scheduleAfterResult(word, finalQuality, now);
@@ -1908,7 +1936,7 @@
         
         // 更新统计（只有正式完成的才计入）
         if (shouldSave) {
-            if (finalQuality === 'hard' && spellingAttempts >= 2) {
+            if (finalQuality === 'wrong') {
                 session.progress.wrong += 1;
             } else if (finalQuality === 'hard' || spellingAttempts > 0) {
                 session.progress.near += 1;
@@ -2144,8 +2172,14 @@
             return;
         }
         if (session.stage === 'recognition') {
+            const safeWord = escapeHtml(word.word);
+            const safeMeaning = escapeHtml(word.meaning || '暂无释义');
+            const phonetic = normalizePhoneticValue(word.phonetic);
+            const phoneticBlock = phonetic
+                ? `<div class="vocab-card__phonetic"><span class="visually-hidden">音标：</span><span aria-hidden="true">/</span><span>${escapeHtml(phonetic)}</span><span aria-hidden="true">/</span></div>`
+                : '';
             const meaningBlock = session.meaningVisible
-                ? `<div class="vocab-card__meaning" data-visible="true">${word.meaning || '暂无释义'}</div>`
+                ? `<div class="vocab-card__meaning" data-visible="true">${safeMeaning}</div>`
                 : '';
             const revealControl = session.meaningVisible
                 ? ''
@@ -2153,7 +2187,8 @@
             card.innerHTML = `
                 <div class="vocab-card vocab-card--recognition">
                     <div class="vocab-card__wordline">
-                        <div class="vocab-card__word">${word.word}</div>
+                        <div class="vocab-card__word">${safeWord}</div>
+                        ${phoneticBlock}
                     </div>
                     ${meaningBlock}
                     ${revealControl}
@@ -2180,10 +2215,11 @@
                 ? '根据释义，拼写出这个单词'
                 : '再试一次，注意拼写细节';
             
+            const safeMeaning = escapeHtml(word.meaning || '暂无释义');
             card.innerHTML = `
                 <div class="vocab-card vocab-card--spelling">
                     <div class="vocab-card__meaning" data-visible="true" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">
-                        ${word.meaning || '暂无释义'}
+                        ${safeMeaning}
                     </div>
                     <p class="vocab-card__instruction">${instructionText}</p>
                     ${attemptsHint}
@@ -2214,9 +2250,15 @@
             const baseEF = session.lastAnswer?.baseEF || word.easeFactor;
             const finalEF = session.lastAnswer?.finalEF || word.easeFactor;
             const penalty = session.lastAnswer?.penalty || 0;
+            const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
+            const feedbackKind = finalQuality === 'wrong'
+                ? 'wrong'
+                : (spellingAttempts > 0 ? 'near' : 'correct');
             
-            const icon = spellingAttempts >= 3 ? '❌' : (spellingAttempts > 0 || skipped ? '🟡' : '✅');
-            const title = spellingAttempts >= 3 ? '需要加强' : (spellingAttempts > 0 || skipped ? '接近了' : '太棒了！');
+            const icon = feedbackKind === 'wrong' ? '❌' : (feedbackKind === 'near' ? '🟡' : '✅');
+            const title = skipped
+                ? '已跳过，需要加强'
+                : (feedbackKind === 'wrong' ? '需要加强' : (feedbackKind === 'near' ? '接近了' : '太棒了！'));
             
             const nextReview = word.nextReview ? new Date(word.nextReview).toLocaleString() : '待安排';
             const typedAnswer = session.lastAnswer?.typed ? escapeHtml(session.lastAnswer.typed) : '';
@@ -2248,7 +2290,6 @@
             const intraCycles = session.lastAnswer?.intraCycles || 0;
             const needsContinueIntra = session.lastAnswer?.needsContinueIntra || false;
             const needsEasyVerification = session.lastAnswer?.needsEasyVerification || false;
-            const finalQuality = session.lastAnswer?.finalQuality || recognitionQuality;
             const saved = session.lastAnswer?.saved || false;
             
             let qualityBreakdown = '';
@@ -2330,8 +2371,14 @@
                 }
             }
             
+            const safeWord = escapeHtml(word.word);
+            const safeMeaning = escapeHtml(word.meaning || '暂无释义');
+            const phonetic = normalizePhoneticValue(word.phonetic);
+            const phoneticDetail = phonetic
+                ? `<div><dt>音标</dt><dd class="vocab-feedback__phonetic"><span aria-hidden="true">/</span><span>${escapeHtml(phonetic)}</span><span aria-hidden="true">/</span></dd></div>`
+                : '';
             card.innerHTML = `
-                <div class="vocab-card vocab-card--feedback vocab-card--${spellingAttempts >= 3 ? 'wrong' : spellingAttempts > 0 ? 'near' : 'correct'}">
+                <div class="vocab-card vocab-card--feedback vocab-card--${feedbackKind}">
                     <div class="vocab-feedback__head">
                         <span class="vocab-feedback__icon">${icon}</span>
                         <div>
@@ -2340,8 +2387,9 @@
                         </div>
                     </div>
                     <dl class="vocab-feedback__details">
-                        <div><dt>正确拼写</dt><dd>${word.word}</dd></div>
-                        <div><dt>释义</dt><dd>${word.meaning || '暂无释义'}</dd></div>
+                        <div><dt>正确拼写</dt><dd>${safeWord}</dd></div>
+                        ${phoneticDetail}
+                        <div><dt>释义</dt><dd>${safeMeaning}</dd></div>
                         <div><dt>间隔天数</dt><dd>${intervalDays} 天</dd></div>
                         <div><dt>难度因子</dt><dd>${easeFactor}</dd></div>
                         <div><dt>连续正确</dt><dd>${repetitions} 次</dd></div>

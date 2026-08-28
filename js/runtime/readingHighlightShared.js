@@ -89,6 +89,40 @@
         });
     }
 
+    function expandRangeToFullySelectedBoundaries(range) {
+        if (!range || range.collapsed) {
+            return range;
+        }
+        const commonAncestor = range.commonAncestorContainer;
+        let startContainer = range.startContainer;
+        let startOffset = range.startOffset;
+        while (startContainer !== commonAncestor && startOffset === 0) {
+            const parent = startContainer.parentNode;
+            if (!parent) break;
+            startOffset = Array.prototype.indexOf.call(parent.childNodes, startContainer);
+            startContainer = parent;
+        }
+
+        let endContainer = range.endContainer;
+        let endOffset = range.endOffset;
+        let endLength = endContainer.nodeType === Node.TEXT_NODE
+            ? (endContainer.textContent || '').length
+            : endContainer.childNodes.length;
+        while (endContainer !== commonAncestor && endOffset === endLength) {
+            const parent = endContainer.parentNode;
+            if (!parent) break;
+            endOffset = Array.prototype.indexOf.call(parent.childNodes, endContainer) + 1;
+            endContainer = parent;
+            endLength = endContainer.nodeType === Node.TEXT_NODE
+                ? (endContainer.textContent || '').length
+                : endContainer.childNodes.length;
+        }
+
+        range.setStart(startContainer, startOffset);
+        range.setEnd(endContainer, endOffset);
+        return range;
+    }
+
     function resolveRangeFromOffsets(root, start, end) {
         const nodes = getTextNodes(root);
         let offset = 0;
@@ -100,11 +134,15 @@
             const node = nodes[index];
             const text = node.textContent || '';
             const nextOffset = offset + text.length;
-            if (!startNode && start >= offset && start <= nextOffset) {
+            if (
+                !startNode
+                && start >= offset
+                && (start < nextOffset || (index === nodes.length - 1 && start === nextOffset))
+            ) {
                 startNode = node;
                 startOffset = Math.max(0, start - offset);
             }
-            if (!endNode && end >= offset && end <= nextOffset) {
+            if (!endNode && end > offset && end <= nextOffset) {
                 endNode = node;
                 endOffset = Math.max(0, end - offset);
             }
@@ -119,7 +157,7 @@
         const range = document.createRange();
         range.setStart(startNode, startOffset);
         range.setEnd(endNode, endOffset);
-        return range;
+        return expandRangeToFullySelectedBoundaries(range);
     }
 
     function resolveHighlightKind(node) {
@@ -129,7 +167,14 @@
         return node.dataset && node.dataset.hlType === 'note' ? 'note' : 'highlight';
     }
 
-    function applyHighlightKind(node, kind = 'highlight') {
+    function resolveHighlightLevel(node) {
+        if (!(node instanceof HTMLElement)) {
+            return 'primary';
+        }
+        return node.dataset && node.dataset.hlLevel === 'secondary' ? 'secondary' : 'primary';
+    }
+
+    function applyHighlightKind(node, kind = 'highlight', level = 'primary') {
         if (!(node instanceof HTMLElement)) {
             return;
         }
@@ -138,6 +183,11 @@
             node.dataset.hlType = 'note';
         } else {
             delete node.dataset.hlType;
+        }
+        if (level === 'secondary') {
+            node.dataset.hlLevel = 'secondary';
+        } else {
+            delete node.dataset.hlLevel;
         }
     }
 
@@ -149,32 +199,44 @@
         Object.entries(rootsByScope).forEach(([scope, root]) => {
             if (!root) return;
             const seenByText = new Map();
-            const cursorByText = new Map();
-            const fullText = getText(root);
+            const textNodes = getTextNodes(root);
+            const textNodeOffsets = new Map();
+            let runningOffset = 0;
+            textNodes.forEach((textNode) => {
+                textNodeOffsets.set(textNode, runningOffset);
+                runningOffset += String(textNode.textContent || '').length;
+            });
+            const fullText = textNodes
+                .map((textNode) => textNode.textContent || '')
+                .join('');
             Array.from(root.querySelectorAll('.hl')).forEach((node) => {
                 if (isInsideExplanation(node)) return;
-                const text = String(node.textContent || '').trim();
+                const rawText = String(node.textContent || '');
+                const text = rawText.trim();
                 if (!text) return;
                 const key = `${scope}::${text}`;
                 const seen = seenByText.get(key) || 0;
                 seenByText.set(key, seen + 1);
-                let cursor = cursorByText.get(key) || 0;
-                let hit = -1;
-                for (let index = 0; index <= seen; index += 1) {
-                    hit = fullText.indexOf(text, cursor);
-                    if (hit < 0) break;
-                    cursor = hit + text.length;
+                const containedTextNodes = textNodes.filter((textNode) => node.contains(textNode));
+                if (!containedTextNodes.length) return;
+                const firstTextNode = containedTextNodes[0];
+                const lastTextNode = containedTextNodes[containedTextNodes.length - 1];
+                const leadingTrimLength = rawText.length - rawText.trimStart().length;
+                const trailingTrimLength = rawText.length - rawText.trimEnd().length;
+                const startOffset = textNodeOffsets.get(firstTextNode) + leadingTrimLength;
+                const endOffset = textNodeOffsets.get(lastTextNode)
+                    + String(lastTextNode.textContent || '').length
+                    - trailingTrimLength;
+                if (!Number.isFinite(startOffset) || !Number.isFinite(endOffset) || endOffset <= startOffset) {
+                    return;
                 }
-                if (hit < 0) return;
-                cursorByText.set(key, cursor);
-                const startOffset = hit;
-                const endOffset = hit + text.length;
                 const before = fullText.slice(Math.max(0, startOffset - 20), startOffset);
                 const after = fullText.slice(endOffset, endOffset + 20);
                 records.push({
                     scope,
                     text,
                     kind: resolveHighlightKind(node),
+                    level: resolveHighlightLevel(node),
                     noteId: node.dataset && node.dataset.noteId ? String(node.dataset.noteId) : '',
                     occurrence: seen,
                     start: startOffset,
@@ -198,6 +260,7 @@
             return;
         }
         const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
+        const highlightLevel = record.level === 'secondary' ? 'secondary' : 'primary';
         const normalizedRecordText = normalizeComparableText(record.text);
         const startOffset = Number(
             Object.prototype.hasOwnProperty.call(record, 'start')
@@ -248,7 +311,7 @@
                 const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
                 if (offsetRange && !offsetRange.collapsed) {
                     const offsetSpan = document.createElement('span');
-                    applyHighlightKind(offsetSpan, highlightKind);
+                    applyHighlightKind(offsetSpan, highlightKind, highlightLevel);
                     if (record.noteId) {
                         offsetSpan.dataset.noteId = String(record.noteId);
                     }
@@ -299,7 +362,7 @@
             return false;
         }
         const span = document.createElement('span');
-        applyHighlightKind(span, highlightKind);
+        applyHighlightKind(span, highlightKind, highlightLevel);
         if (record.noteId) {
             span.dataset.noteId = String(record.noteId);
         }

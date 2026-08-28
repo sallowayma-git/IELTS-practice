@@ -25,6 +25,16 @@ function harness(legacyValues, options = {}) {
     vm.runInContext(catalogSource, vm.createContext(catalogSandbox), { filename: 'dataCatalog.js' });
     const catalog = catalogSandbox.__AppDataV2Catalog;
     const shared = options.shared || { docs: new Map(), entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]), counter: 0, legacyReads: 0, externalReads: 0 };
+    if (!shared.entityRevisions) {
+        shared.entityRevisions = new Map([
+            ['practiceSummaries', new Map()],
+            ['practiceDetails', new Map()],
+            ['practiceAnnotations', new Map()]
+        ]);
+    }
+    for (const store of ['practiceSummaries', 'practiceDetails', 'practiceAnnotations']) {
+        if (!shared.entityRevisions.has(store)) shared.entityRevisions.set(store, new Map());
+    }
     const envelope = (key, data, state = 'present', revision = 1, operationId = 'seed') => ({ schemaVersion: 2, revision, operationId, updatedAt: new Date().toISOString(), state, data: state === 'cleared' ? null : clone(data), checksum: checksum(state === 'cleared' ? null : data) });
     class Kernel {
         async initialize() { this.state = 'ready'; this.backend = 'memory'; return this; }
@@ -32,8 +42,34 @@ function harness(legacyValues, options = {}) {
         async read(key, options = {}) { const entry = catalog.get(key); const value = shared.docs.get(key) || null; const data = !value || value.state === 'cleared' ? entry.defaultValue() : value.data; return options.withMeta ? { data: clone(data), envelope: clone(value) } : clone(data); }
         async mutate(changes, options = {}) { const op = String(options.operationId || `doc-${++shared.counter}`); const revisions = {}; for (const change of changes) { const old = shared.docs.get(change.logicalKey); if (change.expectedRevision !== undefined && Number(change.expectedRevision) !== Number(old && old.revision || 0)) throw new AppDataError('CONFLICT', 'document revision'); const revision = Number(old && old.revision || 0) + 1; shared.docs.set(change.logicalKey, envelope(change.logicalKey, change.data, change.state, revision, op)); revisions[change.logicalKey] = revision; } return { committed: true, operationId: op, revisions, derived: { status: 'ready', pending: [] }, warnings: [] }; }
         async readEntity(store, recordId) { const row = shared.entities.get(store).get(String(recordId)); return row ? clone(row.data) : null; }
+        async getEntityRevision(store, recordId, options = {}) {
+            const id = String(recordId);
+            const row = shared.entities.get(store).get(id) || null;
+            const revision = Math.max(
+                Number(row && row.revision) || 0,
+                Number(shared.entityRevisions.get(store).get(id)) || 0
+            );
+            return options.withPresence ? { revision, present: Boolean(row) } : revision;
+        }
         async listEntities(store) { if (store !== 'practiceSummaries') throw new AppDataError('VALIDATION', 'details are not listable'); return Array.from(shared.entities.get(store).values()).map((row) => clone(row.data)); }
-        async mutateEntities(operations, options = {}) { const op = String(options.operationId || `entity-${++shared.counter}`); for (const item of operations) { const rows = shared.entities.get(item.store); const old = rows.get(String(item.recordId)); rows.set(String(item.recordId), { recordId: String(item.recordId), revision: Number(old && old.revision || 0) + 1, operationId: op, data: clone(item.data) }); } return { committed: true, operationId: op, revisions: {}, derived: { status: 'ready', pending: [] }, warnings: [] }; }
+        async mutateEntities(operations, options = {}) {
+            const op = String(options.operationId || `entity-${++shared.counter}`);
+            for (const item of operations) {
+                const id = String(item.recordId);
+                const rows = shared.entities.get(item.store);
+                const old = rows.get(id) || null;
+                const revisionMap = shared.entityRevisions.get(item.store);
+                const revision = Math.max(Number(old && old.revision) || 0, Number(revisionMap.get(id)) || 0);
+                if (item.expectedRevision !== undefined && item.expectedRevision !== null
+                    && Number(item.expectedRevision) !== revision) {
+                    throw new AppDataError('CONFLICT', `entity revision: ${item.store}/${id}`);
+                }
+                const nextRevision = revision + 1;
+                rows.set(id, { recordId: id, revision: nextRevision, operationId: op, data: clone(item.data) });
+                revisionMap.set(id, nextRevision);
+            }
+            return { committed: true, operationId: op, revisions: {}, derived: { status: 'ready', pending: [] }, warnings: [] };
+        }
         status() { return { state: this.state, backend: this.backend, failure: null }; }
     }
     const internals = { DataKernel: Kernel, AppDataError, catalog, clone, checksum, randomId: (prefix) => `${prefix}-${++shared.counter}`, nowIso: () => new Date().toISOString(), makeEnvelope: (entry, data, options = {}) => envelope(entry.logicalKey, data, options.state, options.revision, options.operationId), validateEnvelope: (entry, value) => Boolean(value && value.schemaVersion === 2 && value.checksum === checksum(value.data)), readLegacyValues: async () => { shared.legacyReads += 1; return clone(legacyValues); }, readLegacyExternalBackup: async () => { shared.externalReads += 1; return clone(options.externalBackup || null); } };
@@ -60,6 +96,131 @@ async function run() {
     // Empty legacy set is also a clean resolve (no records path).
     const empty = harness({});
     assert.deepStrictEqual(await empty.app.practice.list({ projection: 'light' }), [], 'empty legacy migrates to empty list');
+
+    const legacyFields = harness({
+        vocab_list_p1_errors: [{ word: 'alpha' }],
+        vocab_list_p4_errors: [{ word: 'beta' }],
+        vocab_list_master_errors: [{ word: 'gamma' }],
+        vocab_list_custom: [{ word: 'delta' }],
+        vocab_list_reading_highlights: [{ word: 'epsilon' }],
+        vocab_user_config: { dailyNew: 12, reviewLimit: 50 },
+        vocab_active_list_id: 'p1',
+        ui_preferences: { theme: 'light', retained: true, timer: { reading: { minutes: 20 } } },
+        theme: 'dark',
+        practice_timer_preferences: { listening: { minutes: 30 } }
+    });
+    await legacyFields.app.ready;
+    const migratedLists = await legacyFields.app.vocab.listCollections();
+    assert.deepStrictEqual(Object.keys(migratedLists).sort(), [
+        'custom',
+        'reading-highlights',
+        'spelling-errors-master',
+        'spelling-errors-p1',
+        'spelling-errors-p4'
+    ]);
+    assert.strictEqual(migratedLists['spelling-errors-p1'][0].word, 'alpha');
+    assert.strictEqual(migratedLists['reading-highlights'][0].word, 'epsilon');
+    assert.deepStrictEqual(await legacyFields.app.vocab.getConfig(), {
+        dailyNew: 12,
+        reviewLimit: 50,
+        activeListId: 'spelling-errors-p1'
+    });
+    assert.deepStrictEqual(await legacyFields.app.preferences.getAll(), {
+        theme: 'dark',
+        retained: true,
+        timer: { listening: { minutes: 30 } }
+    }, 'standalone legacy preferences overlay the aggregate object instead of being skipped');
+
+    const partialDocuments = {
+        docs: new Map(),
+        entities: new Map([['practiceSummaries', new Map()], ['practiceDetails', new Map()], ['practiceAnnotations', new Map()]]),
+        counter: 0,
+        legacyReads: 0,
+        externalReads: 0
+    };
+    const seedEnvelope = (data, revision = 1) => ({
+        schemaVersion: 2,
+        revision,
+        operationId: 'partial-v2-seed',
+        updatedAt: '2026-07-26T00:00:00.000Z',
+        state: 'present',
+        data: clone(data),
+        checksum: checksum(data)
+    });
+    partialDocuments.docs.set('vocab.words', seedEnvelope([
+        { word: 'shared', source: 'v2' },
+        { word: 'new-only', source: 'v2' }
+    ]));
+    partialDocuments.docs.set('preferences.values', seedEnvelope({ theme: 'v2-theme', v2Only: true }));
+    const retriedMigration = harness({
+        vocab_words: [
+            { word: 'shared', source: 'legacy' },
+            { word: 'legacy-only', source: 'legacy' }
+        ],
+        ui_preferences: { theme: 'legacy-theme', legacyOnly: true }
+    }, { shared: partialDocuments });
+    await retriedMigration.app.ready;
+    const reconciledWords = await retriedMigration.app.vocab.listWords();
+    assert.deepStrictEqual(reconciledWords.map((word) => word.word), ['shared', 'legacy-only', 'new-only']);
+    assert.strictEqual(reconciledWords.find((word) => word.word === 'shared').source, 'v2');
+    assert.deepStrictEqual(await retriedMigration.app.preferences.getAll(), {
+        theme: 'v2-theme',
+        legacyOnly: true,
+        v2Only: true
+    });
+    assert.strictEqual(partialDocuments.docs.get('system.migrations').data.v1ToV2.status, 'complete');
+
+    const tombstonedExternal = {
+        docs: new Map(),
+        entities: new Map([
+            ['practiceSummaries', new Map()],
+            ['practiceDetails', new Map()],
+            ['practiceAnnotations', new Map()]
+        ]),
+        entityRevisions: new Map([
+            ['practiceSummaries', new Map([['late-external', 4]])],
+            ['practiceDetails', new Map([['late-external', 4]])],
+            ['practiceAnnotations', new Map([['late-external', 4]])]
+        ]),
+        counter: 0,
+        legacyReads: 0,
+        externalReads: 0
+    };
+    tombstonedExternal.docs.set('system.migrations', seedEnvelope({
+        v1ToV2: { version: 1, status: 'complete' }
+    }));
+    const lateExternalPayload = { practiceRecords: [{
+        id: 'late-external',
+        type: 'reading',
+        title: 'Recovered after tombstone',
+        totalQuestions: 1,
+        correctAnswers: 1
+    }] };
+    const restoredTombstone = harness({}, {
+        shared: tombstonedExternal,
+        externalBackup: lateExternalPayload
+    });
+    await restoredTombstone.app.ready;
+    const restoredSummary = (await restoredTombstone.app.practice.list({ projection: 'light' }))
+        .find((record) => record.id === 'late-external');
+    assert.strictEqual(restoredSummary.title, 'Recovered after tombstone');
+    for (const store of ['practiceSummaries', 'practiceDetails', 'practiceAnnotations']) {
+        assert.strictEqual(tombstonedExternal.entities.get(store).get('late-external').revision, 5,
+            'legacy restore must compare against and advance the durable tombstone revision');
+    }
+    assert.strictEqual(tombstonedExternal.docs.get('system.migrations').data.externalBackupV1.status, 'consumed');
+    assert.strictEqual(tombstonedExternal.legacyReads, 0, 'a late external backup must not rescan completed v1 data');
+
+    const tombstoneSecondBoot = harness({}, {
+        shared: tombstonedExternal,
+        externalBackup: lateExternalPayload
+    });
+    await tombstoneSecondBoot.app.ready;
+    assert.strictEqual(tombstonedExternal.externalReads, 1,
+        'the durable consumed marker must make tombstone recovery idempotent across boots');
+    for (const store of ['practiceSummaries', 'practiceDetails', 'practiceAnnotations']) {
+        assert.strictEqual(tombstonedExternal.entities.get(store).get('late-external').revision, 5);
+    }
 
     const merged = harness({ practice_records: [
         { id: 'idb-only', type: 'reading', title: 'IDB only', totalQuestions: 1, correctAnswers: 1 },

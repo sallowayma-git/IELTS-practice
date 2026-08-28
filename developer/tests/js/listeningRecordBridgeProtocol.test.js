@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
 const bridgeSource = fs.readFileSync(path.join(repoRoot, 'js/listeningRecordBridge.js'), 'utf8');
 
-function createHarness() {
+function createHarness(options = {}) {
     const posted = [];
     const messageListeners = [];
     const timers = [];
@@ -21,6 +21,7 @@ function createHarness() {
         }
     };
     const answerInput = { value: 'accommodation' };
+    const suiteContainers = options.multiSuite ? [{}, {}] : [];
     const document = {
         readyState: 'complete',
         title: 'Listening protocol test',
@@ -32,8 +33,9 @@ function createHarness() {
         querySelector(selector) {
             return selector === '[name="q1"]' ? answerInput : null;
         },
-        querySelectorAll() {
-            return [];
+        querySelectorAll(selector) {
+            if (selector === '[name="q1"]') return [answerInput];
+            return selector === '[data-suite-id]' ? suiteContainers : [];
         },
         createElement() {
             return {
@@ -43,6 +45,24 @@ function createHarness() {
             };
         }
     };
+    let uuidIndex = 0;
+    const uuidValues = options.uuidValues || ['fixed-submission', 'second-submission', 'third-submission'];
+    const defaultApp = {
+        state: { isReviewing: true },
+        config: {
+            questionList: [1],
+            answerKey: {
+                text: { q1: 'accommodation' }
+            }
+        }
+    };
+    if (options.multiSuite) {
+        defaultApp.finishSuite = function finishSuite(suiteId) {
+            this.lastFinishedSuiteId = suiteId;
+            answerInput.value = suiteId === 'set2' ? 'library' : 'accommodation';
+            this.config.answerKey.text.q1 = answerInput.value;
+        };
+    }
     const window = {
         document,
         opener: parentWindow,
@@ -54,22 +74,17 @@ function createHarness() {
         },
         crypto: {
             randomUUID() {
-                return 'fixed-submission';
+                const value = uuidValues[Math.min(uuidIndex, uuidValues.length - 1)];
+                uuidIndex += 1;
+                return value;
             }
         },
-        App: {
-            state: { isReviewing: true },
-            config: {
-                questionList: [1],
-                answerKey: {
-                    text: { q1: 'accommodation' }
-                }
-            }
-        },
+        App: options.withoutApp ? null : defaultApp,
         addEventListener(type, listener) {
             if (type === 'message') messageListeners.push(listener);
         }
     };
+    if (options.correctAnswers) window.correctAnswers = options.correctAnswers;
     window.parent = window;
 
     const sandbox = {
@@ -128,6 +143,12 @@ function createHarness() {
 
 function messagesOf(harness, type) {
     return harness.posted.filter((entry) => entry.message && entry.message.type === type);
+}
+
+function latestActiveTimer(harness, delay) {
+    return harness.timers.slice().reverse().find(
+        (timer) => !timer.interval && timer.delay === delay && !timer.cancelled
+    );
 }
 
 function run() {
@@ -194,9 +215,96 @@ function run() {
         'trusted ACK must cancel every completion retry'
     );
 
+    const globalAnswersHarness = createHarness({
+        withoutApp: true,
+        correctAnswers: { q1: 'accommodation' }
+    });
+    assert.strictEqual(
+        globalAnswersHarness.window.__listeningBridgeComplete({ allowGenerated: true }),
+        true,
+        'window.correctAnswers must be a supported normalized listening contract'
+    );
+    globalAnswersHarness.dispatch('INIT_SESSION', {
+        examId: 'listening-global-answers',
+        sessionId: 'global-answers-session',
+        windowSessionToken: 'global-answers-token',
+        parentOrigin: 'null'
+    });
+    const globalAnswersCompletion = messagesOf(globalAnswersHarness, 'PRACTICE_COMPLETE').at(-1);
+    assert(globalAnswersCompletion, 'window.correctAnswers completion must reach the host');
+    assert.strictEqual(globalAnswersCompletion.message.data.answers.q1, 'accommodation');
+    assert.strictEqual(globalAnswersCompletion.message.data.correctAnswers.q1, 'accommodation');
+    assert.strictEqual(globalAnswersCompletion.message.data.scoreInfo.correct, 1);
+
+    const multiSuiteHarness = createHarness({ multiSuite: true });
+    multiSuiteHarness.dispatch('INIT_SESSION', {
+        examId: 'listening-100-p1',
+        sessionId: 'multi-suite-session',
+        windowSessionToken: 'multi-suite-token',
+        parentOrigin: 'null'
+    });
+    assert(
+        multiSuiteHarness.window.App.finishSuite._bridgeOriginal,
+        'bridge must wrap App.finishSuite for legacy multi-suite listening pages'
+    );
+
+    multiSuiteHarness.window.App.finishSuite('set1');
+    const firstSuiteDebounce = latestActiveTimer(multiSuiteHarness, 500);
+    assert(firstSuiteDebounce, 'first suite finish must schedule collection');
+    firstSuiteDebounce.callback();
+    const firstSuiteMessage = messagesOf(multiSuiteHarness, 'PRACTICE_COMPLETE').at(-1);
+    assert(firstSuiteMessage, 'first suite must emit completion');
+    assert.strictEqual(firstSuiteMessage.message.data.suiteId, 'set1');
+    assert.strictEqual(firstSuiteMessage.message.data.totalSuites, 2);
+    assert.strictEqual(firstSuiteMessage.message.data.submissionId, 'listening-submit-set1-fixed-submission');
+
+    multiSuiteHarness.dispatch('PRACTICE_SUBMIT_ACK', {
+        submissionId: firstSuiteMessage.message.data.submissionId,
+        sessionId: 'multi-suite-session',
+        windowSessionToken: 'multi-suite-token'
+    });
+    const countAfterFirstAck = messagesOf(multiSuiteHarness, 'PRACTICE_COMPLETE').length;
+    multiSuiteHarness.window.App.finishSuite('set1');
+    assert.strictEqual(
+        messagesOf(multiSuiteHarness, 'PRACTICE_COMPLETE').length,
+        countAfterFirstAck,
+        'repeating an ACKed suite must remain idempotent'
+    );
+
+    multiSuiteHarness.window.App.finishSuite('set2');
+    const secondSuiteDebounce = latestActiveTimer(multiSuiteHarness, 500);
+    assert(secondSuiteDebounce, 'second suite must have an independent debounce latch');
+    secondSuiteDebounce.callback();
+    let suiteMessages = messagesOf(multiSuiteHarness, 'PRACTICE_COMPLETE');
+    const secondSuiteMessage = suiteMessages.at(-1);
+    assert.strictEqual(secondSuiteMessage.message.data.suiteId, 'set2');
+    assert.strictEqual(secondSuiteMessage.message.data.submissionId, 'listening-submit-set2-second-submission');
+
+    const secondSuiteRetry = latestActiveTimer(multiSuiteHarness, 400);
+    assert(secondSuiteRetry, 'unacknowledged second suite must schedule persistence retry');
+    secondSuiteRetry.callback();
+    suiteMessages = messagesOf(multiSuiteHarness, 'PRACTICE_COMPLETE');
+    assert.strictEqual(suiteMessages.at(-1).message.data.submissionId, secondSuiteMessage.message.data.submissionId);
+    assert.strictEqual(suiteMessages.at(-2).message.data.submissionId, secondSuiteMessage.message.data.submissionId);
+
+    const secondAck = {
+        submissionId: secondSuiteMessage.message.data.submissionId,
+        sessionId: 'multi-suite-session',
+        windowSessionToken: 'multi-suite-token'
+    };
+    multiSuiteHarness.dispatch('PRACTICE_SUBMIT_ACK', secondAck);
+    multiSuiteHarness.dispatch('PRACTICE_SUBMIT_ACK', secondAck);
+    const multiSuiteState = multiSuiteHarness.window.__listeningBridgeGetState();
+    assert.strictEqual(Object.keys(multiSuiteState.pendingCompletions).length, 0);
+    assert.deepStrictEqual(
+        Object.keys(multiSuiteState.completedCompletions).sort(),
+        ['suite:set1', 'suite:set2'],
+        'two suites must settle independently despite repeated ACK delivery'
+    );
+
     console.log(JSON.stringify({
         status: 'pass',
-        detail: 'listening pre-INIT completion, same-submission retry and persisted ACK checks passed'
+        detail: 'listening global-answer, pre-INIT, retry/ACK and multi-suite completion checks passed'
     }));
 }
 

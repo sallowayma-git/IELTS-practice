@@ -34,11 +34,44 @@
 
     function asObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
     function asArray(value) { return Array.isArray(value) ? value : []; }
+    function normalizePhoneticValue(value) {
+        if (typeof value !== 'string') return '';
+        return value.trim().replace(/^\/+|\/+$/g, '').trim();
+    }
     function idOf(value, fields) {
         for (const field of fields) {
             if (value && value[field] !== undefined && value[field] !== null && value[field] !== '') return String(value[field]);
         }
         return '';
+    }
+
+    function preserveProgressPhonetics(incomingWords, existingWords) {
+        const existingById = new Map();
+        const existingByWord = new Map();
+        asArray(existingWords).forEach((rawWord) => {
+            const word = asObject(rawWord);
+            const phonetic = normalizePhoneticValue(word.phonetic);
+            if (!phonetic) return;
+            const id = typeof word.id === 'string' ? word.id.trim() : '';
+            const identity = String(word.word || '').trim().toLowerCase();
+            if (id && !existingById.has(id)) existingById.set(id, phonetic);
+            if (identity && !existingByWord.has(identity)) existingByWord.set(identity, phonetic);
+        });
+        return asArray(incomingWords).map((rawWord) => {
+            if (!rawWord || typeof rawWord !== 'object' || Array.isArray(rawWord)) return clone(rawWord);
+            const word = clone(rawWord);
+            const incomingPhonetic = normalizePhoneticValue(word.phonetic);
+            if (incomingPhonetic) {
+                word.phonetic = incomingPhonetic;
+                return word;
+            }
+            delete word.phonetic;
+            const id = typeof word.id === 'string' ? word.id.trim() : '';
+            const identity = String(word.word || '').trim().toLowerCase();
+            const preserved = (id && existingById.get(id)) || (identity && existingByWord.get(identity)) || '';
+            if (preserved) word.phonetic = preserved;
+            return word;
+        });
     }
 
     function importedLibraryId(value, options = {}) {
@@ -681,6 +714,27 @@
         const find = (store) => asArray(snapshot[store]).find((row) => practiceLayerId(row) === String(recordId)) || null;
         return { summary: find('practiceSummaries'), detail: find('practiceDetails'), annotations: find('practiceAnnotations') };
     }
+    async function practiceLayersForUpsert(recordId) {
+        const layers = await practiceLayers(recordId, true);
+        if (typeof kernel.getEntityRevision !== 'function') return layers;
+        for (const [field, store] of [
+            ['summary', 'practiceSummaries'],
+            ['detail', 'practiceDetails'],
+            ['annotations', 'practiceAnnotations']
+        ]) {
+            if (layers[field]) continue;
+            const info = await kernel.getEntityRevision(store, recordId, { withPresence: true });
+            const revision = typeof info === 'number' ? info : Number(info && info.revision) || 0;
+            if (info && typeof info === 'object' && info.present === true) {
+                throw new AppDataError('CONFLICT', `Practice record appeared while preparing ${recordId}`, {
+                    store,
+                    recordId: String(recordId)
+                });
+            }
+            if (revision > 0) layers[field] = { recordId: String(recordId), revision, deleted: true, data: null };
+        }
+        return layers;
+    }
     function entityRevision(row) { return row ? Number(row.revision) : 0; }
     function practiceUpserts(recordId, layers, existing = {}) {
         return [
@@ -725,7 +779,7 @@
             if (!idOf(recordInput, ['id', 'recordId', 'sessionId'])) recordInput.id = deterministicEntityId('record', mutation.operationId);
             const layers = splitPracticeRecord(recordInput); const recordId = layers.summary.id;
             const receipt = await retryMergeConflict(command || {}, async () => kernel.mutateEntities(
-                practiceUpserts(recordId, layers, await practiceLayers(recordId, true)), mutation));
+                practiceUpserts(recordId, layers, await practiceLayersForUpsert(recordId)), mutation));
             return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
         },
         async finalizeSuite(command) {
@@ -740,7 +794,7 @@
                 .map((summary) => idOf(summary, ['id', 'recordId', 'sessionId'])));
             children.delete(recordId);
             const receipt = await retryMergeConflict(command, async () => {
-                const existing = await practiceLayers(recordId, true);
+                const existing = await practiceLayersForUpsert(recordId);
                 const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
                 return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)), mutation);
             });
@@ -1055,12 +1109,18 @@
         ancestors.add(value);
         try {
             if (Array.isArray(value)) {
-                return value.map((item, index) => {
+                const result = new Array(value.length);
+                for (let index = 0; index < value.length; index += 1) {
                     if (!Object.prototype.hasOwnProperty.call(value, index)) {
                         throw new AppDataError('VALIDATION', `Sparse array entry at ${path}[${index}]`, { path });
                     }
-                    return fallbackCanonicalizeSnapshotJson(item, `${path}[${index}]`, ancestors);
-                });
+                    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+                    if (!descriptor || descriptor.get || descriptor.set) {
+                        throw new AppDataError('VALIDATION', `Accessor property at ${path}[${index}]`, { path });
+                    }
+                    result[index] = fallbackCanonicalizeSnapshotJson(descriptor.value, `${path}[${index}]`, ancestors);
+                }
+                return result;
             }
             const result = {};
             for (const key of Object.keys(value).sort()) {
@@ -1100,7 +1160,7 @@
         canonicalizeSnapshotJson(envelope, `$.envelopes.${logicalKey}`);
         if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)
             || Number(envelope.schemaVersion) !== Number(entry.schemaVersion)
-            || !Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1
+            || !Number.isSafeInteger(Number(envelope.revision)) || Number(envelope.revision) < 1 || Number(envelope.revision) >= Number.MAX_SAFE_INTEGER
             || typeof envelope.operationId !== 'string' || !envelope.operationId.trim()
             || typeof envelope.updatedAt !== 'string' || !envelope.updatedAt.trim()
             || (envelope.state !== 'present' && envelope.state !== 'cleared')) {
@@ -1122,12 +1182,22 @@
         canonicalizeSnapshotJson(row, path);
         if (!row || typeof row !== 'object' || Array.isArray(row)
             || typeof row.recordId !== 'string' || !row.recordId.trim()
-            || !Number.isInteger(Number(row.revision)) || Number(row.revision) < 1
+            || !Number.isSafeInteger(Number(row.revision)) || Number(row.revision) < 1 || Number(row.revision) >= Number.MAX_SAFE_INTEGER
             || typeof row.operationId !== 'string' || !row.operationId.trim()
             || typeof row.updatedAt !== 'string' || !row.updatedAt.trim()) {
             throw snapshotValidation(`Invalid snapshot entity: ${store}`, { store, recordId: row && row.recordId || null });
         }
         const data = canonicalizeSnapshotJson(row.data, `${path}.${row.recordId}.data`);
+        const identityField = store === 'practiceSummaries' ? 'id' : 'recordId';
+        if (!isPlainImportObject(data)
+            || typeof data[identityField] !== 'string'
+            || data[identityField] !== row.recordId) {
+            throw snapshotValidation(`Invalid snapshot entity identity: ${store}/${row.recordId}`, {
+                store,
+                recordId: row.recordId,
+                identityField
+            });
+        }
         if (typeof row.checksum !== 'string' || row.checksum !== checksum(data)) {
             throw snapshotValidation(`Invalid snapshot entity checksum: ${store}/${row.recordId}`, {
                 store,
@@ -1498,12 +1568,40 @@
             const item = jsonValue(rawItem, `${logicalKey} item`);
             const identity = collectionIdentity(logicalKey, item);
             if (!identity) throw new AppDataError('VALIDATION', `${logicalKey} import item has no stable identity`);
-            if (positions.has(identity)) result[positions.get(identity)] = item;
+            const position = positions.get(identity);
+            const mergedItem = logicalKey === 'vocab.words'
+                ? preserveProgressPhonetics([item], position === undefined ? [] : [result[position]])[0]
+                : item;
+            if (position !== undefined) result[position] = mergedItem;
             else {
                 positions.set(identity, result.length);
-                result.push(item);
+                result.push(mergedItem);
             }
         }
+        return result;
+    }
+
+    function mergeVocabListPhonetics(existing, incoming) {
+        const result = Object.assign({}, asObject(existing));
+        Object.entries(asObject(incoming)).forEach(([listId, incomingValue]) => {
+            const existingValue = result[listId];
+            const existingWords = Array.isArray(existingValue)
+                ? existingValue
+                : asObject(existingValue).words;
+            if (Array.isArray(incomingValue)) {
+                result[listId] = preserveProgressPhonetics(incomingValue, existingWords);
+                return;
+            }
+            if (incomingValue && typeof incomingValue === 'object') {
+                const nextList = clone(incomingValue);
+                if (Array.isArray(nextList.words)) {
+                    nextList.words = preserveProgressPhonetics(nextList.words, existingWords);
+                }
+                result[listId] = nextList;
+                return;
+            }
+            result[listId] = clone(incomingValue);
+        });
         return result;
     }
 
@@ -1511,6 +1609,9 @@
         const policy = entry.import;
         if (policy === 'merge-by-id') return mergeCollection(existing, incoming, entry.logicalKey);
         if (policy === 'patch') {
+            if (entry.logicalKey === 'vocab.lists') {
+                return mergeVocabListPhonetics(existing, incoming);
+            }
             if (Array.isArray(existing) || Array.isArray(incoming)) {
                 // Array-shaped keys should use merge-by-id; treat accidental patch as replace.
                 return clone(incoming);
@@ -1547,7 +1648,7 @@
     async function createImportPlan(parsed, options = {}) {
         const { replaceDocuments, replacePractice } = resolveImportReplaceFlags(options);
         const snapshot = { format: 'ielts-atlas-data-v2', schemaVersion: catalog.version, scope: parsed.scope, envelopes: {}, entities: {} };
-        const revisionToken = { documents: {}, entities: {} };
+        const revisionToken = { documents: {}, entities: {}, entityEpochs: {} };
         const keys = []; const clearedKeys = [];
         const warnings = asArray(parsed.warnings).map(String);
         for (const [logicalKey, envelope] of Object.entries(asObject(parsed.envelopes))) {
@@ -1591,6 +1692,9 @@
         if (sourceStores.length) {
             if (replacePractice && PRACTICE_ENTITY_STORES.some((store) => !sourceStores.includes(store))) {
                 throw new AppDataError('VALIDATION', 'Practice replace requires summaries, details, and annotations');
+            }
+            if (typeof kernel.getEntityRevisionEpochs === 'function') {
+                revisionToken.entityEpochs = await kernel.getEntityRevisionEpochs();
             }
             const current = await currentEntitySnapshot();
             revisionToken.entities = Object.fromEntries(PRACTICE_ENTITY_STORES.map((store) => [store, Object.fromEntries(
@@ -1662,11 +1766,11 @@
             }
         };
     }
-    async function createRestoreSnapshot(backup) {
+    async function createRestorePlan(backup) {
         const parsed = parseImportPayload(asObject(backup && backup.data));
         if (parsed.format !== 'v2') throw new AppDataError('VALIDATION', 'Only v2 snapshots can be restored from local backups');
         if (backup.checksum && backup.checksum !== parsed.checksum) throw new AppDataError('VALIDATION', 'Backup checksum mismatch');
-        return (await createImportPlan(parsed, { replace: true })).snapshot;
+        return createImportPlan(parsed, { replace: true });
     }
 
     const backups = Object.freeze({
@@ -1778,7 +1882,7 @@
         async restore(id, options = {}) {
             await ready; const backup = (await kernel.read('backups.entries')).find((item) => String(item.id) === String(id));
             if (!backup) throw new AppDataError('VALIDATION', `Unknown backup: ${id}`);
-            const snapshot = await createRestoreSnapshot(backup);
+            const prepared = await createRestorePlan(backup);
             const restoreMutation = optionsMutationOptions(options, 'backup-restore', {
                 backupId: String(id),
                 checksum: backup.checksum || checksum(backup.data)
@@ -1795,7 +1899,10 @@
                 type: 'pre-restore',
                 preserveIds: [String(id)]
             });
-            const receipt = await kernel.installSnapshot(snapshot, restoreMutation);
+            const receipt = await kernel.installSnapshot(prepared.snapshot, Object.assign({}, restoreMutation, {
+                resetJournal: prepared.resetJournal === true,
+                expectedRevisionToken: prepared.revisionToken
+            }));
             return Object.assign({}, receipt, { preRestoreBackupId: preRestoreBackup.id });
         }
     });
@@ -1887,7 +1994,12 @@
             if (!id) throw new AppDataError('VALIDATION', 'vocab collection id is required');
             const identity = String(word.word || word.id || '').trim().toLowerCase();
             if (!identity) throw new AppDataError('VALIDATION', 'vocab word identity is required');
-            const mutation = optionsMutationOptions(options, 'vocab-word', { collectionId: id, word });
+            const normalizedWord = clone(word);
+            if (Object.prototype.hasOwnProperty.call(normalizedWord, 'phonetic')) {
+                const phonetic = normalizePhoneticValue(normalizedWord.phonetic);
+                if (phonetic) normalizedWord.phonetic = phonetic; else delete normalizedWord.phonetic;
+            }
+            const mutation = optionsMutationOptions(options, 'vocab-word', { collectionId: id, word: normalizedWord });
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read('vocab.lists', { withMeta: true });
                 const collections = Object.assign({}, asObject(current.data));
@@ -1896,7 +2008,7 @@
                     ? Object.assign({}, clone(existing), { words: asArray(existing.words) })
                     : { id, words: asArray(existing) };
                 const index = list.words.findIndex((item) => String(item && (item.word || item.id) || '').trim().toLowerCase() === identity);
-                const nextWord = Object.assign({}, index >= 0 ? list.words[index] : {}, clone(word), { updatedAt: word.updatedAt || nowIso() });
+                const nextWord = Object.assign({}, index >= 0 ? list.words[index] : {}, normalizedWord, { updatedAt: normalizedWord.updatedAt || nowIso() });
                 if (!nextWord.createdAt) nextWord.createdAt = nextWord.updatedAt;
                 if (index >= 0) list.words[index] = nextWord; else list.words.push(nextWord);
                 list.updatedAt = nowIso();
@@ -1957,8 +2069,13 @@
                     const identity = String(rawWord.word || rawWord.id || '').trim().toLowerCase();
                     if (!identity) throw new AppDataError('VALIDATION', 'vocab word identity is required');
                     if (!positions.has(identity)) {
+                        const addedWord = clone(rawWord);
+                        if (Object.prototype.hasOwnProperty.call(addedWord, 'phonetic')) {
+                            const phonetic = normalizePhoneticValue(addedWord.phonetic);
+                            if (phonetic) addedWord.phonetic = phonetic; else delete addedWord.phonetic;
+                        }
                         positions.set(identity, merged.length);
-                        merged.push(clone(rawWord));
+                        merged.push(addedWord);
                         addedCount += 1;
                         continue;
                     }
@@ -1967,6 +2084,8 @@
                     const patch = {};
                     if (typeof rawWord.meaning === 'string' && rawWord.meaning.trim()) patch.meaning = rawWord.meaning.trim();
                     if (typeof rawWord.example === 'string' && rawWord.example.trim()) patch.example = rawWord.example.trim();
+                    const phonetic = normalizePhoneticValue(rawWord.phonetic);
+                    if (phonetic) patch.phonetic = phonetic;
                     if (typeof rawWord.freq === 'number' && Number.isFinite(rawWord.freq)) patch.freq = rawWord.freq;
                     merged[index] = Object.assign({}, existing, patch, { updatedAt: nowIso() });
                     updatedCount += 1;
@@ -1993,30 +2112,98 @@
                 return Object.assign({}, receipt, { listId, words: clone(merged), addedCount, updatedCount });
             });
         },
+        async backfillListWordPhonetics(command, options = {}) {
+            await ready;
+            assertObject(command, 'vocab.backfillListWordPhonetics requires a command');
+            const listId = String(command.listId || 'default');
+            const phonetics = new Map();
+            asArray(command.entries).forEach((entry) => {
+                assertObject(entry, 'vocab.backfillListWordPhonetics entries must be objects');
+                const identity = String(entry.word || '').trim().toLowerCase();
+                const phonetic = normalizePhoneticValue(entry.phonetic);
+                if (identity && phonetic && !phonetics.has(identity)) {
+                    phonetics.set(identity, phonetic);
+                }
+            });
+            const logicalKey = listId === 'default' ? 'vocab.words' : 'vocab.lists';
+            const mutation = optionsMutationOptions(options, 'vocab-phonetic-backfill', {
+                listId,
+                entryCount: phonetics.size,
+                entriesChecksum: checksum(Array.from(phonetics.entries()))
+            });
+            return retryVocabMutation(options, async () => {
+                const current = await kernel.read(logicalKey, { withMeta: true });
+                const collections = listId === 'default' ? null : Object.assign({}, asObject(current.data));
+                const storedList = listId === 'default'
+                    ? asArray(current.data)
+                    : (function readStoredCollection() {
+                        const collection = collections[listId];
+                        return collection && typeof collection === 'object' && !Array.isArray(collection)
+                            ? asArray(collection.words)
+                            : asArray(collection);
+                    }());
+                let updatedCount = 0;
+                const words = storedList.map((word) => {
+                    if (!word || typeof word !== 'object' || Array.isArray(word)) {
+                        return clone(word);
+                    }
+                    const existing = asObject(word);
+                    if (normalizePhoneticValue(existing.phonetic)) return clone(existing);
+                    const identity = String(existing.word || existing.id || '').trim().toLowerCase();
+                    const phonetic = phonetics.get(identity);
+                    if (!phonetic) return clone(existing);
+                    updatedCount += 1;
+                    return Object.assign({}, clone(existing), { phonetic });
+                });
+                if (!updatedCount) {
+                    return { committed: false, listId, words: clone(words), updatedCount: 0 };
+                }
+                const data = listId === 'default'
+                    ? words
+                    : Object.assign({}, collections, {
+                        [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words })
+                    });
+                const receipt = await kernel.mutate([{
+                    logicalKey,
+                    data,
+                    expectedRevision: options.expectedRevision ?? (current.envelope ? current.envelope.revision : 0)
+                }], mutation);
+                return Object.assign({}, receipt, { listId, words: clone(words), updatedCount });
+            });
+        },
         async patchWord(command, options = {}) {
             await ready; assertObject(command, 'vocab.patchWord requires a command');
             const listId = String(command.listId || 'default'); const wordId = String(command.wordId || command.id || '');
             if (!wordId) throw new AppDataError('VALIDATION', 'vocab word id is required');
+            const normalizedPatch = clone(asObject(command.patch));
+            if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'phonetic')) {
+                const phonetic = normalizePhoneticValue(normalizedPatch.phonetic);
+                if (phonetic) normalizedPatch.phonetic = phonetic; else delete normalizedPatch.phonetic;
+            }
             const logicalKey = listId === 'default' ? 'vocab.words' : 'vocab.lists';
             const mutation = optionsMutationOptions(
                 Object.assign({}, options, { operationId: command.operationId || options.operationId }),
                 'vocab-word-patch',
-                command
+                Object.assign({}, command, { patch: normalizedPatch })
             );
             return retryVocabMutation(options, async () => {
                 const current = await kernel.read(logicalKey, { withMeta: true });
                 const collections = listId === 'default' ? null : asObject(current.data);
+                const collectionValue = listId === 'default' ? null : collections[listId];
+                const collection = collectionValue && typeof collectionValue === 'object' && !Array.isArray(collectionValue)
+                    ? asObject(collectionValue)
+                    : {};
                 const list = listId === 'default'
                     ? asArray(current.data)
-                    : asArray(asObject(collections[listId]).words);
+                    : (Array.isArray(collectionValue) ? collectionValue : asArray(collection.words));
                 const index = list.findIndex((word) => idOf(word, ['id', 'word', 'key']) === wordId);
                 if (index < 0) throw new AppDataError('VALIDATION', `Unknown vocab word: ${wordId}`);
-                const updated = Object.assign({}, list[index], clone(asObject(command.patch)), { id: list[index].id || wordId, updatedAt: nowIso() });
+                const updated = Object.assign({}, list[index], normalizedPatch, { id: list[index].id || wordId, updatedAt: nowIso() });
                 const next = list.slice(); next[index] = updated;
                 const data = listId === 'default'
                     ? next
                     : Object.assign({}, collections, {
-                        [listId]: Object.assign({}, asObject(collections[listId]), { id: listId, words: next, updatedAt: nowIso() })
+                        [listId]: Object.assign({}, collection, { id: listId, words: next, updatedAt: nowIso() })
                     });
                 const receipt = await kernel.mutate([{
                     logicalKey,
@@ -2032,6 +2219,7 @@
             const mutation = optionsMutationOptions(options, 'vocab-progress', command);
             return retryVocabMutation(options, async () => {
                 const configMeta = await kernel.read('vocab.userConfig', { withMeta: true });
+                let committedWords = words;
                 const changes = [{
                     logicalKey: 'vocab.userConfig',
                     data: Object.assign({}, asObject(configMeta.data), asObject(command.config), { activeListId: listId }),
@@ -2039,13 +2227,23 @@
                 }];
                 if (listId === 'default') {
                     const wordsMeta = await kernel.read('vocab.words', { withMeta: true });
-                    changes.push({ logicalKey: 'vocab.words', data: words, expectedRevision: wordsMeta.envelope ? wordsMeta.envelope.revision : 0 });
+                    committedWords = preserveProgressPhonetics(words, wordsMeta.data);
+                    changes.push({ logicalKey: 'vocab.words', data: committedWords, expectedRevision: wordsMeta.envelope ? wordsMeta.envelope.revision : 0 });
                 } else {
                     const listsMeta = await kernel.read('vocab.lists', { withMeta: true }); const lists = Object.assign({}, asObject(listsMeta.data));
-                    lists[listId] = Object.assign({}, asObject(lists[listId]), { id: listId, words });
+                    const existingValue = lists[listId];
+                    const existingList = existingValue && typeof existingValue === 'object' && !Array.isArray(existingValue)
+                        ? asObject(existingValue)
+                        : {};
+                    const existingWords = Array.isArray(existingValue)
+                        ? existingValue
+                        : existingList.words;
+                    committedWords = preserveProgressPhonetics(words, existingWords);
+                    lists[listId] = Object.assign({}, existingList, { id: listId, words: committedWords });
                     changes.push({ logicalKey: 'vocab.lists', data: lists, expectedRevision: listsMeta.envelope ? listsMeta.envelope.revision : 0 });
                 }
-                return kernel.mutate(changes, mutation);
+                const receipt = await kernel.mutate(changes, mutation);
+                return Object.assign({}, receipt, { listId, words: clone(committedWords) });
             });
         }
     });
@@ -2185,6 +2383,165 @@
         practice_timer_preferences: 'timer', suite_preference: 'suite', candidate_code: 'candidateCode',
         ielts_reading_display_preferences_v1: 'readingDisplay', onboarding_completed: 'onboarding.completed'
     });
+    const LEGACY_VOCAB_LIST_ALIASES = Object.freeze({
+        'spelling-errors-p1': ['vocab_list_p1_errors', 'vocab_list_p1'],
+        'spelling-errors-p4': ['vocab_list_p4_errors', 'vocab_list_p4'],
+        'spelling-errors-master': ['vocab_list_master_errors', 'vocab_list_master'],
+        custom: ['vocab_list_custom'],
+        'reading-highlights': ['vocab_list_reading_highlights']
+    });
+    const LEGACY_VOCAB_LIST_IDS = Object.freeze({
+        p1: 'spelling-errors-p1',
+        'p1-errors': 'spelling-errors-p1',
+        p1_errors: 'spelling-errors-p1',
+        p4: 'spelling-errors-p4',
+        'p4-errors': 'spelling-errors-p4',
+        p4_errors: 'spelling-errors-p4',
+        master: 'spelling-errors-master',
+        'master-errors': 'spelling-errors-master',
+        master_errors: 'spelling-errors-master',
+        custom: 'custom',
+        reading: 'reading-highlights',
+        'reading-highlights': 'reading-highlights',
+        vocab_list_p1_errors: 'spelling-errors-p1',
+        vocab_list_p4_errors: 'spelling-errors-p4',
+        vocab_list_master_errors: 'spelling-errors-master',
+        vocab_list_custom: 'custom',
+        vocab_list_reading_highlights: 'reading-highlights'
+    });
+
+    function setLegacyPath(target, pathValue, value) {
+        const path = String(pathValue).split('.');
+        let cursor = target;
+        for (const part of path.slice(0, -1)) {
+            cursor[part] = Object.assign({}, asObject(cursor[part]));
+            cursor = cursor[part];
+        }
+        cursor[path[path.length - 1]] = clone(value);
+    }
+    function legacyPreferences(legacy) {
+        const preferences = Object.assign({}, asObject(legacy.ui_preferences));
+        for (const [alias, target] of Object.entries(LEGACY_PREFERENCE_ALIASES)) {
+            if (Object.prototype.hasOwnProperty.call(legacy, alias)) {
+                setLegacyPath(preferences, target, legacy[alias]);
+            }
+        }
+        return Object.keys(preferences).length ? preferences : null;
+    }
+    function legacyVocabConfig(legacy) {
+        const config = Object.assign({}, asObject(legacy.vocab_user_config));
+        if (Object.prototype.hasOwnProperty.call(legacy, 'vocab_active_list_id')) {
+            config.activeListId = clone(legacy.vocab_active_list_id);
+        }
+        if (config.activeListId !== undefined && config.activeListId !== null) {
+            const rawId = String(config.activeListId);
+            config.activeListId = LEGACY_VOCAB_LIST_IDS[rawId] || rawId;
+        }
+        return Object.keys(config).length ? config : null;
+    }
+    function legacyVocabLists(legacy) {
+        const lists = {};
+        for (const [rawId, value] of Object.entries(asObject(legacy.vocab_lists))) {
+            const id = LEGACY_VOCAB_LIST_IDS[rawId] || String(rawId);
+            lists[id] = clone(value);
+        }
+        for (const [id, aliases] of Object.entries(LEGACY_VOCAB_LIST_ALIASES)) {
+            const alias = aliases.find((key) => Object.prototype.hasOwnProperty.call(legacy, key));
+            if (alias) lists[id] = clone(legacy[alias]);
+        }
+        return Object.keys(lists).length ? lists : null;
+    }
+    function legacyCollectionIdentity(logicalKey, value) {
+        if (logicalKey === 'vocab.words') {
+            const word = typeof value === 'string'
+                ? value.trim().toLowerCase()
+                : collectionIdentity(logicalKey, value);
+            if (word) return `word:${word}`;
+        }
+        const identity = collectionIdentity(logicalKey, value);
+        return identity ? `id:${identity}` : `content:${checksum(value)}`;
+    }
+    function mergeLegacyCollection(legacyValue, currentValue, logicalKey) {
+        const result = [];
+        const positions = new Map();
+        for (const item of asArray(legacyValue).concat(asArray(currentValue))) {
+            const next = clone(item);
+            const identity = legacyCollectionIdentity(logicalKey, next);
+            if (positions.has(identity)) result[positions.get(identity)] = next;
+            else {
+                positions.set(identity, result.length);
+                result.push(next);
+            }
+        }
+        return result;
+    }
+    function reconcileLegacyValue(entry, legacyValue, currentValue) {
+        if (entry.import === 'merge-by-id') {
+            return mergeLegacyCollection(legacyValue, currentValue, entry.logicalKey);
+        }
+        if (entry.import === 'patch') {
+            return Object.assign({}, asObject(legacyValue), asObject(currentValue));
+        }
+        return clone(currentValue);
+    }
+    function legacyDocumentCandidate(logicalKey, aliases, legacy) {
+        if (logicalKey === 'preferences.values') {
+            const value = legacyPreferences(legacy);
+            return { found: value !== null, value };
+        }
+        if (logicalKey === 'vocab.userConfig') {
+            const value = legacyVocabConfig(legacy);
+            return { found: value !== null, value };
+        }
+        if (logicalKey === 'vocab.lists') {
+            const value = legacyVocabLists(legacy);
+            return { found: value !== null, value };
+        }
+        const alias = aliases.find((key) => Object.prototype.hasOwnProperty.call(legacy, key));
+        return alias ? { found: true, value: clone(legacy[alias]) } : { found: false, value: null };
+    }
+    async function prepareLegacyDocumentChange(logicalKey, legacyValue) {
+        const entry = catalog.get(logicalKey);
+        const currentEnvelope = await kernel.getEnvelope(logicalKey);
+        if (!currentEnvelope) {
+            return { logicalKey, data: clone(legacyValue), expectedRevision: 0 };
+        }
+        if (entry.import === 'replace' || entry.import === 'ignore') return null;
+        const currentValue = await kernel.read(logicalKey);
+        const next = reconcileLegacyValue(entry, legacyValue, currentValue);
+        if (checksum(next) === checksum(currentValue)) return null;
+        return {
+            logicalKey,
+            data: next,
+            expectedRevision: Number(currentEnvelope.revision) || 0
+        };
+    }
+
+    async function prepareLegacyEntityUpsert(store, recordId, data) {
+        if (typeof kernel.getEntityRevision === 'function') {
+            const revisionInfo = await kernel.getEntityRevision(store, recordId, { withPresence: true });
+            if (revisionInfo && typeof revisionInfo === 'object') {
+                if (revisionInfo.present === true) return null;
+                return {
+                    type: 'upsert',
+                    store,
+                    recordId,
+                    data,
+                    expectedRevision: Number(revisionInfo.revision) || 0
+                };
+            }
+            if (await kernel.readEntity(store, recordId)) return null;
+            return {
+                type: 'upsert',
+                store,
+                recordId,
+                data,
+                expectedRevision: Number(revisionInfo) || 0
+            };
+        }
+        if (await kernel.readEntity(store, recordId)) return null;
+        return { type: 'upsert', store, recordId, data, expectedRevision: 0 };
+    }
 
     function mergeLegacySources(indexedDbValue, externalValue) {
         const indexedDb = asObject(indexedDbValue);
@@ -2252,62 +2609,66 @@
         }
         if (v1Complete && !externalBackup) return;
 
-        const indexedDb = await internals.readLegacyValues();
+        // Once the durable marker is complete, never re-consume ExamSystemDB.
+        // A legacy external backup may still be discovered later and is handled
+        // independently without resurrecting subsequently deleted v1 data.
+        const indexedDb = v1Complete ? {} : await internals.readLegacyValues();
         if (indexedDb && indexedDb.__legacyReadComplete === false) {
             throw new AppDataError('BACKEND_UNAVAILABLE', 'Legacy IndexedDB could not be read completely; migration will retry on next startup');
         }
         const legacy = mergeLegacySources(indexedDb, externalBackup);
         const changes = [];
         for (const [logicalKey, aliases] of Object.entries(LEGACY_DOCUMENT_ALIASES)) {
-            const current = await kernel.getEnvelope(logicalKey);
-            if (current) continue;
-            const alias = aliases.find((key) => Object.prototype.hasOwnProperty.call(legacy, key));
-            if (alias) changes.push({ logicalKey, data: legacy[alias], expectedRevision: 0 });
+            const candidate = legacyDocumentCandidate(logicalKey, aliases, legacy);
+            if (!candidate.found) continue;
+            const change = await prepareLegacyDocumentChange(logicalKey, candidate.value);
+            if (change) changes.push(change);
         }
         const libraryBundle = legacyLibraryBundle(legacy);
         if (libraryBundle) {
-            if (!(await kernel.getEnvelope('library.configurations'))) changes.push({ logicalKey: 'library.configurations', data: libraryBundle.configurations, expectedRevision: 0 });
-            if (!(await kernel.getEnvelope('library.importedIndexes'))) changes.push({ logicalKey: 'library.importedIndexes', data: libraryBundle.indexes, expectedRevision: 0 });
-            if (!(await kernel.getEnvelope('library.activeConfigurationId'))) changes.push({ logicalKey: 'library.activeConfigurationId', data: libraryBundle.activeId, expectedRevision: 0 });
-        }
-        if (!(await kernel.getEnvelope('preferences.values')) && !changes.some((change) => change.logicalKey === 'preferences.values')) {
-            const preferences = {};
-            for (const [alias, target] of Object.entries(LEGACY_PREFERENCE_ALIASES)) {
-                if (!Object.prototype.hasOwnProperty.call(legacy, alias)) continue;
-                const path = target.split('.'); let cursor = preferences;
-                path.slice(0, -1).forEach((part) => { cursor[part] = asObject(cursor[part]); cursor = cursor[part]; });
-                cursor[path[path.length - 1]] = clone(legacy[alias]);
+            for (const [logicalKey, value] of [
+                ['library.configurations', libraryBundle.configurations],
+                ['library.importedIndexes', libraryBundle.indexes],
+                ['library.activeConfigurationId', libraryBundle.activeId]
+            ]) {
+                const change = await prepareLegacyDocumentChange(logicalKey, value);
+                if (change) changes.push(change);
             }
-            if (Object.keys(preferences).length) changes.push({ logicalKey: 'preferences.values', data: preferences, expectedRevision: 0 });
-        }
-        if (!(await kernel.getEnvelope('vocab.userConfig')) && !changes.some((change) => change.logicalKey === 'vocab.userConfig') && Object.prototype.hasOwnProperty.call(legacy, 'vocab_active_list_id')) {
-            changes.push({ logicalKey: 'vocab.userConfig', data: { activeListId: legacy.vocab_active_list_id }, expectedRevision: 0 });
         }
         if (changes.length) await kernel.mutate(changes, { operationId: `legacy-documents-${internals.checksum(changes)}` });
         const recordsValue = legacy.practice_records;
         const records = Array.isArray(recordsValue) ? recordsValue : asArray(asObject(recordsValue).data);
         const operations = [];
         for (const [index, record] of records.entries()) {
+            let canonical;
+            let parts;
             try {
                 const candidate = clone(record);
                 if (!idOf(candidate, ['id', 'recordId', 'sessionId'])) candidate.id = `legacy_${index}_${internals.checksum(record)}`;
-                const canonical = canonicalizeRecord(candidate);
-                const parts = splitPracticeRecord(canonical);
-                for (const [store, data] of [
-                    ['practiceSummaries', parts.summary],
-                    ['practiceDetails', parts.detail],
-                    ['practiceAnnotations', parts.annotations]
-                ]) {
-                    if (!await kernel.readEntity(store, canonical.id)) {
-                        operations.push({ type: 'upsert', store, recordId: canonical.id, data, expectedRevision: 0 });
-                    }
-                }
+                canonical = canonicalizeRecord(candidate);
+                parts = splitPracticeRecord(canonical);
             } catch (error) {
                 if (global.console && console.warn) console.warn(`[AppData v2] skipping malformed legacy practice record #${index}:`, error && error.message);
+                continue;
+            }
+            for (const [store, data] of [
+                ['practiceSummaries', parts.summary],
+                ['practiceDetails', parts.detail],
+                ['practiceAnnotations', parts.annotations]
+            ]) {
+                // A deleted entity has no physical row, but its sidecar revision
+                // remains authoritative. Restore legacy backup data against that
+                // tombstone instead of retrying forever with expectedRevision 0.
+                // Storage/CAS failures intentionally escape this loop so the
+                // migration marker is not consumed before every valid row lands.
+                const operation = await prepareLegacyEntityUpsert(store, canonical.id, data);
+                if (operation) operations.push(operation);
             }
         }
         if (operations.length) {
-            await kernel.mutateEntities(operations, { operationId: `legacy-practice-${internals.checksum(records)}` });
+            await kernel.mutateEntities(operations, {
+                operationId: `legacy-practice-${internals.checksum(operations)}`
+            });
         }
 
         const nextMigrationState = Object.assign({}, migrationState);

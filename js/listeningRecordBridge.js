@@ -31,7 +31,9 @@
     windowSessionToken: '',
     initRequestTimer: null,
     initRequestAttempts: 0,
-    pendingCompletion: null
+    pendingCompletion: null,
+    pendingCompletions: Object.create(null),
+    completedCompletions: Object.create(null)
   };
 
   function log() {
@@ -56,20 +58,30 @@
     return null;
   }
 
-  function createSubmissionId() {
+  function normalizeSuiteId(value) {
+    var text = String(value == null ? '' : value).trim();
+    return text && text.length <= 180 ? text : '';
+  }
+
+  function createSubmissionId(suiteId) {
+    var normalizedSuiteId = normalizeSuiteId(suiteId);
+    var suiteToken = normalizedSuiteId
+      ? normalizedSuiteId.replace(/[^A-Za-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+      : '';
+    var suitePrefix = normalizedSuiteId ? (suiteToken || 'suite') + '-' : '';
     try {
       if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-        return 'listening-submit-' + window.crypto.randomUUID();
+        return 'listening-submit-' + suitePrefix + window.crypto.randomUUID();
       }
       if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
         var bytes = new Uint8Array(16);
         window.crypto.getRandomValues(bytes);
-        return 'listening-submit-' + Array.prototype.map.call(bytes, function (byte) {
+        return 'listening-submit-' + suitePrefix + Array.prototype.map.call(bytes, function (byte) {
           return byte.toString(16).padStart(2, '0');
         }).join('');
       }
     } catch (_) {}
-    return 'listening-submit-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    return 'listening-submit-' + suitePrefix + Date.now() + '-' + Math.random().toString(36).slice(2);
   }
 
   function sendMessage(type, data) {
@@ -162,6 +174,92 @@
 
   function cssAttr(s) {
     return String(s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
+  function completionKeyForSuite(suiteId) {
+    var normalized = normalizeSuiteId(suiteId);
+    return normalized ? 'suite:' + normalized : 'default';
+  }
+
+  function syncLegacyCompletionState() {
+    var pendingKeys = Object.keys(state.pendingCompletions);
+    state.pendingCompletion = state.pendingCompletions.default
+      || (pendingKeys.length ? state.pendingCompletions[pendingKeys[0]] : null);
+    state.completed = Object.keys(state.completedCompletions).length > 0;
+  }
+
+  function isCompletionSettled(completionKey) {
+    return !!state.completedCompletions[completionKey || 'default'];
+  }
+
+  function findSuiteContainer(doc, suiteId) {
+    var normalized = normalizeSuiteId(suiteId);
+    if (!doc || !normalized) return null;
+    var container = null;
+    try {
+      container = doc.querySelector('[data-suite-id="' + cssAttr(normalized) + '"]');
+    } catch (_) {}
+    if (!container && typeof doc.getElementById === 'function') {
+      container = doc.getElementById(normalized);
+      if (!container) {
+        var setMatch = normalized.match(/^set(.+)$/i);
+        if (setMatch) container = doc.getElementById('page-test' + setMatch[1]);
+      }
+    }
+    return container;
+  }
+
+  function suiteIdFromElement(element) {
+    var node = element;
+    while (node && node !== window.document) {
+      if (node.dataset) {
+        var direct = normalizeSuiteId(node.dataset.submitSuite || node.dataset.suiteId);
+        if (direct) return direct;
+      }
+      var nodeId = normalizeSuiteId(node.id);
+      if (nodeId) {
+        var testPageMatch = nodeId.match(/^page-test(.+)$/i);
+        if (testPageMatch) return normalizeSuiteId('set' + testPageMatch[1]);
+        try {
+          if (node.classList
+            && (node.classList.contains('test-page') || node.classList.contains('suite-container'))) {
+            return nodeId;
+          }
+        } catch (_) {}
+      }
+      node = node.parentNode;
+    }
+    return '';
+  }
+
+  function resolveCompletionSuiteId(options, element) {
+    options = options || {};
+    var explicit = normalizeSuiteId(options.suiteId);
+    if (explicit) return explicit;
+    var fromElement = suiteIdFromElement(element);
+    if (fromElement) return fromElement;
+    var doc = window.document;
+    if (!doc || typeof doc.querySelector !== 'function') return '';
+    try {
+      var active = doc.querySelector(
+        '.test-page.active[data-suite-id], [data-suite-id].active, .test-page.active, .suite-container.active'
+      );
+      return suiteIdFromElement(active);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function countSuiteContainers(doc) {
+    if (!doc || typeof doc.querySelectorAll !== 'function') return 0;
+    var selectors = ['[data-suite-id]', '.test-page', '.suite-container', '.pill[data-target^="page-test"]'];
+    for (var i = 0; i < selectors.length; i++) {
+      try {
+        var count = doc.querySelectorAll(selectors[i]).length;
+        if (count) return count;
+      } catch (_) {}
+    }
+    return 0;
   }
 
   function getText(node) {
@@ -422,6 +520,13 @@
       return { answerKey: answerKey, answers: null, questionList: questionList || [] };
     }
 
+    try {
+      var globalAnswers = window.correctAnswers;
+      if (globalAnswers && typeof globalAnswers === 'object') {
+        return { answerKey: null, answers: globalAnswers, questionList: questionList || [] };
+      }
+    } catch (e) {}
+
     for (var ai = 0; ai < scripts.length; ai++) {
       var script = scripts[ai];
       var src = String(script && script.src || '');
@@ -571,8 +676,13 @@
 
   function buildDetailsFromSimpleAnswers(doc, answers) {
     if (!doc || !answers || typeof answers !== 'object') return [];
-    return Object.keys(answers).map(function (key) {
-      var rawAnswer = answers[key];
+    var entries = Array.isArray(answers)
+      ? answers.map(function (value, index) { return { key: 'q' + (index + 1), value: value }; })
+      : Object.keys(answers).map(function (key) { return { key: key, value: answers[key] }; });
+    return entries.map(function (entry) {
+      var key = entry.key;
+      var rawAnswer = entry.value;
+      if (rawAnswer == null) return null;
       var question = String(key || '').replace(/^q/i, '');
       if (!question) return null;
       var correctAnswer = formatCorrectAnswer(rawAnswer, 'text');
@@ -661,8 +771,11 @@
     var allowGenerated = !!options.allowGenerated;
     var doc = win && win.document;
     if (!doc) return [];
+    var suiteId = normalizeSuiteId(options.suiteId);
+    var suiteContainer = findSuiteContainer(doc, suiteId);
+    var extractionRoot = suiteContainer || doc;
 
-    var s1 = parseResultsFromDocument(doc);
+    var s1 = parseResultsFromDocument(extractionRoot);
     if (s1.length) return s1;
 
     var app = win.App;
@@ -698,7 +811,10 @@
     return !!doc.querySelector('.results-table, .result-table, .review-table, .ans-table, .feedback .grade-report, #reviewList');
   }
 
-  function buildBridgePayload(details) {
+  function buildBridgePayload(details, context) {
+    context = context || {};
+    var contentSuiteId = normalizeSuiteId(context.suiteId);
+    var totalSuites = Math.max(0, Number(context.totalSuites) || 0);
     var answers = {};
     var correctAnswers = {};
     var answerComparison = {};
@@ -738,7 +854,7 @@
     try {
       var collector = window.spellingErrorCollector;
       if (collector && typeof collector.detectErrors === 'function') {
-        spellingErrors = collector.detectErrors(answerComparison, state.suiteSessionId, state.examId);
+        spellingErrors = collector.detectErrors(answerComparison, contentSuiteId || state.suiteSessionId, state.examId);
       }
     } catch (e) {
       warn('spelling error detection failed:', e);
@@ -748,7 +864,7 @@
     var startTimeMs = toTimestampMs(state.startTime, endTimeMs);
     var durationSec = Math.max(0, Math.round((endTimeMs - startTimeMs) / 1000));
 
-    return {
+    var payload = {
       examId: state.examId,
       sessionId: state.sessionId,
       suiteSessionId: state.suiteSessionId,
@@ -774,20 +890,26 @@
       metadata: {
         type: 'listening',
         examType: 'listening',
-        source: 'listening_record_bridge'
+        source: 'listening_record_bridge',
+        suiteId: contentSuiteId || null,
+        totalSuites: totalSuites || null
       }
     };
+    if (contentSuiteId) payload.suiteId = contentSuiteId;
+    if (totalSuites) payload.totalSuites = totalSuites;
+    return payload;
   }
 
-  function sendPendingCompletion(reason) {
-    var pending = state.pendingCompletion;
-    if (!pending || state.completed) return false;
+  function sendPendingCompletion(reason, completionKey) {
+    var key = completionKey || 'default';
+    var pending = state.pendingCompletions[key];
+    if (!pending || isCompletionSettled(key)) return false;
     if (!state.initialized || !state.windowSessionToken) {
       sendInitRequest(reason || 'complete_before_init');
       return false;
     }
     if (!pending.payload) {
-      pending.payload = buildBridgePayload(pending.details);
+      pending.payload = buildBridgePayload(pending.details, pending);
       pending.payload.submissionId = pending.submissionId;
     }
     log(
@@ -798,24 +920,29 @@
   }
 
   function onComplete(options) {
-    options = options || {};
-    if (state.completed) {
-      log('already completed, skipping');
+    options = Object.assign({}, options || {});
+    var suiteId = resolveCompletionSuiteId(options);
+    if (suiteId) options.suiteId = suiteId;
+    var completionKey = completionKeyForSuite(suiteId);
+    if (isCompletionSettled(completionKey)) {
+      log('already completed, skipping key=' + completionKey);
       return true;
     }
-    if (state.pendingCompletion) {
-      sendPendingCompletion('completion_retry');
-      scheduleCompletionRetries(state.pendingCompletion.options || options);
+    var existingPending = state.pendingCompletions[completionKey];
+    if (existingPending) {
+      sendPendingCompletion('completion_retry', completionKey);
+      scheduleCompletionRetries(existingPending.options || options);
       return true;
     }
 
     var allowGenerated = !!options.allowGenerated;
-    var details = extractAttemptDetails(window, { allowGenerated: allowGenerated });
+    var details = extractAttemptDetails(window, options);
     if (!details.length && !allowGenerated) {
       var app = window.App;
       var isReviewing = !!(app && app.state && (app.state.isReviewing || app.state.review));
-      if (isReviewing || hasReviewArtifacts(window.document)) {
-        details = extractAttemptDetails(window, { allowGenerated: true });
+      var reviewRoot = findSuiteContainer(window.document, suiteId) || window.document;
+      if (isReviewing || hasReviewArtifacts(reviewRoot)) {
+        details = extractAttemptDetails(window, Object.assign({}, options, { allowGenerated: true }));
       }
     }
     if (!details.length) {
@@ -823,35 +950,46 @@
       return false;
     }
 
-    state.pendingCompletion = {
-      submissionId: createSubmissionId(),
+    state.pendingCompletions[completionKey] = {
+      completionKey: completionKey,
+      suiteId: suiteId || null,
+      totalSuites: suiteId ? countSuiteContainers(window.document) : 0,
+      submissionId: createSubmissionId(suiteId),
       details: details,
       options: Object.assign({}, options),
       payload: null
     };
-    sendPendingCompletion(state.initialized ? 'completion_created' : 'complete_before_init');
+    syncLegacyCompletionState();
+    sendPendingCompletion(state.initialized ? 'completion_created' : 'complete_before_init', completionKey);
     scheduleCompletionRetries(options);
     return true;
   }
 
-  var completionDebounceTimer = null;
-  var completionDebounceOptions = null;
-  var completionRetryTimers = [];
-  function clearCompletionRetryTimers() {
-    for (var i = 0; i < completionRetryTimers.length; i++) {
-      clearTimeout(completionRetryTimers[i]);
+  var completionDebounceTimers = Object.create(null);
+  var completionDebounceOptions = Object.create(null);
+  var completionRetryTimers = Object.create(null);
+  function clearCompletionRetryTimers(completionKey) {
+    var key = completionKey || 'default';
+    var timers = completionRetryTimers[key] || [];
+    for (var i = 0; i < timers.length; i++) {
+      clearTimeout(timers[i]);
     }
-    completionRetryTimers = [];
+    delete completionRetryTimers[key];
   }
 
   function scheduleCompletionRetries(options) {
-    clearCompletionRetryTimers();
+    options = Object.assign({}, options || {});
+    var suiteId = resolveCompletionSuiteId(options);
+    if (suiteId) options.suiteId = suiteId;
+    var completionKey = completionKeyForSuite(suiteId);
+    clearCompletionRetryTimers(completionKey);
+    completionRetryTimers[completionKey] = [];
     var retryDelays = [400, 1200, 2500];
     for (var i = 0; i < retryDelays.length; i++) {
       (function (delay) {
-        completionRetryTimers.push(setTimeout(function () {
-          if (state.completed) return;
-          if (state.pendingCompletion) sendPendingCompletion('completion_timeout');
+        completionRetryTimers[completionKey].push(setTimeout(function () {
+          if (isCompletionSettled(completionKey)) return;
+          if (state.pendingCompletions[completionKey]) sendPendingCompletion('completion_timeout', completionKey);
           else onComplete(options || {});
         }, delay));
       })(retryDelays[i]);
@@ -859,13 +997,17 @@
   }
 
   function debouncedOnComplete(delay, options) {
-    if (state.completed) return;
-    if (completionDebounceTimer) clearTimeout(completionDebounceTimer);
-    completionDebounceOptions = options || null;
-    completionDebounceTimer = setTimeout(function () {
-      completionDebounceTimer = null;
-      var runOptions = completionDebounceOptions || {};
-      completionDebounceOptions = null;
+    options = Object.assign({}, options || {});
+    var suiteId = resolveCompletionSuiteId(options);
+    if (suiteId) options.suiteId = suiteId;
+    var completionKey = completionKeyForSuite(suiteId);
+    if (isCompletionSettled(completionKey)) return;
+    if (completionDebounceTimers[completionKey]) clearTimeout(completionDebounceTimers[completionKey]);
+    completionDebounceOptions[completionKey] = options;
+    completionDebounceTimers[completionKey] = setTimeout(function () {
+      delete completionDebounceTimers[completionKey];
+      var runOptions = completionDebounceOptions[completionKey] || {};
+      delete completionDebounceOptions[completionKey];
       if (!onComplete(runOptions)) {
         scheduleCompletionRetries(runOptions);
       }
@@ -874,10 +1016,8 @@
 
   function hookAppFinish() {
     var app = window.App;
-    if (app && !app.__listeningBridgeHooked) {
-      app.__listeningBridgeHooked = true;
-
-      var methods = ['finishTest', 'gradeAnswers', 'enterReviewMode'];
+    if (app) {
+      var methods = ['finishTest', 'gradeAnswers', 'enterReviewMode', 'finishSuite'];
       for (var mi = 0; mi < methods.length; mi++) {
         var method = methods[mi];
         if (typeof app[method] === 'function') {
@@ -885,14 +1025,21 @@
             var original = app[m];
             if (original._bridgeOriginal) return;
             app[m] = function () {
+              var suiteId = m === 'finishSuite' ? normalizeSuiteId(arguments[0]) : '';
               var result = original.apply(this, arguments);
-              debouncedOnComplete(500, { allowGenerated: true });
+              debouncedOnComplete(500, {
+                allowGenerated: true,
+                suiteId: suiteId || resolveCompletionSuiteId({})
+              });
               return result;
             };
             app[m]._bridgeOriginal = original;
           })(method);
         }
       }
+      app.__listeningBridgeHooked = methods.every(function (methodName) {
+        return typeof app[methodName] !== 'function' || !!app[methodName]._bridgeOriginal;
+      });
     }
 
     if (typeof window.finishTest === 'function') {
@@ -921,13 +1068,19 @@
   }
 
   function areCoreFinishHooksReady() {
+    var appMethods = ['finishTest', 'gradeAnswers', 'enterReviewMode', 'finishSuite'];
+    var appHookTargets = window.App ? appMethods.filter(function (methodName) {
+      return typeof window.App[methodName] === 'function';
+    }) : [];
     var hasHookTarget = !!(
-      window.App
+      appHookTargets.length
       || typeof window.finishTest === 'function'
       || typeof window.gradeAnswers === 'function'
     );
     if (!hasHookTarget) return false;
-    var appReady = !window.App || !!window.App.__listeningBridgeHooked;
+    var appReady = appHookTargets.every(function (methodName) {
+      return !!window.App[methodName]._bridgeOriginal;
+    });
     var finishReady = (typeof window.finishTest !== 'function') || !!window.finishTest._bridgeOriginal;
     var gradeReady = (typeof window.gradeAnswers !== 'function') || !!window.gradeAnswers._bridgeOriginal;
     return appReady && finishReady && gradeReady;
@@ -1007,8 +1160,11 @@
     for (var i = 0; i < buttonSelectors.length; i++) {
       var btns = doc.querySelectorAll(buttonSelectors[i]);
       for (var j = 0; j < btns.length; j++) {
-        btns[j].addEventListener('click', function () {
-          debouncedOnComplete(800, { allowGenerated: true });
+        btns[j].addEventListener('click', function (event) {
+          debouncedOnComplete(800, {
+            allowGenerated: true,
+            suiteId: resolveCompletionSuiteId({}, event && (event.currentTarget || event.target))
+          });
         });
       }
     }
@@ -1023,8 +1179,12 @@
     }
 
     function queueFinishCompletion(event) {
-      if (isFinishLikeElement(event && event.target)) {
-        debouncedOnComplete(800, { allowGenerated: true });
+      var finishElement = isFinishLikeElement(event && event.target);
+      if (finishElement) {
+        debouncedOnComplete(800, {
+          allowGenerated: true,
+          suiteId: resolveCompletionSuiteId({}, finishElement)
+        });
       }
     }
 
@@ -1035,7 +1195,10 @@
       var submitter = event && event.submitter;
       var form = event && event.target;
       if (isFinishLikeElement(submitter) || isFinishLikeElement(form) || formHasFinishControl(form)) {
-        debouncedOnComplete(500, { allowGenerated: true });
+        debouncedOnComplete(500, {
+          allowGenerated: true,
+          suiteId: resolveCompletionSuiteId({}, submitter || form)
+        });
       }
     }, true);
     doc.addEventListener('keydown', function (event) {
@@ -1043,7 +1206,10 @@
       if (key !== 'Enter' && key !== ' ' && key !== 'Space' && key !== 'Spacebar') return;
       var target = (event && event.target) || doc.activeElement;
       if (isFinishLikeElement(target)) {
-        debouncedOnComplete(500, { allowGenerated: true });
+        debouncedOnComplete(500, {
+          allowGenerated: true,
+          suiteId: resolveCompletionSuiteId({}, target)
+        });
       }
     }, true);
   }
@@ -1055,9 +1221,15 @@
 
     var reviewSelectors = '.results-table, .result-table, .review-table, .ans-table, .feedback .grade-report, #reviewList';
     var observer = new MutationObserver(function () {
-      var reviewEl = doc.querySelector(reviewSelectors);
-      if (reviewEl && !state.completed) {
-        debouncedOnComplete(1500, { allowGenerated: false });
+      var reviewElements = Array.prototype.slice.call(doc.querySelectorAll(reviewSelectors));
+      var queued = Object.create(null);
+      for (var i = 0; i < reviewElements.length; i++) {
+        var suiteId = suiteIdFromElement(reviewElements[i]);
+        var completionKey = completionKeyForSuite(suiteId);
+        if (!queued[completionKey] && !isCompletionSettled(completionKey)) {
+          queued[completionKey] = true;
+          debouncedOnComplete(1500, { allowGenerated: false, suiteId: suiteId || null });
+        }
       }
     });
     observer.observe(doc.body, { childList: true, subtree: true });
@@ -1108,29 +1280,38 @@
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
         state.initialized = true;
         stopInitRequestLoop();
-        if (state.pendingCompletion && String(previousSessionId || '') !== String(state.sessionId || '')) {
-          state.pendingCompletion.payload = null;
+        if (String(previousSessionId || '') !== String(state.sessionId || '')) {
+          Object.keys(state.pendingCompletions).forEach(function (completionKey) {
+            state.pendingCompletions[completionKey].payload = null;
+          });
         }
 
         log('INIT_SESSION received — examId=' + state.examId + ' sessionId=' + state.sessionId);
         sendSessionReady('ready');
-        if (state.pendingCompletion) {
-          sendPendingCompletion('init_received');
-        }
+        Object.keys(state.pendingCompletions).forEach(function (completionKey) {
+          sendPendingCompletion('init_received', completionKey);
+        });
       } else if (type === 'PRACTICE_SUBMIT_ACK' || type === 'PRACTICE_SUBMIT_FAILED') {
         var outcome = data.data || data;
         if (!state.parentWindow || event.source !== state.parentWindow || data.source !== HOST_MESSAGE_SOURCE) return;
         var outcomeOrigin = typeof event.origin === 'string' ? event.origin : '';
         if (state.parentOriginIsOpaque ? outcomeOrigin !== 'null' : (!state.parentOrigin || outcomeOrigin !== state.parentOrigin)) return;
         if (!outcome || String(outcome.windowSessionToken || '') !== String(state.windowSessionToken || '')) return;
-        var pending = state.pendingCompletion;
+        var pendingKey = Object.keys(state.pendingCompletions).find(function (completionKey) {
+          return String(state.pendingCompletions[completionKey].submissionId || '') === String(outcome.submissionId || '');
+        });
+        var pending = pendingKey ? state.pendingCompletions[pendingKey] : null;
         if (!pending
-          || String(outcome.submissionId || '') !== String(pending.submissionId || '')
           || String(outcome.sessionId || '') !== String(state.sessionId || '')) return;
         if (type === 'PRACTICE_SUBMIT_ACK') {
-          state.completed = true;
-          state.pendingCompletion = null;
-          clearCompletionRetryTimers();
+          state.completedCompletions[pendingKey] = {
+            submissionId: pending.submissionId,
+            suiteId: pending.suiteId || null,
+            completedAt: Date.now()
+          };
+          delete state.pendingCompletions[pendingKey];
+          clearCompletionRetryTimers(pendingKey);
+          syncLegacyCompletionState();
           log('PRACTICE_COMPLETE persisted, submissionId=' + outcome.submissionId);
         } else {
           warn('PRACTICE_COMPLETE persistence failed, retrying submissionId=' + outcome.submissionId);

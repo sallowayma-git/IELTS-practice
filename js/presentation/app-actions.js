@@ -3,7 +3,7 @@
 
     var prefetchTriggered = false;
     var attachedPrefetchHandlers = false;
-    var browsePrefetchTriggered = false;
+    var browsePrefetchPromise = null;
     var morePrefetchTriggered = false;
 
     function ensurePracticeSuite() {
@@ -52,15 +52,20 @@
     }
 
     function triggerBrowsePrefetch() {
-        if (browsePrefetchTriggered) {
-            return;
+        if (browsePrefetchPromise) {
+            return browsePrefetchPromise;
         }
-        browsePrefetchTriggered = true;
-        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-            global.AppLazyLoader.ensureGroup('browse-runtime').catch(function swallow(error) {
-                console.warn('[AppActions] 浏览模块预加载失败:', error);
-            });
+        if (typeof global.ensureBrowseGroup === 'function') {
+            browsePrefetchPromise = Promise.resolve(global.ensureBrowseGroup());
+        } else if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            browsePrefetchPromise = Promise.resolve(global.AppLazyLoader.ensureGroup('browse-runtime'));
+        } else {
+            browsePrefetchPromise = Promise.resolve();
         }
+        browsePrefetchPromise = browsePrefetchPromise.catch(function swallow(error) {
+            console.warn('[AppActions] 浏览模块预加载失败:', error);
+        });
+        return browsePrefetchPromise;
     }
 
     function triggerMorePrefetch() {
@@ -500,6 +505,10 @@
         var tasks = [];
         if (loader) {
             tasks.push(loader.ensureGroup('exam-data'));
+        }
+        if (typeof global.ensureBrowseGroup === 'function') {
+            tasks.push(global.ensureBrowseGroup().catch(function () { return undefined; }));
+        } else if (loader) {
             tasks.push(loader.ensureGroup('browse-runtime').catch(function () { return undefined; }));
         }
         return Promise.all(tasks).then(function () {

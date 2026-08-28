@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List
@@ -20,6 +21,11 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
     async_playwright,
 )
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
@@ -389,49 +395,171 @@ async def test_complete_practice_flow(browser: Browser, console_log: List[Consol
 
 async def test_vocab_practice_flow(browser: Browser, console_log: List[ConsoleEntry]) -> dict:
     """
-    测试单词背诵流程
-    1. 答题出错触发错误收集
-    2. 打开单词背诵功能
-    3. 切换词表
-    4. 背诵单词并标记
-    5. 验证复习箱移动
+    测试移动端 file:// 单词背诵与音标流程
     """
-    context = await browser.new_context(user_agent=CHROME_UA)
+    context = await browser.new_context(
+        user_agent=CHROME_UA,
+        viewport={"width": 390, "height": 844},
+    )
     context.on("page", lambda pg: _collect_console(pg, console_log))
-    
+    page_errors: List[str] = []
+
     page = await context.new_page()
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
     await page.goto(INDEX_URL)
     await _ensure_app_ready(page)
     await _dismiss_overlays(page)
-    
-    # 步骤1: 进入单词背诵视图（通过More视图）
+
+    # 模拟已有用户：启动后只应补充缺失音标，原始字段必须保持不变。
+    seeded = await page.evaluate(
+        """async () => {
+            const word = {
+                id: 'e2e-existing-emperor',
+                word: 'emperor',
+                meaning: 'n. 皇帝；君主',
+                example: 'The emperor led the empire.',
+                note: 'keep this note',
+                easeFactor: 2.2,
+                interval: 7,
+                repetitions: 3,
+                correctCount: 4,
+                createdAt: '2026-07-01T00:00:00.000Z',
+                updatedAt: '2026-08-01T00:00:00.000Z',
+                futureField: { keep: true }
+            };
+            await window.AppData.vocab.saveWords([word]);
+            await window.AppData.vocab.patchConfig({ activeListId: 'default', dailyNew: 20 });
+            return word;
+        }"""
+    )
+
+    # 进入单词背诵视图（通过 More 视图），懒加载 bundle 后等待真实识别卡。
     await _click_nav(page, "more")
-    await page.wait_for_timeout(500)
-    
-    # 点击单词背诵工具卡片
     vocab_button = page.locator("button[data-action='open-vocab']")
     await vocab_button.wait_for(state="visible", timeout=10000)
     await vocab_button.click()
-    await page.wait_for_timeout(1500)
-    
-    # 步骤2: 验证vocab视图加载成功
-    # 注意：当前vocab系统是Leitner学习系统，没有简单的词表切换器
+
     vocab_view = page.locator("#vocab-view")
     await vocab_view.wait_for(state="visible", timeout=10000)
-    
-    # 验证vocab topbar存在
-    topbar = page.locator(".vocab-topbar")
-    await topbar.wait_for(state="visible", timeout=5000)
-    
-    # 截图
+    await page.locator(".vocab-topbar").wait_for(state="visible", timeout=5000)
+    recognition = page.locator(".vocab-card--recognition")
+    await recognition.wait_for(state="visible", timeout=30000)
+
+    persisted = await page.evaluate(
+        """async () => {
+            const words = await window.AppData.vocab.listWords();
+            return words.find((word) => word.id === 'e2e-existing-emperor');
+        }"""
+    )
+    for field in (
+        "id", "word", "meaning", "example", "note", "easeFactor", "interval",
+        "repetitions", "correctCount", "createdAt", "updatedAt", "futureField",
+    ):
+        if persisted.get(field) != seeded.get(field):
+            raise AssertionError(f"phonetic backfill changed existing field: {field}")
+    phonetic_value = str(persisted.get("phonetic") or "").strip()
+    if not phonetic_value or phonetic_value.startswith("/") or phonetic_value.endswith("/"):
+        raise AssertionError("existing-user backfill did not persist a slash-free phonetic")
+
+    phonetic = recognition.locator(".vocab-card__phonetic")
+    await phonetic.wait_for(state="visible", timeout=5000)
+    visible_value = await phonetic.locator(
+        "span:not([aria-hidden='true']):not(.visually-hidden)"
+    ).text_content()
+    accessible_label = await phonetic.locator(".visually-hidden").text_content()
+    decorative_count = await phonetic.locator("span[aria-hidden='true']").count()
+    if (visible_value or "").strip() != phonetic_value:
+        raise AssertionError("recognition phonetic does not match the persisted value")
+    if (accessible_label or "").strip() != "音标：" or decorative_count != 2:
+        raise AssertionError("recognition phonetic is missing its accessible Chinese label")
+
+    visual_metrics = await page.evaluate(
+        """() => {
+            const el = document.querySelector('.vocab-card__phonetic');
+            const card = document.querySelector('.vocab-card--recognition');
+            const rect = el.getBoundingClientRect();
+            const parse = (value) => (value.match(/[\\d.]+/g) || []).slice(0, 3).map(Number);
+            const luminance = (rgb) => {
+                const channels = rgb.map((value) => {
+                    const part = value / 255;
+                    return part <= 0.03928 ? part / 12.92 : Math.pow((part + 0.055) / 1.055, 2.4);
+                });
+                return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+            };
+            const contrast = (foreground, background) => {
+                const a = luminance(foreground);
+                const b = luminance(background);
+                return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            };
+            const initialColor = getComputedStyle(el).color;
+            const foreground = parse(initialColor);
+            const endpointRatios = [
+                contrast(foreground, [255, 250, 242]),
+                contrast(foreground, [242, 226, 204])
+            ];
+            document.documentElement.setAttribute('data-theme', 'blue');
+            document.body.classList.add('theme-blue', 'blue-dark-mode');
+            return {
+                inViewport: rect.left >= -1 && rect.right <= window.innerWidth + 1,
+                wrapsWithoutOverflow: el.scrollWidth <= el.clientWidth + 1,
+                cardWithinViewport: card.getBoundingClientRect().right <= window.innerWidth + 1,
+                minContrast: Math.min(...endpointRatios),
+                initialColor,
+                themedColor: getComputedStyle(el).color
+            };
+        }"""
+    )
+    if not all(
+        visual_metrics[key]
+        for key in ("inViewport", "wrapsWithoutOverflow", "cardWithinViewport")
+    ):
+        raise AssertionError(f"mobile phonetic layout overflowed: {visual_metrics}")
+    if visual_metrics["minContrast"] < 4.5:
+        raise AssertionError(f"phonetic contrast is below WCAG AA: {visual_metrics}")
+    if visual_metrics["initialColor"] != visual_metrics["themedColor"]:
+        raise AssertionError(f"theme overrode Vocabulary phonetic contrast: {visual_metrics}")
+
+    headword = (await recognition.locator(".vocab-card__word").text_content() or "").strip()
+    await recognition.locator("button[data-action='recognize-good']").click()
+    spelling = page.locator(".vocab-card--spelling")
+    await spelling.wait_for(state="visible", timeout=5000)
+    spelling_markup = await spelling.inner_html()
+    if (
+        await spelling.locator(".vocab-card__phonetic, .vocab-feedback__phonetic").count()
+        or phonetic_value in spelling_markup
+        or "音标" in spelling_markup
+    ):
+        raise AssertionError("spelling stage exposed the phonetic hint")
+
+    await spelling.locator("input[name='answer']").fill(headword)
+    await spelling.locator("button[data-action='submit-spelling']").click()
+    feedback = page.locator(".vocab-card--feedback")
+    await feedback.wait_for(state="visible", timeout=10000)
+    feedback_data = await feedback.evaluate(
+        """(card) => {
+            const rows = Array.from(card.querySelectorAll('.vocab-feedback__details > div'));
+            const row = rows.find((candidate) => candidate.querySelector('dt')?.textContent.trim() === '音标');
+            return {
+                hasRow: !!row,
+                value: row?.querySelector('.vocab-feedback__phonetic span:not([aria-hidden="true"])')?.textContent.trim() || ''
+            };
+        }"""
+    )
+    if not feedback_data["hasRow"] or feedback_data["value"] != phonetic_value:
+        raise AssertionError("feedback did not render the labeled phonetic detail")
+    if page_errors:
+        raise AssertionError(f"Vocabulary flow emitted page errors: {page_errors}")
+
     vocab_path = REPORT_DIR / "vocab-view-loaded.png"
     await page.locator("#vocab-view").screenshot(path=str(vocab_path))
-    
+
     await context.close()
-    
+
     return {
-        "name": "单词背诵流程",
+        "name": "单词背诵音标流程",
         "status": "pass",
+        "phonetic": phonetic_value,
+        "contrast": visual_metrics["minContrast"],
         "screenshots": [str(vocab_path)]
     }
 

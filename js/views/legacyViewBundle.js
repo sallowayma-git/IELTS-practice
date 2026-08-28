@@ -2657,7 +2657,7 @@
         options = options || {};
         var container = this._getContainer();
         if (!container) {
-            return;
+            return false;
         }
 
         var loadingSelector = options.loadingSelector || this.loadingSelector;
@@ -2667,7 +2667,7 @@
         if (normalizedExams.length === 0) {
             this._renderEmptyState(container, options.emptyState);
             this._hideLoading(loadingIndicator);
-            return;
+            return true;
         }
 
         var examList = this._createExamList();
@@ -2686,6 +2686,7 @@
 
         this._replaceContent(container, [examList]);
         this._hideLoading(loadingIndicator);
+        return true;
     };
 
     LegacyExamListView.prototype._createExamList = function _createExamList() {
@@ -3288,7 +3289,7 @@
         return Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
     }
 
-    function rebuildBrowseCompletionIndex(records) {
+    function prepareBrowseCompletionIndex(records) {
         var byExamId = new Map();
         var byTitle = new Map();
         var recordSnapshot = ensureArray(records).slice();
@@ -3322,13 +3323,37 @@
                 }
             });
         });
-        browseCompletionIndex = {
+        return {
             byExamId: byExamId,
             byTitle: byTitle,
             records: recordSnapshot,
             ready: true
         };
-        return browseCompletionIndex;
+    }
+
+    function isPreparedBrowseCompletionIndex(preparedIndex) {
+        return !!preparedIndex
+            && preparedIndex.byExamId instanceof Map
+            && preparedIndex.byTitle instanceof Map
+            && Array.isArray(preparedIndex.records)
+            && preparedIndex.ready === true;
+    }
+
+    function commitBrowseCompletionIndex(preparedIndex) {
+        if (!isPreparedBrowseCompletionIndex(preparedIndex)) {
+            return false;
+        }
+        // Preparation performs every operation that can fail. Publication is
+        // deliberately one assignment so later stages cannot observe a
+        // partially rebuilt completion map.
+        browseCompletionIndex = preparedIndex;
+        return true;
+    }
+
+    function rebuildBrowseCompletionIndex(records) {
+        var preparedIndex = prepareBrowseCompletionIndex(records);
+        commitBrowseCompletionIndex(preparedIndex);
+        return preparedIndex;
     }
 
     function ensureBrowseCompletionIndex() {
@@ -3398,6 +3423,9 @@
         };
     };
 
+    global.prepareBrowseCompletionIndex = prepareBrowseCompletionIndex;
+    global.isPreparedBrowseCompletionIndex = isPreparedBrowseCompletionIndex;
+    global.commitBrowseCompletionIndex = commitBrowseCompletionIndex;
     global.rebuildBrowseCompletionIndex = rebuildBrowseCompletionIndex;
 
     // --- Legacy navigation controller ---
@@ -3483,7 +3511,7 @@
         }
 
         if (typeof window.showView === 'function') {
-            window.showView(viewName);
+            window.showView(viewName, false);
             return;
         }
 
@@ -3547,14 +3575,33 @@
         }
 
         event.preventDefault();
-        this.navigate(viewName, event);
-        if (alreadyActive && typeof this.options.onRepeatNavigate === 'function') {
+        if (viewName === 'browse') {
             try {
-                this.options.onRepeatNavigate(viewName, event);
+                event.__browseNavigationHandled = true;
+            } catch (_) { }
+        }
+        if (alreadyActive && typeof this.options.onRepeatNavigate === 'function') {
+            var repeatHandled = true;
+            try {
+                var repeatResult = this.options.onRepeatNavigate(viewName, event);
+                if (repeatResult === false) {
+                    repeatHandled = false;
+                } else if (repeatResult && typeof repeatResult.then === 'function') {
+                    Promise.resolve(repeatResult).catch(function handleRepeatFailure(repeatError) {
+                        console.warn('[LegacyNavigationController] onRepeatNavigate 执行失败', repeatError);
+                    });
+                }
             } catch (repeatError) {
                 console.warn('[LegacyNavigationController] onRepeatNavigate 执行失败', repeatError);
             }
+            if (repeatHandled) {
+                if (this.options.syncOnNavigate !== false) {
+                    this.syncActive(viewName);
+                }
+                return;
+            }
         }
+        this.navigate(viewName, event);
         if (this.options.syncOnNavigate !== false) {
             this.syncActive(viewName);
         }
