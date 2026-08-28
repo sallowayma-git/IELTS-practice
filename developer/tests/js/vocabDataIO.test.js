@@ -11,8 +11,12 @@ global.AppData = {
         async getConfig() {
             return { activeListId: 'spelling-errors-p1', dailyNew: 8 };
         },
-        async readList() {
-            throw new Error('进度导出不应读取原始 collection 词条');
+        async readList(listId) {
+            assert.strictEqual(listId, 'spelling-errors-p1');
+            return {
+                id: listId,
+                words: [{ id: 'word-1', word: 'garden', meaning: '花园' }]
+            };
         }
     }
 };

@@ -308,7 +308,9 @@ function testSuiteReviewAnnotationsUseDraftChannel() {
         suiteReviewMode: true,
         reviewMode: true,
         readOnly: true,
-        parentWindow: hostWindow
+        parentWindow: hostWindow,
+        expectedParentOrigin: 'http://localhost',
+        parentOrigin: 'http://localhost'
     });
 
     hooks.syncReadingAnnotation('note-edit');

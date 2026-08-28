@@ -393,11 +393,17 @@
 
     async function exportProgress(words) {
         if (!window.AppData || !window.AppData.vocab) throw new Error('AppData.vocab 未加载');
-        if (!Array.isArray(words)) throw new Error('当前词表尚未加载');
         await window.AppData.ready;
         const config = await window.AppData.vocab.getConfig();
         const listId = config.activeListId || 'default';
-        const entries = words.map(cloneProgressEntry);
+        let entries;
+        if (Array.isArray(words)) {
+            entries = words.map(cloneProgressEntry);
+        } else {
+            const list = await window.AppData.vocab.readList(listId);
+            const listWords = Array.isArray(list) ? list : (list && Array.isArray(list.words) ? list.words : []);
+            entries = listWords.map(cloneProgressEntry);
+        }
         if (entries.some((entry) => !entry)) {
             throw new Error('当前词表包含无效词汇数据');
         }
